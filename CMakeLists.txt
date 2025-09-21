@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 3.25)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(VersionFromGit)
-cktools_version_from_git(CKTOOLS_VERSION)
+set(CKTOOLS_VERSION "0.1.0" CACHE STRING "ck-utilities version" FORCE)
+message(STATUS "ck-utilities version: ${CKTOOLS_VERSION}")
 
 project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX)
 
@@ -16,6 +17,7 @@ if(BUILD_TESTING)
   enable_testing()
 endif()
 
+add_subdirectory(src/common)
 add_subdirectory(src/tools)
 
 install(FILES README.md DESTINATION share/doc/ck-utilities)

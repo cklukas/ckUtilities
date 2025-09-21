@@ -15,47 +15,20 @@ if(TARGET tvision)
   target_include_directories(tvision PRIVATE ${CURSES_INCLUDE_DIRS})
 endif()
 
-add_library(ck_du_core STATIC
-  src/disk_usage_core.cpp
-  src/disk_usage_options.cpp
-)
-
-target_include_directories(ck_du_core
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-target_compile_features(ck_du_core PUBLIC cxx_std_20)
-
-install(TARGETS ck_du_core
-  ARCHIVE DESTINATION lib
-)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-  DESTINATION include
-  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-)
-
-add_ck_tool(ckdu
-  OUTPUT_NAME "ck-du"
+add_ck_tool(ckconfig
+  OUTPUT_NAME "ck-config"
   SOURCES
-    src/disk-usage-app.cpp
+    src/config-app.cpp
   LIBRARIES
+    ck_options
     ck_du_core
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
-    CK_DU_VERSION="${PROJECT_VERSION}"
+    CK_CONFIG_VERSION="${PROJECT_VERSION}"
 )
 
-target_link_libraries(ck_du_core
-  PUBLIC
-    ck_options
-  PRIVATE
-    ${CURSES_LIBRARIES}
-)

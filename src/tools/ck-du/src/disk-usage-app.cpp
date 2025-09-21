@@ -1,4 +1,5 @@
 #include "disk_usage_core.hpp"
+#include "disk_usage_options.hpp"
 
 #define Uses_TApplication
 #define Uses_TDeskTop
@@ -28,18 +29,23 @@
 #include <tvision/tv.h>
 
 #include "ck/about_dialog.hpp"
+#include "ck/options.hpp"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <cstdio>
 #include <deque>
 #include <functional>
 #include <filesystem>
+#include <iostream>
 #include <iomanip>
+#include <limits>
 #include <limits.h>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -48,6 +54,7 @@
 #include <vector>
 
 using namespace ck::du;
+namespace config = ck::config;
 
 static constexpr const char *kAboutDescription =
     "Analyze directory and file storage utilization.";
@@ -69,15 +76,421 @@ static const ushort cmSortSizeDesc = 2303;
 static const ushort cmSortSizeAsc = 2304;
 static const ushort cmSortModifiedDesc = 2305;
 static const ushort cmSortModifiedAsc = 2306;
+static const ushort cmOptionFollowNever = 2400;
+static const ushort cmOptionFollowCommandLine = 2401;
+static const ushort cmOptionFollowAll = 2402;
+static const ushort cmOptionToggleHardLinks = 2403;
+static const ushort cmOptionToggleNodump = 2404;
+static const ushort cmOptionToggleErrors = 2405;
+static const ushort cmOptionToggleOneFs = 2406;
+static const ushort cmOptionEditIgnores = 2407;
+static const ushort cmOptionEditThreshold = 2408;
+static const ushort cmOptionLoad = 2409;
+static const ushort cmOptionSave = 2410;
+static const ushort cmOptionSaveDefaults = 2411;
+static const ushort cmPatternAdd = 2500;
+static const ushort cmPatternEdit = 2501;
+static const ushort cmPatternDelete = 2502;
 
 namespace
 {
+const char *const kOptionSymlinkPolicy = "symlinkPolicy";
+const char *const kOptionHardLinks = "countHardLinksMultiple";
+const char *const kOptionIgnoreNodump = "ignoreNodump";
+const char *const kOptionReportErrors = "reportErrors";
+const char *const kOptionThreshold = "threshold";
+const char *const kOptionStayOnFilesystem = "stayOnFilesystem";
+const char *const kOptionIgnorePatterns = "ignorePatterns";
+
+struct DuOptions
+{
+    BuildDirectoryTreeOptions::SymlinkPolicy symlinkPolicy =
+        BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+    bool followCommandLineSymlinks = false;
+    bool countHardLinksMultipleTimes = false;
+    bool ignoreNodump = false;
+    bool reportErrors = true;
+    std::int64_t threshold = 0;
+    bool stayOnFilesystem = false;
+    std::vector<std::string> ignorePatterns;
+};
+
+BuildDirectoryTreeOptions::SymlinkPolicy policyFromString(const std::string &value)
+{
+    if (value == "always")
+        return BuildDirectoryTreeOptions::SymlinkPolicy::Always;
+    if (value == "command-line")
+        return BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly;
+    return BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+}
+
+std::string policyToString(BuildDirectoryTreeOptions::SymlinkPolicy policy)
+{
+    switch (policy)
+    {
+    case BuildDirectoryTreeOptions::SymlinkPolicy::Always:
+        return "always";
+    case BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly:
+        return "command-line";
+    case BuildDirectoryTreeOptions::SymlinkPolicy::Never:
+    default:
+        return "never";
+    }
+}
+
+std::string trim(const std::string &text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])))
+        ++start;
+    std::size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])))
+        --end;
+    return text.substr(start, end - start);
+}
+
+std::optional<std::int64_t> parseThresholdValue(const std::string &input)
+{
+    std::string trimmed = trim(input);
+    if (trimmed.empty())
+        return static_cast<std::int64_t>(0);
+
+    bool negative = false;
+    std::size_t pos = 0;
+    if (trimmed[pos] == '+' || trimmed[pos] == '-')
+    {
+        negative = trimmed[pos] == '-';
+        ++pos;
+    }
+    if (pos >= trimmed.size() || !std::isdigit(static_cast<unsigned char>(trimmed[pos])))
+        return std::nullopt;
+
+    std::uint64_t value = 0;
+    while (pos < trimmed.size() && std::isdigit(static_cast<unsigned char>(trimmed[pos])))
+    {
+        unsigned digit = static_cast<unsigned>(trimmed[pos] - '0');
+        if (value > (std::numeric_limits<std::uint64_t>::max() - digit) / 10)
+            return std::nullopt;
+        value = value * 10 + digit;
+        ++pos;
+    }
+
+    std::uint64_t multiplier = 1;
+    if (pos < trimmed.size())
+    {
+        char suffix = static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed[pos])));
+        switch (suffix)
+        {
+        case 'k':
+            multiplier = 1024ull;
+            break;
+        case 'm':
+            multiplier = 1024ull * 1024ull;
+            break;
+        case 'g':
+            multiplier = 1024ull * 1024ull * 1024ull;
+            break;
+        case 't':
+            multiplier = 1024ull * 1024ull * 1024ull * 1024ull;
+            break;
+        case 'b':
+            multiplier = 1;
+            break;
+        default:
+            return std::nullopt;
+        }
+        ++pos;
+    }
+
+    if (pos != trimmed.size())
+        return std::nullopt;
+
+    if (multiplier != 1 && value > std::numeric_limits<std::uint64_t>::max() / multiplier)
+        return std::nullopt;
+    std::uint64_t bytes = value * multiplier;
+    if (bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+        return std::nullopt;
+
+    std::int64_t result = static_cast<std::int64_t>(bytes);
+    if (negative)
+        result = -result;
+    return result;
+}
+
+std::string formatThresholdLabel(std::int64_t threshold)
+{
+    const std::string base = "Size ~T~hreshold...";
+    if (threshold == 0)
+        return base + " (Off)";
+    bool less = threshold < 0;
+    std::uintmax_t magnitude = static_cast<std::uintmax_t>(std::llabs(threshold));
+    std::string formatted = formatSize(magnitude, SizeUnit::Auto);
+    return base + " (" + (less ? "≤ " : "≥ ") + formatted + ")";
+}
+
+std::string ignoreMenuLabel(const DuOptions &options)
+{
+    const std::string base = "Ignore ~P~atterns...";
+    if (options.ignorePatterns.empty())
+        return base;
+    if (options.ignorePatterns.size() == 1)
+        return base + " (" + options.ignorePatterns.front() + ")";
+    return base + " (" + std::to_string(options.ignorePatterns.size()) + ")";
+}
+
+DuOptions optionsFromRegistry(const config::OptionRegistry &registry)
+{
+    DuOptions opts;
+    opts.symlinkPolicy = policyFromString(registry.getString(kOptionSymlinkPolicy, "never"));
+    opts.followCommandLineSymlinks = opts.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+    opts.countHardLinksMultipleTimes = registry.getBool(kOptionHardLinks, false);
+    opts.ignoreNodump = registry.getBool(kOptionIgnoreNodump, false);
+    opts.reportErrors = registry.getBool(kOptionReportErrors, true);
+    opts.threshold = registry.getInteger(kOptionThreshold, 0);
+    opts.stayOnFilesystem = registry.getBool(kOptionStayOnFilesystem, false);
+    opts.ignorePatterns = registry.getStringList(kOptionIgnorePatterns);
+    return opts;
+}
+
+BuildDirectoryTreeOptions makeScanOptions(const DuOptions &options)
+{
+    BuildDirectoryTreeOptions scan;
+    scan.symlinkPolicy = options.symlinkPolicy;
+    scan.followCommandLineSymlinks = options.followCommandLineSymlinks;
+    scan.countHardLinksMultipleTimes = options.countHardLinksMultipleTimes;
+    scan.ignoreNodumpFlag = options.ignoreNodump;
+    scan.reportErrors = options.reportErrors;
+    scan.threshold = options.threshold;
+    scan.stayOnFilesystem = options.stayOnFilesystem;
+    scan.ignoreMasks = options.ignorePatterns;
+    return scan;
+}
+
 std::array<TMenuItem *, 7> gUnitMenuItems{};
 }
 
 namespace
 {
 std::array<TMenuItem *, 7> gSortMenuItems{};
+}
+
+namespace
+{
+std::array<TMenuItem *, 3> gSymlinkMenuItems{};
+TMenuItem *gHardLinkMenuItem = nullptr;
+TMenuItem *gNodumpMenuItem = nullptr;
+TMenuItem *gErrorsMenuItem = nullptr;
+TMenuItem *gOneFsMenuItem = nullptr;
+TMenuItem *gIgnoreMenuItem = nullptr;
+TMenuItem *gThresholdMenuItem = nullptr;
+}
+
+namespace
+{
+class PatternListViewer : public TListViewer
+{
+public:
+    PatternListViewer(const TRect &bounds, std::vector<std::string> &items, TScrollBar *vScroll)
+        : TListViewer(bounds, 1, nullptr, vScroll), patterns(&items)
+    {
+        growMode = gfGrowHiX | gfGrowHiY;
+        setRange(static_cast<short>(patterns->size()));
+    }
+
+    void updateRange()
+    {
+        setRange(static_cast<short>(patterns->size()));
+    }
+
+    short currentIndex() const { return focused; }
+
+    virtual void getText(char *dest, short item, short maxChars) override
+    {
+        if (!patterns || item < 0 || item >= static_cast<short>(patterns->size()))
+        {
+            if (maxChars > 0)
+                dest[0] = '\0';
+            return;
+        }
+        std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", (*patterns)[static_cast<std::size_t>(item)].c_str());
+    }
+
+    virtual void handleEvent(TEvent &event) override
+    {
+        TListViewer::handleEvent(event);
+        if (event.what == evKeyDown)
+        {
+            switch (event.keyDown.keyCode)
+            {
+            case kbEnter:
+                message(owner, evCommand, cmPatternEdit, this);
+                clearEvent(event);
+                break;
+            case kbIns:
+                message(owner, evCommand, cmPatternAdd, this);
+                clearEvent(event);
+                break;
+            case kbDel:
+                message(owner, evCommand, cmPatternDelete, this);
+                clearEvent(event);
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+private:
+    std::vector<std::string> *patterns;
+};
+
+class PatternEditorDialog : public TDialog
+{
+public:
+    explicit PatternEditorDialog(const std::vector<std::string> &initialPatterns)
+        : TWindowInit(&TDialog::initFrame),
+          TDialog(TRect(0, 0, 74, 21), "Ignore Patterns"),
+          patterns(initialPatterns)
+    {
+        options |= ofCentered;
+
+        insert(new TStaticText(TRect(2, 2, 72, 4),
+                               "Manage wildcard masks. Use '*' and '?' for matching."
+                               " Use Insert/Delete keys for quick edits."));
+
+        vScroll = new TScrollBar(TRect(70, 4, 71, 16));
+        vScroll->growMode = gfGrowHiY;
+        insert(vScroll);
+
+        listView = new PatternListViewer(TRect(3, 4, 70, 16), patterns, vScroll);
+        listView->growMode = gfGrowHiX | gfGrowHiY;
+        insert(listView);
+
+        insert(new TButton(TRect(3, 16, 15, 18), "~A~dd", cmPatternAdd, bfNormal));
+        insert(new TButton(TRect(17, 16, 29, 18), "~E~dit", cmPatternEdit, bfNormal));
+        insert(new TButton(TRect(31, 16, 43, 18), "~R~emove", cmPatternDelete, bfNormal));
+        insert(new TButton(TRect(45, 16, 57, 18), "O~K~", cmOK, bfDefault));
+        insert(new TButton(TRect(59, 16, 71, 18), "Cancel", cmCancel, bfNormal));
+    }
+
+    std::vector<std::string> result() const { return patterns; }
+
+protected:
+    virtual void handleEvent(TEvent &event) override
+    {
+        TDialog::handleEvent(event);
+        if (event.what == evCommand)
+        {
+            switch (event.message.command)
+            {
+            case cmPatternAdd:
+                addPattern();
+                break;
+            case cmPatternEdit:
+                editPattern();
+                break;
+            case cmPatternDelete:
+                deletePattern();
+                break;
+            default:
+                return;
+            }
+            clearEvent(event);
+        }
+    }
+
+private:
+    PatternListViewer *listView = nullptr;
+    TScrollBar *vScroll = nullptr;
+    std::vector<std::string> patterns;
+
+    void refreshList()
+    {
+        if (listView)
+        {
+            listView->updateRange();
+            listView->drawView();
+        }
+        if (vScroll)
+            vScroll->drawView();
+    }
+
+    bool promptForPattern(const char *title, const char *label, const std::string &initial, std::string &output)
+    {
+        struct Data
+        {
+            char buffer[256];
+        } data{};
+        std::snprintf(data.buffer, sizeof(data.buffer), "%s", initial.c_str());
+
+        while (true)
+        {
+            auto *dialog = new TDialog(TRect(0, 0, 64, 12), title);
+            dialog->options |= ofCentered;
+            auto *input = new TInputLine(TRect(3, 5, 60, 6), sizeof(data.buffer) - 1);
+            dialog->insert(new TLabel(TRect(2, 4, 20, 5), label, input));
+            dialog->insert(input);
+            dialog->insert(new TButton(TRect(18, 8, 28, 10), "O~K~", cmOK, bfDefault));
+            dialog->insert(new TButton(TRect(30, 8, 40, 10), "Cancel", cmCancel, bfNormal));
+
+            ushort code = TProgram::application->executeDialog(dialog, &data);
+            if (code != cmOK)
+                return false;
+
+            std::string value = trim(data.buffer);
+            if (value.empty())
+            {
+                messageBox("Pattern cannot be empty", mfError | mfOKButton);
+                continue;
+            }
+            output = value;
+            return true;
+        }
+    }
+
+    void addPattern()
+    {
+        std::string value;
+        if (!promptForPattern("Add Pattern", "~P~attern:", std::string(), value))
+            return;
+        patterns.push_back(value);
+        refreshList();
+    }
+
+    void editPattern()
+    {
+        if (!listView)
+            return;
+        short index = listView->currentIndex();
+        if (index < 0 || index >= static_cast<short>(patterns.size()))
+        {
+            messageBox("Select a pattern to edit", mfInformation | mfOKButton);
+            return;
+        }
+        std::string value;
+        if (!promptForPattern("Edit Pattern", "~P~attern:", patterns[static_cast<std::size_t>(index)], value))
+            return;
+        patterns[static_cast<std::size_t>(index)] = value;
+        refreshList();
+    }
+
+    void deletePattern()
+    {
+        if (!listView)
+            return;
+        short index = listView->currentIndex();
+        if (index < 0 || index >= static_cast<short>(patterns.size()))
+        {
+            messageBox("Select a pattern to remove", mfInformation | mfOKButton);
+            return;
+        }
+        std::string label = "Remove pattern?\n" + patterns[static_cast<std::size_t>(index)];
+        if (messageBox(label.c_str(), mfYesNoCancel | mfConfirmation) != cmYes)
+            return;
+        patterns.erase(patterns.begin() + index);
+        refreshList();
+    }
+};
 }
 
 namespace
@@ -331,16 +744,20 @@ private:
 class DirectoryWindow : public TWindow
 {
 public:
-    DirectoryWindow(const std::filesystem::path &path, std::unique_ptr<DirectoryNode> rootNode, class DiskUsageApp &app);
+    DirectoryWindow(const std::filesystem::path &path, std::unique_ptr<DirectoryNode> rootNode, DuOptions options,
+                    class DiskUsageApp &app);
     ~DirectoryWindow();
 
     DirectoryNode *focusedNode() const;
     void refreshLabels();
     void refreshSort();
+    const DuOptions &scanOptions() const { return options; }
+    std::filesystem::path rootPath() const;
 
 private:
     class DiskUsageApp &app;
     std::unique_ptr<DirectoryNode> root;
+    DuOptions options;
     DirectoryOutline *outline = nullptr;
     TScrollBar *hScroll = nullptr;
     TScrollBar *vScroll = nullptr;
@@ -414,7 +831,8 @@ private:
 class DiskUsageApp : public TApplication
 {
 public:
-    DiskUsageApp(int argc, char **argv);
+    DiskUsageApp(const std::vector<std::filesystem::path> &paths,
+                 std::shared_ptr<config::OptionRegistry> registry);
     ~DiskUsageApp();
 
     virtual void handleEvent(TEvent &event) override;
@@ -439,6 +857,23 @@ private:
     std::unordered_map<SortKey, TMenuItem *> sortMenuItems;
     std::unordered_map<SortKey, std::string> sortBaseLabels;
 
+    std::array<TMenuItem *, 3> symlinkMenuItems{};
+    std::array<std::string, 3> symlinkBaseLabels{};
+    std::string hardLinkBaseLabel = "Count ~H~ard Links Multiple Times";
+    std::string nodumpBaseLabel = "Ignore ~N~odump Flag";
+    std::string errorsBaseLabel = "Report ~E~rrors";
+    std::string oneFsBaseLabel = "Stay on One ~F~ile System";
+    TMenuItem *hardLinkMenuItem = nullptr;
+    TMenuItem *nodumpMenuItem = nullptr;
+    TMenuItem *errorsMenuItem = nullptr;
+    TMenuItem *oneFsMenuItem = nullptr;
+    TMenuItem *ignoreMenuItem = nullptr;
+    TMenuItem *thresholdMenuItem = nullptr;
+    std::shared_ptr<config::OptionRegistry> optionRegistry;
+    DuOptions currentOptions;
+    bool rescanRequested = false;
+    bool rescanInProgress = false;
+
     struct DirectoryScanTask
     {
         std::filesystem::path rootPath;
@@ -449,6 +884,9 @@ private:
         std::string errorMessage;
         bool cancelled = false;
         bool failed = false;
+        DuOptions optionState;
+        BuildDirectoryTreeOptions scanOptions;
+        std::vector<std::string> errors;
         std::atomic<bool> cancelRequested{false};
         std::atomic<bool> finished{false};
         ScanProgressDialog *dialog = nullptr;
@@ -465,6 +903,24 @@ private:
     void applyUnit(SizeUnit unit);
     void updateSortMenu();
     void applySortMode(SortKey key);
+    void updateOptionsMenu();
+    void updateSymlinkMenu();
+    void updateToggleMenuItem(TMenuItem *item, bool enabled, const std::string &baseLabel);
+    void optionsChanged(bool triggerRescan);
+    void requestRescanAllDirectories();
+    void processRescanRequests();
+    void performRescanAllDirectories();
+    void applySymlinkPolicy(BuildDirectoryTreeOptions::SymlinkPolicy policy);
+    void toggleHardLinks();
+    void toggleNodump();
+    void toggleErrors();
+    void toggleOneFilesystem();
+    void editIgnorePatterns();
+    void editThreshold();
+    void loadOptionsFromFile();
+    void saveOptionsToFile();
+    void saveDefaultOptions();
+    void reloadOptionState();
     void requestDirectoryScan(const std::filesystem::path &path, bool allowQueue);
     void queueDirectoryForScan(const std::filesystem::path &path);
     void startDirectoryScan(const std::filesystem::path &path);
@@ -899,10 +1355,11 @@ void FileListWindow::refreshSort()
         vScroll->drawView();
 }
 
-DirectoryWindow::DirectoryWindow(const std::filesystem::path &path, std::unique_ptr<DirectoryNode> rootNode, DiskUsageApp &appRef)
+DirectoryWindow::DirectoryWindow(const std::filesystem::path &path, std::unique_ptr<DirectoryNode> rootNode,
+                                 DuOptions optionsIn, DiskUsageApp &appRef)
     : TWindowInit(&TWindow::initFrame),
       TWindow(TRect(0, 0, 78, 20), path.filename().empty() ? path.string().c_str() : path.filename().string().c_str(), wnNoNumber),
-      app(appRef), root(std::move(rootNode))
+      app(appRef), root(std::move(rootNode)), options(std::move(optionsIn))
 {
     flags |= wfGrow;
     growMode = gfGrowHiX | gfGrowHiY;
@@ -973,6 +1430,11 @@ DirectoryNode *DirectoryWindow::focusedNode() const
     return nullptr;
 }
 
+std::filesystem::path DirectoryWindow::rootPath() const
+{
+    return root ? root->path : std::filesystem::path();
+}
+
 void DirectoryWindow::refreshLabels()
 {
     for (auto &pair : nodeMap)
@@ -1041,24 +1503,25 @@ void DirectoryWindow::refreshSort()
     }
 }
 
-DiskUsageApp::DiskUsageApp(int argc, char **argv)
+DiskUsageApp::DiskUsageApp(const std::vector<std::filesystem::path> &paths,
+                           std::shared_ptr<config::OptionRegistry> registry)
     : TProgInit(&DiskUsageApp::initStatusLine, &DiskUsageApp::initMenuBar, &TApplication::initDeskTop),
-      TApplication()
+      TApplication(), optionRegistry(std::move(registry))
 {
-    unitBaseLabels = {{SizeUnit::Auto, "Auto"},
-                      {SizeUnit::Bytes, "Bytes"},
-                      {SizeUnit::Kilobytes, "Kilobytes"},
-                      {SizeUnit::Megabytes, "Megabytes"},
-                      {SizeUnit::Gigabytes, "Gigabytes"},
-                      {SizeUnit::Terabytes, "Terabytes"},
-                      {SizeUnit::Blocks, "Blocks"}};
-    sortBaseLabels = {{SortKey::Unsorted, "Unsorted"},
-                      {SortKey::NameAscending, "Name (A→Z)"},
-                      {SortKey::NameDescending, "Name (Z→A)"},
-                      {SortKey::SizeDescending, "Size (Largest)"},
-                      {SortKey::SizeAscending, "Size (Smallest)"},
-                      {SortKey::ModifiedDescending, "Modified (Newest)"},
-                      {SortKey::ModifiedAscending, "Modified (Oldest)"}};
+    unitBaseLabels = {{SizeUnit::Auto, "~A~uto"},
+                      {SizeUnit::Bytes, "~B~ytes"},
+                      {SizeUnit::Kilobytes, "~K~ilobytes"},
+                      {SizeUnit::Megabytes, "~M~egabytes"},
+                      {SizeUnit::Gigabytes, "~G~igabytes"},
+                      {SizeUnit::Terabytes, "~T~erabytes"},
+                      {SizeUnit::Blocks, "B~l~ocks"}};
+    sortBaseLabels = {{SortKey::Unsorted, "~U~nsorted"},
+                      {SortKey::NameAscending, "~N~ame (A→Z)"},
+                      {SortKey::NameDescending, "Name (Z→~A~)"},
+                      {SortKey::SizeDescending, "~S~ize (Largest)"},
+                      {SortKey::SizeAscending, "Size (S~m~allest)"},
+                      {SortKey::ModifiedDescending, "~M~odified (Newest)"},
+                      {SortKey::ModifiedAscending, "Modified (~O~ldest)"}};
     std::array<std::pair<SizeUnit, int>, 7> unitOrder = {{
         {SizeUnit::Auto, 0},
         {SizeUnit::Bytes, 1},
@@ -1088,9 +1551,23 @@ DiskUsageApp::DiskUsageApp(int argc, char **argv)
             sortMenuItems[key] = gSortMenuItems[index];
     }
     updateSortMenu();
+    symlinkBaseLabels = {"Do ~N~ot Follow Links", "Follow ~C~LI Links", "Follow ~A~ll Links"};
+    for (std::size_t i = 0; i < symlinkMenuItems.size(); ++i)
+    {
+        if (i < gSymlinkMenuItems.size())
+            symlinkMenuItems[i] = gSymlinkMenuItems[i];
+    }
+    hardLinkMenuItem = gHardLinkMenuItem;
+    nodumpMenuItem = gNodumpMenuItem;
+    errorsMenuItem = gErrorsMenuItem;
+    oneFsMenuItem = gOneFsMenuItem;
+    ignoreMenuItem = gIgnoreMenuItem;
+    thresholdMenuItem = gThresholdMenuItem;
 
-    for (int i = 1; i < argc; ++i)
-        queueDirectoryForScan(argv[i]);
+    reloadOptionState();
+
+    for (const auto &path : paths)
+        queueDirectoryForScan(path);
 }
 
 DiskUsageApp::~DiskUsageApp()
@@ -1157,6 +1634,42 @@ void DiskUsageApp::handleEvent(TEvent &event)
         case cmSortModifiedAsc:
             applySortMode(SortKey::ModifiedAscending);
             break;
+        case cmOptionFollowNever:
+            applySymlinkPolicy(BuildDirectoryTreeOptions::SymlinkPolicy::Never);
+            break;
+        case cmOptionFollowCommandLine:
+            applySymlinkPolicy(BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly);
+            break;
+        case cmOptionFollowAll:
+            applySymlinkPolicy(BuildDirectoryTreeOptions::SymlinkPolicy::Always);
+            break;
+        case cmOptionToggleHardLinks:
+            toggleHardLinks();
+            break;
+        case cmOptionToggleNodump:
+            toggleNodump();
+            break;
+        case cmOptionToggleErrors:
+            toggleErrors();
+            break;
+        case cmOptionToggleOneFs:
+            toggleOneFilesystem();
+            break;
+        case cmOptionEditIgnores:
+            editIgnorePatterns();
+            break;
+        case cmOptionEditThreshold:
+            editThreshold();
+            break;
+        case cmOptionLoad:
+            loadOptionsFromFile();
+            break;
+        case cmOptionSave:
+            saveOptionsToFile();
+            break;
+        case cmOptionSaveDefaults:
+            saveDefaultOptions();
+            break;
         case cmAbout:
         {
             ck::ui::showAboutDialog("ck-du", CK_DU_VERSION, kAboutDescription);
@@ -1172,6 +1685,7 @@ void DiskUsageApp::handleEvent(TEvent &event)
 void DiskUsageApp::idle()
 {
     TApplication::idle();
+    processRescanRequests();
     if (activeScan)
     {
         updateScanProgress(*activeScan);
@@ -1185,22 +1699,41 @@ void DiskUsageApp::idle()
 TMenuBar *DiskUsageApp::initMenuBar(TRect r)
 {
     r.b.y = r.a.y + 1;
-    auto *unitAuto = new TMenuItem("Auto", cmUnitAuto, kbNoKey, hcNoContext);
-    auto *unitBytes = new TMenuItem("Bytes", cmUnitBytes, kbNoKey, hcNoContext);
-    auto *unitKB = new TMenuItem("Kilobytes", cmUnitKB, kbNoKey, hcNoContext);
-    auto *unitMB = new TMenuItem("Megabytes", cmUnitMB, kbNoKey, hcNoContext);
-    auto *unitGB = new TMenuItem("Gigabytes", cmUnitGB, kbNoKey, hcNoContext);
-    auto *unitTB = new TMenuItem("Terabytes", cmUnitTB, kbNoKey, hcNoContext);
-    auto *unitBlocks = new TMenuItem("Blocks", cmUnitBlocks, kbNoKey, hcNoContext);
+    auto *unitAuto = new TMenuItem("~A~uto", cmUnitAuto, kbNoKey, hcNoContext);
+    auto *unitBytes = new TMenuItem("~B~ytes", cmUnitBytes, kbNoKey, hcNoContext);
+    auto *unitKB = new TMenuItem("~K~ilobytes", cmUnitKB, kbNoKey, hcNoContext);
+    auto *unitMB = new TMenuItem("~M~egabytes", cmUnitMB, kbNoKey, hcNoContext);
+    auto *unitGB = new TMenuItem("~G~igabytes", cmUnitGB, kbNoKey, hcNoContext);
+    auto *unitTB = new TMenuItem("~T~erabytes", cmUnitTB, kbNoKey, hcNoContext);
+    auto *unitBlocks = new TMenuItem("B~l~ocks", cmUnitBlocks, kbNoKey, hcNoContext);
     gUnitMenuItems = {unitAuto, unitBytes, unitKB, unitMB, unitGB, unitTB, unitBlocks};
-    auto *sortUnsorted = new TMenuItem("Unsorted", cmSortUnsorted, kbNoKey, hcNoContext);
-    auto *sortNameAsc = new TMenuItem("Name (A→Z)", cmSortNameAsc, kbNoKey, hcNoContext);
-    auto *sortNameDesc = new TMenuItem("Name (Z→A)", cmSortNameDesc, kbNoKey, hcNoContext);
-    auto *sortSizeDesc = new TMenuItem("Size (Largest)", cmSortSizeDesc, kbNoKey, hcNoContext);
-    auto *sortSizeAsc = new TMenuItem("Size (Smallest)", cmSortSizeAsc, kbNoKey, hcNoContext);
-    auto *sortModifiedDesc = new TMenuItem("Modified (Newest)", cmSortModifiedDesc, kbNoKey, hcNoContext);
-    auto *sortModifiedAsc = new TMenuItem("Modified (Oldest)", cmSortModifiedAsc, kbNoKey, hcNoContext);
+    auto *sortUnsorted = new TMenuItem("~U~nsorted", cmSortUnsorted, kbNoKey, hcNoContext);
+    auto *sortNameAsc = new TMenuItem("~N~ame (A→Z)", cmSortNameAsc, kbNoKey, hcNoContext);
+    auto *sortNameDesc = new TMenuItem("Name (Z→~A~)", cmSortNameDesc, kbNoKey, hcNoContext);
+    auto *sortSizeDesc = new TMenuItem("~S~ize (Largest)", cmSortSizeDesc, kbNoKey, hcNoContext);
+    auto *sortSizeAsc = new TMenuItem("Size (S~m~allest)", cmSortSizeAsc, kbNoKey, hcNoContext);
+    auto *sortModifiedDesc = new TMenuItem("~M~odified (Newest)", cmSortModifiedDesc, kbNoKey, hcNoContext);
+    auto *sortModifiedAsc = new TMenuItem("Modified (~O~ldest)", cmSortModifiedAsc, kbNoKey, hcNoContext);
     gSortMenuItems = {sortUnsorted, sortNameAsc, sortNameDesc, sortSizeDesc, sortSizeAsc, sortModifiedDesc, sortModifiedAsc};
+    auto *followNever = new TMenuItem("Do ~N~ot Follow Links", cmOptionFollowNever, kbNoKey, hcNoContext);
+    auto *followCommand = new TMenuItem("Follow ~C~LI Links", cmOptionFollowCommandLine, kbNoKey, hcNoContext);
+    auto *followAll = new TMenuItem("Follow ~A~ll Links", cmOptionFollowAll, kbNoKey, hcNoContext);
+    gSymlinkMenuItems = {followNever, followCommand, followAll};
+    auto *hardLinks = new TMenuItem("Count ~H~ard Links Multiple Times", cmOptionToggleHardLinks, kbNoKey, hcNoContext);
+    auto *nodump = new TMenuItem("Ignore ~N~odump Flag", cmOptionToggleNodump, kbNoKey, hcNoContext);
+    auto *errors = new TMenuItem("Report ~E~rrors", cmOptionToggleErrors, kbNoKey, hcNoContext);
+    auto *oneFs = new TMenuItem("Stay on One ~F~ile System", cmOptionToggleOneFs, kbNoKey, hcNoContext);
+    auto *ignore = new TMenuItem("Ignore ~P~atterns...", cmOptionEditIgnores, kbNoKey, hcNoContext);
+    auto *threshold = new TMenuItem("Size ~T~hreshold...", cmOptionEditThreshold, kbNoKey, hcNoContext);
+    gHardLinkMenuItem = hardLinks;
+    gNodumpMenuItem = nodump;
+    gErrorsMenuItem = errors;
+    gOneFsMenuItem = oneFs;
+    gIgnoreMenuItem = ignore;
+    gThresholdMenuItem = threshold;
+    auto *loadOptions = new TMenuItem("~L~oad Options...", cmOptionLoad, kbNoKey, hcNoContext);
+    auto *saveOptions = new TMenuItem("~S~ave Options...", cmOptionSave, kbNoKey, hcNoContext);
+    auto *saveDefaults = new TMenuItem("Save ~D~efaults", cmOptionSaveDefaults, kbNoKey, hcNoContext);
     return new TMenuBar(r,
                         *new TSubMenu("~F~ile", hcNoContext) +
                             *new TMenuItem("~O~pen Directory", cmOpen, kbF2, hcOpen, "F2") +
@@ -1223,6 +1756,21 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                             *unitGB +
                             *unitTB +
                             *unitBlocks +
+                        *new TSubMenu("Op~t~ions", hcNoContext) +
+                            *followNever +
+                            *followCommand +
+                            *followAll +
+                            newLine() +
+                            *hardLinks +
+                            *nodump +
+                            *errors +
+                            *oneFs +
+                            *ignore +
+                            *threshold +
+                            newLine() +
+                            *loadOptions +
+                            *saveOptions +
+                            *saveDefaults +
                         *new TSubMenu("~V~iew", hcNoContext) +
                             *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
                             *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
@@ -1254,7 +1802,7 @@ void DiskUsageApp::promptOpenDirectory()
     d->insert(new TButton(TRect(15, 6, 25, 8), "O~K~", cmOK, bfDefault));
     d->insert(new TButton(TRect(27, 6, 37, 8), "Cancel", cmCancel, bfNormal));
 
-    if (executeDialog(d, &data) != cmCancel)
+    if (TProgram::application->executeDialog(d, &data) != cmCancel)
         openDirectory(data.path);
 }
 
@@ -1278,7 +1826,8 @@ void DiskUsageApp::viewFiles(bool recursive)
         return;
     }
 
-    std::vector<FileEntry> files = listFiles(node->path, recursive);
+    BuildDirectoryTreeOptions listOptions = makeScanOptions(window->scanOptions());
+    std::vector<FileEntry> files = listFiles(node->path, recursive, listOptions);
     std::string title = node->path.filename().empty() ? node->path.string() : node->path.filename().string();
     if (title.empty())
         title = node->path.string();
@@ -1324,6 +1873,9 @@ void DiskUsageApp::startDirectoryScan(const std::filesystem::path &path)
     auto task = std::make_unique<DirectoryScanTask>();
     task->rootPath = path;
     task->currentPath = path.string();
+    task->optionState = currentOptions;
+    task->scanOptions = makeScanOptions(task->optionState);
+    task->errors.clear();
 
     auto *dialog = new ScanProgressDialog();
     dialog->setCancelHandler([this]() { requestScanCancellation(); });
@@ -1374,6 +1926,8 @@ void DiskUsageApp::processActiveScanCompletion()
     bool cancelled = false;
     bool failed = false;
     std::string errorMessage;
+    DuOptions optionState = currentOptions;
+    std::vector<std::string> errors;
     std::filesystem::path rootPath = activeScan->rootPath;
     {
         std::lock_guard<std::mutex> lock(activeScan->mutex);
@@ -1381,6 +1935,8 @@ void DiskUsageApp::processActiveScanCompletion()
         cancelled = activeScan->cancelled;
         failed = activeScan->failed;
         errorMessage = activeScan->errorMessage;
+        optionState = activeScan->optionState;
+        errors = activeScan->errors;
     }
 
     closeProgressDialog(*activeScan);
@@ -1394,9 +1950,19 @@ void DiskUsageApp::processActiveScanCompletion()
     }
     else if (!cancelled && result)
     {
-        auto *win = new DirectoryWindow(rootPath, std::move(result), *this);
+        auto *win = new DirectoryWindow(rootPath, std::move(result), optionState, *this);
         deskTop->insert(win);
         win->drawView();
+        if (optionState.reportErrors && !errors.empty())
+        {
+            std::string message = "Some entries could not be read:\n";
+            std::size_t count = std::min<std::size_t>(errors.size(), 10);
+            for (std::size_t i = 0; i < count; ++i)
+                message += " - " + errors[i] + "\n";
+            if (errors.size() > count)
+                message += "... (" + std::to_string(errors.size() - count) + " more)";
+            messageBox(message.c_str(), mfWarning | mfOKButton);
+        }
     }
 
     startNextQueuedDirectory();
@@ -1404,12 +1970,25 @@ void DiskUsageApp::processActiveScanCompletion()
 
 void DiskUsageApp::runDirectoryScan(DirectoryScanTask &task)
 {
-    BuildDirectoryTreeOptions options;
+    BuildDirectoryTreeOptions options = task.scanOptions;
     options.progressCallback = [&](const std::filesystem::path &current) {
         std::lock_guard<std::mutex> lock(task.mutex);
         task.currentPath = current.string();
     };
     options.cancelRequested = [&]() -> bool { return task.cancelRequested.load(); };
+    if (options.reportErrors)
+    {
+        options.errorCallback = [&](const std::filesystem::path &p, const std::error_code &ec) {
+            std::lock_guard<std::mutex> lock(task.mutex);
+            if (task.errors.size() < 200)
+            {
+                std::string message = p.empty() ? std::string("(unknown)") : p.string();
+                if (!ec.message().empty())
+                    message += ": " + ec.message();
+                task.errors.push_back(std::move(message));
+            }
+        };
+    }
 
     BuildDirectoryTreeResult result;
     try
@@ -1585,9 +2164,522 @@ void DiskUsageApp::applySortMode(SortKey key)
     notifySortChanged();
 }
 
+void DiskUsageApp::updateToggleMenuItem(TMenuItem *item, bool enabled, const std::string &baseLabel)
+{
+    if (!item)
+        return;
+    std::string label = std::string(enabled ? "[x] " : "[ ] ") + baseLabel;
+    delete[] const_cast<char *>(item->name);
+    item->name = newStr(label.c_str());
+}
+
+void DiskUsageApp::updateSymlinkMenu()
+{
+    int activeIndex = 0;
+    switch (currentOptions.symlinkPolicy)
+    {
+    case BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly:
+        activeIndex = 1;
+        break;
+    case BuildDirectoryTreeOptions::SymlinkPolicy::Always:
+        activeIndex = 2;
+        break;
+    case BuildDirectoryTreeOptions::SymlinkPolicy::Never:
+    default:
+        activeIndex = 0;
+        break;
+    }
+    for (std::size_t i = 0; i < symlinkMenuItems.size(); ++i)
+    {
+        TMenuItem *item = symlinkMenuItems[i];
+        if (!item)
+            continue;
+        std::string label = std::string(static_cast<int>(i) == activeIndex ? "● " : "  ") + symlinkBaseLabels[i];
+        delete[] const_cast<char *>(item->name);
+        item->name = newStr(label.c_str());
+    }
+}
+
+void DiskUsageApp::updateOptionsMenu()
+
+{
+    updateSymlinkMenu();
+    updateToggleMenuItem(hardLinkMenuItem, currentOptions.countHardLinksMultipleTimes, hardLinkBaseLabel);
+    updateToggleMenuItem(nodumpMenuItem, currentOptions.ignoreNodump, nodumpBaseLabel);
+    updateToggleMenuItem(errorsMenuItem, currentOptions.reportErrors, errorsBaseLabel);
+    updateToggleMenuItem(oneFsMenuItem, currentOptions.stayOnFilesystem, oneFsBaseLabel);
+    if (ignoreMenuItem)
+    {
+        std::string label = ignoreMenuLabel(currentOptions);
+        delete[] const_cast<char *>(ignoreMenuItem->name);
+        ignoreMenuItem->name = newStr(label.c_str());
+    }
+    if (thresholdMenuItem)
+    {
+        std::string label = formatThresholdLabel(currentOptions.threshold);
+        delete[] const_cast<char *>(thresholdMenuItem->name);
+        thresholdMenuItem->name = newStr(label.c_str());
+    }
+    if (menuBar)
+        menuBar->drawView();
+}
+
+void DiskUsageApp::optionsChanged(bool triggerRescan)
+{
+    updateOptionsMenu();
+    if (triggerRescan)
+    {
+        requestRescanAllDirectories();
+        processRescanRequests();
+    }
+}
+
+void DiskUsageApp::requestRescanAllDirectories()
+{
+    if (directoryWindows.empty())
+        return;
+    rescanRequested = true;
+}
+
+void DiskUsageApp::processRescanRequests()
+{
+    if (!rescanRequested || rescanInProgress)
+        return;
+    rescanInProgress = true;
+    rescanRequested = false;
+    performRescanAllDirectories();
+    rescanInProgress = false;
+}
+
+void DiskUsageApp::performRescanAllDirectories()
+{
+    std::vector<std::filesystem::path> paths;
+    paths.reserve(directoryWindows.size());
+    for (auto *window : directoryWindows)
+    {
+        if (window)
+            paths.push_back(window->rootPath());
+    }
+    if (paths.empty())
+        return;
+
+    cancelActiveScan(true);
+    pendingScanQueue.clear();
+
+    std::vector<FileListWindow *> fileCopies = fileWindows;
+    for (auto *fileWin : fileCopies)
+        if (fileWin && fileWin->owner)
+            fileWin->close();
+
+    std::vector<DirectoryWindow *> dirCopies = directoryWindows;
+    for (auto *dirWin : dirCopies)
+        if (dirWin && dirWin->owner)
+            dirWin->close();
+
+    for (const auto &path : paths)
+        queueDirectoryForScan(path);
+}
+
+void DiskUsageApp::applySymlinkPolicy(BuildDirectoryTreeOptions::SymlinkPolicy policy)
+{
+    if (currentOptions.symlinkPolicy == policy)
+        return;
+    currentOptions.symlinkPolicy = policy;
+    currentOptions.followCommandLineSymlinks = policy != BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+    if (optionRegistry)
+        optionRegistry->set(kOptionSymlinkPolicy, config::OptionValue(policyToString(policy)));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::toggleHardLinks()
+{
+    currentOptions.countHardLinksMultipleTimes = !currentOptions.countHardLinksMultipleTimes;
+    if (optionRegistry)
+        optionRegistry->set(kOptionHardLinks, config::OptionValue(currentOptions.countHardLinksMultipleTimes));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::toggleNodump()
+{
+    currentOptions.ignoreNodump = !currentOptions.ignoreNodump;
+    if (optionRegistry)
+        optionRegistry->set(kOptionIgnoreNodump, config::OptionValue(currentOptions.ignoreNodump));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::toggleErrors()
+{
+    currentOptions.reportErrors = !currentOptions.reportErrors;
+    if (optionRegistry)
+        optionRegistry->set(kOptionReportErrors, config::OptionValue(currentOptions.reportErrors));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::toggleOneFilesystem()
+{
+    currentOptions.stayOnFilesystem = !currentOptions.stayOnFilesystem;
+    if (optionRegistry)
+        optionRegistry->set(kOptionStayOnFilesystem, config::OptionValue(currentOptions.stayOnFilesystem));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::editIgnorePatterns()
+{
+    auto *dialog = new PatternEditorDialog(currentOptions.ignorePatterns);
+    if (TProgram::application->executeDialog(dialog, nullptr) != cmOK)
+        return;
+
+    std::vector<std::string> patterns = dialog->result();
+    currentOptions.ignorePatterns = patterns;
+    if (optionRegistry)
+        optionRegistry->set(kOptionIgnorePatterns, config::OptionValue(patterns));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::editThreshold()
+{
+    struct DialogData
+    {
+        char value[64];
+    } data{};
+
+    if (currentOptions.threshold != 0)
+        std::snprintf(data.value, sizeof(data.value), "%lld",
+                      static_cast<long long>(currentOptions.threshold));
+    else
+        data.value[0] = '\0';
+
+    TDialog *d = new TDialog(TRect(0, 0, 60, 12), "Size Threshold");
+    d->options |= ofCentered;
+    auto *input = new TInputLine(TRect(3, 5, 55, 6), sizeof(data.value) - 1);
+    d->insert(new TStaticText(TRect(2, 2, 58, 4),
+                               "Enter a byte value (supports K, M, G, T suffix)."
+                               " Use a leading '-' to match entries below the value."));
+    d->insert(new TLabel(TRect(2, 4, 20, 5), "~T~hreshold:", input));
+    d->insert(input);
+    d->insert(new TButton(TRect(15, 8, 25, 10), "O~K~", cmOK, bfDefault));
+    d->insert(new TButton(TRect(27, 8, 37, 10), "Cancel", cmCancel, bfNormal));
+
+    if (TProgram::application->executeDialog(d, &data) != cmOK)
+        return;
+
+    std::optional<std::int64_t> parsed = parseThresholdValue(data.value);
+    if (!parsed)
+    {
+        messageBox("Invalid threshold value", mfError | mfOKButton);
+        return;
+    }
+
+    currentOptions.threshold = *parsed;
+    if (optionRegistry)
+        optionRegistry->set(kOptionThreshold, config::OptionValue(currentOptions.threshold));
+    optionsChanged(true);
+}
+
+void DiskUsageApp::loadOptionsFromFile()
+{
+    if (!optionRegistry)
+        return;
+    struct DialogData
+    {
+        char path[PATH_MAX];
+    } data{};
+
+    std::filesystem::path configPath = config::OptionRegistry::configRoot();
+    std::snprintf(data.path, sizeof(data.path), "%s", configPath.string().c_str());
+
+    TDialog *d = new TDialog(TRect(0, 0, 68, 10), "Load Options");
+    d->options |= ofCentered;
+    auto *input = new TInputLine(TRect(3, 4, 64, 5), sizeof(data.path) - 1);
+    d->insert(new TLabel(TRect(2, 3, 20, 4), "~F~ile:", input));
+    d->insert(input);
+    d->insert(new TButton(TRect(18, 6, 28, 8), "O~K~", cmOK, bfDefault));
+    d->insert(new TButton(TRect(30, 6, 40, 8), "Cancel", cmCancel, bfNormal));
+
+    if (TProgram::application->executeDialog(d, &data) != cmOK)
+        return;
+
+    std::filesystem::path path = data.path;
+    if (!optionRegistry->loadFromFile(path))
+    {
+        std::string message = "Failed to load options:\n" + path.string();
+        messageBox(message.c_str(), mfError | mfOKButton);
+        return;
+    }
+    reloadOptionState();
+    std::string success = "Options loaded from:\n" + path.string();
+    messageBox(success.c_str(), mfInformation | mfOKButton);
+}
+
+void DiskUsageApp::saveOptionsToFile()
+{
+    if (!optionRegistry)
+        return;
+    struct DialogData
+    {
+        char path[PATH_MAX];
+    } data{};
+
+    std::filesystem::path configPath = config::OptionRegistry::configRoot() / "options.json";
+    std::snprintf(data.path, sizeof(data.path), "%s", configPath.string().c_str());
+
+    TDialog *d = new TDialog(TRect(0, 0, 68, 10), "Save Options");
+    d->options |= ofCentered;
+    auto *input = new TInputLine(TRect(3, 4, 64, 5), sizeof(data.path) - 1);
+    d->insert(new TLabel(TRect(2, 3, 20, 4), "~F~ile:", input));
+    d->insert(input);
+    d->insert(new TButton(TRect(18, 6, 28, 8), "O~K~", cmOK, bfDefault));
+    d->insert(new TButton(TRect(30, 6, 40, 8), "Cancel", cmCancel, bfNormal));
+
+    if (TProgram::application->executeDialog(d, &data) != cmOK)
+        return;
+
+    std::filesystem::path path = data.path;
+    if (!optionRegistry->saveToFile(path))
+    {
+        std::string message = "Failed to save options:\n" + path.string();
+        messageBox(message.c_str(), mfError | mfOKButton);
+        return;
+    }
+    std::string success = "Options saved to:\n" + path.string();
+    messageBox(success.c_str(), mfInformation | mfOKButton);
+}
+
+void DiskUsageApp::saveDefaultOptions()
+{
+    if (!optionRegistry)
+        return;
+    std::filesystem::path dest = optionRegistry->defaultOptionsPath();
+    if (optionRegistry->saveDefaults())
+    {
+        std::string message = "Defaults saved to:\n" + dest.string();
+        messageBox(message.c_str(), mfInformation | mfOKButton);
+    }
+    else
+    {
+        std::string message = "Failed to save defaults:\n" + dest.string();
+        messageBox(message.c_str(), mfError | mfOKButton);
+    }
+}
+
+void DiskUsageApp::reloadOptionState()
+{
+    if (!optionRegistry)
+        return;
+    currentOptions = optionsFromRegistry(*optionRegistry);
+    optionsChanged(false);
+}
+
 int main(int argc, char **argv)
 {
-    DiskUsageApp app(argc, argv);
+    auto registry = std::make_shared<config::OptionRegistry>("ck-du");
+    registerDiskUsageOptions(*registry);
+
+    bool loadDefaults = true;
+    bool forceReloadDefaults = false;
+    std::vector<std::filesystem::path> optionFiles;
+    std::vector<std::string> cliIgnorePatterns;
+    std::optional<BuildDirectoryTreeOptions::SymlinkPolicy> symlinkOverride;
+    std::optional<bool> hardLinksOverride;
+    std::optional<bool> nodumpOverride;
+    std::optional<bool> errorsOverride;
+    std::optional<bool> oneFsOverride;
+    std::optional<std::int64_t> thresholdOverride;
+    std::vector<std::filesystem::path> directories;
+
+    auto printUsage = []() {
+        std::cout << "Usage: ck-du [options] [paths...]\n"
+                  << "  -H             Follow symlinks listed on the command line only\n"
+                  << "  -L             Follow all symbolic links\n"
+                  << "  -P             Do not follow symbolic links\n"
+                  << "  -l             Count hard links multiple times\n"
+                  << "  -n             Ignore entries with the nodump flag\n"
+                  << "  -r             Report read errors (default)\n"
+                  << "  -q             Suppress read error warnings\n"
+                  << "  -t N           Apply size threshold N (supports K/M/G/T suffix)\n"
+                  << "  -I PATTERN     Ignore entries matching PATTERN\n"
+                  << "  -x             Stay on a single file system\n"
+                  << "  --load-options FILE    Load options from FILE\n"
+                  << "  --no-default-options   Do not load saved defaults\n"
+                  << "  --default-options      Load saved defaults after parsing flags\n"
+                  << std::endl;
+    };
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h")
+        {
+            printUsage();
+            return 0;
+        }
+        else if (arg == "--no-default-options")
+        {
+            loadDefaults = false;
+        }
+        else if (arg == "--default-options")
+        {
+            forceReloadDefaults = true;
+        }
+        else if (arg.rfind("--load-options", 0) == 0)
+        {
+            std::string value;
+            const std::string prefix = "--load-options=";
+            if (arg == "--load-options")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "ck-du: --load-options requires a file path" << std::endl;
+                    return 1;
+                }
+                value = argv[++i];
+            }
+            else if (arg.size() > prefix.size())
+            {
+                value = arg.substr(prefix.size());
+            }
+            else
+            {
+                std::cerr << "ck-du: invalid --load-options usage" << std::endl;
+                return 1;
+            }
+            optionFiles.emplace_back(value);
+        }
+        else if (!arg.empty() && arg[0] == '-' && arg.size() > 1)
+        {
+            for (std::size_t j = 1; j < arg.size(); ++j)
+            {
+                char opt = arg[j];
+                switch (opt)
+                {
+                case 'H':
+                    symlinkOverride = BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly;
+                    break;
+                case 'L':
+                    symlinkOverride = BuildDirectoryTreeOptions::SymlinkPolicy::Always;
+                    break;
+                case 'P':
+                    symlinkOverride = BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+                    break;
+                case 'l':
+                    hardLinksOverride = true;
+                    break;
+                case 'n':
+                    nodumpOverride = true;
+                    break;
+                case 'r':
+                    errorsOverride = true;
+                    break;
+                case 'q':
+                    errorsOverride = false;
+                    break;
+                case 'x':
+                    oneFsOverride = true;
+                    break;
+                case 'I':
+                {
+                    std::string pattern;
+                    if (j + 1 < arg.size())
+                    {
+                        pattern = arg.substr(j + 1);
+                        j = arg.size();
+                    }
+                    else
+                    {
+                        if (i + 1 >= argc)
+                        {
+                            std::cerr << "ck-du: -I requires a pattern" << std::endl;
+                            return 1;
+                        }
+                        pattern = argv[++i];
+                    }
+                    cliIgnorePatterns.push_back(pattern);
+                    break;
+                }
+                case 't':
+                {
+                    std::string value;
+                    if (j + 1 < arg.size())
+                    {
+                        value = arg.substr(j + 1);
+                        j = arg.size();
+                    }
+                    else
+                    {
+                        if (i + 1 >= argc)
+                        {
+                            std::cerr << "ck-du: -t requires a value" << std::endl;
+                            return 1;
+                        }
+                        value = argv[++i];
+                    }
+                    auto parsed = parseThresholdValue(value);
+                    if (!parsed)
+                    {
+                        std::cerr << "ck-du: invalid threshold value '" << value << "'" << std::endl;
+                        return 1;
+                    }
+                    thresholdOverride = *parsed;
+                    break;
+                }
+                case '-':
+                    std::cerr << "ck-du: unknown option '" << arg << "'" << std::endl;
+                    return 1;
+                default:
+                    std::cerr << "ck-du: unknown option '-" << opt << "'" << std::endl;
+                    return 1;
+                }
+                if (opt == 'I' || opt == 't')
+                    break;
+            }
+        }
+        else
+        {
+            directories.emplace_back(arg);
+        }
+    }
+
+    if (loadDefaults)
+        registry->loadDefaults();
+    if (forceReloadDefaults)
+        registry->loadDefaults();
+    for (const auto &file : optionFiles)
+    {
+        if (!registry->loadFromFile(file))
+        {
+            std::cerr << "ck-du: failed to load options from '" << file.string() << "'" << std::endl;
+            return 1;
+        }
+    }
+
+    DuOptions options = optionsFromRegistry(*registry);
+    if (symlinkOverride)
+    {
+        options.symlinkPolicy = *symlinkOverride;
+        options.followCommandLineSymlinks = options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Never;
+    }
+    if (hardLinksOverride)
+        options.countHardLinksMultipleTimes = *hardLinksOverride;
+    if (nodumpOverride)
+        options.ignoreNodump = *nodumpOverride;
+    if (errorsOverride)
+        options.reportErrors = *errorsOverride;
+    if (oneFsOverride)
+        options.stayOnFilesystem = *oneFsOverride;
+    if (thresholdOverride)
+        options.threshold = *thresholdOverride;
+    for (const auto &pattern : cliIgnorePatterns)
+        options.ignorePatterns.push_back(pattern);
+
+    registry->set(kOptionSymlinkPolicy, config::OptionValue(policyToString(options.symlinkPolicy)));
+    registry->set(kOptionHardLinks, config::OptionValue(options.countHardLinksMultipleTimes));
+    registry->set(kOptionIgnoreNodump, config::OptionValue(options.ignoreNodump));
+    registry->set(kOptionReportErrors, config::OptionValue(options.reportErrors));
+    registry->set(kOptionThreshold, config::OptionValue(options.threshold));
+    registry->set(kOptionStayOnFilesystem, config::OptionValue(options.stayOnFilesystem));
+    registry->set(kOptionIgnorePatterns, config::OptionValue(options.ignorePatterns));
+
+    DiskUsageApp app(directories, registry);
     app.run();
     return 0;
 }

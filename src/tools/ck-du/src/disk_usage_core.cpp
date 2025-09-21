@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
+#include <cerrno>
 #include <ctime>
 #include <fcntl.h>
 #include <grp.h>
@@ -13,10 +15,15 @@
 #include <pwd.h>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <system_error>
 #include <unistd.h>
+
+#if !defined(_WIN32)
+#include <fnmatch.h>
+#endif
 
 namespace ck::du
 {
@@ -26,6 +33,139 @@ namespace fs = std::filesystem;
 
 SizeUnit gCurrentUnit = SizeUnit::Auto;
 SortKey gCurrentSortKey = SortKey::Unsorted;
+
+struct FileIdentity
+{
+    std::uintmax_t device = 0;
+    std::uintmax_t inode = 0;
+
+    bool operator==(const FileIdentity &) const noexcept = default;
+};
+
+struct FileIdentityHash
+{
+    std::size_t operator()(const FileIdentity &id) const noexcept
+    {
+        std::size_t h1 = std::hash<std::uintmax_t>{}(id.device);
+        std::size_t h2 = std::hash<std::uintmax_t>{}(id.inode);
+        return h1 ^ (h2 << 1);
+    }
+};
+
+struct ScanContext
+{
+    const BuildDirectoryTreeOptions &options;
+    std::unordered_set<FileIdentity, FileIdentityHash> visited;
+    std::uintmax_t rootDevice = 0;
+    fs::path rootPath;
+};
+
+bool hasNoDumpFlag(const struct stat &sb)
+{
+#ifdef UF_NODUMP
+    return (sb.st_flags & UF_NODUMP) != 0;
+#else
+    (void)sb;
+    return false;
+#endif
+}
+
+bool matchPattern(const std::string &pattern, const std::string &value)
+{
+#if !defined(_WIN32)
+    return fnmatch(pattern.c_str(), value.c_str(), 0) == 0;
+#else
+    const char *p = pattern.c_str();
+    const char *s = value.c_str();
+    const char *star = nullptr;
+    const char *ss = nullptr;
+    while (*s)
+    {
+        if (*p == '*')
+        {
+            star = p++;
+            ss = s;
+        }
+        else if (*p == '?' || *p == *s)
+        {
+            ++p;
+            ++s;
+        }
+        else if (star)
+        {
+            p = star + 1;
+            s = ++ss;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    while (*p == '*')
+        ++p;
+    return *p == '\0';
+#endif
+}
+
+bool shouldIgnorePath(const fs::path &path, const ScanContext &context)
+{
+    if (context.options.ignoreMasks.empty())
+        return false;
+
+    std::string filename = path.filename().string();
+    fs::path relativePath = path.lexically_relative(context.rootPath);
+    std::string relativeString;
+    if (relativePath.empty() || relativePath.native() == ".")
+        relativeString = filename;
+    else
+        relativeString = relativePath.generic_string();
+
+    for (const auto &pattern : context.options.ignoreMasks)
+    {
+        if (pattern.empty())
+            continue;
+        if (matchPattern(pattern, filename))
+            return true;
+        if (!relativeString.empty() && matchPattern(pattern, relativeString))
+            return true;
+    }
+    return false;
+}
+
+std::uintmax_t fileSizeFromStat(const struct stat &sb)
+{
+    if (sb.st_size < 0)
+        return 0;
+    return static_cast<std::uintmax_t>(sb.st_size);
+}
+
+bool passesThreshold(std::uintmax_t size, const BuildDirectoryTreeOptions &options)
+{
+    if (options.threshold == 0)
+        return true;
+    std::uintmax_t threshold = static_cast<std::uintmax_t>(std::llabs(options.threshold));
+    if (options.threshold > 0)
+        return size >= threshold;
+    return size <= threshold;
+}
+
+void reportError(const ScanContext &context, const fs::path &path, const std::error_code &ec)
+{
+    if (!context.options.reportErrors)
+        return;
+    if (context.options.errorCallback)
+        context.options.errorCallback(path, ec);
+}
+
+ScanContext makeScanContext(const fs::path &root, const BuildDirectoryTreeOptions &options)
+{
+    ScanContext context{options};
+    context.rootPath = root;
+    struct stat sb;
+    if (stat(root.c_str(), &sb) == 0)
+        context.rootDevice = static_cast<std::uintmax_t>(sb.st_dev);
+    return context;
+}
 
 std::string formatTimePoint(const std::chrono::system_clock::time_point &tp)
 {
@@ -66,16 +206,15 @@ struct ScanCancelled
 {
 };
 
-DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, const BuildDirectoryTreeOptions &options)
+DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanContext &context)
 {
-    if (options.cancelRequested && options.cancelRequested())
+    if (context.options.cancelRequested && context.options.cancelRequested())
         throw ScanCancelled{};
-    if (options.progressCallback)
-        options.progressCallback(path);
+    if (context.options.progressCallback)
+        context.options.progressCallback(path);
 
     node.path = path;
     DirectoryStats stats{};
-    std::error_code ec;
 
     struct stat sb;
     if (stat(path.c_str(), &sb) == 0)
@@ -83,55 +222,106 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, const Bui
     else
         node.modifiedTime = std::chrono::system_clock::time_point{};
 
-    fs::directory_iterator endIter;
-    fs::directory_iterator it(path, fs::directory_options::skip_permission_denied, ec);
+    if (context.options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+        return stats;
+
+    if (!context.options.countHardLinksMultipleTimes)
+    {
+        FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+        auto [it, inserted] = context.visited.insert(identity);
+        if (!inserted)
+            return stats;
+    }
+
+    fs::directory_options dirOptions = fs::directory_options::skip_permission_denied;
+    if (context.options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+        dirOptions |= fs::directory_options::follow_directory_symlink;
+
+    std::error_code ec;
+    fs::directory_iterator it(path, dirOptions, ec);
     if (ec)
     {
+        reportError(context, path, ec);
         node.stats = stats;
         return stats;
     }
 
+    fs::directory_iterator endIter;
     for (; it != endIter; it.increment(ec))
     {
         if (ec)
         {
+            reportError(context, path, ec);
             ec.clear();
             continue;
         }
 
-        if (options.cancelRequested && options.cancelRequested())
+        if (context.options.cancelRequested && context.options.cancelRequested())
             throw ScanCancelled{};
 
         const fs::directory_entry &entry = *it;
-        std::error_code entryEc;
         const fs::path &entryPath = entry.path();
 
-        if (entry.is_symlink(entryEc))
+        if (shouldIgnorePath(entryPath, context))
+            continue;
+
+        std::error_code entryEc;
+        bool isDirectory = entry.is_directory(entryEc);
+        bool isSymlink = entry.is_symlink(entryEc);
+        if (entryEc)
         {
-            if (!entryEc && entry.is_directory(entryEc))
-                continue;
+            reportError(context, entryPath, entryEc);
+            continue;
         }
 
-        if (!entryEc && entry.is_directory(entryEc))
+        struct stat entryStat;
+        if (stat(entryPath.c_str(), &entryStat) != 0)
         {
-            if (options.cancelRequested && options.cancelRequested())
-                throw ScanCancelled{};
+            reportError(context, entryPath, std::error_code(errno, std::generic_category()));
+            continue;
+        }
 
-            auto child = std::make_unique<DirectoryNode>();
-            child->parent = &node;
-            child->expanded = false;
-            DirectoryStats childStats = populateNode(*child, entryPath, options);
-            child->stats = childStats;
+        if (context.options.ignoreNodumpFlag && hasNoDumpFlag(entryStat))
+            continue;
+
+        if (context.options.stayOnFilesystem && context.rootDevice != 0 &&
+            static_cast<std::uintmax_t>(entryStat.st_dev) != context.rootDevice)
+        {
+            continue;
+        }
+
+        if (isDirectory)
+        {
+            if (isSymlink && context.options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+                continue;
+
+            auto childNode = std::make_unique<DirectoryNode>();
+            childNode->parent = &node;
+            childNode->expanded = false;
+            DirectoryStats childStats = populateNode(*childNode, entryPath, context);
+            childNode->stats = childStats;
+
             stats.totalSize += childStats.totalSize;
             stats.fileCount += childStats.fileCount;
             stats.directoryCount += childStats.directoryCount + 1;
-            node.children.push_back(std::move(child));
+
+            if (passesThreshold(childStats.totalSize, context.options))
+                node.children.push_back(std::move(childNode));
         }
         else
         {
-            std::uintmax_t fileSize = 0;
-            if (!entryEc && entry.is_regular_file(entryEc))
-                fileSize = entry.file_size(entryEc);
+            bool count = true;
+            if (!context.options.countHardLinksMultipleTimes)
+            {
+                FileIdentity identity{static_cast<std::uintmax_t>(entryStat.st_dev),
+                                       static_cast<std::uintmax_t>(entryStat.st_ino)};
+                auto [it2, inserted] = context.visited.insert(identity);
+                count = inserted;
+            }
+            if (!count)
+                continue;
+
+            std::uintmax_t fileSize = fileSizeFromStat(entryStat);
             stats.totalSize += fileSize;
             ++stats.fileCount;
         }
@@ -199,13 +389,37 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
                                            const BuildDirectoryTreeOptions &options)
 {
     BuildDirectoryTreeResult result;
+    std::error_code ec;
+    fs::path basePath = fs::absolute(rootPath, ec);
+    if (ec)
+        basePath = rootPath;
+
+    fs::path scanPath = basePath;
+    if (options.followCommandLineSymlinks)
+    {
+        std::error_code symEc;
+        if (fs::is_symlink(basePath, symEc))
+        {
+            fs::path resolved = fs::weakly_canonical(basePath, symEc);
+            if (!symEc)
+                scanPath = resolved;
+        }
+    }
+
+    scanPath = fs::absolute(scanPath, ec);
+    if (ec)
+        scanPath = basePath;
+
     auto root = std::make_unique<DirectoryNode>();
     root->parent = nullptr;
     root->expanded = true;
 
+    ScanContext context = makeScanContext(scanPath, options);
+    context.rootPath = scanPath;
+
     try
     {
-        DirectoryStats stats = populateNode(*root, fs::absolute(rootPath), options);
+        DirectoryStats stats = populateNode(*root, scanPath, context);
         root->stats = stats;
         result.root = std::move(root);
     }
@@ -217,15 +431,74 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
     return result;
 }
 
-std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive)
+std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive,
+                                const BuildDirectoryTreeOptions &options)
 {
     std::vector<FileEntry> files;
-    const fs::path base = fs::absolute(directory);
+
     std::error_code ec;
+    fs::path basePath = fs::absolute(directory, ec);
+    if (ec)
+        basePath = directory;
+
+    fs::path scanPath = basePath;
+    if (options.followCommandLineSymlinks)
+    {
+        std::error_code symEc;
+        if (fs::is_symlink(basePath, symEc))
+        {
+            fs::path resolved = fs::weakly_canonical(basePath, symEc);
+            if (!symEc)
+                scanPath = resolved;
+        }
+    }
+    scanPath = fs::absolute(scanPath, ec);
+    if (ec)
+        scanPath = basePath;
+
+    ScanContext context = makeScanContext(scanPath, options);
+    context.rootPath = scanPath;
+
+    auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+        if (shouldIgnorePath(path, context))
+            return;
+        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+            return;
+        if (options.stayOnFilesystem && context.rootDevice != 0 &&
+            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            return;
+        if (!options.countHardLinksMultipleTimes)
+        {
+            FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+            auto [it, inserted] = context.visited.insert(identity);
+            if (!inserted)
+                return;
+        }
+        std::uintmax_t size = fileSizeFromStat(sb);
+        if (!passesThreshold(size, options))
+            return;
+        files.push_back(makeFileEntry(path, scanPath));
+    };
+
+    auto shouldSkipDirectory = [&](const fs::path &path, const struct stat &sb, bool isSymlink) {
+        if (shouldIgnorePath(path, context))
+            return true;
+        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+            return true;
+        if (options.stayOnFilesystem && context.rootDevice != 0 &&
+            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            return true;
+        if (isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            return true;
+        return false;
+    };
 
     if (recursive)
     {
-        fs::recursive_directory_iterator it(base, fs::directory_options::skip_permission_denied, ec);
+        fs::directory_options dirOptions = fs::directory_options::skip_permission_denied;
+        if (options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            dirOptions |= fs::directory_options::follow_directory_symlink;
+        fs::recursive_directory_iterator it(scanPath, dirOptions, ec);
         fs::recursive_directory_iterator end;
         if (ec)
             return files;
@@ -234,21 +507,44 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
         {
             if (ec)
             {
+                reportError(context, it->path(), ec);
                 ec.clear();
                 continue;
             }
 
             const fs::directory_entry &entry = *it;
-            std::error_code entryEc;
-            if (entry.is_directory(entryEc) && !entryEc)
+            const fs::path &path = entry.path();
+
+            struct stat sb;
+            if (stat(path.c_str(), &sb) != 0)
+            {
+                reportError(context, path, std::error_code(errno, std::generic_category()));
                 continue;
-            if (!entryEc && entry.is_regular_file(entryEc))
-                files.push_back(makeFileEntry(entry.path(), base));
+            }
+
+            std::error_code entryEc;
+            bool isSymlink = entry.is_symlink(entryEc) && !entryEc;
+            bool isDirectory = S_ISDIR(sb.st_mode);
+
+            if (isDirectory)
+            {
+                if (shouldSkipDirectory(path, sb, isSymlink))
+                    it.disable_recursion_pending();
+                continue;
+            }
+
+            if (!entry.is_regular_file(entryEc) || entryEc)
+                continue;
+
+            considerFile(path, sb);
         }
     }
     else
     {
-        fs::directory_iterator it(base, fs::directory_options::skip_permission_denied, ec);
+        fs::directory_options dirOptions = fs::directory_options::skip_permission_denied;
+        if (options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            dirOptions |= fs::directory_options::follow_directory_symlink;
+        fs::directory_iterator it(scanPath, dirOptions, ec);
         fs::directory_iterator end;
         if (ec)
             return files;
@@ -257,14 +553,25 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
         {
             if (ec)
             {
+                reportError(context, scanPath, ec);
                 ec.clear();
                 continue;
             }
 
             const fs::directory_entry &entry = *it;
+            const fs::path &path = entry.path();
             std::error_code entryEc;
-            if (!entryEc && entry.is_regular_file(entryEc))
-                files.push_back(makeFileEntry(entry.path(), base));
+            if (!entry.is_regular_file(entryEc) || entryEc)
+                continue;
+
+            struct stat sb;
+            if (stat(path.c_str(), &sb) != 0)
+            {
+                reportError(context, path, std::error_code(errno, std::generic_category()));
+                continue;
+            }
+
+            considerFile(path, sb);
         }
     }
 
