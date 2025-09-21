@@ -207,6 +207,185 @@ private:
     }
 };
 
+TSubMenu &makeFileMenu()
+{
+    return *new TSubMenu("~F~ile", kbAltF) +
+           *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
+           *new TMenuItem("~N~ew", cmNew, kbCtrlN, hcNoContext, "Ctrl-N") +
+           *new TMenuItem("~S~ave", cmSave, kbF2, hcNoContext, "F2") +
+           *new TMenuItem("S~a~ve as...", cmSaveAs, kbNoKey) +
+           newLine() +
+           *new TMenuItem("~C~hange dir...", cmChangeDir, kbNoKey) +
+           *new TMenuItem("E~x~it", cmQuit, kbCtrlQ, hcNoContext, "Ctrl-Q");
+}
+
+TSubMenu &makeHeadingsMenu()
+{
+    return *new TSubMenu("~H~eadings", kbNoKey) +
+           *new TMenuItem("Heading ~1", cmHeading1, kbNoKey) +
+           *new TMenuItem("Heading ~2", cmHeading2, kbNoKey) +
+           *new TMenuItem("Heading ~3", cmHeading3, kbNoKey) +
+           *new TMenuItem("Heading ~4", cmHeading4, kbNoKey) +
+           *new TMenuItem("Heading ~5", cmHeading5, kbNoKey) +
+           *new TMenuItem("Heading ~6", cmHeading6, kbNoKey) +
+           newLine() +
+           *new TMenuItem("C~l~ear Heading", cmClearHeading, kbNoKey);
+}
+
+TSubMenu &makeTextStyleMenu()
+{
+    return *new TSubMenu("Te~x~t Style", kbNoKey) +
+           *new TMenuItem("~B~old", cmBold, kbCtrlB, hcNoContext, "Ctrl-B") +
+           *new TMenuItem("~I~talic", cmItalic, kbCtrlI, hcNoContext, "Ctrl-I") +
+           *new TMenuItem("Bold + Italic", cmBoldItalic, kbNoKey) +
+           *new TMenuItem("~S~trikethrough", cmStrikethrough, kbNoKey) +
+           *new TMenuItem("Remove Formatting", cmRemoveFormatting, kbNoKey);
+}
+
+TSubMenu &makeCodeMediaMenu()
+{
+    return *new TSubMenu("~C~ode && Media", kbNoKey) +
+           *new TMenuItem("Inline Code", cmInlineCode, kbCtrlK, hcNoContext, "Ctrl-K") +
+           *new TMenuItem("Code Block...", cmCodeBlock, kbNoKey) +
+           *new TMenuItem("Insert Image...", cmInsertImage, kbNoKey);
+}
+
+TSubMenu &makeBlocksMenu()
+{
+    return *new TSubMenu("~B~locks", kbNoKey) +
+           *new TMenuItem("Make Paragraph", cmMakeParagraph, kbNoKey) +
+           *new TMenuItem("Toggle Blockquote", cmToggleBlockQuote, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Increase Indent", cmIncreaseIndent, kbNoKey) +
+           *new TMenuItem("Decrease Indent", cmDecreaseIndent, kbNoKey);
+}
+
+TSubMenu &makeListsMenu()
+{
+    return *new TSubMenu("~L~ists", kbNoKey) +
+           *new TMenuItem("Bulleted List", cmToggleBulletList, kbNoKey) +
+           *new TMenuItem("Numbered List", cmToggleNumberedList, kbNoKey) +
+           *new TMenuItem("Task List", cmConvertTaskList, kbNoKey) +
+           *new TMenuItem("Toggle Checkbox", cmToggleTaskCheckbox, kbNoKey) +
+           *new TMenuItem("Definition List", cmDefinitionList, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Auto List Continuation", cmToggleSmartList, kbNoKey);
+}
+
+TSubMenu &makeInsertMenu()
+{
+    return *new TSubMenu("I~n~sert", kbNoKey) +
+           *new TMenuItem("Insert/Edit Link...", cmInsertLink, kbNoKey) +
+           *new TMenuItem("Reference Link...", cmInsertReferenceLink, kbNoKey) +
+           *new TMenuItem("Auto-link Selection", cmAutoLinkSelection, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Line Break", cmInsertLineBreak, kbNoKey) +
+           *new TMenuItem("Horizontal Rule", cmInsertHorizontalRule, kbNoKey) +
+           *new TMenuItem("Escape Selection", cmEscapeSelection, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Footnote", cmInsertFootnote, kbNoKey);
+}
+
+TSubMenu &makeDocumentMenu()
+{
+    return *new TSubMenu("Doc~u~ment", kbNoKey) +
+           *new TMenuItem("Reflow Paragraphs", cmReflowParagraphs, kbNoKey) +
+           *new TMenuItem("Format Document", cmFormatDocument, kbNoKey);
+}
+
+TSubMenu &makeTableMenu()
+{
+    return *new TSubMenu("Ta~b~le", kbAltB) +
+           *new TMenuItem("Insert ~T~able...", cmInsertTable, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Insert row ~a~bove", cmTableInsertRowAbove, kbNoKey) +
+           *new TMenuItem("Insert row ~b~elow", cmTableInsertRowBelow, kbNoKey) +
+           *new TMenuItem("Delete row", cmTableDeleteRow, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Insert column ~b~efore", cmTableInsertColumnBefore, kbNoKey) +
+           *new TMenuItem("Insert column ~a~fter", cmTableInsertColumnAfter, kbNoKey) +
+           *new TMenuItem("Delete column", cmTableDeleteColumn, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Align ~d~efault", cmTableAlignDefault, kbNoKey) +
+           *new TMenuItem("Align ~l~eft", cmTableAlignLeft, kbNoKey) +
+           *new TMenuItem("Align ~c~enter", cmTableAlignCenter, kbNoKey) +
+           *new TMenuItem("Align ~r~ight", cmTableAlignRight, kbNoKey) +
+           *new TMenuItem("Align ~n~umber", cmTableAlignNumber, kbNoKey) +
+           newLine() +
+           *new TMenuItem("Delete table", cmTableDeleteTable, kbNoKey);
+}
+
+TSubMenu &makeViewMenu()
+{
+    return *new TSubMenu("~V~iew", kbAltV) +
+           *new TMenuItem("Toggle ~w~rap", cmToggleWrap, kbCtrlW, hcNoContext, "Ctrl-W") +
+           *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbCtrlM, hcNoContext, "Ctrl-M");
+}
+
+TSubMenu &makeHelpMenu()
+{
+    return *new TSubMenu("~H~elp", kbAltH) +
+           *new TMenuItem("~A~bout", cmAbout, kbNoKey);
+}
+
+TSubMenu &makeEditMenu(bool markdownMode)
+{
+    TSubMenu &edit = *new TSubMenu("~E~dit", kbAltE) +
+                     *new TMenuItem("~U~ndo", cmUndo, kbCtrlU, hcNoContext, "Ctrl-U") +
+                     newLine() +
+                     *new TMenuItem("Cu~t~", cmCut, kbShiftDel, hcNoContext, "Shift-Del") +
+                     *new TMenuItem("~C~opy", cmCopy, kbCtrlIns, hcNoContext, "Ctrl-Ins") +
+                     *new TMenuItem("~P~aste", cmPaste, kbShiftIns, hcNoContext, "Shift-Ins") +
+                     newLine() +
+                     *new TMenuItem("~F~ind...", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
+                     *new TMenuItem("~R~eplace...", cmReplace, kbCtrlR, hcNoContext, "Ctrl-R") +
+                     *new TMenuItem("Find ~N~ext", cmSearchAgain, kbCtrlL, hcNoContext, "Ctrl-L");
+
+    if (markdownMode)
+    {
+        edit + newLine() + makeHeadingsMenu() + makeTextStyleMenu() + makeCodeMediaMenu() + makeBlocksMenu() +
+            makeListsMenu() + makeInsertMenu() + makeDocumentMenu();
+    }
+
+    return edit;
+}
+
+class MarkdownMenuBar : public TMenuBar
+{
+public:
+    explicit MarkdownMenuBar(TRect r)
+        : TMenuBar(r, buildMenu(true)), markdownMode(true)
+    {
+    }
+
+    void setMarkdownMode(bool mode)
+    {
+        if (markdownMode == mode)
+            return;
+        markdownMode = mode;
+        TMenu *newMenu = buildMenu(mode);
+        delete menu;
+        menu = newMenu;
+        current = menu ? menu->items : nullptr;
+        drawView();
+    }
+
+private:
+    bool markdownMode;
+
+    static TMenu *buildMenu(bool markdownMode)
+    {
+        if (markdownMode)
+        {
+            TMenuItem &items = makeFileMenu() + makeEditMenu(true) + makeTableMenu() + makeViewMenu() + makeHelpMenu();
+            return new TMenu(items);
+        }
+
+        TMenuItem &items = makeFileMenu() + makeEditMenu(false) + makeViewMenu() + makeHelpMenu();
+        return new TMenu(items);
+    }
+};
+
 } // namespace
 
 MarkdownFileEditor::MarkdownFileEditor(const TRect &bounds, TScrollBar *hScroll,
@@ -217,7 +396,7 @@ MarkdownFileEditor::MarkdownFileEditor(const TRect &bounds, TScrollBar *hScroll,
     if (!fileName.empty())
         markdownMode = isMarkdownFile(std::string(fileName));
     else
-        markdownMode = true;
+        markdownMode = false;
 }
 
 int MarkdownFileEditor::TableContext::columnCount() const noexcept
@@ -2556,8 +2735,7 @@ void MarkdownInfoView::draw()
                 buffer.moveCStr(1, "Plain Text", normalPair);
             if (size.x > 0)
             {
-                buffer.putChar(size.x - 1, '|');
-                buffer.putAttribute(size.x - 1, normalAttr);
+                buffer.moveStr(size.x - 1, "│", normalAttr);
             }
             writeLine(0, y, size.x, 1, buffer);
         }
@@ -2631,8 +2809,7 @@ void MarkdownInfoView::draw()
         }
         if (size.x > 0)
         {
-            buffer.putChar(size.x - 1, '|');
-            buffer.putAttribute(size.x - 1, rowAttr);
+            buffer.moveStr(size.x - 1, "│", rowAttr);
         }
         writeLine(0, row, size.x, 1, buffer);
         ++lineNumber;
@@ -2701,7 +2878,21 @@ void MarkdownEditWindow::updateLayoutForMode()
     hScrollBar->drawView();
 
     if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
-        app->updateStatusLineForMode(markdown);
+        app->refreshUiMode();
+}
+
+void MarkdownEditWindow::draw()
+{
+    TWindow::draw();
+    if (fileEditor && fileEditor->isMarkdownMode())
+    {
+        TDrawBuffer buffer;
+        TColorAttr frameAttr = getColor(2);
+        buffer.moveStr(0, "╤", frameAttr);
+        writeLine(kInfoColumnWidth, 0, 1, 1, buffer);
+        buffer.moveStr(0, "╧", frameAttr);
+        writeLine(kInfoColumnWidth, size.y - 1, 1, 1, buffer);
+    }
 }
 
 void MarkdownEditWindow::setState(ushort aState, Boolean enable)
@@ -2710,7 +2901,7 @@ void MarkdownEditWindow::setState(ushort aState, Boolean enable)
     if ((aState & sfActive) != 0 && enable)
     {
         if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
-            app->updateStatusLineForMode(fileEditor && fileEditor->isMarkdownMode());
+            app->refreshUiMode();
     }
 }
 
@@ -2734,6 +2925,7 @@ MarkdownEditorApp::MarkdownEditorApp(int argc, char **argv)
     while (--argc > 0)
         openEditor(*++argv, True);
     cascade();
+    refreshUiMode();
 }
 
 MarkdownEditWindow *MarkdownEditorApp::openEditor(const char *fileName, Boolean visible)
@@ -2767,7 +2959,7 @@ void MarkdownEditorApp::changeDir()
 
 void MarkdownEditorApp::showAbout()
 {
-    ck::ui::showAboutDialog(kAppName, CK_EDIT_VERSION, kAppDescription);
+    ck::ui::showAboutDialog(appName(), CK_EDIT_VERSION, appAboutDescription());
 }
 
 void MarkdownEditorApp::dispatchToEditor(ushort command)
@@ -2787,8 +2979,12 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
 {
     TApplication::handleEvent(event);
     if (event.what != evCommand)
+    {
+        refreshUiMode();
         return;
+    }
 
+    bool handled = true;
     switch (event.message.command)
     {
     case cmOpen:
@@ -2855,103 +3051,18 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
         showAbout();
         break;
     default:
-        return;
+        handled = false;
+        break;
     }
-    clearEvent(event);
+    if (handled)
+        clearEvent(event);
+    refreshUiMode();
 }
 
 TMenuBar *MarkdownEditorApp::initMenuBar(TRect r)
 {
     r.b.y = r.a.y + 1;
-    return new TMenuBar(r,
-                        *new TSubMenu("~F~ile", kbAltF) +
-                            *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
-                            *new TMenuItem("~N~ew", cmNew, kbCtrlN, hcNoContext, "Ctrl-N") +
-                            *new TMenuItem("~S~ave", cmSave, kbF2, hcNoContext, "F2") +
-                            *new TMenuItem("S~a~ve as...", cmSaveAs, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("~C~hange dir...", cmChangeDir, kbNoKey) +
-                            *new TMenuItem("E~x~it", cmQuit, kbCtrlQ, hcNoContext, "Ctrl-Q") +
-                        *new TSubMenu("~E~dit", kbAltE) +
-                            *new TMenuItem("~U~ndo", cmUndo, kbCtrlU, hcNoContext, "Ctrl-U") +
-                            newLine() +
-                            *new TMenuItem("Cu~t~", cmCut, kbShiftDel, hcNoContext, "Shift-Del") +
-                            *new TMenuItem("~C~opy", cmCopy, kbCtrlIns, hcNoContext, "Ctrl-Ins") +
-                            *new TMenuItem("~P~aste", cmPaste, kbShiftIns, hcNoContext, "Shift-Ins") +
-                            newLine() +
-                            *new TMenuItem("~F~ind...", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                            *new TMenuItem("~R~eplace...", cmReplace, kbCtrlR, hcNoContext, "Ctrl-R") +
-                            *new TMenuItem("Find ~N~ext", cmSearchAgain, kbCtrlL, hcNoContext, "Ctrl-L") +
-                            newLine() +
-                            *new TSubMenu("~H~eadings", kbNoKey) +
-                                *new TMenuItem("Heading ~1", cmHeading1, kbNoKey) +
-                                *new TMenuItem("Heading ~2", cmHeading2, kbNoKey) +
-                                *new TMenuItem("Heading ~3", cmHeading3, kbNoKey) +
-                                *new TMenuItem("Heading ~4", cmHeading4, kbNoKey) +
-                                *new TMenuItem("Heading ~5", cmHeading5, kbNoKey) +
-                                *new TMenuItem("Heading ~6", cmHeading6, kbNoKey) +
-                                newLine() +
-                                *new TMenuItem("C~l~ear Heading", cmClearHeading, kbNoKey) +
-                            *new TSubMenu("Te~x~t Style", kbNoKey) +
-                                *new TMenuItem("~B~old", cmBold, kbCtrlB, hcNoContext, "Ctrl-B") +
-                                *new TMenuItem("~I~talic", cmItalic, kbCtrlI, hcNoContext, "Ctrl-I") +
-                                *new TMenuItem("Bold + Italic", cmBoldItalic, kbNoKey) +
-                                *new TMenuItem("~S~trikethrough", cmStrikethrough, kbNoKey) +
-                                *new TMenuItem("Remove Formatting", cmRemoveFormatting, kbNoKey) +
-                            *new TSubMenu("~C~ode && Media", kbNoKey) +
-                                *new TMenuItem("Inline Code", cmInlineCode, kbCtrlK, hcNoContext, "Ctrl-K") +
-                                *new TMenuItem("Code Block...", cmCodeBlock, kbNoKey) +
-                                *new TMenuItem("Insert Image...", cmInsertImage, kbNoKey) +
-                            *new TSubMenu("~B~locks", kbNoKey) +
-                                *new TMenuItem("Make Paragraph", cmMakeParagraph, kbNoKey) +
-                                *new TMenuItem("Toggle Blockquote", cmToggleBlockQuote, kbNoKey) +
-                                newLine() +
-                                *new TMenuItem("Increase Indent", cmIncreaseIndent, kbNoKey) +
-                                *new TMenuItem("Decrease Indent", cmDecreaseIndent, kbNoKey) +
-                            *new TSubMenu("~L~ists", kbNoKey) +
-                                *new TMenuItem("Bulleted List", cmToggleBulletList, kbNoKey) +
-                                *new TMenuItem("Numbered List", cmToggleNumberedList, kbNoKey) +
-                                *new TMenuItem("Task List", cmConvertTaskList, kbNoKey) +
-                                *new TMenuItem("Toggle Checkbox", cmToggleTaskCheckbox, kbNoKey) +
-                                *new TMenuItem("Definition List", cmDefinitionList, kbNoKey) +
-                                newLine() +
-                                *new TMenuItem("Auto List Continuation", cmToggleSmartList, kbNoKey) +
-                            *new TSubMenu("I~n~sert", kbNoKey) +
-                                *new TMenuItem("Insert/Edit Link...", cmInsertLink, kbNoKey) +
-                                *new TMenuItem("Reference Link...", cmInsertReferenceLink, kbNoKey) +
-                                *new TMenuItem("Auto-link Selection", cmAutoLinkSelection, kbNoKey) +
-                                newLine() +
-                                *new TMenuItem("Line Break", cmInsertLineBreak, kbNoKey) +
-                                *new TMenuItem("Horizontal Rule", cmInsertHorizontalRule, kbNoKey) +
-                                *new TMenuItem("Escape Selection", cmEscapeSelection, kbNoKey) +
-                                newLine() +
-                                *new TMenuItem("Footnote", cmInsertFootnote, kbNoKey) +
-                            *new TSubMenu("Doc~u~ment", kbNoKey) +
-                                *new TMenuItem("Reflow Paragraphs", cmReflowParagraphs, kbNoKey) +
-                                *new TMenuItem("Format Document", cmFormatDocument, kbNoKey) +
-                        *new TSubMenu("Ta~b~le", kbAltB) +
-                            *new TMenuItem("Insert ~T~able...", cmInsertTable, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("Insert row ~a~bove", cmTableInsertRowAbove, kbNoKey) +
-                            *new TMenuItem("Insert row ~b~elow", cmTableInsertRowBelow, kbNoKey) +
-                            *new TMenuItem("Delete row", cmTableDeleteRow, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("Insert column ~b~efore", cmTableInsertColumnBefore, kbNoKey) +
-                            *new TMenuItem("Insert column ~a~fter", cmTableInsertColumnAfter, kbNoKey) +
-                            *new TMenuItem("Delete column", cmTableDeleteColumn, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("Align ~d~efault", cmTableAlignDefault, kbNoKey) +
-                            *new TMenuItem("Align ~l~eft", cmTableAlignLeft, kbNoKey) +
-                            *new TMenuItem("Align ~c~enter", cmTableAlignCenter, kbNoKey) +
-                            *new TMenuItem("Align ~r~ight", cmTableAlignRight, kbNoKey) +
-                            *new TMenuItem("Align ~n~umber", cmTableAlignNumber, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("Delete table", cmTableDeleteTable, kbNoKey) +
-                        *new TSubMenu("~V~iew", kbAltV) +
-                            *new TMenuItem("Toggle ~w~rap", cmToggleWrap, kbCtrlW, hcNoContext, "Ctrl-W") +
-                            *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbCtrlM, hcNoContext, "Ctrl-M") +
-                        *new TSubMenu("~H~elp", kbAltH) +
-                            *new TMenuItem("~A~bout", cmAbout, kbNoKey));
+    return new MarkdownMenuBar(r);
 
 }
 
@@ -2967,6 +3078,29 @@ void MarkdownEditorApp::updateStatusLineForMode(bool markdownMode)
         return;
     if (auto *line = dynamic_cast<MarkdownStatusLine *>(statusLine))
         line->setMarkdownMode(markdownMode);
+}
+
+void MarkdownEditorApp::updateMenuBarForMode(bool markdownMode)
+{
+    if (!menuBar)
+        return;
+    if (auto *bar = dynamic_cast<MarkdownMenuBar *>(menuBar))
+        bar->setMarkdownMode(markdownMode);
+}
+
+void MarkdownEditorApp::refreshUiMode()
+{
+    bool markdownMode = false;
+    if (deskTop && deskTop->current)
+    {
+        if (auto *win = dynamic_cast<MarkdownEditWindow *>(deskTop->current))
+        {
+            if (auto *ed = win->editor())
+                markdownMode = ed->isMarkdownMode();
+        }
+    }
+    updateStatusLineForMode(markdownMode);
+    updateMenuBarForMode(markdownMode);
 }
 
 } // namespace ck::edit

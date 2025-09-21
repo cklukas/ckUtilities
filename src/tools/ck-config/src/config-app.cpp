@@ -1,5 +1,6 @@
 #include "ck/options.hpp"
 #include "ck/about_dialog.hpp"
+#include "ck/app_info.hpp"
 #include "disk_usage_options.hpp"
 
 #define Uses_TApplication
@@ -51,9 +52,12 @@ namespace config = ck::config;
 namespace
 {
 
-constexpr std::string_view kAppName = "ck-config";
-constexpr std::string_view kAppDescription =
-    "Manage ck-utilities configuration defaults.";
+constexpr std::string_view kToolId = "ck-config";
+
+const ck::appinfo::ToolInfo &toolInfo()
+{
+    return ck::appinfo::requireTool(kToolId);
+}
 
 using RegisterFn = void (*)(config::OptionRegistry &);
 
@@ -195,8 +199,9 @@ std::vector<ApplicationEntry> gatherApplicationEntries()
 
 void printUsage()
 {
-    std::cout << kAppName << " - " << kAppDescription << "\n\n"
-              << "Usage: " << kAppName << " [options]\n"
+    const auto &info = toolInfo();
+    std::cout << info.executable << " - " << info.shortDescription << "\n\n"
+              << "Usage: " << info.executable << " [options]\n"
               << "  --list-apps             List known applications\n"
               << "  --list-profiles         List profiles with saved defaults\n"
               << "  --config-root           Print the configuration root path\n"
@@ -1184,9 +1189,12 @@ public:
             case cmOpenConfigDir:
                 showConfigDirectory();
                 break;
-            case cmAbout:
-                ck::ui::showAboutDialog(kAppName, CK_CONFIG_VERSION, kAppDescription);
-                break;
+        case cmAbout:
+        {
+            const auto &info = toolInfo();
+            ck::ui::showAboutDialog(info.executable, CK_CONFIG_VERSION, info.aboutDescription);
+            break;
+        }
             default:
                 return;
             }
@@ -1358,4 +1366,3 @@ int main(int argc, char **argv)
     app.run();
     return 0;
 }
-

@@ -8,8 +8,8 @@ namespace
 
 void printHelp()
 {
-    std::cout << ck::edit::kAppName << " - " << ck::edit::kAppDescription << "\n\n";
-    std::cout << "Usage: " << ck::edit::kAppName << " [FILE...]\n";
+    std::cout << ck::edit::appName() << " - " << ck::edit::appShortDescription() << "\n\n";
+    std::cout << "Usage: " << ck::edit::appName() << " [FILE...]\n";
     std::cout << "Launch the editor and open each FILE provided on the command line." << std::endl;
 }
 

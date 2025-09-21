@@ -29,6 +29,7 @@
 #include <tvision/tv.h>
 
 #include "ck/about_dialog.hpp"
+#include "ck/app_info.hpp"
 #include "ck/options.hpp"
 
 #include <algorithm>
@@ -56,8 +57,12 @@
 using namespace ck::du;
 namespace config = ck::config;
 
-static constexpr const char *kAboutDescription =
-    "Analyze directory and file storage utilization.";
+static constexpr std::string_view kToolId = "ck-du";
+
+static const ck::appinfo::ToolInfo &toolInfo()
+{
+    return ck::appinfo::requireTool(kToolId);
+}
 
 static const ushort cmViewFiles = 2001;
 static const ushort cmViewFilesRecursive = 2002;
@@ -1665,7 +1670,8 @@ void DiskUsageApp::handleEvent(TEvent &event)
             break;
         case cmAbout:
         {
-            ck::ui::showAboutDialog("ck-du", CK_DU_VERSION, kAboutDescription);
+            const auto &info = toolInfo();
+            ck::ui::showAboutDialog(info.executable, CK_DU_VERSION, info.aboutDescription);
             break;
         }
         default:
@@ -2481,8 +2487,9 @@ int main(int argc, char **argv)
     std::vector<std::filesystem::path> directories;
 
     auto printUsage = []() {
-        std::cout << "ck-du - " << kAboutDescription << "\n\n"
-                  << "Usage: ck-du [options] [paths...]\n"
+        const auto &info = toolInfo();
+        std::cout << info.executable << " - " << info.shortDescription << "\n\n"
+                  << "Usage: " << info.executable << " [options] [paths...]\n"
                   << "  -H             Follow symlinks listed on the command line only\n"
                   << "  -L             Follow all symbolic links\n"
                   << "  -P             Do not follow symbolic links\n"
@@ -2677,4 +2684,3 @@ int main(int argc, char **argv)
     app.run();
     return 0;
 }
-

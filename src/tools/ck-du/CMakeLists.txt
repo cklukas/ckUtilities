@@ -23,6 +23,7 @@ add_library(ck_du_core STATIC
 target_include_directories(ck_du_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
@@ -42,6 +43,8 @@ add_ck_tool(ckdu
   SOURCES
     src/disk-usage-app.cpp
   LIBRARIES
+    ck_app_info
+    ck_options
     ck_du_core
     tvision::tvision
     ${CURSES_LIBRARIES}
@@ -51,11 +54,4 @@ add_ck_tool(ckdu
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_DU_VERSION="${PROJECT_VERSION}"
-)
-
-target_link_libraries(ck_du_core
-  PUBLIC
-    ck_options
-  PRIVATE
-    ${CURSES_LIBRARIES}
 )

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "markdown_parser.hpp"
+#include "ck/app_info.hpp"
 
 #define Uses_TWindow
 #define Uses_TScrollBar
@@ -9,6 +10,7 @@
 #define Uses_TEditWindow
 #define Uses_TFileEditor
 #define Uses_TRect
+#define Uses_TMenu
 #define Uses_TEvent
 #define Uses_TPoint
 #define Uses_TDrawBuffer
@@ -39,9 +41,22 @@
 namespace ck::edit
 {
 
-inline constexpr std::string_view kAppName = "ck-edit";
-inline constexpr std::string_view kAppDescription =
-    "Edit text and Markdown documents with live structural hints.";
+inline constexpr std::string_view kAppId = "ck-edit";
+
+inline std::string_view appName()
+{
+    return ck::appinfo::requireTool(kAppId).executable;
+}
+
+inline std::string_view appShortDescription()
+{
+    return ck::appinfo::requireTool(kAppId).shortDescription;
+}
+
+inline std::string_view appAboutDescription()
+{
+    return ck::appinfo::requireTool(kAppId).aboutDescription;
+}
 
 class MarkdownInfoView;
 class MarkdownEditWindow;
@@ -234,6 +249,7 @@ public:
     MarkdownFileEditor *editor() noexcept { return fileEditor; }
     void updateLayoutForMode();
 
+    virtual void draw() override;
     virtual void setState(ushort aState, Boolean enable) override;
 
 private:
@@ -255,6 +271,8 @@ public:
     virtual void handleEvent(TEvent &event) override;
 
     void updateStatusLineForMode(bool markdownMode);
+    void updateMenuBarForMode(bool markdownMode);
+    void refreshUiMode();
 
 private:
     MarkdownEditWindow *openEditor(const char *fileName, Boolean visible);

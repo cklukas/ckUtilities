@@ -20,6 +20,7 @@ add_ck_tool(ckconfig
   SOURCES
     src/config-app.cpp
   LIBRARIES
+    ck_app_info
     ck_options
     ck_du_core
     tvision::tvision
@@ -31,4 +32,3 @@ add_ck_tool(ckconfig
   DEFINITIONS
     CK_CONFIG_VERSION="${PROJECT_VERSION}"
 )
-

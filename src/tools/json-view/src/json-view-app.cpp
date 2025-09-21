@@ -24,14 +24,19 @@
 #include <tvision/tv.h>
 
 #include "ck/about_dialog.hpp"
+#include "ck/app_info.hpp"
 
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <string>
 
-static constexpr const char *kAboutDescription =
-    "Inspect and navigate JSON documents interactively.";
+static constexpr std::string_view kToolId = "ck-json-view";
+
+static const ck::appinfo::ToolInfo &toolInfo()
+{
+    return ck::appinfo::requireTool(kToolId);
+}
 
 class JsonTNode : public TNode
 {
@@ -357,7 +362,8 @@ void JsonViewApp::handleEvent(TEvent &event)
             break;
         case cmAbout:
         {
-            ck::ui::showAboutDialog("ck-json-view", JSON_VIEW_VERSION, kAboutDescription);
+            const auto &info = toolInfo();
+            ck::ui::showAboutDialog(info.executable, JSON_VIEW_VERSION, info.aboutDescription);
             break;
         }
         default:
