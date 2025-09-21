@@ -13,6 +13,20 @@ function(add_ck_tool TOOL_NAME)
   add_executable(${TOOL_NAME} ${cktool_SOURCES})
   target_compile_features(${TOOL_NAME} PRIVATE cxx_std_20)
 
+  set(_ck_runtime_dir "${PROJECT_BINARY_DIR}/bin")
+  file(MAKE_DIRECTORY "${_ck_runtime_dir}")
+  set_target_properties(${TOOL_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${_ck_runtime_dir}"
+  )
+  if(CMAKE_CONFIGURATION_TYPES)
+    foreach(_ck_config ${CMAKE_CONFIGURATION_TYPES})
+      string(TOUPPER "${_ck_config}" _ck_config_upper)
+      set_target_properties(${TOOL_NAME} PROPERTIES
+        "RUNTIME_OUTPUT_DIRECTORY_${_ck_config_upper}" "${_ck_runtime_dir}"
+      )
+    endforeach()
+  endif()
+
   if(cktool_INCLUDE_DIRECTORIES)
     target_include_directories(${TOOL_NAME} PRIVATE ${cktool_INCLUDE_DIRECTORIES})
   endif()

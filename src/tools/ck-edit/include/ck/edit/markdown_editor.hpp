@@ -39,6 +39,10 @@
 namespace ck::edit
 {
 
+inline constexpr std::string_view kAppName = "ck-edit";
+inline constexpr std::string_view kAppDescription =
+    "Edit text and Markdown documents with live structural hints.";
+
 class MarkdownInfoView;
 class MarkdownEditWindow;
 class MarkdownEditorApp;
