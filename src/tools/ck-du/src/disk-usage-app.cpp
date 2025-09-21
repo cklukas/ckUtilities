@@ -2481,7 +2481,8 @@ int main(int argc, char **argv)
     std::vector<std::filesystem::path> directories;
 
     auto printUsage = []() {
-        std::cout << "Usage: ck-du [options] [paths...]\n"
+        std::cout << "ck-du - " << kAboutDescription << "\n\n"
+                  << "Usage: ck-du [options] [paths...]\n"
                   << "  -H             Follow symlinks listed on the command line only\n"
                   << "  -L             Follow all symbolic links\n"
                   << "  -P             Do not follow symbolic links\n"

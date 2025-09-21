@@ -37,6 +37,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unordered_set>
 #include <vector>
@@ -49,6 +50,10 @@ namespace config = ck::config;
 
 namespace
 {
+
+constexpr std::string_view kAppName = "ck-config";
+constexpr std::string_view kAppDescription =
+    "Manage ck-utilities configuration defaults.";
 
 using RegisterFn = void (*)(config::OptionRegistry &);
 
@@ -190,7 +195,8 @@ std::vector<ApplicationEntry> gatherApplicationEntries()
 
 void printUsage()
 {
-    std::cout << "Usage: ck-config [options]\n"
+    std::cout << kAppName << " - " << kAppDescription << "\n\n"
+              << "Usage: " << kAppName << " [options]\n"
               << "  --list-apps             List known applications\n"
               << "  --list-profiles         List profiles with saved defaults\n"
               << "  --config-root           Print the configuration root path\n"
@@ -1179,7 +1185,7 @@ public:
                 showConfigDirectory();
                 break;
             case cmAbout:
-                ck::ui::showAboutDialog("ck-config", CK_CONFIG_VERSION, "Manage ck-utilities configuration defaults.");
+                ck::ui::showAboutDialog(kAppName, CK_CONFIG_VERSION, kAppDescription);
                 break;
             default:
                 return;

@@ -2641,8 +2641,7 @@ void MarkdownEditorApp::changeDir()
 
 void MarkdownEditorApp::showAbout()
 {
-    ck::ui::showAboutDialog("ck-edit", CK_EDIT_VERSION,
-                            "Edit text and Markdown documents with live structural hints.");
+    ck::ui::showAboutDialog(kAppName, CK_EDIT_VERSION, kAppDescription);
 }
 
 void MarkdownEditorApp::dispatchToEditor(ushort command)
