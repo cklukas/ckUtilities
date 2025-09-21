@@ -88,7 +88,6 @@ struct AboutDialogInfo
     std::string_view toolName;
     std::string_view version;
     std::string_view description;
-    std::string_view developer = "Dr. C. Klukas";
     std::string_view copyright = "(c) 2025 by Dr. C. Klukas";
     std::string_view applicationName = "CK Utilities";
     std::string_view buildDate = __DATE__;
@@ -129,13 +128,6 @@ inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
         if (!info.buildTime.empty())
             buildOut << ' ' << info.buildTime;
         paragraphs.emplace_back(buildOut.str());
-    }
-
-    if (!info.developer.empty())
-    {
-        std::ostringstream developerOut;
-        developerOut << "Developer: " << info.developer;
-        paragraphs.emplace_back(developerOut.str());
     }
 
     std::ostringstream out;
