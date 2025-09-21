@@ -98,7 +98,17 @@ struct AboutDialogInfo
 inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
 {
     std::vector<std::string> paragraphs;
-    paragraphs.emplace_back(info.applicationName);
+    {
+        std::ostringstream headerOut;
+        headerOut << info.applicationName;
+        if (!info.copyright.empty())
+        {
+            if (!info.applicationName.empty())
+                headerOut << '\n';
+            headerOut << info.copyright;
+        }
+        paragraphs.emplace_back(headerOut.str());
+    }
     if (!info.toolName.empty())
         paragraphs.emplace_back(info.toolName);
 
@@ -121,11 +131,12 @@ inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
         paragraphs.emplace_back(buildOut.str());
     }
 
-    std::ostringstream developerOut;
-    developerOut << "Developer: " << info.developer;
-    if (!info.copyright.empty())
-        developerOut << "\n" << info.copyright;
-    paragraphs.emplace_back(developerOut.str());
+    if (!info.developer.empty())
+    {
+        std::ostringstream developerOut;
+        developerOut << "Developer: " << info.developer;
+        paragraphs.emplace_back(developerOut.str());
+    }
 
     std::ostringstream out;
     for (size_t i = 0; i < paragraphs.size(); ++i)
@@ -158,7 +169,8 @@ public:
     void draw() override
     {
         const TColorAttr normal = getColor(1);
-        const TColorAttr highlight = reverseAttribute(normal);
+        TColorAttr highlight = normal;
+        ::setFore(highlight, TColorBIOS(0x1));
         TDrawBuffer buffer;
         for (int y = 0; y < size.y; ++y)
         {
