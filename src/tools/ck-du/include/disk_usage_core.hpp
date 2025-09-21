@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <system_error>
 #include <string>
 #include <vector>
 
@@ -66,6 +67,20 @@ struct BuildDirectoryTreeOptions
 {
     std::function<void(const std::filesystem::path &)> progressCallback;
     std::function<bool()> cancelRequested;
+    enum class SymlinkPolicy
+    {
+        Never,
+        CommandLineOnly,
+        Always
+    } symlinkPolicy = SymlinkPolicy::Never;
+    bool followCommandLineSymlinks = false;
+    bool countHardLinksMultipleTimes = false;
+    bool ignoreNodumpFlag = false;
+    bool reportErrors = true;
+    std::int64_t threshold = 0;
+    bool stayOnFilesystem = false;
+    std::vector<std::string> ignoreMasks;
+    std::function<void(const std::filesystem::path &, const std::error_code &)> errorCallback;
 };
 
 struct BuildDirectoryTreeResult
@@ -76,7 +91,8 @@ struct BuildDirectoryTreeResult
 
 BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPath,
                                             const BuildDirectoryTreeOptions &options = {});
-std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive);
+std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive,
+                                const BuildDirectoryTreeOptions &options = {});
 
 SizeUnit getCurrentUnit() noexcept;
 void setCurrentUnit(SizeUnit unit) noexcept;
