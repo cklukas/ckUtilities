@@ -23,12 +23,15 @@
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
+#include "ck/about_dialog.hpp"
+
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <string>
 
-static constexpr const char *kDeveloperName = "Dr. C. Klukas";
+static constexpr const char *kAboutDescription =
+    "Inspect and navigate JSON documents interactively.";
 
 class JsonTNode : public TNode
 {
@@ -354,9 +357,7 @@ void JsonViewApp::handleEvent(TEvent &event)
             break;
         case cmAbout:
         {
-            std::string msg = std::string("ck-json-view ") + JSON_VIEW_VERSION +
-                              "\nDeveloper: " + kDeveloperName;
-            messageBox(msg.c_str(), mfInformation | mfOKButton);
+            ck::ui::showAboutDialog("ck-json-view", JSON_VIEW_VERSION, kAboutDescription);
             break;
         }
         default:
