@@ -4,15 +4,74 @@
 #define CK_ABOUT_DIALOG_DEFINE_USES_MSGBOX
 #define Uses_MsgBox
 #endif
+#ifndef Uses_TButton
+#define CK_ABOUT_DIALOG_DEFINE_USES_TBUTTON
+#define Uses_TButton
+#endif
+#ifndef Uses_TDialog
+#define CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
+#define Uses_TDialog
+#endif
+#ifndef Uses_TDrawBuffer
+#define CK_ABOUT_DIALOG_DEFINE_USES_TDRAWBUFFER
+#define Uses_TDrawBuffer
+#endif
+#ifndef Uses_TObject
+#define CK_ABOUT_DIALOG_DEFINE_USES_TOBJECT
+#define Uses_TObject
+#endif
+#ifndef Uses_TProgram
+#define CK_ABOUT_DIALOG_DEFINE_USES_TPROGRAM
+#define Uses_TProgram
+#endif
+#ifndef Uses_TRect
+#define CK_ABOUT_DIALOG_DEFINE_USES_TRECT
+#define Uses_TRect
+#endif
+#ifndef Uses_TStaticText
+#define CK_ABOUT_DIALOG_DEFINE_USES_TSTATICTEXT
+#define Uses_TStaticText
+#endif
 #include <tvision/tv.h>
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TSTATICTEXT
+#undef Uses_TStaticText
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TSTATICTEXT
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TRECT
+#undef Uses_TRect
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TRECT
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TPROGRAM
+#undef Uses_TProgram
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TPROGRAM
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TOBJECT
+#undef Uses_TObject
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TOBJECT
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TDRAWBUFFER
+#undef Uses_TDrawBuffer
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TDRAWBUFFER
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
+#undef Uses_TDialog
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TBUTTON
+#undef Uses_TButton
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TBUTTON
+#endif
 #ifdef CK_ABOUT_DIALOG_DEFINE_USES_MSGBOX
 #undef Uses_MsgBox
 #undef CK_ABOUT_DIALOG_DEFINE_USES_MSGBOX
 #endif
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace ck::ui
 {
@@ -30,34 +89,160 @@ struct AboutDialogInfo
 
 inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
 {
-    std::ostringstream out;
-    out << info.applicationName;
+    std::vector<std::string> paragraphs;
+    paragraphs.emplace_back(info.applicationName);
+    if (!info.toolName.empty())
+        paragraphs.emplace_back(info.toolName);
 
-    out << "\n\n" << info.toolName;
     if (!info.description.empty())
-        out << "\n" << info.description;
+        paragraphs.emplace_back(std::string(info.description));
 
     if (!info.version.empty())
-        out << "\nVersion: " << info.version;
+    {
+        std::ostringstream versionOut;
+        versionOut << "Version: " << info.version;
+        paragraphs.emplace_back(versionOut.str());
+    }
 
     if (!info.buildDate.empty())
     {
-        out << "\nBuild: " << info.buildDate;
+        std::ostringstream buildOut;
+        buildOut << "Build: " << info.buildDate;
         if (!info.buildTime.empty())
-            out << ' ' << info.buildTime;
+            buildOut << ' ' << info.buildTime;
+        paragraphs.emplace_back(buildOut.str());
     }
 
-    out << "\n\nDeveloper: " << info.developer;
+    std::ostringstream developerOut;
+    developerOut << "Developer: " << info.developer;
     if (!info.copyright.empty())
-        out << "\n" << info.copyright;
+        developerOut << "\n" << info.copyright;
+    paragraphs.emplace_back(developerOut.str());
+
+    std::ostringstream out;
+    for (size_t i = 0; i < paragraphs.size(); ++i)
+    {
+        if (i > 0)
+            out << "\n\n";
+        out << paragraphs[i];
+    }
 
     return out.str();
 }
 
+namespace detail
+{
+
+class AboutStaticText : public TStaticText
+{
+public:
+    AboutStaticText(const TRect &bounds,
+                    TStringView message,
+                    std::vector<std::string> lines,
+                    size_t highlightIndex) noexcept
+        : TStaticText(bounds, message)
+        , m_lines(std::move(lines))
+        , m_highlightIndex(highlightIndex)
+    {
+        growMode |= gfFixed;
+    }
+
+    void draw() override
+    {
+        const TColorAttr normal = getColor(1);
+        const TColorAttr highlight = reverseAttribute(normal);
+        TDrawBuffer buffer;
+        for (int y = 0; y < size.y; ++y)
+        {
+            buffer.moveChar(0, ' ', normal, size.x);
+            if (y < static_cast<int>(m_lines.size()))
+            {
+                const bool isHighlighted = (m_highlightIndex < m_lines.size()) &&
+                                            (static_cast<size_t>(y) == m_highlightIndex) &&
+                                            !m_lines[y].empty();
+                const TColorAttr attr = isHighlighted ? highlight : normal;
+                buffer.moveStr(0, TStringView(m_lines[y]), attr);
+            }
+            writeLine(0, y, size.x, 1, buffer);
+        }
+    }
+
+private:
+    std::vector<std::string> m_lines;
+    size_t m_highlightIndex;
+};
+
+inline std::vector<std::string> splitLinesPreservingEmpties(const std::string &text)
+{
+    std::vector<std::string> lines;
+    std::string current;
+    for (char ch : text)
+    {
+        if (ch == '\n')
+        {
+            lines.emplace_back(std::move(current));
+            current.clear();
+        }
+        else
+        {
+            current.push_back(ch);
+        }
+    }
+    lines.emplace_back(std::move(current));
+    return lines;
+}
+
+inline size_t findFirstNonEmptyLine(const std::vector<std::string> &lines)
+{
+    for (size_t index = 0; index < lines.size(); ++index)
+        if (!lines[index].empty())
+            return index;
+    return 0;
+}
+
+inline int computeMaxLineWidth(const std::vector<std::string> &lines)
+{
+    int maxWidth = 0;
+    for (const auto &line : lines)
+        maxWidth = std::max(maxWidth, strwidth(TStringView(line)));
+    return maxWidth;
+}
+
+} // namespace detail
+
 inline void showAboutDialog(const AboutDialogInfo &info)
 {
     const std::string message = buildAboutDialogMessage(info);
-    messageBox(message.c_str(), mfInformation | mfOKButton);
+    auto lines = detail::splitLinesPreservingEmpties(message);
+    const size_t highlightIndex = detail::findFirstNonEmptyLine(lines);
+    const int maxLineWidth = detail::computeMaxLineWidth(lines);
+
+    constexpr int kMinWidth = 40;
+    constexpr int kMinHeight = 9;
+    const int textHeight = static_cast<int>(lines.size());
+    const int dialogWidth = std::max(kMinWidth, maxLineWidth + 5);
+    const int dialogHeight = std::max(kMinHeight, textHeight + 5);
+
+    TRect bounds(0, 0, dialogWidth, dialogHeight);
+    bounds.move((TProgram::deskTop->size.x - dialogWidth) / 2,
+                (TProgram::deskTop->size.y - dialogHeight) / 2);
+
+    TDialog *dialog = new TDialog(bounds, MsgBoxText::informationText);
+
+    const TRect textBounds(3, 2, dialog->size.x - 2, dialog->size.y - 3);
+    dialog->insert(new detail::AboutStaticText(textBounds,
+                                              message,
+                                              std::move(lines),
+                                              highlightIndex));
+
+    TButton *okButton = new TButton(TRect(0, 0, 10, 2), MsgBoxText::okText, cmOK, bfDefault);
+    dialog->insert(okButton);
+    const int buttonX = (dialog->size.x - okButton->size.x) / 2;
+    okButton->moveTo(buttonX, dialog->size.y - 3);
+
+    dialog->selectNext(False);
+    TProgram::application->execView(dialog);
+    TObject::destroy(dialog);
 }
 
 inline void showAboutDialog(std::string_view toolName,
