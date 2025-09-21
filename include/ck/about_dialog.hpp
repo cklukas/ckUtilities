@@ -12,6 +12,10 @@
 #define CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
 #define Uses_TDialog
 #endif
+#ifndef Uses_TDeskTop
+#define CK_ABOUT_DIALOG_DEFINE_USES_TDESKTOP
+#define Uses_TDeskTop
+#endif
 #ifndef Uses_TDrawBuffer
 #define CK_ABOUT_DIALOG_DEFINE_USES_TDRAWBUFFER
 #define Uses_TDrawBuffer
@@ -56,6 +60,10 @@
 #ifdef CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
 #undef Uses_TDialog
 #undef CK_ABOUT_DIALOG_DEFINE_USES_TDIALOG
+#endif
+#ifdef CK_ABOUT_DIALOG_DEFINE_USES_TDESKTOP
+#undef Uses_TDeskTop
+#undef CK_ABOUT_DIALOG_DEFINE_USES_TDESKTOP
 #endif
 #ifdef CK_ABOUT_DIALOG_DEFINE_USES_TBUTTON
 #undef Uses_TButton
