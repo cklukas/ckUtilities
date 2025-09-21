@@ -62,8 +62,17 @@ std::string groupName(gid_t gid)
     return std::to_string(gid);
 }
 
-DirectoryStats populateNode(DirectoryNode &node, const fs::path &path)
+struct ScanCancelled
 {
+};
+
+DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, const BuildDirectoryTreeOptions &options)
+{
+    if (options.cancelRequested && options.cancelRequested())
+        throw ScanCancelled{};
+    if (options.progressCallback)
+        options.progressCallback(path);
+
     node.path = path;
     DirectoryStats stats{};
     std::error_code ec;
@@ -90,6 +99,9 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path)
             continue;
         }
 
+        if (options.cancelRequested && options.cancelRequested())
+            throw ScanCancelled{};
+
         const fs::directory_entry &entry = *it;
         std::error_code entryEc;
         const fs::path &entryPath = entry.path();
@@ -102,10 +114,13 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path)
 
         if (!entryEc && entry.is_directory(entryEc))
         {
+            if (options.cancelRequested && options.cancelRequested())
+                throw ScanCancelled{};
+
             auto child = std::make_unique<DirectoryNode>();
             child->parent = &node;
             child->expanded = false;
-            DirectoryStats childStats = populateNode(*child, entryPath);
+            DirectoryStats childStats = populateNode(*child, entryPath, options);
             child->stats = childStats;
             stats.totalSize += childStats.totalSize;
             stats.fileCount += childStats.fileCount;
@@ -180,15 +195,26 @@ FileEntry makeFileEntry(const fs::path &path, const fs::path &base)
 
 } // namespace
 
-std::unique_ptr<DirectoryNode> buildDirectoryTree(const std::filesystem::path &rootPath)
+BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPath,
+                                           const BuildDirectoryTreeOptions &options)
 {
+    BuildDirectoryTreeResult result;
     auto root = std::make_unique<DirectoryNode>();
     root->parent = nullptr;
     root->expanded = true;
 
-    DirectoryStats stats = populateNode(*root, fs::absolute(rootPath));
-    root->stats = stats;
-    return root;
+    try
+    {
+        DirectoryStats stats = populateNode(*root, fs::absolute(rootPath), options);
+        root->stats = stats;
+        result.root = std::move(root);
+    }
+    catch (const ScanCancelled &)
+    {
+        result.cancelled = true;
+    }
+
+    return result;
 }
 
 std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive)

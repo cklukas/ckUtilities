@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -61,7 +62,20 @@ struct FileEntry
     std::chrono::system_clock::time_point modifiedTime{};
 };
 
-std::unique_ptr<DirectoryNode> buildDirectoryTree(const std::filesystem::path &rootPath);
+struct BuildDirectoryTreeOptions
+{
+    std::function<void(const std::filesystem::path &)> progressCallback;
+    std::function<bool()> cancelRequested;
+};
+
+struct BuildDirectoryTreeResult
+{
+    std::unique_ptr<DirectoryNode> root;
+    bool cancelled = false;
+};
+
+BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPath,
+                                            const BuildDirectoryTreeOptions &options = {});
 std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive);
 
 SizeUnit getCurrentUnit() noexcept;
