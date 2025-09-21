@@ -11,7 +11,12 @@ set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
 if(APPLE)
   set(CPACK_GENERATOR "TGZ")
   set(CPACK_PACKAGE_FILE_NAME "ck-utilities-${CPACK_PACKAGE_VERSION}-macos")
-  set(CPACK_PACKAGING_INSTALL_PREFIX ".")
+  # Use an empty packaging install prefix so the macOS archive contains the
+  # installed tree directly under the top-level directory. Using "." here
+  # causes CPack to generate an empty top-level directory (and therefore a
+  # near-empty archive) because the staged install ends up under a sibling
+  # directory named with a trailing dot.
+  set(CPACK_PACKAGING_INSTALL_PREFIX "")
 else()
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" _cpack_system)
