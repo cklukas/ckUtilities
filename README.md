@@ -1,4 +1,4 @@
-# CkTools (working title)
+# CK Utilities
 
 **Status:** concept / exploration.
 
@@ -6,7 +6,7 @@ Current prototypes:
 
 * `ck-json-view` — JSON tree viewer built with Turbo Vision.
 * `ck-du` — disk usage explorer with tree views, file listings, unit and sort controls.
-CkTools aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
+CK Utilities aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
 Target platform: **Linux text-mode terminals**.
 Tech stack: **C++20 (or newer)** + **Turbo Vision**.
 
@@ -39,7 +39,7 @@ Many GNU tools are extremely powerful but tricky to memorize. CkTools wraps a fo
 ---
 
 
-## Building CkTools
+## Building CK Utilities
 
 ### Prerequisites
 
@@ -52,8 +52,8 @@ Many GNU tools are extremely powerful but tricky to memorize. CkTools wraps a fo
 Clone the repository and enter the directory:
 
 ```bash
-git clone https://example.com/cktools.git
-cd cktools
+git clone https://github.com/cklukas/ckUtilities.git
+cd ckUtilities
 ```
 
 #### Configure the build (choose a preset):
@@ -89,17 +89,3 @@ cmake --build build/release -t install
 ```
 
 For more details, see `COMPILE.md`.
-
----
-
-## Roadmap (very early)
-
-1. Prototype **ckfind** and **cktext**.
-2. Add **ckdiff**, **ckdu**.
-3. Ship **ckrescue** (read-only features first).
-
----
-
-## License & contributions
-
-TBD. Discussion, mockups, and feedback welcome while this is still an idea.

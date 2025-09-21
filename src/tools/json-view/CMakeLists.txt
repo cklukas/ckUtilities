@@ -1,4 +1,12 @@
 set(CURSES_NEED_WIDE TRUE)
+
+if(APPLE)
+    find_path(CURSES_INCLUDE_PATH
+        NAMES ncurses.h
+        PATHS ${CMAKE_OSX_SYSROOT}/usr/include
+        NO_DEFAULT_PATH)
+endif()
+
 find_package(Curses REQUIRED)
 
 if(CURSES_INCLUDE_PATH MATCHES "/ncursesw$")
