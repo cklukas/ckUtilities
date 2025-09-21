@@ -7,6 +7,8 @@
 #define Uses_TInputLine
 #define Uses_TLabel
 #define Uses_TButton
+#define Uses_TStaticText
+#define Uses_TParamText
 #define Uses_TListViewer
 #define Uses_TMenu
 #define Uses_TMenuBar
@@ -22,13 +24,18 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <array>
+#include <atomic>
+#include <cstdio>
+#include <deque>
+#include <functional>
 #include <filesystem>
 #include <limits.h>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -303,6 +310,24 @@ private:
     friend class DirectoryOutline;
 };
 
+class ScanProgressDialog : public TDialog
+{
+public:
+    ScanProgressDialog();
+
+    void setCancelHandler(std::function<void()> handler);
+    void updatePath(const std::string &path);
+
+    virtual void handleEvent(TEvent &event) override;
+
+private:
+    void setPathText(const std::string &text);
+
+    TParamText *pathText = nullptr;
+    std::function<void()> cancelHandler;
+    std::string lastDisplay;
+};
+
 class DiskUsageStatusLine : public TStatusLine
 {
 public:
@@ -343,6 +368,7 @@ class DiskUsageApp : public TApplication
 {
 public:
     DiskUsageApp(int argc, char **argv);
+    ~DiskUsageApp();
 
     virtual void handleEvent(TEvent &event) override;
     virtual void idle() override;
@@ -366,6 +392,24 @@ private:
     std::unordered_map<SortKey, TMenuItem *> sortMenuItems;
     std::unordered_map<SortKey, std::string> sortBaseLabels;
 
+    struct DirectoryScanTask
+    {
+        std::filesystem::path rootPath;
+        std::thread worker;
+        std::mutex mutex;
+        std::unique_ptr<DirectoryNode> result;
+        std::string currentPath;
+        std::string errorMessage;
+        bool cancelled = false;
+        bool failed = false;
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<bool> finished{false};
+        ScanProgressDialog *dialog = nullptr;
+    };
+
+    std::unique_ptr<DirectoryScanTask> activeScan;
+    std::deque<std::filesystem::path> pendingScanQueue;
+
     void promptOpenDirectory();
     void openDirectory(const std::filesystem::path &path);
     void viewFiles(bool recursive);
@@ -374,11 +418,70 @@ private:
     void applyUnit(SizeUnit unit);
     void updateSortMenu();
     void applySortMode(SortKey key);
+    void requestDirectoryScan(const std::filesystem::path &path, bool allowQueue);
+    void queueDirectoryForScan(const std::filesystem::path &path);
+    void startDirectoryScan(const std::filesystem::path &path);
+    void startNextQueuedDirectory();
+    void updateScanProgress(DirectoryScanTask &task);
+    void processActiveScanCompletion();
+    void runDirectoryScan(DirectoryScanTask &task);
+    void requestScanCancellation();
+    void closeProgressDialog(DirectoryScanTask &task);
+    void cancelActiveScan(bool waitForCompletion);
 };
 
 DirectoryOutline::DirectoryOutline(TRect bounds, TScrollBar *h, TScrollBar *v, DirTNode *rootNode, DirectoryWindow &owner)
     : TOutline(bounds, h, v, rootNode), ownerWindow(owner)
 {
+}
+
+ScanProgressDialog::ScanProgressDialog()
+    : TWindowInit(&TDialog::initFrame),
+      TDialog(TRect(0, 0, 60, 9), "Scanning Directory")
+{
+    options |= ofCentered;
+    insert(new TStaticText(TRect(2, 2, 58, 3), "Scanning directory..."));
+    pathText = new TParamText(TRect(2, 3, 58, 4));
+    insert(pathText);
+    pathText->setText("%s", "Current: (scanning...)");
+    insert(new TButton(TRect(24, 6, 36, 8), "~C~ancel", cmCancel, bfNormal));
+}
+
+void ScanProgressDialog::setCancelHandler(std::function<void()> handler)
+{
+    cancelHandler = std::move(handler);
+}
+
+void ScanProgressDialog::setPathText(const std::string &text)
+{
+    if (!pathText)
+        return;
+    pathText->setText("%s", text.c_str());
+    pathText->drawView();
+}
+
+void ScanProgressDialog::updatePath(const std::string &path)
+{
+    std::string display = path.empty() ? std::string("(scanning...)") : path;
+    constexpr std::size_t maxDisplayLength = 47;
+    if (display.size() > maxDisplayLength)
+        display = "..." + display.substr(display.size() - (maxDisplayLength - 3));
+    if (display == lastDisplay)
+        return;
+    lastDisplay = display;
+    setPathText("Current: " + display);
+}
+
+void ScanProgressDialog::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand && event.message.command == cmCancel)
+    {
+        if (cancelHandler)
+            cancelHandler();
+        clearEvent(event);
+        return;
+    }
+    TDialog::handleEvent(event);
 }
 
 DirTNode *DirectoryOutline::focusedNode()
@@ -837,7 +940,13 @@ DiskUsageApp::DiskUsageApp(int argc, char **argv)
     updateSortMenu();
 
     for (int i = 1; i < argc; ++i)
-        openDirectory(argv[i]);
+        queueDirectoryForScan(argv[i]);
+}
+
+DiskUsageApp::~DiskUsageApp()
+{
+    cancelActiveScan(true);
+    pendingScanQueue.clear();
 }
 
 void DiskUsageApp::handleEvent(TEvent &event)
@@ -915,6 +1024,14 @@ void DiskUsageApp::handleEvent(TEvent &event)
 void DiskUsageApp::idle()
 {
     TApplication::idle();
+    if (activeScan)
+    {
+        updateScanProgress(*activeScan);
+        if (activeScan->finished.load())
+            processActiveScanCompletion();
+    }
+    else if (!pendingScanQueue.empty())
+        startNextQueuedDirectory();
 }
 
 TMenuBar *DiskUsageApp::initMenuBar(TRect r)
@@ -942,9 +1059,6 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                             *new TMenuItem("~C~lose", cmClose, kbF4, hcClose, "F4") +
                             newLine() +
                             *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X") +
-                        *new TSubMenu("~A~ctions", hcNoContext) +
-                            *new TMenuItem("~V~iew Files", cmViewFiles, kbF3, hcNoContext, "F3") +
-                            *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
                         *new TSubMenu("~S~ort", hcNoContext) +
                             *sortUnsorted +
                             *sortNameAsc +
@@ -961,6 +1075,9 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                             *unitGB +
                             *unitTB +
                             *unitBlocks +
+                        *new TSubMenu("~V~iew", hcNoContext) +
+                            *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
+                            *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
                         *new TSubMenu("~H~elp", hcNoContext) +
                             *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1"));
 }
@@ -995,23 +1112,7 @@ void DiskUsageApp::promptOpenDirectory()
 
 void DiskUsageApp::openDirectory(const std::filesystem::path &path)
 {
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec) || !std::filesystem::is_directory(path, ec))
-    {
-        messageBox("Path is not a directory", mfError | mfOKButton);
-        return;
-    }
-
-    auto tree = buildDirectoryTree(path);
-    if (!tree)
-    {
-        messageBox("Failed to read directory", mfError | mfOKButton);
-        return;
-    }
-
-    DirectoryWindow *win = new DirectoryWindow(path, std::move(tree), *this);
-    deskTop->insert(win);
-    win->drawView();
+    requestDirectoryScan(path, false);
 }
 
 void DiskUsageApp::viewFiles(bool recursive)
@@ -1038,6 +1139,196 @@ void DiskUsageApp::viewFiles(bool recursive)
     auto *win = new FileListWindow(title, std::move(files), recursive, *this);
     deskTop->insert(win);
     win->drawView();
+}
+
+void DiskUsageApp::requestDirectoryScan(const std::filesystem::path &path, bool allowQueue)
+{
+    processActiveScanCompletion();
+
+    std::filesystem::path absolute = std::filesystem::absolute(path);
+    std::error_code ec;
+    if (!std::filesystem::exists(absolute, ec) || !std::filesystem::is_directory(absolute, ec))
+    {
+        std::string message = "Path is not a directory:\n" + absolute.string();
+        messageBox(message.c_str(), mfError | mfOKButton);
+        return;
+    }
+
+    if (activeScan && !activeScan->finished.load())
+    {
+        if (allowQueue)
+            pendingScanQueue.push_back(absolute);
+        else
+            messageBox("A directory scan is already in progress", mfInformation | mfOKButton);
+        return;
+    }
+
+    startDirectoryScan(absolute);
+}
+
+void DiskUsageApp::queueDirectoryForScan(const std::filesystem::path &path)
+{
+    requestDirectoryScan(path, true);
+}
+
+void DiskUsageApp::startDirectoryScan(const std::filesystem::path &path)
+{
+    auto task = std::make_unique<DirectoryScanTask>();
+    task->rootPath = path;
+    task->currentPath = path.string();
+
+    auto *dialog = new ScanProgressDialog();
+    dialog->setCancelHandler([this]() { requestScanCancellation(); });
+    task->dialog = dialog;
+    deskTop->insert(dialog);
+    dialog->drawView();
+    dialog->updatePath(task->currentPath);
+
+    DirectoryScanTask *rawTask = task.get();
+    rawTask->worker = std::thread([this, rawTask]() { runDirectoryScan(*rawTask); });
+
+    activeScan = std::move(task);
+}
+
+void DiskUsageApp::startNextQueuedDirectory()
+{
+    if (activeScan || pendingScanQueue.empty())
+        return;
+
+    std::filesystem::path next = pendingScanQueue.front();
+    pendingScanQueue.pop_front();
+    startDirectoryScan(next);
+}
+
+void DiskUsageApp::updateScanProgress(DirectoryScanTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    std::string currentPath;
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        currentPath = task.currentPath;
+    }
+
+    task.dialog->updatePath(currentPath);
+}
+
+void DiskUsageApp::processActiveScanCompletion()
+{
+    if (!activeScan || !activeScan->finished.load())
+        return;
+
+    if (activeScan->worker.joinable())
+        activeScan->worker.join();
+
+    std::unique_ptr<DirectoryNode> result;
+    bool cancelled = false;
+    bool failed = false;
+    std::string errorMessage;
+    std::filesystem::path rootPath = activeScan->rootPath;
+    {
+        std::lock_guard<std::mutex> lock(activeScan->mutex);
+        result = std::move(activeScan->result);
+        cancelled = activeScan->cancelled;
+        failed = activeScan->failed;
+        errorMessage = activeScan->errorMessage;
+    }
+
+    closeProgressDialog(*activeScan);
+
+    activeScan.reset();
+
+    if (failed)
+    {
+        std::string message = errorMessage.empty() ? std::string("Failed to read directory") : errorMessage;
+        messageBox(message.c_str(), mfError | mfOKButton);
+    }
+    else if (!cancelled && result)
+    {
+        auto *win = new DirectoryWindow(rootPath, std::move(result), *this);
+        deskTop->insert(win);
+        win->drawView();
+    }
+
+    startNextQueuedDirectory();
+}
+
+void DiskUsageApp::runDirectoryScan(DirectoryScanTask &task)
+{
+    BuildDirectoryTreeOptions options;
+    options.progressCallback = [&](const std::filesystem::path &current) {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.currentPath = current.string();
+    };
+    options.cancelRequested = [&]() -> bool { return task.cancelRequested.load(); };
+
+    BuildDirectoryTreeResult result;
+    try
+    {
+        result = buildDirectoryTree(task.rootPath, options);
+    }
+    catch (const std::exception &ex)
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.failed = true;
+        task.errorMessage = ex.what();
+        task.finished.store(true);
+        return;
+    }
+    catch (...)
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.failed = true;
+        task.errorMessage = "Unknown error";
+        task.finished.store(true);
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.cancelled = result.cancelled;
+        task.result = std::move(result.root);
+    }
+
+    task.finished.store(true);
+}
+
+void DiskUsageApp::requestScanCancellation()
+{
+    if (!activeScan)
+        return;
+    activeScan->cancelRequested.store(true);
+    closeProgressDialog(*activeScan);
+}
+
+void DiskUsageApp::closeProgressDialog(DirectoryScanTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    TDialog *dialog = task.dialog;
+    task.dialog = nullptr;
+    if (dialog->owner)
+        dialog->close();
+    else
+    {
+        dialog->shutDown();
+        delete dialog;
+    }
+}
+
+void DiskUsageApp::cancelActiveScan(bool waitForCompletion)
+{
+    if (!activeScan)
+        return;
+
+    activeScan->cancelRequested.store(true);
+    if (waitForCompletion && activeScan->worker.joinable())
+        activeScan->worker.join();
+
+    closeProgressDialog(*activeScan);
+    activeScan.reset();
 }
 
 DirectoryWindow *DiskUsageApp::activeDirectoryWindow() const
