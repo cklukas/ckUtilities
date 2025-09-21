@@ -1,7 +1,7 @@
 set(CPACK_PACKAGE_NAME "ck-utilities")
 set(CPACK_PACKAGE_VENDOR "ckUtilities Project")
 set(CPACK_PACKAGE_CONTACT "maintainers@ckutilities.dev")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Turbo Vision utilities including the ckjsonview JSON viewer")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Turbo Vision utilities including the ck-json-view JSON viewer")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")

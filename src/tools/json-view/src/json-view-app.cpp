@@ -354,7 +354,7 @@ void JsonViewApp::handleEvent(TEvent &event)
             break;
         case cmAbout:
         {
-            std::string msg = std::string("json-view-app ") + JSON_VIEW_VERSION +
+            std::string msg = std::string("ck-json-view ") + JSON_VIEW_VERSION +
                               "\nDeveloper: " + kDeveloperName;
             messageBox(msg.c_str(), mfInformation | mfOKButton);
             break;

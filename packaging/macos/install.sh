@@ -4,17 +4,17 @@ set -euo pipefail
 PREFIX="${1:-/usr/local}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-BIN_SOURCE="${ROOT_DIR}/bin/ckjsonview"
+BIN_SOURCE="${ROOT_DIR}/bin/ck-json-view"
 LICENSE_SOURCE="${ROOT_DIR}/share/licenses/ck-utilities/LICENSE"
 DOC_DIR="${ROOT_DIR}/share/doc/ck-utilities"
 
 if [[ ! -x "${BIN_SOURCE}" ]]; then
-  echo "ckjsonview binary not found at ${BIN_SOURCE}" >&2
+  echo "ck-json-view binary not found at ${BIN_SOURCE}" >&2
   exit 1
 fi
 
 install -d "${PREFIX}/bin"
-install -m 0755 "${BIN_SOURCE}" "${PREFIX}/bin/ckjsonview"
+install -m 0755 "${BIN_SOURCE}" "${PREFIX}/bin/ck-json-view"
 
 if [[ -f "${LICENSE_SOURCE}" ]]; then
   install -d "${PREFIX}/share/licenses/ck-utilities"
@@ -28,4 +28,4 @@ if [[ -d "${DOC_DIR}" ]]; then
   done
 fi
 
-echo "ckjsonview installed to ${PREFIX}/bin."
+echo "ck-json-view installed to ${PREFIX}/bin."
