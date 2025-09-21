@@ -1,0 +1,95 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Debug (Ninja)",
+      "generator": "Ninja",
+      "binaryDir": "build/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "AddressSanitizer",
+      "inherits": "dev",
+      "binaryDir": "build/asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "generator": "Ninja",
+      "binaryDir": "build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage",
+      "inherits": "dev",
+      "binaryDir": "build/coverage",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "--coverage",
+        "CMAKE_EXE_LINKER_FLAGS": "--coverage"
+      }
+    },
+    {
+      "name": "pkg",
+      "displayName": "Packaging",
+      "inherits": "release",
+      "binaryDir": "build/pkg",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "/usr"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage"
+    },
+    {
+      "name": "pkg",
+      "configurePreset": "pkg"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage"
+    }
+  ]
+}
