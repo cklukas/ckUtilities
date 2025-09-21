@@ -27,7 +27,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install ninja
+          brew install ninja ncurses
+          NCURSES_PREFIX=$(brew --prefix ncurses)
+          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
+          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
 
       - name: Configure
         run: cmake --preset dev
@@ -79,7 +83,11 @@ jobs:
       - name: Install packaging dependencies
         run: |
           brew update
-          brew install ninja
+          brew install ninja ncurses
+          NCURSES_PREFIX=$(brew --prefix ncurses)
+          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
+          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
 
       - name: Configure
         run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
