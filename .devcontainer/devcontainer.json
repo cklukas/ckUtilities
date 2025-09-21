@@ -1,7 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
   "name": "ckUtilities",
-  "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-22.04",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "postCreateCommand": ".devcontainer/postCreate.sh",
   "customizations": {
     "vscode": {
