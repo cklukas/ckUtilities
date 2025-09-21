@@ -829,17 +829,17 @@ FileListWindow::~FileListWindow()
 
 void FileListWindow::buildView()
 {
-    TRect r = getExtent();
-    r.grow(-1, -1);
-    if (r.b.x <= r.a.x + 2 || r.b.y <= r.a.y + 3)
-        r = TRect(0, 0, 76, 18);
+    TRect client = getExtent();
+    client.grow(-1, -1);
+    if (client.b.x <= client.a.x + 2 || client.b.y <= client.a.y + 3)
+        client = TRect(0, 0, 76, 18);
 
-    TRect headerBounds(r.a.x, r.a.y, r.b.x, r.a.y + 1);
-    TRect listBounds(r.a.x, r.a.y + 1, r.b.x, r.b.y);
+    TRect headerBounds(client.a.x, client.a.y, client.b.x - 1, client.a.y + 1);
+    TRect listBounds(client.a.x, client.a.y + 1, client.b.x - 1, client.b.y - 1);
 
-    vScroll = new TScrollBar(TRect(r.b.x - 1, r.a.y, r.b.x, r.b.y - 1));
+    vScroll = new TScrollBar(TRect(client.b.x - 1, client.a.y, client.b.x, client.b.y - 1));
     vScroll->growMode = gfGrowHiY;
-    hScroll = new TScrollBar(TRect(r.a.x, r.b.y - 1, r.b.x - 1, r.b.y));
+    hScroll = new TScrollBar(TRect(client.a.x, client.b.y - 1, client.b.x - 1, client.b.y));
     hScroll->growMode = gfGrowHiX;
 
     auto *view = new FileListView(listBounds, hScroll, vScroll, entries);
@@ -934,23 +934,26 @@ void DirectoryWindow::buildOutline()
     DirTNode *rootNode = buildNodes(root.get());
     rootNode->expanded = True;
 
-    TRect r = getExtent();
-    r.grow(-1, -1);
-    if (r.b.x <= r.a.x + 2 || r.b.y <= r.a.y + 2)
-        r = TRect(0, 0, 76, 18);
+    TRect client = getExtent();
+    client.grow(-1, -1);
+    if (client.b.x <= client.a.x + 2 || client.b.y <= client.a.y + 2)
+        client = TRect(0, 0, 76, 18);
 
-    vScroll = new TScrollBar(TRect(r.b.x - 1, r.a.y, r.b.x, r.b.y));
+    TRect outlineBounds(client.a.x, client.a.y, client.b.x - 1, client.b.y - 1);
+    vScroll = new TScrollBar(TRect(client.b.x - 1, client.a.y, client.b.x, client.b.y - 1));
     vScroll->growMode = gfGrowHiY;
-    hScroll = new TScrollBar(TRect(r.a.x, r.b.y - 1, r.b.x - 1, r.b.y));
+    hScroll = new TScrollBar(TRect(client.a.x, client.b.y - 1, client.b.x - 1, client.b.y));
     hScroll->growMode = gfGrowHiX;
 
-    auto *view = new DirectoryOutline(r, hScroll, vScroll, rootNode, *this);
+    auto *view = new DirectoryOutline(outlineBounds, hScroll, vScroll, rootNode, *this);
     view->growMode = gfGrowHiX | gfGrowHiY;
     insert(vScroll);
     insert(hScroll);
     insert(view);
     outline = view;
     outline->update();
+    hScroll->drawView();
+    vScroll->drawView();
     outline->drawView();
 }
 
