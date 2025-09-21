@@ -32,6 +32,8 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 #include <climits>
 
 namespace ck::edit
@@ -55,17 +57,28 @@ public:
 
     void applyHeadingLevel(int level);
     void clearHeading();
+    void makeParagraph();
+    void insertLineBreak();
     void applyBold();
     void applyItalic();
     void applyBoldItalic();
+    void applyStrikethrough();
+    void applyInlineCode();
+    void toggleCodeBlock();
     void removeFormatting();
     void applyBlockQuote();
     void removeBlockQuote();
+    void toggleBlockQuote();
 
     void insertBulletList(int count);
     void insertNumberedList(int count);
     void insertLink();
+    void insertReferenceLink();
+    void autoLinkSelection();
     void insertImage();
+    void insertFootnote();
+    void insertHorizontalRule();
+    void escapeSelection();
     void insertTable();
     void tableInsertRowAbove();
     void tableInsertRowBelow();
@@ -75,6 +88,17 @@ public:
     void tableDeleteColumn();
     void tableDeleteTable();
     void tableAlignColumn(MarkdownTableAlignment alignment);
+    void toggleBulletList();
+    void toggleNumberedList();
+    void convertToTaskList();
+    void toggleTaskCheckbox();
+    void increaseIndent();
+    void decreaseIndent();
+    void convertToDefinitionList();
+    void reflowParagraphs();
+    void formatDocument();
+    void toggleSmartListContinuation();
+    bool isSmartListContinuationEnabled() const noexcept { return smartListContinuation; }
 
     virtual void handleEvent(TEvent &event) override;
     virtual void draw() override;
@@ -91,6 +115,7 @@ private:
     MarkdownAnalyzer markdownAnalyzer;
     bool wrapEnabled = false;
     bool markdownMode = true;
+    bool smartListContinuation = true;
     uint cachedStateVersion = 0;
 
     void onContentModified();
@@ -106,6 +131,37 @@ private:
     int promptForCount(const char *title);
     std::string promptForText(const char *title, const char *label, const std::string &initial = {});
     int promptForNumeric(const char *title, const char *label, int defaultValue, int minValue, int maxValue);
+    bool continueListOnEnter(TEvent &event);
+
+    struct BlockSelection
+    {
+        uint start = 0;
+        uint end = 0;
+        std::vector<std::string> lines;
+        bool trailingNewline = false;
+    };
+
+    struct LinePattern
+    {
+        std::string indent;
+        std::string blockquote;
+        std::size_t markerStart = 0;
+        std::size_t markerEnd = 0;
+        bool hasBullet = false;
+        bool hasOrdered = false;
+        bool hasTask = false;
+        char bulletChar = '-';
+    };
+
+    BlockSelection captureSelectedLines();
+    void applyBlockSelection(const BlockSelection &selection, const std::vector<std::string> &lines, bool trailingNewline);
+    static std::string trimLeft(std::string_view text);
+    static std::string trim(std::string_view text);
+    static bool lineIsWhitespace(const std::string &line);
+    LinePattern analyzeLinePattern(const std::string &line) const;
+    std::string generateUniqueReferenceId(const std::string &prefix);
+    std::string generateUniqueFootnoteId();
+    void appendDefinition(const std::string &definition);
 
     struct TableContext
     {
