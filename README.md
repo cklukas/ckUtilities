@@ -1,6 +1,11 @@
 # CkTools (working title)
 
 **Status:** concept / exploration.
+
+Current prototypes:
+
+* `ck-json-view` — JSON tree viewer built with Turbo Vision.
+* `ck-du` — disk usage explorer with tree views, file listings, unit and sort controls.
 CkTools aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
 Target platform: **Linux text-mode terminals**.
 Tech stack: **C++20 (or newer)** + **Turbo Vision**.
