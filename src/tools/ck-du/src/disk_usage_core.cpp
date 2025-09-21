@@ -519,7 +519,18 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;
 
+    auto cancelRequested = [&]() -> bool {
+        return options.cancelRequested && options.cancelRequested();
+    };
+
+    auto reportProgress = [&](const fs::path &path) {
+        if (options.progressCallback)
+            options.progressCallback(path);
+    };
+
     auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+        if (cancelRequested())
+            return;
         if (shouldIgnorePath(path, context))
             return;
         if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
@@ -572,8 +583,13 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
                 continue;
             }
 
+            if (cancelRequested())
+                return files;
+
             const fs::directory_entry &entry = *it;
             const fs::path &path = entry.path();
+
+            reportProgress(path);
 
             struct stat sb;
             if (stat(path.c_str(), &sb) != 0)
@@ -618,8 +634,12 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
                 continue;
             }
 
+            if (cancelRequested())
+                return files;
+
             const fs::directory_entry &entry = *it;
             const fs::path &path = entry.path();
+            reportProgress(path);
             std::error_code entryEc;
             if (!entry.is_regular_file(entryEc) || entryEc)
                 continue;
@@ -666,7 +686,18 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;
 
+    auto cancelRequested = [&]() -> bool {
+        return options.cancelRequested && options.cancelRequested();
+    };
+
+    auto reportProgress = [&](const fs::path &path) {
+        if (options.progressCallback)
+            options.progressCallback(path);
+    };
+
     auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+        if (cancelRequested())
+            return;
         if (shouldIgnorePath(path, context))
             return;
         if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
@@ -724,8 +755,13 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
                 continue;
             }
 
+            if (cancelRequested())
+                return {};
+
             const fs::directory_entry &entry = *it;
             const fs::path &path = entry.path();
+
+            reportProgress(path);
 
             struct stat sb;
             if (stat(path.c_str(), &sb) != 0)
@@ -770,8 +806,12 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
                 continue;
             }
 
+            if (cancelRequested())
+                return {};
+
             const fs::directory_entry &entry = *it;
             const fs::path &path = entry.path();
+            reportProgress(path);
             std::error_code entryEc;
             if (!entry.is_regular_file(entryEc) || entryEc)
                 continue;
