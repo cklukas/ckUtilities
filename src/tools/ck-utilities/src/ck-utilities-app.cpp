@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <system_error>
 #include <string>
 #include <string_view>
@@ -53,6 +54,96 @@ const ck::appinfo::ToolInfo &launcherInfo()
 
 constexpr ushort cmLaunchTool = 6000;
 constexpr ushort cmNewLauncher = 6001;
+
+std::filesystem::path resolveToolDirectory(const char *argv0)
+{
+    std::filesystem::path base = std::filesystem::current_path();
+    if (!argv0 || !argv0[0])
+        return base;
+
+    std::filesystem::path candidate = argv0;
+    std::error_code ec;
+    if (!candidate.is_absolute())
+        candidate = std::filesystem::current_path() / candidate;
+
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(candidate, ec);
+    if (!ec)
+        candidate = canonical;
+
+    if (!candidate.has_parent_path())
+        return base;
+    return candidate.parent_path();
+}
+
+std::optional<std::filesystem::path> locateProgramPath(const std::filesystem::path &toolDirectory,
+                                                       const ck::appinfo::ToolInfo &info)
+{
+    std::filesystem::path programPath = toolDirectory / std::filesystem::path(info.executable);
+    std::error_code ec;
+    std::filesystem::path resolved = std::filesystem::weakly_canonical(programPath, ec);
+    if (!ec)
+        programPath = std::move(resolved);
+
+    std::error_code existsEc;
+    if (!std::filesystem::exists(programPath, existsEc))
+        return std::nullopt;
+    return programPath;
+}
+
+int executeProgram(const std::filesystem::path &programPath, const std::vector<std::string> &arguments)
+{
+#ifndef _WIN32
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        return -1;
+    }
+    else if (pid == 0)
+    {
+        std::vector<std::string> argvStorage;
+        argvStorage.reserve(1 + arguments.size());
+        argvStorage.push_back(programPath.string());
+        for (const auto &arg : arguments)
+            argvStorage.push_back(arg);
+
+        std::vector<char *> argvPointers;
+        argvPointers.reserve(argvStorage.size() + 1);
+        for (auto &entry : argvStorage)
+            argvPointers.push_back(entry.data());
+        argvPointers.push_back(nullptr);
+
+        execve(programPath.c_str(), argvPointers.data(), environ);
+        _exit(127);
+    }
+    else
+    {
+        int status;
+        if (waitpid(pid, &status, 0) == -1)
+            return -1;
+        return status;
+    }
+#else
+    auto quoteArgument = [](const std::string &value) {
+        std::string quoted = "\"";
+        for (char ch : value)
+        {
+            if (ch == '\"')
+                quoted.push_back('\\');
+            quoted.push_back(ch);
+        }
+        quoted.push_back('"');
+        return quoted;
+    };
+
+    std::string command = quoteArgument(programPath.string());
+    for (const auto &arg : arguments)
+    {
+        command.push_back(' ');
+        command.append(quoteArgument(arg));
+    }
+    return std::system(command.c_str());
+#endif
+}
 
 std::vector<std::string> wrapText(std::string_view text, int width)
 {
@@ -637,6 +728,17 @@ private:
     }
 };
 
+LauncherDialog *findLauncherDialogFromView(TView *view)
+{
+    while (view)
+    {
+        if (auto *dialog = dynamic_cast<LauncherDialog *>(view))
+            return dialog;
+        view = view->owner;
+    }
+    return nullptr;
+}
+
 class LauncherApp : public TApplication
 {
 public:
@@ -657,7 +759,14 @@ public:
             {
             case cmLaunchTool:
             {
-                auto *dialog = static_cast<LauncherDialog *>(event.message.infoPtr);
+                LauncherDialog *dialog = nullptr;
+                if (event.message.infoPtr)
+                {
+                    auto *sourceView = static_cast<TView *>(event.message.infoPtr);
+                    dialog = findLauncherDialogFromView(sourceView);
+                }
+                if (!dialog && deskTop)
+                    dialog = findLauncherDialogFromView(deskTop->current);
                 if (dialog)
                     launchTool(dialog->currentTool());
                 clearEvent(event);
@@ -726,18 +835,17 @@ private:
         dialog->select();
     }
 
-    void launchTool(const ck::appinfo::ToolInfo *info)
+    void launchTool(const ck::appinfo::ToolInfo *info, const std::vector<std::string> &extraArgs = {})
     {
         if (!info)
             return;
 
         std::filesystem::path programPath = toolDirectory / std::filesystem::path(info->executable);
-        std::error_code ec;
-        std::filesystem::path resolved = std::filesystem::weakly_canonical(programPath, ec);
-        if (!ec)
-            programPath = resolved;
-        std::error_code existsEc;
-        if (!std::filesystem::exists(programPath, existsEc))
+        if (auto resolved = locateProgramPath(toolDirectory, *info))
+        {
+            programPath = std::move(*resolved);
+        }
+        else
         {
             char buffer[256];
             std::snprintf(buffer, sizeof(buffer), "Unable to locate %s", programPath.c_str());
@@ -746,7 +854,7 @@ private:
         }
 
         suspend();
-        int result = executeProgram(programPath);
+        int result = executeProgram(programPath, extraArgs);
         resume();
 
         bool report = false;
@@ -784,73 +892,78 @@ private:
             messageBox(buffer, mfInformation | mfOKButton);
     }
 
-    static int executeProgram(const std::filesystem::path &programPath)
-    {
-#ifndef _WIN32
-        pid_t pid = fork();
-        if (pid == -1)
-        {
-            // Fork failed
-            return -1;
-        }
-        else if (pid == 0)
-        {
-            // Child process
-            // It's crucial to only call async-signal-safe functions here.
-            // execve is async-signal-safe.
-            std::vector<char *> args;
-            std::string programPathStr = programPath.string();
-            args.push_back(programPathStr.data()); // Program name as first argument
-            args.push_back(nullptr); // Null-terminate the argument list
-
-            execve(programPathStr.c_str(), args.data(), environ);
-
-            // If execve returns, it must have failed.
-            // _exit is async-signal-safe.
-            _exit(127); // 127 is a common exit code for "command not found" or execve failure
-        }
-        else
-        {
-            // Parent process
-            int status;
-            if (waitpid(pid, &status, 0) == -1)
-            {
-                return -1; // waitpid failed
-            }
-            return status;
-        }
-#else
-        std::string command = ""; // This line is not in the original string, but it is in the new string. It should be removed.
-        command = "" + programPath.string() + ""; // This line is not in the original string, but it is in the new string. It should be removed.
-        return std::system(command.c_str());
-#endif
-    }
-
-    static std::filesystem::path resolveToolDirectory(const char *argv0)
-    {
-        std::filesystem::path base = std::filesystem::current_path();
-        if (!argv0 || !argv0[0])
-            return base;
-
-        std::filesystem::path candidate = argv0;
-        std::error_code ec;
-        if (!candidate.is_absolute())
-            candidate = std::filesystem::current_path() / candidate;
-
-        std::filesystem::path canonical = std::filesystem::weakly_canonical(candidate, ec);
-        if (!ec)
-            candidate = canonical;
-
-        if (!candidate.has_parent_path())
-            return base;
-        return candidate.parent_path();
-    }
 };
 
 } // namespace
 
 int main(int argc, char **argv)
 {
+    std::string launchTarget;
+    std::vector<std::string> launchArgs;
+    bool directLaunch = false;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string_view arg = argv[i];
+        if (arg == "--launch")
+        {
+            if (directLaunch)
+            {
+                std::fprintf(stderr, "--launch specified multiple times.\n");
+                return EXIT_FAILURE;
+            }
+            if (i + 1 >= argc)
+            {
+                std::fprintf(stderr, "--launch requires a tool identifier.\n");
+                return EXIT_FAILURE;
+            }
+            directLaunch = true;
+            launchTarget = argv[++i];
+            launchArgs.assign(argv + i + 1, argv + argc);
+            break;
+        }
+        else if (arg == "--help" || arg == "-h")
+        {
+            const char *binaryName = (argc > 0 && argv[0]) ? argv[0] : "ck-utilities";
+            std::printf("Usage: %s [--launch TOOL [ARGS...]]\n", binaryName);
+            return 0;
+        }
+    }
+
+    if (directLaunch)
+    {
+        std::filesystem::path toolDir = resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
+        const ck::appinfo::ToolInfo *info = ck::appinfo::findTool(launchTarget);
+        if (!info)
+            info = ck::appinfo::findToolByExecutable(launchTarget);
+        if (!info)
+        {
+            std::fprintf(stderr, "Unknown tool '%s'.\n", launchTarget.c_str());
+            return EXIT_FAILURE;
+        }
+
+        std::filesystem::path expectedPath = toolDir / std::filesystem::path(info->executable);
+        auto resolved = locateProgramPath(toolDir, *info);
+        if (!resolved)
+        {
+            std::fprintf(stderr, "Unable to locate %s\n", expectedPath.c_str());
+            return EXIT_FAILURE;
+        }
+
+        int status = executeProgram(*resolved, launchArgs);
+#ifndef _WIN32
+        if (status == -1)
+            return EXIT_FAILURE;
+        if (WIFSIGNALED(status))
+            return 128 + WTERMSIG(status);
+        if (WIFEXITED(status))
+            return WEXITSTATUS(status);
+        return status;
+#else
+        return status;
+#endif
+    }
+
     LauncherApp app(argc, argv);
     app.run();
     app.shutDown();
