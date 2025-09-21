@@ -88,7 +88,7 @@ struct AboutDialogInfo
     std::string_view toolName;
     std::string_view version;
     std::string_view description;
-    std::string_view copyright = "(c) 2025 by Dr. C. Klukas";
+    std::string_view copyright = "© 2025 by Dr. C. Klukas";
     std::string_view applicationName = "CK Utilities";
     std::string_view buildDate = __DATE__;
     std::string_view buildTime = __TIME__;
@@ -100,12 +100,10 @@ inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
     {
         std::ostringstream headerOut;
         headerOut << info.applicationName;
+        if (!info.applicationName.empty() && !info.copyright.empty())
+            headerOut << ' ';
         if (!info.copyright.empty())
-        {
-            if (!info.applicationName.empty())
-                headerOut << '\n';
             headerOut << info.copyright;
-        }
         paragraphs.emplace_back(headerOut.str());
     }
     if (!info.toolName.empty())
@@ -150,10 +148,12 @@ public:
     AboutStaticText(const TRect &bounds,
                     TStringView message,
                     std::vector<std::string> lines,
-                    size_t highlightIndex) noexcept
+                    size_t highlightIndex,
+                    size_t highlightPrefixLength) noexcept
         : TStaticText(bounds, message)
         , m_lines(std::move(lines))
         , m_highlightIndex(highlightIndex)
+        , m_highlightPrefixLength(highlightPrefixLength)
     {
         growMode |= gfFixed;
     }
@@ -172,8 +172,25 @@ public:
                 const bool isHighlighted = (m_highlightIndex < m_lines.size()) &&
                                             (static_cast<size_t>(y) == m_highlightIndex) &&
                                             !m_lines[y].empty();
-                const TColorAttr attr = isHighlighted ? highlight : normal;
-                buffer.moveStr(0, TStringView(m_lines[y]), attr);
+                if (isHighlighted && m_highlightPrefixLength > 0)
+                {
+                    const std::string &line = m_lines[y];
+                    const size_t prefixLength = std::min(m_highlightPrefixLength, line.size());
+                    const TStringView prefix(line.data(), prefixLength);
+                    buffer.moveStr(0, prefix, highlight);
+
+                    const TStringView suffix(line.data() + prefixLength, line.size() - prefixLength);
+                    if (!suffix.empty())
+                    {
+                        const int prefixWidth = strwidth(prefix);
+                        buffer.moveStr(prefixWidth, suffix, normal);
+                    }
+                }
+                else
+                {
+                    const TColorAttr attr = isHighlighted ? highlight : normal;
+                    buffer.moveStr(0, TStringView(m_lines[y]), attr);
+                }
             }
             writeLine(0, y, size.x, 1, buffer);
         }
@@ -182,6 +199,7 @@ public:
 private:
     std::vector<std::string> m_lines;
     size_t m_highlightIndex;
+    size_t m_highlightPrefixLength;
 };
 
 inline std::vector<std::string> splitLinesPreservingEmpties(const std::string &text)
@@ -227,6 +245,13 @@ inline void showAboutDialog(const AboutDialogInfo &info)
     const std::string message = buildAboutDialogMessage(info);
     auto lines = detail::splitLinesPreservingEmpties(message);
     const size_t highlightIndex = detail::findFirstNonEmptyLine(lines);
+    size_t highlightPrefixLength = 0;
+    if (highlightIndex < lines.size() && !info.applicationName.empty())
+    {
+        const std::string &line = lines[highlightIndex];
+        if (line.compare(0, info.applicationName.size(), info.applicationName) == 0)
+            highlightPrefixLength = info.applicationName.size();
+    }
     const int maxLineWidth = detail::computeMaxLineWidth(lines);
 
     constexpr int kMinWidth = 40;
@@ -245,7 +270,8 @@ inline void showAboutDialog(const AboutDialogInfo &info)
     dialog->insert(new detail::AboutStaticText(textBounds,
                                               message,
                                               std::move(lines),
-                                              highlightIndex));
+                                              highlightIndex,
+                                              highlightPrefixLength));
 
     TButton *okButton = new TButton(TRect(0, 0, 10, 2), MsgBoxText::okText, cmOK, bfDefault);
     dialog->insert(okButton);
