@@ -1,0 +1,57 @@
+name: Release Packages
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libncursesw5-dev rpm
+
+      - name: Configure
+        run: cmake --preset pkg
+
+      - name: Build packages
+        run: cmake --build build/pkg -t package
+
+      - name: Upload Linux assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/pkg/*.deb
+            build/pkg/*.rpm
+            build/pkg/*.tar.gz
+
+  release-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install packaging dependencies
+        run: |
+          brew update
+          brew install ninja
+
+      - name: Configure
+        run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+
+      - name: Build macOS archive
+        run: cmake --build build/pkg -t package
+
+      - name: Upload macOS asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/pkg/*.tar.gz
