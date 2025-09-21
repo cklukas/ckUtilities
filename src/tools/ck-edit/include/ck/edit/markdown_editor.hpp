@@ -64,6 +64,29 @@ class MarkdownInfoView;
 class MarkdownEditWindow;
 class MarkdownEditorApp;
 
+struct MarkdownStatusContext
+{
+    bool hasEditor = false;
+    bool markdownMode = false;
+    bool hasFileName = false;
+    bool isUntitled = false;
+    bool isModified = false;
+    bool hasCursorLine = false;
+    MarkdownLineKind lineKind = MarkdownLineKind::Unknown;
+    int headingLevel = 0;
+    bool isTaskItem = false;
+    bool isOrderedItem = false;
+    bool isBulletItem = false;
+    bool isTableRow = false;
+    bool isTableHeader = false;
+    bool isTableSeparator = false;
+    int tableColumn = -1;
+    MarkdownTableAlignment tableAlignment = MarkdownTableAlignment::Default;
+    bool tableHasAlignment = false;
+    MarkdownSpanKind spanKind = MarkdownSpanKind::PlainText;
+    bool hasSpan = false;
+};
+
 class MarkdownFileEditor : public TFileEditor
 {
 public:
@@ -132,6 +155,7 @@ public:
     std::string lineText(uint linePtr);
     void notifyInfoView();
     uint stateVersion() const noexcept { return cachedStateVersion; }
+    void buildStatusContext(struct MarkdownStatusContext &context);
 
 private:
     friend class MarkdownInfoView;
@@ -142,6 +166,10 @@ private:
     bool markdownMode = true;
     bool smartListContinuation = true;
     uint cachedStateVersion = 0;
+
+    MarkdownParserState statusStateCache{};
+    uint statusCachePrefixPtr = UINT_MAX;
+    uint statusCacheVersion = 0;
 
     void onContentModified();
     void wrapSelectionWith(const std::string &prefix, const std::string &suffix);
@@ -278,7 +306,7 @@ public:
     virtual void handleEvent(TEvent &event) override;
     virtual void idle() override;
 
-    void updateStatusLineForMode(bool markdownMode);
+    void updateStatusLine(const MarkdownStatusContext &context);
     void updateMenuBarForMode(bool markdownMode);
     void refreshUiMode();
     void showDocumentSavedMessage(const std::string &path);

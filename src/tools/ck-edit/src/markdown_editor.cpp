@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <chrono>
 #include <thread>
 #include <set>
@@ -155,13 +156,297 @@ ushort execDialog(TDialog *d, void *data)
     return result;
 }
 
+struct CommandHotkey
+{
+    ushort command;
+    TKey key;
+    const char *label;
+};
+
+const std::array<CommandHotkey, 52> kCommandHotkeys = {{
+    {cmOpen, TKey(kbF3), "~F3~ Open"},
+    {cmSave, TKey(kbF2), "~F2~ Save"},
+    {cmSaveAs, TKey(kbShiftF12), "~Shift-F12~ Save As"},
+    {cmToggleWrap, TKey(kbCtrlW), "~Ctrl-W~ Wrap"},
+    {cmToggleMarkdownMode, TKey(kbCtrlM), "~Ctrl-M~ Markdown"},
+    {cmBold, TKey(kbCtrlB), "~Ctrl-B~ Bold"},
+    {cmItalic, TKey(kbCtrlI), "~Ctrl-I~ Italic"},
+    {cmBoldItalic, TKey('B', kbCtrlShift | kbShift), "~Ctrl+Shift+B~ Bold+Italic"},
+    {cmStrikethrough, TKey('S', kbCtrlShift | kbShift), "~Ctrl+Shift+S~ Strike"},
+    {cmInlineCode, TKey(kbCtrlK), "~Ctrl-K~ Inline Code"},
+    {cmCodeBlock, TKey('K', kbCtrlShift | kbShift), "~Ctrl+Shift+K~ Code Block"},
+    {cmRemoveFormatting, TKey('0', kbCtrlShift | kbShift), "~Ctrl+Shift+0~ Clear Format"},
+    {cmMakeParagraph, TKey('P', kbCtrlShift | kbShift), "~Ctrl+Shift+P~ Paragraph"},
+    {cmToggleBlockQuote, TKey('Q', kbCtrlShift | kbShift), "~Ctrl+Shift+Q~ Block Quote"},
+    {cmToggleBulletList, TKey('U', kbCtrlShift | kbShift), "~Ctrl+Shift+U~ Bullet List"},
+    {cmToggleNumberedList, TKey('O', kbCtrlShift | kbShift), "~Ctrl+Shift+O~ Numbered"},
+    {cmConvertTaskList, TKey('T', kbCtrlShift | kbShift), "~Ctrl+Shift+T~ Task List"},
+    {cmToggleTaskCheckbox, TKey('X', kbCtrlShift | kbShift), "~Ctrl+Shift+X~ Checkbox"},
+    {cmIncreaseIndent, TKey(kbRight, kbCtrlShift | kbShift), "~Ctrl+Shift+Right~ Indent"},
+    {cmDecreaseIndent, TKey(kbLeft, kbCtrlShift | kbShift), "~Ctrl+Shift+Left~ Outdent"},
+    {cmDefinitionList, TKey('D', kbCtrlShift | kbShift), "~Ctrl+Shift+D~ Definition"},
+    {cmToggleSmartList, TKey('A', kbCtrlShift | kbShift), "~Ctrl+Shift+A~ Auto List"},
+    {cmInsertLink, TKey('L', kbCtrlShift | kbShift), "~Ctrl+Shift+L~ Link"},
+    {cmInsertReferenceLink, TKey('R', kbCtrlShift | kbShift), "~Ctrl+Shift+R~ Reference"},
+    {cmAutoLinkSelection, TKey('Y', kbCtrlShift | kbShift), "~Ctrl+Shift+Y~ Auto Link"},
+    {cmInsertImage, TKey('I', kbCtrlShift | kbShift), "~Ctrl+Shift+I~ Image"},
+    {cmInsertFootnote, TKey('N', kbCtrlShift | kbShift), "~Ctrl+Shift+N~ Footnote"},
+    {cmInsertHorizontalRule, TKey('H', kbCtrlShift | kbShift), "~Ctrl+Shift+H~ Rule"},
+    {cmEscapeSelection, TKey('E', kbCtrlShift | kbShift), "~Ctrl+Shift+E~ Escape"},
+    {cmInsertTable, TKey('T', kbCtrlShift | kbAltShift), "~Ctrl+Alt+T~ Table"},
+    {cmTableInsertRowAbove, TKey(kbUp, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Up~ Row Above"},
+    {cmTableInsertRowBelow, TKey(kbDown, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Down~ Row Below"},
+    {cmTableDeleteRow, TKey(kbDown, kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+Down~ Delete Row"},
+    {cmTableInsertColumnBefore, TKey(kbLeft, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Left~ Col Before"},
+    {cmTableInsertColumnAfter, TKey(kbRight, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Right~ Col After"},
+    {cmTableDeleteColumn, TKey(kbRight, kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+Right~ Delete Col"},
+    {cmTableDeleteTable, TKey('T', kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+T~ Delete Table"},
+    {cmTableAlignDefault, TKey('D', kbCtrlShift | kbAltShift), "~Ctrl+Alt+D~ Align Default"},
+    {cmTableAlignLeft, TKey('L', kbCtrlShift | kbAltShift), "~Ctrl+Alt+L~ Align Left"},
+    {cmTableAlignCenter, TKey('C', kbCtrlShift | kbAltShift), "~Ctrl+Alt+C~ Align Center"},
+    {cmTableAlignRight, TKey('R', kbCtrlShift | kbAltShift), "~Ctrl+Alt+R~ Align Right"},
+    {cmTableAlignNumber, TKey('N', kbCtrlShift | kbAltShift), "~Ctrl+Alt+N~ Align Number"},
+    {cmReflowParagraphs, TKey('P', kbCtrlShift | kbAltShift), "~Ctrl+Alt+P~ Reflow"},
+    {cmFormatDocument, TKey('F', kbCtrlShift | kbAltShift), "~Ctrl+Alt+F~ Format Doc"},
+    {cmHeading1, TKey('1', kbAltShift), "~Alt-1~ H1"},
+    {cmHeading2, TKey('2', kbAltShift), "~Alt-2~ H2"},
+    {cmHeading3, TKey('3', kbAltShift), "~Alt-3~ H3"},
+    {cmHeading4, TKey('4', kbAltShift), "~Alt-4~ H4"},
+    {cmHeading5, TKey('5', kbAltShift), "~Alt-5~ H5"},
+    {cmHeading6, TKey('6', kbAltShift), "~Alt-6~ H6"},
+    {cmClearHeading, TKey('0', kbAltShift), "~Alt-0~ Clear"},
+    {cmInsertLineBreak, TKey(kbCtrlEnter), "~Ctrl+Enter~ Line Break"},
+}};
+
+const CommandHotkey *findHotkey(ushort command) noexcept
+{
+    for (const auto &entry : kCommandHotkeys)
+    {
+        if (entry.command == command)
+            return &entry;
+    }
+    return nullptr;
+}
+
+bool operator==(const MarkdownStatusContext &lhs, const MarkdownStatusContext &rhs) noexcept
+{
+    return lhs.hasEditor == rhs.hasEditor && lhs.markdownMode == rhs.markdownMode &&
+           lhs.hasFileName == rhs.hasFileName && lhs.isUntitled == rhs.isUntitled &&
+           lhs.isModified == rhs.isModified && lhs.hasCursorLine == rhs.hasCursorLine &&
+           lhs.lineKind == rhs.lineKind && lhs.headingLevel == rhs.headingLevel &&
+           lhs.isTaskItem == rhs.isTaskItem && lhs.isOrderedItem == rhs.isOrderedItem &&
+           lhs.isBulletItem == rhs.isBulletItem && lhs.isTableRow == rhs.isTableRow &&
+           lhs.isTableHeader == rhs.isTableHeader && lhs.isTableSeparator == rhs.isTableSeparator &&
+           lhs.tableColumn == rhs.tableColumn && lhs.tableAlignment == rhs.tableAlignment &&
+           lhs.tableHasAlignment == rhs.tableHasAlignment && lhs.spanKind == rhs.spanKind &&
+           lhs.hasSpan == rhs.hasSpan;
+}
+
+bool operator!=(const MarkdownStatusContext &lhs, const MarkdownStatusContext &rhs) noexcept
+{
+    return !(lhs == rhs);
+}
+
+std::vector<ushort> buildBaseCommands(const MarkdownStatusContext &context)
+{
+    std::vector<ushort> commands;
+    if (!context.hasEditor)
+    {
+        commands.push_back(cmOpen);
+        return commands;
+    }
+
+    commands.push_back(cmSave);
+    if (context.isUntitled)
+        commands.push_back(cmSaveAs);
+    commands.push_back(cmToggleWrap);
+    commands.push_back(cmToggleMarkdownMode);
+    return commands;
+}
+
+std::vector<ushort> buildContextCommands(const MarkdownStatusContext &context)
+{
+    constexpr std::size_t kMaxContextCommands = 12;
+    std::vector<ushort> commands;
+    if (!context.hasEditor || !context.markdownMode)
+        return commands;
+
+    auto addCommand = [&](ushort command) {
+        if (commands.size() >= kMaxContextCommands)
+            return;
+        if (std::find(commands.begin(), commands.end(), command) != commands.end())
+            return;
+        commands.push_back(command);
+    };
+
+    if (context.isTableRow || context.isTableHeader)
+    {
+        addCommand(cmTableInsertRowAbove);
+        addCommand(cmTableInsertRowBelow);
+        addCommand(cmTableDeleteRow);
+        addCommand(cmTableInsertColumnBefore);
+        addCommand(cmTableInsertColumnAfter);
+        addCommand(cmTableDeleteColumn);
+        addCommand(cmTableDeleteTable);
+        addCommand(cmTableAlignDefault);
+        addCommand(cmTableAlignLeft);
+        addCommand(cmTableAlignCenter);
+        addCommand(cmTableAlignRight);
+        addCommand(cmTableAlignNumber);
+    }
+    else if (context.isTableSeparator)
+    {
+        addCommand(cmTableAlignDefault);
+        addCommand(cmTableAlignLeft);
+        addCommand(cmTableAlignCenter);
+        addCommand(cmTableAlignRight);
+        addCommand(cmTableAlignNumber);
+        addCommand(cmTableInsertColumnBefore);
+        addCommand(cmTableInsertColumnAfter);
+        addCommand(cmTableDeleteColumn);
+        addCommand(cmTableDeleteTable);
+    }
+
+    switch (context.spanKind)
+    {
+    case MarkdownSpanKind::Bold:
+        addCommand(cmBold);
+        addCommand(cmItalic);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::Italic:
+        addCommand(cmItalic);
+        addCommand(cmBold);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::BoldItalic:
+        addCommand(cmBoldItalic);
+        addCommand(cmBold);
+        addCommand(cmItalic);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::Strikethrough:
+        addCommand(cmStrikethrough);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::Code:
+        addCommand(cmInlineCode);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::Link:
+        addCommand(cmInsertLink);
+        addCommand(cmInsertReferenceLink);
+        addCommand(cmAutoLinkSelection);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::Image:
+        addCommand(cmInsertImage);
+        addCommand(cmRemoveFormatting);
+        break;
+    case MarkdownSpanKind::InlineHtml:
+        addCommand(cmEscapeSelection);
+        addCommand(cmRemoveFormatting);
+        break;
+    default:
+        break;
+    }
+
+    switch (context.lineKind)
+    {
+    case MarkdownLineKind::Heading:
+        addCommand(cmHeading1);
+        addCommand(cmHeading2);
+        addCommand(cmHeading3);
+        addCommand(cmHeading4);
+        addCommand(cmHeading5);
+        addCommand(cmHeading6);
+        addCommand(cmClearHeading);
+        addCommand(cmMakeParagraph);
+        addCommand(cmInsertLineBreak);
+        break;
+    case MarkdownLineKind::BlockQuote:
+        addCommand(cmToggleBlockQuote);
+        addCommand(cmIncreaseIndent);
+        addCommand(cmDecreaseIndent);
+        addCommand(cmMakeParagraph);
+        break;
+    case MarkdownLineKind::BulletListItem:
+        addCommand(cmToggleBulletList);
+        addCommand(cmToggleNumberedList);
+        addCommand(cmConvertTaskList);
+        addCommand(cmIncreaseIndent);
+        addCommand(cmDecreaseIndent);
+        addCommand(cmToggleSmartList);
+        if (context.isTaskItem)
+            addCommand(cmToggleTaskCheckbox);
+        break;
+    case MarkdownLineKind::OrderedListItem:
+        addCommand(cmToggleNumberedList);
+        addCommand(cmToggleBulletList);
+        addCommand(cmConvertTaskList);
+        addCommand(cmIncreaseIndent);
+        addCommand(cmDecreaseIndent);
+        addCommand(cmToggleSmartList);
+        if (context.isTaskItem)
+            addCommand(cmToggleTaskCheckbox);
+        break;
+    case MarkdownLineKind::TaskListItem:
+        addCommand(cmToggleTaskCheckbox);
+        addCommand(cmConvertTaskList);
+        addCommand(cmToggleBulletList);
+        addCommand(cmToggleNumberedList);
+        addCommand(cmIncreaseIndent);
+        addCommand(cmDecreaseIndent);
+        addCommand(cmToggleSmartList);
+        break;
+    case MarkdownLineKind::CodeFenceStart:
+    case MarkdownLineKind::CodeFenceEnd:
+    case MarkdownLineKind::FencedCode:
+    case MarkdownLineKind::IndentedCode:
+        addCommand(cmCodeBlock);
+        addCommand(cmInlineCode);
+        addCommand(cmEscapeSelection);
+        break;
+    case MarkdownLineKind::HorizontalRule:
+        addCommand(cmInsertHorizontalRule);
+        addCommand(cmMakeParagraph);
+        addCommand(cmInsertTable);
+        break;
+    case MarkdownLineKind::Html:
+        addCommand(cmEscapeSelection);
+        addCommand(cmInlineCode);
+        addCommand(cmInsertLink);
+        addCommand(cmInsertImage);
+        break;
+    case MarkdownLineKind::Paragraph:
+    case MarkdownLineKind::Blank:
+    case MarkdownLineKind::Unknown:
+        addCommand(cmBold);
+        addCommand(cmItalic);
+        addCommand(cmInlineCode);
+        addCommand(cmInsertLink);
+        addCommand(cmInsertImage);
+        addCommand(cmInsertFootnote);
+        addCommand(cmInsertTable);
+        addCommand(cmInsertLineBreak);
+        addCommand(cmReflowParagraphs);
+        addCommand(cmFormatDocument);
+        addCommand(cmInsertHorizontalRule);
+        break;
+    default:
+        break;
+    }
+
+    return commands;
+}
+
 class MarkdownStatusLine : public TStatusLine
 {
 public:
     MarkdownStatusLine(TRect r)
         : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
     {
-        setMarkdownMode(true);
+        setContext(MarkdownStatusContext{});
     }
 
     ~MarkdownStatusLine() override
@@ -171,6 +456,19 @@ public:
         if (defs)
             defs->items = nullptr;
     }
+
+    void setContext(const MarkdownStatusContext &context)
+    {
+        if (lastContext && *lastContext == context)
+            return;
+        lastContext = context;
+        rebuildItems(context);
+    }
+
+private:
+    std::optional<MarkdownStatusContext> lastContext;
+
+    void rebuildItems(const MarkdownStatusContext &context)
 
     void showTemporaryMessage(const std::string &message)
     {
@@ -197,24 +495,23 @@ public:
         if (defs)
             defs->items = nullptr;
 
-        auto *save = new TStatusItem("~F2~ Save", kbF2, cmSave);
-        auto *open = new TStatusItem("~F3~ Open", kbF3, cmOpen);
-        auto *wrap = new TStatusItem("~Ctrl-W~ Wrap", kbCtrlW, cmToggleWrap);
+        std::vector<ushort> commands = buildBaseCommands(context);
+        std::vector<ushort> contextCommands = buildContextCommands(context);
+        commands.insert(commands.end(), contextCommands.begin(), contextCommands.end());
 
-        save->next = open;
-        open->next = wrap;
-        TStatusItem *tail = wrap;
-
-        if (markdownMode)
+        TStatusItem *head = nullptr;
+        TStatusItem **tail = &head;
+        for (ushort command : commands)
         {
-            auto *bold = new TStatusItem("~Ctrl-B~ Bold", kbCtrlB, cmBold);
-            auto *italic = new TStatusItem("~Ctrl-I~ Italic", kbCtrlI, cmItalic);
-            tail->next = bold;
-            bold->next = italic;
-            tail = italic;
+            if (const auto *hotkey = findHotkey(command))
+            {
+                auto *item = new TStatusItem(hotkey->label, hotkey->key, hotkey->command);
+                *tail = item;
+                tail = &item->next;
+            }
         }
 
-        items = save;
+        items = head;
         if (defs)
             defs->items = items;
         drawView();
@@ -2674,11 +2971,140 @@ std::string MarkdownFileEditor::lineText(uint linePtr)
 void MarkdownFileEditor::notifyInfoView()
 {
     ++cachedStateVersion;
+    statusCachePrefixPtr = UINT_MAX;
+    statusCacheVersion = 0;
     if (infoView)
     {
         infoView->invalidateState();
         if (markdownMode && (infoView->state & sfVisible))
             infoView->drawView();
+    }
+    if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
+        app->refreshUiMode();
+}
+
+void MarkdownFileEditor::buildStatusContext(MarkdownStatusContext &context)
+{
+    context = {};
+    context.hasEditor = true;
+    context.markdownMode = markdownMode;
+    context.hasFileName = fileName[0] != '\0';
+    context.isUntitled = !context.hasFileName;
+    context.isModified = modified;
+
+    if (!markdownMode)
+        return;
+
+    if (bufLen == 0)
+    {
+        context.lineKind = MarkdownLineKind::Blank;
+        context.hasCursorLine = false;
+        context.spanKind = MarkdownSpanKind::PlainText;
+        return;
+    }
+
+    uint linePtr = lineStart(curPtr);
+    if (linePtr >= bufLen)
+    {
+        context.lineKind = MarkdownLineKind::Blank;
+        context.hasCursorLine = false;
+        context.spanKind = MarkdownSpanKind::PlainText;
+        return;
+    }
+
+    context.hasCursorLine = true;
+
+    MarkdownParserState state;
+    if (statusCacheVersion == cachedStateVersion && statusCachePrefixPtr != UINT_MAX && statusCachePrefixPtr <= linePtr)
+    {
+        state = statusStateCache;
+        uint ptr = statusCachePrefixPtr;
+        while (ptr < linePtr && ptr < bufLen)
+        {
+            uint end = lineEnd(ptr);
+            std::string line = readRange(ptr, end);
+            analyzer().analyzeLine(line, state);
+            uint next = nextLine(ptr);
+            if (next <= ptr)
+                break;
+            ptr = next;
+        }
+    }
+    else
+    {
+        state = MarkdownParserState{};
+        uint ptr = 0;
+        while (ptr < linePtr && ptr < bufLen)
+        {
+            uint end = lineEnd(ptr);
+            std::string line = readRange(ptr, end);
+            analyzer().analyzeLine(line, state);
+            uint next = nextLine(ptr);
+            if (next <= ptr)
+                break;
+            ptr = next;
+        }
+    }
+    statusStateCache = state;
+    statusCachePrefixPtr = linePtr;
+    statusCacheVersion = cachedStateVersion;
+
+    MarkdownLineInfo info = analyzer().analyzeLine(lineText(linePtr), state);
+    context.lineKind = info.kind;
+    context.headingLevel = info.headingLevel;
+    context.isTaskItem = info.isTask || info.kind == MarkdownLineKind::TaskListItem;
+    context.isOrderedItem = info.kind == MarkdownLineKind::OrderedListItem;
+    context.isBulletItem = info.kind == MarkdownLineKind::BulletListItem;
+    context.isTableHeader = info.isTableHeader;
+    context.isTableSeparator = info.kind == MarkdownLineKind::TableSeparator;
+    context.isTableRow = info.kind == MarkdownLineKind::TableRow;
+
+    if (context.isTableRow || context.isTableSeparator)
+    {
+        int columnIndex = -1;
+        if (!info.tableCells.empty())
+        {
+            for (std::size_t i = 0; i < info.tableCells.size(); ++i)
+            {
+                const auto &cell = info.tableCells[i];
+                std::size_t endCol = std::max(cell.endColumn, cell.startColumn + 1);
+                if (curPos.x >= static_cast<int>(cell.startColumn) && curPos.x < static_cast<int>(endCol))
+                {
+                    columnIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+            if (columnIndex == -1)
+                columnIndex = static_cast<int>(info.tableCells.size()) - 1;
+        }
+        if (columnIndex < 0 && !info.tableAlignments.empty())
+            columnIndex = std::clamp(curPos.x, 0, static_cast<int>(info.tableAlignments.size()) - 1);
+        context.tableColumn = columnIndex;
+        if (columnIndex >= 0 && columnIndex < static_cast<int>(info.tableAlignments.size()))
+        {
+            context.tableAlignment = info.tableAlignments[columnIndex];
+            context.tableHasAlignment = true;
+        }
+        else if (context.isTableSeparator && !info.tableAlignments.empty())
+        {
+            context.tableHasAlignment = true;
+            if (columnIndex >= 0 && columnIndex < static_cast<int>(info.tableAlignments.size()))
+                context.tableAlignment = info.tableAlignments[columnIndex];
+            else
+                context.tableAlignment = MarkdownTableAlignment::Default;
+        }
+    }
+
+    const MarkdownSpan *span = analyzer().spanAtColumn(info, curPos.x);
+    if (span)
+    {
+        context.spanKind = span->kind;
+        context.hasSpan = span->kind != MarkdownSpanKind::PlainText;
+    }
+    else
+    {
+        context.spanKind = MarkdownSpanKind::PlainText;
+        context.hasSpan = false;
     }
 }
 
@@ -3252,12 +3678,12 @@ TStatusLine *MarkdownEditorApp::initStatusLine(TRect r)
     return new MarkdownStatusLine(r);
 }
 
-void MarkdownEditorApp::updateStatusLineForMode(bool markdownMode)
+void MarkdownEditorApp::updateStatusLine(const MarkdownStatusContext &context)
 {
     if (!statusLine)
         return;
     if (auto *line = dynamic_cast<MarkdownStatusLine *>(statusLine))
-        line->setMarkdownMode(markdownMode);
+        line->setContext(context);
 }
 
 void MarkdownEditorApp::updateMenuBarForMode(bool markdownMode)
@@ -3270,16 +3696,20 @@ void MarkdownEditorApp::updateMenuBarForMode(bool markdownMode)
 
 void MarkdownEditorApp::refreshUiMode()
 {
+    MarkdownStatusContext context;
     bool markdownMode = false;
     if (deskTop && deskTop->current)
     {
         if (auto *win = dynamic_cast<MarkdownEditWindow *>(deskTop->current))
         {
             if (auto *ed = win->editor())
-                markdownMode = ed->isMarkdownMode();
+            {
+                ed->buildStatusContext(context);
+                markdownMode = context.markdownMode;
+            }
         }
     }
-    updateStatusLineForMode(markdownMode);
+    updateStatusLine(context);
     updateMenuBarForMode(markdownMode);
 }
 
