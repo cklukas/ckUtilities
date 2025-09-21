@@ -584,7 +584,10 @@ public:
         layoutChildren();
 
         if (!toolRefs.empty())
+        {
             listView->focusItem(0);
+            listView->select();
+        }
 
         ensureDetailUpdated();
     }
