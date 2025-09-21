@@ -148,6 +148,65 @@ ushort execDialog(TDialog *d, void *data)
     return result;
 }
 
+class MarkdownStatusLine : public TStatusLine
+{
+public:
+    MarkdownStatusLine(TRect r)
+        : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+    {
+        setMarkdownMode(true);
+    }
+
+    ~MarkdownStatusLine() override
+    {
+        disposeItems(items);
+        items = nullptr;
+        if (defs)
+            defs->items = nullptr;
+    }
+
+    void setMarkdownMode(bool markdownMode)
+    {
+        disposeItems(items);
+        items = nullptr;
+        if (defs)
+            defs->items = nullptr;
+
+        auto *save = new TStatusItem("~F2~ Save", kbF2, cmSave);
+        auto *open = new TStatusItem("~F3~ Open", kbF3, cmOpen);
+        auto *wrap = new TStatusItem("~Ctrl-W~ Wrap", kbCtrlW, cmToggleWrap);
+
+        save->next = open;
+        open->next = wrap;
+        TStatusItem *tail = wrap;
+
+        if (markdownMode)
+        {
+            auto *bold = new TStatusItem("~Ctrl-B~ Bold", kbCtrlB, cmBold);
+            auto *italic = new TStatusItem("~Ctrl-I~ Italic", kbCtrlI, cmItalic);
+            tail->next = bold;
+            bold->next = italic;
+            tail = italic;
+        }
+
+        items = save;
+        if (defs)
+            defs->items = items;
+        drawView();
+    }
+
+private:
+    void disposeItems(TStatusItem *item)
+    {
+        while (item)
+        {
+            TStatusItem *next = item->next;
+            delete item;
+            item = next;
+        }
+    }
+};
+
 } // namespace
 
 MarkdownFileEditor::MarkdownFileEditor(const TRect &bounds, TScrollBar *hScroll,
@@ -191,10 +250,20 @@ void MarkdownFileEditor::toggleWrap()
     drawView();
 }
 
+void MarkdownFileEditor::setMarkdownMode(bool value) noexcept
+{
+    if (markdownMode == value)
+        return;
+    markdownMode = value;
+    if (hostWindow)
+        hostWindow->updateLayoutForMode();
+    else
+        notifyInfoView();
+}
+
 void MarkdownFileEditor::toggleMarkdownMode()
 {
-    markdownMode = !markdownMode;
-    notifyInfoView();
+    setMarkdownMode(!markdownMode);
 }
 
 void MarkdownFileEditor::applyHeadingLevel(int level)
@@ -2380,7 +2449,8 @@ void MarkdownFileEditor::notifyInfoView()
     if (infoView)
     {
         infoView->invalidateState();
-        infoView->drawView();
+        if (markdownMode && (infoView->state & sfVisible))
+            infoView->drawView();
     }
 }
 
@@ -2592,6 +2662,56 @@ MarkdownEditWindow::MarkdownEditWindow(const TRect &bounds, TStringView fileName
     insert(fileEditor);
     infoView->setEditor(fileEditor);
     fileEditor->setInfoView(infoView);
+    fileEditor->setHostWindow(this);
+    updateLayoutForMode();
+}
+
+void MarkdownEditWindow::updateLayoutForMode()
+{
+    if (!fileEditor || !hScrollBar)
+        return;
+
+    const bool markdown = fileEditor->isMarkdownMode();
+
+    if (infoView)
+    {
+        if (markdown)
+        {
+            TRect infoRect(1, 1, 1 + kInfoColumnWidth, size.y - 1);
+            infoView->show();
+            infoView->locate(infoRect);
+        }
+        else
+        {
+            infoView->hide();
+        }
+    }
+
+    TRect editorRect = markdown ? TRect(1 + kInfoColumnWidth, 1, size.x - 1, size.y - 1)
+                                : TRect(1, 1, size.x - 1, size.y - 1);
+    fileEditor->locate(editorRect);
+
+    TRect hScrollRect = markdown ? TRect(1 + kInfoColumnWidth, size.y - 1, size.x - 2, size.y)
+                                 : TRect(1, size.y - 1, size.x - 2, size.y);
+    hScrollBar->locate(hScrollRect);
+
+    if (infoView && markdown)
+        infoView->drawView();
+    fileEditor->drawView();
+    hScrollBar->drawView();
+
+    if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
+        app->updateStatusLineForMode(markdown);
+}
+
+void MarkdownEditWindow::setState(ushort aState, Boolean enable)
+{
+    TWindow::setState(aState, enable);
+    if ((aState & sfActive) != 0 && enable)
+    {
+        if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
+            app->updateStatusLineForMode(fileEditor && fileEditor->isMarkdownMode());
+    }
 }
 
 MarkdownEditorApp::MarkdownEditorApp(int argc, char **argv)
@@ -2839,15 +2959,15 @@ TMenuBar *MarkdownEditorApp::initMenuBar(TRect r)
 TStatusLine *MarkdownEditorApp::initStatusLine(TRect r)
 {
     r.a.y = r.b.y - 1;
-    return new TStatusLine(r,
-                           *new TStatusDef(0, 0xFFFF) +
-                               *new TStatusItem("~F2~ Save", kbF2, cmSave) +
-                               *new TStatusItem("~F3~ Open", kbF3, cmOpen) +
-                               *new TStatusItem("~Ctrl-W~ Wrap", kbCtrlW, cmToggleWrap) +
-                               *new TStatusItem("~Ctrl-M~ Markdown", kbCtrlM, cmToggleMarkdownMode) +
-                               *new TStatusItem("~Ctrl-B~ Bold", kbCtrlB, cmBold) +
-                               *new TStatusItem("~Ctrl-I~ Italic", kbCtrlI, cmItalic));
+    return new MarkdownStatusLine(r);
+}
+
+void MarkdownEditorApp::updateStatusLineForMode(bool markdownMode)
+{
+    if (!statusLine)
+        return;
+    if (auto *line = dynamic_cast<MarkdownStatusLine *>(statusLine))
+        line->setMarkdownMode(markdownMode);
 }
 
 } // namespace ck::edit
-

@@ -40,6 +40,8 @@ namespace ck::edit
 {
 
 class MarkdownInfoView;
+class MarkdownEditWindow;
+class MarkdownEditorApp;
 
 class MarkdownFileEditor : public TFileEditor
 {
@@ -48,7 +50,8 @@ public:
                        TIndicator *indicator, TStringView fileName) noexcept;
 
     void setInfoView(MarkdownInfoView *view) noexcept { infoView = view; }
-    void setMarkdownMode(bool value) noexcept { markdownMode = value; notifyInfoView(); }
+    void setHostWindow(MarkdownEditWindow *window) noexcept { hostWindow = window; }
+    void setMarkdownMode(bool value) noexcept;
     bool isMarkdownMode() const noexcept { return markdownMode; }
 
     void toggleWrap();
@@ -112,6 +115,7 @@ public:
 private:
     friend class MarkdownInfoView;
     MarkdownInfoView *infoView = nullptr;
+    MarkdownEditWindow *hostWindow = nullptr;
     MarkdownAnalyzer markdownAnalyzer;
     bool wrapEnabled = false;
     bool markdownMode = true;
@@ -224,6 +228,9 @@ class MarkdownEditWindow : public TWindow
 public:
     MarkdownEditWindow(const TRect &bounds, TStringView fileName, int aNumber) noexcept;
     MarkdownFileEditor *editor() noexcept { return fileEditor; }
+    void updateLayoutForMode();
+
+    virtual void setState(ushort aState, Boolean enable) override;
 
 private:
     MarkdownFileEditor *fileEditor = nullptr;
@@ -243,6 +250,8 @@ public:
 
     virtual void handleEvent(TEvent &event) override;
 
+    void updateStatusLineForMode(bool markdownMode);
+
 private:
     MarkdownEditWindow *openEditor(const char *fileName, Boolean visible);
     void fileOpen();
@@ -253,4 +262,3 @@ private:
 };
 
 } // namespace ck::edit
-
