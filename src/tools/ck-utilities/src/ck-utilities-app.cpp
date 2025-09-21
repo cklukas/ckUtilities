@@ -631,7 +631,14 @@ public:
         TDialog::handleEvent(event);
         if (event.what == evCommand && event.message.command == cmLaunchTool)
         {
-            message(TProgram::application, evCommand, cmLaunchTool, this);
+            if (TProgram::application)
+            {
+                TEvent launchEvent{};
+                launchEvent.what = evCommand;
+                launchEvent.message.command = cmLaunchTool;
+                launchEvent.message.infoPtr = this;
+                TProgram::application->putEvent(launchEvent);
+            }
             clearEvent(event);
             return;
         }
