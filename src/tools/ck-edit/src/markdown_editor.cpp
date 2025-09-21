@@ -9,6 +9,8 @@
 #include <cstring>
 #include <filesystem>
 #include <optional>
+#include <chrono>
+#include <thread>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +28,11 @@ constexpr int kInfoColumnWidth = 20;
 
 const std::array<std::string_view, 7> kMarkdownExtensions = {
     ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdtxt", ".mdtext"};
+
+void delay(unsigned milliseconds)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
 
 const ushort cmToggleWrap = 3000;
 const ushort cmToggleMarkdownMode = 3001;
@@ -462,6 +469,26 @@ private:
     std::optional<MarkdownStatusContext> lastContext;
 
     void rebuildItems(const MarkdownStatusContext &context)
+
+    void showTemporaryMessage(const std::string &message)
+    {
+        temporaryMessage = message;
+        showingTemporaryMessage = true;
+        drawView();
+    }
+
+    void clearTemporaryMessage()
+    {
+        if (!showingTemporaryMessage)
+            return;
+        showingTemporaryMessage = false;
+        temporaryMessage.clear();
+        drawView();
+    }
+
+    bool hasTemporaryMessage() const noexcept { return showingTemporaryMessage; }
+
+    void setMarkdownMode(bool markdownMode)
     {
         disposeItems(items);
         items = nullptr;
@@ -490,6 +517,14 @@ private:
         drawView();
     }
 
+    virtual const char *hint(ushort helpCtx) override
+    {
+        if (showingTemporaryMessage)
+            return temporaryMessage.c_str();
+        return TStatusLine::hint(helpCtx);
+    }
+
+private:
     void disposeItems(TStatusItem *item)
     {
         while (item)
@@ -499,6 +534,9 @@ private:
             item = next;
         }
     }
+
+    std::string temporaryMessage;
+    bool showingTemporaryMessage = false;
 };
 
 TSubMenu &makeFileMenu()
@@ -2634,6 +2672,20 @@ void MarkdownFileEditor::handleEvent(TEvent &event)
     {
         switch (event.message.command)
         {
+        case cmSave:
+            if (hostWindow)
+                hostWindow->saveDocument(false);
+            else
+                save();
+            clearEvent(event);
+            return;
+        case cmSaveAs:
+            if (hostWindow)
+                hostWindow->saveDocument(true);
+            else
+                saveAs();
+            clearEvent(event);
+            return;
         case cmToggleWrap:
             toggleWrap();
             clearEvent(event);
@@ -3059,6 +3111,8 @@ void MarkdownFileEditor::buildStatusContext(MarkdownStatusContext &context)
 void MarkdownFileEditor::onContentModified()
 {
     notifyInfoView();
+    if (hostWindow)
+        hostWindow->updateWindowTitle();
 }
 
 std::string MarkdownFileEditor::makeTableRow(const std::vector<std::string> &cells) const
@@ -3264,6 +3318,7 @@ MarkdownEditWindow::MarkdownEditWindow(const TRect &bounds, TStringView fileName
     fileEditor->setInfoView(infoView);
     fileEditor->setHostWindow(this);
     updateLayoutForMode();
+    updateWindowTitle();
 }
 
 void MarkdownEditWindow::updateLayoutForMode()
@@ -3302,6 +3357,77 @@ void MarkdownEditWindow::updateLayoutForMode()
 
     if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
         app->refreshUiMode();
+}
+
+void MarkdownEditWindow::applyWindowTitle(const std::string &titleText)
+{
+    if (title)
+    {
+        delete[] const_cast<char *>(title);
+        title = nullptr;
+    }
+    title = newStr(titleText.c_str());
+    if (frame)
+        frame->drawView();
+}
+
+void MarkdownEditWindow::updateWindowTitle()
+{
+    if (!fileEditor)
+        return;
+
+    std::string displayName;
+    if (fileEditor->fileName[0] != '\0')
+    {
+        std::filesystem::path path(fileEditor->fileName);
+        displayName = path.filename().string();
+        if (displayName.empty())
+            displayName = path.string();
+    }
+    else
+    {
+        displayName = "Untitled";
+    }
+
+    if (fileEditor->modified)
+        displayName.insert(0, "* ");
+
+    applyWindowTitle(displayName);
+}
+
+bool MarkdownEditWindow::saveDocument(bool forceSaveAs)
+{
+    if (!fileEditor)
+        return false;
+
+    std::string previousName = fileEditor->fileName;
+    bool saved = forceSaveAs ? static_cast<bool>(fileEditor->saveAs())
+                             : static_cast<bool>(fileEditor->save());
+    if (!saved)
+        return false;
+
+    std::string newName = fileEditor->fileName;
+    if (previousName != newName && !newName.empty())
+        fileEditor->setMarkdownMode(isMarkdownFile(newName));
+
+    updateWindowTitle();
+
+    std::string savedPath = newName.empty() ? std::string("Untitled") : newName;
+
+    if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
+        app->showDocumentSavedMessage(savedPath);
+
+    return true;
+}
+
+void MarkdownEditWindow::handleEvent(TEvent &event)
+{
+    TWindow::handleEvent(event);
+    if (event.what == evBroadcast && event.message.command == cmUpdateTitle)
+    {
+        updateWindowTitle();
+        clearEvent(event);
+    }
 }
 
 void MarkdownEditWindow::draw()
@@ -3398,6 +3524,35 @@ void MarkdownEditorApp::dispatchToEditor(ushort command)
     win->editor()->handleEvent(ev);
 }
 
+void MarkdownEditorApp::showDocumentSavedMessage(const std::string &path)
+{
+    if (!statusLine)
+        return;
+    auto *line = dynamic_cast<MarkdownStatusLine *>(statusLine);
+    if (!line)
+        return;
+
+    std::string message = "Document saved: " + path;
+    line->showTemporaryMessage(message);
+
+    const uint32_t token = statusMessageCounter.fetch_add(1, std::memory_order_relaxed) + 1;
+    activeStatusMessageToken.store(token, std::memory_order_release);
+    pendingStatusMessageClear.store(0, std::memory_order_release);
+
+    std::thread([this, token]() {
+        delay(3000);
+        pendingStatusMessageClear.store(token, std::memory_order_release);
+    }).detach();
+}
+
+void MarkdownEditorApp::clearStatusMessage()
+{
+    if (!statusLine)
+        return;
+    if (auto *line = dynamic_cast<MarkdownStatusLine *>(statusLine))
+        line->clearTemporaryMessage();
+}
+
 void MarkdownEditorApp::handleEvent(TEvent &event)
 {
     TApplication::handleEvent(event);
@@ -3484,6 +3639,30 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
     if (handled)
         clearEvent(event);
     refreshUiMode();
+}
+
+void MarkdownEditorApp::idle()
+{
+    TApplication::idle();
+
+    uint32_t token = pendingStatusMessageClear.load(std::memory_order_acquire);
+    if (token == 0)
+        return;
+
+    uint32_t active = activeStatusMessageToken.load(std::memory_order_acquire);
+    if (token == active)
+    {
+        clearStatusMessage();
+        pendingStatusMessageClear.store(0, std::memory_order_release);
+        activeStatusMessageToken.store(0, std::memory_order_release);
+    }
+    else
+    {
+        uint32_t expected = token;
+        pendingStatusMessageClear.compare_exchange_strong(expected, 0,
+                                                          std::memory_order_acq_rel,
+                                                          std::memory_order_acquire);
+    }
 }
 
 TMenuBar *MarkdownEditorApp::initMenuBar(TRect r)

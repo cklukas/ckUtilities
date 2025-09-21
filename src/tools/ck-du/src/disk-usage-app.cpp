@@ -66,6 +66,9 @@ static const ck::appinfo::ToolInfo &toolInfo()
 
 static const ushort cmViewFiles = 2001;
 static const ushort cmViewFilesRecursive = 2002;
+static const ushort cmViewFileTypes = 2003;
+static const ushort cmViewFileTypesRecursive = 2004;
+static const ushort cmViewFilesForType = 2005;
 static const ushort cmAbout = 2100;
 static const ushort cmUnitAuto = 2200;
 static const ushort cmUnitBytes = 2201;
@@ -588,14 +591,24 @@ std::vector<DirectoryNode *> orderedChildren(DirectoryNode *node)
     return order;
 }
 
+std::string listEntryName(const FileEntry &entry)
+{
+    std::string name = entry.path.filename().string();
+    if (!name.empty())
+        return name;
+    if (!entry.displayPath.empty())
+        return entry.displayPath;
+    return entry.path.string();
+}
+
 void applySortToFiles(std::vector<FileEntry> &entries)
 {
     auto key = getCurrentSortKey();
     auto nameLess = [](const FileEntry &a, const FileEntry &b) {
-        return a.displayPath < b.displayPath;
+        return listEntryName(a) < listEntryName(b);
     };
     auto nameGreater = [](const FileEntry &a, const FileEntry &b) {
-        return a.displayPath > b.displayPath;
+        return listEntryName(a) > listEntryName(b);
     };
 
     switch (key)
@@ -634,6 +647,57 @@ void applySortToFiles(std::vector<FileEntry> &entries)
             if (a.modifiedTime == b.modifiedTime)
                 return nameLess(a, b);
             return a.modifiedTime < b.modifiedTime;
+        });
+        break;
+    }
+}
+
+void applySortToFileTypes(std::vector<FileTypeSummary> &entries)
+{
+    auto key = getCurrentSortKey();
+    auto nameLess = [](const FileTypeSummary &a, const FileTypeSummary &b) {
+        return a.type < b.type;
+    };
+    auto nameGreater = [](const FileTypeSummary &a, const FileTypeSummary &b) {
+        return a.type > b.type;
+    };
+
+    switch (key)
+    {
+    case SortKey::Unsorted:
+        break;
+    case SortKey::NameAscending:
+        std::stable_sort(entries.begin(), entries.end(), nameLess);
+        break;
+    case SortKey::NameDescending:
+        std::stable_sort(entries.begin(), entries.end(), nameGreater);
+        break;
+    case SortKey::SizeDescending:
+        std::stable_sort(entries.begin(), entries.end(), [&](const FileTypeSummary &a, const FileTypeSummary &b) {
+            if (a.totalSize == b.totalSize)
+                return nameLess(a, b);
+            return a.totalSize > b.totalSize;
+        });
+        break;
+    case SortKey::SizeAscending:
+        std::stable_sort(entries.begin(), entries.end(), [&](const FileTypeSummary &a, const FileTypeSummary &b) {
+            if (a.totalSize == b.totalSize)
+                return nameLess(a, b);
+            return a.totalSize < b.totalSize;
+        });
+        break;
+    case SortKey::ModifiedDescending:
+        std::stable_sort(entries.begin(), entries.end(), [&](const FileTypeSummary &a, const FileTypeSummary &b) {
+            if (a.count == b.count)
+                return nameLess(a, b);
+            return a.count > b.count;
+        });
+        break;
+    case SortKey::ModifiedAscending:
+        std::stable_sort(entries.begin(), entries.end(), [&](const FileTypeSummary &a, const FileTypeSummary &b) {
+            if (a.count == b.count)
+                return nameLess(a, b);
+            return a.count < b.count;
         });
         break;
     }
@@ -680,9 +744,12 @@ public:
     virtual void getText(char *dest, short item, short maxLen) override;
     virtual void changeBounds(const TRect &bounds) override;
     virtual void handleEvent(TEvent &event) override;
+    virtual void focusItem(short item) override;
 
     void refreshMetrics();
     void setHeader(FileListHeaderView *headerView);
+    void setOwner(FileListWindow *window);
+    const FileEntry *currentEntry() const;
     std::string headerLine() const;
     int horizontalOffset() const;
     ushort headerColorIndex() const;
@@ -693,6 +760,7 @@ private:
 
     std::vector<FileEntry> &files;
     FileListHeaderView *header = nullptr;
+    FileListWindow *owner = nullptr;
     std::size_t maxLineWidth = 0;
     std::size_t nameWidth = 0;
     std::size_t ownerWidth = 0;
@@ -730,6 +798,10 @@ public:
 
     void refreshUnits();
     void refreshSort();
+    void updateStatus();
+    const FileEntry *selectedEntry() const;
+
+    virtual void setState(ushort aState, Boolean enable) override;
 
 private:
     class DiskUsageApp &app;
@@ -742,6 +814,92 @@ private:
     bool recursiveMode = false;
 
     void buildView();
+};
+
+class FileTypeWindow;
+class FileTypeHeaderView;
+
+class FileTypeListView : public TListViewer
+{
+public:
+    FileTypeListView(const TRect &bounds, TScrollBar *h, TScrollBar *v,
+                     std::vector<FileTypeSummary> &entries);
+
+    virtual void getText(char *dest, short item, short maxLen) override;
+    virtual void changeBounds(const TRect &bounds) override;
+    virtual void handleEvent(TEvent &event) override;
+    virtual void focusItem(short item) override;
+
+    void refreshMetrics();
+    void setHeader(FileTypeHeaderView *headerView);
+    void setOwner(FileTypeWindow *window);
+    const FileTypeSummary *currentEntry() const;
+    std::string headerLine() const;
+    int horizontalOffset() const;
+    ushort headerColorIndex() const;
+
+private:
+    static constexpr std::size_t kSeparatorWidth = 2;
+    static constexpr std::size_t kSeparatorCount = 2;
+
+    std::vector<FileTypeSummary> &entries;
+    FileTypeHeaderView *header = nullptr;
+    FileTypeWindow *owner = nullptr;
+    std::size_t maxLineWidth = 0;
+    std::size_t typeWidth = 0;
+    std::size_t countWidth = 0;
+    std::size_t sizeWidth = 0;
+
+    void computeWidths();
+    std::size_t totalLineWidth() const;
+    void updateMaxLineWidth();
+    std::string formatRow(const std::string &type, const std::string &count,
+                          const std::string &size) const;
+    void notifyHeader();
+};
+
+class FileTypeHeaderView : public TView
+{
+public:
+    FileTypeHeaderView(const TRect &bounds, FileTypeListView &listView);
+
+    virtual void draw() override;
+    void refresh();
+
+private:
+    FileTypeListView &listView;
+};
+
+class FileTypeWindow : public TWindow
+{
+public:
+    FileTypeWindow(const std::string &title, std::filesystem::path directory,
+                   std::vector<FileTypeSummary> entries, bool recursive,
+                   BuildDirectoryTreeOptions scanOptions, class DiskUsageApp &app);
+    ~FileTypeWindow();
+
+    void refreshUnits();
+    void refreshSort();
+    void updateStatus();
+    const FileTypeSummary *selectedEntry() const;
+
+    virtual void handleEvent(TEvent &event) override;
+    virtual void setState(ushort aState, Boolean enable) override;
+
+private:
+    void buildView();
+    void openFilesForSelectedType();
+
+    class DiskUsageApp &app;
+    std::filesystem::path basePath;
+    BuildDirectoryTreeOptions scanOptions;
+    std::vector<FileTypeSummary> baseEntries;
+    std::vector<FileTypeSummary> entries;
+    FileTypeListView *listView = nullptr;
+    FileTypeHeaderView *headerView = nullptr;
+    TScrollBar *hScroll = nullptr;
+    TScrollBar *vScroll = nullptr;
+    bool recursiveMode = false;
 };
 
 class DirectoryWindow : public TWindow
@@ -795,29 +953,53 @@ public:
     DiskUsageStatusLine(TRect r)
         : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
     {
-        rebuild();
+        showDefaultHints();
+    }
+
+    void showDefaultHints()
+    {
+        currentMessage.clear();
+        setItems(buildHintChain());
+    }
+
+    void showMessage(std::string message)
+    {
+        currentMessage = std::move(message);
+        auto *item = new TStatusItem(currentMessage.c_str(), kbNoKey, 0);
+        setItems(item);
     }
 
 private:
-    void rebuild()
+    std::string currentMessage;
+
+    void setItems(TStatusItem *chain)
     {
         disposeItems(items);
+        items = chain;
+        defs->items = items;
+        drawView();
+    }
+
+    TStatusItem *buildHintChain()
+    {
         auto *open = new TStatusItem("~F2~ Open", kbF2, cmOpen);
         auto *files = new TStatusItem("~F3~ Files", kbF3, cmViewFiles);
         auto *recursive = new TStatusItem("~Shift-F3~ Files+Sub", kbShiftF3, cmViewFilesRecursive);
+        auto *types = new TStatusItem("~F4~ Types", kbF4, cmViewFileTypes);
+        auto *typesRecursive = new TStatusItem("~Shift-F4~ Types+Sub", kbShiftF4, cmViewFileTypesRecursive);
         auto *sortName = new TStatusItem("~Ctrl-N~ Sort Name", kbCtrlN, cmSortNameAsc);
         auto *sortSize = new TStatusItem("~Ctrl-S~ Sort Size", kbCtrlS, cmSortSizeDesc);
         auto *sortModified = new TStatusItem("~Ctrl-M~ Sort Modified", kbCtrlM, cmSortModifiedDesc);
         auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
         open->next = files;
         files->next = recursive;
-        recursive->next = sortName;
+        recursive->next = types;
+        types->next = typesRecursive;
+        typesRecursive->next = sortName;
         sortName->next = sortSize;
         sortSize->next = sortModified;
         sortModified->next = quit;
-        items = open;
-        defs->items = items;
-        drawView();
+        return open;
     }
 
     void disposeItems(TStatusItem *item)
@@ -848,13 +1030,22 @@ public:
     void unregisterDirectoryWindow(DirectoryWindow *window);
     void registerFileWindow(FileListWindow *window);
     void unregisterFileWindow(FileListWindow *window);
+    void registerTypeWindow(FileTypeWindow *window);
+    void unregisterTypeWindow(FileTypeWindow *window);
+
+    void showDefaultStatusHints();
+    void showFilePath(const std::filesystem::path &path);
+    void showTypeSummary(const FileTypeSummary &summary, bool recursive);
 
     void notifyUnitsChanged();
     void notifySortChanged();
 
 private:
+    friend class FileTypeWindow;
+
     std::vector<DirectoryWindow *> directoryWindows;
     std::vector<FileListWindow *> fileWindows;
+    std::vector<FileTypeWindow *> typeWindows;
     std::unordered_map<SizeUnit, TMenuItem *> unitMenuItems;
     std::unordered_map<SizeUnit, std::string> unitBaseLabels;
     std::unordered_map<SortKey, TMenuItem *> sortMenuItems;
@@ -901,6 +1092,9 @@ private:
     void promptOpenDirectory();
     void openDirectory(const std::filesystem::path &path);
     void viewFiles(bool recursive);
+    void viewFileTypes(bool recursive);
+    void viewFilesForType(const std::filesystem::path &directory, bool recursive, const std::string &type,
+                          const BuildDirectoryTreeOptions &options);
     DirectoryWindow *activeDirectoryWindow() const;
     void updateUnitMenu();
     void applyUnit(SizeUnit unit);
@@ -1119,7 +1313,7 @@ void FileListView::computeWidths()
 
     for (const auto &entry : files)
     {
-        nameWidth = std::max(nameWidth, entry.displayPath.size());
+        nameWidth = std::max(nameWidth, listEntryName(entry).size());
         ownerWidth = std::max(ownerWidth, entry.owner.size());
         groupWidth = std::max(groupWidth, entry.group.size());
         createdWidth = std::max(createdWidth, entry.created.size());
@@ -1161,7 +1355,7 @@ void FileListView::getText(char *dest, short item, short maxLen)
 
     const FileEntry &entry = files[item];
     std::string sizeStr = formatSize(entry.size, getCurrentUnit());
-    std::string text = formatRow(entry.displayPath, entry.owner, entry.group, sizeStr, entry.created, entry.modified);
+    std::string text = formatRow(listEntryName(entry), entry.owner, entry.group, sizeStr, entry.created, entry.modified);
     if (text.size() >= static_cast<std::size_t>(maxLen))
         text.resize(maxLen - 1);
     std::snprintf(dest, maxLen, "%s", text.c_str());
@@ -1177,6 +1371,27 @@ void FileListView::handleEvent(TEvent &event)
 {
     TListViewer::handleEvent(event);
     notifyHeader();
+    if (owner)
+        owner->updateStatus();
+}
+
+void FileListView::focusItem(short item)
+{
+    TListViewer::focusItem(item);
+    if (owner)
+        owner->updateStatus();
+}
+
+void FileListView::setOwner(FileListWindow *window)
+{
+    owner = window;
+}
+
+const FileEntry *FileListView::currentEntry() const
+{
+    if (focused < 0 || static_cast<std::size_t>(focused) >= files.size())
+        return nullptr;
+    return &files[focused];
 }
 
 
@@ -1285,6 +1500,8 @@ FileListWindow::FileListWindow(const std::string &title, std::vector<FileEntry> 
 
 FileListWindow::~FileListWindow()
 {
+    if (getState(sfActive))
+        app.showDefaultStatusHints();
     app.unregisterFileWindow(this);
 }
 
@@ -1309,6 +1526,7 @@ void FileListWindow::buildView()
     auto *header = new FileListHeaderView(headerBounds, *view);
     header->growMode = gfGrowHiX;
 
+    view->setOwner(this);
     view->setHeader(header);
 
     insert(vScroll);
@@ -1321,6 +1539,7 @@ void FileListWindow::buildView()
     headerView->refresh();
     hScroll->drawView();
     vScroll->drawView();
+    updateStatus();
 }
 
 void FileListWindow::refreshUnits()
@@ -1348,6 +1567,351 @@ void FileListWindow::refreshSort()
         hScroll->drawView();
     if (vScroll)
         vScroll->drawView();
+    updateStatus();
+}
+
+const FileEntry *FileListWindow::selectedEntry() const
+{
+    if (!listView)
+        return nullptr;
+    return listView->currentEntry();
+}
+
+void FileListWindow::updateStatus()
+{
+    if (!getState(sfActive))
+        return;
+    if (const FileEntry *entry = selectedEntry())
+        app.showFilePath(entry->path);
+    else
+        app.showDefaultStatusHints();
+}
+
+void FileListWindow::setState(ushort aState, Boolean enable)
+{
+    TWindow::setState(aState, enable);
+    if ((aState & sfActive) != 0)
+    {
+        if (enable)
+            updateStatus();
+        else
+            app.showDefaultStatusHints();
+    }
+}
+
+FileTypeListView::FileTypeListView(const TRect &bounds, TScrollBar *h, TScrollBar *v,
+                                   std::vector<FileTypeSummary> &entriesIn)
+    : TListViewer(bounds, 1, h, v), entries(entriesIn)
+{
+    setRange(static_cast<short>(entries.size()));
+    computeWidths();
+    updateMaxLineWidth();
+}
+
+void FileTypeListView::computeWidths()
+{
+    typeWidth = std::string("Type").size();
+    countWidth = std::string("Files").size();
+    sizeWidth = std::string("Size").size();
+
+    for (const auto &entry : entries)
+    {
+        typeWidth = std::max(typeWidth, entry.type.size());
+        countWidth = std::max<std::size_t>(countWidth, std::to_string(entry.count).size());
+        sizeWidth = std::max(sizeWidth, formatSize(entry.totalSize, getCurrentUnit()).size());
+    }
+
+    countWidth = std::max(countWidth, std::string("0").size());
+    sizeWidth = std::max(sizeWidth, std::string("0 B").size());
+}
+
+void FileTypeListView::refreshMetrics()
+{
+    computeWidths();
+    updateMaxLineWidth();
+    if (hScrollBar)
+    {
+        int visibleWidth = std::max<int>(1, size.x);
+        int maxIndent = 0;
+        if (static_cast<int>(maxLineWidth) > visibleWidth)
+            maxIndent = static_cast<int>(maxLineWidth) - visibleWidth;
+        int current = hScrollBar->value;
+        if (current > maxIndent)
+            current = maxIndent;
+        int pageStep = std::max<int>(1, visibleWidth - 1);
+        hScrollBar->setParams(current, 0, maxIndent, pageStep, 1);
+    }
+    drawView();
+    notifyHeader();
+}
+
+void FileTypeListView::getText(char *dest, short item, short maxLen)
+{
+    if (item < 0 || static_cast<std::size_t>(item) >= entries.size())
+    {
+        *dest = '\0';
+        return;
+    }
+
+    const FileTypeSummary &entry = entries[item];
+    std::string countStr = std::to_string(entry.count);
+    std::string sizeStr = formatSize(entry.totalSize, getCurrentUnit());
+    std::string text = formatRow(entry.type, countStr, sizeStr);
+    if (text.size() >= static_cast<std::size_t>(maxLen))
+        text.resize(maxLen - 1);
+    std::snprintf(dest, maxLen, "%s", text.c_str());
+}
+
+void FileTypeListView::changeBounds(const TRect &bounds)
+{
+    TListViewer::changeBounds(bounds);
+    refreshMetrics();
+}
+
+void FileTypeListView::handleEvent(TEvent &event)
+{
+    TListViewer::handleEvent(event);
+    if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
+    {
+        if (owner)
+            message(owner, evCommand, cmViewFilesForType, this);
+        clearEvent(event);
+    }
+    notifyHeader();
+    if (owner)
+        owner->updateStatus();
+}
+
+void FileTypeListView::focusItem(short item)
+{
+    TListViewer::focusItem(item);
+    if (owner)
+        owner->updateStatus();
+}
+
+void FileTypeListView::setHeader(FileTypeHeaderView *headerView)
+{
+    header = headerView;
+}
+
+void FileTypeListView::setOwner(FileTypeWindow *window)
+{
+    owner = window;
+}
+
+const FileTypeSummary *FileTypeListView::currentEntry() const
+{
+    if (focused < 0 || static_cast<std::size_t>(focused) >= entries.size())
+        return nullptr;
+    return &entries[focused];
+}
+
+std::string FileTypeListView::headerLine() const
+{
+    return formatRow("Type", "Files", "Size");
+}
+
+int FileTypeListView::horizontalOffset() const
+{
+    if (hScrollBar)
+        return hScrollBar->value;
+    return 0;
+}
+
+ushort FileTypeListView::headerColorIndex() const
+{
+    if (getState(sfActive) && getState(sfSelected))
+        return 1;
+    return 2;
+}
+
+std::size_t FileTypeListView::totalLineWidth() const
+{
+    return typeWidth + countWidth + sizeWidth + kSeparatorWidth * kSeparatorCount;
+}
+
+void FileTypeListView::updateMaxLineWidth()
+{
+    maxLineWidth = totalLineWidth();
+    if (maxLineWidth < static_cast<std::size_t>(size.x))
+        maxLineWidth = static_cast<std::size_t>(size.x);
+}
+
+std::string FileTypeListView::formatRow(const std::string &type, const std::string &count,
+                                        const std::string &size) const
+{
+    static constexpr const char *separator = "  ";
+    std::ostringstream line;
+    line << std::left << std::setw(typeWidth) << type;
+    line << separator;
+    line << std::right << std::setw(countWidth) << count;
+    line << separator;
+    line << std::right << std::setw(sizeWidth) << size;
+    return line.str();
+}
+
+void FileTypeListView::notifyHeader()
+{
+    if (header)
+        header->refresh();
+}
+
+FileTypeHeaderView::FileTypeHeaderView(const TRect &bounds, FileTypeListView &list)
+    : TView(bounds), listView(list)
+{
+    options &= ~(ofSelectable | ofFirstClick);
+}
+
+void FileTypeHeaderView::draw()
+{
+    TDrawBuffer buffer;
+    TColorAttr color = listView.getColor(listView.headerColorIndex());
+    buffer.moveChar(0, ' ', color, size.x);
+    std::string headerText = listView.headerLine();
+    int indent = listView.horizontalOffset();
+    if (indent < 0)
+        indent = 0;
+    if (indent < 255)
+        buffer.moveStr(0, headerText.c_str(), color, size.x, indent);
+    writeLine(0, 0, size.x, 1, buffer);
+}
+
+void FileTypeHeaderView::refresh()
+{
+    drawView();
+}
+
+FileTypeWindow::FileTypeWindow(const std::string &title, std::filesystem::path directory,
+                               std::vector<FileTypeSummary> entriesIn, bool recursive,
+                               BuildDirectoryTreeOptions scanOptionsIn, DiskUsageApp &appRef)
+    : TWindowInit(&TWindow::initFrame),
+      TWindow(TRect(0, 0, 74, 18), title.c_str(), wnNoNumber),
+      app(appRef), basePath(std::move(directory)), scanOptions(std::move(scanOptionsIn)),
+      baseEntries(std::move(entriesIn)), recursiveMode(recursive)
+{
+    flags |= wfGrow;
+    growMode = gfGrowHiX | gfGrowHiY;
+    refreshSort();
+    buildView();
+    app.registerTypeWindow(this);
+}
+
+FileTypeWindow::~FileTypeWindow()
+{
+    if (getState(sfActive))
+        app.showDefaultStatusHints();
+    app.unregisterTypeWindow(this);
+}
+
+void FileTypeWindow::buildView()
+{
+    TRect client = getExtent();
+    client.grow(-1, -1);
+    if (client.b.x <= client.a.x + 2 || client.b.y <= client.a.y + 3)
+        client = TRect(0, 0, 60, 16);
+
+    TRect headerBounds(client.a.x, client.a.y, client.b.x - 1, client.a.y + 1);
+    TRect listBounds(client.a.x, client.a.y + 1, client.b.x - 1, client.b.y - 1);
+
+    vScroll = new TScrollBar(TRect(client.b.x - 1, client.a.y, client.b.x, client.b.y - 1));
+    vScroll->growMode = gfGrowHiY;
+    hScroll = new TScrollBar(TRect(client.a.x, client.b.y - 1, client.b.x - 1, client.b.y));
+    hScroll->growMode = gfGrowHiX;
+
+    auto *view = new FileTypeListView(listBounds, hScroll, vScroll, entries);
+    view->growMode = gfGrowHiX | gfGrowHiY;
+
+    auto *header = new FileTypeHeaderView(headerBounds, *view);
+    header->growMode = gfGrowHiX;
+
+    view->setOwner(this);
+    view->setHeader(header);
+
+    insert(vScroll);
+    insert(hScroll);
+    insert(header);
+    insert(view);
+    listView = view;
+    headerView = header;
+    view->refreshMetrics();
+    headerView->refresh();
+    hScroll->drawView();
+    vScroll->drawView();
+    updateStatus();
+}
+
+void FileTypeWindow::refreshUnits()
+{
+    if (listView)
+        listView->refreshMetrics();
+    if (headerView)
+        headerView->refresh();
+    updateStatus();
+}
+
+void FileTypeWindow::refreshSort()
+{
+    entries = baseEntries;
+    applySortToFileTypes(entries);
+    if (listView)
+    {
+        listView->setRange(static_cast<short>(entries.size()));
+        listView->refreshMetrics();
+    }
+    if (headerView)
+        headerView->refresh();
+    if (hScroll)
+        hScroll->drawView();
+    if (vScroll)
+        vScroll->drawView();
+    updateStatus();
+}
+
+const FileTypeSummary *FileTypeWindow::selectedEntry() const
+{
+    if (!listView)
+        return nullptr;
+    return listView->currentEntry();
+}
+
+void FileTypeWindow::updateStatus()
+{
+    if (!getState(sfActive))
+        return;
+    if (const FileTypeSummary *entry = selectedEntry())
+        app.showTypeSummary(*entry, recursiveMode);
+    else
+        app.showDefaultStatusHints();
+}
+
+void FileTypeWindow::handleEvent(TEvent &event)
+{
+    TWindow::handleEvent(event);
+    if (event.what == evCommand && event.message.command == cmViewFilesForType)
+    {
+        openFilesForSelectedType();
+        clearEvent(event);
+    }
+}
+
+void FileTypeWindow::setState(ushort aState, Boolean enable)
+{
+    TWindow::setState(aState, enable);
+    if ((aState & sfActive) != 0)
+    {
+        if (enable)
+            updateStatus();
+        else
+            app.showDefaultStatusHints();
+    }
+}
+
+void FileTypeWindow::openFilesForSelectedType()
+{
+    const FileTypeSummary *entry = selectedEntry();
+    if (!entry)
+        return;
+    app.viewFilesForType(basePath, recursiveMode, entry->type, scanOptions);
 }
 
 DirectoryWindow::DirectoryWindow(const std::filesystem::path &path, std::unique_ptr<DirectoryNode> rootNode,
@@ -1590,6 +2154,12 @@ void DiskUsageApp::handleEvent(TEvent &event)
         case cmViewFilesRecursive:
             viewFiles(true);
             break;
+        case cmViewFileTypes:
+            viewFileTypes(false);
+            break;
+        case cmViewFileTypesRecursive:
+            viewFileTypes(true);
+            break;
         case cmUnitAuto:
             applyUnit(SizeUnit::Auto);
             break;
@@ -1773,6 +2343,8 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                         *new TSubMenu("~V~iew", hcNoContext) +
                             *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
                             *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
+                            *new TMenuItem("~T~ypes", cmViewFileTypes, kbF4, hcNoContext, "F4") +
+                            *new TMenuItem("Types (~S~ubdirs)", cmViewFileTypesRecursive, kbShiftF4, hcNoContext, "Shift-F4") +
                         *new TSubMenu("~H~elp", hcNoContext) +
                             *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1"));
 }
@@ -1831,6 +2403,49 @@ void DiskUsageApp::viewFiles(bool recursive)
     if (title.empty())
         title = node->path.string();
     title += recursive ? " (files + subdirs)" : " (files)";
+
+    auto *win = new FileListWindow(title, std::move(files), recursive, *this);
+    deskTop->insert(win);
+    win->drawView();
+}
+
+void DiskUsageApp::viewFileTypes(bool recursive)
+{
+    DirectoryWindow *window = activeDirectoryWindow();
+    if (!window)
+    {
+        messageBox("No directory window active", mfError | mfOKButton);
+        return;
+    }
+    DirectoryNode *node = window->focusedNode();
+    if (!node)
+    {
+        messageBox("No directory selected", mfError | mfOKButton);
+        return;
+    }
+
+    BuildDirectoryTreeOptions listOptions = makeScanOptions(window->scanOptions());
+    std::vector<FileTypeSummary> types = summarizeFileTypes(node->path, recursive, listOptions);
+    std::string title = node->path.filename().empty() ? node->path.string() : node->path.filename().string();
+    if (title.empty())
+        title = node->path.string();
+    title += recursive ? " (types + subdirs)" : " (types)";
+
+    auto *win = new FileTypeWindow(title, node->path, std::move(types), recursive, std::move(listOptions), *this);
+    deskTop->insert(win);
+    win->drawView();
+}
+
+void DiskUsageApp::viewFilesForType(const std::filesystem::path &directory, bool recursive, const std::string &type,
+                                    const BuildDirectoryTreeOptions &options)
+{
+    std::vector<FileEntry> files = listFilesByType(directory, recursive, type, options);
+    std::string title = directory.filename().empty() ? directory.string() : directory.filename().string();
+    if (title.empty())
+        title = directory.string();
+    title += recursive ? " (files + subdirs)" : " (files)";
+    if (!type.empty())
+        title += " — " + type;
 
     auto *win = new FileListWindow(title, std::move(files), recursive, *this);
     deskTop->insert(win);
@@ -2087,12 +2702,51 @@ void DiskUsageApp::unregisterFileWindow(FileListWindow *window)
     fileWindows.erase(std::remove(fileWindows.begin(), fileWindows.end(), window), fileWindows.end());
 }
 
+void DiskUsageApp::registerTypeWindow(FileTypeWindow *window)
+{
+    typeWindows.push_back(window);
+}
+
+void DiskUsageApp::unregisterTypeWindow(FileTypeWindow *window)
+{
+    typeWindows.erase(std::remove(typeWindows.begin(), typeWindows.end(), window), typeWindows.end());
+}
+
+void DiskUsageApp::showDefaultStatusHints()
+{
+    if (auto *line = dynamic_cast<DiskUsageStatusLine *>(statusLine))
+        line->showDefaultHints();
+}
+
+void DiskUsageApp::showFilePath(const std::filesystem::path &path)
+{
+    if (auto *line = dynamic_cast<DiskUsageStatusLine *>(statusLine))
+        line->showMessage(path.string());
+}
+
+void DiskUsageApp::showTypeSummary(const FileTypeSummary &summary, bool recursive)
+{
+    if (auto *line = dynamic_cast<DiskUsageStatusLine *>(statusLine))
+    {
+        std::ostringstream out;
+        out << summary.type << " — " << summary.count << (summary.count == 1 ? " file" : " files")
+            << ", " << formatSize(summary.totalSize, getCurrentUnit());
+        if (recursive)
+            out << " (including subdirectories)";
+        out << " — Press Enter to view files";
+        line->showMessage(out.str());
+    }
+}
+
 void DiskUsageApp::notifyUnitsChanged()
 {
     for (auto *win : directoryWindows)
         if (win)
             win->refreshLabels();
     for (auto *win : fileWindows)
+        if (win)
+            win->refreshUnits();
+    for (auto *win : typeWindows)
         if (win)
             win->refreshUnits();
 }
@@ -2103,6 +2757,9 @@ void DiskUsageApp::notifySortChanged()
         if (win)
             win->refreshSort();
     for (auto *win : fileWindows)
+        if (win)
+            win->refreshSort();
+    for (auto *win : typeWindows)
         if (win)
             win->refreshSort();
 }

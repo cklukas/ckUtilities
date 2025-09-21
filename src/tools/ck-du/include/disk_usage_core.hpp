@@ -63,6 +63,13 @@ struct FileEntry
     std::chrono::system_clock::time_point modifiedTime{};
 };
 
+struct FileTypeSummary
+{
+    std::string type;
+    std::uintmax_t totalSize = 0;
+    std::size_t count = 0;
+};
+
 struct BuildDirectoryTreeOptions
 {
     std::function<void(const std::filesystem::path &)> progressCallback;
@@ -93,6 +100,13 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
                                             const BuildDirectoryTreeOptions &options = {});
 std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive,
                                 const BuildDirectoryTreeOptions &options = {});
+
+std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &directory, bool recursive,
+                                                const BuildDirectoryTreeOptions &options = {});
+
+std::vector<FileEntry> listFilesByType(const std::filesystem::path &directory, bool recursive,
+                                       const std::string &type,
+                                       const BuildDirectoryTreeOptions &options = {});
 
 SizeUnit getCurrentUnit() noexcept;
 void setCurrentUnit(SizeUnit unit) noexcept;

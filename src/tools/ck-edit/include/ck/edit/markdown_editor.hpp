@@ -4,6 +4,7 @@
 #include "ck/app_info.hpp"
 
 #define Uses_TWindow
+#define Uses_TFrame
 #define Uses_TScrollBar
 #define Uses_TIndicator
 #define Uses_TView
@@ -32,6 +33,7 @@
 #define Uses_TObject
 #include <tvision/tv.h>
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -276,9 +278,12 @@ public:
     MarkdownEditWindow(const TRect &bounds, TStringView fileName, int aNumber) noexcept;
     MarkdownFileEditor *editor() noexcept { return fileEditor; }
     void updateLayoutForMode();
+    void updateWindowTitle();
+    bool saveDocument(bool forceSaveAs);
 
     virtual void draw() override;
     virtual void setState(ushort aState, Boolean enable) override;
+    virtual void handleEvent(TEvent &event) override;
 
 private:
     MarkdownFileEditor *fileEditor = nullptr;
@@ -286,6 +291,8 @@ private:
     TScrollBar *hScrollBar = nullptr;
     TScrollBar *vScrollBar = nullptr;
     TIndicator *indicator = nullptr;
+
+    void applyWindowTitle(const std::string &titleText);
 };
 
 class MarkdownEditorApp : public TApplication
@@ -297,10 +304,12 @@ public:
     static TStatusLine *initStatusLine(TRect);
 
     virtual void handleEvent(TEvent &event) override;
+    virtual void idle() override;
 
     void updateStatusLine(const MarkdownStatusContext &context);
     void updateMenuBarForMode(bool markdownMode);
     void refreshUiMode();
+    void showDocumentSavedMessage(const std::string &path);
 
 private:
     MarkdownEditWindow *openEditor(const char *fileName, Boolean visible);
@@ -309,6 +318,11 @@ private:
     void changeDir();
     void showAbout();
     void dispatchToEditor(ushort command);
+    void clearStatusMessage();
+
+    std::atomic<uint32_t> statusMessageCounter = 0;
+    std::atomic<uint32_t> activeStatusMessageToken = 0;
+    std::atomic<uint32_t> pendingStatusMessageClear = 0;
 };
 
 } // namespace ck::edit
