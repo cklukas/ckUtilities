@@ -3288,31 +3288,42 @@ void MarkdownInfoView::draw()
     }
 
     uint topPtr = editor->topLinePointer();
-    MarkdownParserState state = computeState(topPtr);
+    MarkdownParserState stateBeforeTop = computeState(topPtr);
+    MarkdownParserState state = stateBeforeTop;
     uint linePtr = topPtr;
     int lineNumber = editor->delta.y;
 
+    struct LineRenderInfo
+    {
+        bool hasLine = false;
+        bool isActive = false;
+        std::string displayLabel;
+        std::string groupLabel;
+    };
+
+    std::vector<LineRenderInfo> lines;
+    lines.reserve(size.y);
+
     for (int row = 0; row < size.y; ++row)
     {
-        TDrawBuffer buffer;
-        bool isActiveRow = lineNumber == editor->curPos.y;
-        const TColorAttr &rowAttr = isActiveRow ? activeAttr : normalAttr;
-        buffer.moveChar(0, ' ', rowAttr, size.x);
+        LineRenderInfo info;
+        info.isActive = lineNumber == editor->curPos.y;
         if (linePtr < editor->bufLen)
         {
-            MarkdownLineInfo info = editor->analyzer().analyzeLine(editor->lineText(linePtr), state);
-            std::string label = editor->analyzer().describeLine(info);
-            if (isActiveRow)
+            MarkdownLineInfo lineInfo = editor->analyzer().analyzeLine(editor->lineText(linePtr), state);
+            info.groupLabel = editor->analyzer().describeLine(lineInfo);
+            info.displayLabel = info.groupLabel;
+            if (info.isActive)
             {
                 std::string tableLabel;
-                if (info.kind == MarkdownLineKind::TableRow || info.kind == MarkdownLineKind::TableSeparator)
+                if (lineInfo.kind == MarkdownLineKind::TableRow || lineInfo.kind == MarkdownLineKind::TableSeparator)
                 {
                     int columnIndex = -1;
-                    if (!info.tableCells.empty())
+                    if (!lineInfo.tableCells.empty())
                     {
-                        for (std::size_t i = 0; i < info.tableCells.size(); ++i)
+                        for (std::size_t i = 0; i < lineInfo.tableCells.size(); ++i)
                         {
-                            const auto &cell = info.tableCells[i];
+                            const auto &cell = lineInfo.tableCells[i];
                             auto endCol = std::max(cell.endColumn, cell.startColumn + 1);
                             if (editor->curPos.x >= static_cast<int>(cell.startColumn) &&
                                 editor->curPos.x < static_cast<int>(endCol))
@@ -3322,14 +3333,14 @@ void MarkdownInfoView::draw()
                             }
                         }
                         if (columnIndex == -1)
-                            columnIndex = static_cast<int>(info.tableCells.size()) - 1;
+                            columnIndex = static_cast<int>(lineInfo.tableCells.size()) - 1;
                     }
                     if (columnIndex >= 0)
                         tableLabel = sanitizeMultiline(
-                            editor->analyzer().describeTableCell(info, static_cast<std::size_t>(columnIndex)));
+                            editor->analyzer().describeTableCell(lineInfo, static_cast<std::size_t>(columnIndex)));
                 }
 
-                const auto *span = editor->analyzer().spanAtColumn(info, editor->curPos.x);
+                const auto *span = editor->analyzer().spanAtColumn(lineInfo, editor->curPos.x);
                 if (!tableLabel.empty())
                 {
                     if (span && span->kind != MarkdownSpanKind::PlainText)
@@ -3342,22 +3353,83 @@ void MarkdownInfoView::draw()
                             tableLabel.append(spanLabel);
                         }
                     }
-                    label = tableLabel;
+                    info.displayLabel = tableLabel;
                 }
                 else if (span)
                 {
-                    label = sanitizeMultiline(editor->analyzer().describeSpan(*span));
+                    info.displayLabel = sanitizeMultiline(editor->analyzer().describeSpan(*span));
                 }
             }
-            buffer.moveCStr(0, label, isActiveRow ? activePair : normalPair, size.x);
+            info.hasLine = true;
             linePtr = editor->nextLine(linePtr);
         }
+        lines.push_back(info);
+        ++lineNumber;
+    }
+
+    std::optional<std::string> labelBeforeView;
+    if (topPtr > 0 && editor->bufLen > 0)
+    {
+        uint prevPtr = editor->lineMove(topPtr, -1);
+        if (prevPtr < editor->bufLen)
+        {
+            MarkdownParserState prevState = computeState(prevPtr);
+            MarkdownLineInfo prevInfo = editor->analyzer().analyzeLine(editor->lineText(prevPtr), prevState);
+            labelBeforeView = editor->analyzer().describeLine(prevInfo);
+        }
+    }
+
+    std::optional<std::string> labelAfterView;
+    if (linePtr < editor->bufLen)
+    {
+        MarkdownParserState afterState = state;
+        MarkdownLineInfo nextInfo = editor->analyzer().analyzeLine(editor->lineText(linePtr), afterState);
+        labelAfterView = editor->analyzer().describeLine(nextInfo);
+    }
+
+    for (int row = 0; row < size.y; ++row)
+    {
+        TDrawBuffer buffer;
+        const auto &line = lines[row];
+        const bool isActiveRow = line.isActive;
+        const TColorAttr &rowAttr = isActiveRow ? activeAttr : normalAttr;
+        buffer.moveChar(0, ' ', rowAttr, size.x);
+
+        if (line.hasLine)
+        {
+            const bool hasGroupLabel = !line.groupLabel.empty();
+            bool hasPrevSame = false;
+            bool hasNextSame = false;
+
+            if (hasGroupLabel)
+            {
+                if (row > 0 && lines[row - 1].hasLine && lines[row - 1].groupLabel == line.groupLabel)
+                    hasPrevSame = true;
+                else if (row == 0 && labelBeforeView && *labelBeforeView == line.groupLabel)
+                    hasPrevSame = true;
+
+                if (row + 1 < size.y && lines[row + 1].hasLine && lines[row + 1].groupLabel == line.groupLabel)
+                    hasNextSame = true;
+                else if (row == size.y - 1 && labelAfterView && *labelAfterView == line.groupLabel)
+                    hasNextSame = true;
+            }
+
+            if (hasPrevSame)
+            {
+                const char *connector = hasNextSame ? "│" : "└";
+                buffer.moveStr(0, connector, rowAttr);
+            }
+            else if (hasGroupLabel)
+            {
+                buffer.moveCStr(0, line.displayLabel, isActiveRow ? activePair : normalPair, size.x);
+            }
+        }
+
         if (size.x > 0)
         {
             buffer.moveStr(size.x - 1, "│", rowAttr);
         }
         writeLine(0, row, size.x, 1, buffer);
-        ++lineNumber;
     }
 }
 
