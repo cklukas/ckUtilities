@@ -18,6 +18,7 @@
 #define Uses_TMenuItem
 #define Uses_TMessageBox
 #define Uses_TScrollBar
+#define Uses_TPalette
 #define Uses_TStaticText
 #define Uses_TStatusDef
 #define Uses_TStatusItem
@@ -37,7 +38,6 @@
 #include <functional>
 #include <iostream>
 #include <optional>
-#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -178,23 +178,16 @@ std::vector<ApplicationEntry> gatherApplicationEntries()
 {
     std::vector<ApplicationEntry> entries;
     std::vector<std::string> profiles = config::OptionRegistry::availableProfiles();
-    std::unordered_set<std::string> seen;
+    std::unordered_set<std::string> savedProfiles(profiles.begin(), profiles.end());
     for (const auto &info : knownApplications())
     {
-        bool has = std::find(profiles.begin(), profiles.end(), info.id) != profiles.end();
+        if (!info.registerFn)
+            continue;
+        bool has = savedProfiles.find(info.id) != savedProfiles.end();
         entries.push_back({info, true, has});
-        seen.insert(info.id);
-    }
-    for (const auto &id : profiles)
-    {
-        if (seen.insert(id).second)
-        {
-            ApplicationInfo info{id, id + " (Unknown)", nullptr};
-            entries.push_back({info, false, true});
-        }
     }
     std::sort(entries.begin(), entries.end(), [](const ApplicationEntry &a, const ApplicationEntry &b) {
-        return a.info.name < b.info.name;
+        return a.info.id < b.info.id;
     });
     return entries;
 }
@@ -606,9 +599,7 @@ public:
             return;
         }
         const ApplicationEntry &entry = (*entries)[static_cast<std::size_t>(item)];
-        std::string text = entry.info.name + " [" + entry.info.id + "]";
-        text += entry.hasDefaults ? "  (saved)" : "  (no defaults)";
-        std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", text.c_str());
+        std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", entry.info.id.c_str());
     }
 
     virtual void handleEvent(TEvent &event) override
@@ -644,8 +635,12 @@ public:
         listView = new AppListViewer(TRect(r.a.x, r.a.y, r.b.x - 1, r.b.y), entries, vScroll);
         listView->growMode = gfGrowHiX | gfGrowHiY;
         insert(listView);
-        insert(new TStaticText(TRect(r.a.x, r.b.y, r.b.x, r.b.y + 1),
-                               "Enter: Edit  F5: Reload  Ins/Del via menu"));
+    }
+
+    virtual TPalette &getPalette() const override
+    {
+        static TPalette palette(cpGrayWindow, sizeof(cpGrayWindow) - 1);
+        return palette;
     }
 
     void setEntries(std::vector<ApplicationEntry> newEntries)
@@ -951,11 +946,11 @@ public:
         listView->growMode = gfGrowHiX | gfGrowHiY;
         insert(listView);
 
-        insert(new TButton(TRect(3, 17, 15, 19), "~E~dit", cmOptionEdit, bfNormal));
-        insert(new TButton(TRect(17, 17, 33, 19), "~R~eset Value", cmOptionResetValue, bfNormal));
-        insert(new TButton(TRect(35, 17, 51, 19), "Reset ~A~ll", cmOptionResetAll, bfNormal));
-        insert(new TButton(TRect(53, 17, 65, 19), "~S~ave", cmOK, bfDefault));
-        insert(new TButton(TRect(66, 17, 74, 19), "Cancel", cmCancel, bfNormal));
+        insert(new TButton(TRect(3, 18, 15, 20), "~E~dit", cmOptionEdit, bfNormal));
+        insert(new TButton(TRect(17, 18, 33, 20), "~R~eset Value", cmOptionResetValue, bfNormal));
+        insert(new TButton(TRect(35, 18, 51, 20), "Reset ~A~ll", cmOptionResetAll, bfNormal));
+        insert(new TButton(TRect(53, 18, 65, 20), "~S~ave", cmOK, bfDefault));
+        insert(new TButton(TRect(66, 18, 74, 20), "Cancel", cmCancel, bfNormal));
 
         refreshItems();
     }
