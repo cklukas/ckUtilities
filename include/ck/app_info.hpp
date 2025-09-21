@@ -35,4 +35,3 @@ inline constexpr std::string_view kProjectBanner = R"( ██████╗█�
                                                                                  )";
 
 } // namespace ck::appinfo
-

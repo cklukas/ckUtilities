@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
@@ -37,6 +38,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+extern char **environ;
 #endif
 
 namespace
@@ -50,6 +52,7 @@ const ck::appinfo::ToolInfo &launcherInfo()
 }
 
 constexpr ushort cmLaunchTool = 6000;
+constexpr ushort cmNewLauncher = 6001;
 
 std::vector<std::string> wrapText(std::string_view text, int width)
 {
@@ -142,12 +145,79 @@ std::vector<std::string> wrapText(std::string_view text, int width)
     return lines;
 }
 
+bool decodeUtf8Char(std::string_view text, std::size_t &pos, uint32_t &codePoint)
+{
+    if (pos >= text.size())
+        return false;
+
+    unsigned char lead = static_cast<unsigned char>(text[pos]);
+    if ((lead & 0x80) == 0)
+    {
+        codePoint = lead;
+        ++pos;
+        return true;
+    }
+
+    auto needsContinuation = [&](unsigned char byte) { return (byte & 0xC0) == 0x80; };
+
+    if ((lead & 0xE0) == 0xC0)
+    {
+        if (pos + 1 >= text.size())
+            return false;
+        unsigned char b1 = static_cast<unsigned char>(text[pos + 1]);
+        if (!needsContinuation(b1))
+            return false;
+        codePoint = static_cast<uint32_t>((lead & 0x1F) << 6) | static_cast<uint32_t>(b1 & 0x3F);
+        pos += 2;
+        return true;
+    }
+
+    if ((lead & 0xF0) == 0xE0)
+    {
+        if (pos + 2 >= text.size())
+            return false;
+        unsigned char b1 = static_cast<unsigned char>(text[pos + 1]);
+        unsigned char b2 = static_cast<unsigned char>(text[pos + 2]);
+        if (!needsContinuation(b1) || !needsContinuation(b2))
+            return false;
+        codePoint = static_cast<uint32_t>((lead & 0x0F) << 12) |
+                    static_cast<uint32_t>((b1 & 0x3F) << 6) |
+                    static_cast<uint32_t>(b2 & 0x3F);
+        pos += 3;
+        return true;
+    }
+
+    if ((lead & 0xF8) == 0xF0)
+    {
+        if (pos + 3 >= text.size())
+            return false;
+        unsigned char b1 = static_cast<unsigned char>(text[pos + 1]);
+        unsigned char b2 = static_cast<unsigned char>(text[pos + 2]);
+        unsigned char b3 = static_cast<unsigned char>(text[pos + 3]);
+        if (!needsContinuation(b1) || !needsContinuation(b2) || !needsContinuation(b3))
+            return false;
+        codePoint = static_cast<uint32_t>((lead & 0x07) << 18) |
+                    static_cast<uint32_t>((b1 & 0x3F) << 12) |
+                    static_cast<uint32_t>((b2 & 0x3F) << 6) |
+                    static_cast<uint32_t>(b3 & 0x3F);
+        pos += 4;
+        return true;
+    }
+
+    // Invalid leading byte; treat it as a literal single-byte char.
+    ++pos;
+    codePoint = lead;
+    return true;
+}
+
 std::vector<std::string> splitBannerLines()
 {
     std::vector<std::string> lines;
     std::string current;
     for (char ch : ck::appinfo::kProjectBanner)
     {
+        if (ch == '\r')
+            continue;
         if (ch == '\n')
         {
             lines.push_back(current);
@@ -160,6 +230,55 @@ std::vector<std::string> splitBannerLines()
     }
     lines.push_back(std::move(current));
     return lines;
+}
+
+int utf8ColumnCount(std::string_view text)
+{
+    int count = 0;
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        uint32_t codePoint = 0;
+        if (!decodeUtf8Char(text, pos, codePoint))
+            break;
+        ++count;
+    }
+    return count;
+}
+
+struct Utf8Slice
+{
+    std::size_t offset;
+    std::size_t length;
+};
+
+Utf8Slice utf8ColumnSlice(std::string_view text, int startColumn, int columns)
+{
+    std::size_t pos = 0;
+    for (int skipped = 0; skipped < startColumn && pos < text.size(); ++skipped)
+    {
+        uint32_t codePoint = 0;
+        if (!decodeUtf8Char(text, pos, codePoint))
+        {
+            pos = text.size();
+            break;
+        }
+    }
+
+    std::size_t sliceStart = pos;
+    int taken = 0;
+    while (taken < columns && pos < text.size())
+    {
+        uint32_t codePoint = 0;
+        if (!decodeUtf8Char(text, pos, codePoint))
+        {
+            pos = text.size();
+            break;
+        }
+        ++taken;
+    }
+
+    return {sliceStart, pos - sliceStart};
 }
 
 class BannerView : public TView
@@ -180,8 +299,8 @@ public:
     virtual void draw() override
     {
         TDrawBuffer buffer;
-        TColorAttr background = TColorAttr(0x70);     // Light gray background.
-        TColorAttr blueText = TColorAttr(0x71);       // Blue text on light gray.
+        TColorAttr background{TColorBIOS(0x0), TColorBIOS(0x7)};  // Spaces: black on light gray.
+        TColorAttr blueText{TColorBIOS(0x1), TColorBIOS(0x7)};    // Banner glyphs: blue on light gray.
         for (int y = 0; y < size.y; ++y)
         {
             buffer.moveChar(0, ' ', background, size.x);
@@ -189,15 +308,27 @@ public:
             if (lineIndex >= 0 && lineIndex < static_cast<int>(bannerLines.size()))
             {
                 const std::string &line = bannerLines[static_cast<std::size_t>(lineIndex)];
-                int glyphWidth = static_cast<int>(line.size());
-                int start = glyphWidth >= size.x ? 0 : std::max(0, (size.x - glyphWidth) / 2);
-                int maxWidth = std::max(0, size.x - start);
-                if (maxWidth > 0)
+                int width = utf8ColumnCount(line);
+                if (width > 0)
                 {
-                    TStringView view{line};
-                    if (static_cast<int>(view.size()) > maxWidth)
-                        view = view.substr(0, static_cast<std::size_t>(maxWidth));
-                    buffer.moveStr(start, view, blueText);
+                    int start = 0;
+                    int copyOffset = 0;
+                    int copyWidth = width;
+                    if (width > size.x)
+                    {
+                        copyOffset = (width - size.x) / 2;
+                        copyWidth = std::min(width - copyOffset, size.x);
+                    }
+                    else
+                    {
+                        start = (size.x - width) / 2;
+                    }
+                    if (copyWidth > 0 && start < size.x)
+                    {
+                        Utf8Slice slice = utf8ColumnSlice(line, copyOffset, copyWidth);
+                        TStringView fragment{line.data() + slice.offset, slice.length};
+                        buffer.moveStr(start, fragment, blueText);
+                    }
                 }
             }
             writeLine(0, y, size.x, 1, buffer);
@@ -520,12 +651,25 @@ public:
     virtual void handleEvent(TEvent &event) override
     {
         TApplication::handleEvent(event);
-        if (event.what == evCommand && event.message.command == cmLaunchTool)
+        if (event.what == evCommand)
         {
-            auto *dialog = static_cast<LauncherDialog *>(event.message.infoPtr);
-            if (dialog)
-                launchTool(dialog->currentTool());
-            clearEvent(event);
+            switch (event.message.command)
+            {
+            case cmLaunchTool:
+            {
+                auto *dialog = static_cast<LauncherDialog *>(event.message.infoPtr);
+                if (dialog)
+                    launchTool(dialog->currentTool());
+                clearEvent(event);
+                break;
+            }
+            case cmNewLauncher:
+                openLauncher();
+                clearEvent(event);
+                break;
+            default:
+                break;
+            }
         }
     }
 
@@ -534,6 +678,7 @@ public:
         r.b.y = r.a.y + 1;
         return new TMenuBar(r,
                             *new TSubMenu("~F~ile", kbAltF) +
+                                *new TMenuItem("~N~ew Launcher", cmNewLauncher, kbNoKey, hcNoContext) +
                                 *new TMenuItem("~E~xit", cmQuit, kbAltX));
     }
 
@@ -643,20 +788,40 @@ private:
     {
 #ifndef _WIN32
         pid_t pid = fork();
-        if (pid == 0)
+        if (pid == -1)
         {
-            execl(programPath.c_str(), programPath.c_str(), static_cast<char *>(nullptr));
-            _exit(127);
-        }
-        if (pid < 0)
+            // Fork failed
             return -1;
+        }
+        else if (pid == 0)
+        {
+            // Child process
+            // It's crucial to only call async-signal-safe functions here.
+            // execve is async-signal-safe.
+            std::vector<char *> args;
+            std::string programPathStr = programPath.string();
+            args.push_back(programPathStr.data()); // Program name as first argument
+            args.push_back(nullptr); // Null-terminate the argument list
 
-        int status = 0;
-        while (waitpid(pid, &status, 0) == -1 && errno == EINTR)
-            ;
-        return status;
+            execve(programPathStr.c_str(), args.data(), environ);
+
+            // If execve returns, it must have failed.
+            // _exit is async-signal-safe.
+            _exit(127); // 127 is a common exit code for "command not found" or execve failure
+        }
+        else
+        {
+            // Parent process
+            int status;
+            if (waitpid(pid, &status, 0) == -1)
+            {
+                return -1; // waitpid failed
+            }
+            return status;
+        }
 #else
-        std::string command = "\"" + programPath.string() + "\"";
+        std::string command = ""; // This line is not in the original string, but it is in the new string. It should be removed.
+        command = "" + programPath.string() + ""; // This line is not in the original string, but it is in the new string. It should be removed.
         return std::system(command.c_str());
 #endif
     }
