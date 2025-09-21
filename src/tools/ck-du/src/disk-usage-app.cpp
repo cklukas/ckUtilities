@@ -932,7 +932,8 @@ private:
 class ScanProgressDialog : public TDialog
 {
 public:
-    ScanProgressDialog();
+    ScanProgressDialog(const char *titleText = "Scanning Directory",
+                       const char *messageText = "Scanning directory...");
 
     void setCancelHandler(std::function<void()> handler);
     void updatePath(const std::string &path);
@@ -1086,8 +1087,50 @@ private:
         ScanProgressDialog *dialog = nullptr;
     };
 
+    struct FileListTask
+    {
+        std::filesystem::path directory;
+        bool recursive = false;
+        std::string title;
+        std::optional<std::string> typeFilter;
+        std::thread worker;
+        std::mutex mutex;
+        std::vector<FileEntry> files;
+        std::vector<std::string> errors;
+        std::string currentPath;
+        std::string errorMessage;
+        bool cancelled = false;
+        bool failed = false;
+        bool reportErrors = false;
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<bool> finished{false};
+        ScanProgressDialog *dialog = nullptr;
+    };
+
+    struct FileTypeTask
+    {
+        std::filesystem::path directory;
+        bool recursive = false;
+        std::string title;
+        BuildDirectoryTreeOptions options;
+        std::thread worker;
+        std::mutex mutex;
+        std::vector<FileTypeSummary> types;
+        std::vector<std::string> errors;
+        std::string currentPath;
+        std::string errorMessage;
+        bool cancelled = false;
+        bool failed = false;
+        bool reportErrors = false;
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<bool> finished{false};
+        ScanProgressDialog *dialog = nullptr;
+    };
+
     std::unique_ptr<DirectoryScanTask> activeScan;
     std::deque<std::filesystem::path> pendingScanQueue;
+    std::unique_ptr<FileListTask> activeFileList;
+    std::unique_ptr<FileTypeTask> activeFileType;
 
     void promptOpenDirectory();
     void openDirectory(const std::filesystem::path &path);
@@ -1122,12 +1165,27 @@ private:
     void queueDirectoryForScan(const std::filesystem::path &path);
     void startDirectoryScan(const std::filesystem::path &path);
     void startNextQueuedDirectory();
+    void startFileListTask(const std::filesystem::path &directory, bool recursive,
+                           BuildDirectoryTreeOptions options, std::string title,
+                           std::optional<std::string> typeFilter = std::nullopt);
+    void startFileTypeTask(const std::filesystem::path &directory, bool recursive,
+                           BuildDirectoryTreeOptions options, std::string title);
     void updateScanProgress(DirectoryScanTask &task);
+    void updateFileListProgress(FileListTask &task);
+    void updateFileTypeProgress(FileTypeTask &task);
     void processActiveScanCompletion();
+    void processActiveFileListCompletion();
+    void processActiveFileTypeCompletion();
     void runDirectoryScan(DirectoryScanTask &task);
     void requestScanCancellation();
+    void requestFileListCancellation();
+    void requestFileTypeCancellation();
     void closeProgressDialog(DirectoryScanTask &task);
+    void closeProgressDialog(FileListTask &task);
+    void closeProgressDialog(FileTypeTask &task);
     void cancelActiveScan(bool waitForCompletion);
+    void cancelActiveFileList(bool waitForCompletion);
+    void cancelActiveFileType(bool waitForCompletion);
 };
 
 DirectoryOutline::DirectoryOutline(TRect bounds, TScrollBar *h, TScrollBar *v, DirTNode *rootNode, DirectoryWindow &owner)
@@ -1135,12 +1193,12 @@ DirectoryOutline::DirectoryOutline(TRect bounds, TScrollBar *h, TScrollBar *v, D
 {
 }
 
-ScanProgressDialog::ScanProgressDialog()
+ScanProgressDialog::ScanProgressDialog(const char *titleText, const char *messageText)
     : TWindowInit(&TDialog::initFrame),
-      TDialog(TRect(0, 0, 60, 9), "Scanning Directory")
+      TDialog(TRect(0, 0, 60, 9), titleText ? titleText : "Scanning Directory")
 {
     options |= ofCentered;
-    insert(new TStaticText(TRect(2, 2, 58, 3), "Scanning directory..."));
+    insert(new TStaticText(TRect(2, 2, 58, 3), messageText ? messageText : "Scanning directory..."));
     pathText = new TParamText(TRect(2, 3, 58, 4));
     insert(pathText);
     pathText->setText("%s", "Current: (scanning...)");
@@ -2135,6 +2193,8 @@ DiskUsageApp::DiskUsageApp(const std::vector<std::filesystem::path> &paths,
 DiskUsageApp::~DiskUsageApp()
 {
     cancelActiveScan(true);
+    cancelActiveFileList(true);
+    cancelActiveFileType(true);
     pendingScanQueue.clear();
 }
 
@@ -2263,6 +2323,20 @@ void DiskUsageApp::idle()
     }
     else if (!pendingScanQueue.empty())
         startNextQueuedDirectory();
+
+    if (activeFileList)
+    {
+        updateFileListProgress(*activeFileList);
+        if (activeFileList->finished.load())
+            processActiveFileListCompletion();
+    }
+
+    if (activeFileType)
+    {
+        updateFileTypeProgress(*activeFileType);
+        if (activeFileType->finished.load())
+            processActiveFileTypeCompletion();
+    }
 }
 
 TMenuBar *DiskUsageApp::initMenuBar(TRect r)
@@ -2398,15 +2472,22 @@ void DiskUsageApp::viewFiles(bool recursive)
     }
 
     BuildDirectoryTreeOptions listOptions = makeScanOptions(window->scanOptions());
-    std::vector<FileEntry> files = listFiles(node->path, recursive, listOptions);
-    std::string title = node->path.filename().empty() ? node->path.string() : node->path.filename().string();
-    if (title.empty())
-        title = node->path.string();
-    title += recursive ? " (files + subdirs)" : " (files)";
+    if (activeFileList)
+    {
+        if (!activeFileList->finished.load())
+        {
+            messageBox("A file listing is already in progress", mfInformation | mfOKButton);
+            return;
+        }
+        processActiveFileListCompletion();
+    }
 
-    auto *win = new FileListWindow(title, std::move(files), recursive, *this);
-    deskTop->insert(win);
-    win->drawView();
+    std::filesystem::path directory = node->path;
+    std::string title = directory.filename().empty() ? directory.string() : directory.filename().string();
+    if (title.empty())
+        title = directory.string();
+    title += recursive ? " (files + subdirs)" : " (files)";
+    startFileListTask(directory, recursive, std::move(listOptions), std::move(title));
 }
 
 void DiskUsageApp::viewFileTypes(bool recursive)
@@ -2425,31 +2506,45 @@ void DiskUsageApp::viewFileTypes(bool recursive)
     }
 
     BuildDirectoryTreeOptions listOptions = makeScanOptions(window->scanOptions());
-    std::vector<FileTypeSummary> types = summarizeFileTypes(node->path, recursive, listOptions);
-    std::string title = node->path.filename().empty() ? node->path.string() : node->path.filename().string();
-    if (title.empty())
-        title = node->path.string();
-    title += recursive ? " (types + subdirs)" : " (types)";
+    if (activeFileType)
+    {
+        if (!activeFileType->finished.load())
+        {
+            messageBox("A file type analysis is already in progress", mfInformation | mfOKButton);
+            return;
+        }
+        processActiveFileTypeCompletion();
+    }
 
-    auto *win = new FileTypeWindow(title, node->path, std::move(types), recursive, std::move(listOptions), *this);
-    deskTop->insert(win);
-    win->drawView();
+    std::filesystem::path directory = node->path;
+    std::string title = directory.filename().empty() ? directory.string() : directory.filename().string();
+    if (title.empty())
+        title = directory.string();
+    title += recursive ? " (types + subdirs)" : " (types)";
+    startFileTypeTask(directory, recursive, std::move(listOptions), std::move(title));
 }
 
 void DiskUsageApp::viewFilesForType(const std::filesystem::path &directory, bool recursive, const std::string &type,
                                     const BuildDirectoryTreeOptions &options)
 {
-    std::vector<FileEntry> files = listFilesByType(directory, recursive, type, options);
+    if (activeFileList)
+    {
+        if (!activeFileList->finished.load())
+        {
+            messageBox("A file listing is already in progress", mfInformation | mfOKButton);
+            return;
+        }
+        processActiveFileListCompletion();
+    }
+
+    BuildDirectoryTreeOptions listOptions = options;
     std::string title = directory.filename().empty() ? directory.string() : directory.filename().string();
     if (title.empty())
         title = directory.string();
     title += recursive ? " (files + subdirs)" : " (files)";
     if (!type.empty())
         title += " — " + type;
-
-    auto *win = new FileListWindow(title, std::move(files), recursive, *this);
-    deskTop->insert(win);
-    win->drawView();
+    startFileListTask(directory, recursive, std::move(listOptions), std::move(title), type);
 }
 
 void DiskUsageApp::requestDirectoryScan(const std::filesystem::path &path, bool allowQueue)
@@ -2514,7 +2609,195 @@ void DiskUsageApp::startNextQueuedDirectory()
     startDirectoryScan(next);
 }
 
+void DiskUsageApp::startFileListTask(const std::filesystem::path &directory, bool recursive,
+                                     BuildDirectoryTreeOptions options, std::string title,
+                                     std::optional<std::string> typeFilter)
+{
+    auto task = std::make_unique<FileListTask>();
+    task->directory = directory;
+    task->recursive = recursive;
+    task->title = std::move(title);
+    task->typeFilter = std::move(typeFilter);
+    task->currentPath = directory.string();
+    task->reportErrors = options.reportErrors;
+
+    auto *dialog = new ScanProgressDialog("Listing Files", "Listing files...");
+    dialog->setCancelHandler([this]() { requestFileListCancellation(); });
+    task->dialog = dialog;
+    deskTop->insert(dialog);
+    dialog->drawView();
+    dialog->updatePath(task->currentPath);
+
+    FileListTask *rawTask = task.get();
+
+    BuildDirectoryTreeOptions workerOptions = options;
+    workerOptions.progressCallback = [rawTask](const std::filesystem::path &current) {
+        std::lock_guard<std::mutex> lock(rawTask->mutex);
+        rawTask->currentPath = current.string();
+    };
+    workerOptions.cancelRequested = [rawTask]() -> bool { return rawTask->cancelRequested.load(); };
+    if (workerOptions.reportErrors)
+    {
+        workerOptions.errorCallback = [rawTask](const std::filesystem::path &path, const std::error_code &ec) {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (rawTask->errors.size() < 200)
+            {
+                std::string message = path.empty() ? std::string("(unknown)") : path.string();
+                if (!ec.message().empty())
+                    message += ": " + ec.message();
+                rawTask->errors.push_back(std::move(message));
+            }
+        };
+    }
+
+    rawTask->worker = std::thread([this, rawTask, workerOptions]() mutable {
+        std::vector<FileEntry> result;
+        try
+        {
+            if (rawTask->typeFilter)
+                result = listFilesByType(rawTask->directory, rawTask->recursive, *rawTask->typeFilter, workerOptions);
+            else
+                result = listFiles(rawTask->directory, rawTask->recursive, workerOptions);
+        }
+        catch (const std::exception &ex)
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            rawTask->failed = true;
+            rawTask->errorMessage = ex.what();
+        }
+        catch (...)
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            rawTask->failed = true;
+            rawTask->errorMessage = "Unknown error";
+        }
+
+        if (rawTask->cancelRequested.load())
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (!rawTask->failed)
+                rawTask->cancelled = true;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (!rawTask->cancelled && !rawTask->failed)
+                rawTask->files = std::move(result);
+        }
+
+        rawTask->finished.store(true);
+    });
+
+    activeFileList = std::move(task);
+}
+
+void DiskUsageApp::startFileTypeTask(const std::filesystem::path &directory, bool recursive,
+                                     BuildDirectoryTreeOptions options, std::string title)
+{
+    auto task = std::make_unique<FileTypeTask>();
+    task->directory = directory;
+    task->recursive = recursive;
+    task->title = std::move(title);
+    task->options = options;
+    task->currentPath = directory.string();
+    task->reportErrors = options.reportErrors;
+
+    auto *dialog = new ScanProgressDialog("Analyzing File Types", "Analyzing file types...");
+    dialog->setCancelHandler([this]() { requestFileTypeCancellation(); });
+    task->dialog = dialog;
+    deskTop->insert(dialog);
+    dialog->drawView();
+    dialog->updatePath(task->currentPath);
+
+    FileTypeTask *rawTask = task.get();
+
+    BuildDirectoryTreeOptions workerOptions = task->options;
+    workerOptions.progressCallback = [rawTask](const std::filesystem::path &current) {
+        std::lock_guard<std::mutex> lock(rawTask->mutex);
+        rawTask->currentPath = current.string();
+    };
+    workerOptions.cancelRequested = [rawTask]() -> bool { return rawTask->cancelRequested.load(); };
+    if (workerOptions.reportErrors)
+    {
+        workerOptions.errorCallback = [rawTask](const std::filesystem::path &path, const std::error_code &ec) {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (rawTask->errors.size() < 200)
+            {
+                std::string message = path.empty() ? std::string("(unknown)") : path.string();
+                if (!ec.message().empty())
+                    message += ": " + ec.message();
+                rawTask->errors.push_back(std::move(message));
+            }
+        };
+    }
+
+    rawTask->worker = std::thread([this, rawTask, workerOptions]() mutable {
+        std::vector<FileTypeSummary> result;
+        try
+        {
+            result = summarizeFileTypes(rawTask->directory, rawTask->recursive, workerOptions);
+        }
+        catch (const std::exception &ex)
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            rawTask->failed = true;
+            rawTask->errorMessage = ex.what();
+        }
+        catch (...)
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            rawTask->failed = true;
+            rawTask->errorMessage = "Unknown error";
+        }
+
+        if (rawTask->cancelRequested.load())
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (!rawTask->failed)
+                rawTask->cancelled = true;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(rawTask->mutex);
+            if (!rawTask->cancelled && !rawTask->failed)
+                rawTask->types = std::move(result);
+        }
+
+        rawTask->finished.store(true);
+    });
+
+    activeFileType = std::move(task);
+}
+
 void DiskUsageApp::updateScanProgress(DirectoryScanTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    std::string currentPath;
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        currentPath = task.currentPath;
+    }
+
+    task.dialog->updatePath(currentPath);
+}
+
+void DiskUsageApp::updateFileListProgress(FileListTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    std::string currentPath;
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        currentPath = task.currentPath;
+    }
+
+    task.dialog->updatePath(currentPath);
+}
+
+void DiskUsageApp::updateFileTypeProgress(FileTypeTask &task)
 {
     if (!task.dialog)
         return;
@@ -2582,6 +2865,120 @@ void DiskUsageApp::processActiveScanCompletion()
     startNextQueuedDirectory();
 }
 
+void DiskUsageApp::processActiveFileListCompletion()
+{
+    if (!activeFileList || !activeFileList->finished.load())
+        return;
+
+    if (activeFileList->worker.joinable())
+        activeFileList->worker.join();
+
+    std::vector<FileEntry> files;
+    std::vector<std::string> errors;
+    bool cancelled = false;
+    bool failed = false;
+    std::string errorMessage;
+    bool recursive = activeFileList->recursive;
+    std::string title = std::move(activeFileList->title);
+    bool reportErrors = activeFileList->reportErrors;
+
+    {
+        std::lock_guard<std::mutex> lock(activeFileList->mutex);
+        files = std::move(activeFileList->files);
+        errors = std::move(activeFileList->errors);
+        cancelled = activeFileList->cancelled;
+        failed = activeFileList->failed;
+        errorMessage = activeFileList->errorMessage;
+    }
+
+    closeProgressDialog(*activeFileList);
+
+    activeFileList.reset();
+
+    if (failed)
+    {
+        std::string message = errorMessage.empty() ? std::string("Failed to list files") : errorMessage;
+        messageBox(message.c_str(), mfError | mfOKButton);
+        return;
+    }
+
+    if (cancelled)
+        return;
+
+    auto *win = new FileListWindow(title, std::move(files), recursive, *this);
+    deskTop->insert(win);
+    win->drawView();
+
+    if (reportErrors && !errors.empty())
+    {
+        std::string message = "Some entries could not be read:\n";
+        std::size_t count = std::min<std::size_t>(errors.size(), 10);
+        for (std::size_t i = 0; i < count; ++i)
+            message += " - " + errors[i] + "\n";
+        if (errors.size() > count)
+            message += "... (" + std::to_string(errors.size() - count) + " more)";
+        messageBox(message.c_str(), mfWarning | mfOKButton);
+    }
+}
+
+void DiskUsageApp::processActiveFileTypeCompletion()
+{
+    if (!activeFileType || !activeFileType->finished.load())
+        return;
+
+    if (activeFileType->worker.joinable())
+        activeFileType->worker.join();
+
+    std::vector<FileTypeSummary> types;
+    std::vector<std::string> errors;
+    bool cancelled = false;
+    bool failed = false;
+    std::string errorMessage;
+    std::filesystem::path directory = activeFileType->directory;
+    bool recursive = activeFileType->recursive;
+    std::string title = std::move(activeFileType->title);
+    BuildDirectoryTreeOptions options = std::move(activeFileType->options);
+    bool reportErrors = activeFileType->reportErrors;
+
+    {
+        std::lock_guard<std::mutex> lock(activeFileType->mutex);
+        types = std::move(activeFileType->types);
+        errors = std::move(activeFileType->errors);
+        cancelled = activeFileType->cancelled;
+        failed = activeFileType->failed;
+        errorMessage = activeFileType->errorMessage;
+    }
+
+    closeProgressDialog(*activeFileType);
+
+    activeFileType.reset();
+
+    if (failed)
+    {
+        std::string message = errorMessage.empty() ? std::string("Failed to analyze file types") : errorMessage;
+        messageBox(message.c_str(), mfError | mfOKButton);
+        return;
+    }
+
+    if (cancelled)
+        return;
+
+    auto *win = new FileTypeWindow(title, std::move(directory), std::move(types), recursive, std::move(options), *this);
+    deskTop->insert(win);
+    win->drawView();
+
+    if (reportErrors && !errors.empty())
+    {
+        std::string message = "Some entries could not be read:\n";
+        std::size_t count = std::min<std::size_t>(errors.size(), 10);
+        for (std::size_t i = 0; i < count; ++i)
+            message += " - " + errors[i] + "\n";
+        if (errors.size() > count)
+            message += "... (" + std::to_string(errors.size() - count) + " more)";
+        messageBox(message.c_str(), mfWarning | mfOKButton);
+    }
+}
+
 void DiskUsageApp::runDirectoryScan(DirectoryScanTask &task)
 {
     BuildDirectoryTreeOptions options = task.scanOptions;
@@ -2643,7 +3040,55 @@ void DiskUsageApp::requestScanCancellation()
     closeProgressDialog(*activeScan);
 }
 
+void DiskUsageApp::requestFileListCancellation()
+{
+    if (!activeFileList)
+        return;
+    activeFileList->cancelRequested.store(true);
+    closeProgressDialog(*activeFileList);
+}
+
+void DiskUsageApp::requestFileTypeCancellation()
+{
+    if (!activeFileType)
+        return;
+    activeFileType->cancelRequested.store(true);
+    closeProgressDialog(*activeFileType);
+}
+
 void DiskUsageApp::closeProgressDialog(DirectoryScanTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    TDialog *dialog = task.dialog;
+    task.dialog = nullptr;
+    if (dialog->owner)
+        dialog->close();
+    else
+    {
+        dialog->shutDown();
+        delete dialog;
+    }
+}
+
+void DiskUsageApp::closeProgressDialog(FileListTask &task)
+{
+    if (!task.dialog)
+        return;
+
+    TDialog *dialog = task.dialog;
+    task.dialog = nullptr;
+    if (dialog->owner)
+        dialog->close();
+    else
+    {
+        dialog->shutDown();
+        delete dialog;
+    }
+}
+
+void DiskUsageApp::closeProgressDialog(FileTypeTask &task)
 {
     if (!task.dialog)
         return;
@@ -2670,6 +3115,32 @@ void DiskUsageApp::cancelActiveScan(bool waitForCompletion)
 
     closeProgressDialog(*activeScan);
     activeScan.reset();
+}
+
+void DiskUsageApp::cancelActiveFileList(bool waitForCompletion)
+{
+    if (!activeFileList)
+        return;
+
+    activeFileList->cancelRequested.store(true);
+    if (waitForCompletion && activeFileList->worker.joinable())
+        activeFileList->worker.join();
+
+    closeProgressDialog(*activeFileList);
+    activeFileList.reset();
+}
+
+void DiskUsageApp::cancelActiveFileType(bool waitForCompletion)
+{
+    if (!activeFileType)
+        return;
+
+    activeFileType->cancelRequested.store(true);
+    if (waitForCompletion && activeFileType->worker.joinable())
+        activeFileType->worker.join();
+
+    closeProgressDialog(*activeFileType);
+    activeFileType.reset();
 }
 
 DirectoryWindow *DiskUsageApp::activeDirectoryWindow() const
