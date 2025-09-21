@@ -451,7 +451,7 @@ public:
 
     ~MarkdownStatusLine() override
     {
-        disposeItems(items);
+        disposeItemList(items);
         items = nullptr;
         if (defs)
             defs->items = nullptr;
@@ -464,11 +464,6 @@ public:
         lastContext = context;
         rebuildItems(context);
     }
-
-private:
-    std::optional<MarkdownStatusContext> lastContext;
-
-    void rebuildItems(const MarkdownStatusContext &context)
 
     void showTemporaryMessage(const std::string &message)
     {
@@ -488,9 +483,21 @@ private:
 
     bool hasTemporaryMessage() const noexcept { return showingTemporaryMessage; }
 
-    void setMarkdownMode(bool markdownMode)
+    const char *hint(ushort helpCtx) override
     {
-        disposeItems(items);
+        if (showingTemporaryMessage)
+            return temporaryMessage.c_str();
+        return TStatusLine::hint(helpCtx);
+    }
+
+private:
+    std::optional<MarkdownStatusContext> lastContext;
+    std::string temporaryMessage;
+    bool showingTemporaryMessage = false;
+
+    void rebuildItems(const MarkdownStatusContext &context)
+    {
+        disposeItemList(items);
         items = nullptr;
         if (defs)
             defs->items = nullptr;
@@ -517,15 +524,7 @@ private:
         drawView();
     }
 
-    virtual const char *hint(ushort helpCtx) override
-    {
-        if (showingTemporaryMessage)
-            return temporaryMessage.c_str();
-        return TStatusLine::hint(helpCtx);
-    }
-
-private:
-    void disposeItems(TStatusItem *item)
+    static void disposeItemList(TStatusItem *item)
     {
         while (item)
         {
@@ -534,9 +533,6 @@ private:
             item = next;
         }
     }
-
-    std::string temporaryMessage;
-    bool showingTemporaryMessage = false;
 };
 
 TSubMenu &makeFileMenu()
