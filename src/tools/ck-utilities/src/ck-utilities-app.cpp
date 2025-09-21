@@ -1,4 +1,5 @@
 #include "ck/app_info.hpp"
+#include "ck/launcher.hpp"
 
 #define Uses_TApplication
 #define Uses_TButton
@@ -90,7 +91,9 @@ std::optional<std::filesystem::path> locateProgramPath(const std::filesystem::pa
     return programPath;
 }
 
-int executeProgram(const std::filesystem::path &programPath, const std::vector<std::string> &arguments)
+int executeProgram(const std::filesystem::path &programPath,
+                   const std::vector<std::string> &arguments,
+                   const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
 {
 #ifndef _WIN32
     pid_t pid = fork();
@@ -100,6 +103,8 @@ int executeProgram(const std::filesystem::path &programPath, const std::vector<s
     }
     else if (pid == 0)
     {
+        for (const auto &entry : extraEnv)
+            setenv(entry.first.c_str(), entry.second.c_str(), 1);
         std::vector<std::string> argvStorage;
         argvStorage.reserve(1 + arguments.size());
         argvStorage.push_back(programPath.string());
@@ -123,6 +128,18 @@ int executeProgram(const std::filesystem::path &programPath, const std::vector<s
         return status;
     }
 #else
+    std::vector<std::pair<std::string, std::optional<std::string>>> previousValues;
+    previousValues.reserve(extraEnv.size());
+    for (const auto &entry : extraEnv)
+    {
+        const char *existing = std::getenv(entry.first.c_str());
+        if (existing)
+            previousValues.emplace_back(entry.first, std::string(existing));
+        else
+            previousValues.emplace_back(entry.first, std::optional<std::string>());
+        _putenv_s(entry.first.c_str(), entry.second.c_str());
+    }
+
     auto quoteArgument = [](const std::string &value) {
         std::string quoted = "\"";
         for (char ch : value)
@@ -141,7 +158,17 @@ int executeProgram(const std::filesystem::path &programPath, const std::vector<s
         command.push_back(' ');
         command.append(quoteArgument(arg));
     }
-    return std::system(command.c_str());
+    int result = std::system(command.c_str());
+
+    for (auto it = previousValues.rbegin(); it != previousValues.rend(); ++it)
+    {
+        if (it->second)
+            _putenv_s(it->first.c_str(), it->second->c_str());
+        else
+            _putenv_s(it->first.c_str(), "");
+    }
+
+    return result;
 #endif
 }
 
@@ -854,10 +881,15 @@ private:
         }
 
         suspend();
-        int result = executeProgram(programPath, extraArgs);
+        std::vector<std::pair<std::string, std::string>> extraEnv = {
+            {ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue},
+        };
+        int result = executeProgram(programPath, extraArgs, extraEnv);
         resume();
 
         bool report = false;
+        bool returnToLauncher = false;
+        bool programFinished = false;
         char buffer[256];
 
 #ifndef _WIN32
@@ -874,22 +906,61 @@ private:
                 signalName = "unknown signal";
             std::snprintf(buffer, sizeof(buffer), "%s terminated by signal %d (%s)", programPath.c_str(), signum, signalName);
             report = true;
+            programFinished = true;
         }
         else if (WIFEXITED(result) && WEXITSTATUS(result) != 0)
         {
-            std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), WEXITSTATUS(result));
-            report = true;
+            int exitStatus = WEXITSTATUS(result);
+            programFinished = true;
+            if (exitStatus == ck::launcher::kReturnToLauncherExitCode)
+            {
+                returnToLauncher = true;
+                report = false;
+            }
+            else
+            {
+                std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), exitStatus);
+                report = true;
+            }
+        }
+        else if (WIFEXITED(result))
+        {
+            programFinished = true;
+            if (WEXITSTATUS(result) == ck::launcher::kReturnToLauncherExitCode)
+                returnToLauncher = true;
         }
 #else
-        if (result != 0)
+        if (result == -1)
         {
-            std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
+            std::snprintf(buffer, sizeof(buffer), "Failed to launch %s", programPath.c_str());
             report = true;
+        }
+        else if (result == ck::launcher::kReturnToLauncherExitCode)
+        {
+            returnToLauncher = true;
+            programFinished = true;
+        }
+        else
+        {
+            programFinished = true;
+            if (result != 0)
+            {
+                std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
+                report = true;
+            }
         }
 #endif
 
         if (report)
             messageBox(buffer, mfInformation | mfOKButton);
+
+        if (programFinished && !returnToLauncher)
+        {
+            TEvent quitEvent{};
+            quitEvent.what = evCommand;
+            quitEvent.message.command = cmQuit;
+            putEvent(quitEvent);
+        }
     }
 
 };

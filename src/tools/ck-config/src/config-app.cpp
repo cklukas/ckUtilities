@@ -1,6 +1,7 @@
 #include "ck/options.hpp"
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/launcher.hpp"
 #include "disk_usage_options.hpp"
 
 #define Uses_TApplication
@@ -29,6 +30,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <climits>
 #include <filesystem>
 #include <fstream>
@@ -574,6 +576,7 @@ static const ushort cmOptionResetAll = 3102;
 static const ushort cmPatternAdd = 3200;
 static const ushort cmPatternEdit = 3201;
 static const ushort cmPatternDelete = 3202;
+static const ushort cmReturnToLauncher = 3300;
 
 class AppListViewer : public TListViewer
 {
@@ -1129,9 +1132,16 @@ private:
         disposeItems(items);
         auto *edit = new TStatusItem("~Enter~ Edit", kbEnter, cmEditApp);
         auto *reload = new TStatusItem("~F5~ Reload", kbF5, cmReloadApps);
-        auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
         edit->next = reload;
-        reload->next = quit;
+        TStatusItem *tail = reload;
+        if (ck::launcher::launchedFromCkLauncher())
+        {
+            auto *returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+            tail->next = returnItem;
+            tail = returnItem;
+        }
+        auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+        tail->next = quit;
         items = edit;
         defs->items = items;
         drawView();
@@ -1189,6 +1199,9 @@ public:
             case cmOpenConfigDir:
                 showConfigDirectory();
                 break;
+            case cmReturnToLauncher:
+                std::exit(ck::launcher::kReturnToLauncherExitCode);
+                break;
         case cmAbout:
         {
             const auto &info = toolInfo();
@@ -1210,21 +1223,26 @@ public:
     static TMenuBar *initMenuBar(TRect r)
     {
         r.b.y = r.a.y + 1;
-        return new TMenuBar(r,
-                            *new TSubMenu("~F~ile", hcNoContext) +
-                                *new TMenuItem("~R~eload", cmReloadApps, kbF5, hcNoContext, "F5") +
-                                newLine() +
-                                *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X") +
-                            *new TSubMenu("~P~rofile", hcNoContext) +
-                                *new TMenuItem("~E~dit Options", cmEditApp, kbEnter, hcNoContext, "Enter") +
-                                *new TMenuItem("Reset to ~D~efaults", cmResetApp, kbNoKey, hcNoContext) +
-                                *new TMenuItem("~C~lear Saved Defaults", cmClearApp, kbNoKey, hcNoContext) +
-                                newLine() +
-                                *new TMenuItem("~E~xport...", cmExportApp, kbNoKey, hcNoContext) +
-                                *new TMenuItem("~I~mport...", cmImportApp, kbNoKey, hcNoContext) +
-                                *new TMenuItem("Open Config ~D~ir", cmOpenConfigDir, kbNoKey, hcNoContext) +
-                            *new TSubMenu("~H~elp", hcNoContext) +
-                                *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1"));
+        TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
+                             *new TMenuItem("~R~eload", cmReloadApps, kbF5, hcNoContext, "F5") +
+                             newLine();
+        if (ck::launcher::launchedFromCkLauncher())
+            fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
+        fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X");
+
+        TMenuItem &menuChain = fileMenu +
+                               *new TSubMenu("~P~rofile", hcNoContext) +
+                               *new TMenuItem("~E~dit Options", cmEditApp, kbEnter, hcNoContext, "Enter") +
+                               *new TMenuItem("Reset to ~D~efaults", cmResetApp, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~C~lear Saved Defaults", cmClearApp, kbNoKey, hcNoContext) +
+                               newLine() +
+                               *new TMenuItem("~E~xport...", cmExportApp, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~I~mport...", cmImportApp, kbNoKey, hcNoContext) +
+                               *new TMenuItem("Open Config ~D~ir", cmOpenConfigDir, kbNoKey, hcNoContext) +
+                               *new TSubMenu("~H~elp", hcNoContext) +
+                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+
+        return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
     }
 
     static TStatusLine *initStatusLine(TRect r)
