@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -28,6 +29,66 @@ constexpr int kInfoColumnWidth = 20;
 
 const std::array<std::string_view, 7> kMarkdownExtensions = {
     ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdtxt", ".mdtext"};
+
+ushort execDialog(TDialog *d, void *data = nullptr);
+
+ushort runEditorDialog(int dialog, ...)
+{
+    va_list args;
+    switch (dialog)
+    {
+    case edOutOfMemory:
+        return messageBox("Not enough memory for this operation.", mfError | mfOKButton);
+    case edReadError:
+    case edWriteError:
+    case edCreateError:
+    {
+        va_start(args, dialog);
+        const char *file = va_arg(args, const char *);
+        va_end(args);
+        std::ostringstream text;
+        switch (dialog)
+        {
+        case edReadError:
+            text << "Error reading file ";
+            break;
+        case edWriteError:
+            text << "Error writing file ";
+            break;
+        default:
+            text << "Error creating file ";
+            break;
+        }
+        if (file && *file)
+            text << file;
+        text << '.';
+        return messageBox(text.str().c_str(), mfError | mfOKButton);
+    }
+    case edSaveModify:
+    {
+        va_start(args, dialog);
+        const char *file = va_arg(args, const char *);
+        va_end(args);
+        std::ostringstream text;
+        if (file && *file)
+            text << file << " has been modified. Save?";
+        else
+            text << "Document has been modified. Save?";
+        return messageBox(text.str().c_str(), mfConfirmation | mfYesNoCancel);
+    }
+    case edSaveUntitled:
+        return messageBox("Save untitled document?", mfConfirmation | mfYesNoCancel);
+    case edSaveAs:
+    {
+        va_start(args, dialog);
+        char *file = va_arg(args, char *);
+        va_end(args);
+        return execDialog(new TFileDialog("*.md", "Save file as", "~N~ame", fdOKButton, 101), file);
+    }
+    default:
+        return cmCancel;
+    }
+}
 
 void delay(unsigned milliseconds)
 {
@@ -3454,6 +3515,8 @@ MarkdownEditorApp::MarkdownEditorApp(int argc, char **argv)
     : TProgInit(&MarkdownEditorApp::initStatusLine, &MarkdownEditorApp::initMenuBar, &TApplication::initDeskTop),
       TApplication()
 {
+    TEditor::editorDialog = runEditorDialog;
+
     TCommandSet ts;
     ts.enableCmd(cmSave);
     ts.enableCmd(cmSaveAs);
