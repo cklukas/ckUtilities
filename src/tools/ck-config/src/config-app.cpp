@@ -639,7 +639,7 @@ public:
 
     virtual TPalette &getPalette() const override
     {
-        static TPalette palette(cpGrayWindow, sizeof(cpGrayWindow) - 1);
+        static TPalette palette(cpGrayDialog, sizeof(cpGrayDialog) - 1);
         return palette;
     }
 
@@ -927,7 +927,7 @@ class OptionEditorDialog : public TDialog
 public:
     OptionEditorDialog(const ApplicationInfo &info)
         : TWindowInit(&TDialog::initFrame),
-          TDialog(TRect(0, 0, 78, 22), (info.name + " Options").c_str()),
+          TDialog(TRect(0, 0, 81, 22), (info.name + " Options").c_str()),
           appInfo(info), registry(info.id)
     {
         options |= ofCentered;
@@ -935,14 +935,14 @@ public:
             info.registerFn(registry);
         registry.loadDefaults();
 
-        insert(new TStaticText(TRect(2, 2, 76, 4),
+        insert(new TStaticText(TRect(2, 2, 79, 4),
                                "Edit options and press Save to persist as defaults."));
 
-        vScroll = new TScrollBar(TRect(74, 4, 75, 17));
+        vScroll = new TScrollBar(TRect(77, 4, 78, 17));
         vScroll->growMode = gfGrowHiY;
         insert(vScroll);
 
-        listView = new OptionListViewer(TRect(3, 4, 74, 17), items, vScroll);
+        listView = new OptionListViewer(TRect(3, 4, 77, 17), items, vScroll);
         listView->growMode = gfGrowHiX | gfGrowHiY;
         insert(listView);
 
@@ -950,7 +950,7 @@ public:
         insert(new TButton(TRect(17, 18, 33, 20), "~R~eset Value", cmOptionResetValue, bfNormal));
         insert(new TButton(TRect(35, 18, 51, 20), "Reset ~A~ll", cmOptionResetAll, bfNormal));
         insert(new TButton(TRect(53, 18, 65, 20), "~S~ave", cmOK, bfDefault));
-        insert(new TButton(TRect(66, 18, 74, 20), "Cancel", cmCancel, bfNormal));
+        insert(new TButton(TRect(66, 18, 77, 20), "Cancel", cmCancel, bfNormal));
 
         refreshItems();
     }
