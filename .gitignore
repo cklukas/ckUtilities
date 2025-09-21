@@ -1,0 +1,11 @@
+/build/
+CMakeFiles/
+CMakeCache.txt
+*.ninja
+*.o
+*.obj
+*.pdb
+*.user
+compile_commands.json
+.vscode/
+.idea/
