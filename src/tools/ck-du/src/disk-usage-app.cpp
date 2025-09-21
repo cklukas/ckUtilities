@@ -262,7 +262,6 @@ public:
     virtual void getText(char *dest, short item, short maxLen) override;
     virtual void changeBounds(const TRect &bounds) override;
     virtual void handleEvent(TEvent &event) override;
-    virtual TPalette &getPalette() const override;
 
     void refreshMetrics();
     void setHeader(FileListHeaderView *headerView);
@@ -299,7 +298,6 @@ public:
     FileListHeaderView(const TRect &bounds, FileListView &listView);
 
     virtual void draw() override;
-    virtual TPalette &getPalette() const override;
     void refresh();
 
 private:
@@ -720,12 +718,7 @@ void FileListView::handleEvent(TEvent &event)
     notifyHeader();
 }
 
-TPalette &FileListView::getPalette() const
-{
-    static const char paletteData[] = "\x1F\x17\x3F\x70\x1F";
-    static TPalette palette(paletteData, sizeof(paletteData) - 1);
-    return palette;
-}
+
 
 void FileListView::setHeader(FileListHeaderView *headerView)
 {
@@ -810,10 +803,7 @@ void FileListHeaderView::draw()
     writeLine(0, 0, size.x, 1, buffer);
 }
 
-TPalette &FileListHeaderView::getPalette() const
-{
-    return listView.getPalette();
-}
+
 
 void FileListHeaderView::refresh()
 {
@@ -844,8 +834,8 @@ void FileListWindow::buildView()
     if (r.b.x <= r.a.x + 2 || r.b.y <= r.a.y + 3)
         r = TRect(0, 0, 76, 18);
 
-    TRect headerBounds(r.a.x, r.a.y, r.b.x - 1, r.a.y + 1);
-    TRect listBounds(r.a.x, r.a.y + 1, r.b.x - 1, r.b.y - 1);
+    TRect headerBounds(r.a.x, r.a.y, r.b.x, r.a.y + 1);
+    TRect listBounds(r.a.x, r.a.y + 1, r.b.x, r.b.y);
 
     vScroll = new TScrollBar(TRect(r.b.x - 1, r.a.y, r.b.x, r.b.y - 1));
     vScroll->growMode = gfGrowHiY;
@@ -954,7 +944,7 @@ void DirectoryWindow::buildOutline()
     hScroll = new TScrollBar(TRect(r.a.x, r.b.y - 1, r.b.x - 1, r.b.y));
     hScroll->growMode = gfGrowHiX;
 
-    auto *view = new DirectoryOutline(TRect(r.a.x, r.a.y, r.b.x - 1, r.b.y - 1), hScroll, vScroll, rootNode, *this);
+    auto *view = new DirectoryOutline(r, hScroll, vScroll, rootNode, *this);
     view->growMode = gfGrowHiX | gfGrowHiY;
     insert(vScroll);
     insert(hScroll);

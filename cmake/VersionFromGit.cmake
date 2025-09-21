@@ -13,12 +13,9 @@ function(cktools_version_from_git OUT_VAR)
     if(_git_result EQUAL 0 AND NOT _git_version STREQUAL "")
       string(REGEX REPLACE "^v" "" _git_version "${_git_version}")
 
-      # A git hash won't contain any dots.
-      # A proper git describe tag will be like <semver>-<count>-g<hash>
-      if(NOT _git_version MATCHES "\.")
-        # This is likely a hash because no tags were found.
-        # Or a tag that is not a semver, like "my-tag".
-        # Let's get the number of commits as a tweak version.
+      string(FIND "${_git_version}" "." _dot_pos)
+      if(_dot_pos EQUAL -1)
+        # This is likely a hash because no tags were found, or a non-semver tag.
         execute_process(
           COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
           WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -26,6 +23,7 @@ function(cktools_version_from_git OUT_VAR)
           RESULT_VARIABLE _git_result2
           OUTPUT_STRIP_TRAILING_WHITESPACE)
         if(_git_result2 EQUAL 0)
+            string(STRIP "${_commit_count}" _commit_count)
             set(${OUT_VAR} "0.1.0.${_commit_count}" PARENT_SCOPE)
         else()
             set(${OUT_VAR} "${_fallback}" PARENT_SCOPE)
@@ -36,7 +34,7 @@ function(cktools_version_from_git OUT_VAR)
       # It has dots, so it's probably based on a tag like `1.2.3` or `1.2`.
       # The format is <tag>-<commits>-g<hash>[-dirty]
       # Let's convert it to <tag>.<commits>
-      string(REGEX REPLACE "-[0-9]+-g[a-f0-9]+(-dirty)?$" "" _cmake_version "${_git_version}")
+      string(REGEX REPLACE "-[0-9]+-g[a-f0-9A-F]+(-dirty)?$" "" _cmake_version "${_git_version}")
       string(REGEX MATCH "-([0-9]+)-g" _commit_count_match "${_git_version}")
       if(CMAKE_MATCH_COUNT GREATER 0)
         set(_commit_count "${CMAKE_MATCH_1}")
