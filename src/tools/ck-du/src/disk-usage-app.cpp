@@ -10,6 +10,10 @@
 #define Uses_TStaticText
 #define Uses_TParamText
 #define Uses_TListViewer
+#define Uses_TColorAttr
+#define Uses_TDrawBuffer
+#define Uses_TEvent
+#define Uses_TPalette
 #define Uses_TMenu
 #define Uses_TMenuBar
 #define Uses_TMenuItem
@@ -32,6 +36,7 @@
 #include <deque>
 #include <functional>
 #include <filesystem>
+#include <iomanip>
 #include <limits.h>
 #include <memory>
 #include <mutex>
@@ -246,6 +251,7 @@ private:
 };
 
 class FileListWindow;
+class FileListHeaderView;
 
 class FileListView : public TListViewer
 {
@@ -255,10 +261,21 @@ public:
 
     virtual void getText(char *dest, short item, short maxLen) override;
     virtual void changeBounds(const TRect &bounds) override;
+    virtual void handleEvent(TEvent &event) override;
+    virtual TPalette &getPalette() const override;
+
     void refreshMetrics();
+    void setHeader(FileListHeaderView *headerView);
+    std::string headerLine() const;
+    int horizontalOffset() const;
+    ushort headerColorIndex() const;
 
 private:
+    static constexpr std::size_t kSeparatorWidth = 2;
+    static constexpr std::size_t kSeparatorCount = 5;
+
     std::vector<FileEntry> &files;
+    FileListHeaderView *header = nullptr;
     std::size_t maxLineWidth = 0;
     std::size_t nameWidth = 0;
     std::size_t ownerWidth = 0;
@@ -268,6 +285,25 @@ private:
     std::size_t modifiedWidth = 0;
 
     void computeWidths();
+    std::size_t totalLineWidth() const;
+    void updateMaxLineWidth();
+    std::string formatRow(const std::string &name, const std::string &owner,
+                          const std::string &group, const std::string &size,
+                          const std::string &created, const std::string &modified) const;
+    void notifyHeader();
+};
+
+class FileListHeaderView : public TView
+{
+public:
+    FileListHeaderView(const TRect &bounds, FileListView &listView);
+
+    virtual void draw() override;
+    virtual TPalette &getPalette() const override;
+    void refresh();
+
+private:
+    FileListView &listView;
 };
 
 class FileListWindow : public TWindow
@@ -286,6 +322,7 @@ private:
     FileListView *listView = nullptr;
     TScrollBar *hScroll = nullptr;
     TScrollBar *vScroll = nullptr;
+    FileListHeaderView *headerView = nullptr;
     bool recursiveMode = false;
 
     void buildView();
@@ -609,17 +646,17 @@ FileListView::FileListView(const TRect &bounds, TScrollBar *h, TScrollBar *v, st
 {
     setRange(static_cast<short>(entries.size()));
     computeWidths();
-    maxLineWidth = nameWidth + ownerWidth + groupWidth + sizeWidth + createdWidth + modifiedWidth + 12;
+    updateMaxLineWidth();
 }
 
 void FileListView::computeWidths()
 {
-    nameWidth = 0;
-    ownerWidth = 0;
-    groupWidth = 0;
-    sizeWidth = 0;
-    createdWidth = 0;
-    modifiedWidth = 0;
+    nameWidth = std::string("Name").size();
+    ownerWidth = std::string("Owner").size();
+    groupWidth = std::string("Group").size();
+    sizeWidth = std::string("Size").size();
+    createdWidth = std::string("Created").size();
+    modifiedWidth = std::string("Modified").size();
 
     for (const auto &entry : files)
     {
@@ -630,21 +667,15 @@ void FileListView::computeWidths()
         modifiedWidth = std::max(modifiedWidth, entry.modified.size());
         sizeWidth = std::max(sizeWidth, formatSize(entry.size, getCurrentUnit()).size());
     }
-    if (createdWidth == 0)
-        createdWidth = std::string("YYYY-MM-DD HH:MM").size();
-    if (modifiedWidth == 0)
-        modifiedWidth = std::string("YYYY-MM-DD HH:MM").size();
-    if (sizeWidth == 0)
-        sizeWidth = std::string("0 B").size();
+    createdWidth = std::max(createdWidth, std::string("YYYY-MM-DD HH:MM").size());
+    modifiedWidth = std::max(modifiedWidth, std::string("YYYY-MM-DD HH:MM").size());
+    sizeWidth = std::max(sizeWidth, std::string("0 B").size());
 }
 
 void FileListView::refreshMetrics()
 {
     computeWidths();
-    sizeWidth = std::max<size_t>(sizeWidth, std::string("0 B").size());
-    maxLineWidth = nameWidth + ownerWidth + groupWidth + sizeWidth + createdWidth + modifiedWidth + 12;
-    if (maxLineWidth < static_cast<std::size_t>(size.x))
-        maxLineWidth = static_cast<std::size_t>(size.x);
+    updateMaxLineWidth();
     if (hScrollBar)
     {
         int visibleWidth = std::max<int>(1, size.x);
@@ -658,6 +689,7 @@ void FileListView::refreshMetrics()
         hScrollBar->setParams(current, 0, maxIndent, pageStep, 1);
     }
     drawView();
+    notifyHeader();
 }
 
 void FileListView::getText(char *dest, short item, short maxLen)
@@ -669,27 +701,8 @@ void FileListView::getText(char *dest, short item, short maxLen)
     }
 
     const FileEntry &entry = files[item];
-    std::ostringstream line;
-    line << entry.displayPath;
-    if (entry.displayPath.size() < nameWidth)
-        line << std::string(nameWidth - entry.displayPath.size(), ' ');
-    line << "  " << entry.owner;
-    if (entry.owner.size() < ownerWidth)
-        line << std::string(ownerWidth - entry.owner.size(), ' ');
-    line << ':';
-    line << entry.group;
-    if (entry.group.size() < groupWidth)
-        line << std::string(groupWidth - entry.group.size(), ' ');
     std::string sizeStr = formatSize(entry.size, getCurrentUnit());
-    line << "  " << sizeStr;
-    if (sizeStr.size() < sizeWidth)
-        line << std::string(sizeWidth - sizeStr.size(), ' ');
-    line << entry.created;
-    if (entry.created.size() < createdWidth)
-        line << std::string(createdWidth - entry.created.size(), ' ');
-    line << "  " << entry.modified;
-
-    std::string text = line.str();
+    std::string text = formatRow(entry.displayPath, entry.owner, entry.group, sizeStr, entry.created, entry.modified);
     if (text.size() >= static_cast<std::size_t>(maxLen))
         text.resize(maxLen - 1);
     std::snprintf(dest, maxLen, "%s", text.c_str());
@@ -699,6 +712,112 @@ void FileListView::changeBounds(const TRect &bounds)
 {
     TListViewer::changeBounds(bounds);
     refreshMetrics();
+}
+
+void FileListView::handleEvent(TEvent &event)
+{
+    TListViewer::handleEvent(event);
+    notifyHeader();
+}
+
+TPalette &FileListView::getPalette() const
+{
+    static const char paletteData[] = "\x1F\x17\x3F\x70\x1F";
+    static TPalette palette(paletteData, sizeof(paletteData) - 1);
+    return palette;
+}
+
+void FileListView::setHeader(FileListHeaderView *headerView)
+{
+    header = headerView;
+}
+
+std::string FileListView::headerLine() const
+{
+    return formatRow("Name", "Owner", "Group", "Size", "Created", "Modified");
+}
+
+int FileListView::horizontalOffset() const
+{
+    if (hScrollBar)
+        return hScrollBar->value;
+    return 0;
+}
+
+ushort FileListView::headerColorIndex() const
+{
+    if (getState(sfActive) && getState(sfSelected))
+        return 1;
+    return 2;
+}
+
+std::size_t FileListView::totalLineWidth() const
+{
+    return nameWidth + ownerWidth + groupWidth + sizeWidth + createdWidth + modifiedWidth +
+           kSeparatorWidth * kSeparatorCount;
+}
+
+void FileListView::updateMaxLineWidth()
+{
+    maxLineWidth = totalLineWidth();
+    if (maxLineWidth < static_cast<std::size_t>(size.x))
+        maxLineWidth = static_cast<std::size_t>(size.x);
+}
+
+std::string FileListView::formatRow(const std::string &name, const std::string &owner,
+                                    const std::string &group, const std::string &size,
+                                    const std::string &created, const std::string &modified) const
+{
+    static constexpr const char *separator = "  ";
+    std::ostringstream line;
+    line << std::left << std::setw(nameWidth) << name;
+    line << separator;
+    line << std::left << std::setw(ownerWidth) << owner;
+    line << separator;
+    line << std::left << std::setw(groupWidth) << group;
+    line << separator;
+    line << std::right << std::setw(sizeWidth) << size;
+    line << separator;
+    line << std::left << std::setw(createdWidth) << created;
+    line << separator;
+    line << std::left << std::setw(modifiedWidth) << modified;
+    return line.str();
+}
+
+void FileListView::notifyHeader()
+{
+    if (header)
+        header->refresh();
+}
+
+FileListHeaderView::FileListHeaderView(const TRect &bounds, FileListView &list)
+    : TView(bounds), listView(list)
+{
+    options &= ~(ofSelectable | ofFirstClick);
+}
+
+void FileListHeaderView::draw()
+{
+    TDrawBuffer buffer;
+    TColorAttr color = listView.getColor(listView.headerColorIndex());
+    buffer.moveChar(0, ' ', color, size.x);
+    std::string headerText = listView.headerLine();
+    int indent = listView.horizontalOffset();
+    if (indent < 0)
+        indent = 0;
+    if (indent < 255)
+        buffer.moveStr(0, headerText.c_str(), color, size.x, indent);
+    writeLine(0, 0, size.x, 1, buffer);
+}
+
+TPalette &FileListHeaderView::getPalette() const
+{
+    return listView.getPalette();
+}
+
+void FileListHeaderView::refresh()
+{
+    drawView();
 }
 
 FileListWindow::FileListWindow(const std::string &title, std::vector<FileEntry> files, bool recursive, DiskUsageApp &appRef)
@@ -722,22 +841,33 @@ void FileListWindow::buildView()
 {
     TRect r = getExtent();
     r.grow(-1, -1);
-    if (r.b.x <= r.a.x + 2 || r.b.y <= r.a.y + 2)
+    if (r.b.x <= r.a.x + 2 || r.b.y <= r.a.y + 3)
         r = TRect(0, 0, 76, 18);
 
-    vScroll = new TScrollBar(TRect(r.b.x - 1, r.a.y, r.b.x, r.b.y));
+    TRect headerBounds(r.a.x, r.a.y, r.b.x - 1, r.a.y + 1);
+    TRect listBounds(r.a.x, r.a.y + 1, r.b.x - 1, r.b.y - 1);
+
+    vScroll = new TScrollBar(TRect(r.b.x - 1, r.a.y, r.b.x, r.b.y - 1));
     vScroll->growMode = gfGrowHiY;
     hScroll = new TScrollBar(TRect(r.a.x, r.b.y - 1, r.b.x - 1, r.b.y));
     hScroll->growMode = gfGrowHiX;
 
-    auto *view = new FileListView(TRect(r.a.x, r.a.y, r.b.x - 1, r.b.y - 1), hScroll, vScroll, entries);
+    auto *view = new FileListView(listBounds, hScroll, vScroll, entries);
     view->growMode = gfGrowHiX | gfGrowHiY;
+
+    auto *header = new FileListHeaderView(headerBounds, *view);
+    header->growMode = gfGrowHiX;
+
+    view->setHeader(header);
 
     insert(vScroll);
     insert(hScroll);
+    insert(header);
     insert(view);
     listView = view;
+    headerView = header;
     view->refreshMetrics();
+    headerView->refresh();
     hScroll->drawView();
     vScroll->drawView();
 }
@@ -748,6 +878,8 @@ void FileListWindow::refreshUnits()
     {
         listView->refreshMetrics();
     }
+    if (headerView)
+        headerView->refresh();
 }
 
 void FileListWindow::refreshSort()
@@ -759,6 +891,8 @@ void FileListWindow::refreshSort()
         listView->setRange(static_cast<short>(entries.size()));
         listView->refreshMetrics();
     }
+    if (headerView)
+        headerView->refresh();
     if (hScroll)
         hScroll->drawView();
     if (vScroll)
