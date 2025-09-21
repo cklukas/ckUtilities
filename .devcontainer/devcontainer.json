@@ -2,17 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
   "name": "ckUtilities",
   "image": "mcr.microsoft.com/devcontainers/cpp:1-ubuntu-22.04",
-  "features": {
-    "ghcr.io/devcontainers/features/cmake:1": {
-      "version": "3.27.6"
-    },
-    "ghcr.io/devcontainers/features/ninja:1": {},
-    "ghcr.io/devcontainers/features/llvm:1": {
-      "version": "15"
-    },
-    "ghcr.io/devcontainers/features/git:1": {}
-  },
-  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y pandoc texinfo dpkg-dev rpm ccache lcov && cmake --preset dev",
+  "postCreateCommand": ".devcontainer/postCreate.sh",
   "customizations": {
     "vscode": {
       "extensions": [
