@@ -766,7 +766,7 @@ public:
         TMenu *newMenu = buildMenu(mode);
         delete menu;
         menu = newMenu;
-        current = menu ? menu->items : nullptr;
+        current = nullptr;
         drawView();
     }
 
