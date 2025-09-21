@@ -37,6 +37,7 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
 )
 
 add_ck_tool(ckjsonview
+  OUTPUT_NAME "ck-json-view"
   SOURCES
     src/json-view-app.cpp
   LIBRARIES
