@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -34,30 +35,47 @@ const ushort cmHeading4 = 3013;
 const ushort cmHeading5 = 3014;
 const ushort cmHeading6 = 3015;
 const ushort cmClearHeading = 3016;
+const ushort cmMakeParagraph = 3017;
+const ushort cmInsertLineBreak = 3018;
 const ushort cmBold = 3020;
 const ushort cmItalic = 3021;
 const ushort cmBoldItalic = 3022;
-const ushort cmRemoveFormatting = 3023;
-const ushort cmBlockQuote = 3024;
-const ushort cmBlockQuoteClear = 3025;
-const ushort cmInsertBulletList = 3030;
-const ushort cmInsertNumberedList = 3031;
-const ushort cmInsertLink = 3032;
-const ushort cmInsertImage = 3033;
-const ushort cmInsertTable = 3035;
-const ushort cmTableInsertRowAbove = 3040;
-const ushort cmTableInsertRowBelow = 3041;
-const ushort cmTableDeleteRow = 3042;
-const ushort cmTableInsertColumnBefore = 3043;
-const ushort cmTableInsertColumnAfter = 3044;
-const ushort cmTableDeleteColumn = 3045;
-const ushort cmTableDeleteTable = 3046;
-const ushort cmTableAlignDefault = 3047;
-const ushort cmTableAlignLeft = 3048;
-const ushort cmTableAlignCenter = 3049;
-const ushort cmTableAlignRight = 3050;
-const ushort cmTableAlignNumber = 3051;
-const ushort cmAbout = 3052;
+const ushort cmStrikethrough = 3023;
+const ushort cmInlineCode = 3024;
+const ushort cmCodeBlock = 3025;
+const ushort cmRemoveFormatting = 3026;
+const ushort cmToggleBlockQuote = 3030;
+const ushort cmToggleBulletList = 3031;
+const ushort cmToggleNumberedList = 3032;
+const ushort cmConvertTaskList = 3033;
+const ushort cmToggleTaskCheckbox = 3034;
+const ushort cmIncreaseIndent = 3035;
+const ushort cmDecreaseIndent = 3036;
+const ushort cmDefinitionList = 3037;
+const ushort cmInsertLink = 3040;
+const ushort cmInsertReferenceLink = 3041;
+const ushort cmAutoLinkSelection = 3042;
+const ushort cmInsertImage = 3043;
+const ushort cmInsertFootnote = 3044;
+const ushort cmInsertHorizontalRule = 3045;
+const ushort cmEscapeSelection = 3046;
+const ushort cmInsertTable = 3050;
+const ushort cmTableInsertRowAbove = 3051;
+const ushort cmTableInsertRowBelow = 3052;
+const ushort cmTableDeleteRow = 3053;
+const ushort cmTableInsertColumnBefore = 3054;
+const ushort cmTableInsertColumnAfter = 3055;
+const ushort cmTableDeleteColumn = 3056;
+const ushort cmTableDeleteTable = 3057;
+const ushort cmTableAlignDefault = 3058;
+const ushort cmTableAlignLeft = 3059;
+const ushort cmTableAlignCenter = 3060;
+const ushort cmTableAlignRight = 3061;
+const ushort cmTableAlignNumber = 3062;
+const ushort cmReflowParagraphs = 3070;
+const ushort cmFormatDocument = 3071;
+const ushort cmToggleSmartList = 3080;
+const ushort cmAbout = 3090;
 
 bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) noexcept
 {
@@ -186,46 +204,71 @@ void MarkdownFileEditor::applyHeadingLevel(int level)
         clearHeading();
         return;
     }
-    lock();
-    uint lineStartPtr = lineStart(curPtr);
-    uint lineEndPtr = lineEnd(lineStartPtr);
-    std::string line = readRange(lineStartPtr, lineEndPtr);
-    std::size_t index = 0;
-    while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
-        ++index;
-    std::string indent = line.substr(0, index);
-    std::size_t markerEnd = index;
-    while (markerEnd < line.size() && line[markerEnd] == '#')
-        ++markerEnd;
-    if (markerEnd < line.size() && line[markerEnd] == ' ')
-        ++markerEnd;
-    std::string content = line.substr(markerEnd);
-    std::string replacement = indent + std::string(level, '#');
-    if (!content.empty())
-        replacement.append(" ").append(content);
-    replaceRange(lineStartPtr, lineEndPtr, replacement);
-    unlock();
-    onContentModified();
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        std::size_t index = 0;
+        while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
+            ++index;
+        std::size_t markerEnd = index;
+        while (markerEnd < line.size() && line[markerEnd] == '#')
+            ++markerEnd;
+        if (markerEnd < line.size() && line[markerEnd] == ' ')
+            ++markerEnd;
+
+        int existingLevel = static_cast<int>(markerEnd - index);
+        if (existingLevel > 0 && markerEnd > index && line[markerEnd - 1] == ' ')
+            --existingLevel;
+
+        std::string content = trimLeft(std::string_view(line).substr(markerEnd));
+        std::string indent = line.substr(0, index);
+        if (existingLevel == level && existingLevel > 0)
+        {
+            line = indent + content;
+        }
+        else
+        {
+            std::string replacement = indent + std::string(level, '#');
+            if (!content.empty())
+            {
+                replacement.push_back(' ');
+                replacement.append(content);
+            }
+            else
+            {
+                replacement.push_back(' ');
+            }
+            line = replacement;
+        }
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
 }
 
 void MarkdownFileEditor::clearHeading()
 {
-    lock();
-    uint lineStartPtr = lineStart(curPtr);
-    uint lineEndPtr = lineEnd(lineStartPtr);
-    std::string line = readRange(lineStartPtr, lineEndPtr);
-    std::size_t index = 0;
-    while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
-        ++index;
-    std::size_t markerEnd = index;
-    while (markerEnd < line.size() && line[markerEnd] == '#')
-        ++markerEnd;
-    if (markerEnd < line.size() && line[markerEnd] == ' ')
-        ++markerEnd;
-    std::string replacement = line.substr(0, index) + line.substr(markerEnd);
-    replaceRange(lineStartPtr, lineEndPtr, replacement);
-    unlock();
-    onContentModified();
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    bool modified = false;
+    for (auto &line : lines)
+    {
+        std::size_t index = 0;
+        while (index < line.size() && (line[index] == ' ' || line[index] == '\t'))
+            ++index;
+        std::size_t markerEnd = index;
+        while (markerEnd < line.size() && line[markerEnd] == '#')
+            ++markerEnd;
+        if (markerEnd > index)
+        {
+            if (markerEnd < line.size() && line[markerEnd] == ' ')
+                ++markerEnd;
+            std::string content = trimLeft(std::string_view(line).substr(markerEnd));
+            line = line.substr(0, index) + content;
+            modified = true;
+        }
+    }
+    if (modified)
+        applyBlockSelection(block, lines, block.trailingNewline);
 }
 
 bool MarkdownFileEditor::ensureSelection()
@@ -240,19 +283,243 @@ bool MarkdownFileEditor::ensureSelection()
     return true;
 }
 
+MarkdownFileEditor::BlockSelection MarkdownFileEditor::captureSelectedLines()
+{
+    BlockSelection selection;
+    uint selectionStart = hasSelection() ? std::min(selStart, selEnd) : curPtr;
+    uint selectionEnd = hasSelection() ? std::max(selStart, selEnd) : curPtr;
+    selection.start = lineStart(selectionStart);
+    uint lastLineStart = lineStart(selectionEnd);
+    uint afterEnd = nextLine(lastLineStart);
+    if (afterEnd <= lastLineStart)
+        afterEnd = lineEnd(lastLineStart);
+    selection.end = afterEnd;
+    std::string text = readRange(selection.start, selection.end);
+    selection.trailingNewline = !text.empty() && text.back() == '\n';
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        std::size_t next = text.find('\n', pos);
+        if (next == std::string::npos)
+        {
+            selection.lines.push_back(text.substr(pos));
+            break;
+        }
+        selection.lines.push_back(text.substr(pos, next - pos));
+        pos = next + 1;
+    }
+    if (selection.lines.empty())
+        selection.lines.emplace_back();
+    return selection;
+}
+
+void MarkdownFileEditor::applyBlockSelection(const BlockSelection &selection, const std::vector<std::string> &lines, bool trailingNewline)
+{
+    std::string result;
+    for (std::size_t i = 0; i < lines.size(); ++i)
+    {
+        if (i > 0)
+            result.push_back('\n');
+        result.append(lines[i]);
+    }
+    if (trailingNewline)
+        result.push_back('\n');
+
+    lock();
+    replaceRange(selection.start, selection.end, result);
+    unlock();
+    onContentModified();
+}
+
+std::string MarkdownFileEditor::trimLeft(std::string_view text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && (text[start] == ' ' || text[start] == '\t'))
+        ++start;
+    return std::string(text.substr(start));
+}
+
+std::string MarkdownFileEditor::trim(std::string_view text)
+{
+    std::size_t start = 0;
+    std::size_t end = text.size();
+    while (start < end && (text[start] == ' ' || text[start] == '\t'))
+        ++start;
+    while (end > start && (text[end - 1] == ' ' || text[end - 1] == '\t'))
+        --end;
+    return std::string(text.substr(start, end - start));
+}
+
+bool MarkdownFileEditor::lineIsWhitespace(const std::string &line)
+{
+    for (char ch : line)
+    {
+        if (ch != ' ' && ch != '\t' && ch != '\r')
+            return false;
+    }
+    return true;
+}
+
+MarkdownFileEditor::LinePattern MarkdownFileEditor::analyzeLinePattern(const std::string &line) const
+{
+    LinePattern pattern;
+    std::size_t pos = 0;
+    while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
+        ++pos;
+    pattern.indent = line.substr(0, pos);
+    std::size_t blockStart = pos;
+    while (pos < line.size() && line[pos] == '>')
+    {
+        ++pos;
+        if (pos < line.size() && line[pos] == ' ')
+            ++pos;
+    }
+    pattern.blockquote = line.substr(blockStart, pos - blockStart);
+    pattern.markerStart = pos;
+    std::size_t markerEnd = pos;
+    if (pos < line.size())
+    {
+        char ch = line[pos];
+        if (ch == '-' || ch == '*' || ch == '+')
+        {
+            pattern.hasBullet = true;
+            pattern.bulletChar = ch;
+            markerEnd = pos + 1;
+            while (markerEnd < line.size() && (line[markerEnd] == ' ' || line[markerEnd] == '\t'))
+                ++markerEnd;
+            if (markerEnd + 2 < line.size() && line[markerEnd] == '[' && line[markerEnd + 2] == ']')
+            {
+                pattern.hasTask = true;
+                markerEnd += 3;
+                if (markerEnd < line.size() && (line[markerEnd] == ' ' || line[markerEnd] == '\t'))
+                    ++markerEnd;
+            }
+        }
+        else if (std::isdigit(static_cast<unsigned char>(ch)))
+        {
+            std::size_t digitsEnd = pos;
+            while (digitsEnd < line.size() && std::isdigit(static_cast<unsigned char>(line[digitsEnd])))
+                ++digitsEnd;
+            if (digitsEnd > pos && digitsEnd < line.size() && line[digitsEnd] == '.')
+            {
+                markerEnd = digitsEnd + 1;
+                while (markerEnd < line.size() && (line[markerEnd] == ' ' || line[markerEnd] == '\t'))
+                    ++markerEnd;
+                pattern.hasOrdered = true;
+            }
+        }
+    }
+    pattern.markerEnd = markerEnd;
+    return pattern;
+}
+
+std::string MarkdownFileEditor::generateUniqueReferenceId(const std::string &prefix)
+{
+    std::set<std::string> ids;
+    std::string text = readRange(0, bufLen);
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        std::size_t end = text.find('\n', pos);
+        std::string_view line(text.c_str() + pos, (end == std::string::npos ? text.size() - pos : end - pos));
+        std::size_t start = 0;
+        while (start < line.size() && (line[start] == ' ' || line[start] == '\t'))
+            ++start;
+        if (start < line.size() && line[start] == '[')
+        {
+            std::size_t close = line.find(']', start);
+            if (close != std::string::npos && close + 1 < line.size() && line[close + 1] == ':')
+            {
+                ids.emplace(std::string(line.substr(start + 1, close - start - 1)));
+            }
+        }
+        if (end == std::string::npos)
+            break;
+        pos = end + 1;
+    }
+
+    if (prefix.empty())
+        return "ref1";
+
+    for (int i = 1; i < 10000; ++i)
+    {
+        std::string candidate = prefix + std::to_string(i);
+        if (!ids.count(candidate))
+            return candidate;
+    }
+    return prefix + "x";
+}
+
+std::string MarkdownFileEditor::generateUniqueFootnoteId()
+{
+    std::set<std::string> ids;
+    std::string text = readRange(0, bufLen);
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        std::size_t end = text.find('\n', pos);
+        std::string_view line(text.c_str() + pos, (end == std::string::npos ? text.size() - pos : end - pos));
+        std::size_t start = 0;
+        while (start < line.size() && (line[start] == ' ' || line[start] == '\t'))
+            ++start;
+        if (start + 2 < line.size() && line[start] == '[' && line[start + 1] == '^')
+        {
+            std::size_t close = line.find(']', start);
+            if (close != std::string::npos && close + 1 < line.size() && line[close + 1] == ':')
+                ids.emplace(std::string(line.substr(start + 2, close - start - 2)));
+        }
+        if (end == std::string::npos)
+            break;
+        pos = end + 1;
+    }
+
+    for (int i = 1; i < 10000; ++i)
+    {
+        std::string candidate = "fn" + std::to_string(i);
+        if (!ids.count(candidate))
+            return candidate;
+    }
+    return "fn";
+}
+
+void MarkdownFileEditor::appendDefinition(const std::string &definition)
+{
+    lock();
+    setCurPtr(bufLen, 0);
+    if (bufLen > 0 && bufChar(bufLen - 1) != '\n')
+        insertText("\n", 1, False);
+    insertText(definition.c_str(), definition.size(), False);
+    unlock();
+    onContentModified();
+}
+
 void MarkdownFileEditor::wrapSelectionWith(const std::string &prefix, const std::string &suffix)
 {
     if (!ensureSelection())
         return;
-    lock();
     uint start = std::min(selStart, selEnd);
     uint end = std::max(selStart, selEnd);
+    std::string text = readRange(start, end);
+    if (text.size() >= prefix.size() + suffix.size() &&
+        text.rfind(prefix, 0) == 0 &&
+        text.substr(text.size() - suffix.size()) == suffix)
+    {
+        std::string inner = text.substr(prefix.size(), text.size() - prefix.size() - suffix.size());
+        lock();
+        replaceRange(start, end, inner);
+        unlock();
+        setSelect(start, start + inner.size(), True);
+        onContentModified();
+        return;
+    }
+
+    lock();
     setCurPtr(start, 0);
     insertText(prefix.c_str(), prefix.size(), False);
     setCurPtr(end + prefix.size(), 0);
     insertText(suffix.c_str(), suffix.size(), False);
-    setCurPtr(end + prefix.size() + suffix.size(), 0);
     unlock();
+    setSelect(start, end + prefix.size() + suffix.size(), True);
     onContentModified();
 }
 
@@ -278,6 +545,20 @@ void MarkdownFileEditor::removeFormattingAround(uint start, uint end)
     if (removePair("***") || removePair("___") || removePair("**") || removePair("__") ||
         removePair("*") || removePair("_") || removePair("~~"))
         return;
+
+    std::size_t leadingTicks = 0;
+    while (leadingTicks < text.size() && text[leadingTicks] == '`')
+        ++leadingTicks;
+    std::size_t trailingTicks = 0;
+    while (trailingTicks < text.size() && text[text.size() - 1 - trailingTicks] == '`')
+        ++trailingTicks;
+    if (leadingTicks > 0 && leadingTicks == trailingTicks && leadingTicks * 2 <= text.size())
+    {
+        std::string inner = text.substr(leadingTicks, text.size() - 2 * leadingTicks);
+        replaceRange(start, end, inner);
+        setSelect(start, start + inner.size(), True);
+        onContentModified();
+    }
 }
 
 void MarkdownFileEditor::applyBold()
@@ -293,6 +574,352 @@ void MarkdownFileEditor::applyItalic()
 void MarkdownFileEditor::applyBoldItalic()
 {
     wrapSelectionWith("***", "***");
+}
+
+void MarkdownFileEditor::applyStrikethrough()
+{
+    wrapSelectionWith("~~", "~~");
+}
+
+void MarkdownFileEditor::applyInlineCode()
+{
+    if (!ensureSelection())
+        return;
+    uint start = std::min(selStart, selEnd);
+    uint end = std::max(selStart, selEnd);
+    std::string text = readRange(start, end);
+    std::size_t leading = 0;
+    while (leading < text.size() && text[leading] == '`')
+        ++leading;
+    std::size_t trailing = 0;
+    while (trailing < text.size() && text[text.size() - 1 - trailing] == '`')
+        ++trailing;
+    if (leading > 0 && leading == trailing && leading * 2 <= text.size())
+    {
+        std::string inner = text.substr(leading, text.size() - 2 * leading);
+        lock();
+        replaceRange(start, end, inner);
+        unlock();
+        setSelect(start, start + inner.size(), True);
+        onContentModified();
+        return;
+    }
+
+    std::size_t longest = 0;
+    std::size_t current = 0;
+    for (char ch : text)
+    {
+        if (ch == '`')
+        {
+            ++current;
+            longest = std::max(longest, current);
+        }
+        else
+        {
+            current = 0;
+        }
+    }
+    std::string fence(longest + 1, '`');
+    lock();
+    setCurPtr(start, 0);
+    insertText(fence.c_str(), fence.size(), False);
+    setCurPtr(end + fence.size(), 0);
+    insertText(fence.c_str(), fence.size(), False);
+    unlock();
+    setSelect(start, end + fence.size() * 2, True);
+    onContentModified();
+}
+
+void MarkdownFileEditor::toggleCodeBlock()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    auto trimmed = [&](const std::string &line) { return trim(std::string_view(line)); };
+
+    int first = 0;
+    while (first < static_cast<int>(lines.size()) && trimmed(lines[first]).empty())
+        ++first;
+    int last = static_cast<int>(lines.size()) - 1;
+    while (last >= first && trimmed(lines[last]).empty())
+        --last;
+
+    bool hasFence = false;
+    if (first < last)
+    {
+        std::string firstLine = trimmed(lines[first]);
+        std::string lastLine = trimmed(lines[last]);
+        if (firstLine.rfind("```", 0) == 0 && lastLine.rfind("```", 0) == 0)
+            hasFence = true;
+    }
+
+    if (hasFence)
+    {
+        lines.erase(lines.begin() + first);
+        for (int i = static_cast<int>(lines.size()) - 1; i >= 0; --i)
+        {
+            if (trimmed(lines[i]).rfind("```", 0) == 0)
+            {
+                lines.erase(lines.begin() + i);
+                break;
+            }
+        }
+        applyBlockSelection(block, lines, true);
+        return;
+    }
+
+    std::string language = trim(promptForText("Code Block", "Language (optional)", ""));
+    std::string fence = "```";
+    if (!language.empty())
+        fence += language;
+
+    std::vector<std::string> result;
+    result.push_back(fence);
+    result.insert(result.end(), lines.begin(), lines.end());
+    result.push_back("```");
+    applyBlockSelection(block, result, true);
+}
+
+void MarkdownFileEditor::makeParagraph()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        LinePattern pattern = analyzeLinePattern(line);
+        std::string content = trimLeft(std::string_view(line).substr(pattern.markerEnd));
+        line = pattern.indent + content;
+    }
+
+    auto isBlank = [&](const std::string &line) { return trimLeft(line).empty(); };
+    while (!lines.empty() && isBlank(lines.front()))
+        lines.erase(lines.begin());
+    while (!lines.empty() && isBlank(lines.back()))
+        lines.pop_back();
+    if (lines.empty())
+        lines.emplace_back();
+
+    bool needBefore = false;
+    if (block.start > 0)
+    {
+        uint prevStart = lineMove(block.start, -1);
+        if (prevStart < block.start)
+        {
+            std::string prevLine = readRange(prevStart, lineEnd(prevStart));
+            while (!prevLine.empty() && (prevLine.back() == '\n' || prevLine.back() == '\r'))
+                prevLine.pop_back();
+            if (!lineIsWhitespace(prevLine))
+                needBefore = true;
+        }
+    }
+
+    bool needAfter = false;
+    if (block.end < bufLen)
+    {
+        uint nextStart = block.end;
+        std::string nextLine = readRange(nextStart, lineEnd(nextStart));
+        while (!nextLine.empty() && (nextLine.back() == '\n' || nextLine.back() == '\r'))
+            nextLine.pop_back();
+        if (!lineIsWhitespace(nextLine))
+            needAfter = true;
+    }
+
+    if (needBefore && (lines.empty() || !isBlank(lines.front())))
+        lines.insert(lines.begin(), std::string());
+    if (needAfter && (lines.empty() || !isBlank(lines.back())))
+        lines.push_back(std::string());
+
+    applyBlockSelection(block, lines, true);
+}
+
+void MarkdownFileEditor::insertLineBreak()
+{
+    lock();
+    insertText("  \n", 3, False);
+    unlock();
+    onContentModified();
+}
+
+void MarkdownFileEditor::toggleBlockQuote()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    bool allQuoted = true;
+    for (const auto &line : lines)
+    {
+        if (trimLeft(line).empty())
+            continue;
+        LinePattern pattern = analyzeLinePattern(line);
+        if (pattern.blockquote.empty())
+        {
+            allQuoted = false;
+            break;
+        }
+    }
+
+    for (auto &line : lines)
+    {
+        LinePattern pattern = analyzeLinePattern(line);
+        if (allQuoted)
+        {
+            if (!pattern.blockquote.empty())
+            {
+                std::size_t removeStart = pattern.indent.size();
+                std::size_t removeEnd = removeStart + pattern.blockquote.size();
+                line = line.substr(0, removeStart) + line.substr(removeEnd);
+            }
+        }
+        else
+        {
+            if (pattern.blockquote.empty())
+                line = pattern.indent + "> " + line.substr(pattern.indent.size());
+        }
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::toggleBulletList()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        if (trimLeft(line).empty())
+            continue;
+        LinePattern pattern = analyzeLinePattern(line);
+        std::string content = trimLeft(std::string_view(line).substr(pattern.markerEnd));
+        line = pattern.indent + pattern.blockquote + "- " + content;
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::toggleNumberedList()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        if (trimLeft(line).empty())
+            continue;
+        LinePattern pattern = analyzeLinePattern(line);
+        std::string content = trimLeft(std::string_view(line).substr(pattern.markerEnd));
+        line = pattern.indent + pattern.blockquote + "1. " + content;
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::convertToTaskList()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        if (trimLeft(line).empty())
+            continue;
+        LinePattern pattern = analyzeLinePattern(line);
+        bool checked = false;
+        std::size_t bracket = line.find('[', pattern.markerStart);
+        if (bracket != std::string::npos && bracket + 2 < line.size())
+        {
+            char mark = line[bracket + 1];
+            if (mark == 'x' || mark == 'X')
+                checked = true;
+        }
+        std::string content = trimLeft(std::string_view(line).substr(pattern.markerEnd));
+        line = pattern.indent + pattern.blockquote + "- [" + std::string(1, checked ? 'x' : ' ') + "] " + content;
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::toggleTaskCheckbox()
+{
+    uint lineStartPtr = lineStart(curPtr);
+    uint lineEndPtr = lineEnd(lineStartPtr);
+    std::string line = readRange(lineStartPtr, lineEndPtr);
+    bool hadNewline = false;
+    if (!line.empty() && line.back() == '\n')
+    {
+        hadNewline = true;
+        line.pop_back();
+    }
+
+    LinePattern pattern = analyzeLinePattern(line);
+    std::size_t bracket = line.find('[', pattern.markerStart);
+    if (bracket == std::string::npos || bracket + 2 >= line.size())
+        return;
+    if (line[bracket + 2] != ']')
+        return;
+
+    char current = line[bracket + 1];
+    if (current == 'x' || current == 'X')
+        line[bracket + 1] = ' ';
+    else if (current == ' ')
+        line[bracket + 1] = 'x';
+    else
+        return;
+
+    if (hadNewline)
+        line.push_back('\n');
+
+    lock();
+    replaceRange(lineStartPtr, lineEndPtr, line);
+    unlock();
+    onContentModified();
+}
+
+void MarkdownFileEditor::increaseIndent()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+        line.insert(line.begin(), { ' ', ' ' });
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::decreaseIndent()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> lines = block.lines;
+    for (auto &line : lines)
+    {
+        if (!line.empty() && line[0] == '\t')
+            line.erase(line.begin());
+        else if (line.size() >= 2 && line[0] == ' ' && line[1] == ' ')
+            line.erase(line.begin(), line.begin() + 2);
+        else if (!line.empty() && line[0] == ' ')
+            line.erase(line.begin());
+    }
+    applyBlockSelection(block, lines, block.trailingNewline);
+}
+
+void MarkdownFileEditor::convertToDefinitionList()
+{
+    BlockSelection block = captureSelectedLines();
+    std::vector<std::string> result;
+    result.reserve(block.lines.size() * 2);
+    for (const auto &line : block.lines)
+    {
+        std::string trimmedLine = trim(std::string_view(line));
+        if (trimmedLine.empty())
+        {
+            result.push_back("");
+            continue;
+        }
+        std::size_t colon = trimmedLine.find(':');
+        if (colon == std::string::npos)
+        {
+            result.push_back(trimmedLine);
+            continue;
+        }
+        std::size_t indentLen = 0;
+        while (indentLen < line.size() && (line[indentLen] == ' ' || line[indentLen] == '\t'))
+            ++indentLen;
+        std::string indent = line.substr(0, indentLen);
+        std::string term = trim(std::string_view(trimmedLine).substr(0, colon));
+        std::string definition = trim(std::string_view(trimmedLine).substr(colon + 1));
+        result.push_back(indent + term);
+        result.push_back(indent + ": " + definition);
+    }
+    applyBlockSelection(block, result, block.trailingNewline);
 }
 
 void MarkdownFileEditor::removeFormatting()
@@ -470,6 +1097,147 @@ void MarkdownFileEditor::insertImage()
     std::ostringstream out;
     out << "![" << alt << "](" << url << ')';
     insertRichInline("", "", out.str());
+}
+
+void MarkdownFileEditor::insertReferenceLink()
+{
+    std::string selectionText;
+    if (hasSelection())
+        selectionText = readRange(std::min(selStart, selEnd), std::max(selStart, selEnd));
+    if (selectionText.empty())
+    {
+        selectionText = promptForText("Reference Link", "Link text", "");
+        if (selectionText.empty())
+            return;
+    }
+
+    std::string url = promptForText("Reference Link", "Target URL", "https://");
+    if (url.empty())
+        return;
+
+    std::string defaultId = generateUniqueReferenceId("ref");
+    std::string referenceId = promptForText("Reference Link", "Reference ID", defaultId);
+    if (referenceId.empty())
+        return;
+
+    std::string title = promptForText("Reference Link", "Title (optional)", "");
+
+    std::ostringstream link;
+    link << '[' << selectionText << "][" << referenceId << ']';
+
+    lock();
+    if (hasSelection())
+        deleteSelect();
+    insertText(link.str().c_str(), link.str().size(), False);
+    unlock();
+    onContentModified();
+
+    std::ostringstream def;
+    def << '[' << referenceId << "]: " << url;
+    if (!title.empty())
+        def << " \"" << title << "\"";
+    def << '\n';
+    appendDefinition(def.str());
+}
+
+void MarkdownFileEditor::autoLinkSelection()
+{
+    if (!ensureSelection())
+        return;
+    uint start = std::min(selStart, selEnd);
+    uint end = std::max(selStart, selEnd);
+    std::string text = readRange(start, end);
+    auto isUrl = [&](const std::string &value) {
+        return value.rfind("http://", 0) == 0 || value.rfind("https://", 0) == 0 || value.rfind("ftp://", 0) == 0;
+    };
+    auto isEmail = [&](const std::string &value) {
+        auto at = value.find('@');
+        return at != std::string::npos && value.find('.', at) != std::string::npos;
+    };
+
+    if (text.size() >= 2 && text.front() == '<' && text.back() == '>')
+    {
+        std::string inner = text.substr(1, text.size() - 2);
+        if (isUrl(inner) || isEmail(inner))
+        {
+            lock();
+            replaceRange(start, end, inner);
+            unlock();
+            setSelect(start, start + inner.size(), True);
+            onContentModified();
+        }
+        return;
+    }
+
+    if (!isUrl(text) && !isEmail(text))
+        return;
+
+    std::string wrapped = '<' + text + '>';
+    lock();
+    replaceRange(start, end, wrapped);
+    unlock();
+    setSelect(start, start + wrapped.size(), True);
+    onContentModified();
+}
+
+void MarkdownFileEditor::insertFootnote()
+{
+    std::string note = promptForText("Footnote", "Footnote text", "");
+    if (note.empty())
+        return;
+
+    std::string id = generateUniqueFootnoteId();
+    std::string marker = "[^" + id + "]";
+
+    lock();
+    if (hasSelection())
+        deleteSelect();
+    insertText(marker.c_str(), marker.size(), False);
+    unlock();
+    onContentModified();
+
+    std::ostringstream definition;
+    definition << "[^" << id << "]: " << note << '\n';
+    appendDefinition(definition.str());
+}
+
+void MarkdownFileEditor::insertHorizontalRule()
+{
+    std::string insertion;
+    if (curPtr > 0 && bufChar(curPtr - 1) != '\n')
+        insertion.push_back('\n');
+    insertion.append("---\n");
+    if (curPtr >= bufLen || bufChar(curPtr) != '\n')
+        insertion.push_back('\n');
+
+    lock();
+    insertText(insertion.c_str(), insertion.size(), False);
+    unlock();
+    onContentModified();
+}
+
+void MarkdownFileEditor::escapeSelection()
+{
+    if (!ensureSelection())
+        return;
+    uint start = std::min(selStart, selEnd);
+    uint end = std::max(selStart, selEnd);
+    std::string text = readRange(start, end);
+    std::string escaped;
+    escaped.reserve(text.size() * 2);
+    const std::string specials = "\\`*_{}[]()#+-.!";
+    for (char ch : text)
+    {
+        if (ch == '\\' || specials.find(ch) != std::string::npos)
+            escaped.push_back('\\');
+        escaped.push_back(ch);
+    }
+
+    lock();
+    replaceRange(start, end, escaped);
+    unlock();
+    setSelect(start, start + escaped.size(), True);
+    onContentModified();
 }
 
 bool MarkdownFileEditor::locateTableContext(TableContext &context)
@@ -894,6 +1662,193 @@ void MarkdownFileEditor::tableAlignColumn(MarkdownTableAlignment alignment)
     alignTableColumn(context, alignment);
 }
 
+void MarkdownFileEditor::reflowParagraphs()
+{
+    if (!hasSelection())
+        return;
+    uint start = std::min(selStart, selEnd);
+    uint end = std::max(selStart, selEnd);
+    std::string text = readRange(start, end);
+    if (text.empty())
+        return;
+
+    std::vector<std::string> paragraphs;
+    std::vector<std::string> separators;
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        std::size_t next = text.find("\n\n", pos);
+        if (next == std::string::npos)
+        {
+            paragraphs.push_back(text.substr(pos));
+            separators.emplace_back();
+            break;
+        }
+        paragraphs.push_back(text.substr(pos, next - pos));
+        std::size_t sepEnd = next;
+        while (sepEnd < text.size() && text[sepEnd] == '\n')
+            ++sepEnd;
+        separators.push_back(text.substr(next, sepEnd - next));
+        pos = sepEnd;
+    }
+    if (paragraphs.empty())
+    {
+        paragraphs.push_back(text);
+        separators.emplace_back();
+    }
+
+    auto reflowParagraph = [](const std::string &paragraph) {
+        std::istringstream stream(paragraph);
+        std::string word;
+        std::string output;
+        int lineLength = 0;
+        while (stream >> word)
+        {
+            if (lineLength == 0)
+            {
+                output += word;
+                lineLength = static_cast<int>(word.size());
+            }
+            else if (lineLength + 1 + static_cast<int>(word.size()) > 80)
+            {
+                output.push_back('\n');
+                output += word;
+                lineLength = static_cast<int>(word.size());
+            }
+            else
+            {
+                output.push_back(' ');
+                output += word;
+                lineLength += 1 + static_cast<int>(word.size());
+            }
+        }
+        return output;
+    };
+
+    std::string result;
+    for (std::size_t i = 0; i < paragraphs.size(); ++i)
+    {
+        std::string reflowed = reflowParagraph(paragraphs[i]);
+        if (!result.empty() && result.back() != '\n' && !reflowed.empty())
+            result.push_back('\n');
+        result += reflowed;
+        result += separators[i];
+    }
+
+    lock();
+    replaceRange(start, end, result);
+    unlock();
+    setSelect(start, start + result.size(), True);
+    onContentModified();
+}
+
+void MarkdownFileEditor::formatDocument()
+{
+    std::string text = readRange(0, bufLen);
+    std::istringstream input(text);
+    std::ostringstream output;
+    std::string line;
+    bool previousBlank = false;
+
+    while (std::getline(input, line))
+    {
+        std::size_t endPos = line.size();
+        std::size_t trailingSpaces = 0;
+        while (endPos > 0 && (line[endPos - 1] == ' ' || line[endPos - 1] == '\t'))
+        {
+            ++trailingSpaces;
+            --endPos;
+        }
+        std::string trimmed = line.substr(0, endPos);
+        if (trailingSpaces >= 2)
+            trimmed.append("  ");
+
+        bool isBlank = trimLeft(trimmed).empty();
+        if (isBlank)
+        {
+            if (!previousBlank)
+            {
+                output << '\n';
+                previousBlank = true;
+            }
+            continue;
+        }
+
+        if (previousBlank && output.tellp() > 0 && output.str().back() != '\n')
+            output << '\n';
+        previousBlank = false;
+        output << trimmed << '\n';
+    }
+
+    std::string formatted = output.str();
+    if (!formatted.empty() && formatted.back() != '\n')
+        formatted.push_back('\n');
+
+    lock();
+    replaceRange(0, bufLen, formatted);
+    unlock();
+    onContentModified();
+}
+
+void MarkdownFileEditor::toggleSmartListContinuation()
+{
+    smartListContinuation = !smartListContinuation;
+}
+
+bool MarkdownFileEditor::continueListOnEnter(TEvent &event)
+{
+    if (!smartListContinuation)
+        return false;
+    if (hasSelection())
+        return false;
+    if (event.what != evKeyDown || event.keyDown.keyCode != kbEnter)
+        return false;
+
+    uint lineStartPtr = lineStart(curPtr);
+    uint lineEndPtr = lineEnd(lineStartPtr);
+    std::string line = readRange(lineStartPtr, lineEndPtr);
+    bool hadNewline = false;
+    if (!line.empty() && line.back() == '\n')
+    {
+        hadNewline = true;
+        line.pop_back();
+    }
+
+    LinePattern pattern = analyzeLinePattern(line);
+    if (!(pattern.hasBullet || pattern.hasOrdered || pattern.hasTask))
+        return false;
+
+    std::size_t contentStart = pattern.markerEnd;
+    std::string content = line.substr(contentStart);
+    bool emptyItem = trimLeft(content).empty() && curPtr >= lineStartPtr + contentStart;
+
+    if (emptyItem)
+    {
+        lock();
+        replaceRange(lineStartPtr + pattern.indent.size() + pattern.blockquote.size(),
+                     lineStartPtr + pattern.markerEnd, "");
+        unlock();
+        onContentModified();
+        return false;
+    }
+
+    std::string marker;
+    if (pattern.hasTask)
+        marker = "- [ ] ";
+    else if (pattern.hasBullet)
+        marker = std::string(1, pattern.bulletChar) + " ";
+    else
+        marker = "1. ";
+
+    std::string prefix = pattern.indent + pattern.blockquote + marker;
+
+    TFileEditor::handleEvent(event);
+    event.what = evNothing;
+    insertText(prefix.c_str(), prefix.size(), False);
+    onContentModified();
+    return true;
+}
+
 void MarkdownFileEditor::insertTableRow(TableContext &context, bool below)
 {
     int columns = context.columnCount();
@@ -1130,6 +2085,9 @@ void MarkdownFileEditor::alignTableColumn(TableContext &context, MarkdownTableAl
 
 void MarkdownFileEditor::handleEvent(TEvent &event)
 {
+    if (continueListOnEnter(event))
+        return;
+
     if (event.what == evCommand)
     {
         switch (event.message.command)
@@ -1155,6 +2113,14 @@ void MarkdownFileEditor::handleEvent(TEvent &event)
             clearHeading();
             clearEvent(event);
             return;
+        case cmMakeParagraph:
+            makeParagraph();
+            clearEvent(event);
+            return;
+        case cmInsertLineBreak:
+            insertLineBreak();
+            clearEvent(event);
+            return;
         case cmBold:
             applyBold();
             clearEvent(event);
@@ -1167,38 +2133,80 @@ void MarkdownFileEditor::handleEvent(TEvent &event)
             applyBoldItalic();
             clearEvent(event);
             return;
+        case cmStrikethrough:
+            applyStrikethrough();
+            clearEvent(event);
+            return;
+        case cmInlineCode:
+            applyInlineCode();
+            clearEvent(event);
+            return;
+        case cmCodeBlock:
+            toggleCodeBlock();
+            clearEvent(event);
+            return;
         case cmRemoveFormatting:
             removeFormatting();
             clearEvent(event);
             return;
-        case cmBlockQuote:
-            applyBlockQuote();
+        case cmToggleBlockQuote:
+            toggleBlockQuote();
             clearEvent(event);
             return;
-        case cmBlockQuoteClear:
-            removeBlockQuote();
+        case cmToggleBulletList:
+            toggleBulletList();
             clearEvent(event);
             return;
-        case cmInsertBulletList:
-        {
-            int count = promptForCount("Bullet List");
-            insertBulletList(count);
+        case cmToggleNumberedList:
+            toggleNumberedList();
             clearEvent(event);
             return;
-        }
-        case cmInsertNumberedList:
-        {
-            int count = promptForCount("Numbered List");
-            insertNumberedList(count);
+        case cmConvertTaskList:
+            convertToTaskList();
             clearEvent(event);
             return;
-        }
+        case cmToggleTaskCheckbox:
+            toggleTaskCheckbox();
+            clearEvent(event);
+            return;
+        case cmIncreaseIndent:
+            increaseIndent();
+            clearEvent(event);
+            return;
+        case cmDecreaseIndent:
+            decreaseIndent();
+            clearEvent(event);
+            return;
+        case cmDefinitionList:
+            convertToDefinitionList();
+            clearEvent(event);
+            return;
         case cmInsertLink:
             insertLink();
             clearEvent(event);
             return;
+        case cmInsertReferenceLink:
+            insertReferenceLink();
+            clearEvent(event);
+            return;
+        case cmAutoLinkSelection:
+            autoLinkSelection();
+            clearEvent(event);
+            return;
         case cmInsertImage:
             insertImage();
+            clearEvent(event);
+            return;
+        case cmInsertFootnote:
+            insertFootnote();
+            clearEvent(event);
+            return;
+        case cmInsertHorizontalRule:
+            insertHorizontalRule();
+            clearEvent(event);
+            return;
+        case cmEscapeSelection:
+            escapeSelection();
             clearEvent(event);
             return;
         case cmInsertTable:
@@ -1251,6 +2259,18 @@ void MarkdownFileEditor::handleEvent(TEvent &event)
             return;
         case cmTableAlignNumber:
             tableAlignColumn(MarkdownTableAlignment::Number);
+            clearEvent(event);
+            return;
+        case cmReflowParagraphs:
+            reflowParagraphs();
+            clearEvent(event);
+            return;
+        case cmFormatDocument:
+            formatDocument();
+            clearEvent(event);
+            return;
+        case cmToggleSmartList:
+            toggleSmartListContinuation();
             clearEvent(event);
             return;
         default:
@@ -1664,16 +2684,30 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
     case cmHeading5:
     case cmHeading6:
     case cmClearHeading:
+    case cmMakeParagraph:
+    case cmInsertLineBreak:
     case cmBold:
     case cmItalic:
     case cmBoldItalic:
+    case cmStrikethrough:
+    case cmInlineCode:
+    case cmCodeBlock:
     case cmRemoveFormatting:
-    case cmBlockQuote:
-    case cmBlockQuoteClear:
-    case cmInsertBulletList:
-    case cmInsertNumberedList:
+    case cmToggleBlockQuote:
+    case cmToggleBulletList:
+    case cmToggleNumberedList:
+    case cmConvertTaskList:
+    case cmToggleTaskCheckbox:
+    case cmIncreaseIndent:
+    case cmDecreaseIndent:
+    case cmDefinitionList:
     case cmInsertLink:
+    case cmInsertReferenceLink:
+    case cmAutoLinkSelection:
     case cmInsertImage:
+    case cmInsertFootnote:
+    case cmInsertHorizontalRule:
+    case cmEscapeSelection:
     case cmInsertTable:
     case cmTableInsertRowAbove:
     case cmTableInsertRowBelow:
@@ -1687,6 +2721,9 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
     case cmTableAlignCenter:
     case cmTableAlignRight:
     case cmTableAlignNumber:
+    case cmReflowParagraphs:
+    case cmFormatDocument:
+    case cmToggleSmartList:
         dispatchToEditor(event.message.command);
         break;
     case cmAbout:
@@ -1720,30 +2757,54 @@ TMenuBar *MarkdownEditorApp::initMenuBar(TRect r)
                             *new TMenuItem("~F~ind...", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
                             *new TMenuItem("~R~eplace...", cmReplace, kbCtrlR, hcNoContext, "Ctrl-R") +
                             *new TMenuItem("Find ~N~ext", cmSearchAgain, kbCtrlL, hcNoContext, "Ctrl-L") +
-                        *new TSubMenu("~S~tyle", kbAltS) +
-                            *new TMenuItem("Heading ~1", cmHeading1, kbNoKey) +
-                            *new TMenuItem("Heading ~2", cmHeading2, kbNoKey) +
-                            *new TMenuItem("Heading ~3", cmHeading3, kbNoKey) +
-                            *new TMenuItem("Heading ~4", cmHeading4, kbNoKey) +
-                            *new TMenuItem("Heading ~5", cmHeading5, kbNoKey) +
-                            *new TMenuItem("Heading ~6", cmHeading6, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("~C~lear heading", cmClearHeading, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("~B~old", cmBold, kbCtrlB, hcNoContext, "Ctrl-B") +
-                            *new TMenuItem("~I~talic", cmItalic, kbCtrlI, hcNoContext, "Ctrl-I") +
-                            *new TMenuItem("Bold + Italic", cmBoldItalic, kbNoKey) +
-                            *new TMenuItem("~R~emove formatting", cmRemoveFormatting, kbNoKey) +
-                            newLine() +
-                            *new TMenuItem("Block ~q~uote", cmBlockQuote, kbNoKey) +
-                            *new TMenuItem("Remove blockquote", cmBlockQuoteClear, kbNoKey) +
+                        *new TSubMenu("F~o~rmat", kbAltO) +
+                            *new TSubMenu("~H~eadings", kbNoKey) +
+                                *new TMenuItem("Heading ~1", cmHeading1, kbNoKey) +
+                                *new TMenuItem("Heading ~2", cmHeading2, kbNoKey) +
+                                *new TMenuItem("Heading ~3", cmHeading3, kbNoKey) +
+                                *new TMenuItem("Heading ~4", cmHeading4, kbNoKey) +
+                                *new TMenuItem("Heading ~5", cmHeading5, kbNoKey) +
+                                *new TMenuItem("Heading ~6", cmHeading6, kbNoKey) +
+                                newLine() +
+                                *new TMenuItem("C~l~ear heading", cmClearHeading, kbNoKey) +
+                            *new TSubMenu("~T~ext", kbNoKey) +
+                                *new TMenuItem("~B~old", cmBold, kbCtrlB, hcNoContext, "Ctrl-B") +
+                                *new TMenuItem("~I~talic", cmItalic, kbCtrlI, hcNoContext, "Ctrl-I") +
+                                *new TMenuItem("Bold + Italic", cmBoldItalic, kbNoKey) +
+                                *new TMenuItem("~S~trikethrough", cmStrikethrough, kbNoKey) +
+                                *new TMenuItem("Remove Formatting", cmRemoveFormatting, kbNoKey) +
+                            *new TSubMenu("~C~ode", kbNoKey) +
+                                *new TMenuItem("Inline Code", cmInlineCode, kbCtrlK, hcNoContext, "Ctrl-K") +
+                                *new TMenuItem("Code Block...", cmCodeBlock, kbNoKey) +
+                        *new TSubMenu("~S~tructure", kbAltS) +
+                            *new TSubMenu("~B~locks", kbNoKey) +
+                                *new TMenuItem("Make Paragraph", cmMakeParagraph, kbNoKey) +
+                                *new TMenuItem("Toggle Blockquote", cmToggleBlockQuote, kbNoKey) +
+                            *new TSubMenu("~L~ists", kbNoKey) +
+                                *new TMenuItem("Bulleted List", cmToggleBulletList, kbNoKey) +
+                                *new TMenuItem("Numbered List", cmToggleNumberedList, kbNoKey) +
+                                *new TMenuItem("Task List", cmConvertTaskList, kbNoKey) +
+                                *new TMenuItem("Toggle Checkbox", cmToggleTaskCheckbox, kbNoKey) +
+                                *new TMenuItem("Definition List", cmDefinitionList, kbNoKey) +
+                            *new TSubMenu("I~n~dent/Nest", kbNoKey) +
+                                *new TMenuItem("Increase Indent", cmIncreaseIndent, kbNoKey) +
+                                *new TMenuItem("Decrease Indent", cmDecreaseIndent, kbNoKey) +
                         *new TSubMenu("~I~nsert", kbAltI) +
-                            *new TMenuItem("Bullet list...", cmInsertBulletList, kbNoKey) +
-                            *new TMenuItem("Numbered list...", cmInsertNumberedList, kbNoKey) +
-                            *new TMenuItem("Link...", cmInsertLink, kbNoKey) +
-                            *new TMenuItem("Image...", cmInsertImage, kbNoKey) +
-                            *new TMenuItem("Table...", cmInsertTable, kbNoKey) +
-                        *new TSubMenu("~T~able", kbAltT) +
+                            *new TSubMenu("~L~ink", kbNoKey) +
+                                *new TMenuItem("Insert/Edit Link...", cmInsertLink, kbNoKey) +
+                                *new TMenuItem("Reference Link...", cmInsertReferenceLink, kbNoKey) +
+                                *new TMenuItem("Auto-link Selection", cmAutoLinkSelection, kbNoKey) +
+                            *new TSubMenu("~M~edia", kbNoKey) +
+                                *new TMenuItem("Image...", cmInsertImage, kbNoKey) +
+                            *new TSubMenu("~S~pecial", kbNoKey) +
+                                *new TMenuItem("Line Break", cmInsertLineBreak, kbNoKey) +
+                                *new TMenuItem("Horizontal Rule", cmInsertHorizontalRule, kbNoKey) +
+                                *new TMenuItem("Escape Selection", cmEscapeSelection, kbNoKey) +
+                            *new TSubMenu("Re~f~erences", kbNoKey) +
+                                *new TMenuItem("Footnote", cmInsertFootnote, kbNoKey) +
+                            *new TSubMenu("~T~able", kbNoKey) +
+                                *new TMenuItem("Insert Table...", cmInsertTable, kbNoKey) +
+                        *new TSubMenu("Ta~b~le", kbAltB) +
                             *new TMenuItem("Insert row ~a~bove", cmTableInsertRowAbove, kbNoKey) +
                             *new TMenuItem("Insert row ~b~elow", cmTableInsertRowBelow, kbNoKey) +
                             *new TMenuItem("Delete row", cmTableDeleteRow, kbNoKey) +
@@ -1762,8 +2823,16 @@ TMenuBar *MarkdownEditorApp::initMenuBar(TRect r)
                         *new TSubMenu("~V~iew", kbAltV) +
                             *new TMenuItem("Toggle ~w~rap", cmToggleWrap, kbCtrlW, hcNoContext, "Ctrl-W") +
                             *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbCtrlM, hcNoContext, "Ctrl-M") +
+                        *new TSubMenu("T~o~ols", kbAltL) +
+                            *new TSubMenu("~F~ormatting", kbNoKey) +
+                                *new TMenuItem("Reflow Paragraphs", cmReflowParagraphs, kbNoKey) +
+                                *new TMenuItem("Format Document", cmFormatDocument, kbNoKey) +
+                        *new TSubMenu("~P~references", kbAltP) +
+                            *new TSubMenu("~E~diting", kbNoKey) +
+                                *new TMenuItem("Smart List Continuation", cmToggleSmartList, kbNoKey) +
                         *new TSubMenu("~H~elp", kbAltH) +
                             *new TMenuItem("~A~bout", cmAbout, kbNoKey));
+
 }
 
 TStatusLine *MarkdownEditorApp::initStatusLine(TRect r)
