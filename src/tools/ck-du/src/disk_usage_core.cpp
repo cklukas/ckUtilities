@@ -5,13 +5,17 @@
 #include "disk_usage_core.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cerrno>
+#include <cctype>
+#include <cstdio>
 #include <ctime>
 #include <fcntl.h>
 #include <grp.h>
 #include <iomanip>
+#include <map>
 #include <pwd.h>
 #include <sstream>
 #include <string>
@@ -59,6 +63,62 @@ struct ScanContext
     std::uintmax_t rootDevice = 0;
     fs::path rootPath;
 };
+
+std::string trimWhitespace(const std::string &value)
+{
+    std::size_t start = 0;
+    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
+        ++start;
+    std::size_t end = value.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
+        --end;
+    return value.substr(start, end - start);
+}
+
+std::string shellEscape(const std::string &text)
+{
+    std::string escaped = "'";
+    for (char ch : text)
+    {
+        if (ch == '\'')
+            escaped += "'\\''";
+        else
+            escaped.push_back(ch);
+    }
+    escaped.push_back('\'');
+    return escaped;
+}
+
+std::string extensionFallback(const fs::path &path)
+{
+    std::string ext = path.extension().string();
+    if (!ext.empty())
+    {
+        std::string lowered;
+        lowered.reserve(ext.size());
+        for (char ch : ext)
+            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        return lowered;
+    }
+    return "unknown";
+}
+
+std::string detectFileType(const fs::path &path)
+{
+    std::string command = "file -b --mime-type " + shellEscape(path.string());
+    std::array<char, 256> buffer{};
+    std::string output;
+    if (FILE *pipe = popen(command.c_str(), "r"))
+    {
+        while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe))
+            output.append(buffer.data());
+        pclose(pipe);
+        output = trimWhitespace(output);
+        if (!output.empty())
+            return output;
+    }
+    return extensionFallback(path);
+}
 
 bool hasNoDumpFlag(const struct stat &sb)
 {
@@ -575,6 +635,174 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
         }
     }
 
+    return files;
+}
+
+std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &directory, bool recursive,
+                                                const BuildDirectoryTreeOptions &options)
+{
+    std::map<std::string, FileTypeSummary> summaries;
+
+    std::error_code ec;
+    fs::path basePath = fs::absolute(directory, ec);
+    if (ec)
+        basePath = directory;
+
+    fs::path scanPath = basePath;
+    if (options.followCommandLineSymlinks)
+    {
+        std::error_code symEc;
+        if (fs::is_symlink(basePath, symEc))
+        {
+            fs::path resolved = fs::weakly_canonical(basePath, symEc);
+            if (!symEc)
+                scanPath = resolved;
+        }
+    }
+    scanPath = fs::absolute(scanPath, ec);
+    if (ec)
+        scanPath = basePath;
+
+    ScanContext context = makeScanContext(scanPath, options);
+    context.rootPath = scanPath;
+
+    auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+        if (shouldIgnorePath(path, context))
+            return;
+        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+            return;
+        if (options.stayOnFilesystem && context.rootDevice != 0 &&
+            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            return;
+        if (!options.countHardLinksMultipleTimes)
+        {
+            FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+            auto [it, inserted] = context.visited.insert(identity);
+            if (!inserted)
+                return;
+        }
+        std::uintmax_t size = fileSizeFromStat(sb);
+        if (!passesThreshold(size, options))
+            return;
+        std::string type = detectFileType(path);
+        FileTypeSummary &summary = summaries[type];
+        if (summary.type.empty())
+            summary.type = type;
+        summary.totalSize += size;
+        ++summary.count;
+    };
+
+    auto shouldSkipDirectory = [&](const fs::path &path, const struct stat &sb, bool isSymlink) {
+        if (shouldIgnorePath(path, context))
+            return true;
+        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+            return true;
+        if (options.stayOnFilesystem && context.rootDevice != 0 &&
+            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            return true;
+        if (isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            return true;
+        return false;
+    };
+
+    if (recursive)
+    {
+        fs::directory_options dirOptions = fs::directory_options::skip_permission_denied;
+        if (options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            dirOptions |= fs::directory_options::follow_directory_symlink;
+        fs::recursive_directory_iterator it(scanPath, dirOptions, ec);
+        fs::recursive_directory_iterator end;
+        if (ec)
+            return {};
+
+        for (; it != end; it.increment(ec))
+        {
+            if (ec)
+            {
+                reportError(context, it->path(), ec);
+                ec.clear();
+                continue;
+            }
+
+            const fs::directory_entry &entry = *it;
+            const fs::path &path = entry.path();
+
+            struct stat sb;
+            if (stat(path.c_str(), &sb) != 0)
+            {
+                reportError(context, path, std::error_code(errno, std::generic_category()));
+                continue;
+            }
+
+            std::error_code entryEc;
+            bool isSymlink = entry.is_symlink(entryEc) && !entryEc;
+            bool isDirectory = S_ISDIR(sb.st_mode);
+
+            if (isDirectory)
+            {
+                if (shouldSkipDirectory(path, sb, isSymlink))
+                    it.disable_recursion_pending();
+                continue;
+            }
+
+            if (!entry.is_regular_file(entryEc) || entryEc)
+                continue;
+
+            considerFile(path, sb);
+        }
+    }
+    else
+    {
+        fs::directory_options dirOptions = fs::directory_options::skip_permission_denied;
+        if (options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+            dirOptions |= fs::directory_options::follow_directory_symlink;
+        fs::directory_iterator it(scanPath, dirOptions, ec);
+        fs::directory_iterator end;
+        if (ec)
+            return {};
+
+        for (; it != end; it.increment(ec))
+        {
+            if (ec)
+            {
+                reportError(context, scanPath, ec);
+                ec.clear();
+                continue;
+            }
+
+            const fs::directory_entry &entry = *it;
+            const fs::path &path = entry.path();
+            std::error_code entryEc;
+            if (!entry.is_regular_file(entryEc) || entryEc)
+                continue;
+
+            struct stat sb;
+            if (stat(path.c_str(), &sb) != 0)
+            {
+                reportError(context, path, std::error_code(errno, std::generic_category()));
+                continue;
+            }
+
+            considerFile(path, sb);
+        }
+    }
+
+    std::vector<FileTypeSummary> result;
+    result.reserve(summaries.size());
+    for (auto &[type, summary] : summaries)
+        result.push_back(summary);
+    return result;
+}
+
+std::vector<FileEntry> listFilesByType(const std::filesystem::path &directory, bool recursive,
+                                       const std::string &type,
+                                       const BuildDirectoryTreeOptions &options)
+{
+    std::vector<FileEntry> files = listFiles(directory, recursive, options);
+    files.erase(std::remove_if(files.begin(), files.end(), [&](const FileEntry &entry) {
+                     return detectFileType(entry.path) != type;
+                 }),
+                 files.end());
     return files;
 }
 
