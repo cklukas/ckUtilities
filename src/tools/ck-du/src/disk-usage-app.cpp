@@ -23,6 +23,8 @@
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
+#include "ck/about_dialog.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -42,7 +44,8 @@
 
 using namespace ck::du;
 
-static constexpr const char *kDeveloperName = "Dr. C. Klukas";
+static constexpr const char *kAboutDescription =
+    "Analyze directory and file storage utilization.";
 
 static const ushort cmViewFiles = 2001;
 static const ushort cmViewFilesRecursive = 2002;
@@ -1016,9 +1019,7 @@ void DiskUsageApp::handleEvent(TEvent &event)
             break;
         case cmAbout:
         {
-            std::string msg = std::string("ck-du ") + CK_DU_VERSION +
-                              "\nDeveloper: " + kDeveloperName;
-            messageBox(msg.c_str(), mfInformation | mfOKButton);
+            ck::ui::showAboutDialog("ck-du", CK_DU_VERSION, kAboutDescription);
             break;
         }
         default:
