@@ -345,10 +345,16 @@ private:
         auto *open = new TStatusItem("~F2~ Open", kbF2, cmOpen);
         auto *files = new TStatusItem("~F3~ Files", kbF3, cmViewFiles);
         auto *recursive = new TStatusItem("~Shift-F3~ Files+Sub", kbShiftF3, cmViewFilesRecursive);
+        auto *sortName = new TStatusItem("~Ctrl-N~ Sort Name", kbCtrlN, cmSortNameAsc);
+        auto *sortSize = new TStatusItem("~Ctrl-S~ Sort Size", kbCtrlS, cmSortSizeDesc);
+        auto *sortModified = new TStatusItem("~Ctrl-M~ Sort Modified", kbCtrlM, cmSortModifiedDesc);
         auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
         open->next = files;
         files->next = recursive;
-        recursive->next = quit;
+        recursive->next = sortName;
+        sortName->next = sortSize;
+        sortSize->next = sortModified;
+        sortModified->next = quit;
         items = open;
         defs->items = items;
         drawView();
