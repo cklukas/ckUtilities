@@ -33,6 +33,60 @@ Many GNU tools are extremely powerful but tricky to memorize. CkTools wraps a fo
 
 ---
 
+
+## Building CkTools
+
+### Prerequisites
+
+- **Compiler:** GCC ≥ 12 or Clang ≥ 15 (C++20 or newer)
+- **Build tools:** CMake ≥ 3.25, Ninja (recommended)
+- **Dependencies:** Turbo Vision (fetched automatically), GoogleTest (fetched automatically)
+
+### Quick Start
+
+Clone the repository and enter the directory:
+
+```bash
+git clone https://example.com/cktools.git
+cd cktools
+```
+
+#### Configure the build (choose a preset):
+
+```bash
+cmake --preset dev         # Debug build (recommended for development)
+cmake --preset release     # Optimized build
+```
+
+#### Build all tools:
+
+```bash
+cmake --build build/dev
+```
+
+#### Build and run a single tool (example: ckfind):
+
+```bash
+cmake --build build/dev -t ckfind
+./build/dev/src/tools/ckfind/ckfind --help
+```
+
+#### Run tests:
+
+```bash
+ctest --test-dir build/dev --output-on-failure
+```
+
+#### Install (to staging directory):
+
+```bash
+cmake --build build/release -t install
+```
+
+For more details, see `COMPILE.md`.
+
+---
+
 ## Roadmap (very early)
 
 1. Prototype **ckfind** and **cktext**.
