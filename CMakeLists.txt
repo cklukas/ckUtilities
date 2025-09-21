@@ -18,4 +18,11 @@ endif()
 
 add_subdirectory(src/tools)
 
+install(FILES README.md DESTINATION share/doc/ck-utilities)
+install(FILES LICENSE DESTINATION share/licenses/ck-utilities)
+
+if(APPLE)
+  install(PROGRAMS packaging/macos/install.sh DESTINATION share/ck-utilities)
+endif()
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/packaging/CPackConfig.cmake")

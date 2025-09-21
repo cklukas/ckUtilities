@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libncursesw5-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build ckjsonview
+        run: cmake --build build/dev --target ckjsonview
+
+      - name: Run tests
+        run: ctest --test-dir build/dev --output-on-failure
+        if: runner.os == 'Linux'
+
+  package-linux:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libncursesw5-dev rpm
+
+      - name: Configure
+        run: cmake --preset pkg
+
+      - name: Build packages
+        run: cmake --build build/pkg -t package
+
+      - name: List packages
+        run: ls -R1 build/pkg
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ck-utilities-linux-packages
+          path: |
+            build/pkg/*.deb
+            build/pkg/*.rpm
+            build/pkg/*.tar.gz
+
+  package-macos:
+    runs-on: macos-latest
+    needs: build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: |
+          brew update
+          brew install ninja
+
+      - name: Configure
+        run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+
+      - name: Build macOS archive
+        run: cmake --build build/pkg -t package
+
+      - name: List macOS package
+        run: ls -R1 build/pkg
+
+      - name: Upload macOS archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ck-utilities-macos-archive
+          path: build/pkg/*.tar.gz

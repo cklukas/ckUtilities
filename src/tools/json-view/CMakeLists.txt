@@ -27,6 +27,15 @@ target_include_directories(ck_json_view_core
 
 target_compile_features(ck_json_view_core PUBLIC cxx_std_20)
 
+install(TARGETS ck_json_view_core
+  ARCHIVE DESTINATION lib
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION include
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
 add_ck_tool(ckjsonview
   SOURCES
     src/json-view-app.cpp
