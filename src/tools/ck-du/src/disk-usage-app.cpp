@@ -30,6 +30,7 @@
 
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/launcher.hpp"
 #include "ck/options.hpp"
 
 #include <algorithm>
@@ -37,6 +38,7 @@
 #include <atomic>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <functional>
 #include <filesystem>
@@ -99,6 +101,7 @@ static const ushort cmOptionSaveDefaults = 2411;
 static const ushort cmPatternAdd = 2500;
 static const ushort cmPatternEdit = 2501;
 static const ushort cmPatternDelete = 2502;
+static const ushort cmReturnToLauncher = 2600;
 
 namespace
 {
@@ -992,6 +995,9 @@ private:
         auto *sortSize = new TStatusItem("~Ctrl-S~ Sort Size", kbCtrlS, cmSortSizeDesc);
         auto *sortModified = new TStatusItem("~Ctrl-M~ Sort Modified", kbCtrlM, cmSortModifiedDesc);
         auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+        TStatusItem *returnItem = nullptr;
+        if (ck::launcher::launchedFromCkLauncher())
+            returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
         open->next = files;
         files->next = recursive;
         recursive->next = types;
@@ -999,7 +1005,15 @@ private:
         typesRecursive->next = sortName;
         sortName->next = sortSize;
         sortSize->next = sortModified;
-        sortModified->next = quit;
+        if (returnItem)
+        {
+            sortModified->next = returnItem;
+            returnItem->next = quit;
+        }
+        else
+        {
+            sortModified->next = quit;
+        }
         return open;
     }
 
@@ -2298,6 +2312,9 @@ void DiskUsageApp::handleEvent(TEvent &event)
         case cmOptionSaveDefaults:
             saveDefaultOptions();
             break;
+        case cmReturnToLauncher:
+            std::exit(ck::launcher::kReturnToLauncherExitCode);
+            break;
         case cmAbout:
         {
             const auto &info = toolInfo();
@@ -2377,50 +2394,55 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
     auto *loadOptions = new TMenuItem("~L~oad Options...", cmOptionLoad, kbNoKey, hcNoContext);
     auto *saveOptions = new TMenuItem("~S~ave Options...", cmOptionSave, kbNoKey, hcNoContext);
     auto *saveDefaults = new TMenuItem("Save ~D~efaults", cmOptionSaveDefaults, kbNoKey, hcNoContext);
-    return new TMenuBar(r,
-                        *new TSubMenu("~F~ile", hcNoContext) +
-                            *new TMenuItem("~O~pen Directory", cmOpen, kbF2, hcOpen, "F2") +
-                            *new TMenuItem("~C~lose", cmClose, kbF4, hcClose, "F4") +
-                            newLine() +
-                            *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X") +
-                        *new TSubMenu("~S~ort", hcNoContext) +
-                            *sortUnsorted +
-                            *sortNameAsc +
-                            *sortNameDesc +
-                            *sortSizeDesc +
-                            *sortSizeAsc +
-                            *sortModifiedDesc +
-                            *sortModifiedAsc +
-                        *new TSubMenu("~U~nits", hcNoContext) +
-                            *unitAuto +
-                            *unitBytes +
-                            *unitKB +
-                            *unitMB +
-                            *unitGB +
-                            *unitTB +
-                            *unitBlocks +
-                        *new TSubMenu("Op~t~ions", hcNoContext) +
-                            *followNever +
-                            *followCommand +
-                            *followAll +
-                            newLine() +
-                            *hardLinks +
-                            *nodump +
-                            *errors +
-                            *oneFs +
-                            *ignore +
-                            *threshold +
-                            newLine() +
-                            *loadOptions +
-                            *saveOptions +
-                            *saveDefaults +
-                        *new TSubMenu("~V~iew", hcNoContext) +
-                            *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
-                            *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
-                            *new TMenuItem("~T~ypes", cmViewFileTypes, kbF4, hcNoContext, "F4") +
-                            *new TMenuItem("Types (~S~ubdirs)", cmViewFileTypesRecursive, kbShiftF4, hcNoContext, "Shift-F4") +
-                        *new TSubMenu("~H~elp", hcNoContext) +
-                            *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1"));
+    TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
+                         *new TMenuItem("~O~pen Directory", cmOpen, kbF2, hcOpen, "F2") +
+                         *new TMenuItem("~C~lose", cmClose, kbF4, hcClose, "F4") +
+                         newLine();
+    if (ck::launcher::launchedFromCkLauncher())
+        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
+    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X");
+
+    TMenuItem &menuChain = fileMenu +
+                           *new TSubMenu("~S~ort", hcNoContext) +
+                               *sortUnsorted +
+                               *sortNameAsc +
+                               *sortNameDesc +
+                               *sortSizeDesc +
+                               *sortSizeAsc +
+                               *sortModifiedDesc +
+                               *sortModifiedAsc +
+                           *new TSubMenu("~U~nits", hcNoContext) +
+                               *unitAuto +
+                               *unitBytes +
+                               *unitKB +
+                               *unitMB +
+                               *unitGB +
+                               *unitTB +
+                               *unitBlocks +
+                           *new TSubMenu("Op~t~ions", hcNoContext) +
+                               *followNever +
+                               *followCommand +
+                               *followAll +
+                               newLine() +
+                               *hardLinks +
+                               *nodump +
+                               *errors +
+                               *oneFs +
+                               *ignore +
+                               *threshold +
+                               newLine() +
+                               *loadOptions +
+                               *saveOptions +
+                               *saveDefaults +
+                           *new TSubMenu("~V~iew", hcNoContext) +
+                               *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
+                               *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
+                               *new TMenuItem("~T~ypes", cmViewFileTypes, kbF4, hcNoContext, "F4") +
+                               *new TMenuItem("Types (~S~ubdirs)", cmViewFileTypesRecursive, kbShiftF4, hcNoContext, "Shift-F4") +
+                           *new TSubMenu("~H~elp", hcNoContext) +
+                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+
+    return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
 TStatusLine *DiskUsageApp::initStatusLine(TRect r)

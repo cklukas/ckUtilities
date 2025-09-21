@@ -25,11 +25,13 @@
 
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/launcher.hpp"
 
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <string>
+#include <cstdlib>
 
 static constexpr std::string_view kToolId = "ck-json-view";
 
@@ -213,6 +215,7 @@ static const ushort cmLevel6 = 1106;
 static const ushort cmLevel7 = 1107;
 static const ushort cmLevel8 = 1108;
 static const ushort cmLevel9 = 1109;
+static const ushort cmReturnToLauncher = 1200;
 
 class JsonStatusLine : public TStatusLine
 {
@@ -227,9 +230,20 @@ public:
         {
             auto *i1 = new TStatusItem("~F2~ Open", kbF2, cmOpen);
             auto *i2 = new TStatusItem("~F3~ Find", kbF3, cmFind);
+            TStatusItem *returnItem = nullptr;
+            if (ck::launcher::launchedFromCkLauncher())
+                returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
             auto *i3 = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
             i1->next = i2;
-            i2->next = i3;
+            if (returnItem)
+            {
+                i2->next = returnItem;
+                returnItem->next = i3;
+            }
+            else
+            {
+                i2->next = i3;
+            }
             chain = i1;
         }
         else
@@ -244,6 +258,13 @@ public:
             i1->next = i2;
             i2->next = i3;
             i3->next = i4;
+            TStatusItem *tail = i4;
+            if (ck::launcher::launchedFromCkLauncher())
+            {
+                auto *returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+                tail->next = returnItem;
+                tail = returnItem;
+            }
             chain = i1;
         }
         items = chain;
@@ -359,6 +380,9 @@ void JsonViewApp::handleEvent(TEvent &event)
                 expandToLevel(root.get(), level, 0);
                 syncOutlineExpansion();
             }
+            break;
+        case cmReturnToLauncher:
+            std::exit(ck::launcher::kReturnToLauncherExitCode);
             break;
         case cmAbout:
         {
@@ -574,32 +598,37 @@ void JsonViewApp::copySelection()
 TMenuBar *JsonViewApp::initMenuBar(TRect r)
 {
     r.b.y = r.a.y + 1;
-    return new TMenuBar(r,
-                        *new TSubMenu("~F~ile", hcNoContext) +
-                            *new TMenuItem("~O~pen", cmOpen, kbF2, hcNoContext, "F2") +
-                            *new TMenuItem("~C~lose", cmClose, kbF4, hcNoContext, "F4") +
-                            newLine() +
-                            *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X") +
-                            *new TSubMenu("~E~dit", hcNoContext) +
-                            *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
-                            *new TSubMenu("~S~earch", hcNoContext) +
-                            *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                            *new TMenuItem("Find ~N~ext", cmFindNext, kbF3, hcNoContext, "F3") +
-                            *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF3, hcNoContext, "Shift-F3") +
-                            *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
-                            *new TSubMenu("~V~iew", hcNoContext) +
-                            *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +
-                            *new TMenuItem("Level ~1~", cmLevel1, kbAlt1, hcNoContext, "Alt-1") +
-                            *new TMenuItem("Level ~2~", cmLevel2, kbAlt2, hcNoContext, "Alt-2") +
-                            *new TMenuItem("Level ~3~", cmLevel3, kbAlt3, hcNoContext, "Alt-3") +
-                            *new TMenuItem("Level ~4~", cmLevel4, kbAlt4, hcNoContext, "Alt+4") +
-                            *new TMenuItem("Level ~5~", cmLevel5, kbAlt5, hcNoContext, "Alt+5") +
-                            *new TMenuItem("Level ~6~", cmLevel6, kbAlt6, hcNoContext, "Alt+6") +
-                            *new TMenuItem("Level ~7~", cmLevel7, kbAlt7, hcNoContext, "Alt+7") +
-                            *new TMenuItem("Level ~8~", cmLevel8, kbAlt8, hcNoContext, "Alt+8") +
-                            *new TMenuItem("Level ~9~", cmLevel9, kbAlt9, hcNoContext, "Alt+9") +
-                            *new TSubMenu("~H~elp", hcNoContext) +
-                            *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1"));
+    TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
+                         *new TMenuItem("~O~pen", cmOpen, kbF2, hcNoContext, "F2") +
+                         *new TMenuItem("~C~lose", cmClose, kbF4, hcNoContext, "F4") +
+                         newLine();
+    if (ck::launcher::launchedFromCkLauncher())
+        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
+    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X");
+
+    TMenuItem &menuChain = fileMenu +
+                           *new TSubMenu("~E~dit", hcNoContext) +
+                               *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
+                           *new TSubMenu("~S~earch", hcNoContext) +
+                               *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
+                               *new TMenuItem("Find ~N~ext", cmFindNext, kbF3, hcNoContext, "F3") +
+                               *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF3, hcNoContext, "Shift-F3") +
+                               *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
+                           *new TSubMenu("~V~iew", hcNoContext) +
+                               *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +
+                               *new TMenuItem("Level ~1~", cmLevel1, kbAlt1, hcNoContext, "Alt-1") +
+                               *new TMenuItem("Level ~2~", cmLevel2, kbAlt2, hcNoContext, "Alt-2") +
+                               *new TMenuItem("Level ~3~", cmLevel3, kbAlt3, hcNoContext, "Alt-3") +
+                               *new TMenuItem("Level ~4~", cmLevel4, kbAlt4, hcNoContext, "Alt+4") +
+                               *new TMenuItem("Level ~5~", cmLevel5, kbAlt5, hcNoContext, "Alt+5") +
+                               *new TMenuItem("Level ~6~", cmLevel6, kbAlt6, hcNoContext, "Alt+6") +
+                               *new TMenuItem("Level ~7~", cmLevel7, kbAlt7, hcNoContext, "Alt+7") +
+                               *new TMenuItem("Level ~8~", cmLevel8, kbAlt8, hcNoContext, "Alt+8") +
+                               *new TMenuItem("Level ~9~", cmLevel9, kbAlt9, hcNoContext, "Alt+9") +
+                           *new TSubMenu("~H~elp", hcNoContext) +
+                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+
+    return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
 TStatusLine *JsonViewApp::initStatusLine(TRect r)

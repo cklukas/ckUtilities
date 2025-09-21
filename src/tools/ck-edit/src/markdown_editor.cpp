@@ -1,12 +1,14 @@
 #include "ck/edit/markdown_editor.hpp"
 
 #include "ck/about_dialog.hpp"
+#include "ck/launcher.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <optional>
@@ -145,6 +147,7 @@ const ushort cmReflowParagraphs = 3070;
 const ushort cmFormatDocument = 3071;
 const ushort cmToggleSmartList = 3080;
 const ushort cmAbout = 3090;
+const ushort cmReturnToLauncher = 3091;
 
 bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) noexcept
 {
@@ -224,10 +227,11 @@ struct CommandHotkey
     const char *label;
 };
 
-const std::array<CommandHotkey, 52> kCommandHotkeys = {{
+const std::array<CommandHotkey, 53> kCommandHotkeys = {{
     {cmOpen, TKey(kbF3), "~F3~ Open"},
     {cmSave, TKey(kbF2), "~F2~ Save"},
     {cmSaveAs, TKey(kbShiftF12), "~Shift-F12~ Save As"},
+    {cmReturnToLauncher, TKey(kbCtrlL), "~Ctrl-L~ Return"},
     {cmToggleWrap, TKey(kbCtrlW), "~Ctrl-W~ Wrap"},
     {cmToggleMarkdownMode, TKey(kbCtrlM), "~Ctrl-M~ Markdown"},
     {cmBold, TKey(kbCtrlB), "~Ctrl-B~ Bold"},
@@ -314,6 +318,8 @@ std::vector<ushort> buildBaseCommands(const MarkdownStatusContext &context)
     if (!context.hasEditor)
     {
         commands.push_back(cmOpen);
+        if (ck::launcher::launchedFromCkLauncher())
+            commands.push_back(cmReturnToLauncher);
         return commands;
     }
 
@@ -322,6 +328,8 @@ std::vector<ushort> buildBaseCommands(const MarkdownStatusContext &context)
         commands.push_back(cmSaveAs);
     commands.push_back(cmToggleWrap);
     commands.push_back(cmToggleMarkdownMode);
+    if (ck::launcher::launchedFromCkLauncher())
+        commands.push_back(cmReturnToLauncher);
     return commands;
 }
 
@@ -598,14 +606,17 @@ private:
 
 TSubMenu &makeFileMenu()
 {
-    return *new TSubMenu("~F~ile", kbAltF) +
-           *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
-           *new TMenuItem("~N~ew", cmNew, kbCtrlN, hcNoContext, "Ctrl-N") +
-           *new TMenuItem("~S~ave", cmSave, kbF2, hcNoContext, "F2") +
-           *new TMenuItem("S~a~ve as...", cmSaveAs, kbNoKey) +
-           newLine() +
-           *new TMenuItem("~C~hange dir...", cmChangeDir, kbNoKey) +
-           *new TMenuItem("E~x~it", cmQuit, kbCtrlQ, hcNoContext, "Ctrl-Q");
+    TSubMenu &menu = *new TSubMenu("~F~ile", kbAltF) +
+                     *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
+                     *new TMenuItem("~N~ew", cmNew, kbCtrlN, hcNoContext, "Ctrl-N") +
+                     *new TMenuItem("~S~ave", cmSave, kbF2, hcNoContext, "F2") +
+                     *new TMenuItem("S~a~ve as...", cmSaveAs, kbNoKey) +
+                     newLine() +
+                     *new TMenuItem("~C~hange dir...", cmChangeDir, kbNoKey);
+    if (ck::launcher::launchedFromCkLauncher())
+        menu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
+    menu + *new TMenuItem("E~x~it", cmQuit, kbCtrlQ, hcNoContext, "Ctrl-Q");
+    return menu;
 }
 
 TSubMenu &makeHeadingsMenu()
@@ -3687,6 +3698,9 @@ void MarkdownEditorApp::handleEvent(TEvent &event)
     case cmFormatDocument:
     case cmToggleSmartList:
         dispatchToEditor(event.message.command);
+        break;
+    case cmReturnToLauncher:
+        std::exit(ck::launcher::kReturnToLauncherExitCode);
         break;
     case cmAbout:
         showAbout();
