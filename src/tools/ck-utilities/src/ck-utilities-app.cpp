@@ -56,6 +56,67 @@ const ck::appinfo::ToolInfo &launcherInfo()
 constexpr ushort cmLaunchTool = 6000;
 constexpr ushort cmNewLauncher = 6001;
 
+std::string quoteArgument(std::string_view value)
+{
+    std::string quoted;
+    quoted.reserve(value.size() + 2);
+    quoted.push_back('"');
+    for (char ch : value)
+    {
+        if (ch == '"')
+            quoted.push_back('\\');
+        quoted.push_back(ch);
+    }
+    quoted.push_back('"');
+    return quoted;
+}
+
+class TurboVisionSuspendGuard
+{
+public:
+    explicit TurboVisionSuspendGuard(TApplication &application)
+        : app(application)
+    {
+        app.suspend();
+        std::fflush(stdout);
+        std::fflush(stderr);
+    }
+
+    TurboVisionSuspendGuard(const TurboVisionSuspendGuard &) = delete;
+    TurboVisionSuspendGuard &operator=(const TurboVisionSuspendGuard &) = delete;
+
+    ~TurboVisionSuspendGuard()
+    {
+        app.resume();
+        app.redraw();
+    }
+
+private:
+    TApplication &app;
+};
+
+void showLaunchBanner(const std::filesystem::path &programPath,
+                      const std::vector<std::string> &arguments)
+{
+#ifndef _WIN32
+    if (!::isatty(STDOUT_FILENO))
+        return;
+#endif
+
+    std::string commandText = quoteArgument(programPath.string());
+    for (const auto &arg : arguments)
+    {
+        commandText.push_back(' ');
+        commandText.append(quoteArgument(arg));
+    }
+
+    std::fprintf(stdout,
+                 "\n[ck-utilities] Launching %s\n"
+                 "[ck-utilities] Return to the launcher once the tool exits.\n\n",
+                 commandText.c_str());
+    std::fflush(stdout);
+}
+
 std::filesystem::path resolveToolDirectory(const char *argv0)
 {
     std::filesystem::path base = std::filesystem::current_path();
@@ -139,18 +200,6 @@ int executeProgram(const std::filesystem::path &programPath,
             previousValues.emplace_back(entry.first, std::optional<std::string>());
         _putenv_s(entry.first.c_str(), entry.second.c_str());
     }
-
-    auto quoteArgument = [](const std::string &value) {
-        std::string quoted = "\"";
-        for (char ch : value)
-        {
-            if (ch == '\"')
-                quoted.push_back('\\');
-            quoted.push_back(ch);
-        }
-        quoted.push_back('"');
-        return quoted;
-    };
 
     std::string command = quoteArgument(programPath.string());
     for (const auto &arg : arguments)
@@ -890,16 +939,18 @@ private:
             return;
         }
 
-        suspend();
-        std::vector<std::pair<std::string, std::string>> extraEnv = {
-            {ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue},
-        };
-        int result = executeProgram(programPath, extraArgs, extraEnv);
-        resume();
+        int result = 0;
+        {
+            TurboVisionSuspendGuard guard(*this);
+            showLaunchBanner(programPath, extraArgs);
+            std::vector<std::pair<std::string, std::string>> extraEnv = {
+                {ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue},
+            };
+            result = executeProgram(programPath, extraArgs, extraEnv);
+        }
 
         bool report = false;
-        bool returnToLauncher = false;
-        bool programFinished = false;
+        bool suppressReport = false;
         char buffer[256];
 
 #ifndef _WIN32
@@ -916,28 +967,19 @@ private:
                 signalName = "unknown signal";
             std::snprintf(buffer, sizeof(buffer), "%s terminated by signal %d (%s)", programPath.c_str(), signum, signalName);
             report = true;
-            programFinished = true;
         }
-        else if (WIFEXITED(result) && WEXITSTATUS(result) != 0)
+        else if (WIFEXITED(result))
         {
             int exitStatus = WEXITSTATUS(result);
-            programFinished = true;
             if (exitStatus == ck::launcher::kReturnToLauncherExitCode)
             {
-                returnToLauncher = true;
-                report = false;
+                suppressReport = true;
             }
-            else
+            else if (exitStatus != 0)
             {
                 std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), exitStatus);
                 report = true;
             }
-        }
-        else if (WIFEXITED(result))
-        {
-            programFinished = true;
-            if (WEXITSTATUS(result) == ck::launcher::kReturnToLauncherExitCode)
-                returnToLauncher = true;
         }
 #else
         if (result == -1)
@@ -947,30 +989,17 @@ private:
         }
         else if (result == ck::launcher::kReturnToLauncherExitCode)
         {
-            returnToLauncher = true;
-            programFinished = true;
+            suppressReport = true;
         }
-        else
+        else if (result != 0)
         {
-            programFinished = true;
-            if (result != 0)
-            {
-                std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
-                report = true;
-            }
+            std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
+            report = true;
         }
 #endif
 
-        if (report)
+        if (report && !suppressReport)
             messageBox(buffer, mfInformation | mfOKButton);
-
-        if (programFinished && !returnToLauncher)
-        {
-            TEvent quitEvent{};
-            quitEvent.what = evCommand;
-            quitEvent.message.command = cmQuit;
-            putEvent(quitEvent);
-        }
     }
 
 };
