@@ -130,6 +130,7 @@ namespace ck::edit
             }
         };
 
+
         const std::array<std::string_view, 7> kMarkdownExtensions = {
             ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdtxt", ".mdtext"};
 
@@ -1098,6 +1099,7 @@ namespace ck::edit
             markdownMode = isMarkdownFile(std::string(fileName));
         else
             markdownMode = false;
+        refreshCursorMetrics();
     }
 
     int MarkdownFileEditor::TableContext::columnCount() const noexcept
@@ -3210,7 +3212,9 @@ namespace ck::edit
 
     void MarkdownFileEditor::resetLineNumberCache()
     {
-        lineNumberCacheValid = false;
+        lineNumberCachePtr = lineStart(curPtr);
+        lineNumberCacheNumber = cursorLineNumber;
+        lineNumberCacheValid = true;
     }
 
     int MarkdownFileEditor::lineNumberForPointer(uint pointer)
@@ -3230,8 +3234,9 @@ namespace ck::edit
 
         if (!lineNumberCacheValid)
         {
+            lineNumberCacheNumber = computeLineNumberForPointer(curPtr);
             lineNumberCachePtr = lineStart(curPtr);
-            lineNumberCacheNumber = curPos.y;
+            cursorLineNumber = lineNumberCacheNumber;
             lineNumberCacheValid = true;
         }
 
@@ -3272,6 +3277,8 @@ namespace ck::edit
 
         lineNumberCachePtr = currentPtr;
         lineNumberCacheNumber = currentNumber;
+        if (pointer == curPtr)
+            cursorLineNumber = currentNumber;
         return currentNumber;
     }
 
@@ -3517,30 +3524,34 @@ namespace ck::edit
             }
         }
 
+        refreshCursorMetrics();
+        int prevLineNumber = cursorLineNumber;
         TPoint prevPos = curPos;
         TPoint prevDelta = delta;
         uint prevInsCount = insCount;
         uint prevDelCount = delCount;
         Boolean prevModified = modified;
         TFileEditor::handleEvent(event);
+        refreshCursorMetrics();
+        int currentLineNumber = cursorLineNumber;
         bool contentChanged = (insCount != prevInsCount) || (delCount != prevDelCount) || (modified != prevModified);
 
         if (contentChanged)
         {
-            if (prevPos.y >= 0)
-                queueInfoLine(prevPos.y);
-            queueInfoLine(curPos.y);
+            if (prevLineNumber >= 0)
+                queueInfoLine(prevLineNumber);
+            queueInfoLine(currentLineNumber);
         }
         else if (prevPos.x != curPos.x)
         {
-            queueInfoLine(curPos.y);
+            queueInfoLine(currentLineNumber);
         }
 
-        if (prevPos.y != curPos.y)
+        if (prevLineNumber != currentLineNumber)
         {
-            if (prevPos.y >= 0)
-                queueInfoLine(prevPos.y);
-            queueInfoLine(curPos.y);
+            if (prevLineNumber >= 0)
+                queueInfoLine(prevLineNumber);
+            queueInfoLine(currentLineNumber);
         }
 
         if (prevDelta != delta)
@@ -3633,6 +3644,69 @@ namespace ck::edit
         for (uint i = start; i < end && i < bufLen; ++i)
             result.push_back(bufChar(i));
         return result;
+    }
+
+    int MarkdownFileEditor::documentLineNumber() const noexcept
+    {
+        return cursorLineNumber;
+    }
+
+    int MarkdownFileEditor::documentColumnNumber() const noexcept
+    {
+        return cursorColumnNumber;
+    }
+
+    int MarkdownFileEditor::computeLineNumberForPointer(uint pointer)
+    {
+        if (bufLen == 0)
+            return 0;
+
+        if (pointer >= bufLen)
+        {
+            if (bufLen == 0)
+                return 0;
+            uint lastPtr = bufLen - 1;
+            int lastLine = computeLineNumberForPointer(lastPtr);
+            return bufChar(lastPtr) == '\n' ? lastLine + 1 : lastLine;
+        }
+
+        uint target = lineStart(pointer);
+        uint current = 0;
+        int lineNumber = 0;
+        while (current < target)
+        {
+            uint next = nextLine(current);
+            if (next <= current)
+            {
+                current = target;
+                break;
+            }
+            ++lineNumber;
+            current = next;
+        }
+        return lineNumber;
+    }
+
+    void MarkdownFileEditor::refreshCursorMetrics()
+    {
+        if (bufLen == 0)
+        {
+            cursorLineNumber = 0;
+            cursorColumnNumber = 0;
+            lineNumberCachePtr = 0;
+            lineNumberCacheNumber = 0;
+            lineNumberCacheValid = true;
+            return;
+        }
+
+        cursorLineNumber = lineNumberForPointer(curPtr);
+        uint linePtr = lineStart(curPtr);
+        cursorColumnNumber = charPos(linePtr, curPtr);
+        lineNumberCachePtr = linePtr;
+        lineNumberCacheNumber = cursorLineNumber;
+        lineNumberCacheValid = true;
+        if (indicator)
+            indicator->setValue(TPoint(cursorColumnNumber, cursorLineNumber), modified);
     }
 
     void MarkdownFileEditor::replaceRange(uint start, uint end, const std::string &text)
@@ -3825,6 +3899,7 @@ namespace ck::edit
 
     void MarkdownFileEditor::notifyInfoView()
     {
+        refreshCursorMetrics();
         ++cachedStateVersion;
         statusCachePrefixPtr = UINT_MAX;
         statusCacheVersion = 0;
@@ -3973,7 +4048,8 @@ namespace ck::edit
 
     void MarkdownFileEditor::onContentModified()
     {
-        queueInfoLine(curPos.y);
+        refreshCursorMetrics();
+        queueInfoLine(cursorLineNumber);
         notifyInfoView();
         if (hostWindow)
             hostWindow->updateWindowTitle();
@@ -4069,7 +4145,7 @@ namespace ck::edit
     MarkdownInfoView::LineRenderInfo MarkdownInfoView::buildLineInfo(uint linePtr, int lineNumber, MarkdownParserState &state)
     {
         LineRenderInfo info;
-        info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.isActive = editor && (lineNumber == editor->documentLineNumber());
         info.lineActive = info.isActive;
         info.lineNumber = lineNumber;
         info.visualRowIndex = 0;
@@ -4134,18 +4210,18 @@ namespace ck::edit
                     return static_cast<int>(lineInfo.tableCells.size()) - 1;
                 };
 
-                int columnIndex = locateColumn(editor->curPos.x);
-                if (columnIndex == -1 && editor->curPos.x > 0)
-                    columnIndex = locateColumn(editor->curPos.x - 1);
+                int columnIndex = locateColumn(editor->documentColumnNumber());
+                if (columnIndex == -1 && editor->documentColumnNumber() > 0)
+                    columnIndex = locateColumn(editor->documentColumnNumber() - 1);
 
                 if (columnIndex >= 0)
                     tableLabel = sanitizeMultiline(
                         editor->analyzer().describeTableCell(lineInfo, static_cast<std::size_t>(columnIndex)));
             }
 
-            const auto *span = editor->analyzer().spanAtColumn(lineInfo, editor->curPos.x);
-            if (!span && editor->curPos.x > 0)
-                span = editor->analyzer().spanAtColumn(lineInfo, editor->curPos.x - 1);
+            const auto *span = editor->analyzer().spanAtColumn(lineInfo, editor->documentColumnNumber());
+            if (!span && editor->documentColumnNumber() > 0)
+                span = editor->analyzer().spanAtColumn(lineInfo, editor->documentColumnNumber() - 1);
             if (!tableLabel.empty())
             {
                 if (span && span->kind != MarkdownSpanKind::PlainText)
@@ -4172,7 +4248,7 @@ namespace ck::edit
     MarkdownInfoView::LineRenderInfo MarkdownInfoView::buildLineInfo(uint linePtr, int lineNumber)
     {
         LineRenderInfo info;
-        info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.isActive = editor && (lineNumber == editor->documentLineNumber());
         info.lineActive = info.isActive;
         info.lineNumber = lineNumber;
         info.visualRowIndex = 0;
@@ -4276,7 +4352,7 @@ namespace ck::edit
                 int caretRowIndex = -1;
                 if (base.lineActive && totalRows > 0)
                 {
-                    caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                    caretRowIndex = editor->wrapSegmentForColumn(layout, editor->documentColumnNumber());
                     caretRowIndex = std::clamp(caretRowIndex, 0, totalRows - 1);
                 }
 
@@ -4312,7 +4388,7 @@ namespace ck::edit
             {
                 LineRenderInfo info;
                 info.lineNumber = lineNumber;
-                info.isActive = (lineNumber == editor->curPos.y);
+                info.isActive = (lineNumber == editor->documentLineNumber());
                 info.lineActive = info.isActive;
                 info.visualRowIndex = 0;
                 info.visualRowCount = 1;
@@ -4539,7 +4615,7 @@ namespace ck::edit
             int caretRowIndex = -1;
             if (base.lineActive && newTotalRows > 0)
             {
-                caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                caretRowIndex = editor->wrapSegmentForColumn(layout, editor->documentColumnNumber());
                 caretRowIndex = std::clamp(caretRowIndex, 0, newTotalRows - 1);
             }
             groupIt->activeRow = caretRowIndex;

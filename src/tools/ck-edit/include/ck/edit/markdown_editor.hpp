@@ -182,6 +182,9 @@ public:
     uint topLinePointer();
     std::string lineText(uint linePtr);
     void notifyInfoView();
+    void refreshCursorMetrics();
+    int documentLineNumber() const noexcept;
+    int documentColumnNumber() const noexcept;
     uint stateVersion() const noexcept { return cachedStateVersion; }
     void buildStatusContext(struct MarkdownStatusContext &context);
 
@@ -203,6 +206,8 @@ private:
     bool lineNumberCacheValid = false;
     uint lineNumberCachePtr = 0;
     int lineNumberCacheNumber = 0;
+    int cursorLineNumber = 0;
+    int cursorColumnNumber = 0;
 
     void onContentModified();
     void queueInfoLine(int lineNumber);
@@ -213,6 +218,7 @@ private:
     uint pointerForLine(int lineNumber);
     void enqueuePendingInfoLine(int lineNumber);
     void resetLineNumberCache();
+    int computeLineNumberForPointer(uint pointer);
     void applyInlineCommand(const InlineCommandSpec &spec);
     void removeFormattingAround(uint start, uint end);
     bool ensureSelection();
