@@ -106,6 +106,24 @@ public:
     void clearHeading();
     void makeParagraph();
     void insertLineBreak();
+    struct InlineCommandSpec
+    {
+        enum class CursorPlacement
+        {
+            AfterPrefix,
+            AfterPlaceholder,
+            AfterSuffix
+        };
+
+        std::string name;
+        std::string prefix;
+        std::string suffix;
+        std::string placeholder;
+        bool selectPlaceholder = false;
+        bool keepSelection = true;
+        CursorPlacement cursorPlacement = CursorPlacement::AfterPrefix;
+    };
+
     void applyBold();
     void applyItalic();
     void applyBoldItalic();
@@ -172,7 +190,7 @@ private:
     uint statusCacheVersion = 0;
 
     void onContentModified();
-    void wrapSelectionWith(const std::string &prefix, const std::string &suffix);
+    void applyInlineCommand(const InlineCommandSpec &spec);
     void removeFormattingAround(uint start, uint end);
     bool ensureSelection();
     std::string readRange(uint start, uint end);
