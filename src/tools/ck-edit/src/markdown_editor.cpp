@@ -18,6 +18,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace ck::edit
@@ -148,6 +149,19 @@ const ushort cmFormatDocument = 3071;
 const ushort cmToggleSmartList = 3080;
 const ushort cmAbout = 3090;
 const ushort cmReturnToLauncher = 3091;
+
+const std::unordered_map<ushort, MarkdownFileEditor::InlineCommandSpec> kInlineCommandSpecs = {
+    {cmBold, {"Bold", "**", "**", "", false, true,
+              MarkdownFileEditor::InlineCommandSpec::CursorPlacement::AfterPrefix}},
+    {cmItalic, {"Italic", "*", "*", "", false, true,
+                MarkdownFileEditor::InlineCommandSpec::CursorPlacement::AfterPrefix}},
+    {cmBoldItalic, {"Bold + Italic", "***", "***", "", false, true,
+                    MarkdownFileEditor::InlineCommandSpec::CursorPlacement::AfterPrefix}},
+    {cmStrikethrough, {"Strikethrough", "~~", "~~", "", false, true,
+                       MarkdownFileEditor::InlineCommandSpec::CursorPlacement::AfterPrefix}},
+    {cmInlineCode, {"Inline Code", "`", "`", "", false, true,
+                    MarkdownFileEditor::InlineCommandSpec::CursorPlacement::AfterPrefix}},
+};
 
 bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) noexcept
 {
@@ -1141,33 +1155,89 @@ void MarkdownFileEditor::appendDefinition(const std::string &definition)
     onContentModified();
 }
 
-void MarkdownFileEditor::wrapSelectionWith(const std::string &prefix, const std::string &suffix)
+void MarkdownFileEditor::applyInlineCommand(const InlineCommandSpec &spec)
 {
-    if (!ensureSelection())
-        return;
-    uint start = std::min(selStart, selEnd);
-    uint end = std::max(selStart, selEnd);
-    std::string text = readRange(start, end);
-    if (text.size() >= prefix.size() + suffix.size() &&
-        text.rfind(prefix, 0) == 0 &&
-        text.substr(text.size() - suffix.size()) == suffix)
+    uint start = hasSelection() ? std::min(selStart, selEnd) : curPtr;
+    uint end = hasSelection() ? std::max(selStart, selEnd) : curPtr;
+    bool hadSelection = start != end;
+
+    if (hadSelection)
     {
-        std::string inner = text.substr(prefix.size(), text.size() - prefix.size() - suffix.size());
+        std::string text = readRange(start, end);
+        if (!spec.prefix.empty() || !spec.suffix.empty())
+        {
+            if (text.size() >= spec.prefix.size() + spec.suffix.size() &&
+                text.rfind(spec.prefix, 0) == 0 &&
+                text.substr(text.size() - spec.suffix.size()) == spec.suffix)
+            {
+                std::string inner =
+                    text.substr(spec.prefix.size(), text.size() - spec.prefix.size() - spec.suffix.size());
+                lock();
+                replaceRange(start, end, inner);
+                unlock();
+                setSelect(start, start + inner.size(), True);
+                onContentModified();
+                return;
+            }
+        }
+
         lock();
-        replaceRange(start, end, inner);
+        setCurPtr(start, 0);
+        if (!spec.prefix.empty())
+            insertText(spec.prefix.c_str(), spec.prefix.size(), False);
+        setCurPtr(end + spec.prefix.size(), 0);
+        if (!spec.suffix.empty())
+            insertText(spec.suffix.c_str(), spec.suffix.size(), False);
         unlock();
-        setSelect(start, start + inner.size(), True);
+
+        if (spec.keepSelection)
+        {
+            uint innerStart = start + spec.prefix.size();
+            uint innerEnd = innerStart + (end - start);
+            setSelect(innerStart, innerEnd, True);
+        }
+        else
+        {
+            uint caretPos = end + spec.prefix.size();
+            setCurPtr(caretPos, 0);
+        }
+
         onContentModified();
         return;
     }
 
     lock();
     setCurPtr(start, 0);
-    insertText(prefix.c_str(), prefix.size(), False);
-    setCurPtr(end + prefix.size(), 0);
-    insertText(suffix.c_str(), suffix.size(), False);
+    if (!spec.prefix.empty())
+        insertText(spec.prefix.c_str(), spec.prefix.size(), False);
+    if (!spec.placeholder.empty())
+        insertText(spec.placeholder.c_str(), spec.placeholder.size(), False);
+    if (!spec.suffix.empty())
+        insertText(spec.suffix.c_str(), spec.suffix.size(), False);
     unlock();
-    setSelect(start, end + prefix.size() + suffix.size(), True);
+
+    uint afterPrefix = start + spec.prefix.size();
+    uint afterPlaceholder = afterPrefix + spec.placeholder.size();
+    uint afterSuffix = afterPlaceholder + spec.suffix.size();
+
+    uint caretPos = afterPrefix;
+    switch (spec.cursorPlacement)
+    {
+    case InlineCommandSpec::CursorPlacement::AfterPrefix:
+        caretPos = afterPrefix;
+        break;
+    case InlineCommandSpec::CursorPlacement::AfterPlaceholder:
+        caretPos = afterPlaceholder;
+        break;
+    case InlineCommandSpec::CursorPlacement::AfterSuffix:
+        caretPos = afterSuffix;
+        break;
+    }
+
+    setCurPtr(caretPos, 0);
+    if (spec.selectPlaceholder && afterPlaceholder > afterPrefix)
+        setSelect(afterPrefix, afterPlaceholder, True);
+
     onContentModified();
 }
 
@@ -1211,30 +1281,42 @@ void MarkdownFileEditor::removeFormattingAround(uint start, uint end)
 
 void MarkdownFileEditor::applyBold()
 {
-    wrapSelectionWith("**", "**");
+    applyInlineCommand(kInlineCommandSpecs.at(cmBold));
 }
 
 void MarkdownFileEditor::applyItalic()
 {
-    wrapSelectionWith("*", "*");
+    applyInlineCommand(kInlineCommandSpecs.at(cmItalic));
 }
 
 void MarkdownFileEditor::applyBoldItalic()
 {
-    wrapSelectionWith("***", "***");
+    applyInlineCommand(kInlineCommandSpecs.at(cmBoldItalic));
 }
 
 void MarkdownFileEditor::applyStrikethrough()
 {
-    wrapSelectionWith("~~", "~~");
+    applyInlineCommand(kInlineCommandSpecs.at(cmStrikethrough));
 }
 
 void MarkdownFileEditor::applyInlineCode()
 {
-    if (!ensureSelection())
+    const auto &spec = kInlineCommandSpecs.at(cmInlineCode);
+
+    if (!hasSelection())
+    {
+        applyInlineCommand(spec);
         return;
+    }
+
     uint start = std::min(selStart, selEnd);
     uint end = std::max(selStart, selEnd);
+    if (start == end)
+    {
+        applyInlineCommand(spec);
+        return;
+    }
+
     std::string text = readRange(start, end);
     std::size_t leading = 0;
     while (leading < text.size() && text[leading] == '`')
@@ -1274,7 +1356,9 @@ void MarkdownFileEditor::applyInlineCode()
     setCurPtr(end + fence.size(), 0);
     insertText(fence.c_str(), fence.size(), False);
     unlock();
-    setSelect(start, end + fence.size() * 2, True);
+    uint innerStart = start + static_cast<uint>(fence.size());
+    uint innerEnd = innerStart + (end - start);
+    setSelect(innerStart, innerEnd, True);
     onContentModified();
 }
 
