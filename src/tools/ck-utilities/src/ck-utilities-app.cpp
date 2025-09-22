@@ -37,10 +37,7 @@
 #include <vector>
 
 #ifndef _WIN32
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
-extern char **environ;
 #endif
 
 namespace
@@ -55,6 +52,149 @@ const ck::appinfo::ToolInfo &launcherInfo()
 
 constexpr ushort cmLaunchTool = 6000;
 constexpr ushort cmNewLauncher = 6001;
+
+std::string quoteArgument(std::string_view value)
+{
+#ifdef _WIN32
+    std::string quoted;
+    quoted.reserve(value.size() + 2);
+    quoted.push_back('"');
+    for (char ch : value)
+    {
+        if (ch == '"')
+            quoted.push_back('\\');
+        quoted.push_back(ch);
+    }
+    quoted.push_back('"');
+    return quoted;
+#else
+    std::string quoted;
+    quoted.reserve(value.size() + 2);
+    quoted.push_back('\'');
+    for (char ch : value)
+    {
+        if (ch == '\'')
+            quoted.append("'\\''");
+        else
+            quoted.push_back(ch);
+    }
+    quoted.push_back('\'');
+    return quoted;
+#endif
+}
+
+class ScopedEnvironment
+{
+public:
+    explicit ScopedEnvironment(const std::vector<std::pair<std::string, std::string>> &entries)
+    {
+        previous.reserve(entries.size());
+        for (const auto &entry : entries)
+        {
+            const char *existing = std::getenv(entry.first.c_str());
+            std::optional<std::string> priorValue;
+            if (existing)
+                priorValue = std::string(existing);
+            previous.emplace_back(entry.first, priorValue);
+            if (!apply(entry))
+            {
+                failed = true;
+                break;
+            }
+            ++applied;
+        }
+
+        if (failed)
+            rollback();
+    }
+
+    ~ScopedEnvironment()
+    {
+        rollback();
+    }
+
+    [[nodiscard]] bool ok() const { return !failed; }
+
+private:
+    bool apply(const std::pair<std::string, std::string> &entry)
+    {
+#ifdef _WIN32
+        return _putenv_s(entry.first.c_str(), entry.second.c_str()) == 0;
+#else
+        return setenv(entry.first.c_str(), entry.second.c_str(), 1) == 0;
+#endif
+    }
+
+    void rollback()
+    {
+        while (applied > 0)
+        {
+            --applied;
+            auto &entry = previous[applied];
+#ifdef _WIN32
+            if (entry.second)
+                _putenv_s(entry.first.c_str(), entry.second->c_str());
+            else
+                _putenv_s(entry.first.c_str(), "");
+#else
+            if (entry.second)
+                setenv(entry.first.c_str(), entry.second->c_str(), 1);
+            else
+                unsetenv(entry.first.c_str());
+#endif
+        }
+    }
+
+    std::vector<std::pair<std::string, std::optional<std::string>>> previous;
+    std::size_t applied = 0;
+    bool failed = false;
+};
+
+class TurboVisionSuspendGuard
+{
+public:
+    explicit TurboVisionSuspendGuard(TApplication &application)
+        : app(application)
+    {
+        app.suspend();
+        std::fflush(stdout);
+        std::fflush(stderr);
+    }
+
+    TurboVisionSuspendGuard(const TurboVisionSuspendGuard &) = delete;
+    TurboVisionSuspendGuard &operator=(const TurboVisionSuspendGuard &) = delete;
+
+    ~TurboVisionSuspendGuard()
+    {
+        app.resume();
+        app.redraw();
+    }
+
+private:
+    TApplication &app;
+};
+
+void showLaunchBanner(const std::filesystem::path &programPath,
+                      const std::vector<std::string> &arguments)
+{
+#ifndef _WIN32
+    if (!::isatty(STDOUT_FILENO))
+        return;
+#endif
+
+    std::string commandText = quoteArgument(programPath.string());
+    for (const auto &arg : arguments)
+    {
+        commandText.push_back(' ');
+        commandText.append(quoteArgument(arg));
+    }
+
+    std::fprintf(stdout,
+                 "\n[ck-utilities] Launching %s\n"
+                 "[ck-utilities] Return to the launcher once the tool exits.\n\n",
+                 commandText.c_str());
+    std::fflush(stdout);
+}
 
 std::filesystem::path resolveToolDirectory(const char *argv0)
 {
@@ -95,62 +235,9 @@ int executeProgram(const std::filesystem::path &programPath,
                    const std::vector<std::string> &arguments,
                    const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
 {
-#ifndef _WIN32
-    pid_t pid = fork();
-    if (pid == -1)
-    {
+    ScopedEnvironment env(extraEnv);
+    if (!env.ok())
         return -1;
-    }
-    else if (pid == 0)
-    {
-        for (const auto &entry : extraEnv)
-            setenv(entry.first.c_str(), entry.second.c_str(), 1);
-        std::vector<std::string> argvStorage;
-        argvStorage.reserve(1 + arguments.size());
-        argvStorage.push_back(programPath.string());
-        for (const auto &arg : arguments)
-            argvStorage.push_back(arg);
-
-        std::vector<char *> argvPointers;
-        argvPointers.reserve(argvStorage.size() + 1);
-        for (auto &entry : argvStorage)
-            argvPointers.push_back(entry.data());
-        argvPointers.push_back(nullptr);
-
-        execve(programPath.c_str(), argvPointers.data(), environ);
-        _exit(127);
-    }
-    else
-    {
-        int status;
-        if (waitpid(pid, &status, 0) == -1)
-            return -1;
-        return status;
-    }
-#else
-    std::vector<std::pair<std::string, std::optional<std::string>>> previousValues;
-    previousValues.reserve(extraEnv.size());
-    for (const auto &entry : extraEnv)
-    {
-        const char *existing = std::getenv(entry.first.c_str());
-        if (existing)
-            previousValues.emplace_back(entry.first, std::string(existing));
-        else
-            previousValues.emplace_back(entry.first, std::optional<std::string>());
-        _putenv_s(entry.first.c_str(), entry.second.c_str());
-    }
-
-    auto quoteArgument = [](const std::string &value) {
-        std::string quoted = "\"";
-        for (char ch : value)
-        {
-            if (ch == '\"')
-                quoted.push_back('\\');
-            quoted.push_back(ch);
-        }
-        quoted.push_back('"');
-        return quoted;
-    };
 
     std::string command = quoteArgument(programPath.string());
     for (const auto &arg : arguments)
@@ -158,18 +245,8 @@ int executeProgram(const std::filesystem::path &programPath,
         command.push_back(' ');
         command.append(quoteArgument(arg));
     }
-    int result = std::system(command.c_str());
 
-    for (auto it = previousValues.rbegin(); it != previousValues.rend(); ++it)
-    {
-        if (it->second)
-            _putenv_s(it->first.c_str(), it->second->c_str());
-        else
-            _putenv_s(it->first.c_str(), "");
-    }
-
-    return result;
-#endif
+    return std::system(command.c_str());
 }
 
 std::vector<std::string> wrapText(std::string_view text, int width)
@@ -890,17 +967,18 @@ private:
             return;
         }
 
-        suspend();
-        std::vector<std::pair<std::string, std::string>> extraEnv = {
-            {ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue},
-        };
-        int result = executeProgram(programPath, extraArgs, extraEnv);
-        resume();
-        redraw();
+        int result = 0;
+        {
+            TurboVisionSuspendGuard guard(*this);
+            showLaunchBanner(programPath, extraArgs);
+            std::vector<std::pair<std::string, std::string>> extraEnv = {
+                {ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue},
+            };
+            result = executeProgram(programPath, extraArgs, extraEnv);
+        }
 
         bool report = false;
-        bool returnToLauncher = false;
-        bool programFinished = false;
+        bool suppressReport = false;
         char buffer[256];
 
 #ifndef _WIN32
@@ -917,28 +995,19 @@ private:
                 signalName = "unknown signal";
             std::snprintf(buffer, sizeof(buffer), "%s terminated by signal %d (%s)", programPath.c_str(), signum, signalName);
             report = true;
-            programFinished = true;
         }
-        else if (WIFEXITED(result) && WEXITSTATUS(result) != 0)
+        else if (WIFEXITED(result))
         {
             int exitStatus = WEXITSTATUS(result);
-            programFinished = true;
             if (exitStatus == ck::launcher::kReturnToLauncherExitCode)
             {
-                returnToLauncher = true;
-                report = false;
+                suppressReport = true;
             }
-            else
+            else if (exitStatus != 0)
             {
                 std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), exitStatus);
                 report = true;
             }
-        }
-        else if (WIFEXITED(result))
-        {
-            programFinished = true;
-            if (WEXITSTATUS(result) == ck::launcher::kReturnToLauncherExitCode)
-                returnToLauncher = true;
         }
 #else
         if (result == -1)
@@ -948,30 +1017,17 @@ private:
         }
         else if (result == ck::launcher::kReturnToLauncherExitCode)
         {
-            returnToLauncher = true;
-            programFinished = true;
+            suppressReport = true;
         }
-        else
+        else if (result != 0)
         {
-            programFinished = true;
-            if (result != 0)
-            {
-                std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
-                report = true;
-            }
+            std::snprintf(buffer, sizeof(buffer), "%s exited with status %d", programPath.c_str(), result);
+            report = true;
         }
 #endif
 
-        if (report)
+        if (report && !suppressReport)
             messageBox(buffer, mfInformation | mfOKButton);
-
-        if (programFinished && !returnToLauncher)
-        {
-            TEvent quitEvent{};
-            quitEvent.what = evCommand;
-            quitEvent.message.command = cmQuit;
-            putEvent(quitEvent);
-        }
     }
 
 };
