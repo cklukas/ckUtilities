@@ -896,6 +896,7 @@ private:
         };
         int result = executeProgram(programPath, extraArgs, extraEnv);
         resume();
+        redraw();
 
         bool report = false;
         bool returnToLauncher = false;
