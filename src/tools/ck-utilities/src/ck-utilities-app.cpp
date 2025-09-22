@@ -150,6 +150,8 @@ private:
     bool failed = false;
 };
 
+}
+
 class TurboVisionSuspendGuard
 {
 public:
@@ -236,8 +238,47 @@ int executeProgram(const std::filesystem::path &programPath,
                    const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
 {
     ScopedEnvironment env(extraEnv);
-    if (!env.ok())
+    if (!env.ok()) {
         return -1;
+    }
+    else if (pid == 0)
+    {
+        for (const auto &entry : extraEnv)
+            setenv(entry.first.c_str(), entry.second.c_str(), 1);
+        std::vector<std::string> argvStorage;
+        argvStorage.reserve(1 + arguments.size());
+        argvStorage.push_back(programPath.string());
+        for (const auto &arg : arguments)
+            argvStorage.push_back(arg);
+
+        std::vector<char *> argvPointers;
+        argvPointers.reserve(argvStorage.size() + 1);
+        for (auto &entry : argvStorage)
+            argvPointers.push_back(entry.data());
+        argvPointers.push_back(nullptr);
+
+        execve(programPath.c_str(), argvPointers.data(), environ);
+        _exit(127);
+    }
+    else
+    {
+        int status;
+        if (waitpid(pid, &status, 0) == -1)
+            return -1;
+        return status;
+    }
+#else
+    std::vector<std::pair<std::string, std::optional<std::string>>> previousValues;
+    previousValues.reserve(extraEnv.size());
+    for (const auto &entry : extraEnv)
+    {
+        const char *existing = std::getenv(entry.first.c_str());
+        if (existing)
+            previousValues.emplace_back(entry.first, std::string(existing));
+        else
+            previousValues.emplace_back(entry.first, std::optional<std::string>());
+        _putenv_s(entry.first.c_str(), entry.second.c_str());
+    }
 
     std::string command = quoteArgument(programPath.string());
     for (const auto &arg : arguments)
