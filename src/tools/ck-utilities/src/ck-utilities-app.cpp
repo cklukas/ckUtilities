@@ -590,9 +590,9 @@ int executeProgram(const std::filesystem::path &programPath,
             bannerView->growMode = gfGrowHiX;
             insert(bannerView);
 
-            vScroll = new TScrollBar(TRect(0, 0, 0, 0));
-            vScroll->growMode = gfGrowHiY;
-            insert(vScroll);
+        vScroll = new TScrollBar(TRect(0, 0, 1, 2));
+        vScroll->growMode = gfGrowHiY;
+        insert(vScroll);
 
             listView = new ToolListView(TRect(0, 0, 0, 0), toolRefs, vScroll);
             listView->growMode = gfGrowHiY;
