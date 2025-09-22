@@ -37,10 +37,7 @@
 #include <vector>
 
 #ifndef _WIN32
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
-extern char **environ;
 #endif
 
 namespace
@@ -58,6 +55,7 @@ constexpr ushort cmNewLauncher = 6001;
 
 std::string quoteArgument(std::string_view value)
 {
+#ifdef _WIN32
     std::string quoted;
     quoted.reserve(value.size() + 2);
     quoted.push_back('"');
@@ -69,6 +67,89 @@ std::string quoteArgument(std::string_view value)
     }
     quoted.push_back('"');
     return quoted;
+#else
+    std::string quoted;
+    quoted.reserve(value.size() + 2);
+    quoted.push_back('\'');
+    for (char ch : value)
+    {
+        if (ch == '\'')
+            quoted.append("'\\''");
+        else
+            quoted.push_back(ch);
+    }
+    quoted.push_back('\'');
+    return quoted;
+#endif
+}
+
+class ScopedEnvironment
+{
+public:
+    explicit ScopedEnvironment(const std::vector<std::pair<std::string, std::string>> &entries)
+    {
+        previous.reserve(entries.size());
+        for (const auto &entry : entries)
+        {
+            const char *existing = std::getenv(entry.first.c_str());
+            std::optional<std::string> priorValue;
+            if (existing)
+                priorValue = std::string(existing);
+            previous.emplace_back(entry.first, priorValue);
+            if (!apply(entry))
+            {
+                failed = true;
+                break;
+            }
+            ++applied;
+        }
+
+        if (failed)
+            rollback();
+    }
+
+    ~ScopedEnvironment()
+    {
+        rollback();
+    }
+
+    [[nodiscard]] bool ok() const { return !failed; }
+
+private:
+    bool apply(const std::pair<std::string, std::string> &entry)
+    {
+#ifdef _WIN32
+        return _putenv_s(entry.first.c_str(), entry.second.c_str()) == 0;
+#else
+        return setenv(entry.first.c_str(), entry.second.c_str(), 1) == 0;
+#endif
+    }
+
+    void rollback()
+    {
+        while (applied > 0)
+        {
+            --applied;
+            auto &entry = previous[applied];
+#ifdef _WIN32
+            if (entry.second)
+                _putenv_s(entry.first.c_str(), entry.second->c_str());
+            else
+                _putenv_s(entry.first.c_str(), "");
+#else
+            if (entry.second)
+                setenv(entry.first.c_str(), entry.second->c_str(), 1);
+            else
+                unsetenv(entry.first.c_str());
+#endif
+        }
+    }
+
+    std::vector<std::pair<std::string, std::optional<std::string>>> previous;
+    std::size_t applied = 0;
+    bool failed = false;
+};
+
 }
 
 class TurboVisionSuspendGuard
@@ -156,10 +237,8 @@ int executeProgram(const std::filesystem::path &programPath,
                    const std::vector<std::string> &arguments,
                    const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
 {
-#ifndef _WIN32
-    pid_t pid = fork();
-    if (pid == -1)
-    {
+    ScopedEnvironment env(extraEnv);
+    if (!env.ok()) {
         return -1;
     }
     else if (pid == 0)
@@ -207,18 +286,8 @@ int executeProgram(const std::filesystem::path &programPath,
         command.push_back(' ');
         command.append(quoteArgument(arg));
     }
-    int result = std::system(command.c_str());
 
-    for (auto it = previousValues.rbegin(); it != previousValues.rend(); ++it)
-    {
-        if (it->second)
-            _putenv_s(it->first.c_str(), it->second->c_str());
-        else
-            _putenv_s(it->first.c_str(), "");
-    }
-
-    return result;
-#endif
+    return std::system(command.c_str());
 }
 
 std::vector<std::string> wrapText(std::string_view text, int width)
