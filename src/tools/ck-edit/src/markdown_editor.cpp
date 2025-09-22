@@ -32,6 +32,29 @@ namespace ck::edit
 #define CK_EDIT_VERSION "0.0.0"
 #endif
         constexpr int kInfoColumnWidth = 20;
+
+        static bool cellIsWhitespace(const TScreenCell &cell)
+        {
+            if (cell._ch.isWideCharTrail())
+                return false;
+            TStringView text = cell._ch.getText();
+            if (text.empty())
+                return false;
+            unsigned char ch = static_cast<unsigned char>(text[0]);
+            return ch == ' ';
+        }
+
+        static bool cellBreaksAfter(const TScreenCell &cell)
+        {
+            if (cell._ch.isWideCharTrail())
+                return false;
+            TStringView text = cell._ch.getText();
+            if (text.empty())
+                return false;
+            unsigned char ch = static_cast<unsigned char>(text[0]);
+            return ch == '-' || ch == '/';
+        }
+
         class MarkdownWindowFrame : public TFrame
         {
         public:
@@ -111,6 +134,8 @@ namespace ck::edit
             ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdtxt", ".mdtext"};
 
         ushort execDialog(TDialog *d, void *data = nullptr);
+        ushort runFindDialog(TFindDialogRec &rec);
+        ushort runReplaceDialog(TReplaceDialogRec &rec);
 
         ushort runEditorDialog(int dialog, ...)
         {
@@ -170,22 +195,27 @@ namespace ck::edit
                 va_start(args, dialog);
                 auto *rec = va_arg(args, TFindDialogRec *);
                 va_end(args);
-                if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
-                {
-                    return execDialog(new TFindDialog(rec), &app->findDialogRec);
-                }
-                break;
+                if (!rec)
+                    return cmCancel;
+                return runFindDialog(*rec);
             }
             case edReplace:
             {
                 va_start(args, dialog);
-                auto *rec = va_arg(args, TFindDialogRec *);
+                auto *rec = va_arg(args, TReplaceDialogRec *);
                 va_end(args);
-                if (auto *app = dynamic_cast<MarkdownEditorApp *>(TProgram::application))
-                {
-                    return execDialog(new TReplaceDialog(rec), &app->findDialogRec);
-                }
-                break;
+                if (!rec)
+                    return cmCancel;
+                return runReplaceDialog(*rec);
+            }
+            case edSearchFailed:
+                return messageBox("Search string not found.", mfError | mfOKButton);
+            case edReplacePrompt:
+            {
+                va_start(args, dialog);
+                (void)va_arg(args, TPoint *);
+                va_end(args);
+                return messageBox("Replace this occurrence?", mfYesNoCancel | mfInformation);
             }
             default:
                 return cmCancel;
@@ -326,6 +356,148 @@ namespace ck::edit
             if (result != cmCancel && data)
                 p->getData(data);
             TObject::destroy(p);
+            return result;
+        }
+
+        constexpr int kFindHistoryId = 10;
+        constexpr int kReplaceHistoryId = 11;
+
+        ushort encodeFindOptions(ushort options)
+        {
+            ushort value = 0;
+            if (options & efCaseSensitive)
+                value |= 0x0001;
+            if (options & efWholeWordsOnly)
+                value |= 0x0002;
+            return value;
+        }
+
+        ushort decodeFindOptions(ushort value)
+        {
+            ushort options = 0;
+            if (value & 0x0001)
+                options |= efCaseSensitive;
+            if (value & 0x0002)
+                options |= efWholeWordsOnly;
+            return options;
+        }
+
+        ushort encodeReplaceOptions(ushort options)
+        {
+            ushort value = 0;
+            if (options & efCaseSensitive)
+                value |= 0x0001;
+            if (options & efWholeWordsOnly)
+                value |= 0x0002;
+            if (options & efPromptOnReplace)
+                value |= 0x0004;
+            if (options & efReplaceAll)
+                value |= 0x0008;
+            return value;
+        }
+
+        ushort decodeReplaceOptions(ushort value)
+        {
+            ushort options = 0;
+            if (value & 0x0001)
+                options |= efCaseSensitive;
+            if (value & 0x0002)
+                options |= efWholeWordsOnly;
+            if (value & 0x0004)
+                options |= efPromptOnReplace;
+            if (value & 0x0008)
+                options |= efReplaceAll;
+            return options;
+        }
+
+        ushort runFindDialog(TFindDialogRec &rec)
+        {
+            auto *dialog = new TDialog(TRect(0, 0, 38, 12), "Find");
+            dialog->options |= ofCentered;
+
+            auto *findInput = new TInputLine(TRect(3, 3, 32, 4), maxFindStrLen);
+            dialog->insert(findInput);
+            dialog->insert(new TLabel(TRect(2, 2, 15, 3), "~T~ext to find", findInput));
+            dialog->insert(new THistory(TRect(32, 3, 35, 4), findInput, kFindHistoryId));
+
+            auto *optionBoxes = new TCheckBoxes(
+                TRect(3, 5, 35, 7),
+                new TSItem("~C~ase sensitive",
+                           new TSItem("~W~hole words only", nullptr)));
+            dialog->insert(optionBoxes);
+
+            dialog->insert(new TButton(TRect(14, 9, 24, 11), "O~K~", cmOK, bfDefault));
+            dialog->insert(new TButton(TRect(26, 9, 36, 11), "Cancel", cmCancel, bfNormal));
+
+            findInput->setData(rec.find);
+            ushort optionMask = encodeFindOptions(rec.options);
+            optionBoxes->setData(&optionMask);
+
+            dialog->selectNext(False);
+
+            TView *validated = TProgram::application->validView(dialog);
+            if (!validated)
+                return cmCancel;
+            dialog = static_cast<TDialog *>(validated);
+
+            ushort result = TProgram::deskTop->execView(dialog);
+            if (result != cmCancel)
+            {
+                findInput->getData(rec.find);
+                optionBoxes->getData(&optionMask);
+                rec.options = decodeFindOptions(optionMask);
+            }
+            TObject::destroy(dialog);
+            return result;
+        }
+
+        ushort runReplaceDialog(TReplaceDialogRec &rec)
+        {
+            auto *dialog = new TDialog(TRect(0, 0, 40, 16), "Replace");
+            dialog->options |= ofCentered;
+
+            auto *findInput = new TInputLine(TRect(3, 3, 34, 4), maxFindStrLen);
+            dialog->insert(findInput);
+            dialog->insert(new TLabel(TRect(2, 2, 15, 3), "~T~ext to find", findInput));
+            dialog->insert(new THistory(TRect(34, 3, 37, 4), findInput, kFindHistoryId));
+
+            auto *replaceInput = new TInputLine(TRect(3, 6, 34, 7), maxReplaceStrLen);
+            dialog->insert(replaceInput);
+            dialog->insert(new TLabel(TRect(2, 5, 12, 6), "~N~ew text", replaceInput));
+            dialog->insert(new THistory(TRect(34, 6, 37, 7), replaceInput, kReplaceHistoryId));
+
+            auto *optionBoxes = new TCheckBoxes(
+                TRect(3, 8, 37, 12),
+                new TSItem("~C~ase sensitive",
+                           new TSItem("~W~hole words only",
+                                      new TSItem("~P~rompt on replace",
+                                                 new TSItem("~R~eplace all", nullptr)))));
+            dialog->insert(optionBoxes);
+
+            dialog->insert(new TButton(TRect(17, 13, 27, 15), "O~K~", cmOK, bfDefault));
+            dialog->insert(new TButton(TRect(28, 13, 38, 15), "Cancel", cmCancel, bfNormal));
+
+            findInput->setData(rec.find);
+            replaceInput->setData(rec.replace);
+            ushort optionMask = encodeReplaceOptions(rec.options);
+            optionBoxes->setData(&optionMask);
+
+            dialog->selectNext(False);
+
+            TView *validated = TProgram::application->validView(dialog);
+            if (!validated)
+                return cmCancel;
+            dialog = static_cast<TDialog *>(validated);
+
+            ushort result = TProgram::deskTop->execView(dialog);
+            if (result != cmCancel)
+            {
+                findInput->getData(rec.find);
+                replaceInput->getData(rec.replace);
+                optionBoxes->getData(&optionMask);
+                rec.options = decodeReplaceOptions(optionMask);
+            }
+            TObject::destroy(dialog);
             return result;
         }
 
@@ -1285,8 +1457,7 @@ namespace ck::edit
                     text.rfind(spec.prefix, 0) == 0 &&
                     text.substr(text.size() - spec.suffix.size()) == spec.suffix)
                 {
-                    std::string inner =
-                        text.substr(spec.prefix.size(), text.size() - spec.prefix.size() - spec.suffix.size());
+                    std::string inner = text.substr(spec.prefix.size(), text.size() - spec.prefix.size() - spec.suffix.size());
                     lock();
                     replaceRange(start, end, inner);
                     unlock();
@@ -1481,8 +1652,7 @@ namespace ck::edit
     {
         BlockSelection block = captureSelectedLines();
         std::vector<std::string> lines = block.lines;
-        auto trimmed = [&](const std::string &line)
-        { return trim(std::string_view(line)); };
+        auto trimmed = [&](const std::string &line) { return trim(std::string_view(line)); };
 
         int first = 0;
         while (first < static_cast<int>(lines.size()) && trimmed(lines[first]).empty())
@@ -1538,8 +1708,7 @@ namespace ck::edit
             line = pattern.indent + content;
         }
 
-        auto isBlank = [&](const std::string &line)
-        { return trimLeft(line).empty(); };
+        auto isBlank = [&](const std::string &line) { return trimLeft(line).empty(); };
         while (!lines.empty() && isBlank(lines.front()))
             lines.erase(lines.begin());
         while (!lines.empty() && isBlank(lines.back()))
@@ -1846,7 +2015,7 @@ namespace ck::edit
         for (int i = 0; i < count; ++i)
         {
             if (i > 0)
-                out << "\n";
+                out << '\n';
             if (ordered)
                 out << (i + 1) << ". Item" << (i + 1);
             else
@@ -1931,7 +2100,7 @@ namespace ck::edit
         if (url.empty())
             return;
         std::ostringstream out;
-        out << '[' << label << "](" << url << ')';
+        out << "[" << label << "](" << url << ")";
         insertRichInline("", "", out.str());
     }
 
@@ -1944,7 +2113,7 @@ namespace ck::edit
         if (url.empty())
             return;
         std::ostringstream out;
-        out << "![" << alt << "](" << url << ')';
+        out << "![" << alt << "](" << url << ")";
         insertRichInline("", "", out.str());
     }
 
@@ -1972,7 +2141,7 @@ namespace ck::edit
         std::string title = promptForText("Reference Link", "Title (optional)", "");
 
         std::ostringstream link;
-        link << '[' << selectionText << "][" << referenceId << ']';
+        link << "[" << selectionText << "][" << referenceId << "]";
 
         lock();
         if (hasSelection())
@@ -1982,7 +2151,7 @@ namespace ck::edit
         onContentModified();
 
         std::ostringstream def;
-        def << '[' << referenceId << "]: " << url;
+        def << "[" << referenceId << "]: " << url;
         if (!title.empty())
             def << " \"" << title << "\"";
         def << '\n';
@@ -3400,6 +3569,8 @@ namespace ck::edit
         TAttrPair color = getColor(0x0201);
         uint linePtr = topLinePointer();
         int row = 0;
+        int wrapWidth = std::max(1, size.x);
+        std::vector<TScreenCell> segmentBuffer(static_cast<std::size_t>(size.x));
         while (row < size.y)
         {
             if (linePtr >= bufLen)
@@ -3412,33 +3583,32 @@ namespace ck::edit
             }
 
             uint endPtr = lineEnd(linePtr);
-            int lineLen = charPos(linePtr, endPtr);
-            int bufferWidth = std::max(lineLen + 1, size.x);
-            std::vector<TScreenCell> cells(bufferWidth);
+            int lineColumns = charPos(linePtr, endPtr);
+            int bufferWidth = std::max(lineColumns + 1, wrapWidth);
+            std::vector<TScreenCell> cells(static_cast<std::size_t>(bufferWidth));
             formatLine(cells.data(), linePtr, bufferWidth, color);
 
-            if (lineLen == 0 && row < size.y)
-            {
-                TDrawBuffer blank;
-                blank.moveChar(0, ' ', color, size.x);
-                writeLine(0, row, size.x, 1, blank);
-                ++row;
-            }
+            WrapLayout layout;
+            layout.lineColumns = lineColumns;
+            computeWrapLayoutFromCells(cells.data(), lineColumns, wrapWidth, layout);
 
-            int offset = 0;
-            while (offset < lineLen && row < size.y)
+            if (layout.segments.empty())
+                layout.segments.push_back({0, 0});
+
+            for (std::size_t seg = 0; seg < layout.segments.size() && row < size.y; ++seg)
             {
-                std::vector<TScreenCell> segment(size.x);
-                int copyLen = std::min(size.x, lineLen - offset);
+                const auto &segment = layout.segments[seg];
+                int startCol = std::clamp(segment.startColumn, 0, lineColumns);
+                int endCol = std::clamp(segment.endColumn, startCol, lineColumns);
+                int copyLen = std::min(size.x, std::max(0, endCol - startCol));
                 for (int i = 0; i < copyLen; ++i)
-                    segment[i] = cells[offset + i];
+                    segmentBuffer[static_cast<std::size_t>(i)] = cells[static_cast<std::size_t>(startCol + i)];
                 for (int i = copyLen; i < size.x; ++i)
                 {
-                    ::setChar(segment[i], ' ');
-                    ::setAttr(segment[i], color);
+                    ::setChar(segmentBuffer[static_cast<std::size_t>(i)], ' ');
+                    ::setAttr(segmentBuffer[static_cast<std::size_t>(i)], color);
                 }
-                writeBuf(0, row, size.x, 1, segment.data());
-                offset += copyLen;
+                writeBuf(0, row, size.x, 1, segmentBuffer.data());
                 ++row;
             }
             linePtr = nextLine(linePtr);
@@ -3476,6 +3646,181 @@ namespace ck::edit
     std::string MarkdownFileEditor::lineText(uint linePtr)
     {
         return readRange(linePtr, lineEnd(linePtr));
+    }
+
+    void MarkdownFileEditor::buildWordWrapSegments(const TScreenCell *cells,
+                                                   int lineColumns,
+                                                   int wrapWidth,
+                                                   std::vector<WrapSegment> &segments)
+    {
+        segments.clear();
+        if (lineColumns <= 0)
+        {
+            segments.push_back({0, 0});
+            return;
+        }
+
+        wrapWidth = std::max(1, wrapWidth);
+
+        int offset = 0;
+        while (offset < lineColumns)
+        {
+            int limit = std::min(offset + wrapWidth, lineColumns);
+
+            int lastSpaceStart = -1;
+            int lastSpaceEnd = -1;
+            int currentSpaceStart = -1;
+            int lastHyphenBreak = -1;
+
+            for (int i = offset; i < limit; ++i)
+            {
+                const TScreenCell &cell = cells[i];
+                if (cell._ch.isWideCharTrail())
+                    continue;
+
+                if (cellIsWhitespace(cell))
+                {
+                    if (currentSpaceStart == -1)
+                        currentSpaceStart = i;
+                    lastSpaceStart = currentSpaceStart;
+                    lastSpaceEnd = i + 1;
+                }
+                else
+                {
+                    currentSpaceStart = -1;
+                }
+
+                if (cellBreaksAfter(cell))
+                    lastHyphenBreak = i + 1;
+            }
+
+            if (currentSpaceStart != -1)
+            {
+                lastSpaceStart = currentSpaceStart;
+                lastSpaceEnd = limit;
+            }
+
+            if (limit < lineColumns)
+            {
+                const TScreenCell &overflowCell = cells[limit];
+                if (!overflowCell._ch.isWideCharTrail())
+                {
+                    if (cellIsWhitespace(overflowCell))
+                    {
+                        if (lastSpaceStart < offset)
+                            lastSpaceStart = limit;
+                        int j = limit;
+                        while (j < lineColumns && cellIsWhitespace(cells[j]))
+                            ++j;
+                        lastSpaceEnd = j;
+                    }
+                    else if (cellBreaksAfter(overflowCell))
+                    {
+                        lastHyphenBreak = std::min(limit + 1, lineColumns);
+                    }
+                }
+            }
+
+            int segmentEnd = limit;
+            int nextOffset = limit;
+
+            if (limit < lineColumns)
+            {
+                if (lastSpaceStart > offset)
+                {
+                    segmentEnd = lastSpaceStart;
+                    nextOffset = std::max(lastSpaceEnd, segmentEnd);
+                }
+                else if (lastHyphenBreak > offset)
+                {
+                    segmentEnd = lastHyphenBreak;
+                    nextOffset = segmentEnd;
+                }
+            }
+
+            if (segmentEnd <= offset)
+            {
+                if (limit > offset)
+                {
+                    segmentEnd = limit;
+                    nextOffset = limit;
+                }
+                else
+                {
+                    segmentEnd = offset + 1;
+                    nextOffset = segmentEnd;
+                }
+            }
+
+            segments.push_back({offset, segmentEnd});
+
+            offset = nextOffset;
+            while (offset < lineColumns && cells[offset]._ch.isWideCharTrail())
+                ++offset;
+        }
+    }
+
+    void MarkdownFileEditor::computeWrapLayoutFromCells(const TScreenCell *cells,
+                                                        int lineColumns,
+                                                        int wrapWidth,
+                                                        WrapLayout &layout)
+    {
+        layout.segments.clear();
+        layout.lineColumns = std::max(0, lineColumns);
+
+        if (!wrapEnabled || wrapWidth <= 0)
+        {
+            layout.segments.push_back({0, layout.lineColumns});
+            return;
+        }
+
+        buildWordWrapSegments(cells, layout.lineColumns, wrapWidth, layout.segments);
+        if (layout.segments.empty())
+            layout.segments.push_back({0, layout.lineColumns});
+    }
+
+    void MarkdownFileEditor::computeWrapLayout(uint linePtr, WrapLayout &layout)
+    {
+        layout.segments.clear();
+        layout.lineColumns = 0;
+
+        if (linePtr >= bufLen)
+        {
+            layout.segments.push_back({0, 0});
+            return;
+        }
+
+        uint endPtr = lineEnd(linePtr);
+        int lineColumns = charPos(linePtr, endPtr);
+        layout.lineColumns = lineColumns;
+
+        if (!wrapEnabled)
+        {
+            layout.segments.push_back({0, lineColumns});
+            return;
+        }
+
+        int wrapWidth = std::max(1, size.x);
+        int bufferWidth = std::max(lineColumns + 1, wrapWidth);
+        std::vector<TScreenCell> cells(static_cast<std::size_t>(bufferWidth));
+        TAttrPair color = getColor(0x0201);
+        formatLine(cells.data(), linePtr, bufferWidth, color);
+        computeWrapLayoutFromCells(cells.data(), lineColumns, wrapWidth, layout);
+    }
+
+    int MarkdownFileEditor::wrapSegmentForColumn(const WrapLayout &layout, int column) const
+    {
+        if (layout.segments.empty())
+            return 0;
+        if (column <= layout.segments.front().startColumn)
+            return 0;
+        for (std::size_t i = 0; i < layout.segments.size(); ++i)
+        {
+            const auto &segment = layout.segments[i];
+            if (column < segment.endColumn || segment.endColumn <= segment.startColumn)
+                return static_cast<int>(i);
+        }
+        return static_cast<int>(layout.segments.size() - 1);
     }
 
     void MarkdownFileEditor::notifyInfoView()
@@ -3725,6 +4070,10 @@ namespace ck::edit
     {
         LineRenderInfo info;
         info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.lineActive = info.isActive;
+        info.lineNumber = lineNumber;
+        info.visualRowIndex = 0;
+        info.visualRowCount = 1;
 
         if (!editor || linePtr >= editor->bufLen)
             return info;
@@ -3805,7 +4154,7 @@ namespace ck::edit
                     if (!spanLabel.empty())
                     {
                         tableLabel.push_back(' ');
-                        tableLabel.append("— ");
+                        tableLabel.append(" -- ");
                         tableLabel.append(spanLabel);
                     }
                 }
@@ -3824,6 +4173,10 @@ namespace ck::edit
     {
         LineRenderInfo info;
         info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.lineActive = info.isActive;
+        info.lineNumber = lineNumber;
+        info.visualRowIndex = 0;
+        info.visualRowCount = 1;
         if (!editor || linePtr >= editor->bufLen)
             return info;
 
@@ -3895,6 +4248,7 @@ namespace ck::edit
     void MarkdownInfoView::rebuildCache()
     {
         cachedLines.assign(static_cast<std::size_t>(std::max(0, size.y)), {});
+        cachedGroups.clear();
         cachedTopLineNumber = editor ? editor->delta.y : -1;
         cachedLabelBeforeView.reset();
         cachedLabelAfterView.reset();
@@ -3903,32 +4257,73 @@ namespace ck::edit
         if (!editor || !editor->isMarkdownMode() || size.y <= 0)
             return;
 
+        const int viewportRows = size.y;
         uint topPtr = editor->topLinePointer();
         MarkdownParserState state = computeState(topPtr);
         uint linePtr = topPtr;
+        uint linePtrAfterView = topPtr;
         int lineNumber = cachedTopLineNumber;
-
-        for (int row = 0; row < size.y; ++row)
+        int row = 0;
+        while (row < viewportRows)
         {
             if (linePtr < editor->bufLen)
             {
-                cachedLines[static_cast<std::size_t>(row)] = buildLineInfo(linePtr, lineNumber, state);
-                uint nextPtr = editor->nextLine(linePtr);
-                if (nextPtr <= linePtr)
-                    linePtr = editor->bufLen;
-                else
-                    linePtr = nextPtr;
+                LineRenderInfo base = buildLineInfo(linePtr, lineNumber, state);
+                MarkdownFileEditor::WrapLayout layout;
+                editor->computeWrapLayout(linePtr, layout);
+                int totalRows = std::max<int>(1, static_cast<int>(layout.segments.size()));
+                int visibleRows = std::min(totalRows, viewportRows - row);
+                int caretRowIndex = -1;
+                if (base.lineActive && totalRows > 0)
+                {
+                    caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                    caretRowIndex = std::clamp(caretRowIndex, 0, totalRows - 1);
+                }
+
+                LineGroupCache group;
+                group.lineNumber = lineNumber;
+                group.firstRow = row;
+                group.visibleRows = visibleRows;
+                group.totalRows = totalRows;
+                group.activeRow = caretRowIndex;
+                cachedGroups.push_back(group);
+
+                for (int i = 0; i < visibleRows && row < viewportRows; ++i, ++row)
+                {
+                    LineRenderInfo rowInfo = base;
+                    rowInfo.visualRowIndex = i;
+                    rowInfo.visualRowCount = totalRows;
+                    rowInfo.lineActive = base.lineActive;
+                    bool isCursorRow = (caretRowIndex >= 0 && i == caretRowIndex);
+                    rowInfo.isActive = isCursorRow;
+                    if (base.lineActive)
+                        rowInfo.displayLabel = isCursorRow ? base.displayLabel : std::string{};
+                    else
+                        rowInfo.displayLabel = (i == 0) ? base.displayLabel : std::string{};
+                    cachedLines[static_cast<std::size_t>(row)] = std::move(rowInfo);
+                }
+
+                linePtrAfterView = editor->nextLine(linePtr);
+                if (linePtrAfterView <= linePtr)
+                    linePtrAfterView = editor->bufLen;
+                linePtr = linePtrAfterView;
             }
             else
             {
                 LineRenderInfo info;
+                info.lineNumber = lineNumber;
                 info.isActive = (lineNumber == editor->curPos.y);
+                info.lineActive = info.isActive;
+                info.visualRowIndex = 0;
+                info.visualRowCount = 1;
                 cachedLines[static_cast<std::size_t>(row)] = std::move(info);
+                ++row;
+                linePtrAfterView = editor->bufLen;
             }
             ++lineNumber;
         }
 
-        refreshBoundaryLabels(topPtr, linePtr);
+        refreshBoundaryLabels(topPtr, linePtrAfterView);
         cacheValid = true;
     }
 
@@ -3943,6 +4338,7 @@ namespace ck::edit
         {
             cacheValid = false;
             cachedLines.clear();
+            cachedGroups.clear();
             cachedLabelBeforeView.reset();
             cachedLabelAfterView.reset();
             cachedTopLineNumber = -1;
@@ -4106,24 +4502,68 @@ namespace ck::edit
 
         uint topPtr = editor->topLinePointer();
         std::vector<int> rowsChanged;
-        rowsChanged.reserve(lineNumbers.size());
+        rowsChanged.reserve(lineNumbers.size() * 2);
 
         for (int lineNumber : lineNumbers)
         {
-            if (lineNumber < 0)
+            if (lineNumber < 0 || lineNumber < cachedTopLineNumber)
                 continue;
-            int row = lineNumber - cachedTopLineNumber;
-            if (row < 0 || row >= size.y)
+
+            auto groupIt = std::find_if(cachedGroups.begin(), cachedGroups.end(),
+                                         [lineNumber](const LineGroupCache &group)
+                                         { return group.lineNumber == lineNumber; });
+            if (groupIt == cachedGroups.end())
                 continue;
 
             uint linePtr = topPtr;
-            if (row != 0)
-                linePtr = editor->lineMove(topPtr, row);
+            int offset = lineNumber - cachedTopLineNumber;
+            if (offset > 0)
+                linePtr = editor->lineMove(topPtr, offset);
             if (linePtr > editor->bufLen)
                 linePtr = editor->bufLen;
 
-            cachedLines[static_cast<std::size_t>(row)] = buildLineInfo(linePtr, lineNumber);
-            rowsChanged.push_back(row);
+            LineRenderInfo base = buildLineInfo(linePtr, lineNumber);
+            MarkdownFileEditor::WrapLayout layout;
+            editor->computeWrapLayout(linePtr, layout);
+            int newTotalRows = std::max<int>(1, static_cast<int>(layout.segments.size()));
+            int newVisibleRows = std::min(newTotalRows, size.y - groupIt->firstRow);
+            if (newVisibleRows <= 0)
+                continue;
+
+            if (newTotalRows != groupIt->totalRows || newVisibleRows != groupIt->visibleRows)
+            {
+                drawView();
+                return;
+            }
+
+            int caretRowIndex = -1;
+            if (base.lineActive && newTotalRows > 0)
+            {
+                caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                caretRowIndex = std::clamp(caretRowIndex, 0, newTotalRows - 1);
+            }
+            groupIt->activeRow = caretRowIndex;
+            groupIt->visibleRows = newVisibleRows;
+            groupIt->totalRows = newTotalRows;
+
+            for (int i = 0; i < groupIt->visibleRows; ++i)
+            {
+                LineRenderInfo rowInfo = base;
+                rowInfo.visualRowIndex = i;
+                rowInfo.visualRowCount = newTotalRows;
+                rowInfo.lineActive = base.lineActive;
+                bool isCursorRow = (caretRowIndex >= 0 && i == caretRowIndex);
+                rowInfo.isActive = isCursorRow;
+                if (base.lineActive)
+                    rowInfo.displayLabel = isCursorRow ? base.displayLabel : std::string{};
+                else
+                    rowInfo.displayLabel = (i == 0) ? base.displayLabel : std::string{};
+                int rowIndex = groupIt->firstRow + i;
+                if (rowIndex >= size.y)
+                    break;
+                cachedLines[static_cast<std::size_t>(rowIndex)] = std::move(rowInfo);
+                rowsChanged.push_back(rowIndex);
+            }
         }
 
         if (rowsChanged.empty())
@@ -4140,7 +4580,8 @@ namespace ck::edit
         if (touchesFirst || touchesLast)
         {
             uint linePtrAfterView = topPtr;
-            for (int i = 0; i < size.y && linePtrAfterView < editor->bufLen; ++i)
+            int linesVisible = static_cast<int>(cachedGroups.size());
+            for (int i = 0; i < linesVisible && linePtrAfterView < editor->bufLen; ++i)
             {
                 uint next = editor->nextLine(linePtrAfterView);
                 if (next <= linePtrAfterView)
@@ -4283,7 +4724,7 @@ namespace ck::edit
             return false;
 
         std::string previousName = fileEditor->fileName;
-        bool saved = forceSaveAs ? static_cast<bool>(fileEditor->saveAs())
+        bool saved = forceSaveAs ? static_cast<bool>(fileEditor->saveAs()) 
                                  : static_cast<bool>(fileEditor->save());
         if (!saved)
             return false;
@@ -4420,8 +4861,7 @@ namespace ck::edit
         std::thread([this, token]()
                     {
         delay(3000);
-        pendingStatusMessageClear.store(token, std::memory_order_release); })
-            .detach();
+        pendingStatusMessageClear.store(token, std::memory_order_release); }).detach();
     }
 
     void MarkdownEditorApp::clearStatusMessage()
@@ -4544,8 +4984,8 @@ namespace ck::edit
         else
         {
             uint32_t expected = token;
-            pendingStatusMessageClear.compare_exchange_strong(expected, 0,
-                                                              std::memory_order_acq_rel,
+            pendingStatusMessageClear.compare_exchange_strong(expected, 0, 
+                                                              std::memory_order_acq_rel, 
                                                               std::memory_order_acquire);
         }
     }

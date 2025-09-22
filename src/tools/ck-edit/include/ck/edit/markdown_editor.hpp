@@ -31,7 +31,14 @@
 #define Uses_TProgram
 #define Uses_TDialog
 #define Uses_TObject
+#define Uses_TInputLine
+#define Uses_TLabel
+#define Uses_THistory
+#define Uses_TCheckBoxes
+#define Uses_TSItem
+#define Uses_TButton
 #define Uses_TFindDialogRec
+#define Uses_TReplaceDialogRec
 #include <tvision/tv.h>
 
 #include <atomic>
@@ -250,6 +257,23 @@ private:
     std::string generateUniqueFootnoteId();
     void appendDefinition(const std::string &definition);
 
+    struct WrapSegment
+    {
+        int startColumn = 0;
+        int endColumn = 0;
+    };
+
+    struct WrapLayout
+    {
+        std::vector<WrapSegment> segments;
+        int lineColumns = 0;
+    };
+
+    void computeWrapLayout(uint linePtr, WrapLayout &layout);
+    void computeWrapLayoutFromCells(const TScreenCell *cells, int lineColumns, int wrapWidth, WrapLayout &layout);
+    int wrapSegmentForColumn(const WrapLayout &layout, int column) const;
+    static void buildWordWrapSegments(const TScreenCell *cells, int lineColumns, int wrapWidth, std::vector<WrapSegment> &segments);
+
     struct TableContext
     {
         enum class ActiveRow
@@ -302,9 +326,22 @@ private:
     {
         bool hasLine = false;
         bool isActive = false;
+        bool lineActive = false;
         MarkdownLineKind lineKind = MarkdownLineKind::Unknown;
         std::string displayLabel;
         std::string groupLabel;
+        int lineNumber = -1;
+        int visualRowIndex = 0;
+        int visualRowCount = 1;
+    };
+
+    struct LineGroupCache
+    {
+        int lineNumber = -1;
+        int firstRow = 0;
+        int visibleRows = 0;
+        int totalRows = 0;
+        int activeRow = -1;
     };
 
     MarkdownFileEditor *editor;
@@ -312,6 +349,7 @@ private:
     uint cachedPrefixPtr = UINT_MAX;
     uint cachedVersion = 0;
     std::vector<LineRenderInfo> cachedLines;
+    std::vector<LineGroupCache> cachedGroups;
     int cachedTopLineNumber = -1;
     std::optional<std::string> cachedLabelBeforeView;
     std::optional<std::string> cachedLabelAfterView;
@@ -368,8 +406,6 @@ public:
     void updateMenuBarForMode(bool markdownMode);
     void refreshUiMode();
     void showDocumentSavedMessage(const std::string &path);
-
-    TFindDialogRec findDialogRec;
 
 private:
     MarkdownEditWindow *openEditor(const char *fileName, Boolean visible);
