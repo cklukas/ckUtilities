@@ -20,6 +20,10 @@ endif()
 add_subdirectory(src/common)
 add_subdirectory(src/tools)
 
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
+
 install(FILES README.md DESTINATION share/doc/ck-utilities)
 install(FILES LICENSE DESTINATION share/licenses/ck-utilities)
 

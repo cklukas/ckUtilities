@@ -82,6 +82,10 @@ cmake --build build/dev -t ckfind
 ctest --test-dir build/dev --output-on-failure
 ```
 
+Unit tests exercise the shared libraries and each tool's core logic (JSON tree building, Markdown analysis, disk-usage math, and
+configuration registries). The suite uses GoogleTest and is enabled automatically when `BUILD_TESTING` is on, so running `ctest`
+after a build executes the new checks.
+
 #### Install (to staging directory):
 
 ```bash
