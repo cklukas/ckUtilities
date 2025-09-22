@@ -13,6 +13,7 @@ function(cktools_ensure_tvision)
     tvision
     GIT_REPOSITORY https://github.com/magiblot/tvision.git
     GIT_TAG 7ecc590ac59b163a876da50867c69bba605cebfc
+    CMAKE_ARGS -DCMAKE_DISABLE_FIND_PACKAGE_Python=ON
   )
 
   FetchContent_MakeAvailable(tvision)

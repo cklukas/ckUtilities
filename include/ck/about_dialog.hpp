@@ -83,211 +83,208 @@
 
 namespace ck::ui
 {
-struct AboutDialogInfo
-{
-    std::string_view toolName;
-    std::string_view version;
-    std::string_view description;
-    std::string_view copyright = "© 2025 by Dr. C. Klukas";
-    std::string_view applicationName = "CK Utilities";
-    std::string_view buildDate = __DATE__;
-    std::string_view buildTime = __TIME__;
-};
-
-inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
-{
-    std::vector<std::string> paragraphs;
+    struct AboutDialogInfo
     {
-        std::ostringstream headerOut;
-        headerOut << info.applicationName;
-        if (!info.applicationName.empty() && !info.copyright.empty())
-            headerOut << ' ';
-        if (!info.copyright.empty())
-            headerOut << info.copyright;
-        paragraphs.emplace_back(headerOut.str());
-    }
-    if (!info.toolName.empty())
-        paragraphs.emplace_back(info.toolName);
+        std::string_view toolName;
+        std::string_view version;
+        std::string_view description;
+        std::string_view copyright = "© 2025 by Dr. C. Klukas";
+        std::string_view applicationName = "CK Utilities";
+        std::string_view buildDate = __DATE__;
+        std::string_view buildTime = __TIME__;
+    };
 
-    if (!info.description.empty())
-        paragraphs.emplace_back(std::string(info.description));
-
-    if (!info.version.empty())
+    inline std::string buildAboutDialogMessage(const AboutDialogInfo &info)
     {
-        std::ostringstream versionOut;
-        versionOut << "Version: " << info.version;
-        paragraphs.emplace_back(versionOut.str());
-    }
-
-    if (!info.buildDate.empty())
-    {
-        std::ostringstream buildOut;
-        buildOut << "Build: " << info.buildDate;
-        if (!info.buildTime.empty())
-            buildOut << ' ' << info.buildTime;
-        paragraphs.emplace_back(buildOut.str());
-    }
-
-    std::ostringstream out;
-    for (size_t i = 0; i < paragraphs.size(); ++i)
-    {
-        if (i > 0)
-            out << "\n\n";
-        out << paragraphs[i];
-    }
-
-    return out.str();
-}
-
-namespace detail
-{
-
-class AboutStaticText : public TStaticText
-{
-public:
-    AboutStaticText(const TRect &bounds,
-                    TStringView message,
-                    std::vector<std::string> lines,
-                    size_t highlightIndex,
-                    size_t highlightPrefixLength) noexcept
-        : TStaticText(bounds, message)
-        , m_lines(std::move(lines))
-        , m_highlightIndex(highlightIndex)
-        , m_highlightPrefixLength(highlightPrefixLength)
-    {
-        growMode |= gfFixed;
-    }
-
-    void draw() override
-    {
-        const TColorAttr normal = getColor(1);
-        TColorAttr highlight = normal;
-        ::setFore(highlight, TColorBIOS(0x1));
-        TDrawBuffer buffer;
-        for (int y = 0; y < size.y; ++y)
+        std::vector<std::string> paragraphs;
         {
-            buffer.moveChar(0, ' ', normal, size.x);
-            if (y < static_cast<int>(m_lines.size()))
-            {
-                const bool isHighlighted = (m_highlightIndex < m_lines.size()) &&
-                                            (static_cast<size_t>(y) == m_highlightIndex) &&
-                                            !m_lines[y].empty();
-                if (isHighlighted && m_highlightPrefixLength > 0)
-                {
-                    const std::string &line = m_lines[y];
-                    const size_t prefixLength = std::min(m_highlightPrefixLength, line.size());
-                    const TStringView prefix(line.data(), prefixLength);
-                    buffer.moveStr(0, prefix, highlight);
+            std::ostringstream headerOut;
+            headerOut << info.applicationName;
+            if (!info.applicationName.empty() && !info.copyright.empty())
+                headerOut << ' ';
+            if (!info.copyright.empty())
+                headerOut << info.copyright;
+            paragraphs.emplace_back(headerOut.str());
+        }
+        if (!info.toolName.empty())
+            paragraphs.emplace_back(info.toolName);
 
-                    const TStringView suffix(line.data() + prefixLength, line.size() - prefixLength);
-                    if (!suffix.empty())
+        if (!info.description.empty())
+            paragraphs.emplace_back(std::string(info.description));
+
+        if (!info.version.empty())
+        {
+            std::ostringstream versionOut;
+            versionOut << "Version: " << info.version;
+            paragraphs.emplace_back(versionOut.str());
+        }
+
+        if (!info.buildDate.empty())
+        {
+            std::ostringstream buildOut;
+            buildOut << "Build: " << info.buildDate;
+            if (!info.buildTime.empty())
+                buildOut << ' ' << info.buildTime;
+            paragraphs.emplace_back(buildOut.str());
+        }
+
+        std::ostringstream out;
+        for (size_t i = 0; i < paragraphs.size(); ++i)
+        {
+            if (i > 0)
+                out << "\n\n";
+            out << paragraphs[i];
+        }
+
+        return out.str();
+    }
+
+    namespace detail
+    {
+
+        class AboutStaticText : public TStaticText
+        {
+        public:
+            AboutStaticText(const TRect &bounds,
+                            TStringView message,
+                            std::vector<std::string> lines,
+                            size_t highlightIndex,
+                            size_t highlightPrefixLength) noexcept
+                : TStaticText(bounds, message), m_lines(std::move(lines)), m_highlightIndex(highlightIndex), m_highlightPrefixLength(highlightPrefixLength)
+            {
+                growMode |= gfFixed;
+            }
+
+            void draw() override
+            {
+                const TColorAttr normal = getColor(1);
+                TColorAttr highlight = normal;
+                ::setFore(highlight, TColorBIOS(0x1));
+                TDrawBuffer buffer;
+                for (int y = 0; y < size.y; ++y)
+                {
+                    buffer.moveChar(0, ' ', normal, size.x);
+                    if (y < static_cast<int>(m_lines.size()))
                     {
-                        const int prefixWidth = strwidth(prefix);
-                        buffer.moveStr(prefixWidth, suffix, normal);
+                        const bool isHighlighted = (m_highlightIndex < m_lines.size()) &&
+                                                   (static_cast<size_t>(y) == m_highlightIndex) &&
+                                                   !m_lines[y].empty();
+                        if (isHighlighted && m_highlightPrefixLength > 0)
+                        {
+                            const std::string &line = m_lines[y];
+                            const size_t prefixLength = std::min(m_highlightPrefixLength, line.size());
+                            const TStringView prefix(line.data(), prefixLength);
+                            buffer.moveStr(0, prefix, highlight);
+
+                            const TStringView suffix(line.data() + prefixLength, line.size() - prefixLength);
+                            if (!suffix.empty())
+                            {
+                                const int prefixWidth = strwidth(prefix);
+                                buffer.moveStr(prefixWidth, suffix, normal);
+                            }
+                        }
+                        else
+                        {
+                            const TColorAttr attr = isHighlighted ? highlight : normal;
+                            buffer.moveStr(0, TStringView(m_lines[y]), attr);
+                        }
                     }
+                    writeLine(0, y, size.x, 1, buffer);
+                }
+            }
+
+        private:
+            std::vector<std::string> m_lines;
+            size_t m_highlightIndex;
+            size_t m_highlightPrefixLength;
+        };
+
+        inline std::vector<std::string> splitLinesPreservingEmpties(const std::string &text)
+        {
+            std::vector<std::string> lines;
+            std::string current;
+            for (char ch : text)
+            {
+                if (ch == '\n')
+                {
+                    lines.emplace_back(std::move(current));
+                    current.clear();
                 }
                 else
                 {
-                    const TColorAttr attr = isHighlighted ? highlight : normal;
-                    buffer.moveStr(0, TStringView(m_lines[y]), attr);
+                    current.push_back(ch);
                 }
             }
-            writeLine(0, y, size.x, 1, buffer);
-        }
-    }
-
-private:
-    std::vector<std::string> m_lines;
-    size_t m_highlightIndex;
-    size_t m_highlightPrefixLength;
-};
-
-inline std::vector<std::string> splitLinesPreservingEmpties(const std::string &text)
-{
-    std::vector<std::string> lines;
-    std::string current;
-    for (char ch : text)
-    {
-        if (ch == '\n')
-        {
             lines.emplace_back(std::move(current));
-            current.clear();
+            return lines;
         }
-        else
+
+        inline size_t findFirstNonEmptyLine(const std::vector<std::string> &lines)
         {
-            current.push_back(ch);
+            for (size_t index = 0; index < lines.size(); ++index)
+                if (!lines[index].empty())
+                    return index;
+            return 0;
         }
-    }
-    lines.emplace_back(std::move(current));
-    return lines;
-}
 
-inline size_t findFirstNonEmptyLine(const std::vector<std::string> &lines)
-{
-    for (size_t index = 0; index < lines.size(); ++index)
-        if (!lines[index].empty())
-            return index;
-    return 0;
-}
+        inline int computeMaxLineWidth(const std::vector<std::string> &lines)
+        {
+            int maxWidth = 0;
+            for (const auto &line : lines)
+                maxWidth = std::max(maxWidth, strwidth(TStringView(line)));
+            return maxWidth;
+        }
 
-inline int computeMaxLineWidth(const std::vector<std::string> &lines)
-{
-    int maxWidth = 0;
-    for (const auto &line : lines)
-        maxWidth = std::max(maxWidth, strwidth(TStringView(line)));
-    return maxWidth;
-}
+    } // namespace detail
 
-} // namespace detail
-
-inline void showAboutDialog(const AboutDialogInfo &info)
-{
-    const std::string message = buildAboutDialogMessage(info);
-    auto lines = detail::splitLinesPreservingEmpties(message);
-    const size_t highlightIndex = detail::findFirstNonEmptyLine(lines);
-    size_t highlightPrefixLength = 0;
-    if (highlightIndex < lines.size() && !info.applicationName.empty())
+    inline void showAboutDialog(const AboutDialogInfo &info)
     {
-        const std::string &line = lines[highlightIndex];
-        if (line.compare(0, info.applicationName.size(), info.applicationName) == 0)
-            highlightPrefixLength = info.applicationName.size();
+        const std::string message = buildAboutDialogMessage(info);
+        auto lines = detail::splitLinesPreservingEmpties(message);
+        const size_t highlightIndex = detail::findFirstNonEmptyLine(lines);
+        size_t highlightPrefixLength = 0;
+        if (highlightIndex < lines.size() && !info.applicationName.empty())
+        {
+            const std::string &line = lines[highlightIndex];
+            if (line.compare(0, info.applicationName.size(), info.applicationName) == 0)
+                highlightPrefixLength = info.applicationName.size();
+        }
+        const int maxLineWidth = detail::computeMaxLineWidth(lines);
+
+        constexpr int kMinWidth = 40;
+        constexpr int kMinHeight = 9;
+        const int textHeight = static_cast<int>(lines.size());
+        const int dialogWidth = std::max(kMinWidth, maxLineWidth + 5);
+        const int dialogHeight = std::max(kMinHeight, textHeight + 6);
+
+        TRect bounds(0, 0, dialogWidth, dialogHeight);
+        bounds.move((TProgram::deskTop->size.x - dialogWidth) / 2,
+                    (TProgram::deskTop->size.y - dialogHeight) / 2);
+
+        TDialog *dialog = new TDialog(bounds, MsgBoxText::informationText);
+
+        const TRect textBounds(3, 2, dialog->size.x - 2, dialog->size.y - 3);
+        dialog->insert(new detail::AboutStaticText(textBounds,
+                                                   message,
+                                                   std::move(lines),
+                                                   highlightIndex,
+                                                   highlightPrefixLength));
+
+        TButton *okButton = new TButton(TRect(0, 0, 10, 2), MsgBoxText::okText, cmOK, bfDefault);
+        dialog->insert(okButton);
+        const int buttonX = (dialog->size.x - okButton->size.x) / 2;
+        okButton->moveTo(buttonX, dialog->size.y - 3);
+
+        dialog->selectNext(False);
+        TProgram::application->execView(dialog);
+        TObject::destroy(dialog);
     }
-    const int maxLineWidth = detail::computeMaxLineWidth(lines);
 
-    constexpr int kMinWidth = 40;
-    constexpr int kMinHeight = 9;
-    const int textHeight = static_cast<int>(lines.size());
-    const int dialogWidth = std::max(kMinWidth, maxLineWidth + 5);
-    const int dialogHeight = std::max(kMinHeight, textHeight + 5);
-
-    TRect bounds(0, 0, dialogWidth, dialogHeight);
-    bounds.move((TProgram::deskTop->size.x - dialogWidth) / 2,
-                (TProgram::deskTop->size.y - dialogHeight) / 2);
-
-    TDialog *dialog = new TDialog(bounds, MsgBoxText::informationText);
-
-    const TRect textBounds(3, 2, dialog->size.x - 2, dialog->size.y - 3);
-    dialog->insert(new detail::AboutStaticText(textBounds,
-                                              message,
-                                              std::move(lines),
-                                              highlightIndex,
-                                              highlightPrefixLength));
-
-    TButton *okButton = new TButton(TRect(0, 0, 10, 2), MsgBoxText::okText, cmOK, bfDefault);
-    dialog->insert(okButton);
-    const int buttonX = (dialog->size.x - okButton->size.x) / 2;
-    okButton->moveTo(buttonX, dialog->size.y - 3);
-
-    dialog->selectNext(False);
-    TProgram::application->execView(dialog);
-    TObject::destroy(dialog);
-}
-
-inline void showAboutDialog(std::string_view toolName,
-                            std::string_view version,
-                            std::string_view description)
-{
-    showAboutDialog(AboutDialogInfo{toolName, version, description});
-}
+    inline void showAboutDialog(std::string_view toolName,
+                                std::string_view version,
+                                std::string_view description)
+    {
+        showAboutDialog(AboutDialogInfo{toolName, version, description});
+    }
 
 } // namespace ck::ui

@@ -77,6 +77,7 @@ struct MarkdownLineInfo
     bool isOrdered = false;
     std::string marker;
     std::string language;
+    std::string fenceLabel;
     std::vector<MarkdownSpan> spans;
     std::vector<MarkdownTableCell> tableCells;
     std::vector<MarkdownTableAlignment> tableAlignments;
@@ -93,6 +94,8 @@ struct MarkdownParserState
     bool tableHeaderConfirmed = false;
     int tableRowCounter = 0;
     std::vector<MarkdownTableAlignment> tableAlignments;
+    std::string fenceLabel;
+    std::string fenceLanguage;
 };
 
 class MarkdownAnalyzer
@@ -125,4 +128,3 @@ private:
 };
 
 } // namespace ck::edit
-

@@ -137,6 +137,10 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
                     auto lang = trim(trimmed.substr(count));
                     info.language = lang;
                 }
+                info.inFence = true;
+                info.fenceLabel = describeLine(info);
+                state.fenceLabel = info.fenceLabel;
+                state.fenceLanguage = info.language;
                 resetTable();
                 parseInline(line, info);
                 return info;
@@ -587,6 +591,8 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeFencedState(const std::string &line, M
 {
     MarkdownLineInfo info;
     info.inFence = true;
+    info.fenceLabel = state.fenceLabel;
+    info.language = state.fenceLanguage;
     std::string trimmed = trim(line);
     if (!state.fenceMarker.empty() && trimmed.rfind(state.fenceMarker, 0) == 0)
     {
@@ -594,6 +600,8 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeFencedState(const std::string &line, M
         info.fenceCloses = true;
         state.inFence = false;
         state.fenceMarker.clear();
+        state.fenceLabel.clear();
+        state.fenceLanguage.clear();
     }
     else
     {
@@ -813,4 +821,3 @@ void MarkdownAnalyzer::parseInlineHtml(const std::string &line, std::vector<Mark
 }
 
 } // namespace ck::edit
-

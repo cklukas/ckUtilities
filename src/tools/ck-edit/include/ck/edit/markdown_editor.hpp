@@ -31,10 +31,12 @@
 #define Uses_TProgram
 #define Uses_TDialog
 #define Uses_TObject
+#define Uses_TFindDialogRec
 #include <tvision/tv.h>
 
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,6 +70,7 @@ struct MarkdownStatusContext
 {
     bool hasEditor = false;
     bool markdownMode = false;
+    bool smartListContinuation = true;
     bool hasFileName = false;
     bool isUntitled = false;
     bool isModified = false;
@@ -188,8 +191,21 @@ private:
     MarkdownParserState statusStateCache{};
     uint statusCachePrefixPtr = UINT_MAX;
     uint statusCacheVersion = 0;
+    std::vector<int> pendingInfoLines;
+    bool infoViewNeedsFullRefresh = false;
+    bool lineNumberCacheValid = false;
+    uint lineNumberCachePtr = 0;
+    int lineNumberCacheNumber = 0;
 
     void onContentModified();
+    void queueInfoLine(int lineNumber);
+    void queueInfoLineRange(int firstLine, int lastLine);
+    void requestInfoViewFullRefresh();
+    void clearInfoViewQueue();
+    int lineNumberForPointer(uint pointer);
+    uint pointerForLine(int lineNumber);
+    void enqueuePendingInfoLine(int lineNumber);
+    void resetLineNumberCache();
     void applyInlineCommand(const InlineCommandSpec &spec);
     void removeFormattingAround(uint start, uint end);
     bool ensureSelection();
@@ -276,18 +292,38 @@ public:
     virtual void draw() override;
     virtual TPalette &getPalette() const override;
 
+    void updateLines(const std::vector<int> &lineNumbers);
+
     void invalidateState() noexcept { cachedPrefixPtr = UINT_MAX; }
     void setEditor(MarkdownFileEditor *ed) noexcept { editor = ed; }
 
 private:
+    struct LineRenderInfo
+    {
+        bool hasLine = false;
+        bool isActive = false;
+        MarkdownLineKind lineKind = MarkdownLineKind::Unknown;
+        std::string displayLabel;
+        std::string groupLabel;
+    };
+
     MarkdownFileEditor *editor;
     MarkdownParserState cachedState{};
     uint cachedPrefixPtr = UINT_MAX;
     uint cachedVersion = 0;
+    std::vector<LineRenderInfo> cachedLines;
+    int cachedTopLineNumber = -1;
+    std::optional<std::string> cachedLabelBeforeView;
+    std::optional<std::string> cachedLabelAfterView;
+    bool cacheValid = false;
 
     MarkdownParserState computeState(uint topPtr);
-    void renderLine(TDrawBuffer &buffer, int row, uint linePtr, int lineNumber,
-                    const MarkdownParserState &stateSnapshot);
+    LineRenderInfo buildLineInfo(uint linePtr, int lineNumber);
+    LineRenderInfo buildLineInfo(uint linePtr, int lineNumber, MarkdownParserState &state);
+    void rebuildCache();
+    void renderRow(int row);
+    void refreshBoundaryLabels(uint topPtr, uint linePtrAfterView);
+    static std::string filterLabel(const std::string &label);
 };
 
 class MarkdownEditWindow : public TWindow
@@ -299,9 +335,10 @@ public:
     void updateWindowTitle();
     bool saveDocument(bool forceSaveAs);
 
-    virtual void draw() override;
     virtual void setState(ushort aState, Boolean enable) override;
     virtual void handleEvent(TEvent &event) override;
+
+    void refreshDivider();
 
 private:
     MarkdownFileEditor *fileEditor = nullptr;
@@ -311,6 +348,9 @@ private:
     TIndicator *indicator = nullptr;
 
     void applyWindowTitle(const std::string &titleText);
+
+protected:
+    static TFrame *initFrame(TRect bounds);
 };
 
 class MarkdownEditorApp : public TApplication
@@ -328,6 +368,8 @@ public:
     void updateMenuBarForMode(bool markdownMode);
     void refreshUiMode();
     void showDocumentSavedMessage(const std::string &path);
+
+    TFindDialogRec findDialogRec;
 
 private:
     MarkdownEditWindow *openEditor(const char *fileName, Boolean visible);
