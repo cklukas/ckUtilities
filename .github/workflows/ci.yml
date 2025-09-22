@@ -36,12 +36,11 @@ jobs:
       - name: Configure
         run: cmake --preset dev
 
-      - name: Build ckjsonview
-        run: cmake --build build/dev --target ckjsonview
+      - name: Build all targets
+        run: cmake --build build/dev
 
       - name: Run tests
         run: ctest --test-dir build/dev --output-on-failure
-        if: runner.os == 'Linux'
 
   package-linux:
     runs-on: ubuntu-latest

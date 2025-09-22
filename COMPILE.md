@@ -169,9 +169,16 @@ add_ck_tool(
 ## Testing strategy
 
 * **Unit tests (gtest):** cover ckcore/ckfs/ckui and pure logic inside tools.
+  * `tests/unit/app_info` validates the launcher catalogue (`ck-utilities`).
+  * `tests/unit/config` checks the shared configuration registry (`ck-config`).
+  * `tests/unit/ck_du` exercises size/unit helpers and option registration.
+  * `tests/unit/json_view` verifies JSON tree construction and formatting helpers.
+  * `tests/unit/ck_edit` parses Markdown structures and inline spans.
 * **Integration tests:** run compiled binaries against fixtures; assert exit codes, stdout patterns, and side effects in a temp sandbox.
 * **Sanitizers:** `asan` preset runs unit+integration under Address/UBSan.
 * **Coverage:** `coverage` preset emits `*.info`; use `lcov`/`genhtml` or `gcovr`.
+
+GoogleTest is fetched automatically when `BUILD_TESTING=ON` (default for the presets). Every executable uses `gtest_discover_tests` so new cases are picked up without editing `CTestTestfile.cmake`.
 
 Examples:
 
