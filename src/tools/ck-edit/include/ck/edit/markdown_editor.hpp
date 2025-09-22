@@ -182,6 +182,9 @@ public:
     uint topLinePointer();
     std::string lineText(uint linePtr);
     void notifyInfoView();
+    void refreshCursorMetrics();
+    int documentLineNumber() const noexcept;
+    int documentColumnNumber() const noexcept;
     uint stateVersion() const noexcept { return cachedStateVersion; }
     void buildStatusContext(struct MarkdownStatusContext &context);
 
@@ -203,6 +206,11 @@ private:
     bool lineNumberCacheValid = false;
     uint lineNumberCachePtr = 0;
     int lineNumberCacheNumber = 0;
+    int cursorLineNumber = 0;
+    int cursorColumnNumber = 0;
+    int wrapTopSegmentOffset = 0;
+    int wrapDesiredVisualColumn = -1;
+    TPoint wrapCursorScreenPos {0, 0};
 
     void onContentModified();
     void queueInfoLine(int lineNumber);
@@ -213,6 +221,7 @@ private:
     uint pointerForLine(int lineNumber);
     void enqueuePendingInfoLine(int lineNumber);
     void resetLineNumberCache();
+    int computeLineNumberForPointer(uint pointer);
     void applyInlineCommand(const InlineCommandSpec &spec);
     void removeFormattingAround(uint start, uint end);
     bool ensureSelection();
@@ -273,6 +282,22 @@ private:
     void computeWrapLayoutFromCells(const TScreenCell *cells, int lineColumns, int wrapWidth, WrapLayout &layout);
     int wrapSegmentForColumn(const WrapLayout &layout, int column) const;
     static void buildWordWrapSegments(const TScreenCell *cells, int lineColumns, int wrapWidth, std::vector<WrapSegment> &segments);
+    int documentLineCount() const;
+    int wrapSegmentCount(const WrapLayout &layout) const;
+    WrapSegment segmentAt(const WrapLayout &layout, int index) const;
+    void normalizeWrapTop(int &docLine, int &segmentOffset);
+    int computeWrapCaretRow(int docLine, int segmentOffset, uint caretLinePtr, const WrapLayout &caretLayout, int caretSegment) const;
+    void ensureWrapViewport(const WrapLayout &caretLayout, int caretSegment);
+    void updateWrapCursorVisualPosition(const WrapLayout &caretLayout, int caretSegment);
+    int currentWrapLocalColumn(const WrapLayout &layout, int segmentIndex) const;
+    void updateWrapStateAfterMovement(bool preserveDesiredColumn);
+    bool handleWrapKeyEvent(TEvent &event);
+    void moveCaretVertically(int lines, uchar selectMode);
+    bool moveCaretOneStep(int direction, uchar selectMode, int desiredColumn);
+    bool moveCaretDownSegment(uint linePtr, const WrapLayout &layout, int segmentIndex, uchar selectMode, int desiredColumn);
+    bool moveCaretToNextDocumentLine(uint linePtr, uchar selectMode, int desiredColumn);
+    bool moveCaretUpSegment(uint linePtr, const WrapLayout &layout, int segmentIndex, uchar selectMode, int desiredColumn);
+    bool moveCaretToPreviousDocumentLine(uint linePtr, uchar selectMode, int desiredColumn);
 
     struct TableContext
     {

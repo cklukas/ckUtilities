@@ -130,6 +130,7 @@ namespace ck::edit
             }
         };
 
+
         const std::array<std::string_view, 7> kMarkdownExtensions = {
             ".md", ".markdown", ".mdown", ".mkd", ".mkdn", ".mdtxt", ".mdtext"};
 
@@ -1098,6 +1099,7 @@ namespace ck::edit
             markdownMode = isMarkdownFile(std::string(fileName));
         else
             markdownMode = false;
+        refreshCursorMetrics();
     }
 
     int MarkdownFileEditor::TableContext::columnCount() const noexcept
@@ -1118,7 +1120,17 @@ namespace ck::edit
     {
         wrapEnabled = !wrapEnabled;
         if (wrapEnabled)
+        {
             delta.x = 0;
+            wrapTopSegmentOffset = 0;
+            wrapDesiredVisualColumn = -1;
+            updateWrapStateAfterMovement(false);
+        }
+        else
+        {
+            wrapTopSegmentOffset = 0;
+            wrapDesiredVisualColumn = -1;
+        }
         if (hScrollBar)
         {
             if (wrapEnabled)
@@ -3210,7 +3222,9 @@ namespace ck::edit
 
     void MarkdownFileEditor::resetLineNumberCache()
     {
-        lineNumberCacheValid = false;
+        lineNumberCachePtr = lineStart(curPtr);
+        lineNumberCacheNumber = cursorLineNumber;
+        lineNumberCacheValid = true;
     }
 
     int MarkdownFileEditor::lineNumberForPointer(uint pointer)
@@ -3230,8 +3244,9 @@ namespace ck::edit
 
         if (!lineNumberCacheValid)
         {
+            lineNumberCacheNumber = computeLineNumberForPointer(curPtr);
             lineNumberCachePtr = lineStart(curPtr);
-            lineNumberCacheNumber = curPos.y;
+            cursorLineNumber = lineNumberCacheNumber;
             lineNumberCacheValid = true;
         }
 
@@ -3272,6 +3287,8 @@ namespace ck::edit
 
         lineNumberCachePtr = currentPtr;
         lineNumberCacheNumber = currentNumber;
+        if (pointer == curPtr)
+            cursorLineNumber = currentNumber;
         return currentNumber;
     }
 
@@ -3303,6 +3320,9 @@ namespace ck::edit
     void MarkdownFileEditor::handleEvent(TEvent &event)
     {
         if (continueListOnEnter(event))
+            return;
+
+        if (handleWrapKeyEvent(event))
             return;
 
         if (event.what == evCommand)
@@ -3352,6 +3372,58 @@ namespace ck::edit
                 insertLineBreak();
                 clearEvent(event);
                 return;
+            case cmLineUp:
+                if (wrapEnabled)
+                {
+                    Boolean centerCursor = Boolean(!cursorVisible());
+                    lock();
+                    moveCaretVertically(-1, 0);
+                    trackCursor(centerCursor);
+                    updateWrapStateAfterMovement(true);
+                    unlock();
+                    clearEvent(event);
+                    return;
+                }
+                break;
+            case cmLineDown:
+                if (wrapEnabled)
+                {
+                    Boolean centerCursor = Boolean(!cursorVisible());
+                    lock();
+                    moveCaretVertically(1, 0);
+                    trackCursor(centerCursor);
+                    updateWrapStateAfterMovement(true);
+                    unlock();
+                    clearEvent(event);
+                    return;
+                }
+                break;
+            case cmPageUp:
+                if (wrapEnabled)
+                {
+                    Boolean centerCursor = Boolean(!cursorVisible());
+                    lock();
+                    moveCaretVertically(-(size.y - 1), 0);
+                    trackCursor(centerCursor);
+                    updateWrapStateAfterMovement(true);
+                    unlock();
+                    clearEvent(event);
+                    return;
+                }
+                break;
+            case cmPageDown:
+                if (wrapEnabled)
+                {
+                    Boolean centerCursor = Boolean(!cursorVisible());
+                    lock();
+                    moveCaretVertically(size.y - 1, 0);
+                    trackCursor(centerCursor);
+                    updateWrapStateAfterMovement(true);
+                    unlock();
+                    clearEvent(event);
+                    return;
+                }
+                break;
             case cmFind:
                 find();
                 clearEvent(event);
@@ -3517,30 +3589,35 @@ namespace ck::edit
             }
         }
 
+        refreshCursorMetrics();
+        int prevLineNumber = cursorLineNumber;
         TPoint prevPos = curPos;
         TPoint prevDelta = delta;
         uint prevInsCount = insCount;
         uint prevDelCount = delCount;
         Boolean prevModified = modified;
         TFileEditor::handleEvent(event);
+        refreshCursorMetrics();
+        int currentLineNumber = cursorLineNumber;
+        updateWrapStateAfterMovement(false);
         bool contentChanged = (insCount != prevInsCount) || (delCount != prevDelCount) || (modified != prevModified);
 
         if (contentChanged)
         {
-            if (prevPos.y >= 0)
-                queueInfoLine(prevPos.y);
-            queueInfoLine(curPos.y);
+            if (prevLineNumber >= 0)
+                queueInfoLine(prevLineNumber);
+            queueInfoLine(currentLineNumber);
         }
         else if (prevPos.x != curPos.x)
         {
-            queueInfoLine(curPos.y);
+            queueInfoLine(currentLineNumber);
         }
 
-        if (prevPos.y != curPos.y)
+        if (prevLineNumber != currentLineNumber)
         {
-            if (prevPos.y >= 0)
-                queueInfoLine(prevPos.y);
-            queueInfoLine(curPos.y);
+            if (prevLineNumber >= 0)
+                queueInfoLine(prevLineNumber);
+            queueInfoLine(currentLineNumber);
         }
 
         if (prevDelta != delta)
@@ -3571,6 +3648,14 @@ namespace ck::edit
         int row = 0;
         int wrapWidth = std::max(1, size.x);
         std::vector<TScreenCell> segmentBuffer(static_cast<std::size_t>(size.x));
+        int skipSegments = wrapTopSegmentOffset;
+
+        {
+            WrapLayout caretLayout;
+            computeWrapLayout(lineStart(curPtr), caretLayout);
+            int caretSegment = wrapSegmentForColumn(caretLayout, cursorColumnNumber);
+            updateWrapCursorVisualPosition(caretLayout, caretSegment);
+        }
         while (row < size.y)
         {
             if (linePtr >= bufLen)
@@ -3595,9 +3680,20 @@ namespace ck::edit
             if (layout.segments.empty())
                 layout.segments.push_back({0, 0});
 
-            for (std::size_t seg = 0; seg < layout.segments.size() && row < size.y; ++seg)
+            int segmentCount = wrapSegmentCount(layout);
+            if (skipSegments >= segmentCount)
             {
-                const auto &segment = layout.segments[seg];
+                skipSegments -= segmentCount;
+                linePtr = nextLine(linePtr);
+                continue;
+            }
+
+            int startSegment = skipSegments;
+            skipSegments = 0;
+
+            for (int seg = startSegment; seg < segmentCount && row < size.y; ++seg)
+            {
+                const auto &segment = layout.segments[static_cast<std::size_t>(seg)];
                 int startCol = std::clamp(segment.startColumn, 0, lineColumns);
                 int endCol = std::clamp(segment.endColumn, startCol, lineColumns);
                 int copyLen = std::min(size.x, std::max(0, endCol - startCol));
@@ -3613,6 +3709,7 @@ namespace ck::edit
             }
             linePtr = nextLine(linePtr);
         }
+        setCursor(wrapCursorScreenPos.x, wrapCursorScreenPos.y);
         notifyInfoView();
     }
 
@@ -3633,6 +3730,69 @@ namespace ck::edit
         for (uint i = start; i < end && i < bufLen; ++i)
             result.push_back(bufChar(i));
         return result;
+    }
+
+    int MarkdownFileEditor::documentLineNumber() const noexcept
+    {
+        return cursorLineNumber;
+    }
+
+    int MarkdownFileEditor::documentColumnNumber() const noexcept
+    {
+        return cursorColumnNumber;
+    }
+
+    int MarkdownFileEditor::computeLineNumberForPointer(uint pointer)
+    {
+        if (bufLen == 0)
+            return 0;
+
+        if (pointer >= bufLen)
+        {
+            if (bufLen == 0)
+                return 0;
+            uint lastPtr = bufLen - 1;
+            int lastLine = computeLineNumberForPointer(lastPtr);
+            return bufChar(lastPtr) == '\n' ? lastLine + 1 : lastLine;
+        }
+
+        uint target = lineStart(pointer);
+        uint current = 0;
+        int lineNumber = 0;
+        while (current < target)
+        {
+            uint next = nextLine(current);
+            if (next <= current)
+            {
+                current = target;
+                break;
+            }
+            ++lineNumber;
+            current = next;
+        }
+        return lineNumber;
+    }
+
+    void MarkdownFileEditor::refreshCursorMetrics()
+    {
+        if (bufLen == 0)
+        {
+            cursorLineNumber = 0;
+            cursorColumnNumber = 0;
+            lineNumberCachePtr = 0;
+            lineNumberCacheNumber = 0;
+            lineNumberCacheValid = true;
+            return;
+        }
+
+        cursorLineNumber = lineNumberForPointer(curPtr);
+        uint linePtr = lineStart(curPtr);
+        cursorColumnNumber = charPos(linePtr, curPtr);
+        lineNumberCachePtr = linePtr;
+        lineNumberCacheNumber = cursorLineNumber;
+        lineNumberCacheValid = true;
+        if (indicator)
+            indicator->setValue(TPoint(cursorColumnNumber, cursorLineNumber), modified);
     }
 
     void MarkdownFileEditor::replaceRange(uint start, uint end, const std::string &text)
@@ -3823,8 +3983,362 @@ namespace ck::edit
         return static_cast<int>(layout.segments.size() - 1);
     }
 
+    int MarkdownFileEditor::documentLineCount() const
+    {
+        if (bufLen == 0)
+            return 1;
+        auto *self = const_cast<MarkdownFileEditor *>(this);
+        int lastLine = self->lineNumberForPointer(bufLen - 1);
+        bool hasTrailingNewline = self->bufChar(bufLen - 1) == '\n';
+        return lastLine + 1 + (hasTrailingNewline ? 1 : 0);
+    }
+
+    int MarkdownFileEditor::wrapSegmentCount(const WrapLayout &layout) const
+    {
+        return std::max<int>(1, static_cast<int>(layout.segments.size()));
+    }
+
+    MarkdownFileEditor::WrapSegment MarkdownFileEditor::segmentAt(const WrapLayout &layout, int index) const
+    {
+        if (layout.segments.empty())
+            return {0, layout.lineColumns};
+        index = std::clamp(index, 0, static_cast<int>(layout.segments.size()) - 1);
+        return layout.segments[static_cast<std::size_t>(index)];
+    }
+
+    void MarkdownFileEditor::normalizeWrapTop(int &docLine, int &segmentOffset)
+    {
+        if (!wrapEnabled)
+        {
+            docLine = std::clamp(docLine, 0, documentLineCount() - 1);
+            segmentOffset = 0;
+            return;
+        }
+
+        int totalLines = std::max(1, documentLineCount());
+        docLine = std::clamp(docLine, 0, totalLines - 1);
+
+        while (true)
+        {
+            uint linePtr = pointerForLine(docLine);
+            WrapLayout layout;
+            computeWrapLayout(linePtr, layout);
+            int segmentCount = wrapSegmentCount(layout);
+
+            if (segmentOffset < 0)
+            {
+                if (docLine == 0)
+                {
+                    segmentOffset = 0;
+                    break;
+                }
+                --docLine;
+                uint prevPtr = pointerForLine(docLine);
+                WrapLayout prevLayout;
+                computeWrapLayout(prevPtr, prevLayout);
+                segmentOffset += wrapSegmentCount(prevLayout);
+                continue;
+            }
+
+            if (segmentOffset >= segmentCount)
+            {
+                segmentOffset -= segmentCount;
+                if (docLine >= totalLines - 1)
+                {
+                    segmentOffset = std::max(0, segmentCount - 1);
+                    break;
+                }
+                ++docLine;
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    int MarkdownFileEditor::computeWrapCaretRow(int docLine,
+                                               int segmentOffset,
+                                               uint caretLinePtr,
+                                               const WrapLayout &caretLayout,
+                                               int caretSegment) const
+    {
+        auto *self = const_cast<MarkdownFileEditor *>(this);
+        int row = -segmentOffset;
+        int lineNumber = docLine;
+        int caretLineNumber = cursorLineNumber;
+        uint linePtr = self->pointerForLine(docLine);
+
+        if (caretLineNumber >= lineNumber)
+        {
+            while (lineNumber < caretLineNumber)
+            {
+                WrapLayout layout;
+                self->computeWrapLayout(linePtr, layout);
+                row += wrapSegmentCount(layout);
+                linePtr = self->nextLine(linePtr);
+                ++lineNumber;
+            }
+            row += caretSegment;
+        }
+        else
+        {
+            while (lineNumber > caretLineNumber)
+            {
+                --lineNumber;
+                linePtr = self->pointerForLine(lineNumber);
+                WrapLayout layout;
+                self->computeWrapLayout(linePtr, layout);
+                row -= wrapSegmentCount(layout);
+            }
+            row += caretSegment;
+        }
+
+        return row;
+    }
+
+    int MarkdownFileEditor::currentWrapLocalColumn(const WrapLayout &layout, int segmentIndex) const
+    {
+        if (layout.segments.empty())
+            return cursorColumnNumber;
+        WrapSegment segment = segmentAt(layout, segmentIndex);
+        return std::max(0, cursorColumnNumber - segment.startColumn);
+    }
+
+    void MarkdownFileEditor::ensureWrapViewport(const WrapLayout &caretLayout, int caretSegment)
+    {
+        int docLine = delta.y;
+        int segmentOffset = wrapTopSegmentOffset;
+        normalizeWrapTop(docLine, segmentOffset);
+
+        uint caretLinePtr = lineStart(curPtr);
+        int caretRow = computeWrapCaretRow(docLine, segmentOffset, caretLinePtr, caretLayout, caretSegment);
+
+        int viewHeight = std::max(1, size.y);
+        while (caretRow < 0)
+        {
+            segmentOffset += caretRow;
+            normalizeWrapTop(docLine, segmentOffset);
+            caretRow = computeWrapCaretRow(docLine, segmentOffset, caretLinePtr, caretLayout, caretSegment);
+        }
+
+        while (caretRow >= viewHeight)
+        {
+            segmentOffset += caretRow - (viewHeight - 1);
+            normalizeWrapTop(docLine, segmentOffset);
+            caretRow = computeWrapCaretRow(docLine, segmentOffset, caretLinePtr, caretLayout, caretSegment);
+        }
+
+        bool docLineChanged = docLine != delta.y;
+        bool offsetChanged = segmentOffset != wrapTopSegmentOffset;
+        wrapTopSegmentOffset = segmentOffset;
+        if (docLineChanged)
+            scrollTo(delta.x, docLine);
+        else if (offsetChanged)
+            update(ufView);
+    }
+
+    void MarkdownFileEditor::updateWrapCursorVisualPosition(const WrapLayout &caretLayout, int caretSegment)
+    {
+        if (!wrapEnabled)
+        {
+            wrapCursorScreenPos = TPoint(curPos.x - delta.x, curPos.y - delta.y);
+            return;
+        }
+
+        int docLine = delta.y;
+        int segmentOffset = wrapTopSegmentOffset;
+        normalizeWrapTop(docLine, segmentOffset);
+
+        uint caretLinePtr = lineStart(curPtr);
+        int caretRow = computeWrapCaretRow(docLine, segmentOffset, caretLinePtr, caretLayout, caretSegment);
+        caretRow = std::clamp(caretRow, 0, std::max(0, size.y - 1));
+
+        int column = cursorColumnNumber;
+        if (!caretLayout.segments.empty())
+        {
+            WrapSegment segment = segmentAt(caretLayout, caretSegment);
+            column = std::max(0, cursorColumnNumber - segment.startColumn);
+        }
+        column = std::clamp(column, 0, std::max(0, size.x - 1));
+        wrapCursorScreenPos = TPoint(column, caretRow);
+    }
+
+    void MarkdownFileEditor::updateWrapStateAfterMovement(bool preserveDesiredColumn)
+    {
+        if (!wrapEnabled)
+            return;
+
+        uint caretLinePtr = lineStart(curPtr);
+        WrapLayout caretLayout;
+        computeWrapLayout(caretLinePtr, caretLayout);
+        int caretSegment = wrapSegmentForColumn(caretLayout, cursorColumnNumber);
+
+        if (!preserveDesiredColumn)
+            wrapDesiredVisualColumn = currentWrapLocalColumn(caretLayout, caretSegment);
+
+        ensureWrapViewport(caretLayout, caretSegment);
+        updateWrapCursorVisualPosition(caretLayout, caretSegment);
+    }
+
+    bool MarkdownFileEditor::handleWrapKeyEvent(TEvent &event)
+    {
+        if (!wrapEnabled || event.what != evKeyDown)
+            return false;
+
+        const ushort keyCode = event.keyDown.keyCode;
+        int lines = 0;
+        if (keyCode == kbUp)
+            lines = -1;
+        else if (keyCode == kbDown)
+            lines = 1;
+        else if (keyCode == kbPgUp)
+            lines = -(size.y - 1);
+        else if (keyCode == kbPgDn)
+            lines = size.y - 1;
+        else
+            return false;
+
+        uchar selectMode = 0;
+        if (selecting == True || (event.keyDown.controlKeyState & kbShift) != 0)
+            selectMode = smExtend;
+
+        Boolean centerCursor = Boolean(!cursorVisible());
+
+        lock();
+        moveCaretVertically(lines, selectMode);
+        trackCursor(centerCursor);
+        updateWrapStateAfterMovement(true);
+        unlock();
+
+        clearEvent(event);
+        return true;
+    }
+
+    void MarkdownFileEditor::moveCaretVertically(int lines, uchar selectMode)
+    {
+        if (lines == 0)
+            return;
+
+        uint linePtr = lineStart(curPtr);
+        WrapLayout layout;
+        computeWrapLayout(linePtr, layout);
+        int segmentIndex = wrapSegmentForColumn(layout, cursorColumnNumber);
+        int desiredColumn = wrapDesiredVisualColumn >= 0 ? wrapDesiredVisualColumn
+                                                        : currentWrapLocalColumn(layout, segmentIndex);
+        wrapDesiredVisualColumn = desiredColumn;
+
+        int remaining = lines;
+        while (remaining != 0)
+        {
+            int direction = remaining > 0 ? 1 : -1;
+            if (!moveCaretOneStep(direction, selectMode, desiredColumn))
+                break;
+            remaining -= direction;
+        }
+    }
+
+    bool MarkdownFileEditor::moveCaretOneStep(int direction, uchar selectMode, int desiredColumn)
+    {
+        uint linePtr = lineStart(curPtr);
+        WrapLayout layout;
+        computeWrapLayout(linePtr, layout);
+        int segmentIndex = wrapSegmentForColumn(layout, cursorColumnNumber);
+
+        if (direction > 0)
+        {
+            if (moveCaretDownSegment(linePtr, layout, segmentIndex, selectMode, desiredColumn))
+                return true;
+            return moveCaretToNextDocumentLine(linePtr, selectMode, desiredColumn);
+        }
+
+        if (moveCaretUpSegment(linePtr, layout, segmentIndex, selectMode, desiredColumn))
+            return true;
+        return moveCaretToPreviousDocumentLine(linePtr, selectMode, desiredColumn);
+    }
+
+    bool MarkdownFileEditor::moveCaretDownSegment(uint linePtr,
+                                                  const WrapLayout &layout,
+                                                  int segmentIndex,
+                                                  uchar selectMode,
+                                                  int desiredColumn)
+    {
+        int segmentCount = wrapSegmentCount(layout);
+        if (segmentIndex + 1 >= segmentCount)
+            return false;
+
+        WrapSegment segment = segmentAt(layout, segmentIndex + 1);
+        int segmentWidth = std::max(0, segment.endColumn - segment.startColumn);
+        int localColumn = std::clamp(desiredColumn, 0, segmentWidth);
+        int targetColumn = segment.startColumn + localColumn;
+        uint newPtr = charPtr(linePtr, targetColumn);
+        setCurPtr(newPtr, selectMode);
+        return true;
+    }
+
+    bool MarkdownFileEditor::moveCaretToNextDocumentLine(uint linePtr,
+                                                        uchar selectMode,
+                                                        int desiredColumn)
+    {
+        uint nextPtr = nextLine(linePtr);
+        if (nextPtr == linePtr || nextPtr >= bufLen)
+        {
+            setCurPtr(bufLen, selectMode);
+            return false;
+        }
+
+        WrapLayout nextLayout;
+        computeWrapLayout(nextPtr, nextLayout);
+        int lineColumns = std::max(0, nextLayout.lineColumns);
+        int targetColumn = std::clamp(desiredColumn, 0, lineColumns);
+        uint newPtr = charPtr(nextPtr, targetColumn);
+        setCurPtr(newPtr, selectMode);
+        return true;
+    }
+
+    bool MarkdownFileEditor::moveCaretUpSegment(uint linePtr,
+                                                const WrapLayout &layout,
+                                                int segmentIndex,
+                                                uchar selectMode,
+                                                int desiredColumn)
+    {
+        if (segmentIndex <= 0)
+            return false;
+
+        WrapSegment segment = segmentAt(layout, segmentIndex - 1);
+        int segmentWidth = std::max(0, segment.endColumn - segment.startColumn);
+        int localColumn = std::clamp(desiredColumn, 0, segmentWidth);
+        int targetColumn = segment.startColumn + localColumn;
+        uint newPtr = charPtr(linePtr, targetColumn);
+        setCurPtr(newPtr, selectMode);
+        return true;
+    }
+
+    bool MarkdownFileEditor::moveCaretToPreviousDocumentLine(uint linePtr,
+                                                             uchar selectMode,
+                                                             int desiredColumn)
+    {
+        uint prevPtr = prevLine(linePtr);
+        if (prevPtr == linePtr)
+        {
+            setCurPtr(0, selectMode);
+            return false;
+        }
+
+        WrapLayout prevLayout;
+        computeWrapLayout(prevPtr, prevLayout);
+        int lastSegmentIndex = wrapSegmentCount(prevLayout) - 1;
+        WrapSegment segment = segmentAt(prevLayout, lastSegmentIndex);
+        int segmentWidth = std::max(0, segment.endColumn - segment.startColumn);
+        int localColumn = std::clamp(desiredColumn, 0, segmentWidth);
+        int targetColumn = segment.startColumn + localColumn;
+        uint newPtr = charPtr(prevPtr, targetColumn);
+        setCurPtr(newPtr, selectMode);
+        return true;
+    }
+
     void MarkdownFileEditor::notifyInfoView()
     {
+        refreshCursorMetrics();
         ++cachedStateVersion;
         statusCachePrefixPtr = UINT_MAX;
         statusCacheVersion = 0;
@@ -3973,7 +4487,8 @@ namespace ck::edit
 
     void MarkdownFileEditor::onContentModified()
     {
-        queueInfoLine(curPos.y);
+        refreshCursorMetrics();
+        queueInfoLine(cursorLineNumber);
         notifyInfoView();
         if (hostWindow)
             hostWindow->updateWindowTitle();
@@ -4069,7 +4584,7 @@ namespace ck::edit
     MarkdownInfoView::LineRenderInfo MarkdownInfoView::buildLineInfo(uint linePtr, int lineNumber, MarkdownParserState &state)
     {
         LineRenderInfo info;
-        info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.isActive = editor && (lineNumber == editor->documentLineNumber());
         info.lineActive = info.isActive;
         info.lineNumber = lineNumber;
         info.visualRowIndex = 0;
@@ -4134,18 +4649,18 @@ namespace ck::edit
                     return static_cast<int>(lineInfo.tableCells.size()) - 1;
                 };
 
-                int columnIndex = locateColumn(editor->curPos.x);
-                if (columnIndex == -1 && editor->curPos.x > 0)
-                    columnIndex = locateColumn(editor->curPos.x - 1);
+                int columnIndex = locateColumn(editor->documentColumnNumber());
+                if (columnIndex == -1 && editor->documentColumnNumber() > 0)
+                    columnIndex = locateColumn(editor->documentColumnNumber() - 1);
 
                 if (columnIndex >= 0)
                     tableLabel = sanitizeMultiline(
                         editor->analyzer().describeTableCell(lineInfo, static_cast<std::size_t>(columnIndex)));
             }
 
-            const auto *span = editor->analyzer().spanAtColumn(lineInfo, editor->curPos.x);
-            if (!span && editor->curPos.x > 0)
-                span = editor->analyzer().spanAtColumn(lineInfo, editor->curPos.x - 1);
+            const auto *span = editor->analyzer().spanAtColumn(lineInfo, editor->documentColumnNumber());
+            if (!span && editor->documentColumnNumber() > 0)
+                span = editor->analyzer().spanAtColumn(lineInfo, editor->documentColumnNumber() - 1);
             if (!tableLabel.empty())
             {
                 if (span && span->kind != MarkdownSpanKind::PlainText)
@@ -4172,7 +4687,7 @@ namespace ck::edit
     MarkdownInfoView::LineRenderInfo MarkdownInfoView::buildLineInfo(uint linePtr, int lineNumber)
     {
         LineRenderInfo info;
-        info.isActive = editor && (lineNumber == editor->curPos.y);
+        info.isActive = editor && (lineNumber == editor->documentLineNumber());
         info.lineActive = info.isActive;
         info.lineNumber = lineNumber;
         info.visualRowIndex = 0;
@@ -4276,7 +4791,7 @@ namespace ck::edit
                 int caretRowIndex = -1;
                 if (base.lineActive && totalRows > 0)
                 {
-                    caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                    caretRowIndex = editor->wrapSegmentForColumn(layout, editor->documentColumnNumber());
                     caretRowIndex = std::clamp(caretRowIndex, 0, totalRows - 1);
                 }
 
@@ -4312,7 +4827,7 @@ namespace ck::edit
             {
                 LineRenderInfo info;
                 info.lineNumber = lineNumber;
-                info.isActive = (lineNumber == editor->curPos.y);
+                info.isActive = (lineNumber == editor->documentLineNumber());
                 info.lineActive = info.isActive;
                 info.visualRowIndex = 0;
                 info.visualRowCount = 1;
@@ -4539,7 +5054,7 @@ namespace ck::edit
             int caretRowIndex = -1;
             if (base.lineActive && newTotalRows > 0)
             {
-                caretRowIndex = editor->wrapSegmentForColumn(layout, editor->curPos.x);
+                caretRowIndex = editor->wrapSegmentForColumn(layout, editor->documentColumnNumber());
                 caretRowIndex = std::clamp(caretRowIndex, 0, newTotalRows - 1);
             }
             groupIt->activeRow = caretRowIndex;
