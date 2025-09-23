@@ -19,6 +19,7 @@ add_ck_tool(ckchat
   OUTPUT_NAME "ck-chat"
   SOURCES
     src/ck-chat-app.cpp
+    src/chat_session.cpp
   LIBRARIES
     ck_app_info
     ckai_core
