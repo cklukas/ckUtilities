@@ -17,35 +17,35 @@ namespace ck::appinfo
                 "CK Utilities",
                 "Launch CK tools from a unified Turbo Vision shell.",
                 "Launch CK tools from a unified Turbo Vision shell.",
-                "ck-utilities is the landing pad for the suite. It presents every installed tool with rich descriptions, a consistent launch workflow, and shortcuts for discovery. Use it as a starting point in new terminals to remind yourself of capabilities and jump straight into the utility you need."},
+                "CK Utilities is the landing pad for the suite. It presents every installed tool with rich descriptions, a consistent launch workflow, and shortcuts for discovery. Use it as a starting point in new terminals to remind yourself of capabilities and jump straight into the utility you need."},
             ToolInfo{
                 "ck-edit",
                 "ck-edit",
                 "Edit",
                 "Edit text and Markdown documents with live structural hints.",
                 "Edit text and Markdown documents with live structural hints.",
-                "ck-edit keeps Markdown editing fast inside the terminal. It pairs a Turbo Vision interface with helpers for headings, lists, and formatting so you stay in flow. Use it for quick note taking, documentation tweaks, or reviewing rendered structure without leaving your shell."},
+                "Edit keeps Markdown editing fast inside the terminal. It pairs a Turbo Vision interface with helpers for headings, lists, and formatting so you stay in flow. Use it for quick note taking, documentation tweaks, or reviewing rendered structure without leaving your shell."},
             ToolInfo{
                 "ck-du",
                 "ck-du",
                 "Disk Usage",
                 "Analyze directory and file storage utilization.",
                 "Analyze directory and file storage utilization.",
-                "ck-du visualizes disk usage with an ncdu-inspired tree and rich metadata. Open multiple windows to compare paths, switch units on the fly, and inspect recursive file listings with owners, timestamps, and filters. It is built to answer “where did my space go?” without memorizing long du pipelines."},
+                "Disk Usage visualizes disk usage with an ncdu-inspired tree and rich metadata. Open multiple windows to compare paths, switch units on the fly, and inspect recursive file listings with owners, timestamps, and filters. It is built to answer “where did my space go?” without memorizing long du pipelines."},
             ToolInfo{
                 "ck-json-view",
                 "ck-json-view",
                 "JSON View",
                 "Inspect and navigate JSON documents interactively.",
                 "Inspect and navigate JSON documents interactively.",
-                "ck-json-view parses JSON into a navigable tree with keyboard-first controls. Expand nodes to reveal structured previews, search across the document with highlighted matches, and copy selections using OSC 52 when your terminal supports it. It is ideal for exploring API responses or configuration blobs in a readable form."},
+                "JSON View parses JSON into a navigable tree with keyboard-first controls. Expand nodes to reveal structured previews, search across the document with highlighted matches, and copy selections using OSC 52 when your terminal supports it. It is ideal for exploring API responses or configuration blobs in a readable form."},
             ToolInfo{
                 "ck-config",
                 "ck-config",
                 "Config",
                 "Manage ck-utilities configuration defaults.",
                 "Manage ck-utilities configuration defaults.",
-                "ck-config centralizes application defaults for every CK utility. Browse known apps, tweak options with validation, and export or import profiles for teammates. It keeps environment-wide settings—like ignore patterns or display preferences—consistent without hunting through dotfiles."},
+                "Config centralizes application defaults for every CK utility. Browse known apps, tweak options with validation, and export or import profiles for teammates. It keeps environment-wide settings—like ignore patterns or display preferences—consistent without hunting through dotfiles."},
         }};
 
     } // namespace
