@@ -10,7 +10,7 @@ namespace ck::appinfo
     namespace
     {
 
-        constexpr std::array<ToolInfo, 6> kTools{{
+        constexpr std::array<ToolInfo, 7> kTools{{
             ToolInfo{
                 "ck-utilities",
                 "ck-utilities",
