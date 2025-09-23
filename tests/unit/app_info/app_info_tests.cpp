@@ -20,10 +20,11 @@ bool containsToolId(std::span<const ck::appinfo::ToolInfo> tools, std::string_vi
 TEST(AppInfo, ListsAllKnownTools)
 {
     auto tools = ck::appinfo::tools();
-    ASSERT_GE(tools.size(), 5u);
+    ASSERT_GE(tools.size(), 6u);
     EXPECT_TRUE(containsToolId(tools, "ck-utilities"));
     EXPECT_TRUE(containsToolId(tools, "ck-edit"));
     EXPECT_TRUE(containsToolId(tools, "ck-du"));
+    EXPECT_TRUE(containsToolId(tools, "ck-find"));
     EXPECT_TRUE(containsToolId(tools, "ck-json-view"));
     EXPECT_TRUE(containsToolId(tools, "ck-config"));
 }
