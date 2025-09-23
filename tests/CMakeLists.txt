@@ -12,3 +12,5 @@ FetchContent_MakeAvailable(googletest)
 enable_testing()
 
 add_subdirectory(unit)
+
+add_subdirectory(integration)

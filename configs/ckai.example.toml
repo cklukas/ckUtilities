@@ -1,0 +1,8 @@
+# ck-ai configuration (install to ~/.config/cktools/ckai.toml)
+
+[llm]
+model = "~/.local/share/cktools/models/llm/stub-model.gguf"
+threads = 0
+
+[limits]
+max_output_tokens = 512

@@ -12,6 +12,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+add_subdirectory(third_party/llama.cpp)
+add_subdirectory(lib/ckai_core)
+
 include(CTest)
 if(BUILD_TESTING)
   enable_testing()
@@ -26,6 +29,7 @@ endif()
 
 install(FILES README.md DESTINATION share/doc/ck-utilities)
 install(FILES LICENSE DESTINATION share/licenses/ck-utilities)
+install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs)
 
 if(APPLE)
   install(PROGRAMS packaging/macos/install.sh DESTINATION share/ck-utilities)

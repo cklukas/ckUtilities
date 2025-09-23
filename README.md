@@ -4,6 +4,7 @@
 
 Current prototypes:
 
+* `ck-chat` — chat interface backed by the ck-ai runtime stubs.
 * `ck-json-view` — JSON tree viewer built with Turbo Vision.
 * `ck-du` — disk usage explorer with tree views, file listings, unit and sort controls.
 CK Utilities aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
@@ -82,9 +83,9 @@ cmake --build build/dev -t ckfind
 ctest --test-dir build/dev --output-on-failure
 ```
 
-Unit tests exercise the shared libraries and each tool's core logic (JSON tree building, Markdown analysis, disk-usage math, and
-configuration registries). The suite uses GoogleTest and is enabled automatically when `BUILD_TESTING` is on, so running `ctest`
-after a build executes the new checks.
+Unit tests exercise the shared libraries and each tool's core logic (JSON tree building, Markdown analysis, disk-usage math, configuration registries, and the ck-ai runtime stubs). The suite uses GoogleTest and is enabled automatically when `BUILD_TESTING` is on, so running `ctest` after a build executes the new checks.
+
+For the ck-ai tooling, copy `configs/ckai.example.toml` to `~/.config/cktools/ckai.toml` and adjust the model path once you have a local GGUF file.
 
 #### Install (to staging directory):
 
