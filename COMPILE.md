@@ -40,17 +40,19 @@ cktools/
 ├─ CMakePresets.json             # dev/release/asan/coverage/pkg presets
 ├─ include/ck/                   # public headers for internal libs
 ├─ lib/
+│  ├─ ckai_core/                 # ck-ai runtime scaffolding
 │  ├─ ckcore/                    # CLI args, logging, config, common utils
 │  ├─ ckfs/                      # filesystem helpers, safe ops, temp dirs
 │  └─ ckui/                      # Turbo Vision wrappers/widgets (dialogs, lists)
+├─ third_party/
+│  └─ llama.cpp/                 # vendored llama backend (stub for now)
 ├─ src/tools/
-│  ├─ ckfind/
-│  │  ├─ main.cpp
-│  │  └─ CMakeLists.txt
-│  ├─ ckdiff/
-│  ├─ ckdu/
-│  ├─ cktext/
-│  └─ ckrescue/
+│  ├─ ck-chat/                   # ck-ai chat prototype
+│  ├─ ck-config/
+│  ├─ ck-du/
+│  ├─ ck-edit/
+│  ├─ ck-utilities/
+│  └─ json-view/
 ├─ tests/
 │  ├─ unit/                      # gtest targets per lib/tool
 │  └─ integration/               # black-box runs of binaries with fixtures
@@ -93,6 +95,8 @@ cmake --preset pkg         # Release + packaging metadata
 
 > Presets set install prefix to `/usr` for packaging; local `install` defaults to `<build>/stage` to avoid root.
 
+The ck-ai configuration template lives at `configs/ckai.example.toml`; install it alongside the binaries or copy it to `~/.config/cktools/ckai.toml` when testing locally.
+
 ### Fast per-tool loop
 
 Build only one tool:
@@ -119,6 +123,8 @@ cmake --build build/release -t install
 ---
 
 ## Adding a new tool
+
+New ck-ai tools follow the same build integration as the legacy TUIs. `ck-chat` ships in-tree as an example that links `ckai_core` and streams deterministic output for tests.
 
 Use the scaffold:
 
@@ -158,6 +164,7 @@ add_ck_tool(
 
 ## Shared libraries
 
+* **ckai_core:** ck-ai runtime scaffolding and deterministic stubs for the llama backend.
 * **ckcore:** logging, argument parsing, subprocess helpers, config file loader, error handling.
 * **ckfs:** path ops, safe file actions (dry-run & confirm flows), temp & locking.
 * **ckui:** Turbo Vision wrappers (list/table widgets, dialogs, keymaps, status-line, help viewer).
@@ -174,7 +181,9 @@ add_ck_tool(
   * `tests/unit/ck_du` exercises size/unit helpers and option registration.
   * `tests/unit/json_view` verifies JSON tree construction and formatting helpers.
   * `tests/unit/ck_edit` parses Markdown structures and inline spans.
+  * `tests/unit/ckai_core` keeps the ck-ai stubs deterministic.
 * **Integration tests:** run compiled binaries against fixtures; assert exit codes, stdout patterns, and side effects in a temp sandbox.
+  * `tests/integration/ck-chat` calls the CLI and asserts the placeholder stream.
 * **Sanitizers:** `asan` preset runs unit+integration under Address/UBSan.
 * **Coverage:** `coverage` preset emits `*.info`; use `lcov`/`genhtml` or `gcovr`.
 

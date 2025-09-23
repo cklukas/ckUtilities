@@ -14,3 +14,5 @@ add_subdirectory(config)
 add_subdirectory(ck_du)
 add_subdirectory(json_view)
 add_subdirectory(ck_edit)
+
+add_subdirectory(ckai_core)

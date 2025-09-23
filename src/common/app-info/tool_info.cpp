@@ -47,6 +47,13 @@ namespace ck::appinfo
                 "Inspect and navigate JSON documents interactively.",
                 "JSON View parses JSON into a navigable tree with keyboard-first controls. Expand nodes to reveal structured previews, search across the document with highlighted matches, and copy selections using OSC 52 when your terminal supports it. It is ideal for exploring API responses or configuration blobs in a readable form."},
             ToolInfo{
+                "ck-chat",
+                "ck-chat",
+                "Chat",
+                "Chat with the ck-ai runtime stubs.",
+                "Chat with the ck-ai runtime stubs.",
+                "Chat demonstrates the streaming interfaces for the ck-ai runtime. It loads the local configuration, opens the placeholder llama backend, and streams deterministic responses so we can exercise the TUI plumbing and testing harness."},
+            ToolInfo{
                 "ck-config",
                 "ck-config",
                 "Config",
