@@ -19,6 +19,17 @@ add_ck_tool(ckfind
   OUTPUT_NAME "ck-find"
   SOURCES
     src/ck-find-app.cpp
+    src/action_options_dialog.cpp
+    src/dialog_utils.cpp
+    src/name_path_dialog.cpp
+    src/permission_ownership_dialog.cpp
+    src/search_dialog.cpp
+    src/search_model.cpp
+    src/size_filters_dialog.cpp
+    src/text_options_dialog.cpp
+    src/time_filters_dialog.cpp
+    src/traversal_filters_dialog.cpp
+    src/type_filters_dialog.cpp
   LIBRARIES
     ck_app_info
     tvision::tvision
