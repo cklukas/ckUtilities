@@ -6,6 +6,8 @@
 #define Uses_TDeskTop
 #define Uses_TDialog
 #define Uses_TDrawBuffer
+#define Uses_TEvent
+#define Uses_TFrame
 #define Uses_TKeys
 #define Uses_TListViewer
 #define Uses_TMenu
@@ -13,26 +15,40 @@
 #define Uses_TMenuItem
 #define Uses_TMessageBox
 #define Uses_MsgBox
+#define Uses_TPoint
 #define Uses_TScrollBar
 #define Uses_TStatusDef
 #define Uses_TStatusItem
 #define Uses_TStatusLine
 #define Uses_TSubMenu
+#define Uses_TTerminal
+#define Uses_TWindow
+#define Uses_TPalette
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <cerrno>
+#include <cmath>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
+#include <functional>
+#include <iomanip>
+#include <limits>
+#include <memory>
 #include <optional>
-#include <system_error>
+#include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -53,6 +69,13 @@ const ck::appinfo::ToolInfo &launcherInfo()
 
 constexpr ushort cmLaunchTool = 6000;
 constexpr ushort cmNewLauncher = 6001;
+constexpr ushort cmShowCalendar = 6002;
+constexpr ushort cmShowAsciiTable = 6003;
+constexpr ushort cmShowCalculator = 6004;
+constexpr ushort cmToggleEventViewer = 6005;
+constexpr ushort cmCalcButtonCommand = 6100;
+constexpr ushort cmAsciiSelectionChanged = 6101;
+constexpr ushort cmFindEventViewer = 6102;
 
 std::string quoteArgument(std::string_view value)
 {
@@ -777,6 +800,767 @@ int executeProgram(const std::filesystem::path &programPath,
         return nullptr;
     }
 
+    constexpr std::array<const char *, 13> kMonthNames = {
+        "",
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    };
+
+    constexpr std::array<unsigned, 13> kMonthLengths = {
+        0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+    };
+
+    bool isLeapYear(int year)
+    {
+        if (year % 400 == 0)
+            return true;
+        if (year % 100 == 0)
+            return false;
+        return year % 4 == 0;
+    }
+
+    unsigned daysInMonth(int year, unsigned month)
+    {
+        if (month == 0 || month >= kMonthLengths.size())
+            return 30;
+        unsigned days = kMonthLengths[month];
+        if (month == 2 && isLeapYear(year))
+            ++days;
+        return days;
+    }
+
+    int calendarDayOfWeek(int day, unsigned month, int year)
+    {
+        int m = static_cast<int>(month);
+        int y = year;
+        if (m < 3)
+        {
+            m += 12;
+            --y;
+        }
+        int K = y % 100;
+        int J = y / 100;
+        int h = (day + (13 * (m + 1)) / 5 + K + K / 4 + J / 4 + 5 * J) % 7;
+        // Zeller's congruence returns 0 = Saturday. Adjust so 0 = Sunday.
+        int dayOfWeek = ((h + 6) % 7);
+        return dayOfWeek;
+    }
+
+    class CalendarView : public TView
+    {
+    public:
+        CalendarView(const TRect &bounds)
+            : TView(bounds)
+        {
+            options |= ofSelectable;
+            eventMask |= evMouseAuto | evMouseDown | evKeyboard;
+
+            auto now = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+            std::chrono::year_month_day ymd(now);
+            year = static_cast<int>(ymd.year());
+            month = static_cast<unsigned>(ymd.month());
+            currentYear = year;
+            currentMonth = month;
+            currentDay = static_cast<unsigned>(ymd.day());
+        }
+
+        virtual void draw() override
+        {
+            TDrawBuffer buf;
+            auto normal = getColor(6);
+            auto highlight = getColor(7);
+
+            buf.moveChar(0, ' ', normal, size.x);
+            std::ostringstream header;
+            header << std::setw(9) << kMonthNames[std::min<std::size_t>(month, kMonthNames.size() - 1)]
+                   << ' ' << std::setw(4) << year
+                   << ' ' << static_cast<char>(30) << "  " << static_cast<char>(31);
+            buf.moveStr(0, header.str().c_str(), normal);
+            writeLine(0, 0, size.x, 1, buf);
+
+            buf.moveChar(0, ' ', normal, size.x);
+            buf.moveStr(0, "Su Mo Tu We Th Fr Sa", normal);
+            writeLine(0, 1, size.x, 1, buf);
+
+            int firstWeekday = calendarDayOfWeek(1, month, year);
+            int current = 1 - firstWeekday;
+            int totalDays = static_cast<int>(daysInMonth(year, month));
+            for (int row = 0; row < 6; ++row)
+            {
+                buf.moveChar(0, ' ', normal, size.x);
+                for (int col = 0; col < 7; ++col)
+                {
+                    if (current < 1 || current > totalDays)
+                    {
+                        buf.moveStr(col * 3, "   ", normal);
+                    }
+                    else
+                    {
+                        std::ostringstream cell;
+                        cell << std::setw(2) << current;
+                        bool isToday = (year == currentYear && month == currentMonth && current == static_cast<int>(currentDay));
+                        buf.moveStr(col * 3, cell.str().c_str(), isToday ? highlight : normal);
+                    }
+                    ++current;
+                }
+                writeLine(0, static_cast<short>(row + 2), size.x, 1, buf);
+            }
+        }
+
+        virtual void handleEvent(TEvent &event) override
+        {
+            TView::handleEvent(event);
+            if (event.what == evKeyboard)
+            {
+                bool handled = false;
+                switch (event.keyDown.keyCode)
+                {
+                case kbLeft:
+                    changeMonth(-1);
+                    handled = true;
+                    break;
+                case kbRight:
+                    changeMonth(1);
+                    handled = true;
+                    break;
+                case kbUp:
+                case kbPgUp:
+                    changeMonth(-12);
+                    handled = true;
+                    break;
+                case kbDown:
+                case kbPgDn:
+                    changeMonth(12);
+                    handled = true;
+                    break;
+                case kbHome:
+                    year = currentYear;
+                    month = currentMonth;
+                    handled = true;
+                    break;
+                default:
+                    break;
+                }
+                if (handled)
+                {
+                    drawView();
+                    clearEvent(event);
+                }
+            }
+            else if (event.what == evMouseDown || event.what == evMouseAuto)
+            {
+                TPoint point = makeLocal(event.mouse.where);
+                if (point.y == 0)
+                {
+                    if (point.x == 15)
+                        changeMonth(1);
+                    else if (point.x == 18)
+                        changeMonth(-1);
+                    drawView();
+                }
+                clearEvent(event);
+            }
+        }
+
+    private:
+        int year = 0;
+        unsigned month = 1;
+        unsigned currentDay = 1;
+        int currentYear = 0;
+        unsigned currentMonth = 1;
+
+        void changeMonth(int delta)
+        {
+            int totalMonths = static_cast<int>(month) + delta;
+            int newYear = year + (totalMonths - 1) / 12;
+            int newMonth = (totalMonths - 1) % 12 + 1;
+            if (newMonth <= 0)
+            {
+                newMonth += 12;
+                --newYear;
+            }
+            year = newYear;
+            month = static_cast<unsigned>(newMonth);
+        }
+    };
+
+    class CalendarWindow : public TWindow
+    {
+    public:
+        CalendarWindow()
+            : TWindowInit(&CalendarWindow::initFrame),
+              TWindow(TRect(0, 0, 24, 10), "Calendar", wnNoNumber)
+        {
+            flags &= ~(wfGrow | wfZoom);
+            growMode = 0;
+            palette = wpGrayWindow;
+
+            TRect inner = getExtent();
+            inner.grow(-1, -1);
+            insert(new CalendarView(inner));
+        }
+    };
+
+    class AsciiInfoView : public TView
+    {
+    public:
+        AsciiInfoView(const TRect &bounds)
+            : TView(bounds)
+        {
+        }
+
+        virtual void draw() override
+        {
+            TDrawBuffer buf;
+            auto color = getColor(6);
+            buf.moveChar(0, ' ', color, size.x);
+
+            std::ostringstream line;
+            char displayChar = static_cast<char>(selectedChar == 0 ? 0x20 : selectedChar);
+            line << "  Char: ";
+            if (selectedChar >= 32 && selectedChar < 127)
+                line << displayChar;
+            else if (selectedChar == 0)
+                line << ' ';
+            else
+                line << '?';
+            line << "  Decimal: " << std::setw(3) << selectedChar
+                 << "  Hex " << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << selectedChar;
+            buf.moveStr(0, line.str().c_str(), color);
+            writeLine(0, 0, size.x, 1, buf);
+        }
+
+        virtual void handleEvent(TEvent &event) override
+        {
+            if (event.what == evBroadcast && event.message.command == cmAsciiSelectionChanged)
+            {
+                int value = static_cast<int>(reinterpret_cast<std::uintptr_t>(event.message.infoPtr));
+                selectedChar = std::clamp(value, 0, 255);
+                drawView();
+                clearEvent(event);
+                return;
+            }
+            TView::handleEvent(event);
+        }
+
+    private:
+        int selectedChar = 0;
+    };
+
+    class AsciiTableView : public TView
+    {
+    public:
+        AsciiTableView(const TRect &bounds)
+            : TView(bounds)
+        {
+            options |= ofSelectable;
+            eventMask |= evKeyboard | evMouseDown | evMouseAuto | evMouseMove;
+            blockCursor();
+            setCursor(0, 0);
+        }
+
+        virtual void draw() override
+        {
+            TDrawBuffer buf;
+            auto color = getColor(6);
+            for (short y = 0; y < size.y; ++y)
+            {
+                buf.moveChar(0, ' ', color, size.x);
+                for (short x = 0; x < size.x; ++x)
+                {
+                    unsigned value = static_cast<unsigned>(x + y * size.x);
+                    buf.moveChar(x, static_cast<char>(value), color, 1);
+                }
+                writeLine(0, y, size.x, 1, buf);
+            }
+            showCursor();
+        }
+
+        virtual void handleEvent(TEvent &event) override
+        {
+            TView::handleEvent(event);
+            if (event.what == evMouseDown)
+            {
+                do
+                {
+                    if (mouseInView(event.mouse.where))
+                    {
+                        TPoint spot = makeLocal(event.mouse.where);
+                        spot.x = std::clamp<short>(spot.x, 0, static_cast<short>(size.x - 1));
+                        spot.y = std::clamp<short>(spot.y, 0, static_cast<short>(size.y - 1));
+                        setCursor(spot.x, spot.y);
+                        notifySelection();
+                    }
+                } while (mouseEvent(event, evMouseMove));
+                clearEvent(event);
+            }
+            else if (event.what == evKeyboard)
+            {
+                bool handled = false;
+                switch (event.keyDown.keyCode)
+                {
+                case kbHome:
+                    setCursor(0, 0);
+                    handled = true;
+                    break;
+                case kbEnd:
+                    setCursor(static_cast<short>(size.x - 1), static_cast<short>(size.y - 1));
+                    handled = true;
+                    break;
+                case kbUp:
+                    if (cursor.y > 0)
+                    {
+                        setCursor(cursor.x, cursor.y - 1);
+                        handled = true;
+                    }
+                    break;
+                case kbDown:
+                    if (cursor.y < size.y - 1)
+                    {
+                        setCursor(cursor.x, cursor.y + 1);
+                        handled = true;
+                    }
+                    break;
+                case kbLeft:
+                    if (cursor.x > 0)
+                    {
+                        setCursor(cursor.x - 1, cursor.y);
+                        handled = true;
+                    }
+                    break;
+                case kbRight:
+                    if (cursor.x < size.x - 1)
+                    {
+                        setCursor(cursor.x + 1, cursor.y);
+                        handled = true;
+                    }
+                    break;
+                default:
+                {
+                    unsigned char ch = static_cast<unsigned char>(event.keyDown.charScan.charCode);
+                    setCursor(static_cast<short>(ch % size.x), static_cast<short>(ch / size.x));
+                    handled = true;
+                    break;
+                }
+                }
+                if (handled)
+                {
+                    notifySelection();
+                    clearEvent(event);
+                }
+            }
+        }
+
+    private:
+        void notifySelection()
+        {
+            unsigned value = static_cast<unsigned>(cursor.x + cursor.y * size.x);
+            message(owner, evBroadcast, cmAsciiSelectionChanged,
+                    reinterpret_cast<void *>(static_cast<std::uintptr_t>(value)));
+        }
+    };
+
+    class AsciiTableWindow : public TWindow
+    {
+    public:
+        AsciiTableWindow()
+            : TWindowInit(&AsciiTableWindow::initFrame),
+              TWindow(TRect(0, 0, 34, 12), "ASCII Table", wnNoNumber)
+        {
+            flags &= ~(wfGrow | wfZoom);
+            growMode = 0;
+            palette = wpGrayWindow;
+
+            TRect bounds = getExtent();
+            bounds.grow(-1, -1);
+
+            TRect infoRect = bounds;
+            infoRect.a.y = std::max<short>(bounds.b.y - 1, bounds.a.y);
+            auto *info = new AsciiInfoView(infoRect);
+            info->options |= ofFramed;
+            info->eventMask |= evBroadcast;
+            insert(info);
+
+            TRect tableRect = bounds;
+            tableRect.b.y = infoRect.a.y - 1;
+            if (tableRect.b.y <= tableRect.a.y)
+                tableRect.b.y = infoRect.a.y;
+            auto *table = new AsciiTableView(tableRect);
+            table->options |= ofFramed;
+            insert(table);
+            table->select();
+            message(this, evBroadcast, cmAsciiSelectionChanged, reinterpret_cast<void *>(0));
+        }
+    };
+
+    class CalculatorDisplay : public TView
+    {
+    public:
+        CalculatorDisplay(const TRect &bounds)
+            : TView(bounds)
+        {
+            options |= ofSelectable;
+            eventMask = evKeyboard | evBroadcast;
+            number = "0";
+        }
+
+        virtual TPalette &getPalette() const override
+        {
+            static TPalette palette("\x13", 1);
+            return palette;
+        }
+
+        virtual void handleEvent(TEvent &event) override
+        {
+            TView::handleEvent(event);
+            if (event.what == evKeyboard)
+            {
+                calcKey(static_cast<unsigned char>(event.keyDown.charScan.charCode));
+                clearEvent(event);
+            }
+            else if (event.what == evBroadcast && event.message.command == cmCalcButtonCommand)
+            {
+                if (auto *button = static_cast<TButton *>(event.message.infoPtr))
+                {
+                    if (button->title && button->title[0])
+                        calcKey(static_cast<unsigned char>(button->title[0]));
+                }
+                clearEvent(event);
+            }
+        }
+
+        virtual void draw() override
+        {
+            TDrawBuffer buf;
+            auto color = getColor(1);
+            buf.moveChar(0, ' ', color, size.x);
+            short padding = static_cast<short>(size.x - static_cast<short>(number.size()) - 2);
+            if (padding < 0)
+                padding = 0;
+            buf.moveChar(0, ' ', color, padding);
+            buf.moveChar(padding, sign, color, 1);
+            buf.moveStr(padding + 1, number.c_str(), color);
+            writeLine(0, 0, size.x, 1, buf);
+        }
+
+        void clear()
+        {
+            status = CalculatorState::First;
+            number = "0";
+            sign = ' ';
+            pendingOperator = '=';
+            operand = 0.0;
+        }
+
+    private:
+        enum class CalculatorState
+        {
+            First,
+            Valid,
+            Error,
+        };
+
+        CalculatorState status = CalculatorState::First;
+        std::string number;
+        char sign = ' ';
+        char pendingOperator = '=';
+        double operand = 0.0;
+
+        void calcKey(unsigned char key)
+        {
+            switch (key)
+            {
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                checkFirst();
+                if (number.size() < 15)
+                {
+                    if (number == "0")
+                        number.clear();
+                    number.push_back(static_cast<char>(key));
+                }
+                break;
+            case '.':
+                checkFirst();
+                if (number.find('.') == std::string::npos)
+                    number.push_back('.');
+                break;
+            case 8:
+            case 27:
+            {
+                checkFirst();
+                if (number.size() <= 1)
+                    number = "0";
+                else
+                    number.pop_back();
+                break;
+            }
+            case '_':
+            case 0xF1:
+                sign = (sign == ' ') ? '-' : ' ';
+                break;
+            case '+': case '-': case '*': case '/':
+            case '=': case '%': case 13:
+                if (status == CalculatorState::Valid)
+                {
+                    status = CalculatorState::First;
+                    double value = currentValue();
+                    if (key == '%')
+                    {
+                        if (pendingOperator == '+' || pendingOperator == '-')
+                            value = (operand * value) / 100.0;
+                        else
+                            value /= 100.0;
+                    }
+                    applyOperation(value);
+                }
+                pendingOperator = static_cast<char>(key == 13 ? '=' : key);
+                operand = currentValue();
+                break;
+            case 'C':
+            case 'c':
+                clear();
+                break;
+            default:
+                break;
+            }
+            drawView();
+        }
+
+        void applyOperation(double value)
+        {
+            switch (pendingOperator)
+            {
+            case '+':
+                setDisplay(operand + value);
+                break;
+            case '-':
+                setDisplay(operand - value);
+                break;
+            case '*':
+                setDisplay(operand * value);
+                break;
+            case '/':
+                if (value == 0.0)
+                    showError();
+                else
+                    setDisplay(operand / value);
+                break;
+            case '=':
+                setDisplay(value);
+                break;
+            default:
+                break;
+            }
+        }
+
+        void checkFirst()
+        {
+            if (status == CalculatorState::First)
+            {
+                status = CalculatorState::Valid;
+                number = "0";
+                sign = ' ';
+            }
+            else if (status == CalculatorState::Error)
+            {
+                clear();
+                status = CalculatorState::Valid;
+            }
+        }
+
+        double currentValue() const
+        {
+            double value = 0.0;
+            std::stringstream ss(number);
+            ss >> value;
+            if (sign == '-')
+                value = -value;
+            return value;
+        }
+
+        void setDisplay(double value)
+        {
+            if (!std::isfinite(value))
+            {
+                showError();
+                return;
+            }
+            sign = value < 0 ? '-' : ' ';
+            double absValue = std::fabs(value);
+            char buffer[64];
+            std::snprintf(buffer, sizeof(buffer), "%.12g", absValue);
+            number = buffer;
+            status = CalculatorState::Valid;
+        }
+
+        void showError()
+        {
+            status = CalculatorState::Error;
+            number = "Error";
+            sign = ' ';
+        }
+    };
+
+    class CalculatorDialog : public TDialog
+    {
+    public:
+        CalculatorDialog()
+            : TWindowInit(&CalculatorDialog::initFrame),
+              TDialog(TRect(5, 3, 29, 18), "Calculator")
+        {
+            options |= ofFirstClick;
+
+            static const std::array<const char *, 20> kButtonLabels = {
+                "C", "\x1B", "%", "\xF1",
+                "7", "8", "9", "/",
+                "4", "5", "6", "*",
+                "1", "2", "3", "-",
+                "0", ".", "=", "+",
+            };
+
+            for (std::size_t i = 0; i < kButtonLabels.size(); ++i)
+            {
+                int x = static_cast<int>(i % 4) * 5 + 2;
+                int y = static_cast<int>(i / 4) * 2 + 4;
+                TRect r(x, y, x + 5, y + 2);
+                auto *button = new TButton(r, kButtonLabels[i], cmCalcButtonCommand, bfNormal | bfBroadcast);
+                button->options &= ~ofSelectable;
+                insert(button);
+            }
+
+            insert(new CalculatorDisplay(TRect(3, 2, 21, 3)));
+        }
+    };
+
+    class EventViewerWindow : public TWindow
+    {
+    public:
+        using ClosedHandler = std::function<void(EventViewerWindow *)>;
+
+        EventViewerWindow(const TRect &bounds, ushort bufferSize)
+            : TWindowInit(&EventViewerWindow::initFrame),
+              TWindow(bounds, "Event Viewer", wnNoNumber),
+              bufferSize(bufferSize)
+        {
+            eventMask |= evBroadcast;
+            palette = wpGrayWindow;
+            title = currentTitle();
+
+            scrollBar = standardScrollBar(sbVertical | sbHandleKeyboard);
+            TRect inner = getExtent();
+            inner.grow(-1, -1);
+            terminal = new TTerminal(inner, 0, scrollBar, bufferSize);
+            insert(terminal);
+            output = std::make_unique<std::ostream>(terminal);
+        }
+
+        void setClosedHandler(ClosedHandler handler)
+        {
+            onClosed = std::move(handler);
+        }
+
+        void toggle()
+        {
+            stopped = !stopped;
+            title = currentTitle();
+            if (frame)
+                frame->drawView();
+        }
+
+        void printEvent(const TEvent &event)
+        {
+            if (!output || stopped || event.what == evNothing)
+                return;
+
+            std::ostringstream os;
+            os << "Event #" << ++eventCount << '\n';
+            describeEvent(os, event);
+            os << '\n';
+            (*output) << os.str();
+            output->flush();
+        }
+
+        virtual void handleEvent(TEvent &event) override
+        {
+            TWindow::handleEvent(event);
+            if (event.what == evBroadcast && event.message.command == cmFindEventViewer)
+            {
+                event.message.infoPtr = this;
+                clearEvent(event);
+            }
+        }
+
+        virtual void shutDown() override
+        {
+            output.reset();
+            terminal = nullptr;
+            scrollBar = nullptr;
+            if (onClosed)
+                onClosed(this);
+            TWindow::shutDown();
+        }
+
+    private:
+        bool stopped = false;
+        ushort bufferSize = 0;
+        std::size_t eventCount = 0;
+        TTerminal *terminal = nullptr;
+        TScrollBar *scrollBar = nullptr;
+        std::unique_ptr<std::ostream> output;
+        ClosedHandler onClosed;
+
+        const char *currentTitle() const
+        {
+            return stopped ? "Event Viewer (Stopped)" : "Event Viewer";
+        }
+
+        static void describeEvent(std::ostringstream &os, const TEvent &event)
+        {
+            os << "  what: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.what << std::dec << std::setfill(' ') << '\n';
+            if (event.what & evMouse)
+            {
+                os << "  mouse.where: (" << event.mouse.where.x << ", " << event.mouse.where.y << ")\n";
+                os << "  mouse.buttons: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.mouse.buttons << std::dec << std::setfill(' ') << '\n';
+                os << "  mouse.eventFlags: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.mouse.eventFlags << std::dec << std::setfill(' ') << '\n';
+                os << "  mouse.controlKeyState: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.mouse.controlKeyState << std::dec << std::setfill(' ') << '\n';
+                os << "  mouse.wheel: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.mouse.wheel << std::dec << std::setfill(' ') << '\n';
+            }
+            if (event.what & evKeyboard)
+            {
+                unsigned char charCode = static_cast<unsigned char>(event.keyDown.charScan.charCode);
+                os << "  keyDown.keyCode: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.keyDown.keyCode << std::dec << std::setfill(' ') << '\n';
+                os << "  keyDown.charCode: " << static_cast<int>(charCode);
+                if (charCode >= 32 && charCode < 127)
+                    os << " ('" << static_cast<char>(charCode) << "')";
+                os << '\n';
+                os << "  keyDown.scanCode: " << static_cast<int>(static_cast<unsigned char>(event.keyDown.charScan.scanCode)) << '\n';
+                os << "  keyDown.controlKeyState: 0x" << std::hex << std::setw(4) << std::setfill('0') << event.keyDown.controlKeyState << std::dec << std::setfill(' ') << '\n';
+                os << "  keyDown.textLength: " << static_cast<int>(event.keyDown.textLength) << '\n';
+                if (event.keyDown.textLength > 0)
+                {
+                    os << "  keyDown.text: ";
+                    for (int i = 0; i < event.keyDown.textLength; ++i)
+                    {
+                        if (i)
+                            os << ", ";
+                        os << "0x" << std::hex << std::setw(2) << std::setfill('0')
+                           << static_cast<int>(static_cast<unsigned char>(event.keyDown.text[i])) << std::dec << std::setfill(' ');
+                    }
+                    os << '\n';
+                }
+            }
+            if (event.what & evCommand)
+            {
+                os << "  message.command: " << event.message.command << '\n';
+                os << "  message.infoPtr: " << event.message.infoPtr << '\n';
+            }
+        }
+    };
+
+
+
+
     class LauncherApp : public TApplication
     {
     public:
@@ -786,6 +1570,13 @@ int executeProgram(const std::filesystem::path &programPath,
         {
             toolDirectory = resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
             openLauncher();
+        }
+
+        virtual void getEvent(TEvent &event) override
+        {
+            TApplication::getEvent(event);
+            if (eventViewer)
+                eventViewer->printEvent(event);
         }
 
         virtual void handleEvent(TEvent &event) override
@@ -817,6 +1608,30 @@ int executeProgram(const std::filesystem::path &programPath,
                     clearEvent(event);
                     return;
                 }
+                else if (event.message.command == cmShowCalendar)
+                {
+                    openCalendarWindow();
+                    clearEvent(event);
+                    return;
+                }
+                else if (event.message.command == cmShowAsciiTable)
+                {
+                    openAsciiTable();
+                    clearEvent(event);
+                    return;
+                }
+                else if (event.message.command == cmShowCalculator)
+                {
+                    openCalculator();
+                    clearEvent(event);
+                    return;
+                }
+                else if (event.message.command == cmToggleEventViewer)
+                {
+                    toggleEventViewer();
+                    clearEvent(event);
+                    return;
+                }
             }
             TApplication::handleEvent(event);
         }
@@ -825,6 +1640,11 @@ int executeProgram(const std::filesystem::path &programPath,
         {
             r.b.y = r.a.y + 1;
             return new TMenuBar(r,
+                                *new TSubMenu("~\360~", kbNoKey) +
+                                    *new TMenuItem("Ca~l~endar", cmShowCalendar, kbNoKey, hcNoContext) +
+                                    *new TMenuItem("Ascii ~T~able", cmShowAsciiTable, kbNoKey, hcNoContext) +
+                                    *new TMenuItem("~C~alculator", cmShowCalculator, kbNoKey, hcNoContext) +
+                                    *new TMenuItem("~E~vent Viewer", cmToggleEventViewer, kbAlt0, hcNoContext, "Alt-0") +
                                 *new TSubMenu("~F~ile", kbAltF) +
                                     *new TMenuItem("~N~ew Launcher", cmNewLauncher, kbNoKey, hcNoContext) +
                                     *new TMenuItem("~E~xit", cmQuit, kbAltX));
@@ -841,6 +1661,7 @@ int executeProgram(const std::filesystem::path &programPath,
 
     private:
         std::filesystem::path toolDirectory;
+        EventViewerWindow *eventViewer = nullptr;
 
         void openLauncher()
         {
@@ -950,6 +1771,47 @@ int executeProgram(const std::filesystem::path &programPath,
                 quitEvent.message.command = cmQuit;
                 putEvent(quitEvent);
             }
+        }
+
+        void openCalendarWindow()
+        {
+            if (!deskTop)
+                return;
+            deskTop->insert(new CalendarWindow());
+        }
+
+        void openAsciiTable()
+        {
+            if (!deskTop)
+                return;
+            deskTop->insert(new AsciiTableWindow());
+        }
+
+        void openCalculator()
+        {
+            if (!deskTop)
+                return;
+            deskTop->insert(new CalculatorDialog());
+        }
+
+        void toggleEventViewer()
+        {
+            if (!deskTop)
+                return;
+            if (eventViewer)
+            {
+                eventViewer->toggle();
+                return;
+            }
+
+            auto *viewer = new EventViewerWindow(deskTop->getExtent(), 0x0F00);
+            viewer->setClosedHandler([this](EventViewerWindow *closed)
+                                     {
+                                         if (eventViewer == closed)
+                                             eventViewer = nullptr;
+                                     });
+            eventViewer = viewer;
+            deskTop->insert(viewer);
         }
     };
 
