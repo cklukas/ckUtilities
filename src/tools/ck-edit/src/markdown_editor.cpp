@@ -1024,6 +1024,17 @@ namespace ck::edit
                    *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbCtrlM, hcNoContext, "Ctrl-M");
         }
 
+        TSubMenu &makeWindowMenu()
+        {
+            return *new TSubMenu("~W~indows", kbAltW) +
+                   *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext, "Ctrl-F5") +
+                   *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
+                   *new TMenuItem("~N~ext", cmNext, kbF6, hcNoContext, "F6") +
+                   *new TMenuItem("~C~lose", cmClose, kbAltF3, hcNoContext, "Alt-F3") +
+                   *new TMenuItem("~T~ile", cmTile, kbNoKey) +
+                   *new TMenuItem("C~a~scade", cmCascade, kbNoKey);
+        }
+
         TSubMenu &makeHelpMenu()
         {
             return *new TSubMenu("~H~elp", kbAltH) +
@@ -1079,11 +1090,11 @@ namespace ck::edit
             {
                 if (markdownMode)
                 {
-                    TMenuItem &items = makeFileMenu() + makeEditMenu(true) + makeInsertMenu() + makeTableMenu() + makeViewMenu() + makeHelpMenu();
+                    TMenuItem &items = makeFileMenu() + makeEditMenu(true) + makeInsertMenu() + makeTableMenu() + makeViewMenu() + makeWindowMenu() + makeHelpMenu();
                     return new TMenu(items);
                 }
 
-                TMenuItem &items = makeFileMenu() + makeEditMenu(false) + makeViewMenu() + makeHelpMenu();
+                TMenuItem &items = makeFileMenu() + makeEditMenu(false) + makeViewMenu() + makeWindowMenu() + makeHelpMenu();
                 return new TMenu(items);
             }
         };
@@ -5481,9 +5492,25 @@ namespace ck::edit
         refreshUiMode();
     }
 
+    static Boolean windowIsTileable(TView *view, void *)
+    {
+        return Boolean((view->options & ofTileable) != 0);
+    }
+
     void MarkdownEditorApp::idle()
     {
         TApplication::idle();
+
+        if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
+        {
+            enableCommand(cmTile);
+            enableCommand(cmCascade);
+        }
+        else
+        {
+            disableCommand(cmTile);
+            disableCommand(cmCascade);
+        }
 
         uint32_t token = pendingStatusMessageClear.load(std::memory_order_acquire);
         if (token == 0)
