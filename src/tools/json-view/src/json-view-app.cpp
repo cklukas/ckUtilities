@@ -228,8 +228,8 @@ public:
         TStatusItem *chain = nullptr;
         if (s.matches.empty())
         {
-            auto *i1 = new TStatusItem("~F2~ Open", kbF2, cmOpen);
-            auto *i2 = new TStatusItem("~F3~ Find", kbF3, cmFind);
+            auto *i1 = new TStatusItem("~F3~ Open", kbF3, cmOpen);
+            auto *i2 = new TStatusItem("~Ctrl-F~ Find", kbCtrlF, cmFind);
             TStatusItem *returnItem = nullptr;
             if (ck::launcher::launchedFromCkLauncher())
                 returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
@@ -252,8 +252,8 @@ public:
                                std::to_string(s.currentIndex + 1) + "/" +
                                std::to_string(s.matches.size());
             auto *i1 = new TStatusItem(info.c_str(), kbNoKey, 0);
-            auto *i2 = new TStatusItem("~F3~ Next", kbF3, cmFindNext);
-            auto *i3 = new TStatusItem("~Shift-F3~ Prev", kbShiftF3, cmFindPrev);
+            auto *i2 = new TStatusItem("~F5~ Next", kbF5, cmFindNext);
+            auto *i3 = new TStatusItem("~Shift-F5~ Prev", kbShiftF5, cmFindPrev);
             auto *i4 = new TStatusItem("~Esc~ End Search", kbEsc, cmEndSearch);
             i1->next = i2;
             i2->next = i3;
@@ -599,7 +599,7 @@ TMenuBar *JsonViewApp::initMenuBar(TRect r)
 {
     r.b.y = r.a.y + 1;
     TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                         *new TMenuItem("~O~pen", cmOpen, kbF2, hcNoContext, "F2") +
+                         *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
                          *new TMenuItem("~C~lose", cmClose, kbF4, hcNoContext, "F4") +
                          newLine();
     if (ck::launcher::launchedFromCkLauncher())
@@ -611,8 +611,8 @@ TMenuBar *JsonViewApp::initMenuBar(TRect r)
                                *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
                            *new TSubMenu("~S~earch", hcNoContext) +
                                *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                               *new TMenuItem("Find ~N~ext", cmFindNext, kbF3, hcNoContext, "F3") +
-                               *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF3, hcNoContext, "Shift-F3") +
+                               *new TMenuItem("Find ~N~ext", cmFindNext, kbF5, hcNoContext, "F5") +
+                               *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF5, hcNoContext, "Shift-F5") +
                                *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
                            *new TSubMenu("~V~iew", hcNoContext) +
                                *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +

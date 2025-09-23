@@ -74,6 +74,8 @@
 #undef CK_ABOUT_DIALOG_DEFINE_USES_MSGBOX
 #endif
 
+#include "ck/app_info.hpp"
+
 #include <algorithm>
 #include <sstream>
 #include <string>
@@ -107,7 +109,24 @@ namespace ck::ui
             paragraphs.emplace_back(headerOut.str());
         }
         if (!info.toolName.empty())
-            paragraphs.emplace_back(info.toolName);
+        {
+            const ck::appinfo::ToolInfo *tool = ck::appinfo::findToolByExecutable(info.toolName);
+            if (!tool)
+                tool = ck::appinfo::findTool(info.toolName);
+
+            if (tool)
+            {
+                std::string toolLine(tool->displayName);
+                toolLine.append(" (");
+                toolLine.append(tool->executable);
+                toolLine.push_back(')');
+                paragraphs.emplace_back(std::move(toolLine));
+            }
+            else
+            {
+                paragraphs.emplace_back(info.toolName);
+            }
+        }
 
         if (!info.description.empty())
             paragraphs.emplace_back(std::string(info.description));
