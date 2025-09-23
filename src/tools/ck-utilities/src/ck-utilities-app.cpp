@@ -61,8 +61,9 @@ namespace
 {
 
 constexpr std::string_view kLauncherId = "ck-utilities";
-constexpr short kUtilityReserveLines = 20;
-constexpr short kUtilityWindowSpacing = 1;
+constexpr short kUtilityReserveLines = 16;
+constexpr short kUtilityWindowSpacing = 2;
+constexpr short kUtilityBottomMargin = 2;
 
 const ck::appinfo::ToolInfo &launcherInfo()
 {
@@ -1661,6 +1662,19 @@ int executeProgram(const std::filesystem::path &programPath,
                     clearEvent(event);
                     return;
                 }
+                else if (event.message.command == cmClose)
+                {
+                    if (eventViewer)
+                    {
+                        auto *target = static_cast<TView *>(event.message.infoPtr);
+                        if (!target || target == eventViewer)
+                        {
+                            eventViewer->close();
+                            clearEvent(event);
+                            return;
+                        }
+                    }
+                }
             }
             TApplication::handleEvent(event);
         }
@@ -1940,6 +1954,14 @@ int executeProgram(const std::filesystem::path &programPath,
             if (availableHeight > kUtilityReserveLines)
                 utilityTop = desktopExtent.b.y - kUtilityReserveLines;
 
+            int bottomLimit = desktopExtent.b.y;
+            if (kUtilityBottomMargin > 0 && availableHeight > kUtilityBottomMargin)
+            {
+                bottomLimit = desktopExtent.b.y - kUtilityBottomMargin;
+                if (bottomLimit < utilityTop)
+                    bottomLimit = utilityTop;
+            }
+
             int currentX = desktopExtent.a.x;
             for (auto *window : utilityWindows)
             {
@@ -1962,13 +1984,20 @@ int executeProgram(const std::filesystem::path &programPath,
                     }
                 }
 
-                int top = std::max(utilityTop, desktopExtent.b.y - height);
+                int top = std::max(utilityTop, bottomLimit - height);
                 int bottom = top + height;
+                if (bottom > bottomLimit)
+                {
+                    bottom = bottomLimit;
+                    top = std::max(utilityTop, bottom - height);
+                }
                 if (bottom > desktopExtent.b.y)
                 {
                     bottom = desktopExtent.b.y;
                     top = std::max(utilityTop, bottom - height);
                 }
+                if (bottom < top)
+                    bottom = top;
 
                 TRect newBounds(static_cast<short>(left), static_cast<short>(top),
                                 static_cast<short>(right), static_cast<short>(bottom));
