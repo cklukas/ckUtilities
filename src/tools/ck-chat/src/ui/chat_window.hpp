@@ -1,0 +1,58 @@
+#pragma once
+
+#include "../chat_session.hpp"
+
+#include "../tvision_include.hpp"
+
+#include <vector>
+
+class ChatApp;
+class ChatTranscriptView;
+class PromptInputView;
+class SolidColorView;
+class TButton;
+class TScrollBar;
+
+class ChatWindow : public TWindow
+{
+public:
+    ChatWindow(ChatApp &owner, const TRect &bounds, int number);
+
+    virtual void handleEvent(TEvent &event) override;
+    virtual void sizeLimits(TPoint &min, TPoint &max) override;
+    virtual void shutDown() override;
+
+    void processPendingResponses();
+
+private:
+    ChatApp &app;
+    ck::chat::ChatSession session;
+    ChatTranscriptView *transcript = nullptr;
+    PromptInputView *promptInput = nullptr;
+    TScrollBar *promptScrollBar = nullptr;
+    TButton *submitButton = nullptr;
+    TScrollBar *transcriptScrollBar = nullptr;
+    SolidColorView *copyColumnBackground = nullptr;
+    SolidColorView *submitBackground = nullptr;
+    struct CopyButtonInfo
+    {
+        std::size_t messageIndex;
+        TButton *button = nullptr;
+        ushort command = 0;
+    };
+    std::vector<CopyButtonInfo> copyButtons;
+
+    void newConversation();
+    void sendPrompt();
+    void updateTranscriptFromSession(bool forceScroll);
+    void copyAssistantMessage(std::size_t messageIndex);
+    void ensureCopyButton(std::size_t messageIndex);
+    void updateCopyButtonState(std::size_t messageIndex);
+    void updateCopyButtonPositions();
+    void updateCopyButtons();
+    void clearCopyButtons();
+    CopyButtonInfo *findCopyButton(std::size_t messageIndex);
+    CopyButtonInfo *findCopyButtonByCommand(ushort command);
+    static void setButtonTitle(TButton &button, const char *title);
+    TRect copyColumnBounds() const;
+};

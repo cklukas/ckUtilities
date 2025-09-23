@@ -20,6 +20,12 @@ add_ck_tool(ckchat
   SOURCES
     src/ck-chat-app.cpp
     src/chat_session.cpp
+    src/ui/solid_color_view.cpp
+    src/ui/prompt_input_view.cpp
+    src/ui/chat_transcript_view.cpp
+    src/ui/chat_window.cpp
+    src/ui/chat_app.cpp
+    src/clipboard.cpp
   LIBRARIES
     ck_app_info
     ckai_core
@@ -27,6 +33,9 @@ add_ck_tool(ckchat
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${PROJECT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/lib/ckai_core/src
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_CHAT_VERSION="${PROJECT_VERSION}"
