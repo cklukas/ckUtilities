@@ -25,6 +25,7 @@ add_ck_tool(ckfind
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-find/include
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_FIND_VERSION="${PROJECT_VERSION}"

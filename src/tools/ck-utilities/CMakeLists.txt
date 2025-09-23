@@ -33,6 +33,7 @@ add_ck_tool(ckutilities
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-utilities/include
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_UTILITIES_VERSION="${PROJECT_VERSION}"

@@ -1,6 +1,7 @@
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
 #include "ck/launcher.hpp"
+#include "ck/find/cli_buffer_utils.hpp"
 
 #define Uses_MsgBox
 #define Uses_TApplication
@@ -84,22 +85,8 @@ constexpr ushort kOptionPermissionBit = 0x0001;
 constexpr ushort kOptionTraversalBit = 0x0002;
 constexpr ushort kOptionActionBit = 0x0004;
 
-template <std::size_t N>
-void copyToArray(std::array<char, N> &dest, const char *src)
-{
-    if (!src)
-        src = "";
-    std::snprintf(dest.data(), dest.size(), "%s", src);
-}
-
-template <std::size_t N>
-std::string bufferToString(const std::array<char, N> &buffer)
-{
-    auto it = std::find(buffer.begin(), buffer.end(), '\0');
-    if (it != buffer.end())
-        return std::string(buffer.data(), static_cast<std::size_t>(std::distance(buffer.begin(), it)));
-    return std::string(buffer.data(), buffer.size());
-}
+using ck::find::bufferToString;
+using ck::find::copyToArray;
 
 TSItem *makeItemList(std::initializer_list<const char *> labels)
 {
