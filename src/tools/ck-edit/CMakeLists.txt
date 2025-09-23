@@ -26,6 +26,7 @@ endif()
 add_library(ck_edit_core STATIC
   src/markdown_parser.cpp
   src/markdown_editor.cpp
+  src/markdown_file_editor.cpp
 )
 
 target_include_directories(ck_edit_core
