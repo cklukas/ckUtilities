@@ -6,6 +6,7 @@ Current prototypes:
 
 * `ck-json-view` — JSON tree viewer built with Turbo Vision.
 * `ck-du` — disk usage explorer with tree views, file listings, unit and sort controls.
+* `ck-find` — staged search-specification builder with simple and advanced filters.
 CK Utilities aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
 Target platform: **Linux text-mode terminals**.
 Tech stack: **C++20 (or newer)** + **Turbo Vision**.
@@ -69,11 +70,11 @@ cmake --preset release     # Optimized build
 cmake --build build/dev
 ```
 
-#### Build and run a single tool (example: ckfind):
+#### Build and run a single tool (example: ck-find):
 
 ```bash
 cmake --build build/dev -t ckfind
-./build/dev/src/tools/ckfind/ckfind --help
+./build/dev/bin/ck-find --help
 ```
 
 #### Run tests:
