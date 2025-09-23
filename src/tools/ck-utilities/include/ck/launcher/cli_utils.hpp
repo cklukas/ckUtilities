@@ -37,13 +37,10 @@ inline std::filesystem::path resolveToolDirectory(const char *argv0)
         return base;
 
     std::filesystem::path candidate = argv0;
-    std::error_code ec;
     if (!candidate.is_absolute())
         candidate = std::filesystem::current_path() / candidate;
 
-    std::filesystem::path canonical = std::filesystem::weakly_canonical(candidate, ec);
-    if (!ec)
-        candidate = canonical;
+    candidate = candidate.lexically_normal();
 
     if (!candidate.has_parent_path())
         return base;
@@ -53,11 +50,7 @@ inline std::filesystem::path resolveToolDirectory(const char *argv0)
 inline std::optional<std::filesystem::path> locateProgramPath(const std::filesystem::path &toolDirectory,
                                                               const ck::appinfo::ToolInfo &info)
 {
-    std::filesystem::path programPath = toolDirectory / std::filesystem::path(info.executable);
-    std::error_code ec;
-    std::filesystem::path resolved = std::filesystem::weakly_canonical(programPath, ec);
-    if (!ec)
-        programPath = std::move(resolved);
+    std::filesystem::path programPath = (toolDirectory / std::filesystem::path(info.executable)).lexically_normal();
 
     std::error_code existsEc;
     if (!std::filesystem::exists(programPath, existsEc))
@@ -157,4 +150,3 @@ inline std::vector<std::string> wrapText(std::string_view text, int width)
 }
 
 } // namespace ck::launcher
-
