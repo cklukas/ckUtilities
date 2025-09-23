@@ -599,7 +599,12 @@ public:
             return;
         }
         const ApplicationEntry &entry = (*entries)[static_cast<std::size_t>(item)];
-        std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", entry.info.id.c_str());
+        std::string label;
+        if (!entry.info.name.empty())
+            label = entry.info.name + " (" + entry.info.id + ")";
+        else
+            label = entry.info.id;
+        std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", label.c_str());
     }
 
     virtual void handleEvent(TEvent &event) override
