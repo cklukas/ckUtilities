@@ -10,7 +10,7 @@ namespace ck::appinfo
     namespace
     {
 
-        constexpr std::array<ToolInfo, 5> kTools{{
+        constexpr std::array<ToolInfo, 6> kTools{{
             ToolInfo{
                 "ck-utilities",
                 "ck-utilities",
@@ -32,6 +32,13 @@ namespace ck::appinfo
                 "Analyze directory and file storage utilization.",
                 "Analyze directory and file storage utilization.",
                 "Disk Usage visualizes disk usage with an ncdu-inspired tree and rich metadata. Open multiple windows to compare paths, switch units on the fly, and inspect recursive file listings with owners, timestamps, and filters. It is built to answer “where did my space go?” without memorizing long du pipelines."},
+            ToolInfo{
+                "ck-find",
+                "ck-find",
+                "Find",
+                "Compose reusable search specifications for files and directories.",
+                "Compose reusable search specifications for files and directories.",
+                "Find guides you through building complex file searches without drowning in flags. Define a starting location, choose how to match text, and layer on filters for dates, sizes, and file types with clear, staged dialogs. Save specifications for recurring audits and load them again when the full execution engine arrives."},
             ToolInfo{
                 "ck-json-view",
                 "ck-json-view",
