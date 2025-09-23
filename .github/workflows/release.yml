@@ -101,3 +101,119 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/pkg/*.tar.gz
+
+  release-windows:
+    if: github.event_name == 'release'
+    needs: release-tests
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      REPOSITORY: ${{ github.repository }}
+      WINGET_PACKAGE_IDENTIFIER: ckUtilities.ck-utilities
+      WINGET_PACKAGE_NAME: ck-utilities
+      WINGET_PUBLISHER: ckUtilities Project
+      WINGET_LICENSE: GPL-3.0-or-later
+      WINGET_SHORT_DESCRIPTION: Turbo Vision utilities for Windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset pkg
+
+      - name: Build
+        run: cmake --build build/pkg --config Release
+
+      - name: Stage installer payload
+        id: stage_windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $staging = Join-Path (Get-Location) 'build/pkg/windows-installer'
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          $payload = Join-Path $staging 'payload'
+          cmake --install build/pkg --config Release --prefix $payload
+
+          $installerExe = Join-Path (Get-Location) 'build/pkg/bin/cku-win-installer.exe'
+          if (-not (Test-Path $installerExe)) {
+            throw "Installer executable not found at $installerExe"
+          }
+          Copy-Item $installerExe -Destination $staging -Force
+
+          $cache = Get-Content 'build/pkg/CMakeCache.txt'
+          $versionLine = $cache | Where-Object { $_ -match '^cktools_VERSION:STATIC=' }
+          if (-not $versionLine) {
+            throw 'Unable to determine ck-utilities version from CMakeCache.txt'
+          }
+          $version = $versionLine -replace 'cktools_VERSION:STATIC=', ''
+          "CK_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ck_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+          $zipName = "ck-utilities-$version-windows.zip"
+          $zipPath = Join-Path (Get-Location) "build/pkg/$zipName"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath
+          }
+          Push-Location $staging
+          try {
+            Compress-Archive -Path * -DestinationPath $zipPath
+          } finally {
+            Pop-Location
+          }
+
+          $sha256 = (Get-FileHash $zipPath -Algorithm SHA256).Hash
+          "INSTALLER_SHA256=$sha256" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "installer_sha256=$sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "installer_zip=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Generate winget manifests
+        id: generate_winget_manifests
+        shell: pwsh
+        env:
+          CK_VERSION: ${{ steps.stage_windows.outputs.ck_version }}
+          INSTALLER_SHA256: ${{ steps.stage_windows.outputs.installer_sha256 }}
+          INSTALLER_ZIP: ${{ steps.stage_windows.outputs.installer_zip }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:CK_VERSION) {
+            throw 'CK_VERSION was not exported by the staging step'
+          }
+          $manifestRoot = Join-Path (Get-Location) 'build/pkg/winget-manifests'
+          python scripts/generate_winget_manifest.py `
+            --output $manifestRoot `
+            --package-identifier $env:WINGET_PACKAGE_IDENTIFIER `
+            --package-name $env:WINGET_PACKAGE_NAME `
+            --publisher $env:WINGET_PUBLISHER `
+            --version $env:CK_VERSION `
+            --installer-url "https://github.com/$($env:REPOSITORY)/releases/download/$($env:RELEASE_TAG)/ck-utilities-$($env:CK_VERSION)-windows.zip" `
+            --installer-sha256 $env:INSTALLER_SHA256 `
+            --license $env:WINGET_LICENSE `
+            --publisher-url "https://github.com/$($env:REPOSITORY)" `
+            --short-description $env:WINGET_SHORT_DESCRIPTION `
+            --silent-switch "--quiet --force"
+
+          $manifestZip = Join-Path (Get-Location) "build/pkg/ck-utilities-$($env:CK_VERSION)-winget-manifests.zip"
+          if (Test-Path $manifestZip) {
+            Remove-Item $manifestZip
+          }
+          Push-Location $manifestRoot
+          try {
+            Compress-Archive -Path * -DestinationPath $manifestZip
+          } finally {
+            Pop-Location
+          }
+          "manifest_zip=$manifestZip" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.stage_windows.outputs.installer_zip }}
+            ${{ steps.generate_winget_manifests.outputs.manifest_zip }}

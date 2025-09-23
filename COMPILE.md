@@ -260,6 +260,37 @@ Packaging metadata (maintainer, license, deps like `libtvision`, `pandoc`, `texi
 
 ---
 
+### Windows installer & winget manifests
+
+We ship a lightweight Windows installer that simply copies the staged payload into `%ProgramFiles%/ck-utilities`. The installer binary (`cku-win-installer`) is built alongside the rest of the tools. To assemble the distributable ZIP on Windows:
+
+```powershell
+cmake --preset pkg
+cmake --build build/pkg --config Release
+$staging = "$PWD/build/pkg/windows-installer"
+cmake --install build/pkg --config Release --prefix "$staging/payload"
+Copy-Item build/pkg/bin/cku-win-installer.exe -Destination $staging
+Compress-Archive -Path "$staging/*" -DestinationPath "build/pkg/ck-utilities-<version>-windows.zip"
+```
+
+The GitHub release workflow performs the same steps and then generates Windows Package Manager manifests via `scripts/generate_winget_manifest.py`. You can run the script locally to produce manifests for a custom source:
+
+```bash
+python scripts/generate_winget_manifest.py \
+  --output build/pkg/winget-manifests \
+  --package-identifier ckUtilities.ck-utilities \
+  --package-name ck-utilities \
+  --publisher "ckUtilities Project" \
+  --version 0.1.0 \
+  --installer-url "https://example.invalid/ck-utilities-0.1.0-windows.zip" \
+  --installer-sha256 012345... \
+  --silent-switch "--quiet --force"
+```
+
+The generated directory hierarchy (`<publisher>/<package>/<version>/...`) can be published in a separate GitHub repository and added with `winget source add` once it is hosted.
+
+---
+
 ## Continuous Integration (outline)
 
 **GitHub Actions** matrix: `ubuntu-22.04` and `fedora-latest`.
