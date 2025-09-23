@@ -343,12 +343,6 @@ public:
         return std::nullopt;
     }
 
-    virtual TPalette &getPalette() const override
-    {
-        static TPalette p(wpGrayWindow, sizeof(wpGrayWindow) - 1);
-        return p;
-    }
-
 protected:
     virtual void draw() override
     {
@@ -632,8 +626,7 @@ public:
 
     virtual void draw() override
     {
-        auto colors = getColor(1);
-        TColorAttr attr = colors[0];
+        TColorAttr attr{TColorBIOS(0x0), TColorBIOS(0x7)};
         TDrawBuffer buffer;
         for (int y = 0; y < size.y; ++y)
         {
