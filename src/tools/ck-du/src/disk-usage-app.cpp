@@ -25,6 +25,7 @@
 #define Uses_TStatusLine
 #define Uses_TSubMenu
 #define Uses_TWindow
+#define Uses_TCommandSet
 #define Uses_MsgBox
 #include <tvision/tv.h>
 
@@ -2328,6 +2329,11 @@ void DiskUsageApp::handleEvent(TEvent &event)
     }
 }
 
+static Boolean windowIsTileable(TView *view, void *)
+{
+    return Boolean((view->options & ofTileable) != 0);
+}
+
 void DiskUsageApp::idle()
 {
     TApplication::idle();
@@ -2353,6 +2359,17 @@ void DiskUsageApp::idle()
         updateFileTypeProgress(*activeFileType);
         if (activeFileType->finished.load())
             processActiveFileTypeCompletion();
+    }
+
+    if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
+    {
+        enableCommand(cmTile);
+        enableCommand(cmCascade);
+    }
+    else
+    {
+        disableCommand(cmTile);
+        disableCommand(cmCascade);
     }
 }
 
@@ -2439,6 +2456,13 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                                *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
                                *new TMenuItem("~T~ypes", cmViewFileTypes, kbF4, hcNoContext, "F4") +
                                *new TMenuItem("Types (~S~ubdirs)", cmViewFileTypesRecursive, kbShiftF4, hcNoContext, "Shift-F4") +
+                           *new TSubMenu("~W~indows", hcNoContext) +
+                               *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext, "Ctrl-F5") +
+                               *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
+                               *new TMenuItem("~N~ext", cmNext, kbF6, hcNoContext, "F6") +
+                               *new TMenuItem("~C~lose", cmClose, kbAltF3, hcNoContext, "Alt-F3") +
+                               *new TMenuItem("~T~ile", cmTile, kbNoKey, hcNoContext) +
+                               *new TMenuItem("C~a~scade", cmCascade, kbNoKey, hcNoContext) +
                            *new TSubMenu("~H~elp", hcNoContext) +
                                *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
 
