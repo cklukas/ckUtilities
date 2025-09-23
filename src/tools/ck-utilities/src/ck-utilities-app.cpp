@@ -61,6 +61,8 @@ namespace
 {
 
 constexpr std::string_view kLauncherId = "ck-utilities";
+constexpr short kUtilityReserveLines = 20;
+constexpr short kUtilityWindowSpacing = 1;
 
 const ck::appinfo::ToolInfo &launcherInfo()
 {
@@ -597,12 +599,15 @@ int executeProgram(const std::filesystem::path &programPath,
         std::vector<const ck::appinfo::ToolInfo *> *entries;
     };
 
+    class LauncherApp;
+
     class LauncherDialog : public TDialog
     {
     public:
-        LauncherDialog(const TRect &bounds, std::vector<const ck::appinfo::ToolInfo *> tools)
+        LauncherDialog(LauncherApp &owner, const TRect &bounds, std::vector<const ck::appinfo::ToolInfo *> tools)
             : TWindowInit(&TDialog::initFrame),
               TDialog(bounds, launcherInfo().displayName.data()),
+              launcher(&owner),
               bannerLines(splitBannerLines()),
               toolRefs(std::move(tools))
         {
@@ -637,6 +642,8 @@ int executeProgram(const std::filesystem::path &programPath,
 
             ensureDetailUpdated();
         }
+
+        virtual void shutDown() override;
 
         const ck::appinfo::ToolInfo *currentTool() const
         {
@@ -677,6 +684,7 @@ int executeProgram(const std::filesystem::path &programPath,
         }
 
     private:
+        LauncherApp *launcher = nullptr;
         std::vector<std::string> bannerLines;
         BannerView *bannerView = nullptr;
         std::vector<const ck::appinfo::ToolInfo *> toolRefs;
@@ -987,9 +995,10 @@ int executeProgram(const std::filesystem::path &programPath,
     class CalendarWindow : public TWindow
     {
     public:
-        CalendarWindow()
+        explicit CalendarWindow(LauncherApp &owner)
             : TWindowInit(&CalendarWindow::initFrame),
-              TWindow(TRect(0, 0, 24, 10), "Calendar", wnNoNumber)
+              TWindow(TRect(0, 0, 24, 10), "Calendar", wnNoNumber),
+              launcher(&owner)
         {
             flags &= ~(wfGrow | wfZoom);
             growMode = 0;
@@ -999,6 +1008,12 @@ int executeProgram(const std::filesystem::path &programPath,
             inner.grow(-1, -1);
             insert(new CalendarView(inner));
         }
+
+    protected:
+        virtual void shutDown() override;
+
+    private:
+        LauncherApp *launcher = nullptr;
     };
 
     class AsciiInfoView : public TView
@@ -1163,9 +1178,10 @@ int executeProgram(const std::filesystem::path &programPath,
     class AsciiTableWindow : public TWindow
     {
     public:
-        AsciiTableWindow()
+        explicit AsciiTableWindow(LauncherApp &owner)
             : TWindowInit(&AsciiTableWindow::initFrame),
-              TWindow(TRect(0, 0, 34, 12), "ASCII Table", wnNoNumber)
+              TWindow(TRect(0, 0, 34, 12), "ASCII Table", wnNoNumber),
+              launcher(&owner)
         {
             flags &= ~(wfGrow | wfZoom);
             growMode = 0;
@@ -1191,6 +1207,12 @@ int executeProgram(const std::filesystem::path &programPath,
             table->select();
             message(this, evBroadcast, cmAsciiSelectionChanged, reinterpret_cast<void *>(0));
         }
+
+    protected:
+        virtual void shutDown() override;
+
+    private:
+        LauncherApp *launcher = nullptr;
     };
 
     class CalculatorDisplay : public TView
@@ -1405,9 +1427,10 @@ int executeProgram(const std::filesystem::path &programPath,
     class CalculatorDialog : public TDialog
     {
     public:
-        CalculatorDialog()
+        explicit CalculatorDialog(LauncherApp &owner)
             : TWindowInit(&CalculatorDialog::initFrame),
-              TDialog(TRect(5, 3, 29, 18), "Calculator")
+              TDialog(TRect(5, 3, 29, 18), "Calculator"),
+              launcher(&owner)
         {
             options |= ofFirstClick;
 
@@ -1431,6 +1454,12 @@ int executeProgram(const std::filesystem::path &programPath,
 
             insert(new CalculatorDisplay(TRect(3, 2, 21, 3)));
         }
+
+    protected:
+        virtual void shutDown() override;
+
+    private:
+        LauncherApp *launcher = nullptr;
     };
 
     class EventViewerWindow : public TWindow
@@ -1662,6 +1691,8 @@ int executeProgram(const std::filesystem::path &programPath,
     private:
         std::filesystem::path toolDirectory;
         EventViewerWindow *eventViewer = nullptr;
+        std::vector<LauncherDialog *> launcherDialogs;
+        std::vector<TWindow *> utilityWindows;
 
         void openLauncher()
         {
@@ -1689,9 +1720,10 @@ int executeProgram(const std::filesystem::path &programPath,
                 --dialogBounds.b.y;
             }
 
-            auto *dialog = new LauncherDialog(dialogBounds, std::move(tools));
+            auto *dialog = new LauncherDialog(*this, dialogBounds, std::move(tools));
             deskTop->insert(dialog);
             dialog->select();
+            onLauncherOpened(dialog);
         }
 
         void launchTool(const ck::appinfo::ToolInfo *info, const std::vector<std::string> &extraArgs = {})
@@ -1777,21 +1809,27 @@ int executeProgram(const std::filesystem::path &programPath,
         {
             if (!deskTop)
                 return;
-            deskTop->insert(new CalendarWindow());
+            auto *window = new CalendarWindow(*this);
+            deskTop->insert(window);
+            onUtilityWindowOpened(window);
         }
 
         void openAsciiTable()
         {
             if (!deskTop)
                 return;
-            deskTop->insert(new AsciiTableWindow());
+            auto *window = new AsciiTableWindow(*this);
+            deskTop->insert(window);
+            onUtilityWindowOpened(window);
         }
 
         void openCalculator()
         {
             if (!deskTop)
                 return;
-            deskTop->insert(new CalculatorDialog());
+            auto *dialog = new CalculatorDialog(*this);
+            deskTop->insert(dialog);
+            onUtilityWindowOpened(dialog);
         }
 
         void toggleEventViewer()
@@ -1813,7 +1851,173 @@ int executeProgram(const std::filesystem::path &programPath,
             eventViewer = viewer;
             deskTop->insert(viewer);
         }
+
+    public:
+        void onLauncherOpened(LauncherDialog *dialog)
+        {
+            if (!dialog)
+                return;
+            if (std::find(launcherDialogs.begin(), launcherDialogs.end(), dialog) == launcherDialogs.end())
+                launcherDialogs.push_back(dialog);
+            layoutLauncherWindows();
+            layoutUtilityWindows();
+        }
+
+        void onLauncherClosed(LauncherDialog *dialog)
+        {
+            auto it = std::remove(launcherDialogs.begin(), launcherDialogs.end(), dialog);
+            if (it != launcherDialogs.end())
+                launcherDialogs.erase(it, launcherDialogs.end());
+            layoutLauncherWindows();
+            layoutUtilityWindows();
+        }
+
+        void onUtilityWindowOpened(TWindow *window)
+        {
+            if (!window)
+                return;
+            if (std::find(utilityWindows.begin(), utilityWindows.end(), window) == utilityWindows.end())
+                utilityWindows.push_back(window);
+            layoutLauncherWindows();
+            layoutUtilityWindows();
+        }
+
+        void onUtilityWindowClosed(TWindow *window)
+        {
+            auto it = std::remove(utilityWindows.begin(), utilityWindows.end(), window);
+            if (it != utilityWindows.end())
+                utilityWindows.erase(it, utilityWindows.end());
+            layoutLauncherWindows();
+            layoutUtilityWindows();
+        }
+
+    private:
+        void layoutLauncherWindows()
+        {
+            if (!deskTop)
+                return;
+
+            TRect desktopExtent = deskTop->getExtent();
+            if (!utilityWindows.empty())
+            {
+                int availableHeight = desktopExtent.b.y - desktopExtent.a.y;
+                if (availableHeight > kUtilityReserveLines)
+                {
+                    desktopExtent.b.y = static_cast<short>(desktopExtent.b.y - kUtilityReserveLines);
+                    if (desktopExtent.b.y < desktopExtent.a.y)
+                        desktopExtent.b.y = desktopExtent.a.y;
+                }
+            }
+
+            TRect bounds = desktopExtent;
+            if (bounds.b.x - bounds.a.x > 2)
+            {
+                ++bounds.a.x;
+                --bounds.b.x;
+            }
+            if (bounds.b.y - bounds.a.y > 2)
+            {
+                ++bounds.a.y;
+                --bounds.b.y;
+            }
+
+            for (auto *dialog : launcherDialogs)
+            {
+                if (!dialog)
+                    continue;
+                dialog->locate(bounds);
+            }
+        }
+
+        void layoutUtilityWindows()
+        {
+            if (!deskTop || utilityWindows.empty())
+                return;
+
+            TRect desktopExtent = deskTop->getExtent();
+            int availableHeight = desktopExtent.b.y - desktopExtent.a.y;
+            int utilityTop = desktopExtent.a.y;
+            if (availableHeight > kUtilityReserveLines)
+                utilityTop = desktopExtent.b.y - kUtilityReserveLines;
+
+            int currentX = desktopExtent.a.x;
+            for (auto *window : utilityWindows)
+            {
+                if (!window)
+                    continue;
+
+                int width = std::max<int>(1, window->size.x);
+                int height = std::max<int>(1, window->size.y);
+
+                int left = currentX;
+                int right = left + width;
+                if (right > desktopExtent.b.x)
+                {
+                    right = desktopExtent.b.x;
+                    left = right - width;
+                    if (left < desktopExtent.a.x)
+                    {
+                        left = desktopExtent.a.x;
+                        right = std::min(desktopExtent.b.x, left + width);
+                    }
+                }
+
+                int top = std::max(utilityTop, desktopExtent.b.y - height);
+                int bottom = top + height;
+                if (bottom > desktopExtent.b.y)
+                {
+                    bottom = desktopExtent.b.y;
+                    top = std::max(utilityTop, bottom - height);
+                }
+
+                TRect newBounds(static_cast<short>(left), static_cast<short>(top),
+                                static_cast<short>(right), static_cast<short>(bottom));
+                window->locate(newBounds);
+
+                currentX = right + kUtilityWindowSpacing;
+            }
+        }
     };
+
+    void LauncherDialog::shutDown()
+    {
+        if (launcher)
+        {
+            launcher->onLauncherClosed(this);
+            launcher = nullptr;
+        }
+        TDialog::shutDown();
+    }
+
+    void CalendarWindow::shutDown()
+    {
+        if (launcher)
+        {
+            launcher->onUtilityWindowClosed(this);
+            launcher = nullptr;
+        }
+        TWindow::shutDown();
+    }
+
+    void AsciiTableWindow::shutDown()
+    {
+        if (launcher)
+        {
+            launcher->onUtilityWindowClosed(this);
+            launcher = nullptr;
+        }
+        TWindow::shutDown();
+    }
+
+    void CalculatorDialog::shutDown()
+    {
+        if (launcher)
+        {
+            launcher->onUtilityWindowClosed(this);
+            launcher = nullptr;
+        }
+        TDialog::shutDown();
+    }
 
 } // namespace
 
