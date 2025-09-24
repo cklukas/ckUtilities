@@ -2,14 +2,22 @@
 #include "chat_app.hpp"
 #include "chat_transcript_view.hpp"
 #include "prompt_input_view.hpp"
-#include "solid_color_view.hpp"
 #include "../clipboard.hpp"
 #include "../commands.hpp"
 
-
-
 #include <algorithm>
 #include <cstring>
+
+// Variable Name	    | Meaning
+// ---------------------|---------------------------------------------------------------
+// transcript           | The view that displays the chat transcript/history.
+// transcriptScrollBar	| The scrollbar associated with the chat transcript view.
+// copyButtons          | A collection of buttons, each for copying a specific assistant
+//
+// promptInput          | The input field where the user types their message.
+// promptScrollBar      | The scrollbar for the user's text input area.
+// submitButton         | The button used to send the user's message.
+//                      | message from the transcript.
 
 void ChatWindow::setButtonTitle(TButton &button, const char *title)
 {
@@ -23,31 +31,25 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
       TWindow(bounds, "Chat", number),
       app(owner)
 {
-    palette = wpGrayWindow;
+    palette = wpBlueWindow;
     options |= ofTileable;
 
     TRect extent = getExtent();
-    extent.grow(-1, -1);
+    extent.grow(-2, -1);
 
-    const int inputLines = 4;
-    const int labelHeight = 1;
+    const int inputLines = 4;  // number of lines for the prompt input area
+    const int labelHeight = 1; // height of the prompt input label ("Prompt:")
     const int transcriptScrollWidth = 1;
     const int copyButtonColumnWidth = 6;
     const int inputScrollWidth = 1;
-    const int buttonWidth = 14;
+    const int buttonWidth = 10; // width of the submit button
 
-    TRect transcriptRect = extent;
+    TRect transcriptRect = extent; // area for the chat transcript view
     transcriptRect.b.y -= (inputLines + labelHeight);
-    transcriptRect.b.x -= (transcriptScrollWidth + copyButtonColumnWidth);
+    transcriptRect.b.x -= (transcriptScrollWidth + copyButtonColumnWidth + 3);
 
-    TRect copyColumnRect(transcriptRect.b.x, transcriptRect.a.y,
-                         transcriptRect.b.x + copyButtonColumnWidth, transcriptRect.b.y);
-    copyColumnBackground = new SolidColorView(copyColumnRect);
-    copyColumnBackground->growMode = gfGrowLoY | gfGrowHiY;
-    insert(copyColumnBackground);
-
-    TRect transcriptScrollRect(copyColumnRect.b.x, transcriptRect.a.y,
-                               copyColumnRect.b.x + transcriptScrollWidth, transcriptRect.b.y);
+    TRect transcriptScrollRect(transcriptRect.b.x + copyButtonColumnWidth, transcriptRect.a.y,
+                               transcriptRect.b.x + copyButtonColumnWidth + transcriptScrollWidth, transcriptRect.b.y);
     auto *transcriptScroll = new TScrollBar(transcriptScrollRect);
     transcriptScroll->growMode = gfGrowHiY;
     transcriptScroll->setState(sfVisible, True);
@@ -66,7 +68,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     if (promptRight <= extent.a.x + 1)
         promptRight = extent.a.x + 2;
     int scrollLeft = promptRight;
-    int buttonLeft = std::max(scrollLeft + inputScrollWidth, extent.b.x - buttonWidth);
+    int buttonLeft = std::max(scrollLeft + inputScrollWidth + 1, extent.b.x - buttonWidth);
     if (buttonLeft >= extent.b.x)
         buttonLeft = extent.b.x - 1;
 
@@ -81,7 +83,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     promptInput->growMode = gfGrowHiX | gfGrowLoY | gfGrowHiY;
     insert(promptInput);
 
-    TRect labelRect(extent.a.x, labelTop, scrollLeft, inputTop);
+    TRect labelRect(extent.a.x - 1, labelTop, scrollLeft, inputTop);
     auto *label = new TLabel(labelRect, "Prompt:", promptInput);
     label->growMode = gfGrowLoY | gfGrowHiY | gfGrowHiX;
     insert(label);
@@ -110,8 +112,6 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
 
 void ChatWindow::handleEvent(TEvent &event)
 {
-    TWindow::handleEvent(event);
-
     if (event.what == evKeyDown && event.keyDown.keyCode == kbAltS)
     {
         sendPrompt();
@@ -138,6 +138,8 @@ void ChatWindow::handleEvent(TEvent &event)
             }
         }
     }
+
+    TWindow::handleEvent(event);
 }
 
 void ChatWindow::sizeLimits(TPoint &min, TPoint &max)
@@ -234,7 +236,7 @@ void ChatWindow::ensureCopyButton(std::size_t messageIndex)
     TRect initialBounds(column.a.x, column.a.y,
                         column.b.x, column.a.y + 2);
     bool pending = transcript->isMessagePending(messageIndex);
-    const char *label = pending ? " ⏳ " : " 📋 ";
+    const char *label = pending ? " ⏳ " : "Copy";
     auto *button = new TButton(initialBounds, label, command, 0);
     button->growMode = 0;
     button->setState(sfVisible, False);
@@ -254,7 +256,7 @@ void ChatWindow::updateCopyButtonState(std::size_t messageIndex)
         return;
 
     bool pending = transcript->isMessagePending(messageIndex);
-    const char *label = pending ? " ⏳ " : " 📋 ";
+    const char *label = pending ? " ⏳ " : "Copy";
     if (!info->button->title || std::strcmp(info->button->title, label) != 0)
         setButtonTitle(*info->button, label);
     info->button->setState(sfDisabled, pending ? True : False);
@@ -347,9 +349,6 @@ TRect ChatWindow::copyColumnBounds() const
 {
     if (!transcript)
         return TRect(0, 0, 0, 0);
-
-    if (copyColumnBackground)
-        return copyColumnBackground->getBounds();
 
     TRect transcriptBounds = transcript->getBounds();
     if (transcriptScrollBar)

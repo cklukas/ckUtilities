@@ -20,7 +20,6 @@ add_ck_tool(ckchat
   SOURCES
     src/ck-chat-app.cpp
     src/chat_session.cpp
-    src/ui/solid_color_view.cpp
     src/ui/prompt_input_view.cpp
     src/ui/chat_transcript_view.cpp
     src/ui/chat_window.cpp

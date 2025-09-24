@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../chat_session.hpp"
-
 #include "../tvision_include.hpp"
 
 #include <vector>
@@ -9,7 +8,6 @@
 class ChatApp;
 class ChatTranscriptView;
 class PromptInputView;
-class SolidColorView;
 class TButton;
 class TScrollBar;
 
@@ -32,8 +30,6 @@ private:
     TScrollBar *promptScrollBar = nullptr;
     TButton *submitButton = nullptr;
     TScrollBar *transcriptScrollBar = nullptr;
-    SolidColorView *copyColumnBackground = nullptr;
-    SolidColorView *submitBackground = nullptr;
     struct CopyButtonInfo
     {
         std::size_t messageIndex;
