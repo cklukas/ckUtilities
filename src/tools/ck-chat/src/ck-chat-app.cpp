@@ -74,7 +74,8 @@ namespace
     {
         ck::ai::GenerationConfig config;
         std::cout << "\n[ck-chat] streaming response...\n";
-        llm.generate(prompt, config, [](ck::ai::Chunk chunk) {
+        llm.generate(prompt, config, [](ck::ai::Chunk chunk)
+                     {
         std::cout << chunk.text << std::flush;
         if (chunk.is_last)
             std::cout << "\n" << std::flush; });
@@ -119,7 +120,7 @@ namespace
         auto cfg = ck::ai::ConfigLoader::load_or_default();
         auto runtime = runtime_from_config(cfg);
         auto llm = ck::ai::Llm::open(runtime.model_path, runtime);
-        llm->set_system_prompt("You are the ck-ai scaffolding.");
+        llm->set_system_prompt("You are the CL Utilities scaffolding.");
 
         stream_response(*llm, prompt);
         return 0;

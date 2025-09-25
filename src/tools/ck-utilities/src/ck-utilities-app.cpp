@@ -61,65 +61,65 @@ extern char **environ;
 namespace
 {
 
-constexpr std::string_view kLauncherId = "ck-utilities";
-constexpr short kUtilityReserveLines = 16;
-constexpr short kUtilityWindowSpacing = 2;
-constexpr short kUtilityBottomMargin = 2;
+    constexpr std::string_view kLauncherId = "ck-utilities";
+    constexpr short kUtilityReserveLines = 16;
+    constexpr short kUtilityWindowSpacing = 2;
+    constexpr short kUtilityBottomMargin = 2;
 
-const ck::appinfo::ToolInfo &launcherInfo()
-{
-    return ck::appinfo::requireTool(kLauncherId);
-}
-
-constexpr ushort cmLaunchTool = 6000;
-constexpr ushort cmNewLauncher = 6001;
-constexpr ushort cmShowCalendar = 6002;
-constexpr ushort cmShowAsciiTable = 6003;
-constexpr ushort cmShowCalculator = 6004;
-constexpr ushort cmToggleEventViewer = 6005;
-constexpr ushort cmCalcButtonCommand = 6100;
-constexpr ushort cmAsciiSelectionChanged = 6101;
-constexpr ushort cmFindEventViewer = 6102;
-
-void showLaunchBanner(const std::filesystem::path &programPath,
-                      const std::vector<std::string> &arguments)
-{
-    if (!::isatty(STDOUT_FILENO))
-        return;
-
-    std::string commandText = ck::launcher::quoteArgument(programPath.string());
-    for (const auto &arg : arguments)
+    const ck::appinfo::ToolInfo &launcherInfo()
     {
-        commandText.push_back(' ');
-        commandText.append(ck::launcher::quoteArgument(arg));
+        return ck::appinfo::requireTool(kLauncherId);
     }
 
-    std::fprintf(stdout,
-                 "\n[ck-utilities] Launching %s\n"
-                 "[ck-utilities] Return to the launcher once the tool exits.\n\n",
-                 commandText.c_str());
-    std::fflush(stdout);
-}
+    constexpr ushort cmLaunchTool = 6000;
+    constexpr ushort cmNewLauncher = 6001;
+    constexpr ushort cmShowCalendar = 6002;
+    constexpr ushort cmShowAsciiTable = 6003;
+    constexpr ushort cmShowCalculator = 6004;
+    constexpr ushort cmToggleEventViewer = 6005;
+    constexpr ushort cmCalcButtonCommand = 6100;
+    constexpr ushort cmAsciiSelectionChanged = 6101;
+    constexpr ushort cmFindEventViewer = 6102;
 
-int executeProgram(const std::filesystem::path &programPath,
-                   const std::vector<std::string> &arguments,
-                   const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
-{
-    pid_t pid = fork();
-    if (pid == -1)
+    void showLaunchBanner(const std::filesystem::path &programPath,
+                          const std::vector<std::string> &arguments)
     {
-        return -1;
-    }
-    else if (pid == 0)
-    {
-        for (const auto &entry : extraEnv)
-            setenv(entry.first.c_str(), entry.second.c_str(), 1);
+        if (!::isatty(STDOUT_FILENO))
+            return;
 
-        std::vector<std::string> argvStorage;
-        argvStorage.reserve(1 + arguments.size());
-        argvStorage.push_back(programPath.string());
+        std::string commandText = ck::launcher::quoteArgument(programPath.string());
         for (const auto &arg : arguments)
-            argvStorage.push_back(arg);
+        {
+            commandText.push_back(' ');
+            commandText.append(ck::launcher::quoteArgument(arg));
+        }
+
+        std::fprintf(stdout,
+                     "\n[ck-utilities] Launching %s\n"
+                     "[ck-utilities] Return to the launcher once the tool exits.\n\n",
+                     commandText.c_str());
+        std::fflush(stdout);
+    }
+
+    int executeProgram(const std::filesystem::path &programPath,
+                       const std::vector<std::string> &arguments,
+                       const std::vector<std::pair<std::string, std::string>> &extraEnv = {})
+    {
+        pid_t pid = fork();
+        if (pid == -1)
+        {
+            return -1;
+        }
+        else if (pid == 0)
+        {
+            for (const auto &entry : extraEnv)
+                setenv(entry.first.c_str(), entry.second.c_str(), 1);
+
+            std::vector<std::string> argvStorage;
+            argvStorage.reserve(1 + arguments.size());
+            argvStorage.push_back(programPath.string());
+            for (const auto &arg : arguments)
+                argvStorage.push_back(arg);
 
             std::vector<char *> argvPointers;
             argvPointers.reserve(argvStorage.size() + 1);
@@ -127,25 +127,25 @@ int executeProgram(const std::filesystem::path &programPath,
                 argvPointers.push_back(entry.data());
             argvPointers.push_back(nullptr);
 
-        execve(programPath.c_str(), argvPointers.data(), environ);
-        _exit(127);
+            execve(programPath.c_str(), argvPointers.data(), environ);
+            _exit(127);
+        }
+
+        int status = 0;
+        pid_t waitResult = 0;
+        do
+        {
+            waitResult = waitpid(pid, &status, 0);
+        } while (waitResult == -1 && errno == EINTR);
+
+        if (waitResult == -1)
+            return -1;
+        return status;
     }
 
-    int status = 0;
-    pid_t waitResult = 0;
-    do
-    {
-        waitResult = waitpid(pid, &status, 0);
-    } while (waitResult == -1 && errno == EINTR);
-
-    if (waitResult == -1)
-        return -1;
-    return status;
-}
-
-using ck::launcher::locateProgramPath;
-using ck::launcher::resolveToolDirectory;
-using ck::launcher::wrapText;
+    using ck::launcher::locateProgramPath;
+    using ck::launcher::resolveToolDirectory;
+    using ck::launcher::wrapText;
 
     bool decodeUtf8Char(std::string_view text, std::size_t &pos, uint32_t &codePoint)
     {
@@ -399,7 +399,7 @@ using ck::launcher::wrapText;
             std::string title = std::string(selected->displayName);
             title.append(" (" + std::string(selected->executable) + ")");
             wrappedLines.push_back(std::move(title));
-
+            wrappedLines.push_back("");
             auto summary = wrapText(selected->shortDescription, width);
             wrappedLines.insert(wrappedLines.end(), summary.begin(), summary.end());
             wrappedLines.emplace_back();
@@ -449,15 +449,15 @@ using ck::launcher::wrapText;
             std::snprintf(dest, static_cast<std::size_t>(maxChars), "%s", info->displayName.data());
         }
 
-    virtual void handleEvent(TEvent &event) override
-    {
-        TListViewer::handleEvent(event);
-        if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
+        virtual void handleEvent(TEvent &event) override
         {
-            message(owner, evCommand, cmLaunchTool, this);
-            clearEvent(event);
+            TListViewer::handleEvent(event);
+            if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
+            {
+                message(owner, evCommand, cmLaunchTool, this);
+                clearEvent(event);
+            }
         }
-    }
 
     private:
         std::vector<const ck::appinfo::ToolInfo *> *entries;
@@ -482,9 +482,9 @@ using ck::launcher::wrapText;
             bannerView->growMode = gfGrowHiX;
             insert(bannerView);
 
-        vScroll = new TScrollBar(TRect(0, 0, 1, 2));
-        vScroll->growMode = gfGrowHiY;
-        insert(vScroll);
+            vScroll = new TScrollBar(TRect(0, 0, 1, 2));
+            vScroll->growMode = gfGrowHiY;
+            insert(vScroll);
 
             listView = new ToolListView(TRect(0, 0, 0, 0), toolRefs, vScroll);
             listView->growMode = gfGrowHiY;
@@ -674,12 +674,34 @@ using ck::launcher::wrapText;
 
     constexpr std::array<const char *, 13> kMonthNames = {
         "",
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
     };
 
     constexpr std::array<unsigned, 13> kMonthLengths = {
-        0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+        0,
+        31,
+        28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
     };
 
     bool isLeapYear(int year)
@@ -1156,8 +1178,16 @@ using ck::launcher::wrapText;
         {
             switch (key)
             {
-            case '0': case '1': case '2': case '3': case '4':
-            case '5': case '6': case '7': case '8': case '9':
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
                 checkFirst();
                 if (number.size() < 15)
                 {
@@ -1185,8 +1215,13 @@ using ck::launcher::wrapText;
             case 0xF1:
                 sign = (sign == ' ') ? '-' : ' ';
                 break;
-            case '+': case '-': case '*': case '/':
-            case '=': case '%': case 13:
+            case '+':
+            case '-':
+            case '*':
+            case '/':
+            case '=':
+            case '%':
+            case 13:
                 if (status == CalculatorState::Valid)
                 {
                     status = CalculatorState::First;
@@ -1299,11 +1334,26 @@ using ck::launcher::wrapText;
             options |= ofFirstClick;
 
             static const std::array<const char *, 20> kButtonLabels = {
-                "C", "\x1B", "%", "\xF1",
-                "7", "8", "9", "/",
-                "4", "5", "6", "*",
-                "1", "2", "3", "-",
-                "0", ".", "=", "+",
+                "C",
+                "\x1B",
+                "%",
+                "\xF1",
+                "7",
+                "8",
+                "9",
+                "/",
+                "4",
+                "5",
+                "6",
+                "*",
+                "1",
+                "2",
+                "3",
+                "-",
+                "0",
+                ".",
+                "=",
+                "+",
             };
 
             for (std::size_t i = 0; i < kButtonLabels.size(); ++i)
@@ -1451,9 +1501,6 @@ using ck::launcher::wrapText;
         }
     };
 
-
-
-
     class LauncherApp : public TApplication
     {
     public:
@@ -1551,7 +1598,7 @@ using ck::launcher::wrapText;
                                     *new TMenuItem("Ascii ~T~able", cmShowAsciiTable, kbNoKey, hcNoContext) +
                                     *new TMenuItem("~C~alculator", cmShowCalculator, kbNoKey, hcNoContext) +
                                     *new TMenuItem("~E~vent Viewer", cmToggleEventViewer, kbAlt0, hcNoContext, "Alt-0") +
-                                *new TSubMenu("~F~ile", kbAltF) +
+                                    *new TSubMenu("~F~ile", kbAltF) +
                                     *new TMenuItem("~N~ew Launcher", cmNewLauncher, kbNoKey, hcNoContext) +
                                     *new TMenuItem("~E~xit", cmQuit, kbAltX));
         }
@@ -1723,8 +1770,7 @@ using ck::launcher::wrapText;
             viewer->setClosedHandler([this](EventViewerWindow *closed)
                                      {
                                          if (eventViewer == closed)
-                                             eventViewer = nullptr;
-                                     });
+                                             eventViewer = nullptr; });
             eventViewer = viewer;
             deskTop->insert(viewer);
         }

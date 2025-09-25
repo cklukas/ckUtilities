@@ -20,8 +20,8 @@ if(BUILD_TESTING)
   enable_testing()
 endif()
 
-add_subdirectory(src/common)
 add_subdirectory(src/tools)
+add_subdirectory(src/common)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)
