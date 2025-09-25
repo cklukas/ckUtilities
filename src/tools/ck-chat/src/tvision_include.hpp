@@ -23,4 +23,5 @@
 #define Uses_TColorAttr
 #define Uses_TPalette
 #define Uses_MsgBox
+
 #include <tvision/tv.h>

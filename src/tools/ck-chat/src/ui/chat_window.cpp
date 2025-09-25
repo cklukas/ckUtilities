@@ -31,7 +31,6 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
       TWindow(bounds, "Chat", number),
       app(owner)
 {
-    palette = wpBlueWindow;
     options |= ofTileable;
 
     TRect extent = getExtent();
@@ -40,9 +39,9 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     const int inputLines = 4;  // number of lines for the prompt input area
     const int labelHeight = 1; // height of the prompt input label ("Prompt:")
     const int transcriptScrollWidth = 1;
-    const int copyButtonColumnWidth = 6;
+    const int copyButtonColumnWidth = 7;
     const int inputScrollWidth = 1;
-    const int buttonWidth = 10; // width of the submit button
+    const int buttonWidth = 12; // width of the submit button
 
     TRect transcriptRect = extent; // area for the chat transcript view
     transcriptRect.b.y -= (inputLines + labelHeight);
@@ -86,28 +85,34 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     TRect labelRect(extent.a.x - 1, labelTop, scrollLeft, inputTop);
     auto *label = new TLabel(labelRect, "Prompt:", promptInput);
     label->growMode = gfGrowLoY | gfGrowHiY | gfGrowHiX;
+    // set label forground color to yellow
     insert(label);
 
     const int buttonHeight = 2;
     int buttonTop = inputTop + std::max(0, (inputLines - buttonHeight) / 2);
-    int buttonBottom = buttonTop + buttonHeight;
-    if (buttonBottom > extent.b.y)
-        buttonBottom = extent.b.y;
-    if (buttonTop >= buttonBottom)
-    {
-        buttonTop = std::max(inputTop, extent.b.y - 1);
-        buttonBottom = std::min(extent.b.y, buttonTop + 1);
-    }
 
-    TRect buttonRect(buttonLeft, buttonTop, extent.b.x, buttonBottom);
-    submitButton = new TButton(buttonRect, "~S~ubmit", cmSendPrompt, 0);
+    TRect buttonRect(buttonLeft, buttonTop, buttonLeft + 10, buttonTop + 2);
+    // define custom button color (blue background, white text
+    TColorAttr buttonColor = (getColor(1) << 8 | getColor(0));
+    submitButton = new TButton(buttonRect, "~S~ubmit", cmSendPrompt, bfDefault);
     submitButton->growMode = gfGrowLoX | gfGrowHiX | gfGrowLoY | gfGrowHiY;
+    submitButton->setState(sfVisible, True);
+
     insert(submitButton);
 
     promptInput->select();
 
     app.registerWindow(this);
     newConversation();
+
+    // override getPalette for the window to set custom colors
+    // new TPalette(cpBlueDialog, sizeof(cpBlueDialog) - 1);
+}
+
+TPalette &ChatWindow::getPalette() const
+{
+    static TPalette palette(cpBlueDialog, sizeof(cpBlueDialog) - 1);
+    return palette;
 }
 
 void ChatWindow::handleEvent(TEvent &event)
@@ -231,14 +236,12 @@ void ChatWindow::ensureCopyButton(std::size_t messageIndex)
 
     ushort command = static_cast<ushort>(cmCopyResponseBase + copyButtons.size());
     TRect column = copyColumnBounds();
-    if (column.b.x <= column.a.x)
-        column.b.x = column.a.x + 4;
     TRect initialBounds(column.a.x, column.a.y,
-                        column.b.x, column.a.y + 2);
+                        column.a.x + 8, column.a.y + 2);
     bool pending = transcript->isMessagePending(messageIndex);
-    const char *label = pending ? " ⏳ " : "Copy";
-    auto *button = new TButton(initialBounds, label, command, 0);
-    button->growMode = 0;
+    const char *label = pending ? "wait" : "Copy";
+    auto *button = new TButton(initialBounds, label, command, bfNormal);
+    button->growMode = gfGrowLoX | gfGrowHiX;
     button->setState(sfVisible, False);
     button->setState(sfDisabled, pending ? True : False);
     insert(button);
@@ -256,7 +259,7 @@ void ChatWindow::updateCopyButtonState(std::size_t messageIndex)
         return;
 
     bool pending = transcript->isMessagePending(messageIndex);
-    const char *label = pending ? " ⏳ " : "Copy";
+    const char *label = pending ? "wait" : "Copy";
     if (!info->button->title || std::strcmp(info->button->title, label) != 0)
         setButtonTitle(*info->button, label);
     info->button->setState(sfDisabled, pending ? True : False);
@@ -268,13 +271,12 @@ void ChatWindow::updateCopyButtonPositions()
         return;
 
     TRect column = copyColumnBounds();
-    if (column.b.x <= column.a.x)
-        column.b.x = column.a.x + 4;
 
     for (auto &info : copyButtons)
     {
         if (!info.button)
             continue;
+
         auto row = transcript->firstRowForMessage(info.messageIndex);
         if (!row.has_value())
         {
@@ -294,14 +296,14 @@ void ChatWindow::updateCopyButtonPositions()
             top = column.b.y - 2;
         if (top < column.a.y)
             top = column.a.y;
-        TRect desired(column.a.x,
-                      top,
-                      column.b.x,
-                      top + 2);
 
         TRect current = info.button->getBounds();
-        if (desired != current)
-            info.button->changeBounds(desired);
+        if (top != current.a.y)
+        {
+            current.a.y = top;
+            current.b.y = top + 2;
+            info.button->changeBounds(current);
+        }
         info.button->setState(sfVisible, True);
     }
 }
@@ -312,6 +314,7 @@ void ChatWindow::updateCopyButtons()
         return;
     for (auto &info : copyButtons)
         updateCopyButtonState(info.messageIndex);
+
     updateCopyButtonPositions();
 }
 
@@ -322,6 +325,7 @@ void ChatWindow::clearCopyButtons()
         if (info.button)
             TObject::destroy(info.button);
     }
+
     copyButtons.clear();
 }
 
@@ -342,6 +346,7 @@ ChatWindow::CopyButtonInfo *ChatWindow::findCopyButtonByCommand(ushort command)
         if (info.command == command)
             return &info;
     }
+
     return nullptr;
 }
 
@@ -356,6 +361,7 @@ TRect ChatWindow::copyColumnBounds() const
         TRect scrollBounds = transcriptScrollBar->getBounds();
         return TRect(transcriptBounds.b.x, transcriptBounds.a.y, scrollBounds.a.x, transcriptBounds.b.y);
     }
+
     return TRect(transcriptBounds.b.x, transcriptBounds.a.y, transcriptBounds.b.x, transcriptBounds.b.y);
 }
 

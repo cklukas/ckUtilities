@@ -19,6 +19,7 @@ public:
     virtual void handleEvent(TEvent &event) override;
     virtual void sizeLimits(TPoint &min, TPoint &max) override;
     virtual void shutDown() override;
+    virtual TPalette& getPalette() const override;
 
     void processPendingResponses();
 
