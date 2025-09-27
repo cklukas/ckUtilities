@@ -49,7 +49,7 @@ int getDisplayWidth(const std::string &str)
 // Build a tree of Node objects mirroring the structure of a JSON
 // document.  Each Node stores a pointer to the original JSON value.
 std::unique_ptr<Node> buildTree(const json *j, const std::string &key,
-                                       Node *parent, bool dummy)
+                                Node *parent, bool dummy)
 {
     auto node = std::make_unique<Node>();
     node->value = j;
@@ -443,8 +443,8 @@ void expandToLevel(Node *node, int targetLevel, int currentLevel)
 // matching.  When searching values, primitive values are converted to
 // their JSON string representation.
 void searchTree(const Node *node, const std::string &term,
-                       bool searchKeys, bool searchValues,
-                       std::vector<const Node *> &out)
+                bool searchKeys, bool searchValues,
+                std::vector<const Node *> &out)
 {
     // Convert the node's key and value to lowercase strings
     if (!term.empty())

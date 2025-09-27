@@ -4,6 +4,9 @@
 #include <unistd.h>
 #include <string>
 
+#define Uses_TClipboard
+#include <tvision/tv.h>
+
 namespace clipboard
 {
     namespace
@@ -72,25 +75,6 @@ namespace clipboard
 
     void copyToClipboard(const std::string &text)
     {
-        if (!osc52Likely())
-            return;
-
-        constexpr std::size_t maxOsc52Payload = 100000;
-        std::string encoded = base64Encode(text);
-
-        if (encoded.size() > maxOsc52Payload)
-            return;
-
-        FILE *out = std::fopen("/dev/tty", "w");
-        if (!out && isatty(fileno(stdout)))
-            out = stdout;
-
-        if (!out)
-            return;
-
-        std::fprintf(out, "\033]52;c;%s\a", encoded.c_str());
-        std::fflush(out);
-        if (out != stdout)
-            std::fclose(out);
+        TClipboard::setText(text.c_str());
     }
 } // namespace clipboard

@@ -21,6 +21,7 @@
 #define Uses_TStatusDef
 #define Uses_TDeskTop
 #define Uses_MsgBox
+#define Uses_TClipboard
 #include <tvision/tv.h>
 
 #include "ck/about_dialog.hpp"
@@ -591,7 +592,16 @@ void JsonViewApp::copySelection()
     if (!n)
         return;
     json j = reconstructJson(n->jsonNode);
-    copyToClipboard(j.dump());
+
+    bool useLibrary = true;
+    if (useLibrary)
+    {
+        TClipboard::setText(j.dump().c_str());
+    }
+    else
+    {
+        copyToClipboard(j.dump());
+    }
     messageBox(getClipboardStatusMessage().c_str(), mfOKButton);
 }
 
@@ -608,25 +618,25 @@ TMenuBar *JsonViewApp::initMenuBar(TRect r)
 
     TMenuItem &menuChain = fileMenu +
                            *new TSubMenu("~E~dit", hcNoContext) +
-                               *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
+                           *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
                            *new TSubMenu("~S~earch", hcNoContext) +
-                               *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                               *new TMenuItem("Find ~N~ext", cmFindNext, kbF5, hcNoContext, "F5") +
-                               *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF5, hcNoContext, "Shift-F5") +
-                               *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
+                           *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
+                           *new TMenuItem("Find ~N~ext", cmFindNext, kbF5, hcNoContext, "F5") +
+                           *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF5, hcNoContext, "Shift-F5") +
+                           *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
                            *new TSubMenu("~V~iew", hcNoContext) +
-                               *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +
-                               *new TMenuItem("Level ~1~", cmLevel1, kbAlt1, hcNoContext, "Alt-1") +
-                               *new TMenuItem("Level ~2~", cmLevel2, kbAlt2, hcNoContext, "Alt-2") +
-                               *new TMenuItem("Level ~3~", cmLevel3, kbAlt3, hcNoContext, "Alt-3") +
-                               *new TMenuItem("Level ~4~", cmLevel4, kbAlt4, hcNoContext, "Alt+4") +
-                               *new TMenuItem("Level ~5~", cmLevel5, kbAlt5, hcNoContext, "Alt+5") +
-                               *new TMenuItem("Level ~6~", cmLevel6, kbAlt6, hcNoContext, "Alt+6") +
-                               *new TMenuItem("Level ~7~", cmLevel7, kbAlt7, hcNoContext, "Alt+7") +
-                               *new TMenuItem("Level ~8~", cmLevel8, kbAlt8, hcNoContext, "Alt+8") +
-                               *new TMenuItem("Level ~9~", cmLevel9, kbAlt9, hcNoContext, "Alt+9") +
+                           *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +
+                           *new TMenuItem("Level ~1~", cmLevel1, kbAlt1, hcNoContext, "Alt-1") +
+                           *new TMenuItem("Level ~2~", cmLevel2, kbAlt2, hcNoContext, "Alt-2") +
+                           *new TMenuItem("Level ~3~", cmLevel3, kbAlt3, hcNoContext, "Alt-3") +
+                           *new TMenuItem("Level ~4~", cmLevel4, kbAlt4, hcNoContext, "Alt+4") +
+                           *new TMenuItem("Level ~5~", cmLevel5, kbAlt5, hcNoContext, "Alt+5") +
+                           *new TMenuItem("Level ~6~", cmLevel6, kbAlt6, hcNoContext, "Alt+6") +
+                           *new TMenuItem("Level ~7~", cmLevel7, kbAlt7, hcNoContext, "Alt+7") +
+                           *new TMenuItem("Level ~8~", cmLevel8, kbAlt8, hcNoContext, "Alt+8") +
+                           *new TMenuItem("Level ~9~", cmLevel9, kbAlt9, hcNoContext, "Alt+9") +
                            *new TSubMenu("~H~elp", hcNoContext) +
-                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+                           *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
 
     return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }

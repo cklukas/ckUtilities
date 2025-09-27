@@ -1,5 +1,6 @@
 #pragma once
 
+#define Uses_TClipboard
 #define Uses_TApplication
 #define Uses_TDeskTop
 #define Uses_TDialog

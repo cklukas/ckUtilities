@@ -92,8 +92,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     int buttonTop = inputTop + std::max(0, (inputLines - buttonHeight) / 2);
 
     TRect buttonRect(buttonLeft, buttonTop, buttonLeft + 10, buttonTop + 2);
-    // define custom button color (blue background, white text
-    TColorAttr buttonColor = (getColor(1) << 8 | getColor(0));
+
     submitButton = new TButton(buttonRect, "~S~ubmit", cmSendPrompt, bfDefault);
     submitButton->growMode = gfGrowLoX | gfGrowHiX | gfGrowLoY | gfGrowHiY;
     submitButton->setState(sfVisible, True);
@@ -104,14 +103,11 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
 
     app.registerWindow(this);
     newConversation();
-
-    // override getPalette for the window to set custom colors
-    // new TPalette(cpBlueDialog, sizeof(cpBlueDialog) - 1);
 }
 
 TPalette &ChatWindow::getPalette() const
 {
-    static TPalette palette(cpBlueDialog, sizeof(cpBlueDialog) - 1);
+    static TPalette palette(cpGrayDialog, sizeof(cpGrayDialog) - 1);
     return palette;
 }
 
