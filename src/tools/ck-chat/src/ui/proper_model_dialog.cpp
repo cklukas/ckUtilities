@@ -125,7 +125,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
     case cmDownloadModel:
       // Update selection based on current focus before action
       if (availableListBox_->focused >= 0) {
-        controller_->setSelectedAvailableModel(availableListBox_->focused);
+        setAvailableSelectionFromListIndex(availableListBox_->focused);
       }
       updateStatusForSelection();
       controller_->downloadSelectedModel();
@@ -134,7 +134,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
     case cmActivateModel:
       // Update selection based on current focus before action
       if (downloadedListBox_->focused >= 0) {
-        controller_->setSelectedDownloadedModel(downloadedListBox_->focused);
+        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
       controller_->activateSelectedModel();
@@ -143,7 +143,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
     case cmDeactivateModel:
       // Update selection based on current focus before action
       if (downloadedListBox_->focused >= 0) {
-        controller_->setSelectedDownloadedModel(downloadedListBox_->focused);
+        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
       controller_->deactivateSelectedModel();
@@ -152,7 +152,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
     case cmDeleteModel:
       // Update selection based on current focus before action
       if (downloadedListBox_->focused >= 0) {
-        controller_->setSelectedDownloadedModel(downloadedListBox_->focused);
+        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
       controller_->deleteSelectedModel();
@@ -165,7 +165,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
     case cmAbout:
       // Update selection based on current focus before showing info
       if (downloadedListBox_->focused >= 0) {
-        controller_->setSelectedDownloadedModel(downloadedListBox_->focused);
+        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
         updateStatusForSelection();
         auto selected = controller_->getSelectedDownloadedModel();
         if (selected) {
@@ -178,7 +178,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
           showStatusMessage("No downloaded model selected");
         }
       } else if (availableListBox_->focused >= 0) {
-        controller_->setSelectedAvailableModel(availableListBox_->focused);
+        setAvailableSelectionFromListIndex(availableListBox_->focused);
         updateStatusForSelection();
         auto selected = controller_->getSelectedAvailableModel();
         if (selected) {
@@ -203,11 +203,11 @@ void ProperModelDialog::handleEvent(TEvent &event) {
   } else if (event.what == evBroadcast) {
     if (event.message.command == cmListItemSelected) {
       if (event.message.infoPtr == availableListBox_) {
-        controller_->setSelectedAvailableModel(availableListBox_->focused);
+        setAvailableSelectionFromListIndex(availableListBox_->focused);
         updateStatusForSelection();
         updateButtons();
       } else if (event.message.infoPtr == downloadedListBox_) {
-        controller_->setSelectedDownloadedModel(downloadedListBox_->focused);
+        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
         updateStatusForSelection();
         updateButtons();
       }
@@ -229,21 +229,52 @@ void ProperModelDialog::updateModelLists() {
   // Clear existing strings
   availableModelStrings_.clear();
   downloadedModelStrings_.clear();
+  availableModelIndexMap_.clear();
+  downloadedModelIndexMap_.clear();
 
-  // Populate available models
-  for (const auto &model : availableModels) {
+  struct DisplayEntry {
+    std::string display;
+    int index;
+  };
+
+  std::vector<DisplayEntry> availableEntries;
+  availableEntries.reserve(availableModels.size());
+  for (std::size_t i = 0; i < availableModels.size(); ++i) {
+    const auto &model = availableModels[i];
     std::string sizeStr = controller_->formatModelSize(model.size_bytes);
     std::string displayText =
         controller_->getModelDisplayName(model) + " (" + sizeStr + ")";
-    availableModelStrings_.push_back(displayText);
+    availableEntries.push_back({displayText, static_cast<int>(i)});
   }
 
-  // Populate downloaded models
-  for (const auto &model : downloadedModels) {
+  std::stable_sort(availableEntries.begin(), availableEntries.end(),
+                   [](const DisplayEntry &a, const DisplayEntry &b) {
+                     return a.display < b.display;
+                   });
+
+  for (const auto &entry : availableEntries) {
+    availableModelStrings_.push_back(entry.display);
+    availableModelIndexMap_.push_back(entry.index);
+  }
+
+  std::vector<DisplayEntry> downloadedEntries;
+  downloadedEntries.reserve(downloadedModels.size());
+  for (std::size_t i = 0; i < downloadedModels.size(); ++i) {
+    const auto &model = downloadedModels[i];
     std::string statusText = controller_->getModelStatusText(model);
     std::string displayText =
         controller_->getModelDisplayName(model) + " " + statusText;
-    downloadedModelStrings_.push_back(displayText);
+    downloadedEntries.push_back({displayText, static_cast<int>(i)});
+  }
+
+  std::stable_sort(downloadedEntries.begin(), downloadedEntries.end(),
+                   [](const DisplayEntry &a, const DisplayEntry &b) {
+                     return a.display < b.display;
+                   });
+
+  for (const auto &entry : downloadedEntries) {
+    downloadedModelStrings_.push_back(entry.display);
+    downloadedModelIndexMap_.push_back(entry.index);
   }
 
   // Update TurboVision list boxes
@@ -298,16 +329,22 @@ void ProperModelDialog::syncSelectionFromLists() {
   if (availableListBox_ && (availableListBox_->state & sfFocused)) {
     int focusedIndex = availableListBox_->focused;
     if (focusedIndex >= 0 &&
-        focusedIndex != controller_->getSelectedAvailableIndex()) {
-      controller_->setSelectedAvailableModel(focusedIndex);
-      changed = true;
+        focusedIndex < static_cast<int>(availableModelIndexMap_.size())) {
+      int mappedIndex = availableModelIndexMap_[focusedIndex];
+      if (mappedIndex != controller_->getSelectedAvailableIndex()) {
+        controller_->setSelectedAvailableModel(mappedIndex);
+        changed = true;
+      }
     }
   } else if (downloadedListBox_ && (downloadedListBox_->state & sfFocused)) {
     int focusedIndex = downloadedListBox_->focused;
     if (focusedIndex >= 0 &&
-        focusedIndex != controller_->getSelectedDownloadedIndex()) {
-      controller_->setSelectedDownloadedModel(focusedIndex);
-      changed = true;
+        focusedIndex < static_cast<int>(downloadedModelIndexMap_.size())) {
+      int mappedIndex = downloadedModelIndexMap_[focusedIndex];
+      if (mappedIndex != controller_->getSelectedDownloadedIndex()) {
+        controller_->setSelectedDownloadedModel(mappedIndex);
+        changed = true;
+      }
     }
   } else {
     if (controller_->getSelectedAvailableIndex() != -1 ||
@@ -403,6 +440,28 @@ void ProperModelDialog::updateListBox(TListBox *listBox,
     collection->insert((void *)item.c_str());
   }
   listBox->newList(collection);
+}
+
+void ProperModelDialog::setAvailableSelectionFromListIndex(int listIndex) {
+  if (!controller_)
+    return;
+
+  if (listIndex >= 0 &&
+      listIndex < static_cast<int>(availableModelIndexMap_.size())) {
+    controller_->setSelectedAvailableModel(
+        availableModelIndexMap_[listIndex]);
+  }
+}
+
+void ProperModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
+  if (!controller_)
+    return;
+
+  if (listIndex >= 0 &&
+      listIndex < static_cast<int>(downloadedModelIndexMap_.size())) {
+    controller_->setSelectedDownloadedModel(
+        downloadedModelIndexMap_[listIndex]);
+  }
 }
 
 // All business logic methods removed - now handled by ModelManagerController

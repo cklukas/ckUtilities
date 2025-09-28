@@ -31,6 +31,8 @@ private:
   std::string buildModelInfoLine(const ck::ai::ModelInfo &model,
                                  bool fromDownloadedList) const;
   void syncSelectionFromLists();
+  void setAvailableSelectionFromListIndex(int listIndex);
+  void setDownloadedSelectionFromListIndex(int listIndex);
   void showStatusMessage(const std::string &message);
   void showErrorMessage(const std::string &error);
   void updateStatusLabel(const std::string &message);
@@ -58,4 +60,6 @@ private:
   // UI display data
   std::vector<std::string> availableModelStrings_;
   std::vector<std::string> downloadedModelStrings_;
+  std::vector<int> availableModelIndexMap_;
+  std::vector<int> downloadedModelIndexMap_;
 };
