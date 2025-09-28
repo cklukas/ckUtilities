@@ -395,12 +395,9 @@ void ProperModelDialog::syncSelectionFromLists() {
 std::string ProperModelDialog::buildModelInfoLine(
     const ck::ai::ModelInfo &model, bool fromDownloadedList) const {
   std::ostringstream oss;
-  oss << model.name;
 
-  if (!model.id.empty() && model.id != model.name) {
-    if (!fromDownloadedList)
-      oss << " | ID: " << model.id;
-  }
+  const std::string &identifier = model.id.empty() ? model.name : model.id;
+  oss << identifier;
 
   if (controller_) {
     oss << " | " << controller_->formatModelSize(model.size_bytes);
