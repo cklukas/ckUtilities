@@ -30,6 +30,7 @@ private:
   void updateStatusForSelection();
   std::string buildModelInfoLine(const ck::ai::ModelInfo &model,
                                  bool fromDownloadedList) const;
+  std::string formatDetailedInfo(const ck::ai::ModelInfo &model) const;
   void syncSelectionFromLists();
   void setAvailableSelectionFromListIndex(int listIndex);
   void setDownloadedSelectionFromListIndex(int listIndex);

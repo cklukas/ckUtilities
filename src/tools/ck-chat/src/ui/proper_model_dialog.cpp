@@ -180,11 +180,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
         updateStatusForSelection();
         auto selected = controller_->getSelectedDownloadedModel();
         if (selected) {
-          std::string modelName = selected->name;
-          std::string modelSize =
-              controller_->formatModelSize(selected->size_bytes);
-          std::string infoMsg = "Model: " + modelName + " (" + modelSize + ")";
-          showStatusMessage(infoMsg);
+          showStatusMessage(formatDetailedInfo(*selected));
         } else {
           showStatusMessage("No downloaded model selected");
         }
@@ -193,11 +189,7 @@ void ProperModelDialog::handleEvent(TEvent &event) {
         updateStatusForSelection();
         auto selected = controller_->getSelectedAvailableModel();
         if (selected) {
-          std::string modelName = selected->name;
-          std::string modelSize =
-              controller_->formatModelSize(selected->size_bytes);
-          std::string infoMsg = "Model: " + modelName + " (" + modelSize + ")";
-          showStatusMessage(infoMsg);
+          showStatusMessage(formatDetailedInfo(*selected));
         } else {
           showStatusMessage("No available model selected");
         }
@@ -436,6 +428,30 @@ std::string ProperModelDialog::buildModelInfoLine(
     oss << " | Downloaded";
   }
 
+  return oss.str();
+}
+
+std::string ProperModelDialog::formatDetailedInfo(
+    const ck::ai::ModelInfo &model) const {
+  std::ostringstream oss;
+  oss << "Name: " << model.name << "\n";
+  if (!model.id.empty())
+    oss << "ID: " << model.id << "\n";
+  if (!model.description.empty())
+    oss << "Description: " << model.description << "\n";
+  oss << "Size: " << controller_->formatModelSize(model.size_bytes) << "\n";
+  if (!model.category.empty())
+    oss << "Category: " << model.category << "\n";
+  if (!model.hardware_requirements.empty())
+    oss << "Hardware: " << model.hardware_requirements << "\n";
+  if (!model.download_url.empty())
+    oss << "Download: " << model.download_url << "\n";
+  if (!model.filename.empty())
+    oss << "Filename: " << model.filename << "\n";
+  if (!model.local_path.empty())
+    oss << "Local Path: " << model.local_path << "\n";
+  oss << "Downloaded: " << (model.is_downloaded ? "yes" : "no") << "\n";
+  oss << "Active: " << (model.is_active ? "yes" : "no");
   return oss.str();
 }
 
