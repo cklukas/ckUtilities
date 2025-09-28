@@ -24,3 +24,5 @@ static constexpr ushort cmDeactivateModel = 1113;
 static constexpr ushort cmDeleteModel = 1114;
 static constexpr ushort cmRefreshModels = 1115;
 static constexpr ushort cmNoOp = 1116;
+static constexpr ushort cmSelectPromptBase = 1200;
+static constexpr ushort cmManagePrompts = 1210;

@@ -3,6 +3,7 @@
 #include "../chat_session.hpp"
 #include "../tvision_include.hpp"
 
+#include <string>
 #include <vector>
 
 class ChatApp;
@@ -22,6 +23,7 @@ public:
     virtual TPalette& getPalette() const override;
 
     void processPendingResponses();
+    void applySystemPrompt(const std::string &prompt);
 
 private:
     ChatApp &app;

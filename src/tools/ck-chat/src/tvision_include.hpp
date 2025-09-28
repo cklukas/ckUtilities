@@ -17,6 +17,7 @@
 #define Uses_TMessageBox
 #define Uses_TScrollBar
 #define Uses_TScroller
+#define Uses_TInputLine
 #define Uses_TStatusDef
 #define Uses_TStatusItem
 #define Uses_TStatusLine

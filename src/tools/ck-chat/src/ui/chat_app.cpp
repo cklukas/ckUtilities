@@ -7,6 +7,7 @@
 #include "ck/app_info.hpp"
 #include "ck/launcher.hpp"
 #include "model_dialog.hpp"
+#include "prompt_dialog.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -30,15 +31,11 @@ ChatApp::ChatApp(int, char **)
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 
-  // Set up the menu bar manually since we need access to modelManager_
-  if (deskTop) {
-    TRect menuRect = deskTop->getExtent();
-    menuRect.b.y = menuRect.a.y + 1;
-    TMenuBar *menuBar = initMenuBar(menuRect);
-    if (menuBar) {
-      insert(menuBar);
-    }
-  }
+  if (auto prompt = promptManager_.get_active_prompt())
+    systemPrompt_ = prompt->message;
+
+  updateActiveModel();
+  handlePromptManagerChange();
 
   openChatWindow();
 }
@@ -83,6 +80,10 @@ void ChatApp::handleEvent(TEvent &event) {
       showModelManagerDialog();
       clearEvent(event);
       break;
+    case cmManagePrompts:
+      showPromptManagerDialog();
+      clearEvent(event);
+      break;
     case cmSelectModel1:
     case cmSelectModel2:
     case cmSelectModel3:
@@ -96,10 +97,17 @@ void ChatApp::handleEvent(TEvent &event) {
       selectModel(event.message.command - cmSelectModel1);
       clearEvent(event);
       break;
-    case cmNoOp: // "No active models" - do nothing
-      clearEvent(event);
-      break;
     default:
+      if (event.message.command >= cmSelectPromptBase &&
+          event.message.command < cmSelectPromptBase + 10) {
+        selectPrompt(event.message.command - cmSelectPromptBase);
+        clearEvent(event);
+        break;
+      }
+      if (event.message.command == cmNoOp) {
+        clearEvent(event);
+        break;
+      }
       break;
     }
   }
@@ -129,17 +137,16 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
 
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);
 
-  auto downloadedModels = modelManager_.get_downloaded_models();
-  menuDownloadedModels_ = downloadedModels;
+  menuDownloadedModels_ = modelManager_.get_downloaded_models();
   auto activeInfo = activeModelInfo();
 
-  if (downloadedModels.empty()) {
+  if (menuDownloadedModels_.empty()) {
     modelsMenu +
         *new TMenuItem("~N~o downloaded models", cmNoOp, kbNoKey, hcNoContext);
   } else {
     TMenuItem *defaultItem = nullptr;
-    for (size_t i = 0; i < downloadedModels.size() && i < 10; ++i) {
-      const auto &model = downloadedModels[i];
+    for (size_t i = 0; i < menuDownloadedModels_.size() && i < 10; ++i) {
+      const auto &model = menuDownloadedModels_[i];
       std::string menuText = model.name;
       if (model.is_active)
         menuText += " [active]";
@@ -156,9 +163,32 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
       modelsMenu.subMenu->deflt = defaultItem;
   }
 
+  modelsMenu + newLine();
+
+  menuPrompts_ = promptManager_.get_prompts();
+  auto activePrompt = promptManager_.get_active_prompt();
+
+  if (menuPrompts_.empty()) {
+    modelsMenu +
+        *new TMenuItem("~N~o prompts defined", cmNoOp, kbNoKey, hcNoContext);
+  } else {
+    for (size_t i = 0; i < menuPrompts_.size() && i < 10; ++i) {
+      const auto &prompt = menuPrompts_[i];
+      std::string label = prompt.name;
+      if (activePrompt && activePrompt->id == prompt.id)
+        label += " [current]";
+
+      ushort command = cmSelectPromptBase + static_cast<ushort>(i);
+      auto *item = new TMenuItem(label.c_str(), command, kbNoKey, hcNoContext);
+      modelsMenu + *item;
+    }
+  }
+
   modelsMenu + newLine() +
       *new TMenuItem("~M~anage models...", cmManageModels, kbNoKey,
                      hcNoContext);
+  modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbNoKey,
+                              hcNoContext);
 
   TMenuItem &menuChain =
       fileMenu + modelsMenu + *new TSubMenu("~W~indows", hcNoContext) +
@@ -243,6 +273,50 @@ void ChatApp::selectModel(int modelIndex) {
 
 void ChatApp::handleModelManagerChange() {
   updateActiveModel();
+  rebuildMenuBar();
+}
+
+void ChatApp::selectPrompt(int promptIndex) {
+  if (menuPrompts_.empty() || promptIndex < 0 ||
+      promptIndex >= static_cast<int>(menuPrompts_.size())) {
+    messageBox("Invalid prompt selection", mfError | mfOKButton);
+    return;
+  }
+
+  const auto &prompt = menuPrompts_[promptIndex];
+  if (!promptManager_.set_active_prompt(prompt.id)) {
+    messageBox("Failed to activate prompt", mfError | mfOKButton);
+    return;
+  }
+
+  handlePromptManagerChange();
+}
+
+void ChatApp::showPromptManagerDialog() {
+  TRect bounds(10, 4, 80, 23);
+  auto *dialog = new PromptDialog(bounds, promptManager_, this);
+  if (dialog) {
+    deskTop->insert(dialog);
+    dialog->select();
+  }
+}
+
+void ChatApp::handlePromptManagerChange() {
+  auto activePrompt = promptManager_.get_active_prompt();
+  if (activePrompt)
+    systemPrompt_ = activePrompt->message;
+
+  {
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    if (activeLlm_)
+      activeLlm_->set_system_prompt(systemPrompt_);
+  }
+
+  for (auto *window : windows) {
+    if (window)
+      window->applySystemPrompt(systemPrompt_);
+  }
+
   rebuildMenuBar();
 }
 

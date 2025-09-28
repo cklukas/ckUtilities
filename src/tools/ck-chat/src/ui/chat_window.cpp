@@ -175,8 +175,14 @@ void ChatWindow::processPendingResponses()
     updateTranscriptFromSession(true);
 }
 
+void ChatWindow::applySystemPrompt(const std::string &prompt)
+{
+    session.setSystemPrompt(prompt);
+}
+
 void ChatWindow::newConversation()
 {
+    session.setSystemPrompt(app.systemPrompt());
     session.resetConversation();
     session.consumeDirtyFlag();
     clearCopyButtons();

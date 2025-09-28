@@ -3,6 +3,7 @@ add_library(ckai_core STATIC
   src/llm.cpp
   src/model_manager.cpp
   src/model_manager_controller.cpp
+  src/system_prompt_manager.cpp
 )
 
 target_include_directories(ckai_core
