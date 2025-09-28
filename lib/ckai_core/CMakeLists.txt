@@ -1,6 +1,8 @@
 add_library(ckai_core STATIC
   src/config_loader.cpp
   src/llm.cpp
+  src/model_manager.cpp
+  src/model_manager_controller.cpp
 )
 
 target_include_directories(ckai_core
@@ -9,9 +11,23 @@ target_include_directories(ckai_core
     $<INSTALL_INTERFACE:include>
 )
 
+# Find required packages
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(CURL REQUIRED libcurl)
+
+# Find nlohmann/json
+find_package(nlohmann_json REQUIRED)
+
 target_link_libraries(ckai_core
   PUBLIC
-    llama_cpp
+    llama
+    ${CURL_LIBRARIES}
+    nlohmann_json::nlohmann_json
+)
+
+target_include_directories(ckai_core
+  PRIVATE
+    ${CURL_INCLUDE_DIRS}
 )
 
 target_compile_features(ckai_core PUBLIC cxx_std_20)
