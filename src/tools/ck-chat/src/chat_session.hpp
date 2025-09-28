@@ -1,12 +1,16 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
+
+namespace ck::ai {
+class Llm;
+}
 
 namespace ck::chat
 {
@@ -35,7 +39,10 @@ namespace ck::chat
         std::size_t addUserMessage(std::string prompt);
         std::size_t addSystemMessage(std::string text);
 
+        void setSystemPrompt(std::string prompt);
         void startAssistantResponse(std::string prompt);
+        void startAssistantResponse(std::string prompt,
+                                    std::shared_ptr<ck::ai::Llm> llm);
         void cancelActiveResponse();
 
         bool responseInProgress() const;
@@ -49,6 +56,7 @@ namespace ck::chat
             std::atomic<bool> cancel{false};
             std::atomic<bool> finished{false};
             std::size_t messageIndex = 0;
+            std::shared_ptr<ck::ai::Llm> llm;
         };
 
         std::size_t addMessage(Message message);
@@ -57,12 +65,13 @@ namespace ck::chat
         void markDirty();
         void joinIfFinished();
         void runSimulatedResponse(ResponseTask &task, std::string prompt);
+        void runLlmResponse(ResponseTask &task, std::string prompt);
 
         mutable std::mutex mutex_;
         std::vector<Message> messages_;
         std::unique_ptr<ResponseTask> activeResponse_;
         std::atomic<bool> dirty_{false};
+        std::string systemPrompt_;
     };
 
 } // namespace ck::chat
-

@@ -43,10 +43,10 @@ char *duplicateString(const std::string &value) {
 }
 }
 
-ProperModelDialog::ProperModelDialog(TRect bounds,
+ModelDialog::ModelDialog(TRect bounds,
                                      ck::ai::ModelManager &modelManager,
                                      ChatApp *app)
-    : TWindowInit(&ProperModelDialog::initFrame),
+    : TWindowInit(&ModelDialog::initFrame),
       TDialog(bounds, "Manage Models"),
       controller_(
           std::make_unique<ck::ai::ModelManagerController>(modelManager)),
@@ -66,20 +66,19 @@ ProperModelDialog::ProperModelDialog(TRect bounds,
 
   controller_->setModelListUpdateCallback([this]() {
     updateModelLists();
-    // Note: Menu update notification temporarily disabled to prevent crashes
-    // TODO: Re-enable once TurboVision menu rebuilding is implemented safely
-    // if (chatApp_) {
-    //   chatApp_->refreshModelsMenu();
-    // }
+    if (chatApp_)
+      chatApp_->handleModelManagerChange();
   });
 
   setupControls();
   updateModelLists();
+  if (chatApp_)
+    chatApp_->handleModelManagerChange();
 }
 
-ProperModelDialog::~ProperModelDialog() {}
+ModelDialog::~ModelDialog() {}
 
-void ProperModelDialog::setupControls() {
+void ModelDialog::setupControls() {
   // Create available models list (left side)
   TRect availableRect(2, 3, 46, 17);
   availableListBox_ = new TListBox(availableRect, 1, nullptr);
@@ -140,7 +139,7 @@ void ProperModelDialog::setupControls() {
   updateButtons();
 }
 
-void ProperModelDialog::handleEvent(TEvent &event) {
+void ModelDialog::handleEvent(TEvent &event) {
   TDialog::handleEvent(event);
 
   if (event.what == evCommand) {
@@ -218,11 +217,11 @@ void ProperModelDialog::handleEvent(TEvent &event) {
   syncSelectionFromLists();
 }
 
-void ProperModelDialog::draw() { TDialog::draw(); }
+void ModelDialog::draw() { TDialog::draw(); }
 
 // This method is no longer needed as controller handles model refresh
 
-void ProperModelDialog::updateModelLists() {
+void ModelDialog::updateModelLists() {
   // Get data from controller
   auto availableModels = controller_->getAvailableModels();
   auto downloadedModels = controller_->getDownloadedModels();
@@ -309,7 +308,7 @@ void ProperModelDialog::updateModelLists() {
   syncSelectionFromLists();
 }
 
-void ProperModelDialog::updateButtons() {
+void ModelDialog::updateButtons() {
   auto availableSelected = controller_->getSelectedAvailableModel();
   auto downloadedSelected = controller_->getSelectedDownloadedModel();
 
@@ -333,7 +332,7 @@ void ProperModelDialog::updateButtons() {
   updateButtonState(infoButton_, canShowInfo);
 }
 
-void ProperModelDialog::updateStatusForSelection() {
+void ModelDialog::updateStatusForSelection() {
   if (!controller_) {
     updateStatusLabel(kDefaultStatusMessage);
     updateDetailLabel("");
@@ -356,7 +355,7 @@ void ProperModelDialog::updateStatusForSelection() {
   updateDetailLabel("");
 }
 
-void ProperModelDialog::syncSelectionFromLists() {
+void ModelDialog::syncSelectionFromLists() {
   if (!controller_)
     return;
 
@@ -396,7 +395,7 @@ void ProperModelDialog::syncSelectionFromLists() {
   }
 }
 
-std::string ProperModelDialog::buildModelInfoLine(
+std::string ModelDialog::buildModelInfoLine(
     const ck::ai::ModelInfo &model, bool fromDownloadedList) const {
   std::ostringstream oss;
 
@@ -429,7 +428,7 @@ std::string ProperModelDialog::buildModelInfoLine(
   return oss.str();
 }
 
-std::string ProperModelDialog::formatDetailedInfo(
+std::string ModelDialog::formatDetailedInfo(
     const ck::ai::ModelInfo &model) const {
   std::ostringstream oss;
   oss << "Name: " << model.name << "\n";
@@ -453,19 +452,19 @@ std::string ProperModelDialog::formatDetailedInfo(
   return oss.str();
 }
 
-void ProperModelDialog::showStatusMessage(const std::string &message) {
+void ModelDialog::showStatusMessage(const std::string &message) {
   // Create a copy to ensure string lifetime
   std::string safeCopy = message;
   messageBox(safeCopy.c_str(), mfInformation | mfOKButton);
 }
 
-void ProperModelDialog::showErrorMessage(const std::string &error) {
+void ModelDialog::showErrorMessage(const std::string &error) {
   // Create a copy to ensure string lifetime
   std::string safeCopy = error;
   messageBox(safeCopy.c_str(), mfError | mfOKButton);
 }
 
-void ProperModelDialog::updateStatusLabel(const std::string &message) {
+void ModelDialog::updateStatusLabel(const std::string &message) {
   if (statusText_ == message)
     return;
 
@@ -479,7 +478,7 @@ void ProperModelDialog::updateStatusLabel(const std::string &message) {
   }
 }
 
-void ProperModelDialog::updateDetailLabel(const std::string &message) {
+void ModelDialog::updateDetailLabel(const std::string &message) {
   if (detailStatusText_ == message)
     return;
 
@@ -491,7 +490,7 @@ void ProperModelDialog::updateDetailLabel(const std::string &message) {
   }
 }
 
-void ProperModelDialog::updateListBox(TListBox *listBox,
+void ModelDialog::updateListBox(TListBox *listBox,
                                       const std::vector<std::string> &items) {
   if (!listBox)
     return;
@@ -503,7 +502,7 @@ void ProperModelDialog::updateListBox(TListBox *listBox,
   listBox->newList(collection);
 }
 
-void ProperModelDialog::setAvailableSelectionFromListIndex(int listIndex) {
+void ModelDialog::setAvailableSelectionFromListIndex(int listIndex) {
   if (!controller_)
     return;
 
@@ -514,7 +513,7 @@ void ProperModelDialog::setAvailableSelectionFromListIndex(int listIndex) {
   }
 }
 
-void ProperModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
+void ModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
   if (!controller_)
     return;
 
@@ -527,7 +526,7 @@ void ProperModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
 
 // All business logic methods removed - now handled by ModelManagerController
 
-TDialog *ProperModelDialog::create(TRect bounds,
+TDialog *ModelDialog::create(TRect bounds,
                                    ck::ai::ModelManager &modelManager) {
-  return new ProperModelDialog(bounds, modelManager, nullptr);
+  return new ModelDialog(bounds, modelManager, nullptr);
 }

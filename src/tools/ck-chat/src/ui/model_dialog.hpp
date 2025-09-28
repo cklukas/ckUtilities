@@ -12,11 +12,11 @@
 // Forward declaration
 class ChatApp;
 
-class ProperModelDialog : public TDialog {
+class ModelDialog : public TDialog {
 public:
-  ProperModelDialog(TRect bounds, ck::ai::ModelManager &modelManager,
+  ModelDialog(TRect bounds, ck::ai::ModelManager &modelManager,
                     ChatApp *app = nullptr);
-  ~ProperModelDialog();
+  ~ModelDialog();
 
   virtual void handleEvent(TEvent &event) override;
   virtual void draw() override;

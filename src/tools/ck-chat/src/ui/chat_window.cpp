@@ -102,6 +102,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     promptInput->select();
 
     app.registerWindow(this);
+    session.setSystemPrompt(app.systemPrompt());
     newConversation();
 }
 
@@ -196,8 +197,17 @@ void ChatWindow::sendPrompt()
     if (prompt.empty())
         return;
 
+    auto llm = app.getActiveLlm();
+    if (!llm)
+    {
+        messageBox("No active model loaded. Use Manage Models to activate one.",
+                   mfInformation | mfOKButton);
+        return;
+    }
+
     session.addUserMessage(prompt);
-    session.startAssistantResponse(prompt);
+    session.setSystemPrompt(app.systemPrompt());
+    session.startAssistantResponse(prompt, std::move(llm));
     promptInput->clearText();
     session.consumeDirtyFlag();
     updateTranscriptFromSession(true);

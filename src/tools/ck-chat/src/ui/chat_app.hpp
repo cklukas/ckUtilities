@@ -2,9 +2,13 @@
 
 #include "../../../../include/ck/ai/config.hpp"
 #include "../../../../include/ck/ai/model_manager.hpp"
+#include "../../../../include/ck/ai/llm.hpp"
 
 #include "../tvision_include.hpp"
 
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <vector>
 
 class ChatWindow;
@@ -22,6 +26,11 @@ public:
   void registerWindow(ChatWindow *window);
   void unregisterWindow(ChatWindow *window);
   void refreshModelsMenu();
+  void handleModelManagerChange();
+
+  std::shared_ptr<ck::ai::Llm> getActiveLlm();
+  const std::string &systemPrompt() const noexcept { return systemPrompt_; }
+  std::optional<ck::ai::ModelInfo> activeModelInfo() const;
 
   const ck::ai::RuntimeConfig &runtime() const noexcept {
     return runtimeConfig;
@@ -33,10 +42,20 @@ private:
   void showAboutDialog();
   void showModelManagerDialog();
   void selectModel(int modelIndex);
+  void updateActiveModel();
+  void rebuildMenuBar();
+  std::shared_ptr<ck::ai::Llm> loadModel(const ck::ai::ModelInfo &model);
 
   std::vector<ChatWindow *> windows;
   int nextWindowNumber = 1;
   ck::ai::Config config;
   ck::ai::RuntimeConfig runtimeConfig;
   ck::ai::ModelManager modelManager_;
+  std::string systemPrompt_ =
+      "You are ck-chat, a helpful assistant for command-line utilities.";
+
+  std::vector<ck::ai::ModelInfo> menuDownloadedModels_;
+  std::optional<ck::ai::ModelInfo> currentActiveModel_;
+  mutable std::mutex llmMutex_;
+  std::shared_ptr<ck::ai::Llm> activeLlm_;
 };

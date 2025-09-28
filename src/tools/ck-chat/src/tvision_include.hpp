@@ -28,5 +28,6 @@
 #define Uses_TStringCollection
 #define Uses_TStaticText
 #define Uses_TString
+#define Uses_TObject
 
 #include <tvision/tv.h>

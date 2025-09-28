@@ -129,20 +129,31 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
 
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);
 
-  // Add active models directly to the menu (not as submenu)
-  auto activeModels = modelManager_.get_active_models();
-  if (activeModels.empty()) {
-    modelsMenu +
-        *new TMenuItem("~N~o active models", cmNoOp, kbNoKey, hcNoContext);
-  } else {
-    for (size_t i = 0; i < activeModels.size() && i < 10; ++i) {
-      const auto &model = activeModels[i];
-      std::string menuText = model.name;
+  auto downloadedModels = modelManager_.get_downloaded_models();
+  menuDownloadedModels_ = downloadedModels;
+  auto activeInfo = activeModelInfo();
 
-      ushort command = cmSelectModel1 + i; // Use existing commands
-      modelsMenu +
-          *new TMenuItem(menuText.c_str(), command, kbNoKey, hcNoContext);
+  if (downloadedModels.empty()) {
+    modelsMenu +
+        *new TMenuItem("~N~o downloaded models", cmNoOp, kbNoKey, hcNoContext);
+  } else {
+    TMenuItem *defaultItem = nullptr;
+    for (size_t i = 0; i < downloadedModels.size() && i < 10; ++i) {
+      const auto &model = downloadedModels[i];
+      std::string menuText = model.name;
+      if (model.is_active)
+        menuText += " [active]";
+
+      ushort command = cmSelectModel1 + static_cast<ushort>(i);
+      auto *item = new TMenuItem(menuText.c_str(), command, kbNoKey, hcNoContext);
+      modelsMenu + *item;
+
+      if (activeInfo && activeInfo->id == model.id)
+        defaultItem = item;
     }
+
+    if (defaultItem && modelsMenu.subMenu)
+      modelsMenu.subMenu->deflt = defaultItem;
   }
 
   modelsMenu + newLine() +
@@ -199,28 +210,134 @@ void ChatApp::showModelManagerDialog() {
   // Fixed dialog size based on content needs
   TRect bounds(5, 3, 105, 28);
 
-  auto *dialog = new ProperModelDialog(bounds, modelManager_, this);
+  auto *dialog = new ModelDialog(bounds, modelManager_, this);
   if (dialog) {
     deskTop->insert(dialog);
     dialog->select();
   }
 }
 
-void ChatApp::refreshModelsMenu() {
-  // For now, just show a message that models were updated
-  // In a full implementation, we would rebuild the menu bar
-  // which is complex in TurboVision, so we'll just refresh when app restarts
-  messageBox("Models updated! Restart ck-chat to see changes in menu.",
-             mfInformation | mfOKButton);
-}
+void ChatApp::refreshModelsMenu() { rebuildMenuBar(); }
 
 void ChatApp::selectModel(int modelIndex) {
-  auto activeModels = modelManager_.get_active_models();
-  if (modelIndex >= 0 && modelIndex < static_cast<int>(activeModels.size())) {
-    const auto &model = activeModels[modelIndex];
-    messageBox("Selected model: " + model.name, mfInformation | mfOKButton);
-    // TODO: Actually switch to this model in the runtime config
-  } else {
+  if (menuDownloadedModels_.empty() ||
+      modelIndex < 0 ||
+      modelIndex >= static_cast<int>(menuDownloadedModels_.size())) {
     messageBox("Invalid model selection", mfError | mfOKButton);
+    return;
+  }
+
+  const auto &model = menuDownloadedModels_[modelIndex];
+  if (!model.is_downloaded) {
+    messageBox("Model is not downloaded", mfError | mfOKButton);
+    return;
+  }
+
+  if (!modelManager_.activate_model(model.id)) {
+    messageBox("Failed to activate model: " + model.name, mfError | mfOKButton);
+    return;
+  }
+
+  handleModelManagerChange();
+}
+
+void ChatApp::handleModelManagerChange() {
+  updateActiveModel();
+  rebuildMenuBar();
+}
+
+std::shared_ptr<ck::ai::Llm> ChatApp::getActiveLlm() {
+  std::lock_guard<std::mutex> lock(llmMutex_);
+  return activeLlm_;
+}
+
+std::optional<ck::ai::ModelInfo> ChatApp::activeModelInfo() const {
+  std::lock_guard<std::mutex> lock(llmMutex_);
+  return currentActiveModel_;
+}
+
+void ChatApp::rebuildMenuBar() {
+  if (!deskTop)
+    return;
+
+  TRect bounds;
+  if (TProgram::menuBar)
+    bounds = TProgram::menuBar->getBounds();
+  else {
+    bounds = deskTop->getExtent();
+    bounds.b.y = bounds.a.y + 1;
+  }
+
+  if (TProgram::menuBar) {
+    TMenuBar *oldBar = TProgram::menuBar;
+    remove(oldBar);
+    TObject::destroy(oldBar);
+  }
+
+  TMenuBar *newBar = initMenuBar(bounds);
+  if (newBar) {
+    insert(newBar);
+    TProgram::menuBar = newBar;
+    newBar->drawView();
+  }
+}
+
+std::shared_ptr<ck::ai::Llm>
+ChatApp::loadModel(const ck::ai::ModelInfo &model) {
+  std::filesystem::path modelPath = model.local_path;
+  if (modelPath.empty())
+    modelPath = modelManager_.get_model_path(model.id);
+
+  if (modelPath.empty() || !std::filesystem::exists(modelPath)) {
+    messageBox(("Model file not found: " + model.name).c_str(),
+               mfError | mfOKButton);
+    return nullptr;
+  }
+
+  ck::ai::RuntimeConfig newRuntime = runtimeConfig;
+  newRuntime.model_path = modelPath.string();
+  if (newRuntime.threads <= 0)
+    newRuntime.threads = static_cast<int>(std::thread::hardware_concurrency());
+
+  try {
+    auto uniqueLlm = ck::ai::Llm::open(newRuntime.model_path, newRuntime);
+    uniqueLlm->set_system_prompt(systemPrompt_);
+    runtimeConfig = newRuntime;
+    return std::shared_ptr<ck::ai::Llm>(std::move(uniqueLlm));
+  } catch (const std::exception &e) {
+    messageBox(("Failed to load model: " + std::string(e.what())).c_str(),
+               mfError | mfOKButton);
+    return nullptr;
+  }
+}
+
+void ChatApp::updateActiveModel() {
+  auto activeModels = modelManager_.get_active_models();
+  std::optional<ck::ai::ModelInfo> selected;
+  if (!activeModels.empty())
+    selected = activeModels.front();
+
+  if (!selected) {
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    activeLlm_.reset();
+    currentActiveModel_.reset();
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    if (currentActiveModel_ && activeLlm_ &&
+        currentActiveModel_->id == selected->id)
+      return;
+  }
+
+  auto newLlm = loadModel(*selected);
+  std::lock_guard<std::mutex> lock(llmMutex_);
+  if (newLlm) {
+    activeLlm_ = std::move(newLlm);
+    currentActiveModel_ = selected;
+  } else {
+    activeLlm_.reset();
+    currentActiveModel_.reset();
   }
 }

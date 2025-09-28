@@ -1,5 +1,7 @@
 #include "chat_session.hpp"
 
+#include "ck/ai/llm.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <utility>
@@ -46,7 +48,19 @@ namespace ck::chat
         return index;
     }
 
+    void ChatSession::setSystemPrompt(std::string prompt)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        systemPrompt_ = std::move(prompt);
+    }
+
     void ChatSession::startAssistantResponse(std::string prompt)
+    {
+        startAssistantResponse(std::move(prompt), nullptr);
+    }
+
+    void ChatSession::startAssistantResponse(std::string prompt,
+                                             std::shared_ptr<ck::ai::Llm> llm)
     {
         cancelActiveResponse();
 
@@ -55,8 +69,12 @@ namespace ck::chat
         markDirty();
 
         ResponseTask *rawTask = task.get();
+        rawTask->llm = std::move(llm);
         rawTask->worker = std::thread([this, rawTask, prompt = std::move(prompt)]() mutable {
-            runSimulatedResponse(*rawTask, std::move(prompt));
+            if (rawTask->llm)
+                runLlmResponse(*rawTask, std::move(prompt));
+            else
+                runSimulatedResponse(*rawTask, std::move(prompt));
         });
 
         activeResponse_ = std::move(task);
@@ -163,5 +181,41 @@ namespace ck::chat
         task.finished.store(true, std::memory_order_release);
     }
 
-} // namespace ck::chat
+    void ChatSession::runLlmResponse(ResponseTask &task, std::string prompt)
+    {
+        auto llm = task.llm;
+        if (!llm)
+        {
+            runSimulatedResponse(task, std::move(prompt));
+            return;
+        }
 
+        try
+        {
+            llm->set_system_prompt(systemPrompt_);
+            ck::ai::GenerationConfig config;
+            llm->generate(prompt, config, [this, &task](ck::ai::Chunk chunk) {
+                if (task.cancel.load(std::memory_order_acquire))
+                    return;
+
+                if (!chunk.text.empty())
+                    appendToMessage(task.messageIndex, chunk.text);
+
+                if (chunk.is_last)
+                    setMessagePending(task.messageIndex, false);
+
+                markDirty();
+            });
+        }
+        catch (const std::exception &e)
+        {
+            appendToMessage(task.messageIndex,
+                            std::string("\n[error] ") + e.what() + '\n');
+        }
+
+        setMessagePending(task.messageIndex, false);
+        markDirty();
+        task.finished.store(true, std::memory_order_release);
+    }
+
+} // namespace ck::chat
