@@ -10,6 +10,7 @@
 #define Uses_TMemo
 #define Uses_TKeys
 #define Uses_TLabel
+#define Uses_TListBox
 #define Uses_TMenu
 #define Uses_TMenuBar
 #define Uses_TMenuItem
@@ -24,5 +25,8 @@
 #define Uses_TColorAttr
 #define Uses_TPalette
 #define Uses_MsgBox
+#define Uses_TStringCollection
+#define Uses_TStaticText
+#define Uses_TString
 
 #include <tvision/tv.h>
