@@ -329,20 +329,18 @@ void ProperModelDialog::updateButtons() {
   const bool canDelete = downloadedSelected.has_value();
   const bool canShowInfo = availableSelected.has_value() || downloadedSelected.has_value();
 
-  if (downloadButton_)
-    downloadButton_->setState(sfDisabled, !canDownload);
+  auto updateButtonState = [](TButton *button, bool enabled) {
+    if (!button)
+      return;
+    button->setState(sfDisabled, !enabled);
+    button->drawView();
+  };
 
-  if (activateButton_)
-    activateButton_->setState(sfDisabled, !canActivate);
-
-  if (deactivateButton_)
-    deactivateButton_->setState(sfDisabled, !canDeactivate);
-
-  if (deleteButton_)
-    deleteButton_->setState(sfDisabled, !canDelete);
-
-  if (infoButton_)
-    infoButton_->setState(sfDisabled, !canShowInfo);
+  updateButtonState(downloadButton_, canDownload);
+  updateButtonState(activateButton_, canActivate);
+  updateButtonState(deactivateButton_, canDeactivate);
+  updateButtonState(deleteButton_, canDelete);
+  updateButtonState(infoButton_, canShowInfo);
 }
 
 void ProperModelDialog::updateStatusForSelection() {
