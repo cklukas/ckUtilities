@@ -6,7 +6,7 @@
 #include "ck/ai/llm.hpp"
 #include "ck/app_info.hpp"
 #include "ck/launcher.hpp"
-#include "proper_model_dialog.hpp"
+#include "model_dialog.hpp"
 
 #include <algorithm>
 #include <cstdlib>

@@ -24,7 +24,7 @@ add_ck_tool(ckchat
     src/ui/chat_transcript_view.cpp
     src/ui/chat_window.cpp
     src/ui/chat_app.cpp
-    src/ui/proper_model_dialog.cpp
+    src/ui/model_dialog.cpp
     src/clipboard.cpp
   LIBRARIES
     ck_app_info

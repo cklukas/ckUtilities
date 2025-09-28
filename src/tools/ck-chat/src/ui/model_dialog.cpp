@@ -1,4 +1,4 @@
-#include "proper_model_dialog.hpp"
+#include "model_dialog.hpp"
 #include "../commands.hpp"
 #include "chat_app.hpp"
 
