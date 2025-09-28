@@ -398,7 +398,8 @@ std::string ProperModelDialog::buildModelInfoLine(
   oss << model.name;
 
   if (!model.id.empty() && model.id != model.name) {
-    oss << " | ID: " << model.id;
+    if (!fromDownloadedList)
+      oss << " | ID: " << model.id;
   }
 
   if (controller_) {
