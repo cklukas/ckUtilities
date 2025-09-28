@@ -314,19 +314,29 @@ void ProperModelDialog::updateModelLists() {
 }
 
 void ProperModelDialog::updateButtons() {
-  // Use controller for validation instead of local state
+  auto availableSelected = controller_->getSelectedAvailableModel();
+  auto downloadedSelected = controller_->getSelectedDownloadedModel();
+
+  const bool canDownload = availableSelected && !availableSelected->is_downloaded;
+  const bool canActivate = downloadedSelected && !downloadedSelected->is_active;
+  const bool canDeactivate = downloadedSelected && downloadedSelected->is_active;
+  const bool canDelete = downloadedSelected.has_value();
+  const bool canShowInfo = availableSelected.has_value() || downloadedSelected.has_value();
+
   if (downloadButton_)
-    downloadButton_->setState(sfDisabled, !controller_->canDownloadSelected());
+    downloadButton_->setState(sfDisabled, !canDownload);
 
   if (activateButton_)
-    activateButton_->setState(sfDisabled, !controller_->canActivateSelected());
+    activateButton_->setState(sfDisabled, !canActivate);
 
   if (deactivateButton_)
-    deactivateButton_->setState(sfDisabled,
-                                !controller_->canDeactivateSelected());
+    deactivateButton_->setState(sfDisabled, !canDeactivate);
 
   if (deleteButton_)
-    deleteButton_->setState(sfDisabled, !controller_->canDeleteSelected());
+    deleteButton_->setState(sfDisabled, !canDelete);
+
+  if (infoButton_)
+    infoButton_->setState(sfDisabled, !canShowInfo);
 }
 
 void ProperModelDialog::updateStatusForSelection() {
