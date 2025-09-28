@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <cstring>
 #include <sstream>
+#include <tvision/util.h>
 
 namespace {
 constexpr const char *kDefaultStatusMessage =
@@ -17,10 +18,17 @@ public:
       : TLabel(bounds, backingText.c_str(), nullptr), backingText_(&backingText) {
   }
 
-  void syncText() { text = backingText_ ? backingText_->c_str() : nullptr; }
+  void update() {
+    if (text)
+      delete[] (char *)text;
+    if (backingText_)
+      text = newStr(TStringView(*backingText_));
+    else
+      text = nullptr;
+  }
 
   void draw() override {
-    syncText();
+    update();
     TLabel::draw();
   }
 
@@ -464,7 +472,7 @@ void ProperModelDialog::updateStatusLabel(const std::string &message) {
   statusText_ = message;
 
   if (statusLabel_) {
-    static_cast<StatusLabel *>(statusLabel_)->syncText();
+    static_cast<StatusLabel *>(statusLabel_)->update();
     statusLabel_->drawView();
   } else {
     drawView();
@@ -478,7 +486,7 @@ void ProperModelDialog::updateDetailLabel(const std::string &message) {
   detailStatusText_ = message;
 
   if (detailStatusLabel_) {
-    static_cast<StatusLabel *>(detailStatusLabel_)->syncText();
+    static_cast<StatusLabel *>(detailStatusLabel_)->update();
     detailStatusLabel_->drawView();
   }
 }
