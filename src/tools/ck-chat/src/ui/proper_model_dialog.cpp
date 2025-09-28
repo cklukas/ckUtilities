@@ -174,25 +174,11 @@ void ProperModelDialog::handleEvent(TEvent &event) {
       clearEvent(event);
       break;
     case cmAbout:
-      // Update selection based on current focus before showing info
-      if (downloadedListBox_->focused >= 0) {
-        setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
-        updateStatusForSelection();
-        auto selected = controller_->getSelectedDownloadedModel();
-        if (selected) {
-          showStatusMessage(formatDetailedInfo(*selected));
-        } else {
-          showStatusMessage("No downloaded model selected");
-        }
-      } else if (availableListBox_->focused >= 0) {
-        setAvailableSelectionFromListIndex(availableListBox_->focused);
-        updateStatusForSelection();
-        auto selected = controller_->getSelectedAvailableModel();
-        if (selected) {
-          showStatusMessage(formatDetailedInfo(*selected));
-        } else {
-          showStatusMessage("No available model selected");
-        }
+      updateStatusForSelection();
+      if (auto selected = controller_->getSelectedDownloadedModel()) {
+        showStatusMessage(formatDetailedInfo(*selected));
+      } else if (auto selected = controller_->getSelectedAvailableModel()) {
+        showStatusMessage(formatDetailedInfo(*selected));
       } else {
         showStatusMessage("Select a model from either list to see details");
       }
