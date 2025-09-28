@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <cstring>
 #include <sstream>
 
 namespace {
@@ -26,6 +27,12 @@ public:
 private:
   std::string *backingText_;
 };
+
+char *duplicateString(const std::string &value) {
+  char *copy = new char[value.size() + 1];
+  std::memcpy(copy, value.c_str(), value.size() + 1);
+  return copy;
+}
 }
 
 ProperModelDialog::ProperModelDialog(TRect bounds,
@@ -62,7 +69,7 @@ ProperModelDialog::~ProperModelDialog() {}
 
 void ProperModelDialog::setupControls() {
   // Create available models list (left side)
-  TRect availableRect(2, 3, 46, 18);
+  TRect availableRect(2, 3, 46, 17);
   availableListBox_ = new TListBox(availableRect, 1, nullptr);
   insert(availableListBox_);
 
@@ -72,7 +79,7 @@ void ProperModelDialog::setupControls() {
   insert(availableLabel);
 
   // Create downloaded models list (right side)
-  TRect downloadedRect(48, 3, 92, 18);
+  TRect downloadedRect(48, 3, 92, 17);
   downloadedListBox_ = new TListBox(downloadedRect, 1, nullptr);
   insert(downloadedListBox_);
 
@@ -82,37 +89,41 @@ void ProperModelDialog::setupControls() {
   insert(downloadedLabel);
 
   // Create buttons with proper widths
-  downloadButton_ = new TButton(TRect(2, 20, 16, 22), "~D~ownload",
+  downloadButton_ = new TButton(TRect(2, 19, 16, 21), "~D~ownload",
                                 cmDownloadModel, bfDefault);
   insert(downloadButton_);
 
-  activateButton_ = new TButton(TRect(18, 20, 30, 22), "~A~ctivate",
+  activateButton_ = new TButton(TRect(18, 19, 30, 21), "~A~ctivate",
                                 cmActivateModel, bfNormal);
   insert(activateButton_);
 
-  deactivateButton_ = new TButton(TRect(32, 20, 46, 22), "~D~eactivate",
+  deactivateButton_ = new TButton(TRect(32, 19, 46, 21), "~D~eactivate",
                                   cmDeactivateModel, bfNormal);
   insert(deactivateButton_);
 
   deleteButton_ =
-      new TButton(TRect(48, 20, 58, 22), "~D~elete", cmDeleteModel, bfNormal);
+      new TButton(TRect(48, 19, 58, 21), "~D~elete", cmDeleteModel, bfNormal);
   insert(deleteButton_);
 
-  refreshButton_ = new TButton(TRect(60, 20, 72, 22), "~R~efresh",
+  refreshButton_ = new TButton(TRect(60, 19, 72, 21), "~R~efresh",
                                cmRefreshModels, bfNormal);
   insert(refreshButton_);
 
-  infoButton_ = new TButton(TRect(74, 20, 84, 22), "~I~nfo", cmAbout, bfNormal);
+  infoButton_ = new TButton(TRect(74, 19, 84, 21), "~I~nfo", cmAbout, bfNormal);
   insert(infoButton_);
 
   closeButton_ =
-      new TButton(TRect(86, 20, 96, 22), "~C~lose", cmClose, bfNormal);
+      new TButton(TRect(86, 19, 96, 21), "~C~lose", cmClose, bfNormal);
   insert(closeButton_);
 
   // Status label
   statusText_ = kDefaultStatusMessage;
-  statusLabel_ = new StatusLabel(TRect(2, 23, 92, 24), statusText_);
+  statusLabel_ = new StatusLabel(TRect(2, 22, 92, 23), statusText_);
   insert(statusLabel_);
+
+  detailStatusText_.clear();
+  detailStatusLabel_ = new StatusLabel(TRect(2, 23, 92, 24), detailStatusText_);
+  insert(detailStatusLabel_);
 
   updateButtons();
 }
@@ -226,6 +237,11 @@ void ProperModelDialog::updateModelLists() {
   auto availableModels = controller_->getAvailableModels();
   auto downloadedModels = controller_->getDownloadedModels();
 
+  int selectedAvailableIndex = controller_->getSelectedAvailableIndex();
+  int selectedDownloadedIndex = controller_->getSelectedDownloadedIndex();
+  int availableListSelection = -1;
+  int downloadedListSelection = -1;
+
   // Clear existing strings
   availableModelStrings_.clear();
   downloadedModelStrings_.clear();
@@ -255,6 +271,9 @@ void ProperModelDialog::updateModelLists() {
   for (const auto &entry : availableEntries) {
     availableModelStrings_.push_back(entry.display);
     availableModelIndexMap_.push_back(entry.index);
+    if (entry.index == selectedAvailableIndex)
+      availableListSelection =
+          static_cast<int>(availableModelStrings_.size()) - 1;
   }
 
   std::vector<DisplayEntry> downloadedEntries;
@@ -275,11 +294,20 @@ void ProperModelDialog::updateModelLists() {
   for (const auto &entry : downloadedEntries) {
     downloadedModelStrings_.push_back(entry.display);
     downloadedModelIndexMap_.push_back(entry.index);
+    if (entry.index == selectedDownloadedIndex)
+      downloadedListSelection =
+          static_cast<int>(downloadedModelStrings_.size()) - 1;
   }
 
   // Update TurboVision list boxes
   updateListBox(availableListBox_, availableModelStrings_);
   updateListBox(downloadedListBox_, downloadedModelStrings_);
+
+  if (availableListBox_ && availableListSelection >= 0)
+    availableListBox_->focusItem(availableListSelection);
+
+  if (downloadedListBox_ && downloadedListSelection >= 0)
+    downloadedListBox_->focusItem(downloadedListSelection);
 
   updateButtons();
   syncSelectionFromLists();
@@ -304,20 +332,24 @@ void ProperModelDialog::updateButtons() {
 void ProperModelDialog::updateStatusForSelection() {
   if (!controller_) {
     updateStatusLabel(kDefaultStatusMessage);
+    updateDetailLabel("");
     return;
   }
 
   if (auto selected = controller_->getSelectedDownloadedModel()) {
     updateStatusLabel(buildModelInfoLine(*selected, true));
+    updateDetailLabel(selected->description);
     return;
   }
 
   if (auto selected = controller_->getSelectedAvailableModel()) {
     updateStatusLabel(buildModelInfoLine(*selected, false));
+    updateDetailLabel(selected->description);
     return;
   }
 
   updateStatusLabel(kDefaultStatusMessage);
+  updateDetailLabel("");
 }
 
 void ProperModelDialog::syncSelectionFromLists() {
@@ -430,6 +462,18 @@ void ProperModelDialog::updateStatusLabel(const std::string &message) {
   }
 }
 
+void ProperModelDialog::updateDetailLabel(const std::string &message) {
+  if (detailStatusText_ == message)
+    return;
+
+  detailStatusText_ = message;
+
+  if (detailStatusLabel_) {
+    static_cast<StatusLabel *>(detailStatusLabel_)->syncText();
+    detailStatusLabel_->drawView();
+  }
+}
+
 void ProperModelDialog::updateListBox(TListBox *listBox,
                                       const std::vector<std::string> &items) {
   if (!listBox)
@@ -437,7 +481,7 @@ void ProperModelDialog::updateListBox(TListBox *listBox,
 
   auto *collection = new TStringCollection(10, 5);
   for (const auto &item : items) {
-    collection->insert((void *)item.c_str());
+    collection->insert(duplicateString(item));
   }
   listBox->newList(collection);
 }

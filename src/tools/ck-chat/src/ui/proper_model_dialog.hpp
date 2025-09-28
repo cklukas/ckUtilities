@@ -36,6 +36,7 @@ private:
   void showStatusMessage(const std::string &message);
   void showErrorMessage(const std::string &error);
   void updateStatusLabel(const std::string &message);
+  void updateDetailLabel(const std::string &message);
   void updateListBox(TListBox *listBox, const std::vector<std::string> &items);
 
   // Business logic controller
@@ -55,7 +56,9 @@ private:
   TButton *infoButton_;
   TButton *closeButton_;
   TLabel *statusLabel_;
+  TLabel *detailStatusLabel_;
   std::string statusText_;
+  std::string detailStatusText_;
 
   // UI display data
   std::vector<std::string> availableModelStrings_;
