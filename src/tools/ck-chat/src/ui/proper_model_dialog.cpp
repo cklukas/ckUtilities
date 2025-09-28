@@ -46,10 +46,14 @@ ProperModelDialog::ProperModelDialog(TRect bounds,
 
   // Set up controller callbacks for UI updates
   controller_->setStatusCallback(
-      [this](const std::string &msg) { updateStatusLabel(msg); });
+      [this](const std::string &msg) {
+        updateStatusLabel(msg);
+        updateDetailLabel("");
+      });
 
   controller_->setErrorCallback([this](const std::string &error) {
     updateStatusLabel("ERROR: " + error);
+    updateDetailLabel("");
   });
 
   controller_->setModelListUpdateCallback([this]() {
