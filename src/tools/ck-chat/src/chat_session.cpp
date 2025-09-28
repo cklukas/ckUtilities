@@ -194,6 +194,11 @@ namespace ck::chat
         {
             llm->set_system_prompt(systemPrompt_);
             ck::ai::GenerationConfig config;
+            if (config.stop.empty())
+            {
+                config.stop = {"\n\n", "\nUser:", "\nAssistant:", "\nSystem:"};
+                config.max_tokens = 256;
+            }
             llm->generate(prompt, config, [this, &task](ck::ai::Chunk chunk) {
                 if (task.cancel.load(std::memory_order_acquire))
                     return;
