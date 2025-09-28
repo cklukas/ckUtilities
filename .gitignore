@@ -9,3 +9,4 @@ CMakeCache.txt
 compile_commands.json
 .vscode/
 .idea/
+third_party/llama.cpp/

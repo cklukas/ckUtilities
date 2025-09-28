@@ -59,8 +59,8 @@
 cktools/
 ├─ lib/ckai_core/            # C++ API and backend glue
 ├─ lib/ckai_embed/
-├─ third_party/              # vendored backends under lockstep versions
-│  ├─ llama.cpp/             # as subproject (frozen at a known commit)
+├─ third_party/              # backends populated via FetchContent (pinned)
+│  ├─ llama.cpp/             # retrieved at configure time
 │  └─ whisper.cpp/           # optional
 ├─ src/tools/
 │  ├─ ckchat/                # local chat (TUI + CLI)
@@ -239,7 +239,7 @@ Each supports `--json` for automation and `--seed` for reproducibility.
 ## 9) Build & Packaging
 
 * AI is **part of the regular build**.
-* `third_party/llama.cpp` vendored as a CMake subproject; compiled static.
+* `third_party/llama.cpp` fetched at configure time via CMake FetchContent (pinned commit).
 * Optional backends toggled via CMake options (see §3).
 * Packages (`.deb`/`.rpm`) include binaries and headers; **not** model weights.
 * Post-install message points to `ckmodel add` instructions.

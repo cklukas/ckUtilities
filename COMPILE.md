@@ -45,7 +45,7 @@ cktools/
 │  ├─ ckfs/                      # filesystem helpers, safe ops, temp dirs
 │  └─ ckui/                      # Turbo Vision wrappers/widgets (dialogs, lists)
 ├─ third_party/
-│  └─ llama.cpp/                 # vendored llama backend (stub for now)
+│  └─ llama.cpp/                 # populated on demand via FetchContent (pinned)
 ├─ src/tools/
 │  ├─ ck-chat/                   # ck-ai chat prototype
 │  ├─ ck-config/

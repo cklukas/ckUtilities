@@ -10,11 +10,10 @@
 
 ## Implementation Steps
 
-1. **Vendor llama.cpp**
-   1. Create `third_party/llama.cpp/` by adding the upstream source at a pinned commit (document the commit hash in `third_party/llama.cpp/README.cktools.md`). No git submodules.
-   2. Add a `third_party/llama.cpp/CMakeLists.txt` wrapper if upstream does not ship one suitable for embedding. Configure it to expose a static library target named `llama_cpp`.
-   3. Update the top-level `CMakeLists.txt` to include a new option `CKAI_BACKEND_LLAMA` (default `ON`) and add `add_subdirectory(third_party/llama.cpp)` guarded by the option.
-   4. For reproducibility, add any required patch files under `third_party/patches/llama.cpp/` and document how to apply them in the README.
+1. **Fetch llama.cpp automatically**
+   1. Add a helper (e.g., `cmake/FetchLlama.cmake`) that declares a `FetchContent` block pointing at the pinned upstream commit.
+   2. Update the top-level `CMakeLists.txt` to include the helper when `CKAI_BACKEND_LLAMA=ON` and ensure the upstream target `llama` is available to dependents.
+   3. For reproducibility, document the pinned commit hash and keep optional patches under `third_party/patches/llama.cpp/` if they become necessary.
 
 2. **Create core AI library skeleton**
    1. Under `lib/`, add a new directory `ckai_core/` with `CMakeLists.txt`, headers in `include/ck/ai/`, and a minimal `src/` directory.
@@ -55,7 +54,7 @@ Confirm the resulting `.deb`/`.rpm` contain `ckchat`, `libckai_core` headers, an
 
 ## Deliverables
 
-* `third_party/llama.cpp` with pinned source + documentation.
+* FetchContent helper for `third_party/llama.cpp` with pinned commit + documentation.
 * New `lib/ckai_core` target and headers in `include/ck/ai/`.
 * Stubbed `ckchat` CLI/TUI wired into the build.
 * Sample AI config file and updated packaging/CI definitions.

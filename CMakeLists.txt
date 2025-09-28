@@ -12,7 +12,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_subdirectory(third_party/llama.cpp)
+# Add llama.cpp integration
+option(CKAI_BACKEND_LLAMA "Enable llama.cpp backend" ON)
+if(CKAI_BACKEND_LLAMA)
+    include(cmake/FetchLlama.cmake)
+else()
+    message(FATAL_ERROR "CKAI_BACKEND_LLAMA is required for AI tools")
+endif()
 add_subdirectory(lib/ckai_core)
 
 include(CTest)
