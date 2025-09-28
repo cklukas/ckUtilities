@@ -424,15 +424,6 @@ std::string ProperModelDialog::buildModelInfoLine(
     oss << " | Downloaded";
   }
 
-  if (!model.description.empty()) {
-    std::string description = model.description;
-    constexpr std::size_t kMaxDescriptionLength = 80;
-    if (description.size() > kMaxDescriptionLength) {
-      description = description.substr(0, kMaxDescriptionLength - 3) + "...";
-    }
-    oss << " | " << description;
-  }
-
   return oss.str();
 }
 
