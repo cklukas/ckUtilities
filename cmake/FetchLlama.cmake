@@ -1,7 +1,7 @@
 include(FetchContent)
 
 set(CK_LLAMA_CPP_TAG
-    "2811c65286ae954bec87049f75b86dc022006dcc"
+    "b6617"
     CACHE STRING "Pinned llama.cpp commit used for builds")
 
 if(NOT TARGET llama)
