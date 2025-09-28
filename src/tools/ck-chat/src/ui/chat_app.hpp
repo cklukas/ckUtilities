@@ -52,7 +52,7 @@ private:
   ck::ai::RuntimeConfig runtimeConfig;
   ck::ai::ModelManager modelManager_;
   std::string systemPrompt_ =
-      "You are ck-chat, a helpful assistant for command-line utilities.";
+      "You are a friendly, knowledgeable assistant. Respond clearly and helpfully.";
 
   std::vector<ck::ai::ModelInfo> menuDownloadedModels_;
   std::optional<ck::ai::ModelInfo> currentActiveModel_;

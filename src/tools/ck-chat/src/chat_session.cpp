@@ -11,7 +11,7 @@ namespace ck::chat
 
     namespace
     {
-        constexpr const char *kWelcomeMessage = "Welcome to ck-chat! Type a prompt below and press Alt+S or click Submit.";
+        constexpr const char *kWelcomeMessage = "Welcome! Ask me anything.";
     }
 
     ChatSession::ChatSession() = default;
