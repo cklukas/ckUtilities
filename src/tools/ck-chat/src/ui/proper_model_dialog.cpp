@@ -303,6 +303,12 @@ void ProperModelDialog::updateModelLists() {
   updateListBox(availableListBox_, availableModelStrings_);
   updateListBox(downloadedListBox_, downloadedModelStrings_);
 
+  if (availableListBox_)
+    availableListBox_->drawView();
+
+  if (downloadedListBox_)
+    downloadedListBox_->drawView();
+
   if (availableListBox_ && availableListSelection >= 0)
     availableListBox_->focusItem(availableListSelection);
 
