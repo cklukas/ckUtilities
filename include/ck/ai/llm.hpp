@@ -3,6 +3,7 @@
 #include "ck/ai/runtime_config.hpp"
 
 #include <functional>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -51,5 +52,6 @@ private:
   // llama.cpp objects
   llama_model *model_;
   llama_context *context_;
+  mutable std::mutex mutex_;
 };
 } // namespace ck::ai

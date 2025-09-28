@@ -75,55 +75,129 @@ std::unique_ptr<Llm> Llm::open(const std::string &model_path,
 }
 
 void Llm::set_system_prompt(std::string system_prompt) {
+  std::lock_guard<std::mutex> lock(mutex_);
   system_prompt_ = std::move(system_prompt);
 }
 
 void Llm::generate(const std::string &prompt, const GenerationConfig &config,
                    const std::function<void(Chunk)> &on_token) {
-  if (!on_token || !context_ || !model_)
+  if (!on_token)
     return;
 
-  // Prepare the full prompt with system message
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  if (!context_ || !model_)
+    return;
+
+  const llama_vocab *vocab = llama_model_get_vocab(model_);
+  if (!vocab)
+    return;
+
+  llama_memory_clear(llama_get_memory(context_), true);
+
+  llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+  if (!sampler)
+    return;
+
+  auto sampler_guard = std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)>(
+      sampler, llama_sampler_free);
+
+  if (config.top_k > 0)
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(config.top_k));
+  if (config.top_p > 0.0f && config.top_p <= 1.0f)
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(config.top_p, 1));
+  if (config.temperature > 0.0f && config.temperature != 1.0f)
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(config.temperature));
+
+  llama_sampler_chain_add(
+      sampler, llama_sampler_init_dist(config.seed != 0 ? config.seed : LLAMA_DEFAULT_SEED));
+
   std::string full_prompt =
       system_prompt_.empty() ? prompt : system_prompt_ + "\n\n" + prompt;
 
-  // Get vocabulary for tokenization
-  const llama_vocab *vocab = llama_model_get_vocab(model_);
-  if (!vocab) {
+  bool add_bos = true;
+  int32_t token_count = llama_tokenize(vocab, full_prompt.c_str(), full_prompt.size(), nullptr, 0,
+                                       add_bos, true);
+  if (token_count < 0) {
+    token_count = -token_count;
+  }
+
+  std::vector<llama_token> tokens(token_count);
+  if (llama_tokenize(vocab, full_prompt.c_str(), full_prompt.size(), tokens.data(), tokens.size(),
+                     add_bos, true) < 0) {
     return;
   }
 
-  // Tokenize the prompt
-  std::vector<llama_token> tokens;
-  tokens.resize(full_prompt.length() + 1);
-  int n_tokens =
-      llama_tokenize(vocab, full_prompt.c_str(), full_prompt.length(),
-                     tokens.data(), tokens.size(), true, false);
-  if (n_tokens < 0) {
-    tokens.resize(-n_tokens);
-    n_tokens = llama_tokenize(vocab, full_prompt.c_str(), full_prompt.length(),
-                              tokens.data(), tokens.size(), true, false);
-  }
-  if (n_tokens <= 0) {
-    return; // No tokens to process
-  }
-  tokens.resize(n_tokens);
+  llama_sampler_reset(sampler);
 
-  // For now, use a simple approach that doesn't crash
-  // TODO: Implement proper llama.cpp generation once we understand the API
-  // better
-  const std::string response = build_stub_response(prompt, system_prompt_);
-  Chunk chunk;
-  chunk.is_last = false;
-  for (std::size_t i = 0; i < response.size(); ++i) {
-    chunk.text.assign(1, response[i]);
-    chunk.is_last = (i + 1 == response.size());
+  llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
+
+  std::string buffer;
+  size_t lastSent = 0;
+  bool stopReached = false;
+  int generated = 0;
+  const int max_tokens = config.max_tokens > 0 ? config.max_tokens : 256;
+
+  while (generated < max_tokens) {
+    int ret = llama_decode(context_, batch);
+    if (ret != 0)
+      break;
+
+    llama_token token_id = llama_sampler_sample(sampler, context_, -1);
+    llama_sampler_accept(sampler, token_id);
+
+    if (llama_vocab_is_eog(vocab, token_id))
+      break;
+
+    char piece_buf[512];
+    int len = llama_token_to_piece(vocab, token_id, piece_buf, sizeof(piece_buf), 0, true);
+    if (len < 0)
+      break;
+
+    buffer.append(piece_buf, len);
+
+    bool stopMatched = false;
+    for (const auto &stop : config.stop) {
+      if (stop.empty())
+        continue;
+      if (buffer.size() >= stop.size() &&
+          buffer.compare(buffer.size() - stop.size(), stop.size(), stop) == 0) {
+        buffer.resize(buffer.size() - stop.size());
+        stopReached = stopMatched = true;
+        break;
+      }
+    }
+
+    if (buffer.size() > lastSent) {
+      Chunk chunk;
+      chunk.text = buffer.substr(lastSent);
+      chunk.is_last = false;
+      on_token(chunk);
+      lastSent = buffer.size();
+    }
+
+    generated++;
+    if (stopMatched || generated >= max_tokens)
+      break;
+
+    batch = llama_batch_get_one(&token_id, 1);
+  }
+
+  if (buffer.size() > lastSent) {
+    Chunk chunk;
+    chunk.text = buffer.substr(lastSent);
+    chunk.is_last = true;
     on_token(chunk);
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    lastSent = buffer.size();
+  } else {
+    Chunk chunk;
+    chunk.is_last = true;
+    on_token(chunk);
   }
 }
 
 std::string Llm::embed(const std::string &text) const {
+  std::lock_guard<std::mutex> lock(mutex_);
   std::hash<std::string> hasher;
   auto value = static_cast<unsigned long long>(hasher(text));
   std::ostringstream stream;
@@ -132,25 +206,18 @@ std::string Llm::embed(const std::string &text) const {
 }
 
 std::size_t Llm::token_count(const std::string &text) const {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!context_ || !model_)
     return 0;
 
   const llama_vocab *vocab = llama_model_get_vocab(model_);
-  if (!vocab) {
+  if (!vocab)
     return 0;
-  }
 
-  std::vector<llama_token> tokens;
-  tokens.resize(text.length() + 1);
-  int n_tokens = llama_tokenize(vocab, text.c_str(), text.length(),
-                                tokens.data(), tokens.size(), true, false);
-  if (n_tokens < 0) {
-    tokens.resize(-n_tokens);
-    n_tokens = llama_tokenize(vocab, text.c_str(), text.length(), tokens.data(),
-                              tokens.size(), true, false);
-  }
-
-  return n_tokens > 0 ? static_cast<std::size_t>(n_tokens) : 0;
+  int32_t n = llama_tokenize(vocab, text.c_str(), text.size(), nullptr, 0, true, false);
+  if (n < 0)
+    n = -n;
+  return static_cast<std::size_t>(n);
 }
 
 } // namespace ck::ai

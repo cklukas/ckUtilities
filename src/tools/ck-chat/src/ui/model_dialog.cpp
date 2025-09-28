@@ -76,7 +76,10 @@ ModelDialog::ModelDialog(TRect bounds,
     chatApp_->handleModelManagerChange();
 }
 
-ModelDialog::~ModelDialog() {}
+ModelDialog::~ModelDialog() {
+  if (chatApp_)
+    chatApp_->handleModelManagerChange();
+}
 
 void ModelDialog::setupControls() {
   // Create available models list (left side)
