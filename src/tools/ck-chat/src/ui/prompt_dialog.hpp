@@ -29,6 +29,8 @@ private:
   void editPrompt();
   void deletePrompt();
   void activatePrompt();
+  void updateSelectionStatus();
+  std::string buildSelectionSummary(const ck::ai::SystemPrompt &prompt) const;
   int selectedIndex() const;
   std::optional<ck::ai::SystemPrompt> selectedPrompt() const;
 
@@ -46,4 +48,5 @@ private:
 
   std::vector<ck::ai::SystemPrompt> prompts_;
   std::vector<int> indexMap_;
+  int lastSelectedIndex_ = -1;
 };

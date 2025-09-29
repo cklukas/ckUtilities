@@ -28,6 +28,7 @@ public:
   bool delete_prompt(const std::string &id);
   bool set_active_prompt(const std::string &id);
   bool restore_default_prompt(const std::string &id);
+  bool is_default_prompt_modified(const std::string &id) const;
 
   void refresh();
 

@@ -173,6 +173,8 @@ PromptDialog::PromptDialog(TRect bounds, ck::ai::SystemPromptManager &manager,
 {
   setupControls();
   refreshList();
+  lastSelectedIndex_ = selectedIndex();
+  updateSelectionStatus();
   setStatus(kPromptStatus);
 }
 
@@ -208,56 +210,58 @@ void PromptDialog::setupControls()
 
 void PromptDialog::handleEvent(TEvent &event)
 {
+  int previousSelection = lastSelectedIndex_;
+  TEvent originalEvent = event;
   TDialog::handleEvent(event);
 
-  const bool isListEvent =
-      event.what == evBroadcast &&
-      event.message.command == cmListItemSelected;
-
-  if (isListEvent)
+  if (originalEvent.what == evBroadcast &&
+      originalEvent.message.command == cmListItemSelected)
   {
-    updateButtons();
-    if (event.message.infoPtr == listBox_)
-    {
-      if (auto prompt = selectedPrompt())
-        setStatus(prompt->name + " selected");
-      else
-        setStatus(kPromptStatus);
-    }
+    lastSelectedIndex_ = selectedIndex();
+    updateSelectionStatus();
   }
-  else if (event.what == evCommand)
+  else if (originalEvent.what == evCommand)
   {
-    if (event.message.command == cmClose)
+    if (originalEvent.message.command == cmClose)
     {
       close();
       clearEvent(event);
+      updateButtons();
       return;
     }
 
-    if (event.message.infoPtr == addButton_)
+    if (originalEvent.message.infoPtr == addButton_)
     {
       addPrompt();
       clearEvent(event);
     }
-    else if (event.message.infoPtr == editButton_)
+    else if (originalEvent.message.infoPtr == editButton_)
     {
       editPrompt();
       clearEvent(event);
     }
-    else if (event.message.infoPtr == deleteButton_)
+    else if (originalEvent.message.infoPtr == deleteButton_)
     {
       deletePrompt();
       clearEvent(event);
     }
-    else if (event.message.infoPtr == activateButton_)
+    else if (originalEvent.message.infoPtr == activateButton_)
     {
       activatePrompt();
       clearEvent(event);
     }
   }
 
-  if (event.what == evBroadcast || event.what == evCommand)
+  int currentSelection = selectedIndex();
+  if (currentSelection != previousSelection)
+  {
+    lastSelectedIndex_ = currentSelection;
+    updateSelectionStatus();
+  }
+  else
+  {
     updateButtons();
+  }
 }
 
 void PromptDialog::refreshList()
@@ -306,6 +310,7 @@ void PromptDialog::refreshList()
     if (it != indexMap_.end())
       listBox_->focusItem(static_cast<int>(std::distance(indexMap_.begin(), it)));
   }
+  lastSelectedIndex_ = selectedIndex();
   updateButtons();
 }
 
@@ -350,6 +355,53 @@ void PromptDialog::setStatus(const std::string &message)
   {
     statusLabel_->drawView();
   }
+}
+
+void PromptDialog::updateSelectionStatus()
+{
+  updateButtons();
+
+  if (auto promptOpt = selectedPrompt())
+  {
+    setStatus(buildSelectionSummary(*promptOpt));
+  }
+  else
+  {
+    setStatus(kPromptStatus);
+  }
+}
+
+std::string PromptDialog::buildSelectionSummary(
+    const ck::ai::SystemPrompt &prompt) const
+{
+  std::vector<std::string> tags;
+  if (prompt.is_default)
+  {
+    bool modified = manager_.is_default_prompt_modified(prompt.id);
+    tags.emplace_back(modified ? "default (modified)" : "default");
+  }
+  else
+  {
+    tags.emplace_back("custom");
+  }
+
+  if (prompt.is_active)
+    tags.emplace_back("active");
+
+  std::string status = prompt.name;
+  if (!tags.empty())
+  {
+    status += " [";
+    for (std::size_t i = 0; i < tags.size(); ++i)
+    {
+      status += tags[i];
+      if (i + 1 < tags.size())
+        status += ", ";
+    }
+    status += "]";
+  }
+
+  return status;
 }
 
 int PromptDialog::selectedIndex() const

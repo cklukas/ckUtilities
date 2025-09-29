@@ -155,6 +155,25 @@ bool SystemPromptManager::restore_default_prompt(const std::string &id) {
   return true;
 }
 
+bool SystemPromptManager::is_default_prompt_modified(const std::string &id) const {
+  auto promptIt = std::find_if(prompts_.begin(), prompts_.end(),
+                               [&](const SystemPrompt &prompt) {
+                                 return prompt.id == id;
+                               });
+  if (promptIt == prompts_.end() || !promptIt->is_default)
+    return false;
+
+  auto defaultIt = std::find_if(kDefaultPrompts.begin(), kDefaultPrompts.end(),
+                                [&](const SystemPrompt &prompt) {
+                                  return prompt.id == id;
+                                });
+  if (defaultIt == kDefaultPrompts.end())
+    return false;
+
+  return promptIt->name != defaultIt->name ||
+         promptIt->message != defaultIt->message;
+}
+
 void SystemPromptManager::refresh() {
   load();
 }
