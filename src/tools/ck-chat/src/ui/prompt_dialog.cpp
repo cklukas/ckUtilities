@@ -178,11 +178,7 @@ PromptDialog::PromptDialog(TRect bounds, ck::ai::SystemPromptManager &manager,
   setStatus(kPromptStatus);
 }
 
-PromptDialog::~PromptDialog()
-{
-  if (chatApp_)
-    chatApp_->handlePromptManagerChange();
-}
+PromptDialog::~PromptDialog() = default;
 
 void PromptDialog::setupControls()
 {
@@ -208,8 +204,55 @@ void PromptDialog::setupControls()
   listBox_->options |= ofSelectable;
 }
 
+void PromptDialog::close()
+{
+  if (closing_)
+    return;
+  closing_ = true;
+  if (chatApp_)
+    chatApp_->handlePromptManagerChange();
+
+  TDialog::close();
+}
+
 void PromptDialog::handleEvent(TEvent &event)
 {
+  if (event.what == evCommand)
+  {
+    if (event.message.command == cmClose ||
+        event.message.command == cmCancel)
+    {
+      clearEvent(event);
+      close();
+      return;
+    }
+
+    if (event.message.infoPtr == addButton_)
+    {
+      addPrompt();
+      clearEvent(event);
+      return;
+    }
+    if (event.message.infoPtr == editButton_)
+    {
+      editPrompt();
+      clearEvent(event);
+      return;
+    }
+    if (event.message.infoPtr == deleteButton_)
+    {
+      deletePrompt();
+      clearEvent(event);
+      return;
+    }
+    if (event.message.infoPtr == activateButton_)
+    {
+      activatePrompt();
+      clearEvent(event);
+      return;
+    }
+  }
+
   int previousSelection = lastSelectedIndex_;
   TEvent originalEvent = event;
   TDialog::handleEvent(event);
@@ -219,37 +262,6 @@ void PromptDialog::handleEvent(TEvent &event)
   {
     lastSelectedIndex_ = selectedIndex();
     updateSelectionStatus();
-  }
-  else if (originalEvent.what == evCommand)
-  {
-    if (originalEvent.message.command == cmClose)
-    {
-      close();
-      clearEvent(event);
-      updateButtons();
-      return;
-    }
-
-    if (originalEvent.message.infoPtr == addButton_)
-    {
-      addPrompt();
-      clearEvent(event);
-    }
-    else if (originalEvent.message.infoPtr == editButton_)
-    {
-      editPrompt();
-      clearEvent(event);
-    }
-    else if (originalEvent.message.infoPtr == deleteButton_)
-    {
-      deletePrompt();
-      clearEvent(event);
-    }
-    else if (originalEvent.message.infoPtr == activateButton_)
-    {
-      activatePrompt();
-      clearEvent(event);
-    }
   }
 
   int currentSelection = selectedIndex();
@@ -316,6 +328,9 @@ void PromptDialog::refreshList()
 
 void PromptDialog::updateButtons()
 {
+  if (closing_)
+    return;
+
   auto selection = selectedPrompt();
   const bool hasSelection = selection.has_value();
   const bool isDefault = selection && selection->is_default;
@@ -359,6 +374,9 @@ void PromptDialog::setStatus(const std::string &message)
 
 void PromptDialog::updateSelectionStatus()
 {
+  if (closing_)
+    return;
+
   updateButtons();
 
   if (auto promptOpt = selectedPrompt())

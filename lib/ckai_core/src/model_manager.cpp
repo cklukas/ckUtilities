@@ -84,13 +84,20 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      20ull * GiB, // ~20GB
      "GPU < 32GB", false, false, "GPU Large"},
 
-    // Recent OpenAI Models
-    {"o1-preview", "o1-preview", "OpenAI's reasoning model (when available)",
-     "o1-preview.gguf",
-     "https://huggingface.co/example/o1-preview-gguf/resolve/main/"
-     "o1-preview.gguf",
+    // OpenAI GPT-OSS Models
+    {"gpt-oss-mini", "GPT-OSS Mini", "OpenAI's lightweight GPT-OSS variant",
+     "gpt-oss-mini.Q4_K_M.gguf",
+     "https://huggingface.co/openai/gpt-oss-mini-gguf/resolve/main/"
+     "gpt-oss-mini.Q4_K_M.gguf",
      "",
-     10ull * GiB, // ~10GB
+     6ull * GiB, // ~6GB
+     "GPU < 8GB", false, false, "OpenAI Models"},
+    {"gpt-oss-pro", "GPT-OSS Pro", "OpenAI's higher-capacity GPT-OSS model",
+     "gpt-oss-pro.Q4_K_M.gguf",
+     "https://huggingface.co/openai/gpt-oss-pro-gguf/resolve/main/"
+     "gpt-oss-pro.Q4_K_M.gguf",
+     "",
+     12ull * GiB, // ~12GB
      "GPU < 16GB", false, false, "OpenAI Models"}};
 
 // CURL write callback for downloads

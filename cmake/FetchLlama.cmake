@@ -4,6 +4,11 @@ set(CK_LLAMA_CPP_TAG
     "b6617"
     CACHE STRING "Pinned llama.cpp commit used for builds")
 
+if(APPLE)
+  set(GGML_METAL ON CACHE BOOL "Enable ggml Metal backend" FORCE)
+  set(LLAMA_METAL ON CACHE BOOL "Enable llama.cpp Metal backend" FORCE)
+endif()
+
 if(NOT TARGET llama)
   FetchContent_Declare(
     llama_cpp

@@ -24,6 +24,8 @@ public:
 
     void processPendingResponses();
     void applySystemPrompt(const std::string &prompt);
+    void applyConversationSettings(const ck::chat::ChatSession::ConversationSettings &settings);
+    void refreshWindowTitle();
 
 private:
     ChatApp &app;
@@ -54,4 +56,7 @@ private:
     CopyButtonInfo *findCopyButtonByCommand(ushort command);
     static void setButtonTitle(TButton &button, const char *title);
     TRect copyColumnBounds() const;
+
+    ck::chat::ChatSession::ConversationSettings conversationSettings_{};
+    std::string lastWindowTitle_;
 };

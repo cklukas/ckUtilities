@@ -3,6 +3,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -30,6 +31,8 @@ namespace ck::chat
             Role role;
             std::string content;
             bool pending = false;
+            bool include_in_context = true;
+            bool is_summary = false;
         };
 
         ChatSession();
@@ -49,6 +52,27 @@ namespace ck::chat
         bool consumeDirtyFlag();
         std::vector<Message> snapshotMessages() const;
 
+        struct ConversationSettings
+        {
+            std::size_t max_context_tokens = 4096;
+            std::size_t summary_trigger_tokens = 2048;
+            std::size_t max_response_tokens = 512;
+        };
+
+        struct ContextStats
+        {
+            std::size_t prompt_tokens = 0;
+            std::size_t max_context_tokens = 0;
+            std::size_t summary_trigger_tokens = 0;
+            std::size_t max_response_tokens = 0;
+            bool summarization_enabled = false;
+            bool summary_present = false;
+        };
+
+        void setConversationSettings(const ConversationSettings &settings);
+        ConversationSettings conversationSettings() const;
+        ContextStats contextStats() const;
+
     private:
         struct ResponseTask
         {
@@ -66,12 +90,32 @@ namespace ck::chat
         void joinIfFinished();
         void runSimulatedResponse(ResponseTask &task, std::string prompt);
         void runLlmResponse(ResponseTask &task, std::string prompt);
+        void ensureContextWithinLimits(ck::ai::Llm &llm);
+        bool summarizeOldMessages(ck::ai::Llm &llm);
+        std::string buildModelPrompt() const;
+        std::string formatMessagesForSummary(const std::vector<Message> &msgs) const;
+        std::string existingSummaryText() const;
+        bool pruneOldMessages();
+        void trimStopSequences(std::size_t index);
+
+        struct SummaryPlan
+        {
+            std::vector<std::size_t> message_indices;
+            std::vector<Message> messages;
+        };
+        std::optional<SummaryPlan> prepareSummaryPlan() const;
+        void applySummaryUpdate(const std::vector<std::size_t> &indices,
+                                const std::string &summary);
+        static std::string role_prefix(Role role);
 
         mutable std::mutex mutex_;
         std::vector<Message> messages_;
         std::unique_ptr<ResponseTask> activeResponse_;
         std::atomic<bool> dirty_{false};
         std::string systemPrompt_;
+        std::optional<std::size_t> summaryMessageIndex_;
+        ConversationSettings settings_{};
+        std::atomic<std::size_t> lastPromptTokens_{0};
     };
 
 } // namespace ck::chat

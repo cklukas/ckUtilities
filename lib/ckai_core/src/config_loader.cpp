@@ -78,7 +78,15 @@ Config ConfigLoader::load_from_file(const std::filesystem::path &path)
 {
     Config config;
     config.runtime.max_output_tokens = 512;
+    config.runtime.context_window_tokens = 4096;
+    config.runtime.summary_trigger_tokens = 2048;
+#if defined(__APPLE__)
+    config.runtime.gpu_layers = -1;
+#else
+    config.runtime.gpu_layers = 0;
+#endif
     config.runtime.threads = 0;
+    config.model_overrides.clear();
 
     std::ifstream stream(path);
     if (!stream)
@@ -111,16 +119,51 @@ Config ConfigLoader::load_from_file(const std::filesystem::path &path)
         if (section == "llm")
         {
             if (key == "model")
+            {
                 config.runtime.model_path = parse_string(value);
+            }
             else if (key == "threads")
+            {
                 if (auto parsed = parse_integer(value))
                     config.runtime.threads = static_cast<int>(*parsed);
+            }
+            else if (key == "gpu_layers")
+            {
+                if (auto parsed = parse_integer(value))
+                    config.runtime.gpu_layers = static_cast<int>(*parsed);
+            }
         }
         else if (section == "limits")
         {
             if (key == "max_output_tokens")
+            {
                 if (auto parsed = parse_integer(value))
                     config.runtime.max_output_tokens = static_cast<std::size_t>(*parsed);
+            }
+            if (key == "context_window_tokens")
+            {
+                if (auto parsed = parse_integer(value))
+                    config.runtime.context_window_tokens = static_cast<std::size_t>(*parsed);
+            }
+            if (key == "summary_trigger_tokens")
+            {
+                if (auto parsed = parse_integer(value))
+                    config.runtime.summary_trigger_tokens = static_cast<std::size_t>(*parsed);
+            }
+        }
+        else if (section.rfind("model.", 0) == 0)
+        {
+            std::string modelId = section.substr(6);
+            if (modelId.empty())
+                continue;
+            auto &overrideConfig = config.model_overrides[modelId];
+            if (overrideConfig.gpu_layers == -9999)
+                overrideConfig.gpu_layers = -1;
+            if (key == "gpu_layers")
+            {
+                if (auto parsed = parse_integer(value))
+                    overrideConfig.gpu_layers = static_cast<int>(*parsed);
+            }
         }
     }
 
@@ -130,6 +173,36 @@ Config ConfigLoader::load_from_file(const std::filesystem::path &path)
 Config ConfigLoader::load_or_default()
 {
     return load_from_file(default_config_path());
+}
+
+void ConfigLoader::save(const Config &config)
+{
+    auto path = default_config_path();
+    std::filesystem::create_directories(path.parent_path());
+
+    std::ofstream out(path);
+    if (!out.is_open())
+        return;
+
+    out << "[llm]\n";
+    if (!config.runtime.model_path.empty())
+        out << "model = \"" << config.runtime.model_path << "\"\n";
+    out << "threads = " << config.runtime.threads << "\n";
+    out << "gpu_layers = " << config.runtime.gpu_layers << "\n";
+
+    out << "\n[limits]\n";
+    out << "max_output_tokens = " << config.runtime.max_output_tokens << "\n";
+    out << "context_window_tokens = " << config.runtime.context_window_tokens << "\n";
+    out << "summary_trigger_tokens = " << config.runtime.summary_trigger_tokens << "\n";
+
+    for (const auto &entry : config.model_overrides)
+    {
+        const auto &overrideConfig = entry.second;
+        if (overrideConfig.gpu_layers == -9999)
+            continue;
+        out << "\n[model." << entry.first << "]\n";
+        out << "gpu_layers = " << overrideConfig.gpu_layers << "\n";
+    }
 }
 
 } // namespace ck::ai

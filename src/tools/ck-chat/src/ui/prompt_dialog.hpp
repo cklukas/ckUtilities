@@ -21,6 +21,7 @@ public:
   static TDialog *create(TRect bounds, ck::ai::SystemPromptManager &manager);
 
 private:
+  void close() override;
   void setupControls();
   void refreshList();
   void updateButtons();
@@ -49,4 +50,5 @@ private:
   std::vector<ck::ai::SystemPrompt> prompts_;
   std::vector<int> indexMap_;
   int lastSelectedIndex_ = -1;
+  bool closing_ = false;
 };

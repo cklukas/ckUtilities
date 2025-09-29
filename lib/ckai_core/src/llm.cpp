@@ -43,11 +43,23 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
 
   // Create context
   auto ctx_params = llama_context_default_params();
-  ctx_params.n_ctx = 4096; // Default context size
+  ctx_params.n_ctx = runtime_.context_window_tokens > 0
+                         ? static_cast<int>(runtime_.context_window_tokens)
+                         : 4096; // Default context size
   ctx_params.n_batch = 512;
   ctx_params.n_threads = runtime_.threads > 0
                              ? runtime_.threads
                              : std::thread::hardware_concurrency();
+
+  int gpuLayers = runtime_.gpu_layers;
+#if defined(__APPLE__)
+  if (gpuLayers == -1)
+    gpuLayers = 9999; // Offload as many layers as possible when Metal is available
+#endif
+  if (gpuLayers > 0)
+    model_params.n_gpu_layers = gpuLayers;
+  else
+    model_params.n_gpu_layers = 0;
 
   context_ = llama_init_from_model(model_, ctx_params);
 

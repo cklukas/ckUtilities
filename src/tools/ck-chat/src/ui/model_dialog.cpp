@@ -3,72 +3,84 @@
 #include "chat_app.hpp"
 
 #include <algorithm>
-#include <iomanip>
+#include <array>
+#include <cctype>
+#include <cstdio>
 #include <cstring>
+#include <iomanip>
+#include <optional>
 #include <sstream>
 #include <tvision/util.h>
 
-namespace {
-constexpr const char *kDefaultStatusMessage =
-    "Ready - Select a model from the lists above";
+namespace
+{
+  constexpr const char *kDefaultStatusMessage =
+      "Ready - Select a model from the lists above";
 
-class StatusLabel : public TLabel {
-public:
-  StatusLabel(const TRect &bounds, std::string &backingText)
-      : TLabel(bounds, backingText.c_str(), nullptr), backingText_(&backingText) {
+  class StatusLabel : public TLabel
+  {
+  public:
+    StatusLabel(const TRect &bounds, std::string &backingText)
+        : TLabel(bounds, backingText.c_str(), nullptr), backingText_(&backingText)
+    {
+    }
+
+    void update()
+    {
+      if (text)
+        delete[] (char *)text;
+      if (backingText_)
+        text = newStr(TStringView(*backingText_));
+      else
+        text = nullptr;
+    }
+
+    void draw() override
+    {
+      update();
+      TLabel::draw();
+    }
+
+  private:
+    std::string *backingText_;
+  };
+
+  char *duplicateString(const std::string &value)
+  {
+    char *copy = new char[value.size() + 1];
+    std::memcpy(copy, value.c_str(), value.size() + 1);
+    return copy;
   }
-
-  void update() {
-    if (text)
-      delete[] (char *)text;
-    if (backingText_)
-      text = newStr(TStringView(*backingText_));
-    else
-      text = nullptr;
-  }
-
-  void draw() override {
-    update();
-    TLabel::draw();
-  }
-
-private:
-  std::string *backingText_;
-};
-
-char *duplicateString(const std::string &value) {
-  char *copy = new char[value.size() + 1];
-  std::memcpy(copy, value.c_str(), value.size() + 1);
-  return copy;
-}
 }
 
 ModelDialog::ModelDialog(TRect bounds,
-                                     ck::ai::ModelManager &modelManager,
-                                     ChatApp *app)
+                         ck::ai::ModelManager &modelManager,
+                         ChatApp *app)
     : TWindowInit(&ModelDialog::initFrame),
       TDialog(bounds, "Manage Models"),
       controller_(
           std::make_unique<ck::ai::ModelManagerController>(modelManager)),
-      chatApp_(app) {
+      chatApp_(app)
+{
 
   // Set up controller callbacks for UI updates
   controller_->setStatusCallback(
-      [this](const std::string &msg) {
+      [this](const std::string &msg)
+      {
         updateStatusLabel(msg);
         updateDetailLabel("");
       });
 
-  controller_->setErrorCallback([this](const std::string &error) {
+  controller_->setErrorCallback([this](const std::string &error)
+                                {
     updateStatusLabel("ERROR: " + error);
-    updateDetailLabel("");
-  });
+    updateDetailLabel(""); });
 
-  controller_->setModelListUpdateCallback([this]() {
+  controller_->setModelListUpdateCallback([this]()
+                                          {
     updateModelLists();
     if (chatApp_)
-      chatApp_->handleModelManagerChange();
-  });
+      chatApp_->handleModelManagerChange(); });
 
   setupControls();
   updateModelLists();
@@ -76,12 +88,14 @@ ModelDialog::ModelDialog(TRect bounds,
     chatApp_->handleModelManagerChange();
 }
 
-ModelDialog::~ModelDialog() {
+ModelDialog::~ModelDialog()
+{
   if (chatApp_)
     chatApp_->handleModelManagerChange();
 }
 
-void ModelDialog::setupControls() {
+void ModelDialog::setupControls()
+{
   // Create available models list (left side)
   TRect availableRect(2, 3, 46, 17);
   availableListBox_ = new TListBox(availableRect, 1, nullptr);
@@ -131,25 +145,50 @@ void ModelDialog::setupControls() {
   insert(closeButton_);
 
   // Status label
+  contextInfoText_.clear();
+  contextInfoLabel_ = new StatusLabel(TRect(2, 22, 58, 23), contextInfoText_);
+  insert(contextInfoLabel_);
+
+  responseTokensInput_ = new TInputLine(TRect(74, 22, 92, 23), 10);
+  insert(responseTokensInput_);
+  insert(new TLabel(TRect(58, 22, 74, 23), "Resp max:", responseTokensInput_));
+
+  summaryThresholdInput_ = new TInputLine(TRect(74, 23, 92, 24), 10);
+  insert(summaryThresholdInput_);
+  insert(new TLabel(TRect(58, 23, 74, 24), "Summ. thr.:", summaryThresholdInput_));
+
+  gpuLayersInput_ = new TInputLine(TRect(74, 24, 92, 25), 10);
+  insert(gpuLayersInput_);
+  insert(new TLabel(TRect(58, 24, 74, 25), "GPU layers:", gpuLayersInput_));
+
+  applySettingsButton_ =
+      new TButton(TRect(73, 26, 93, 28), "~A~pply", cmApplyRuntimeSettings, bfNormal);
+  insert(applySettingsButton_);
+
   statusText_ = kDefaultStatusMessage;
-  statusLabel_ = new StatusLabel(TRect(2, 22, 92, 23), statusText_);
+  statusLabel_ = new StatusLabel(TRect(2, 26, 73, 27), statusText_);
   insert(statusLabel_);
 
-  detailStatusText_.clear();
-  detailStatusLabel_ = new StatusLabel(TRect(2, 23, 92, 24), detailStatusText_);
+  detailStatusText_ = "Tip: 'auto' uses heuristics for GPU layers.";
+  detailStatusLabel_ = new StatusLabel(TRect(2, 27, 73, 28), detailStatusText_);
   insert(detailStatusLabel_);
 
   updateButtons();
+  refreshRuntimeSettingsDisplay();
 }
 
-void ModelDialog::handleEvent(TEvent &event) {
+void ModelDialog::handleEvent(TEvent &event)
+{
   TDialog::handleEvent(event);
 
-  if (event.what == evCommand) {
-    switch (event.message.command) {
+  if (event.what == evCommand)
+  {
+    switch (event.message.command)
+    {
     case cmDownloadModel:
       // Update selection based on current focus before action
-      if (availableListBox_->focused >= 0) {
+      if (availableListBox_->focused >= 0)
+      {
         setAvailableSelectionFromListIndex(availableListBox_->focused);
       }
       updateStatusForSelection();
@@ -158,7 +197,8 @@ void ModelDialog::handleEvent(TEvent &event) {
       break;
     case cmActivateModel:
       // Update selection based on current focus before action
-      if (downloadedListBox_->focused >= 0) {
+      if (downloadedListBox_->focused >= 0)
+      {
         setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
@@ -167,7 +207,8 @@ void ModelDialog::handleEvent(TEvent &event) {
       break;
     case cmDeactivateModel:
       // Update selection based on current focus before action
-      if (downloadedListBox_->focused >= 0) {
+      if (downloadedListBox_->focused >= 0)
+      {
         setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
@@ -176,7 +217,8 @@ void ModelDialog::handleEvent(TEvent &event) {
       break;
     case cmDeleteModel:
       // Update selection based on current focus before action
-      if (downloadedListBox_->focused >= 0) {
+      if (downloadedListBox_->focused >= 0)
+      {
         setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
       }
       updateStatusForSelection();
@@ -189,13 +231,22 @@ void ModelDialog::handleEvent(TEvent &event) {
       break;
     case cmAbout:
       updateStatusForSelection();
-      if (auto selected = controller_->getSelectedDownloadedModel()) {
+      if (auto selected = controller_->getSelectedDownloadedModel())
+      {
         showStatusMessage(formatDetailedInfo(*selected));
-      } else if (auto selected = controller_->getSelectedAvailableModel()) {
+      }
+      else if (auto selected = controller_->getSelectedAvailableModel())
+      {
         showStatusMessage(formatDetailedInfo(*selected));
-      } else {
+      }
+      else
+      {
         showStatusMessage("Select a model from either list to see details");
       }
+      clearEvent(event);
+      break;
+    case cmApplyRuntimeSettings:
+      applyRuntimeSettings();
       clearEvent(event);
       break;
     case cmClose:
@@ -203,16 +254,23 @@ void ModelDialog::handleEvent(TEvent &event) {
       clearEvent(event);
       break;
     }
-  } else if (event.what == evBroadcast) {
-    if (event.message.command == cmListItemSelected) {
-      if (event.message.infoPtr == availableListBox_) {
+  }
+  else if (event.what == evBroadcast)
+  {
+    if (event.message.command == cmListItemSelected)
+    {
+      if (event.message.infoPtr == availableListBox_)
+      {
         setAvailableSelectionFromListIndex(availableListBox_->focused);
         updateStatusForSelection();
         updateButtons();
-      } else if (event.message.infoPtr == downloadedListBox_) {
+      }
+      else if (event.message.infoPtr == downloadedListBox_)
+      {
         setDownloadedSelectionFromListIndex(downloadedListBox_->focused);
         updateStatusForSelection();
         updateButtons();
+        refreshRuntimeSettingsDisplay();
       }
     }
   }
@@ -224,7 +282,8 @@ void ModelDialog::draw() { TDialog::draw(); }
 
 // This method is no longer needed as controller handles model refresh
 
-void ModelDialog::updateModelLists() {
+void ModelDialog::updateModelLists()
+{
   // Get data from controller
   auto availableModels = controller_->getAvailableModels();
   auto downloadedModels = controller_->getDownloadedModels();
@@ -240,14 +299,16 @@ void ModelDialog::updateModelLists() {
   availableModelIndexMap_.clear();
   downloadedModelIndexMap_.clear();
 
-  struct DisplayEntry {
+  struct DisplayEntry
+  {
     std::string display;
     int index;
   };
 
   std::vector<DisplayEntry> availableEntries;
   availableEntries.reserve(availableModels.size());
-  for (std::size_t i = 0; i < availableModels.size(); ++i) {
+  for (std::size_t i = 0; i < availableModels.size(); ++i)
+  {
     const auto &model = availableModels[i];
     std::string sizeStr = controller_->formatModelSize(model.size_bytes);
     std::string displayText =
@@ -256,11 +317,13 @@ void ModelDialog::updateModelLists() {
   }
 
   std::stable_sort(availableEntries.begin(), availableEntries.end(),
-                   [](const DisplayEntry &a, const DisplayEntry &b) {
+                   [](const DisplayEntry &a, const DisplayEntry &b)
+                   {
                      return a.display < b.display;
                    });
 
-  for (const auto &entry : availableEntries) {
+  for (const auto &entry : availableEntries)
+  {
     availableModelStrings_.push_back(entry.display);
     availableModelIndexMap_.push_back(entry.index);
     if (entry.index == selectedAvailableIndex)
@@ -270,7 +333,8 @@ void ModelDialog::updateModelLists() {
 
   std::vector<DisplayEntry> downloadedEntries;
   downloadedEntries.reserve(downloadedModels.size());
-  for (std::size_t i = 0; i < downloadedModels.size(); ++i) {
+  for (std::size_t i = 0; i < downloadedModels.size(); ++i)
+  {
     const auto &model = downloadedModels[i];
     std::string statusText = controller_->getModelStatusText(model);
     std::string displayText =
@@ -279,11 +343,13 @@ void ModelDialog::updateModelLists() {
   }
 
   std::stable_sort(downloadedEntries.begin(), downloadedEntries.end(),
-                   [](const DisplayEntry &a, const DisplayEntry &b) {
+                   [](const DisplayEntry &a, const DisplayEntry &b)
+                   {
                      return a.display < b.display;
                    });
 
-  for (const auto &entry : downloadedEntries) {
+  for (const auto &entry : downloadedEntries)
+  {
     downloadedModelStrings_.push_back(entry.display);
     downloadedModelIndexMap_.push_back(entry.index);
     if (entry.index == selectedDownloadedIndex)
@@ -311,7 +377,8 @@ void ModelDialog::updateModelLists() {
   syncSelectionFromLists();
 }
 
-void ModelDialog::updateButtons() {
+void ModelDialog::updateButtons()
+{
   auto availableSelected = controller_->getSelectedAvailableModel();
   auto downloadedSelected = controller_->getSelectedDownloadedModel();
 
@@ -321,7 +388,8 @@ void ModelDialog::updateButtons() {
   const bool canDelete = downloadedSelected.has_value();
   const bool canShowInfo = availableSelected.has_value() || downloadedSelected.has_value();
 
-  auto updateButtonState = [](TButton *button, bool enabled) {
+  auto updateButtonState = [](TButton *button, bool enabled)
+  {
     if (!button)
       return;
     button->setState(sfDisabled, !enabled);
@@ -333,98 +401,133 @@ void ModelDialog::updateButtons() {
   updateButtonState(deactivateButton_, canDeactivate);
   updateButtonState(deleteButton_, canDelete);
   updateButtonState(infoButton_, canShowInfo);
+  updateButtonState(applySettingsButton_, true);
 }
 
-void ModelDialog::updateStatusForSelection() {
-  if (!controller_) {
+void ModelDialog::updateStatusForSelection()
+{
+  if (!controller_)
+  {
     updateStatusLabel(kDefaultStatusMessage);
     updateDetailLabel("");
     return;
   }
 
-  if (auto selected = controller_->getSelectedDownloadedModel()) {
+  if (auto selected = controller_->getSelectedDownloadedModel())
+  {
     updateStatusLabel(buildModelInfoLine(*selected, true));
     updateDetailLabel(selected->description);
+    refreshRuntimeSettingsDisplay();
     return;
   }
 
-  if (auto selected = controller_->getSelectedAvailableModel()) {
+  if (auto selected = controller_->getSelectedAvailableModel())
+  {
     updateStatusLabel(buildModelInfoLine(*selected, false));
     updateDetailLabel(selected->description);
+    refreshRuntimeSettingsDisplay();
     return;
   }
 
   updateStatusLabel(kDefaultStatusMessage);
   updateDetailLabel("");
+  refreshRuntimeSettingsDisplay();
 }
 
-void ModelDialog::syncSelectionFromLists() {
+void ModelDialog::syncSelectionFromLists()
+{
   if (!controller_)
     return;
 
   bool changed = false;
 
-  if (availableListBox_ && (availableListBox_->state & sfFocused)) {
+  if (availableListBox_ && (availableListBox_->state & sfFocused))
+  {
     int focusedIndex = availableListBox_->focused;
     if (focusedIndex >= 0 &&
-        focusedIndex < static_cast<int>(availableModelIndexMap_.size())) {
+        focusedIndex < static_cast<int>(availableModelIndexMap_.size()))
+    {
       int mappedIndex = availableModelIndexMap_[focusedIndex];
-      if (mappedIndex != controller_->getSelectedAvailableIndex()) {
+      if (mappedIndex != controller_->getSelectedAvailableIndex())
+      {
         controller_->setSelectedAvailableModel(mappedIndex);
         changed = true;
       }
     }
-  } else if (downloadedListBox_ && (downloadedListBox_->state & sfFocused)) {
+  }
+  else if (downloadedListBox_ && (downloadedListBox_->state & sfFocused))
+  {
     int focusedIndex = downloadedListBox_->focused;
     if (focusedIndex >= 0 &&
-        focusedIndex < static_cast<int>(downloadedModelIndexMap_.size())) {
+        focusedIndex < static_cast<int>(downloadedModelIndexMap_.size()))
+    {
       int mappedIndex = downloadedModelIndexMap_[focusedIndex];
-      if (mappedIndex != controller_->getSelectedDownloadedIndex()) {
+      if (mappedIndex != controller_->getSelectedDownloadedIndex())
+      {
         controller_->setSelectedDownloadedModel(mappedIndex);
         changed = true;
       }
     }
-  } else {
+  }
+  else
+  {
     if (controller_->getSelectedAvailableIndex() != -1 ||
-        controller_->getSelectedDownloadedIndex() != -1) {
+        controller_->getSelectedDownloadedIndex() != -1)
+    {
       controller_->clearSelection();
       changed = true;
     }
   }
 
-  if (changed) {
+  if (changed)
+  {
     updateButtons();
     updateStatusForSelection();
   }
 }
 
 std::string ModelDialog::buildModelInfoLine(
-    const ck::ai::ModelInfo &model, bool fromDownloadedList) const {
+    const ck::ai::ModelInfo &model, bool fromDownloadedList) const
+{
   std::ostringstream oss;
 
   const std::string &identifier = model.id.empty() ? model.name : model.id;
   oss << identifier;
 
-  if (controller_) {
+  if (controller_)
+  {
     oss << " | " << controller_->formatModelSize(model.size_bytes);
   }
 
-  if (!model.category.empty()) {
+  if (!model.category.empty())
+  {
     oss << " | " << model.category;
   }
 
-  if (!model.hardware_requirements.empty()) {
+  if (!model.hardware_requirements.empty())
+  {
     oss << " | HW: " << model.hardware_requirements;
   }
 
-  if (fromDownloadedList) {
-    if (model.is_active) {
+  if (chatApp_)
+  {
+    int layers = chatApp_->gpuLayersForModel(model.id);
+    oss << " | GPU: " << (layers == -1 ? std::string("auto") : std::to_string(layers));
+  }
+
+  if (fromDownloadedList)
+  {
+    if (model.is_active)
+    {
       oss << " | Active";
     }
-    if (!model.local_path.empty()) {
+    if (!model.local_path.empty())
+    {
       oss << " | " << model.local_path.filename().string();
     }
-  } else if (model.is_downloaded) {
+  }
+  else if (model.is_downloaded)
+  {
     oss << " | Downloaded";
   }
 
@@ -432,7 +535,8 @@ std::string ModelDialog::buildModelInfoLine(
 }
 
 std::string ModelDialog::formatDetailedInfo(
-    const ck::ai::ModelInfo &model) const {
+    const ck::ai::ModelInfo &model) const
+{
   std::ostringstream oss;
   oss << "Name: " << model.name << "\n";
   if (!model.id.empty())
@@ -451,77 +555,273 @@ std::string ModelDialog::formatDetailedInfo(
   if (!model.local_path.empty())
     oss << "Local Path: " << model.local_path << "\n";
   oss << "Downloaded: " << (model.is_downloaded ? "yes" : "no") << "\n";
-  oss << "Active: " << (model.is_active ? "yes" : "no");
+  oss << "Active: " << (model.is_active ? "yes" : "no") << "\n";
+  if (chatApp_)
+  {
+    int layers = chatApp_->gpuLayersForModel(model.id);
+    oss << "GPU layers: " << (layers == -1 ? std::string("auto") : std::to_string(layers)) << "\n";
+  }
   return oss.str();
 }
 
-void ModelDialog::showStatusMessage(const std::string &message) {
+void ModelDialog::showStatusMessage(const std::string &message)
+{
   // Create a copy to ensure string lifetime
   std::string safeCopy = message;
   messageBox(safeCopy.c_str(), mfInformation | mfOKButton);
 }
 
-void ModelDialog::showErrorMessage(const std::string &error) {
+void ModelDialog::showErrorMessage(const std::string &error)
+{
   // Create a copy to ensure string lifetime
   std::string safeCopy = error;
   messageBox(safeCopy.c_str(), mfError | mfOKButton);
 }
 
-void ModelDialog::updateStatusLabel(const std::string &message) {
+void ModelDialog::updateStatusLabel(const std::string &message)
+{
   if (statusText_ == message)
     return;
 
   statusText_ = message;
 
-  if (statusLabel_) {
+  if (statusLabel_)
+  {
     static_cast<StatusLabel *>(statusLabel_)->update();
     statusLabel_->drawView();
-  } else {
+  }
+  else
+  {
     drawView();
   }
 }
 
-void ModelDialog::updateDetailLabel(const std::string &message) {
+void ModelDialog::updateDetailLabel(const std::string &message)
+{
   if (detailStatusText_ == message)
     return;
 
   detailStatusText_ = message;
 
-  if (detailStatusLabel_) {
+  if (detailStatusLabel_)
+  {
     static_cast<StatusLabel *>(detailStatusLabel_)->update();
     detailStatusLabel_->drawView();
   }
 }
 
 void ModelDialog::updateListBox(TListBox *listBox,
-                                      const std::vector<std::string> &items) {
+                                const std::vector<std::string> &items)
+{
   if (!listBox)
     return;
 
   auto *collection = new TStringCollection(10, 5);
-  for (const auto &item : items) {
+  for (const auto &item : items)
+  {
     collection->insert(duplicateString(item));
   }
   listBox->newList(collection);
 }
 
-void ModelDialog::setAvailableSelectionFromListIndex(int listIndex) {
+void ModelDialog::refreshRuntimeSettingsDisplay()
+{
+  if (!contextInfoLabel_)
+    return;
+
+  if (!chatApp_)
+  {
+    contextInfoText_.clear();
+    static_cast<StatusLabel *>(contextInfoLabel_)->update();
+    contextInfoLabel_->drawView();
+    return;
+  }
+
+  auto runtime = chatApp_->runtime();
+  const auto &settings = chatApp_->conversationSettings();
+
+  std::ostringstream info;
+  info << "Context window: " << runtime.context_window_tokens << " tokens";
+  contextInfoText_ = info.str();
+  static_cast<StatusLabel *>(contextInfoLabel_)->update();
+  contextInfoLabel_->drawView();
+
+  auto setInputValue = [](TInputLine *input, std::size_t value)
+  {
+    if (!input)
+      return;
+    std::array<char, 32> buffer{};
+    std::snprintf(buffer.data(), buffer.size(), "%zu", value);
+    input->setData(buffer.data());
+  };
+  auto setInputString = [](TInputLine *input, const std::string &value)
+  {
+    if (!input)
+      return;
+    std::array<char, 64> buffer{};
+    std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
+    input->setData(buffer.data());
+  };
+
+  setInputValue(responseTokensInput_, settings.max_response_tokens);
+  setInputValue(summaryThresholdInput_, settings.summary_trigger_tokens);
+
+  std::string gpuValue = "auto";
+  if (chatApp_)
+  {
+    auto resolveLayers = [this](const std::string &modelId)
+    {
+      int layers = chatApp_->gpuLayersForModel(modelId);
+      return layers == -1 ? std::string("auto") : std::to_string(layers);
+    };
+    if (controller_)
+    {
+      if (auto selected = controller_->getSelectedDownloadedModel())
+        gpuValue = resolveLayers(selected->id);
+      else if (auto selected = controller_->getSelectedAvailableModel())
+        gpuValue = resolveLayers(selected->id);
+      else
+      {
+        int layers = chatApp_->runtime().gpu_layers;
+        gpuValue = layers == -1 ? std::string("auto") : std::to_string(layers);
+      }
+    }
+  }
+
+  setInputString(gpuLayersInput_, gpuValue);
+}
+
+void ModelDialog::applyRuntimeSettings()
+{
+  if (!chatApp_)
+    return;
+
+  auto trim = [](std::string &value)
+  {
+    auto notSpace = [](unsigned char ch)
+    { return !std::isspace(ch); };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), notSpace));
+    value.erase(std::find_if(value.rbegin(), value.rend(), notSpace).base(),
+                value.end());
+  };
+
+  auto readField = [](TInputLine *input)
+  {
+    std::string value;
+    if (!input)
+      return value;
+    std::array<char, 64> buffer{};
+    input->getData(buffer.data());
+    value.assign(buffer.data());
+    return value;
+  };
+
+  auto settings = chatApp_->conversationSettings();
+
+  std::string responseText = readField(responseTokensInput_);
+  trim(responseText);
+  if (!responseText.empty())
+  {
+    try
+    {
+      settings.max_response_tokens = std::stoull(responseText);
+    }
+    catch (const std::exception &)
+    {
+      showErrorMessage("Invalid value for response token limit");
+      return;
+    }
+  }
+
+  std::string summaryText = readField(summaryThresholdInput_);
+  trim(summaryText);
+  if (!summaryText.empty())
+  {
+    try
+    {
+      settings.summary_trigger_tokens = std::stoull(summaryText);
+    }
+    catch (const std::exception &)
+    {
+      showErrorMessage("Invalid value for summary threshold");
+      return;
+    }
+  }
+
+  std::string gpuText = readField(gpuLayersInput_);
+  trim(gpuText);
+
+  std::optional<std::string> selectedModelId;
+  if (controller_)
+  {
+    if (auto downloaded = controller_->getSelectedDownloadedModel())
+      selectedModelId = downloaded->id;
+    else if (auto available = controller_->getSelectedAvailableModel())
+      selectedModelId = available->id;
+  }
+
+  int gpuLayers = -1;
+  if (selectedModelId)
+    gpuLayers = chatApp_->gpuLayersForModel(*selectedModelId);
+  else
+    gpuLayers = chatApp_->runtime().gpu_layers;
+
+  if (!gpuText.empty())
+  {
+    std::string lowered = gpuText;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+    if (lowered == "auto")
+    {
+      gpuLayers = -1;
+    }
+    else
+    {
+      try
+      {
+        gpuLayers = std::stoi(gpuText);
+      }
+      catch (const std::exception &)
+      {
+        showErrorMessage("Invalid value for GPU layers");
+        return;
+      }
+    }
+  }
+
+  chatApp_->updateConversationSettings(settings.max_response_tokens,
+                                       settings.summary_trigger_tokens);
+
+  if (selectedModelId)
+    chatApp_->updateModelGpuLayers(*selectedModelId, gpuLayers);
+
+  refreshRuntimeSettingsDisplay();
+  updateStatusLabel("Runtime settings updated");
+  updateDetailLabel(detailStatusText_);
+}
+
+void ModelDialog::setAvailableSelectionFromListIndex(int listIndex)
+{
   if (!controller_)
     return;
 
   if (listIndex >= 0 &&
-      listIndex < static_cast<int>(availableModelIndexMap_.size())) {
+      listIndex < static_cast<int>(availableModelIndexMap_.size()))
+  {
     controller_->setSelectedAvailableModel(
         availableModelIndexMap_[listIndex]);
   }
 }
 
-void ModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
+void ModelDialog::setDownloadedSelectionFromListIndex(int listIndex)
+{
   if (!controller_)
     return;
 
   if (listIndex >= 0 &&
-      listIndex < static_cast<int>(downloadedModelIndexMap_.size())) {
+      listIndex < static_cast<int>(downloadedModelIndexMap_.size()))
+  {
     controller_->setSelectedDownloadedModel(
         downloadedModelIndexMap_[listIndex]);
   }
@@ -530,6 +830,7 @@ void ModelDialog::setDownloadedSelectionFromListIndex(int listIndex) {
 // All business logic methods removed - now handled by ModelManagerController
 
 TDialog *ModelDialog::create(TRect bounds,
-                                   ck::ai::ModelManager &modelManager) {
+                             ck::ai::ModelManager &modelManager)
+{
   return new ModelDialog(bounds, modelManager, nullptr);
 }

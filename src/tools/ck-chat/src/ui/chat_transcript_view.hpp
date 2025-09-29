@@ -55,4 +55,5 @@ private:
     void rebuildLayoutIfNeeded();
     void rebuildLayout();
     void notifyLayoutChanged();
+    std::vector<std::string> wrapLines(const std::string &text, int width) const;
 };

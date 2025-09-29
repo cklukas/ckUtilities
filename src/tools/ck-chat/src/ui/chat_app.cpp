@@ -35,6 +35,10 @@ ChatApp::ChatApp(int, char **)
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 
+  conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+  conversationSettings_.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
+  conversationSettings_.max_response_tokens = runtimeConfig.max_output_tokens;
+
   if (auto prompt = promptManager_.get_active_prompt())
     systemPrompt_ = prompt->message;
 
@@ -42,6 +46,7 @@ ChatApp::ChatApp(int, char **)
   handlePromptManagerChange();
 
   openChatWindow();
+  applyConversationSettingsToWindows();
 }
 
 void ChatApp::registerWindow(ChatWindow *window) { windows.push_back(window); }
@@ -64,6 +69,8 @@ void ChatApp::openChatWindow()
 
   auto *window = new ChatWindow(*this, bounds, nextWindowNumber++);
   deskTop->insert(window);
+  window->applyConversationSettings(conversationSettings_);
+  window->refreshWindowTitle();
   window->select();
 }
 
@@ -264,7 +271,7 @@ void ChatApp::showAboutDialog()
 void ChatApp::showModelManagerDialog()
 {
   // Fixed dialog size based on content needs
-  TRect bounds(5, 3, 105, 28);
+  TRect bounds(5, 3, 105, 33);
 
   auto *dialog = new ModelDialog(bounds, modelManager_, this);
   if (dialog)
@@ -306,6 +313,7 @@ void ChatApp::handleModelManagerChange()
 {
   updateActiveModel();
   rebuildMenuBar();
+  refreshWindowTitles();
 }
 
 void ChatApp::selectPrompt(int promptIndex)
@@ -336,6 +344,112 @@ void ChatApp::showPromptManagerDialog()
     deskTop->insert(dialog);
     dialog->select();
   }
+}
+
+void ChatApp::applyConversationSettingsToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+    {
+      window->applyConversationSettings(conversationSettings_);
+      window->refreshWindowTitle();
+    }
+  }
+}
+
+void ChatApp::refreshWindowTitles()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+      window->refreshWindowTitle();
+  }
+}
+
+void ChatApp::updateConversationSettings(std::size_t maxResponseTokens,
+                                         std::size_t summaryThresholdTokens)
+{
+  if (maxResponseTokens == 0)
+  {
+    maxResponseTokens = runtimeConfig.max_output_tokens > 0
+                             ? runtimeConfig.max_output_tokens
+                             : 512;
+  }
+
+  conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+  conversationSettings_.max_response_tokens = maxResponseTokens;
+  conversationSettings_.summary_trigger_tokens = summaryThresholdTokens;
+
+  runtimeConfig.max_output_tokens = maxResponseTokens;
+  runtimeConfig.summary_trigger_tokens = summaryThresholdTokens;
+  config.runtime = runtimeConfig;
+
+  applyConversationSettingsToWindows();
+  ck::ai::ConfigLoader::save(config);
+}
+
+int ChatApp::gpuLayersForModel(const std::string &modelId) const
+{
+  int layers = runtimeConfig.gpu_layers;
+  auto it = config.model_overrides.find(modelId);
+  if (it != config.model_overrides.end() && it->second.gpu_layers != -9999)
+    layers = it->second.gpu_layers;
+  return layers;
+}
+
+int ChatApp::effectiveGpuLayers(const ck::ai::ModelInfo &model) const
+{
+  int requested = gpuLayersForModel(model.id);
+  if (requested == -1)
+    return autoGpuLayersForModel(model);
+  return requested;
+}
+
+int ChatApp::autoGpuLayersForModel(const ck::ai::ModelInfo &model) const
+{
+#if defined(__APPLE__)
+  std::size_t sizeGiB = model.size_bytes / (1024ull * 1024ull * 1024ull);
+  if (sizeGiB <= 0)
+    sizeGiB = 1;
+  if (sizeGiB <= 6)
+    return 9999; // fully offload small models
+  if (sizeGiB <= 10)
+    return 80;
+  if (sizeGiB <= 14)
+    return 60;
+  if (sizeGiB <= 20)
+    return 40;
+  return 24;
+#else
+  (void)model;
+  return 0;
+#endif
+}
+
+void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers)
+{
+  if (gpuLayers < -1)
+    gpuLayers = -1;
+
+  auto &overrideEntry = config.model_overrides[modelId];
+  overrideEntry.gpu_layers = gpuLayers;
+
+  std::shared_ptr<ck::ai::Llm> newLlm;
+  if (currentActiveModel_ && currentActiveModel_->id == modelId)
+  {
+    newLlm = loadModel(*currentActiveModel_);
+  }
+
+  ck::ai::ConfigLoader::save(config);
+
+  if (newLlm)
+  {
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    activeLlm_ = std::move(newLlm);
+  }
+
+  refreshWindowTitles();
 }
 
 void ChatApp::handlePromptManagerChange()
@@ -420,11 +534,32 @@ ChatApp::loadModel(const ck::ai::ModelInfo &model)
   if (newRuntime.threads <= 0)
     newRuntime.threads = static_cast<int>(std::thread::hardware_concurrency());
 
+  int requestedLayers = runtimeConfig.gpu_layers;
+  auto overrideIt = config.model_overrides.find(model.id);
+  if (overrideIt != config.model_overrides.end() &&
+      overrideIt->second.gpu_layers != -9999)
+    requestedLayers = overrideIt->second.gpu_layers;
+
+  int effectiveLayers = requestedLayers;
+  if (effectiveLayers == -1)
+    effectiveLayers = autoGpuLayersForModel(model);
+
+  if (effectiveLayers < 0)
+    effectiveLayers = 0;
+
+  newRuntime.gpu_layers = effectiveLayers;
+
   try
   {
     auto uniqueLlm = ck::ai::Llm::open(newRuntime.model_path, newRuntime);
     uniqueLlm->set_system_prompt(systemPrompt_);
-    runtimeConfig = newRuntime;
+    runtimeConfig.model_path = newRuntime.model_path;
+    runtimeConfig.max_output_tokens = newRuntime.max_output_tokens;
+    runtimeConfig.context_window_tokens = newRuntime.context_window_tokens;
+    runtimeConfig.summary_trigger_tokens = newRuntime.summary_trigger_tokens;
+    runtimeConfig.gpu_layers = requestedLayers;
+    runtimeConfig.threads = newRuntime.threads;
+    config.runtime = runtimeConfig;
     return std::shared_ptr<ck::ai::Llm>(std::move(uniqueLlm));
   }
   catch (const std::exception &e)
@@ -463,6 +598,8 @@ void ChatApp::updateActiveModel()
   {
     activeLlm_ = std::move(newLlm);
     currentActiveModel_ = selected;
+    conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+    applyConversationSettingsToWindows();
   }
   else
   {

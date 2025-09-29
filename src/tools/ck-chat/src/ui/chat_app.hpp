@@ -5,6 +5,7 @@
 #include "../../../../include/ck/ai/system_prompt_manager.hpp"
 #include "../../../../include/ck/ai/llm.hpp"
 
+#include "../chat_session.hpp"
 #include "../tvision_include.hpp"
 
 #include <memory>
@@ -38,6 +39,15 @@ public:
     return runtimeConfig;
   }
   ck::ai::ModelManager &modelManager() noexcept { return modelManager_; }
+  const ck::chat::ChatSession::ConversationSettings &conversationSettings() const noexcept {
+    return conversationSettings_;
+  }
+  int gpuLayersForModel(const std::string &modelId) const;
+  int effectiveGpuLayers(const ck::ai::ModelInfo &model) const;
+  void updateModelGpuLayers(const std::string &modelId, int gpuLayers);
+  void updateConversationSettings(std::size_t maxResponseTokens,
+                                  std::size_t summaryThresholdTokens);
+  void refreshWindowTitles();
 
 private:
   void openChatWindow();
@@ -49,6 +59,8 @@ private:
   std::shared_ptr<ck::ai::Llm> loadModel(const ck::ai::ModelInfo &model);
   void selectPrompt(int promptIndex);
   void showPromptManagerDialog();
+  void applyConversationSettingsToWindows();
+  int autoGpuLayersForModel(const ck::ai::ModelInfo &model) const;
 
   std::vector<ChatWindow *> windows;
   int nextWindowNumber = 1;
@@ -58,6 +70,7 @@ private:
   ck::ai::SystemPromptManager promptManager_;
   std::string systemPrompt_ =
       "You are a friendly, knowledgeable assistant. Respond clearly and helpfully.";
+  ck::chat::ChatSession::ConversationSettings conversationSettings_{};
 
   std::vector<ck::ai::ModelInfo> menuDownloadedModels_;
   std::vector<ck::ai::SystemPrompt> menuPrompts_;

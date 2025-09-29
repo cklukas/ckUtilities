@@ -162,44 +162,24 @@ void ChatTranscriptView::rebuildLayout()
         while (true)
         {
             std::size_t end = content.find('\n', start);
-            std::string_view segment;
+            std::string segment;
             if (end == std::string::npos)
-                segment = content.substr(start);
+                segment = std::string(content.substr(start));
             else
-                segment = content.substr(start, end - start);
+                segment = std::string(content.substr(start, end - start));
 
             std::string currentPrefix = firstLine ? prefix : indent;
-            std::string line = currentPrefix + std::string(segment);
+            std::string fullLine = currentPrefix + segment;
 
-            if (line.empty())
+            auto wrappedLines = wrapLines(fullLine, width);
+            for (std::size_t idx = 0; idx < wrappedLines.size(); ++idx)
             {
                 DisplayRow row;
                 row.role = msg.role;
-                row.text = std::string();
                 row.messageIndex = i;
-                row.isFirstLine = firstLine;
+                row.isFirstLine = firstLine && idx == 0;
+                row.text = wrappedLines[idx];
                 rows.push_back(std::move(row));
-            }
-            else
-            {
-                std::string remaining = line;
-                bool firstSegment = true;
-                while (!remaining.empty())
-                {
-                    DisplayRow row;
-                    row.role = msg.role;
-                    row.messageIndex = i;
-                    row.isFirstLine = firstLine && firstSegment;
-
-                    std::size_t len = std::min<std::size_t>(static_cast<std::size_t>(width), remaining.size());
-                    row.text = remaining.substr(0, len);
-                    rows.push_back(row);
-
-                    if (len >= remaining.size())
-                        break;
-                    remaining = indent + remaining.substr(len);
-                    firstSegment = false;
-                }
             }
 
             if (end == std::string::npos)
@@ -247,4 +227,63 @@ void ChatTranscriptView::notifyLayoutChanged()
 {
     if (layoutChangedCallback)
         layoutChangedCallback();
+}
+
+std::vector<std::string> ChatTranscriptView::wrapLines(const std::string &text, int width) const
+{
+    std::vector<std::string> result;
+    if (width <= 0)
+    {
+        result.push_back(text);
+        return result;
+    }
+
+    std::string current;
+    current.reserve(static_cast<std::size_t>(width));
+    const char *ptr = text.c_str();
+    std::size_t len = text.size();
+    std::size_t pos = 0;
+
+    while (pos < len)
+    {
+        std::size_t remaining = len - pos;
+        std::size_t spaceLeft = static_cast<std::size_t>(width > 0 ? width : 1);
+
+        if (remaining <= spaceLeft)
+        {
+            current.append(ptr + pos, remaining);
+            result.push_back(current);
+            break;
+        }
+
+        std::size_t wrapPos = pos + spaceLeft;
+        std::size_t lastSpace = std::string::npos;
+        for (std::size_t i = pos; i < wrapPos; ++i)
+        {
+            if (std::isspace(static_cast<unsigned char>(ptr[i])))
+                lastSpace = i;
+        }
+
+        if (lastSpace != std::string::npos && lastSpace >= pos)
+        {
+            current.append(ptr + pos, lastSpace - pos);
+            result.push_back(current);
+            current.clear();
+            pos = lastSpace + 1;
+            while (pos < len && std::isspace(static_cast<unsigned char>(ptr[pos])))
+                ++pos;
+        }
+        else
+        {
+            current.append(ptr + pos, spaceLeft);
+            result.push_back(current);
+            current.clear();
+            pos += spaceLeft;
+        }
+    }
+
+    if (result.empty())
+        result.push_back(std::string());
+
+    return result;
 }

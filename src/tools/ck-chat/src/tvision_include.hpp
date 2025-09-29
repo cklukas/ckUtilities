@@ -23,6 +23,7 @@
 #define Uses_TStatusLine
 #define Uses_TSubMenu
 #define Uses_TWindow
+#define Uses_TFrame
 #define Uses_TColorAttr
 #define Uses_TPalette
 #define Uses_MsgBox

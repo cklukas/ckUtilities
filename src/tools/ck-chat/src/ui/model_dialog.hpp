@@ -39,6 +39,8 @@ private:
   void updateStatusLabel(const std::string &message);
   void updateDetailLabel(const std::string &message);
   void updateListBox(TListBox *listBox, const std::vector<std::string> &items);
+  void refreshRuntimeSettingsDisplay();
+  void applyRuntimeSettings();
 
   // Business logic controller
   std::unique_ptr<ck::ai::ModelManagerController> controller_;
@@ -56,10 +58,16 @@ private:
   TButton *refreshButton_;
   TButton *infoButton_;
   TButton *closeButton_;
+  TButton *applySettingsButton_;
   TLabel *statusLabel_;
   TLabel *detailStatusLabel_;
+  TLabel *contextInfoLabel_;
   std::string statusText_;
   std::string detailStatusText_;
+  std::string contextInfoText_;
+  TInputLine *responseTokensInput_ = nullptr;
+  TInputLine *summaryThresholdInput_ = nullptr;
+  TInputLine *gpuLayersInput_ = nullptr;
 
   // UI display data
   std::vector<std::string> availableModelStrings_;

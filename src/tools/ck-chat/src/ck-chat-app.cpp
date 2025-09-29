@@ -9,12 +9,33 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <csignal>
+#include <execinfo.h>
+#include <unistd.h>
 
 namespace
 {
     const ck::appinfo::ToolInfo &tool_info()
     {
         return ck::appinfo::requireTool("ck-chat");
+    }
+
+    void crash_handler(int sig, siginfo_t *, void *)
+    {
+        void *frames[64];
+        int count = backtrace(frames, 64);
+        backtrace_symbols_fd(frames, count, STDERR_FILENO);
+        _exit(128 + sig);
+    }
+
+    void install_crash_handlers()
+    {
+        struct sigaction action {};
+        sigemptyset(&action.sa_mask);
+        action.sa_flags = SA_SIGINFO | SA_RESETHAND;
+        action.sa_sigaction = crash_handler;
+        sigaction(SIGSEGV, &action, nullptr);
+        sigaction(SIGABRT, &action, nullptr);
     }
 
     std::string read_prompt_from_stdin()
@@ -130,6 +151,8 @@ namespace
 
 int main(int argc, char **argv)
 {
+    install_crash_handlers();
+
     CliOptions options = parse_cli(argc, argv);
     if (options.prompt || options.showHelp)
         return run_cli(options);

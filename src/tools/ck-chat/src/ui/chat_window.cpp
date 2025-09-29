@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
+#include <tvision/views.h>
 
 // Variable Name	    | Meaning
 // ---------------------|---------------------------------------------------------------
@@ -173,11 +176,18 @@ void ChatWindow::processPendingResponses()
         return;
 
     updateTranscriptFromSession(true);
+    refreshWindowTitle();
 }
 
 void ChatWindow::applySystemPrompt(const std::string &prompt)
 {
     session.setSystemPrompt(prompt);
+}
+
+void ChatWindow::applyConversationSettings(const ck::chat::ChatSession::ConversationSettings &settings)
+{
+    conversationSettings_ = settings;
+    session.setConversationSettings(settings);
 }
 
 void ChatWindow::newConversation()
@@ -192,6 +202,7 @@ void ChatWindow::newConversation()
         promptInput->select();
     }
     updateTranscriptFromSession(true);
+    refreshWindowTitle();
 }
 
 void ChatWindow::sendPrompt()
@@ -259,6 +270,71 @@ void ChatWindow::ensureCopyButton(std::size_t messageIndex)
     insert(button);
     copyButtons.push_back(CopyButtonInfo{messageIndex, button, command});
     updateCopyButtons();
+}
+
+void ChatWindow::refreshWindowTitle()
+{
+    auto stats = session.contextStats();
+    auto modelInfo = app.activeModelInfo();
+
+    std::ostringstream titleStream;
+    titleStream << "Chat";
+    if (modelInfo)
+        titleStream << " - " << modelInfo->name;
+    else
+        titleStream << " - No Model";
+
+    if (modelInfo)
+    {
+        int requestedLayers = app.gpuLayersForModel(modelInfo->id);
+        int effectiveLayers = app.effectiveGpuLayers(*modelInfo);
+        titleStream << " | gpu "
+                    << (requestedLayers == -1 ? std::string("auto")
+                                              : std::to_string(requestedLayers))
+                    << " (" << effectiveLayers << ")";
+    }
+
+    if (stats.max_context_tokens > 0)
+    {
+        titleStream << " | ctx " << stats.prompt_tokens << '/' << stats.max_context_tokens;
+        double percent = stats.max_context_tokens > 0
+                             ? (100.0 * static_cast<double>(stats.prompt_tokens) /
+                                static_cast<double>(stats.max_context_tokens))
+                             : 0.0;
+        titleStream << " (" << std::fixed << std::setprecision(1) << percent << "%)";
+        titleStream.unsetf(std::ios::floatfield);
+    }
+    else
+    {
+        titleStream << " | ctx " << stats.prompt_tokens;
+    }
+
+    if (stats.max_response_tokens > 0)
+        titleStream << " | resp≤" << stats.max_response_tokens;
+    else
+        titleStream << " | resp unlimited";
+
+    if (stats.summarization_enabled)
+    {
+        titleStream << " | summarize@" << stats.summary_trigger_tokens;
+        if (stats.summary_present)
+            titleStream << " (active)";
+    }
+    else
+    {
+        titleStream << " | summarize off";
+    }
+
+    std::string newTitle = titleStream.str();
+    if (newTitle != lastWindowTitle_)
+    {
+        lastWindowTitle_ = newTitle;
+        delete[] const_cast<char *>(title);
+        title = newStr(newTitle.c_str());
+        drawView();
+        if (frame)
+            frame->drawView();
+    }
 }
 
 void ChatWindow::updateCopyButtonState(std::size_t messageIndex)
@@ -395,4 +471,5 @@ void ChatWindow::updateTranscriptFromSession(bool forceScroll)
     }
 
     updateCopyButtons();
+    refreshWindowTitle();
 }
