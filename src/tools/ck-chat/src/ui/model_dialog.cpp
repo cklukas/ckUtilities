@@ -145,6 +145,10 @@ void ModelDialog::setupControls()
   insert(closeButton_);
 
   // Status label
+  contextWindowInput_ = new TInputLine(TRect(74, 21, 92, 22), 10);
+  insert(contextWindowInput_);
+  insert(new TLabel(TRect(58, 21, 74, 22), "Ctx max:", contextWindowInput_));
+
   contextInfoText_.clear();
   contextInfoLabel_ = new StatusLabel(TRect(2, 22, 58, 23), contextInfoText_);
   insert(contextInfoLabel_);
@@ -637,15 +641,6 @@ void ModelDialog::refreshRuntimeSettingsDisplay()
     return;
   }
 
-  auto runtime = chatApp_->runtime();
-  const auto &settings = chatApp_->conversationSettings();
-
-  std::ostringstream info;
-  info << "Context window: " << runtime.context_window_tokens << " tokens";
-  contextInfoText_ = info.str();
-  static_cast<StatusLabel *>(contextInfoLabel_)->update();
-  contextInfoLabel_->drawView();
-
   auto setInputValue = [](TInputLine *input, std::size_t value)
   {
     if (!input)
@@ -663,8 +658,39 @@ void ModelDialog::refreshRuntimeSettingsDisplay()
     input->setData(buffer.data());
   };
 
-  setInputValue(responseTokensInput_, settings.max_response_tokens);
-  setInputValue(summaryThresholdInput_, settings.summary_trigger_tokens);
+  std::optional<std::string> selectedModelId;
+  if (controller_)
+  {
+    if (auto selected = controller_->getSelectedDownloadedModel())
+      selectedModelId = selected->id;
+    else if (auto selected = controller_->getSelectedAvailableModel())
+      selectedModelId = selected->id;
+  }
+
+  auto limits = chatApp_->resolveTokenLimits(selectedModelId);
+
+  setInputValue(contextWindowInput_, limits.context_tokens);
+  setInputValue(responseTokensInput_, limits.max_response_tokens);
+  setInputValue(summaryThresholdInput_, limits.summary_trigger_tokens);
+
+  std::ostringstream info;
+  if (selectedModelId)
+  {
+    info << "Configured tokens: ctx " << limits.context_tokens << " | resp "
+         << limits.max_response_tokens << " | summary "
+         << limits.summary_trigger_tokens;
+  }
+  else
+  {
+    const auto &settings = chatApp_->conversationSettings();
+    info << "Active chat tokens: ctx " << settings.max_context_tokens
+         << " | resp " << settings.max_response_tokens << " | summary "
+         << settings.summary_trigger_tokens;
+  }
+
+  contextInfoText_ = info.str();
+  static_cast<StatusLabel *>(contextInfoLabel_)->update();
+  contextInfoLabel_->drawView();
 
   std::string gpuValue = "auto";
   if (chatApp_)
@@ -717,14 +743,53 @@ void ModelDialog::applyRuntimeSettings()
   };
 
   auto settings = chatApp_->conversationSettings();
+  std::optional<std::string> selectedModelId;
+  if (controller_)
+  {
+    if (auto downloaded = controller_->getSelectedDownloadedModel())
+    {
+      selectedModelId = downloaded->id;
+    }
+    else if (auto available = controller_->getSelectedAvailableModel())
+    {
+      selectedModelId = available->id;
+    }
+  }
+
+  auto limits = chatApp_->resolveTokenLimits(selectedModelId);
+
+  std::string contextText = readField(contextWindowInput_);
+  trim(contextText);
+  std::size_t contextTokens = limits.context_tokens > 0 ? limits.context_tokens
+                                                       : settings.max_context_tokens;
+  if (!contextText.empty())
+  {
+    try
+    {
+      contextTokens = std::stoull(contextText);
+    }
+    catch (const std::exception &)
+    {
+      showErrorMessage("Invalid value for context window");
+      return;
+    }
+  }
+  if (contextTokens == 0)
+  {
+    showErrorMessage("Context window must be greater than zero");
+    return;
+  }
 
   std::string responseText = readField(responseTokensInput_);
   trim(responseText);
+  std::size_t maxResponseTokens =
+      limits.max_response_tokens > 0 ? limits.max_response_tokens
+                                     : settings.max_response_tokens;
   if (!responseText.empty())
   {
     try
     {
-      settings.max_response_tokens = std::stoull(responseText);
+      maxResponseTokens = std::stoull(responseText);
     }
     catch (const std::exception &)
     {
@@ -735,11 +800,14 @@ void ModelDialog::applyRuntimeSettings()
 
   std::string summaryText = readField(summaryThresholdInput_);
   trim(summaryText);
+  std::size_t summaryTokens =
+      limits.summary_trigger_tokens > 0 ? limits.summary_trigger_tokens
+                                        : settings.summary_trigger_tokens;
   if (!summaryText.empty())
   {
     try
     {
-      settings.summary_trigger_tokens = std::stoull(summaryText);
+      summaryTokens = std::stoull(summaryText);
     }
     catch (const std::exception &)
     {
@@ -748,17 +816,18 @@ void ModelDialog::applyRuntimeSettings()
     }
   }
 
+  if (maxResponseTokens == 0)
+    maxResponseTokens = settings.max_response_tokens;
+  if (summaryTokens == 0)
+    summaryTokens = settings.summary_trigger_tokens;
+
+  if (maxResponseTokens > contextTokens)
+    maxResponseTokens = contextTokens;
+  if (summaryTokens > contextTokens)
+    summaryTokens = contextTokens;
+
   std::string gpuText = readField(gpuLayersInput_);
   trim(gpuText);
-
-  std::optional<std::string> selectedModelId;
-  if (controller_)
-  {
-    if (auto downloaded = controller_->getSelectedDownloadedModel())
-      selectedModelId = downloaded->id;
-    else if (auto available = controller_->getSelectedAvailableModel())
-      selectedModelId = available->id;
-  }
 
   int gpuLayers = -1;
   if (selectedModelId)
@@ -790,11 +859,17 @@ void ModelDialog::applyRuntimeSettings()
     }
   }
 
-  chatApp_->updateConversationSettings(settings.max_response_tokens,
-                                       settings.summary_trigger_tokens);
-
   if (selectedModelId)
+  {
+    chatApp_->updateModelTokenSettings(*selectedModelId, contextTokens,
+                                       maxResponseTokens, summaryTokens);
     chatApp_->updateModelGpuLayers(*selectedModelId, gpuLayers);
+  }
+  else
+  {
+    chatApp_->updateConversationSettings(contextTokens, maxResponseTokens,
+                                         summaryTokens);
+  }
 
   refreshRuntimeSettingsDisplay();
   updateStatusLabel("Runtime settings updated");

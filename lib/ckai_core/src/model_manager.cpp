@@ -17,6 +17,40 @@ constexpr std::size_t KiB = 1024ull;
 constexpr std::size_t MiB = KiB * KiB;
 constexpr std::size_t GiB = KiB * MiB;
 
+constexpr std::size_t align_tokens(std::size_t value, std::size_t step = 64)
+{
+  return step == 0 ? value : ((value + step - 1) / step) * step;
+}
+
+constexpr std::size_t recommended_response_tokens(std::size_t context)
+{
+  if (context == 0)
+    return 0;
+  std::size_t value = (context * 3) / 10; // 30% of context window
+  if (value < 256)
+    value = 256;
+  if (value >= context)
+  {
+    value = context > 1024 ? context - 1024 : context / 2;
+    if (value == 0)
+      value = context;
+  }
+  value = align_tokens(value);
+  if (value >= context)
+    value = context > 64 ? context - 64 : context;
+  return value;
+}
+
+constexpr std::size_t recommended_summary_trigger(std::size_t context)
+{
+  if (context == 0)
+    return 0;
+  std::size_t value = context / 2;
+  if (value == 0)
+    value = context;
+  return align_tokens(value);
+}
+
 const std::vector<ModelInfo> CURATED_MODELS = {
     // CPU Models (Fast)
     {"tinyllama-1.1b", "TinyLlama 1.1B",
@@ -26,14 +60,18 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      "main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
      "",
      636ull * MiB, // ~636 MB
-     "CPU", false, false, "CPU Fast"},
+     "CPU", false, false, "CPU Fast",
+     2048, recommended_response_tokens(2048), recommended_summary_trigger(2048),
+     {}},
     {"phi-3-mini", "Phi-3 Mini 3.8B", "Microsoft's efficient small model",
      "phi-3-mini-4k-instruct-q4.gguf",
      "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/"
      "main/Phi-3-mini-4k-instruct-q4.gguf",
      "",
      2ull * GiB, // ~2GB
-     "CPU", false, false, "CPU Fast"},
+     "CPU", false, false, "CPU Fast",
+     4096, recommended_response_tokens(4096), recommended_summary_trigger(4096),
+     {}},
 
     // GPU Models (Small - < 8GB)
     {"llama-3.2-3b", "Llama 3.2 3B", "Meta's latest 3B model",
@@ -42,14 +80,19 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
      "",
      2ull * GiB, // ~2GB
-     "GPU < 8GB", false, false, "GPU Small"},
+     "GPU < 8GB", false, false, "GPU Small",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {}},
     {"qwen-2.5-7b", "Qwen 2.5 7B", "Alibaba's efficient 7B model",
      "qwen2.5-7b-instruct-q4_k_m.gguf",
-     "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/"
+     "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/"
      "qwen2.5-7b-instruct-q4_k_m.gguf",
      "",
      4ull * GiB, // ~4GB
-     "GPU < 8GB", false, false, "GPU Small"},
+     "GPU < 8GB", false, false, "GPU Small",
+     131072, recommended_response_tokens(131072),
+     recommended_summary_trigger(131072),
+     {}},
 
     // GPU Models (Medium - < 16GB)
     {"llama-3.1-8b", "Llama 3.1 8B",
@@ -59,14 +102,19 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      "Llama-3.1-8B-Instruct-Q4_K_M.gguf",
      "",
      5ull * GiB, // ~5GB
-     "GPU < 16GB", false, false, "GPU Medium"},
+     "GPU < 16GB", false, false, "GPU Medium",
+     131072, recommended_response_tokens(131072),
+     recommended_summary_trigger(131072),
+     {}},
     {"gemma-2-9b", "Gemma 2 9B", "Google's efficient 9B model",
      "gemma-2-9b-it-q4_k_m.gguf",
      "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/"
      "gemma-2-9b-it-Q4_K_M.gguf",
      "",
      5ull * GiB + 512ull * MiB, // ~5.5GB
-     "GPU < 16GB", false, false, "GPU Medium"},
+     "GPU < 16GB", false, false, "GPU Medium",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {}},
 
     // GPU Models (Large - < 32GB)
     {"llama-3.1-70b", "Llama 3.1 70B", "Meta's flagship 70B model",
@@ -75,30 +123,60 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      "main/Llama-3.1-70B-Instruct-Q4_K_M.gguf",
      "",
      40ull * GiB, // ~40GB
-     "GPU < 32GB", false, false, "GPU Large"},
+     "GPU < 32GB", false, false, "GPU Large",
+     131072, recommended_response_tokens(131072),
+     recommended_summary_trigger(131072),
+     {}},
     {"qwen-2.5-32b", "Qwen 2.5 32B", "Alibaba's powerful 32B model",
      "qwen2.5-32b-instruct-q4_k_m.gguf",
-     "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/"
+     "https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF/resolve/main/"
      "qwen2.5-32b-instruct-q4_k_m.gguf",
      "",
      20ull * GiB, // ~20GB
-     "GPU < 32GB", false, false, "GPU Large"},
+     "GPU < 32GB", false, false, "GPU Large",
+     131072, recommended_response_tokens(131072),
+     recommended_summary_trigger(131072),
+     {}},
 
-    // OpenAI GPT-OSS Models
-    {"gpt-oss-mini", "GPT-OSS Mini", "OpenAI's lightweight GPT-OSS variant",
-     "gpt-oss-mini.Q4_K_M.gguf",
-     "https://huggingface.co/openai/gpt-oss-mini-gguf/resolve/main/"
-     "gpt-oss-mini.Q4_K_M.gguf",
-     "",
-     6ull * GiB, // ~6GB
-     "GPU < 8GB", false, false, "OpenAI Models"},
-    {"gpt-oss-pro", "GPT-OSS Pro", "OpenAI's higher-capacity GPT-OSS model",
-     "gpt-oss-pro.Q4_K_M.gguf",
-     "https://huggingface.co/openai/gpt-oss-pro-gguf/resolve/main/"
-     "gpt-oss-pro.Q4_K_M.gguf",
+    // OpenAI Open Source Models (GPT-OSS)
+    {"gpt-oss-20b", "GPT-OSS 20B", "OpenAI's 20B parameter open-source model",
+     "gpt-oss-20b-mxfp4.gguf",
+     "https://huggingface.co/lmstudio-community/gpt-oss-20b-GGUF/resolve/main/"
+     "gpt-oss-20b-MXFP4.gguf",
      "",
      12ull * GiB, // ~12GB
-     "GPU < 16GB", false, false, "OpenAI Models"}};
+     "GPU < 24GB", false, false, "OpenAI Models",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {"<|start|>user"}},
+    {"gpt-oss-120b", "GPT-OSS 120B",
+     "OpenAI's 120B parameter open-source model", "gpt-oss-120b-mxfp4.gguf",
+     "https://huggingface.co/lmstudio-community/gpt-oss-120b-GGUF/resolve/main/"
+     "gpt-oss-120b-MXFP4.gguf",
+     "",
+     60ull * GiB, // ~60GB
+     "GPU < 80GB", false, false, "OpenAI Models",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {"<|start|>user"}},
+
+    // Additional CPU Models
+    {"gemma-2-2b", "Gemma 2 2B", "Google's efficient 2B model",
+     "gemma-2-2b-it-q4_k_m.gguf",
+     "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/"
+     "gemma-2-2b-it-Q4_K_M.gguf",
+     "",
+     1ull * GiB + 500ull * MiB, // ~1.5GB
+     "CPU", false, false, "CPU Fast",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {}},
+    {"llama-3.2-1b", "Llama 3.2 1B", "Meta's ultra-lightweight 1B model",
+     "llama-3.2-1b-instruct-q4_k_m.gguf",
+     "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/"
+     "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+     "",
+     1ull * GiB, // ~1GB
+     "CPU", false, false, "CPU Fast",
+     8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
+     {}}};
 
 // CURL write callback for downloads
 size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
@@ -111,15 +189,19 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
 // CURL progress callback
 int ProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
                      curl_off_t ultotal, curl_off_t ulnow) {
-  auto *progress_callback =
-      static_cast<std::function<void(const ModelDownloadProgress &)> *>(
-          clientp);
-  if (progress_callback && *progress_callback) {
+  auto *callback_data =
+      static_cast<std::pair<std::function<void(const ModelDownloadProgress &)>,
+                            std::string> *>(clientp);
+  if (callback_data && callback_data->first) {
     ModelDownloadProgress progress;
+    progress.model_id = callback_data->second;
     progress.bytes_downloaded = static_cast<std::size_t>(dlnow);
     progress.total_bytes = static_cast<std::size_t>(dltotal);
-    progress.is_complete = (dlnow >= dltotal && dltotal > 0);
-    (*progress_callback)(progress);
+    progress.is_complete = (dltotal > 0 && dlnow >= dltotal);
+    progress.progress_percentage =
+        (dltotal > 0) ? (static_cast<double>(dlnow) / dltotal) * 100.0 : 0.0;
+    progress.error_message.clear();
+    callback_data->first(progress);
   }
   return 0;
 }
@@ -178,18 +260,61 @@ std::optional<ModelInfo> ModelManager::get_active_model() const {
 
 bool ModelManager::download_model(
     const std::string &model_id,
-    std::function<void(const ModelDownloadProgress &)> progress_callback) {
+    std::function<void(const ModelDownloadProgress &)> progress_callback,
+    std::string *error_message) {
   auto model_opt = get_model_by_id(model_id);
   if (!model_opt)
     return false;
 
   const auto &model = *model_opt;
   std::filesystem::path destination = models_directory_ / model.filename;
+  std::filesystem::path temp_destination = destination;
+  temp_destination += ".tmp";
 
-  // Create destination directory if it doesn't exist
-  std::filesystem::create_directories(destination.parent_path());
+  std::error_code ec;
+  std::filesystem::remove(temp_destination, ec);
 
-  return download_file(model.download_url, destination, progress_callback);
+  bool success = download_file(model.download_url, temp_destination,
+                               progress_callback, model_id, error_message);
+
+  if (success) {
+    std::filesystem::rename(temp_destination, destination, ec);
+    if (ec) {
+      if (error_message)
+        *error_message = "Failed to move downloaded file: " + ec.message();
+      std::filesystem::remove(temp_destination, ec);
+      return false;
+    }
+
+    auto updateModel = [&](ModelInfo &downloaded_model) {
+      downloaded_model.is_downloaded = true;
+      downloaded_model.local_path = destination;
+      if (downloaded_model.filename.empty())
+        downloaded_model.filename = model.filename;
+    };
+
+    bool found = false;
+    for (auto &downloaded_model : downloaded_models_) {
+      if (downloaded_model.id == model_id) {
+        updateModel(downloaded_model);
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      ModelInfo downloaded_model = model;
+      updateModel(downloaded_model);
+      downloaded_model.is_active = false;
+      downloaded_models_.push_back(downloaded_model);
+    }
+
+    save_configuration();
+  } else {
+    std::filesystem::remove(temp_destination, ec);
+  }
+
+  return success;
 }
 
 bool ModelManager::activate_model(const std::string &model_id) {
@@ -391,16 +516,25 @@ void ModelManager::load_configuration() {
 
 bool ModelManager::download_file(
     const std::string &url, const std::filesystem::path &destination,
-    std::function<void(const ModelDownloadProgress &)> progress_callback) {
+    std::function<void(const ModelDownloadProgress &)> progress_callback,
+    const std::string &model_id, std::string *error_message) {
   CURL *curl = curl_easy_init();
-  if (!curl)
+  if (!curl) {
+    if (error_message)
+      *error_message = "Failed to initialize CURL";
     return false;
+  }
 
   std::ofstream file(destination, std::ios::binary);
   if (!file.is_open()) {
     curl_easy_cleanup(curl);
+    if (error_message)
+      *error_message =
+          "Failed to open destination file: " + destination.string();
     return false;
   }
+
+  auto callback_data = std::make_pair(std::move(progress_callback), model_id);
 
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
@@ -408,17 +542,44 @@ bool ModelManager::download_file(
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress_callback);
+  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
+
+  // Add timeout and connection settings
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L); // No timeout
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,
+                   30L); // 30 second connection timeout
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1000L); // 1KB/s minimum
+  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME,
+                   60L); // Abort if below speed for 60s
+  curl_easy_setopt(curl, CURLOPT_USERAGENT, "ck-utilities/1.0");
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
   CURLcode res = curl_easy_perform(curl);
   file.close();
 
-  bool success = (res == CURLE_OK);
-  if (!success) {
-    std::filesystem::remove(destination);
+  long response_code = 0;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+  bool success = (res == CURLE_OK && response_code == 200);
+
+  if (!success && error_message) {
+    if (res != CURLE_OK) {
+      const char *curl_error = curl_easy_strerror(res);
+      *error_message =
+          curl_error ? std::string(curl_error) : "unknown curl error";
+    } else if (response_code != 200) {
+      *error_message = "HTTP error: " + std::to_string(response_code);
+    }
   }
 
   curl_easy_cleanup(curl);
+
+  if (!success) {
+    std::error_code ec;
+    std::filesystem::remove(destination, ec);
+  }
+
   return success;
 }
 

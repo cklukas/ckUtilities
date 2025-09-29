@@ -65,6 +65,7 @@ private:
   std::string statusText_;
   std::string detailStatusText_;
   std::string contextInfoText_;
+  TInputLine *contextWindowInput_ = nullptr;
   TInputLine *responseTokensInput_ = nullptr;
   TInputLine *summaryThresholdInput_ = nullptr;
   TInputLine *gpuLayersInput_ = nullptr;

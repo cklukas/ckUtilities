@@ -26,6 +26,10 @@ public:
     void applySystemPrompt(const std::string &prompt);
     void applyConversationSettings(const ck::chat::ChatSession::ConversationSettings &settings);
     void refreshWindowTitle();
+    void setShowThinking(bool show);
+    void setStopSequences(const std::vector<std::string> &stops);
+    void setShowAnalysis(bool show);
+    ChatApp &appRef() noexcept { return app; }
 
 private:
     ChatApp &app;
@@ -56,7 +60,11 @@ private:
     CopyButtonInfo *findCopyButtonByCommand(ushort command);
     static void setButtonTitle(TButton &button, const char *title);
     TRect copyColumnBounds() const;
+    void showHiddenContent(const std::string &channel, const std::string &content);
 
     ck::chat::ChatSession::ConversationSettings conversationSettings_{};
     std::string lastWindowTitle_;
+    bool showThinking_ = true;
+    bool showAnalysis_ = true;
+    std::vector<std::string> stopSequences_;
 };

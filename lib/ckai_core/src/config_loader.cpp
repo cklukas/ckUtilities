@@ -164,6 +164,21 @@ Config ConfigLoader::load_from_file(const std::filesystem::path &path)
                 if (auto parsed = parse_integer(value))
                     overrideConfig.gpu_layers = static_cast<int>(*parsed);
             }
+            else if (key == "context_window_tokens")
+            {
+                if (auto parsed = parse_integer(value))
+                    overrideConfig.context_window_tokens = static_cast<std::size_t>(*parsed);
+            }
+            else if (key == "max_output_tokens")
+            {
+                if (auto parsed = parse_integer(value))
+                    overrideConfig.max_output_tokens = static_cast<std::size_t>(*parsed);
+            }
+            else if (key == "summary_trigger_tokens")
+            {
+                if (auto parsed = parse_integer(value))
+                    overrideConfig.summary_trigger_tokens = static_cast<std::size_t>(*parsed);
+            }
         }
     }
 
@@ -198,10 +213,19 @@ void ConfigLoader::save(const Config &config)
     for (const auto &entry : config.model_overrides)
     {
         const auto &overrideConfig = entry.second;
-        if (overrideConfig.gpu_layers == -9999)
+        if (overrideConfig.gpu_layers == -9999 && overrideConfig.context_window_tokens == 0 &&
+            overrideConfig.max_output_tokens == 0 &&
+            overrideConfig.summary_trigger_tokens == 0)
             continue;
         out << "\n[model." << entry.first << "]\n";
-        out << "gpu_layers = " << overrideConfig.gpu_layers << "\n";
+        if (overrideConfig.gpu_layers != -9999)
+            out << "gpu_layers = " << overrideConfig.gpu_layers << "\n";
+        if (overrideConfig.context_window_tokens != 0)
+            out << "context_window_tokens = " << overrideConfig.context_window_tokens << "\n";
+        if (overrideConfig.max_output_tokens != 0)
+            out << "max_output_tokens = " << overrideConfig.max_output_tokens << "\n";
+        if (overrideConfig.summary_trigger_tokens != 0)
+            out << "summary_trigger_tokens = " << overrideConfig.summary_trigger_tokens << "\n";
     }
 }
 

@@ -20,10 +20,16 @@ public:
     void clearMessages();
     void scrollToBottom();
     void setLayoutChangedCallback(std::function<void()> cb);
+    void setHiddenDetailCallback(std::function<void(std::size_t, const std::string &,
+                                                   const std::string &)> cb);
     bool messageForCopy(std::size_t index, std::string &out) const;
     void setMessagePending(std::size_t index, bool pending);
     bool isMessagePending(std::size_t index) const;
     std::optional<int> firstRowForMessage(std::size_t index) const;
+    void setShowThinking(bool show);
+    void setShowAnalysis(bool show);
+    bool showThinking() const noexcept { return showThinking_; }
+    bool showAnalysis() const noexcept { return showAnalysis_; }
 
 protected:
     virtual void draw() override;
@@ -44,16 +50,40 @@ private:
         std::string text;
         std::size_t messageIndex = 0;
         bool isFirstLine = false;
+        bool isThinking = false;
+        bool isPlaceholder = false;
+        bool isPending = false;
+        std::string channelLabel;
+        std::string hiddenContent;
     };
 
     std::vector<Message> messages;
     std::vector<DisplayRow> rows;
     bool layoutDirty = true;
     std::function<void()> layoutChangedCallback;
+    bool showThinking_ = true;
+    bool showAnalysis_ = true;
+    int spinnerFrame_ = 0;
+    std::function<void(std::size_t, const std::string &, const std::string &)> hiddenDetailCallback_;
 
     static std::string prefixForRole(Role role);
     void rebuildLayoutIfNeeded();
     void rebuildLayout();
     void notifyLayoutChanged();
     std::vector<std::string> wrapLines(const std::string &text, int width) const;
+    void appendVisibleSegment(Role role,
+                              const std::string &prefix,
+                              const std::string &text,
+                              std::size_t messageIndex,
+                              bool &messageFirstRow,
+                              int width,
+                              bool thinking,
+                              const std::string &channelLabel);
+    void appendHiddenPlaceholder(const std::string &prefix,
+                                 const std::string &channelLabel,
+                                 const std::string &content,
+                                 std::size_t messageIndex,
+                                 bool pending,
+                                 bool thinking);
+    void openHiddenRow(std::size_t rowIndex);
 };

@@ -21,6 +21,10 @@ struct ModelInfo {
   bool is_downloaded;                // Whether model is downloaded locally
   bool is_active;       // Whether model is currently active/selected
   std::string category; // e.g., "CPU Fast", "GPU Small", "GPU Large"
+  std::size_t default_context_window_tokens = 0;
+  std::size_t default_max_output_tokens = 0;
+  std::size_t default_summary_trigger_tokens = 0;
+  std::vector<std::string> default_stop_sequences;
 };
 
 struct ModelDownloadProgress {
@@ -29,6 +33,7 @@ struct ModelDownloadProgress {
   std::size_t total_bytes;
   bool is_complete;
   std::string error_message;
+  double progress_percentage;
 };
 
 class ModelManager {
@@ -46,7 +51,8 @@ public:
   // Model management
   bool download_model(const std::string &model_id,
                       std::function<void(const ModelDownloadProgress &)>
-                          progress_callback = nullptr);
+                          progress_callback = nullptr,
+                      std::string *error_message = nullptr);
   bool activate_model(const std::string &model_id);
   bool deactivate_model(const std::string &model_id);
   bool delete_model(const std::string &model_id);
@@ -74,7 +80,8 @@ private:
   void load_configuration();
   bool download_file(
       const std::string &url, const std::filesystem::path &destination,
-      std::function<void(const ModelDownloadProgress &)> progress_callback);
+      std::function<void(const ModelDownloadProgress &)> progress_callback,
+      const std::string &model_id = "", std::string *error_message = nullptr);
   std::string generate_model_id(const std::string &name) const;
 };
 

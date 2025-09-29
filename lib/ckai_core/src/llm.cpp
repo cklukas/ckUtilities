@@ -34,7 +34,17 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
 
   // Load model
   auto model_params = llama_model_default_params();
-  model_params.n_gpu_layers = 0; // CPU only for now
+
+  int gpuLayers = runtime_.gpu_layers;
+#if defined(__APPLE__)
+  if (gpuLayers == -1)
+    gpuLayers = 9999; // Offload as many layers as possible when Metal is available
+#endif
+  if (gpuLayers < 0)
+    gpuLayers = 0; // Keep CPU fallback for negative values on other platforms
+
+  model_params.n_gpu_layers = gpuLayers;
+
   model_ = llama_model_load_from_file(model_path_.c_str(), model_params);
 
   if (!model_) {
@@ -50,16 +60,6 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
   ctx_params.n_threads = runtime_.threads > 0
                              ? runtime_.threads
                              : std::thread::hardware_concurrency();
-
-  int gpuLayers = runtime_.gpu_layers;
-#if defined(__APPLE__)
-  if (gpuLayers == -1)
-    gpuLayers = 9999; // Offload as many layers as possible when Metal is available
-#endif
-  if (gpuLayers > 0)
-    model_params.n_gpu_layers = gpuLayers;
-  else
-    model_params.n_gpu_layers = 0;
 
   context_ = llama_init_from_model(model_, ctx_params);
 

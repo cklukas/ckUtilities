@@ -9,6 +9,7 @@
 #include <cstring>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 #include <tvision/views.h>
 
 // Variable Name	    | Meaning
@@ -62,6 +63,14 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     transcript->growMode = gfGrowHiX | gfGrowHiY;
     transcript->setLayoutChangedCallback([this]()
                                          { updateCopyButtons(); });
+    transcript->setShowThinking(showThinking_);
+    transcript->setShowAnalysis(showAnalysis_);
+    transcript->setHiddenDetailCallback([this](std::size_t messageIndex, const std::string &channel,
+                                              const std::string &content)
+                                        {
+                                            (void)messageIndex;
+                                            showHiddenContent(channel, content);
+                                        });
     insert(transcript);
 
     int labelTop = transcriptRect.b.y;
@@ -104,6 +113,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
 
     promptInput->select();
 
+    session.setLogSink([this](const std::string &entry) { app.appendLog(entry); });
     app.registerWindow(this);
     session.setSystemPrompt(app.systemPrompt());
     newConversation();
@@ -161,6 +171,7 @@ void ChatWindow::sizeLimits(TPoint &min, TPoint &max)
 
 void ChatWindow::shutDown()
 {
+    session.setLogSink(nullptr);
     session.cancelActiveResponse();
     clearCopyButtons();
     app.unregisterWindow(this);
@@ -188,6 +199,42 @@ void ChatWindow::applyConversationSettings(const ck::chat::ChatSession::Conversa
 {
     conversationSettings_ = settings;
     session.setConversationSettings(settings);
+}
+
+void ChatWindow::setShowThinking(bool show)
+{
+    bool changed = (showThinking_ != show);
+    showThinking_ = show;
+    if (transcript)
+    {
+        transcript->setShowThinking(showThinking_);
+        if (changed)
+        {
+            updateTranscriptFromSession(false);
+            transcript->drawView();
+        }
+    }
+}
+
+void ChatWindow::setShowAnalysis(bool show)
+{
+    bool changed = (showAnalysis_ != show);
+    showAnalysis_ = show;
+    if (transcript)
+    {
+        transcript->setShowAnalysis(showAnalysis_);
+        if (changed)
+        {
+            updateTranscriptFromSession(false);
+            transcript->drawView();
+        }
+    }
+}
+
+void ChatWindow::setStopSequences(const std::vector<std::string> &stops)
+{
+    stopSequences_ = stops;
+    session.setStopSequences(stopSequences_);
 }
 
 void ChatWindow::newConversation()
@@ -226,6 +273,7 @@ void ChatWindow::sendPrompt()
     session.setSystemPrompt(app.systemPrompt());
     session.startAssistantResponse(prompt, std::move(llm));
     promptInput->clearText();
+    app.appendLog("[USER]\n" + prompt + "\n");
     session.consumeDirtyFlag();
     updateTranscriptFromSession(true);
 }
@@ -472,4 +520,79 @@ void ChatWindow::updateTranscriptFromSession(bool forceScroll)
 
     updateCopyButtons();
     refreshWindowTitle();
+}
+
+void ChatWindow::showHiddenContent(const std::string &channel, const std::string &content)
+{
+    if (!TProgram::deskTop)
+        return;
+
+    std::string title = "Assistant";
+    if (!channel.empty())
+        title += " (" + channel + ")";
+
+    TRect screen = TProgram::deskTop->getExtent();
+    TRect bounds = screen;
+    bounds.grow(-std::max<short>(5, static_cast<short>((screen.b.x - screen.a.x) / 6)),
+                -std::max<short>(3, static_cast<short>((screen.b.y - screen.a.y) / 6)));
+    if (bounds.b.x - bounds.a.x < 60)
+        bounds.b.x = bounds.a.x + 70;
+    if (bounds.b.y - bounds.a.y < 14)
+        bounds.b.y = bounds.a.y + 16;
+
+    auto *dialog = new TDialog(bounds, title.c_str());
+    if (!dialog)
+        return;
+
+    TRect local = dialog->getExtent();
+    local.grow(-2, -2);
+
+    TRect memoRect = local;
+    memoRect.b.y -= 3;
+    if (memoRect.b.y <= memoRect.a.y + 1)
+        memoRect.b.y = memoRect.a.y + 2;
+
+    TRect vScrollRect(memoRect.b.x, memoRect.a.y, memoRect.b.x + 1, memoRect.b.y);
+    auto *vScroll = new TScrollBar(vScrollRect);
+    dialog->insert(vScroll);
+
+    TRect hScrollRect(memoRect.a.x, memoRect.b.y, memoRect.b.x, memoRect.b.y + 1);
+    auto *hScroll = new TScrollBar(hScrollRect);
+    dialog->insert(hScroll);
+
+    auto bufferSize = static_cast<int>(std::max<std::size_t>(content.size() + 256, 4096));
+    auto *memo = new TMemo(memoRect, hScroll, vScroll, nullptr, bufferSize);
+    dialog->insert(memo);
+
+    auto encode = [](const std::string &text) {
+        std::string encoded;
+        encoded.reserve(text.size());
+        for (char ch : text)
+        {
+            if (ch == '\n')
+                encoded.push_back('\r');
+            else
+                encoded.push_back(ch);
+        }
+        return encoded;
+    };
+
+    const std::string encoded = encode(content);
+    std::size_t limited = std::min<std::size_t>(encoded.size(), static_cast<std::size_t>(0xFFFF));
+    std::vector<char> raw(sizeof(ushort) + std::max<std::size_t>(limited, std::size_t{1}));
+    auto *memoData = reinterpret_cast<TMemoData *>(raw.data());
+    memoData->length = static_cast<ushort>(limited);
+    if (limited > 0)
+        std::memcpy(memoData->buffer, encoded.data(), limited);
+    memo->setData(memoData);
+    memo->select();
+
+    int dialogWidth = dialog->size.x;
+    TRect okRect(dialogWidth / 2 - 6, memoRect.b.y + 1, dialogWidth / 2 + 6, memoRect.b.y + 3);
+    auto *okButton = new TButton(okRect, "~O~K", cmOK, bfDefault);
+    dialog->insert(okButton);
+
+    TProgram::deskTop->insert(dialog);
+    TProgram::deskTop->execView(dialog);
+    destroy(dialog);
 }

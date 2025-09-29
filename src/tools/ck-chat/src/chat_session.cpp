@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <ctime>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -26,6 +27,7 @@ namespace ck::chat
         settings_.max_context_tokens = 4096;
         settings_.summary_trigger_tokens = 2048;
         settings_.max_response_tokens = 512;
+        stopSequences_ = defaultStopSequences();
     }
 
     ChatSession::~ChatSession()
@@ -114,6 +116,18 @@ namespace ck::chat
         return activeResponse_ && !activeResponse_->finished.load(std::memory_order_acquire);
     }
 
+    std::vector<std::string> ChatSession::defaultStopSequences()
+    {
+        return {"<|return|>", "<|call|>", "<|start|>user", "<|start|>developer",
+                "<|start|>system"};
+    }
+
+    void ChatSession::setLogSink(std::function<void(const std::string &)> sink)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        logCallback_ = std::move(sink);
+    }
+
     bool ChatSession::consumeDirtyFlag()
     {
         joinIfFinished();
@@ -124,6 +138,25 @@ namespace ck::chat
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return messages_;
+    }
+
+    void ChatSession::setStopSequences(std::vector<std::string> stops)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (stops.empty())
+        {
+            stopSequences_ = defaultStopSequences();
+            return;
+        }
+        stopSequences_.assign(stops.begin(), stops.end());
+        stopSequences_.erase(std::remove_if(stopSequences_.begin(), stopSequences_.end(),
+                                            [](const std::string &s)
+                                            {
+                                                return s.empty();
+                                            }),
+                             stopSequences_.end());
+        if (stopSequences_.empty())
+            stopSequences_ = defaultStopSequences();
     }
 
     void ChatSession::setConversationSettings(const ConversationSettings &settings)
@@ -245,10 +278,98 @@ namespace ck::chat
         return std::string{};
     }
 
-    std::string ChatSession::buildModelPrompt() const
+    std::string ChatSession::current_date_string()
+    {
+        using namespace std::chrono;
+        auto now = system_clock::now();
+        std::time_t t = system_clock::to_time_t(now);
+#if defined(_WIN32)
+        std::tm tm {};
+        gmtime_s(&tm, &t);
+#else
+        std::tm tm {};
+        gmtime_r(&t, &tm);
+#endif
+        char buffer[32];
+        if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", &tm))
+            return std::string(buffer);
+        return "2025-01-01";
+    }
+
+    std::string ChatSession::trim_whitespace(std::string value)
+    {
+        auto notSpace = [](unsigned char ch)
+        { return !std::isspace(ch); };
+        value.erase(value.begin(), std::find_if(value.begin(), value.end(), notSpace));
+        value.erase(std::find_if(value.rbegin(), value.rend(), notSpace).base(), value.end());
+        return value;
+    }
+
+    std::string ChatSession::extractFinalAssistantMessage(const std::string &content) const
+    {
+        const std::string startToken = "<|start|>assistant";
+        const std::string channelToken = "<|channel|>";
+        const std::string messageToken = "<|message|>";
+        const std::string returnToken = "<|return|>";
+        const std::string endToken = "<|end|>";
+
+        std::string result;
+        std::size_t searchPos = 0;
+        while (true)
+        {
+            std::size_t start = content.find(startToken, searchPos);
+            if (start == std::string::npos)
+                break;
+            std::size_t channelPos = content.find(channelToken, start + startToken.size());
+            if (channelPos == std::string::npos)
+                break;
+            std::size_t headerStart = channelPos + channelToken.size();
+            std::size_t messagePos = content.find(messageToken, headerStart);
+            if (messagePos == std::string::npos)
+                break;
+
+            std::string header = content.substr(headerStart, messagePos - headerStart);
+            bool isFinal = header.find("final") != std::string::npos;
+            std::size_t contentStart = messagePos + messageToken.size();
+            std::size_t contentEnd = content.find(returnToken, contentStart);
+            if (contentEnd == std::string::npos)
+                contentEnd = content.find(endToken, contentStart);
+            if (contentEnd == std::string::npos)
+                contentEnd = content.size();
+
+            if (isFinal)
+            {
+                result = content.substr(contentStart, contentEnd - contentStart);
+            }
+
+            searchPos = contentEnd;
+            if (searchPos == std::string::npos)
+                break;
+        }
+
+        if (result.empty())
+            result = content;
+        return trim_whitespace(result);
+    }
+
+    std::string ChatSession::buildHarmonyPrompt() const
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        std::ostringstream stream;
+
+        std::ostringstream prompt;
+        const std::string date = current_date_string();
+
+        prompt << "<|start|>system<|message|>You are ChatGPT, a large language model trained by OpenAI.\n"
+               << "Knowledge cutoff: 2024-06\n"
+               << "Current date: " << date << "\n\n"
+               << "Reasoning: medium\n\n"
+               << "# Valid channels: analysis, commentary, final. Channel must be included for every message.";
+        prompt << "<|end|>\n";
+
+        prompt << "<|start|>developer<|message|># Instructions\n\n";
+        prompt << systemPrompt_;
+        prompt << "<|end|>\n";
+
         for (const auto &message : messages_)
         {
             if (!message.include_in_context)
@@ -256,10 +377,26 @@ namespace ck::chat
             if (message.pending && message.role == Role::Assistant)
                 continue;
 
-            stream << role_prefix(message.role) << ": " << message.content << '\n';
+            switch (message.role)
+            {
+            case Role::User:
+                prompt << "<|start|>user<|message|>" << message.content << "<|end|>\n";
+                break;
+            case Role::Assistant:
+            {
+                std::string finalContent = extractFinalAssistantMessage(message.content);
+                prompt << "<|start|>assistant<|channel|>final<|message|>"
+                       << finalContent << "<|return|>\n";
+                break;
+            }
+            case Role::System:
+                prompt << "<|start|>system<|message|>" << message.content << "<|end|>\n";
+                break;
+            }
         }
-        stream << "Assistant:";
-        return stream.str();
+
+        prompt << "<|start|>assistant";
+        return prompt.str();
     }
 
     std::optional<ChatSession::SummaryPlan> ChatSession::prepareSummaryPlan() const
@@ -355,7 +492,7 @@ namespace ck::chat
 
         for (int iteration = 0; iteration < 5; ++iteration)
         {
-            std::string prompt = buildModelPrompt();
+            std::string prompt = buildHarmonyPrompt();
             std::size_t tokens = llm.token_count(prompt);
             lastPromptTokens_.store(tokens, std::memory_order_release);
             markDirty();
@@ -483,8 +620,11 @@ namespace ck::chat
         if (message.content.empty())
             return;
 
-        static const std::string stops[] = {"\nUser:", "\nAssistant:",
-                                            "\nSystem:", "\nYou:"};
+        std::vector<std::string> stops = stopSequences_;
+        stops.push_back("<|return|>");
+        stops.push_back("<|call|>");
+        std::sort(stops.begin(), stops.end());
+        stops.erase(std::unique(stops.begin(), stops.end()), stops.end());
 
         bool modified = false;
         bool changed;
@@ -531,11 +671,15 @@ namespace ck::chat
             auto settings = conversationSettings();
 
             ensureContextWithinLimits(*llm);
-            std::string modelPrompt = buildModelPrompt();
+            std::string modelPrompt = buildHarmonyPrompt();
 
             ck::ai::GenerationConfig config;
-            config.stop = {"\n\n", "\nUser:", "\nAssistant:", "\nSystem:",
-                           "\nYou:"};
+            std::vector<std::string> localStops;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                localStops = stopSequences_;
+            }
+            config.stop = std::move(localStops);
             std::size_t runtimeLimit = llm->runtime_config().max_output_tokens;
             std::size_t desiredMax = settings.max_response_tokens;
             if (desiredMax == 0)
@@ -549,16 +693,58 @@ namespace ck::chat
                 if (task.cancel.load(std::memory_order_acquire))
                     return;
 
-                if (!chunk.text.empty())
+                auto sanitizeChunk = [](std::string &text) {
+                    bool stop = false;
+                    const std::string stopTokens[] = {"<|return|>", "<|call|>"};
+                    for (const auto &token : stopTokens)
+                    {
+                        auto pos = text.find(token);
+                        if (pos != std::string::npos)
+                        {
+                            text.erase(pos);
+                            stop = true;
+                        }
+                    }
+                    return stop;
+                };
+
+                std::string text = chunk.text;
+                bool encounteredStop = sanitizeChunk(text);
+
+                if (!text.empty())
                 {
-                    appendToMessage(task.messageIndex, chunk.text);
+                    appendToMessage(task.messageIndex, text);
                     trimStopSequences(task.messageIndex);
+                    markDirty();
+                    std::function<void(const std::string &)> logger;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        logger = logCallback_;
+                    }
+                    if (logger)
+                        logger("[ASSISTANT_RAW]\n" + text);
+                }
+
+                if (encounteredStop)
+                {
+                    trimStopSequences(task.messageIndex);
+                    setMessagePending(task.messageIndex, false);
+                    markDirty();
+                    std::function<void(const std::string &)> logger;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        logger = logCallback_;
+                    }
+                    if (logger)
+                        logger("[ASSISTANT_STOP]\n");
+                    return;
                 }
 
                 if (chunk.is_last)
                 {
                     trimStopSequences(task.messageIndex);
                     setMessagePending(task.messageIndex, false);
+                    markDirty();
                 }
 
                 markDirty();

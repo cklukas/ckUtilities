@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -72,6 +73,9 @@ namespace ck::chat
         void setConversationSettings(const ConversationSettings &settings);
         ConversationSettings conversationSettings() const;
         ContextStats contextStats() const;
+        void setStopSequences(std::vector<std::string> stops);
+        static std::vector<std::string> defaultStopSequences();
+        void setLogSink(std::function<void(const std::string &)> sink);
 
     private:
         struct ResponseTask
@@ -92,7 +96,10 @@ namespace ck::chat
         void runLlmResponse(ResponseTask &task, std::string prompt);
         void ensureContextWithinLimits(ck::ai::Llm &llm);
         bool summarizeOldMessages(ck::ai::Llm &llm);
-        std::string buildModelPrompt() const;
+        std::string buildHarmonyPrompt() const;
+        static std::string current_date_string();
+        static std::string trim_whitespace(std::string value);
+        std::string extractFinalAssistantMessage(const std::string &content) const;
         std::string formatMessagesForSummary(const std::vector<Message> &msgs) const;
         std::string existingSummaryText() const;
         bool pruneOldMessages();
@@ -116,6 +123,8 @@ namespace ck::chat
         std::optional<std::size_t> summaryMessageIndex_;
         ConversationSettings settings_{};
         std::atomic<std::size_t> lastPromptTokens_{0};
+        std::vector<std::string> stopSequences_;
+        std::function<void(const std::string &)> logCallback_;
     };
 
 } // namespace ck::chat

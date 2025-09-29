@@ -15,6 +15,9 @@ struct Config
     struct ModelOverride
     {
         int gpu_layers = -9999; // sentinel meaning inherit
+        std::size_t context_window_tokens = 0;
+        std::size_t max_output_tokens = 0;
+        std::size_t summary_trigger_tokens = 0;
     };
     std::unordered_map<std::string, ModelOverride> model_overrides;
 };

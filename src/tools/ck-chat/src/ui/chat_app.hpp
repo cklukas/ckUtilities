@@ -8,6 +8,7 @@
 #include "../chat_session.hpp"
 #include "../tvision_include.hpp"
 
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -45,9 +46,28 @@ public:
   int gpuLayersForModel(const std::string &modelId) const;
   int effectiveGpuLayers(const ck::ai::ModelInfo &model) const;
   void updateModelGpuLayers(const std::string &modelId, int gpuLayers);
-  void updateConversationSettings(std::size_t maxResponseTokens,
+  void updateConversationSettings(std::size_t contextTokens,
+                                  std::size_t maxResponseTokens,
                                   std::size_t summaryThresholdTokens);
+  void updateModelTokenSettings(const std::string &modelId,
+                                std::size_t contextTokens,
+                                std::size_t maxResponseTokens,
+                                std::size_t summaryThresholdTokens);
+  struct TokenLimits {
+    std::size_t context_tokens = 0;
+    std::size_t max_response_tokens = 0;
+    std::size_t summary_trigger_tokens = 0;
+  };
+  TokenLimits resolveTokenLimits(const std::optional<std::string> &modelId) const;
   void refreshWindowTitles();
+  bool showThinking() const noexcept { return showThinking_; }
+  void setShowThinking(bool showThinking);
+  bool showAnalysis() const noexcept { return showAnalysis_; }
+  void setShowAnalysis(bool showAnalysis);
+  const std::vector<std::string> &stopSequences() const noexcept {
+    return stopSequences_;
+  }
+  void appendLog(const std::string &text);
 
 private:
   void openChatWindow();
@@ -61,6 +81,14 @@ private:
   void showPromptManagerDialog();
   void applyConversationSettingsToWindows();
   int autoGpuLayersForModel(const ck::ai::ModelInfo &model) const;
+  TokenLimits resolveTokenLimitsForModelInfo(const std::optional<std::string> &modelId,
+                                            std::optional<ck::ai::ModelInfo> modelInfo) const;
+  void applyThinkingVisibilityToWindows();
+  void applyAnalysisVisibilityToWindows();
+  void applyStopSequencesToWindows();
+  std::vector<std::string> resolveStopSequencesForModel(
+      const std::optional<std::string> &modelId,
+      std::optional<ck::ai::ModelInfo> modelInfo) const;
 
   std::vector<ChatWindow *> windows;
   int nextWindowNumber = 1;
@@ -77,4 +105,9 @@ private:
   std::optional<ck::ai::ModelInfo> currentActiveModel_;
   mutable std::mutex llmMutex_;
   std::shared_ptr<ck::ai::Llm> activeLlm_;
+  bool showThinking_ = true;
+  bool showAnalysis_ = true;
+  std::vector<std::string> stopSequences_;
+  std::filesystem::path logPath_;
+  std::filesystem::path binaryDir_;
 };

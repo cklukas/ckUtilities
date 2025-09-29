@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 
 namespace
 {
@@ -28,16 +30,31 @@ namespace
   }
 } // namespace
 
-ChatApp::ChatApp(int, char **)
+ChatApp::ChatApp(int argc, char **argv)
     : TProgInit(&ChatApp::initStatusLine, nullptr, &TApplication::initDeskTop),
       TApplication()
 {
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 
+  if (argv && argc > 0 && argv[0])
+  {
+    try
+    {
+      binaryDir_ = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
+    }
+    catch (...)
+    {
+      binaryDir_.clear();
+    }
+  }
+  if (binaryDir_.empty())
+    binaryDir_ = std::filesystem::current_path();
+
   conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
   conversationSettings_.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
   conversationSettings_.max_response_tokens = runtimeConfig.max_output_tokens;
+  stopSequences_ = ck::chat::ChatSession::defaultStopSequences();
 
   if (auto prompt = promptManager_.get_active_prompt())
     systemPrompt_ = prompt->message;
@@ -47,9 +64,20 @@ ChatApp::ChatApp(int, char **)
 
   openChatWindow();
   applyConversationSettingsToWindows();
+
+  logPath_ = binaryDir_ / "chat.log";
+  std::ofstream(logPath_, std::ios::trunc).close();
 }
 
-void ChatApp::registerWindow(ChatWindow *window) { windows.push_back(window); }
+void ChatApp::registerWindow(ChatWindow *window)
+{
+  if (!window)
+    return;
+  windows.push_back(window);
+  window->setShowThinking(showThinking_);
+  window->setShowAnalysis(showAnalysis_);
+  window->setStopSequences(stopSequences_);
+}
 
 void ChatApp::unregisterWindow(ChatWindow *window)
 {
@@ -94,6 +122,22 @@ void ChatApp::handleEvent(TEvent &event)
       break;
     case cmManageModels:
       showModelManagerDialog();
+      clearEvent(event);
+      break;
+    case cmShowThinking:
+      setShowThinking(true);
+      clearEvent(event);
+      break;
+    case cmHideThinking:
+      setShowThinking(false);
+      clearEvent(event);
+      break;
+    case cmShowAnalysis:
+      setShowAnalysis(true);
+      clearEvent(event);
+      break;
+    case cmHideAnalysis:
+      setShowAnalysis(false);
       clearEvent(event);
       break;
     case cmManagePrompts:
@@ -219,8 +263,22 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
   modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbF3,
                               hcNoContext, "F3");
 
+  TSubMenu &viewMenu = *new TSubMenu("~V~iew", hcNoContext);
+  if (showThinking_)
+    viewMenu + *new TMenuItem("~H~ide Thinking", cmHideThinking, kbNoKey,
+                              hcNoContext);
+  else
+    viewMenu + *new TMenuItem("~S~how Thinking", cmShowThinking, kbNoKey,
+                              hcNoContext);
+  if (showAnalysis_)
+    viewMenu + *new TMenuItem("Hide ~A~nalysis", cmHideAnalysis, kbNoKey,
+                              hcNoContext);
+  else
+    viewMenu + *new TMenuItem("Show ~A~nalysis", cmShowAnalysis, kbNoKey,
+                              hcNoContext);
+
   TMenuItem &menuChain =
-      fileMenu + modelsMenu + *new TSubMenu("~W~indows", hcNoContext) +
+      fileMenu + modelsMenu + viewMenu + *new TSubMenu("~W~indows", hcNoContext) +
       *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext,
                      "Ctrl-F5") +
       *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
@@ -367,9 +425,71 @@ void ChatApp::refreshWindowTitles()
   }
 }
 
-void ChatApp::updateConversationSettings(std::size_t maxResponseTokens,
+void ChatApp::setShowThinking(bool showThinking)
+{
+  if (showThinking_ == showThinking)
+    return;
+  showThinking_ = showThinking;
+  applyThinkingVisibilityToWindows();
+  rebuildMenuBar();
+}
+
+void ChatApp::setShowAnalysis(bool showAnalysis)
+{
+  if (showAnalysis_ == showAnalysis)
+    return;
+  showAnalysis_ = showAnalysis;
+  applyAnalysisVisibilityToWindows();
+  rebuildMenuBar();
+}
+
+void ChatApp::appendLog(const std::string &text)
+{
+  if (logPath_.empty())
+    return;
+  std::lock_guard<std::mutex> lock(llmMutex_);
+  std::ofstream file(logPath_, std::ios::app);
+  if (!file.is_open())
+    return;
+  file << text;
+  if (!text.empty() && text.back() != '\n')
+    file << '\n';
+}
+
+void ChatApp::applyThinkingVisibilityToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+      window->setShowThinking(showThinking_);
+  }
+}
+
+void ChatApp::applyAnalysisVisibilityToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+      window->setShowAnalysis(showAnalysis_);
+  }
+}
+
+void ChatApp::applyStopSequencesToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+      window->setStopSequences(stopSequences_);
+  }
+}
+
+void ChatApp::updateConversationSettings(std::size_t contextTokens,
+                                         std::size_t maxResponseTokens,
                                          std::size_t summaryThresholdTokens)
 {
+  if (contextTokens == 0)
+    contextTokens = runtimeConfig.context_window_tokens;
+
   if (maxResponseTokens == 0)
   {
     maxResponseTokens = runtimeConfig.max_output_tokens > 0
@@ -377,10 +497,20 @@ void ChatApp::updateConversationSettings(std::size_t maxResponseTokens,
                              : 512;
   }
 
-  conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+  if (maxResponseTokens > contextTokens)
+    maxResponseTokens = contextTokens;
+
+  if (summaryThresholdTokens == 0)
+    summaryThresholdTokens = runtimeConfig.summary_trigger_tokens;
+
+  if (summaryThresholdTokens > contextTokens)
+    summaryThresholdTokens = contextTokens;
+
+  conversationSettings_.max_context_tokens = contextTokens;
   conversationSettings_.max_response_tokens = maxResponseTokens;
   conversationSettings_.summary_trigger_tokens = summaryThresholdTokens;
 
+  runtimeConfig.context_window_tokens = contextTokens;
   runtimeConfig.max_output_tokens = maxResponseTokens;
   runtimeConfig.summary_trigger_tokens = summaryThresholdTokens;
   config.runtime = runtimeConfig;
@@ -427,6 +557,89 @@ int ChatApp::autoGpuLayersForModel(const ck::ai::ModelInfo &model) const
 #endif
 }
 
+ChatApp::TokenLimits ChatApp::resolveTokenLimitsForModelInfo(
+    const std::optional<std::string> &modelId,
+    std::optional<ck::ai::ModelInfo> modelInfo) const
+{
+  TokenLimits limits{};
+  limits.context_tokens = runtimeConfig.context_window_tokens;
+  limits.max_response_tokens = runtimeConfig.max_output_tokens;
+  limits.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
+
+  if (!modelId)
+    return limits;
+
+  if (!modelInfo)
+    modelInfo = modelManager_.get_model_by_id(*modelId);
+
+  if (modelInfo)
+  {
+    if (modelInfo->default_context_window_tokens > 0)
+      limits.context_tokens = modelInfo->default_context_window_tokens;
+    if (modelInfo->default_max_output_tokens > 0)
+      limits.max_response_tokens = modelInfo->default_max_output_tokens;
+    if (modelInfo->default_summary_trigger_tokens > 0)
+      limits.summary_trigger_tokens = modelInfo->default_summary_trigger_tokens;
+  }
+
+  auto overrideIt = config.model_overrides.find(*modelId);
+  if (overrideIt != config.model_overrides.end())
+  {
+    const auto &overrideConfig = overrideIt->second;
+    if (overrideConfig.context_window_tokens != 0)
+      limits.context_tokens = overrideConfig.context_window_tokens;
+    if (overrideConfig.max_output_tokens != 0)
+      limits.max_response_tokens = overrideConfig.max_output_tokens;
+    if (overrideConfig.summary_trigger_tokens != 0)
+      limits.summary_trigger_tokens = overrideConfig.summary_trigger_tokens;
+  }
+
+  if (limits.max_response_tokens > limits.context_tokens)
+    limits.max_response_tokens = limits.context_tokens;
+  if (limits.summary_trigger_tokens > limits.context_tokens)
+    limits.summary_trigger_tokens = limits.context_tokens;
+
+  return limits;
+}
+
+ChatApp::TokenLimits
+ChatApp::resolveTokenLimits(const std::optional<std::string> &modelId) const
+{
+  return resolveTokenLimitsForModelInfo(modelId,
+                                        modelId ? modelManager_.get_model_by_id(*modelId)
+                                                : std::optional<ck::ai::ModelInfo>{});
+}
+
+std::vector<std::string> ChatApp::resolveStopSequencesForModel(
+    const std::optional<std::string> &modelId,
+    std::optional<ck::ai::ModelInfo> modelInfo) const
+{
+  std::vector<std::string> stops = ck::chat::ChatSession::defaultStopSequences();
+  if (!modelId)
+    return stops;
+
+  if (!modelInfo)
+    modelInfo = modelManager_.get_model_by_id(*modelId);
+
+  if (modelInfo && !modelInfo->default_stop_sequences.empty())
+  {
+    stops.insert(stops.end(), modelInfo->default_stop_sequences.begin(),
+                 modelInfo->default_stop_sequences.end());
+  }
+
+  stops.erase(std::remove_if(stops.begin(), stops.end(),
+                             [](const std::string &value)
+                             {
+                               return value.empty();
+                             }),
+              stops.end());
+  std::sort(stops.begin(), stops.end());
+  stops.erase(std::unique(stops.begin(), stops.end()), stops.end());
+  if (stops.empty())
+    stops = ck::chat::ChatSession::defaultStopSequences();
+  return stops;
+}
+
 void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers)
 {
   if (gpuLayers < -1)
@@ -447,6 +660,54 @@ void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers)
   {
     std::lock_guard<std::mutex> lock(llmMutex_);
     activeLlm_ = std::move(newLlm);
+    conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+    conversationSettings_.max_response_tokens = runtimeConfig.max_output_tokens;
+    conversationSettings_.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
+    applyConversationSettingsToWindows();
+  }
+
+  refreshWindowTitles();
+}
+
+void ChatApp::updateModelTokenSettings(const std::string &modelId,
+                                       std::size_t contextTokens,
+                                       std::size_t maxResponseTokens,
+                                       std::size_t summaryThresholdTokens)
+{
+  if (contextTokens == 0)
+    contextTokens = runtimeConfig.context_window_tokens;
+
+  if (maxResponseTokens == 0)
+    maxResponseTokens = runtimeConfig.max_output_tokens;
+  if (maxResponseTokens > contextTokens)
+    maxResponseTokens = contextTokens;
+
+  if (summaryThresholdTokens == 0)
+    summaryThresholdTokens = runtimeConfig.summary_trigger_tokens;
+  if (summaryThresholdTokens > contextTokens)
+    summaryThresholdTokens = contextTokens;
+
+  auto &overrideEntry = config.model_overrides[modelId];
+  overrideEntry.context_window_tokens = contextTokens;
+  overrideEntry.max_output_tokens = maxResponseTokens;
+  overrideEntry.summary_trigger_tokens = summaryThresholdTokens;
+
+  std::shared_ptr<ck::ai::Llm> newLlm;
+  if (currentActiveModel_ && currentActiveModel_->id == modelId)
+  {
+    newLlm = loadModel(*currentActiveModel_);
+  }
+
+  ck::ai::ConfigLoader::save(config);
+
+  if (newLlm)
+  {
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    activeLlm_ = std::move(newLlm);
+    conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+    conversationSettings_.max_response_tokens = runtimeConfig.max_output_tokens;
+    conversationSettings_.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
+    applyConversationSettingsToWindows();
   }
 
   refreshWindowTitles();
@@ -534,6 +795,16 @@ ChatApp::loadModel(const ck::ai::ModelInfo &model)
   if (newRuntime.threads <= 0)
     newRuntime.threads = static_cast<int>(std::thread::hardware_concurrency());
 
+  TokenLimits limits =
+      resolveTokenLimitsForModelInfo(model.id, modelManager_.get_model_by_id(model.id));
+
+  if (limits.context_tokens > 0)
+    newRuntime.context_window_tokens = limits.context_tokens;
+  if (limits.max_response_tokens > 0)
+    newRuntime.max_output_tokens = limits.max_response_tokens;
+  if (limits.summary_trigger_tokens > 0)
+    newRuntime.summary_trigger_tokens = limits.summary_trigger_tokens;
+
   int requestedLayers = runtimeConfig.gpu_layers;
   auto overrideIt = config.model_overrides.find(model.id);
   if (overrideIt != config.model_overrides.end() &&
@@ -579,9 +850,13 @@ void ChatApp::updateActiveModel()
 
   if (!selected)
   {
-    std::lock_guard<std::mutex> lock(llmMutex_);
-    activeLlm_.reset();
-    currentActiveModel_.reset();
+    {
+      std::lock_guard<std::mutex> lock(llmMutex_);
+      activeLlm_.reset();
+      currentActiveModel_.reset();
+      stopSequences_ = ck::chat::ChatSession::defaultStopSequences();
+    }
+    applyStopSequencesToWindows();
     return;
   }
 
@@ -593,17 +868,31 @@ void ChatApp::updateActiveModel()
   }
 
   auto newLlm = loadModel(*selected);
-  std::lock_guard<std::mutex> lock(llmMutex_);
-  if (newLlm)
+  std::vector<std::string> resolvedStops = resolveStopSequencesForModel(selected->id, selected);
+  std::vector<std::string> defaultStops = ck::chat::ChatSession::defaultStopSequences();
+
+  bool loaded = static_cast<bool>(newLlm);
+
   {
-    activeLlm_ = std::move(newLlm);
-    currentActiveModel_ = selected;
-    conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+    std::lock_guard<std::mutex> lock(llmMutex_);
+    if (loaded)
+    {
+      activeLlm_ = std::move(newLlm);
+      currentActiveModel_ = selected;
+      conversationSettings_.max_context_tokens = runtimeConfig.context_window_tokens;
+      conversationSettings_.max_response_tokens = runtimeConfig.max_output_tokens;
+      conversationSettings_.summary_trigger_tokens = runtimeConfig.summary_trigger_tokens;
+      stopSequences_ = std::move(resolvedStops);
+    }
+    else
+    {
+      activeLlm_.reset();
+      currentActiveModel_.reset();
+      stopSequences_ = std::move(defaultStops);
+    }
+  }
+
+  if (loaded)
     applyConversationSettingsToWindows();
-  }
-  else
-  {
-    activeLlm_.reset();
-    currentActiveModel_.reset();
-  }
+  applyStopSequencesToWindows();
 }
