@@ -374,6 +374,8 @@ void ModelManager::load_configuration() {
     file >> config;
     if (config.contains("active_model_id")) {
       active_model_id_ = config["active_model_id"];
+      for (auto &model : downloaded_models_)
+        model.is_active = (model.id == active_model_id_);
     }
   } catch (const std::exception &) {
     // Ignore JSON parsing errors
