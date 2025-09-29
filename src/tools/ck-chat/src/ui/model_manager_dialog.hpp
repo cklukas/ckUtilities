@@ -5,8 +5,10 @@
 #include "../tvision_include.hpp"
 
 #include <atomic>
+#include <iomanip>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -81,4 +83,30 @@ private:
 
   int selectedAvailableIndex_;
   int selectedDownloadedIndex_;
+};
+
+// ModelLoadingProgressDialog class for showing model loading progress
+class ModelLoadingProgressDialog : public TDialog {
+public:
+  ModelLoadingProgressDialog(TRect bounds, const std::string &modelName);
+  ~ModelLoadingProgressDialog();
+
+  virtual void handleEvent(TEvent &event) override;
+  virtual void draw() override;
+
+  void updateProgress(const std::string &status);
+  void setComplete(bool success, const std::string &message);
+  static TDialog *create(TRect bounds, const std::string &modelName);
+
+private:
+  void setupControls();
+  std::string formatBytes(std::size_t bytes) const;
+
+  std::string modelName_;
+  TLabel *modelNameLabel_;
+  TStaticText *statusLabel_;
+  TButton *closeButton_;
+  bool isComplete_;
+  bool isSuccess_;
+  std::string statusMessage_;
 };

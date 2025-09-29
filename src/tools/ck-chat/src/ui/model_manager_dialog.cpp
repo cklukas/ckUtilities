@@ -1,8 +1,6 @@
 #include "model_manager_dialog.hpp"
 #include "../commands.hpp"
 
-#include <tvision/tview.h>
-
 #include <algorithm>
 #include <atomic>
 #include <iomanip>
@@ -288,44 +286,60 @@ TDialog *ModelManagerDialog::create(TRect bounds,
   return new ModelManagerDialog(bounds, modelManager);
 }
 
-// DownloadProgressDialog implementation
+// ModelLoadingProgressDialog implementation
 
-DownloadProgressDialog::DownloadProgressDialog(TRect bounds,
-                                               const std::string &modelName)
-    : TDialog(bounds, "Download Progress"), modelName_(modelName),
-      downloadedBytes_(0), totalBytes_(0), isComplete_(false),
-      isSuccess_(false) {
+ModelLoadingProgressDialog::ModelLoadingProgressDialog(
+    TRect bounds, const std::string &modelName)
+    : TDialog(bounds, "Loading Model"), modelName_(modelName),
+      modelNameLabel_(nullptr), statusLabel_(nullptr), closeButton_(nullptr),
+      isComplete_(false), isSuccess_(false) {
   setupControls();
 }
 
-DownloadProgressDialog::~DownloadProgressDialog() {}
+ModelLoadingProgressDialog::~ModelLoadingProgressDialog() {}
 
-void DownloadProgressDialog::setupControls() {
+void ModelLoadingProgressDialog::setupControls() {
   modelNameLabel_ = new TLabel(TRect(2, 2, 38, 3),
-                               ("Downloading: " + modelName_).c_str(), nullptr);
+                               ("Loading: " + modelName_).c_str(), nullptr);
   insert(modelNameLabel_);
 
-  progressLabel_ =
-      new TLabel(TRect(2, 4, 38, 5), "Progress: 0% (0 / 0 bytes)", nullptr);
-  insert(progressLabel_);
-
-  statusLabel_ =
-      new TLabel(TRect(2, 6, 38, 7), "Starting download...", nullptr);
+  statusLabel_ = new TStaticText(TRect(2, 4, 38, 5), "Initializing model...");
   insert(statusLabel_);
 
   closeButton_ =
       new TButton(TRect(14, 8, 24, 10), "~C~lose", cmCancel, bfNormal);
   insert(closeButton_);
 
-  // Make close button disabled during download
+  // Make close button disabled during loading
   closeButton_->setState(sfDisabled, true);
 }
 
-void DownloadProgressDialog::handleEvent(TEvent &event) {
+void ModelLoadingProgressDialog::handleEvent(TEvent &event) {
   TDialog::handleEvent(event);
 }
 
-std::string DownloadProgressDialog::formatBytes(std::size_t bytes) const {
+void ModelLoadingProgressDialog::draw() { TDialog::draw(); }
+
+void ModelLoadingProgressDialog::updateProgress(const std::string &status) {
+  // For now, just redraw the dialog
+  drawView();
+}
+
+void ModelLoadingProgressDialog::setComplete(bool success,
+                                             const std::string &message) {
+  isComplete_ = true;
+  isSuccess_ = success;
+  statusMessage_ = message;
+
+  // Enable close button
+  if (closeButton_) {
+    closeButton_->setState(sfDisabled, false);
+  }
+
+  drawView();
+}
+
+std::string ModelLoadingProgressDialog::formatBytes(std::size_t bytes) const {
   std::ostringstream oss;
   if (bytes < 1024)
     oss << bytes << " B";
@@ -341,58 +355,9 @@ std::string DownloadProgressDialog::formatBytes(std::size_t bytes) const {
   return oss.str();
 }
 
-void DownloadProgressDialog::draw() { TDialog::draw(); }
-
-void DownloadProgressDialog::updateProgress(std::size_t downloaded,
-                                            std::size_t total) {
-  downloadedBytes_ = downloaded;
-  totalBytes_ = total;
-
-  // Update progress label
-  if (progressLabel_) {
-    std::string progressText =
-        "Progress: " +
-        std::to_string(static_cast<int>(
-            (total > 0) ? (static_cast<double>(downloaded) / total) * 100.0
-                        : 0.0)) +
-        "% (" + formatBytes(downloaded) + " / " + formatBytes(total) + ")";
-    progressLabel_->setText(progressText.c_str());
-  }
-
-  // Update status label
-  if (statusLabel_) {
-    statusLabel_->setText("Downloading...");
-  }
-
-  drawView();
-}
-
-void DownloadProgressDialog::setComplete(bool success,
-                                         const std::string &message) {
-  isComplete_ = true;
-  isSuccess_ = success;
-  statusMessage_ = message;
-
-  // Update labels
-  if (progressLabel_) {
-    progressLabel_->setText("Progress: 100% (Complete)");
-  }
-
-  if (statusLabel_) {
-    statusLabel_->setText(success ? "Download completed!" : "Download failed!");
-  }
-
-  // Enable close button
-  if (closeButton_) {
-    closeButton_->setState(sfDisabled, false);
-  }
-
-  drawView();
-}
-
-TDialog *DownloadProgressDialog::create(TRect bounds,
-                                        const std::string &modelName) {
-  return new DownloadProgressDialog(bounds, modelName);
+TDialog *ModelLoadingProgressDialog::create(TRect bounds,
+                                            const std::string &modelName) {
+  return new ModelLoadingProgressDialog(bounds, modelName);
 }
 
 void ModelManagerDialog::setStatusText(const std::string &text) {

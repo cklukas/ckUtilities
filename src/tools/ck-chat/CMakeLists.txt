@@ -25,6 +25,7 @@ add_ck_tool(ckchat
     src/ui/chat_window.cpp
     src/ui/chat_app.cpp
     src/ui/model_dialog.cpp
+    src/ui/model_loading_dialog.cpp
     src/ui/prompt_dialog.cpp
     src/clipboard.cpp
   LIBRARIES
