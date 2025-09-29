@@ -25,7 +25,6 @@ private:
   void refreshList();
   void updateButtons();
   void setStatus(const std::string &message);
-  void setDetail(const std::string &message);
   void addPrompt();
   void editPrompt();
   void deletePrompt();
@@ -43,9 +42,7 @@ private:
   TButton *activateButton_;
   TButton *closeButton_;
   TLabel *statusLabel_;
-  TLabel *detailLabel_;
   std::string statusText_;
-  std::string detailText_;
 
   std::vector<ck::ai::SystemPrompt> prompts_;
   std::vector<int> indexMap_;

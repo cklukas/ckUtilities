@@ -12,22 +12,26 @@
 #include <algorithm>
 #include <cstdlib>
 
-namespace {
-const ck::appinfo::ToolInfo &tool_info() {
-  return ck::appinfo::requireTool("ck-chat");
-}
+namespace
+{
+  const ck::appinfo::ToolInfo &tool_info()
+  {
+    return ck::appinfo::requireTool("ck-chat");
+  }
 
-ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config) {
-  ck::ai::RuntimeConfig runtime = config.runtime;
-  if (runtime.model_path.empty())
-    runtime.model_path = "stub-model.gguf";
-  return runtime;
-}
+  ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config)
+  {
+    ck::ai::RuntimeConfig runtime = config.runtime;
+    if (runtime.model_path.empty())
+      runtime.model_path = "stub-model.gguf";
+    return runtime;
+  }
 } // namespace
 
 ChatApp::ChatApp(int, char **)
     : TProgInit(&ChatApp::initStatusLine, nullptr, &TApplication::initDeskTop),
-      TApplication() {
+      TApplication()
+{
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 
@@ -42,12 +46,14 @@ ChatApp::ChatApp(int, char **)
 
 void ChatApp::registerWindow(ChatWindow *window) { windows.push_back(window); }
 
-void ChatApp::unregisterWindow(ChatWindow *window) {
+void ChatApp::unregisterWindow(ChatWindow *window)
+{
   auto it = std::remove(windows.begin(), windows.end(), window);
   windows.erase(it, windows.end());
 }
 
-void ChatApp::openChatWindow() {
+void ChatApp::openChatWindow()
+{
   if (!deskTop)
     return;
 
@@ -61,10 +67,13 @@ void ChatApp::openChatWindow() {
   window->select();
 }
 
-void ChatApp::handleEvent(TEvent &event) {
+void ChatApp::handleEvent(TEvent &event)
+{
   TApplication::handleEvent(event);
-  if (event.what == evCommand) {
-    switch (event.message.command) {
+  if (event.what == evCommand)
+  {
+    switch (event.message.command)
+    {
     case cmNewChat:
       openChatWindow();
       clearEvent(event);
@@ -99,12 +108,14 @@ void ChatApp::handleEvent(TEvent &event) {
       break;
     default:
       if (event.message.command >= cmSelectPromptBase &&
-          event.message.command < cmSelectPromptBase + 10) {
+          event.message.command < cmSelectPromptBase + 10)
+      {
         selectPrompt(event.message.command - cmSelectPromptBase);
         clearEvent(event);
         break;
       }
-      if (event.message.command == cmNoOp) {
+      if (event.message.command == cmNoOp)
+      {
         clearEvent(event);
         break;
       }
@@ -113,15 +124,18 @@ void ChatApp::handleEvent(TEvent &event) {
   }
 }
 
-void ChatApp::idle() {
+void ChatApp::idle()
+{
   TApplication::idle();
-  for (auto *window : windows) {
+  for (auto *window : windows)
+  {
     if (window)
       window->processPendingResponses();
   }
 }
 
-TMenuBar *ChatApp::initMenuBar(TRect r) {
+TMenuBar *ChatApp::initMenuBar(TRect r)
+{
   r.b.y = r.a.y + 1;
 
   TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
@@ -140,12 +154,16 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   menuDownloadedModels_ = modelManager_.get_downloaded_models();
   auto activeInfo = activeModelInfo();
 
-  if (menuDownloadedModels_.empty()) {
+  if (menuDownloadedModels_.empty())
+  {
     modelsMenu +
         *new TMenuItem("~N~o downloaded models", cmNoOp, kbNoKey, hcNoContext);
-  } else {
+  }
+  else
+  {
     TMenuItem *defaultItem = nullptr;
-    for (size_t i = 0; i < menuDownloadedModels_.size() && i < 10; ++i) {
+    for (size_t i = 0; i < menuDownloadedModels_.size() && i < 10; ++i)
+    {
       const auto &model = menuDownloadedModels_[i];
       std::string menuText = model.name;
       if (model.is_active)
@@ -168,11 +186,15 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   menuPrompts_ = promptManager_.get_prompts();
   auto activePrompt = promptManager_.get_active_prompt();
 
-  if (menuPrompts_.empty()) {
+  if (menuPrompts_.empty())
+  {
     modelsMenu +
         *new TMenuItem("~N~o prompts defined", cmNoOp, kbNoKey, hcNoContext);
-  } else {
-    for (size_t i = 0; i < menuPrompts_.size() && i < 10; ++i) {
+  }
+  else
+  {
+    for (size_t i = 0; i < menuPrompts_.size() && i < 10; ++i)
+    {
       const auto &prompt = menuPrompts_[i];
       std::string label = prompt.name;
       if (activePrompt && activePrompt->id == prompt.id)
@@ -185,10 +207,10 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   }
 
   modelsMenu + newLine() +
-      *new TMenuItem("~M~anage models...", cmManageModels, kbNoKey,
-                     hcNoContext);
-  modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbNoKey,
-                              hcNoContext);
+      *new TMenuItem("Manage ~M~odels...", cmManageModels, kbF2,
+                     hcNoContext, "F2");
+  modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbF3,
+                              hcNoContext, "F3");
 
   TMenuItem &menuChain =
       fileMenu + modelsMenu + *new TSubMenu("~W~indows", hcNoContext) +
@@ -205,7 +227,8 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
-TStatusLine *ChatApp::initStatusLine(TRect r) {
+TStatusLine *ChatApp::initStatusLine(TRect r)
+{
   r.a.y = r.b.y - 1;
 
   auto *newItem = new TStatusItem("~Ctrl-N~ New Chat", kbCtrlN, cmNewChat);
@@ -213,7 +236,8 @@ TStatusLine *ChatApp::initStatusLine(TRect r) {
   newItem->next = closeItem;
   TStatusItem *tail = closeItem;
 
-  if (ck::launcher::launchedFromCkLauncher()) {
+  if (ck::launcher::launchedFromCkLauncher())
+  {
     auto *returnItem =
         new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
     tail->next = returnItem;
@@ -226,7 +250,8 @@ TStatusLine *ChatApp::initStatusLine(TRect r) {
   return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, newItem));
 }
 
-void ChatApp::showAboutDialog() {
+void ChatApp::showAboutDialog()
+{
   const auto &info = tool_info();
 #ifdef CK_CHAT_VERSION
   ck::ui::showAboutDialog(info.executable, CK_CHAT_VERSION,
@@ -236,12 +261,14 @@ void ChatApp::showAboutDialog() {
 #endif
 }
 
-void ChatApp::showModelManagerDialog() {
+void ChatApp::showModelManagerDialog()
+{
   // Fixed dialog size based on content needs
   TRect bounds(5, 3, 105, 28);
 
   auto *dialog = new ModelDialog(bounds, modelManager_, this);
-  if (dialog) {
+  if (dialog)
+  {
     deskTop->insert(dialog);
     dialog->select();
   }
@@ -249,21 +276,25 @@ void ChatApp::showModelManagerDialog() {
 
 void ChatApp::refreshModelsMenu() { rebuildMenuBar(); }
 
-void ChatApp::selectModel(int modelIndex) {
+void ChatApp::selectModel(int modelIndex)
+{
   if (menuDownloadedModels_.empty() ||
       modelIndex < 0 ||
-      modelIndex >= static_cast<int>(menuDownloadedModels_.size())) {
+      modelIndex >= static_cast<int>(menuDownloadedModels_.size()))
+  {
     messageBox("Invalid model selection", mfError | mfOKButton);
     return;
   }
 
   const auto &model = menuDownloadedModels_[modelIndex];
-  if (!model.is_downloaded) {
+  if (!model.is_downloaded)
+  {
     messageBox("Model is not downloaded", mfError | mfOKButton);
     return;
   }
 
-  if (!modelManager_.activate_model(model.id)) {
+  if (!modelManager_.activate_model(model.id))
+  {
     messageBox("Failed to activate model: " + model.name, mfError | mfOKButton);
     return;
   }
@@ -271,20 +302,24 @@ void ChatApp::selectModel(int modelIndex) {
   handleModelManagerChange();
 }
 
-void ChatApp::handleModelManagerChange() {
+void ChatApp::handleModelManagerChange()
+{
   updateActiveModel();
   rebuildMenuBar();
 }
 
-void ChatApp::selectPrompt(int promptIndex) {
+void ChatApp::selectPrompt(int promptIndex)
+{
   if (menuPrompts_.empty() || promptIndex < 0 ||
-      promptIndex >= static_cast<int>(menuPrompts_.size())) {
+      promptIndex >= static_cast<int>(menuPrompts_.size()))
+  {
     messageBox("Invalid prompt selection", mfError | mfOKButton);
     return;
   }
 
   const auto &prompt = menuPrompts_[promptIndex];
-  if (!promptManager_.set_active_prompt(prompt.id)) {
+  if (!promptManager_.set_active_prompt(prompt.id))
+  {
     messageBox("Failed to activate prompt", mfError | mfOKButton);
     return;
   }
@@ -292,16 +327,19 @@ void ChatApp::selectPrompt(int promptIndex) {
   handlePromptManagerChange();
 }
 
-void ChatApp::showPromptManagerDialog() {
-  TRect bounds(10, 4, 80, 23);
+void ChatApp::showPromptManagerDialog()
+{
+  TRect bounds(10, 4, 77, 23);
   auto *dialog = new PromptDialog(bounds, promptManager_, this);
-  if (dialog) {
+  if (dialog)
+  {
     deskTop->insert(dialog);
     dialog->select();
   }
 }
 
-void ChatApp::handlePromptManagerChange() {
+void ChatApp::handlePromptManagerChange()
+{
   auto activePrompt = promptManager_.get_active_prompt();
   if (activePrompt)
     systemPrompt_ = activePrompt->message;
@@ -312,7 +350,8 @@ void ChatApp::handlePromptManagerChange() {
       activeLlm_->set_system_prompt(systemPrompt_);
   }
 
-  for (auto *window : windows) {
+  for (auto *window : windows)
+  {
     if (window)
       window->applySystemPrompt(systemPrompt_);
   }
@@ -320,36 +359,42 @@ void ChatApp::handlePromptManagerChange() {
   rebuildMenuBar();
 }
 
-std::shared_ptr<ck::ai::Llm> ChatApp::getActiveLlm() {
+std::shared_ptr<ck::ai::Llm> ChatApp::getActiveLlm()
+{
   std::lock_guard<std::mutex> lock(llmMutex_);
   return activeLlm_;
 }
 
-std::optional<ck::ai::ModelInfo> ChatApp::activeModelInfo() const {
+std::optional<ck::ai::ModelInfo> ChatApp::activeModelInfo() const
+{
   std::lock_guard<std::mutex> lock(llmMutex_);
   return currentActiveModel_;
 }
 
-void ChatApp::rebuildMenuBar() {
+void ChatApp::rebuildMenuBar()
+{
   if (!deskTop)
     return;
 
   TRect bounds;
   if (TProgram::menuBar)
     bounds = TProgram::menuBar->getBounds();
-  else {
+  else
+  {
     bounds = deskTop->getExtent();
     bounds.b.y = bounds.a.y + 1;
   }
 
-  if (TProgram::menuBar) {
+  if (TProgram::menuBar)
+  {
     TMenuBar *oldBar = TProgram::menuBar;
     remove(oldBar);
     TObject::destroy(oldBar);
   }
 
   TMenuBar *newBar = initMenuBar(bounds);
-  if (newBar) {
+  if (newBar)
+  {
     insert(newBar);
     TProgram::menuBar = newBar;
     newBar->drawView();
@@ -357,12 +402,14 @@ void ChatApp::rebuildMenuBar() {
 }
 
 std::shared_ptr<ck::ai::Llm>
-ChatApp::loadModel(const ck::ai::ModelInfo &model) {
+ChatApp::loadModel(const ck::ai::ModelInfo &model)
+{
   std::filesystem::path modelPath = model.local_path;
   if (modelPath.empty())
     modelPath = modelManager_.get_model_path(model.id);
 
-  if (modelPath.empty() || !std::filesystem::exists(modelPath)) {
+  if (modelPath.empty() || !std::filesystem::exists(modelPath))
+  {
     messageBox(("Model file not found: " + model.name).c_str(),
                mfError | mfOKButton);
     return nullptr;
@@ -373,25 +420,30 @@ ChatApp::loadModel(const ck::ai::ModelInfo &model) {
   if (newRuntime.threads <= 0)
     newRuntime.threads = static_cast<int>(std::thread::hardware_concurrency());
 
-  try {
+  try
+  {
     auto uniqueLlm = ck::ai::Llm::open(newRuntime.model_path, newRuntime);
     uniqueLlm->set_system_prompt(systemPrompt_);
     runtimeConfig = newRuntime;
     return std::shared_ptr<ck::ai::Llm>(std::move(uniqueLlm));
-  } catch (const std::exception &e) {
+  }
+  catch (const std::exception &e)
+  {
     messageBox(("Failed to load model: " + std::string(e.what())).c_str(),
                mfError | mfOKButton);
     return nullptr;
   }
 }
 
-void ChatApp::updateActiveModel() {
+void ChatApp::updateActiveModel()
+{
   auto activeModels = modelManager_.get_active_models();
   std::optional<ck::ai::ModelInfo> selected;
   if (!activeModels.empty())
     selected = activeModels.front();
 
-  if (!selected) {
+  if (!selected)
+  {
     std::lock_guard<std::mutex> lock(llmMutex_);
     activeLlm_.reset();
     currentActiveModel_.reset();
@@ -407,10 +459,13 @@ void ChatApp::updateActiveModel() {
 
   auto newLlm = loadModel(*selected);
   std::lock_guard<std::mutex> lock(llmMutex_);
-  if (newLlm) {
+  if (newLlm)
+  {
     activeLlm_ = std::move(newLlm);
     currentActiveModel_ = selected;
-  } else {
+  }
+  else
+  {
     activeLlm_.reset();
     currentActiveModel_.reset();
   }

@@ -27,6 +27,7 @@ public:
   bool add_or_update_prompt(const SystemPrompt &prompt);
   bool delete_prompt(const std::string &id);
   bool set_active_prompt(const std::string &id);
+  bool restore_default_prompt(const std::string &id);
 
   void refresh();
 
@@ -42,4 +43,3 @@ private:
 };
 
 } // namespace ck::ai
-

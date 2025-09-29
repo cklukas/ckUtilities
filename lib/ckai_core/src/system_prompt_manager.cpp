@@ -123,6 +123,34 @@ bool SystemPromptManager::set_active_prompt(const std::string &id) {
     return false;
 
   active_prompt_id_ = id;
+  for (auto &prompt : prompts_)
+    prompt.is_active = (prompt.id == active_prompt_id_);
+
+  save();
+  return true;
+}
+
+bool SystemPromptManager::restore_default_prompt(const std::string &id) {
+  auto promptIt = std::find_if(prompts_.begin(), prompts_.end(),
+                               [&](const SystemPrompt &prompt) {
+                                 return prompt.id == id;
+                               });
+  if (promptIt == prompts_.end() || !promptIt->is_default)
+    return false;
+
+  auto defaultsIt = std::find_if(kDefaultPrompts.begin(), kDefaultPrompts.end(),
+                                 [&](const SystemPrompt &prompt) {
+                                   return prompt.id == id;
+                                 });
+  if (defaultsIt == kDefaultPrompts.end())
+    return false;
+
+  bool was_active = promptIt->is_active;
+  *promptIt = *defaultsIt;
+  promptIt->is_active = was_active;
+  if (was_active)
+    active_prompt_id_ = promptIt->id;
+
   save();
   return true;
 }
