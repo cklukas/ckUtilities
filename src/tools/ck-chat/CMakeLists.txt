@@ -29,6 +29,7 @@ add_ck_tool(ckchat
     src/clipboard.cpp
   LIBRARIES
     ck_app_info
+    ck_edit_core
     ckai_core
     tvision::tvision
     ${CURSES_LIBRARIES}
@@ -37,6 +38,7 @@ add_ck_tool(ckchat
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/lib/ckai_core/src
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_CHAT_VERSION="${PROJECT_VERSION}"

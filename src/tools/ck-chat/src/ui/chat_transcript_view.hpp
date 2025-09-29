@@ -4,6 +4,7 @@
 
 #include "../tvision_include.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -55,6 +56,7 @@ private:
         bool isPending = false;
         std::string channelLabel;
         std::string hiddenContent;
+        std::vector<std::uint16_t> styleMask;
     };
 
     std::vector<Message> messages;
@@ -70,7 +72,6 @@ private:
     void rebuildLayoutIfNeeded();
     void rebuildLayout();
     void notifyLayoutChanged();
-    std::vector<std::string> wrapLines(const std::string &text, int width) const;
     void appendVisibleSegment(Role role,
                               const std::string &prefix,
                               const std::string &text,

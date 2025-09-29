@@ -1,12 +1,39 @@
 #include "chat_transcript_view.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
+#include <sstream>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
+#include "ck/edit/markdown_parser.hpp"
+
 namespace {
+
+constexpr std::uint16_t kStyleNone = 0;
+constexpr std::uint16_t kStyleBold = 1u << 0;
+constexpr std::uint16_t kStyleItalic = 1u << 1;
+constexpr std::uint16_t kStyleStrikethrough = 1u << 2;
+constexpr std::uint16_t kStyleInlineCode = 1u << 3;
+constexpr std::uint16_t kStyleLink = 1u << 4;
+constexpr std::uint16_t kStyleHeading = 1u << 5;
+constexpr std::uint16_t kStyleQuote = 1u << 6;
+constexpr std::uint16_t kStyleListMarker = 1u << 7;
+constexpr std::uint16_t kStyleTableBorder = 1u << 8;
+constexpr std::uint16_t kStyleTableHeader = 1u << 9;
+constexpr std::uint16_t kStyleTableCell = 1u << 10;
+constexpr std::uint16_t kStyleCodeBlock = 1u << 11;
+constexpr std::uint16_t kStylePrefix = 1u << 12;
+
+struct StyledLine
+{
+    std::string text;
+    std::vector<std::uint16_t> styles;
+};
+
 struct ChannelSegment
 {
   std::string channel;
@@ -271,6 +298,538 @@ std::vector<ChannelSegment> parse_harmony_segments(const std::string &content)
 
   return segments;
 }
+
+void applyStyleRange(std::vector<std::uint16_t> &styles,
+                     std::size_t start,
+                     std::size_t end,
+                     std::uint16_t mask)
+{
+    if (start >= end)
+        return;
+    if (end > styles.size())
+        end = styles.size();
+    for (std::size_t i = start; i < end; ++i)
+        styles[i] = static_cast<std::uint16_t>(styles[i] | mask);
+}
+
+std::vector<StyledLine> wrapStyledLine(const std::string &text,
+                                       const std::vector<std::uint16_t> &styles,
+                                       int width,
+                                       bool hardWrap)
+{
+    std::vector<StyledLine> result;
+    if (width <= 0)
+        width = 1;
+
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        if (text[pos] == '\n')
+        {
+            StyledLine blank;
+            blank.text = std::string();
+            result.push_back(std::move(blank));
+            ++pos;
+            continue;
+        }
+
+        std::size_t lineStart = pos;
+        std::size_t remaining = text.size() - pos;
+        std::size_t take = 0;
+
+        if (!hardWrap)
+        {
+            if (remaining <= static_cast<std::size_t>(width))
+            {
+                take = remaining;
+            }
+            else
+            {
+                std::size_t limit = pos + static_cast<std::size_t>(width);
+                std::size_t wrapPos = limit;
+                bool foundSpace = false;
+                for (std::size_t i = pos; i < limit; ++i)
+                {
+                    char ch = text[i];
+                    if (std::isspace(static_cast<unsigned char>(ch)))
+                    {
+                        wrapPos = i;
+                        foundSpace = true;
+                    }
+                }
+                if (foundSpace && wrapPos > pos)
+                {
+                    take = wrapPos - pos;
+                }
+                else
+                {
+                    take = static_cast<std::size_t>(width);
+                }
+            }
+        }
+        else
+        {
+            take = std::min<std::size_t>(remaining, static_cast<std::size_t>(width));
+        }
+
+        std::size_t lineEnd = pos + take;
+        StyledLine line;
+        line.text.assign(text.begin() + lineStart, text.begin() + lineEnd);
+        line.styles.reserve(line.text.size());
+        for (std::size_t i = lineStart; i < lineEnd; ++i)
+            line.styles.push_back(styles[i]);
+        result.push_back(std::move(line));
+
+        pos = lineEnd;
+        while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) && text[pos] != '\n')
+            ++pos;
+    }
+
+    if (result.empty())
+    {
+        StyledLine blank;
+        result.push_back(std::move(blank));
+    }
+
+    return result;
+}
+
+class MarkdownSegmentRenderer
+{
+public:
+    explicit MarkdownSegmentRenderer(int wrapWidth)
+        : width_(std::max(1, wrapWidth))
+    {
+    }
+
+    std::vector<StyledLine> render(const std::string &text)
+    {
+        lines_.clear();
+        tableBuffer_.clear();
+        state_ = ck::edit::MarkdownParserState{};
+
+        std::size_t offset = 0;
+        while (offset <= text.size())
+        {
+            std::size_t newline = text.find('\n', offset);
+            std::string line;
+            if (newline == std::string::npos)
+            {
+                line = text.substr(offset);
+                offset = text.size();
+            }
+            else
+            {
+                line = text.substr(offset, newline - offset);
+                offset = newline + 1;
+            }
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
+            processLine(line);
+        }
+
+        flushTable();
+        return lines_;
+    }
+
+private:
+    struct TableRow
+    {
+        std::string raw;
+        ck::edit::MarkdownLineInfo info;
+    };
+
+    int width_;
+    ck::edit::MarkdownAnalyzer analyzer_;
+    ck::edit::MarkdownParserState state_{};
+    std::vector<StyledLine> lines_;
+    std::vector<TableRow> tableBuffer_;
+
+    void processLine(const std::string &line)
+    {
+        auto info = analyzer_.analyzeLine(line, state_);
+
+        if (info.kind == ck::edit::MarkdownLineKind::TableRow ||
+            info.kind == ck::edit::MarkdownLineKind::TableSeparator)
+        {
+            tableBuffer_.push_back(TableRow{line, info});
+            return;
+        }
+
+        flushTable();
+
+        switch (info.kind)
+        {
+        case ck::edit::MarkdownLineKind::Blank:
+            addBlankLine();
+            break;
+        case ck::edit::MarkdownLineKind::Heading:
+            renderHeading(line, info);
+            break;
+        case ck::edit::MarkdownLineKind::BlockQuote:
+            renderBlockQuote(line, info);
+            break;
+        case ck::edit::MarkdownLineKind::BulletListItem:
+        case ck::edit::MarkdownLineKind::OrderedListItem:
+            renderListItem(line, info);
+            break;
+        case ck::edit::MarkdownLineKind::CodeFenceStart:
+        case ck::edit::MarkdownLineKind::CodeFenceEnd:
+        case ck::edit::MarkdownLineKind::FencedCode:
+        case ck::edit::MarkdownLineKind::IndentedCode:
+            renderCode(line, info);
+            break;
+        case ck::edit::MarkdownLineKind::HorizontalRule:
+            renderHorizontalRule();
+            break;
+        case ck::edit::MarkdownLineKind::Paragraph:
+        case ck::edit::MarkdownLineKind::Html:
+        case ck::edit::MarkdownLineKind::Unknown:
+        default:
+            renderParagraph(line, info);
+            break;
+        }
+    }
+
+    void addBlankLine()
+    {
+        StyledLine blank;
+        lines_.push_back(std::move(blank));
+    }
+
+    void renderHeading(const std::string &line, const ck::edit::MarkdownLineInfo &info)
+    {
+        std::string content = info.inlineText;
+        std::vector<std::uint16_t> styles(content.size(), kStyleHeading);
+        applyInlineSpans(styles, 0, info.spans);
+        appendWrapped(content, styles, false);
+    }
+
+    void renderParagraph(const std::string &line, const ck::edit::MarkdownLineInfo &info)
+    {
+        std::string content = info.inlineText;
+        std::vector<std::uint16_t> styles(content.size(), kStyleNone);
+        applyInlineSpans(styles, 0, info.spans);
+        appendWrapped(content, styles, false);
+    }
+
+    void renderBlockQuote(const std::string &line, const ck::edit::MarkdownLineInfo &info)
+    {
+        std::string content = info.inlineText;
+
+        std::string text = "> " + content;
+        std::vector<std::uint16_t> styles(text.size(), kStyleQuote);
+        applyStyleRange(styles, 0, 2, static_cast<std::uint16_t>(kStyleQuote | kStyleListMarker));
+        if (!content.empty())
+            applyInlineSpans(styles, 2, info.spans);
+        appendWrapped(text, styles, false);
+    }
+
+    void renderListItem(const std::string &line, const ck::edit::MarkdownLineInfo &info)
+    {
+        std::string marker = info.kind == ck::edit::MarkdownLineKind::OrderedListItem ? info.marker : std::string();
+        std::string content = info.inlineText;
+
+        bool taskCompleted = false;
+        if (info.isTask)
+        {
+            std::size_t bracket = content.find('[');
+            if (bracket != std::string::npos && bracket + 1 < content.size())
+            {
+                char status = content[bracket + 1];
+                taskCompleted = (status == 'x' || status == 'X');
+            }
+        }
+
+        if (marker.empty())
+            marker = info.isTask ? (taskCompleted ? "☑" : "☐") : "•";
+
+        std::string text = marker + " " + content;
+        std::vector<std::uint16_t> styles(text.size(), kStyleNone);
+        applyStyleRange(styles, 0, marker.size(), static_cast<std::uint16_t>(kStyleListMarker | (info.isTask ? kStylePrefix : 0)));
+        applyStyleRange(styles, marker.size(), marker.size() + 1, kStyleListMarker);
+        applyInlineSpans(styles, marker.size() + 1, info.spans);
+        appendWrapped(text, styles, false);
+    }
+
+    void renderCode(const std::string &line, const ck::edit::MarkdownLineInfo &info)
+    {
+        std::string text = line;
+        if (info.kind == ck::edit::MarkdownLineKind::CodeFenceStart)
+        {
+            text = "```";
+            if (!info.language.empty())
+            {
+                text.append(" ");
+                text.append(info.language);
+            }
+        }
+        else if (info.kind == ck::edit::MarkdownLineKind::CodeFenceEnd)
+        {
+            text = "```";
+        }
+
+        std::vector<std::uint16_t> styles(text.size(), kStyleCodeBlock);
+        appendWrapped(text, styles, true);
+    }
+
+    void renderHorizontalRule()
+    {
+        std::string text(width_, '-');
+        std::vector<std::uint16_t> styles(text.size(), kStyleCodeBlock);
+        appendWrapped(text, styles, true);
+    }
+
+    void applyInlineSpans(std::vector<std::uint16_t> &styles,
+                          std::size_t offset,
+                          const std::vector<ck::edit::MarkdownSpan> &spans)
+    {
+        for (const auto &span : spans)
+        {
+            std::uint16_t mask = kStyleNone;
+            switch (span.kind)
+            {
+            case ck::edit::MarkdownSpanKind::Bold:
+                mask |= kStyleBold;
+                break;
+            case ck::edit::MarkdownSpanKind::Italic:
+                mask |= kStyleItalic;
+                break;
+            case ck::edit::MarkdownSpanKind::BoldItalic:
+                mask |= kStyleBold | kStyleItalic;
+                break;
+            case ck::edit::MarkdownSpanKind::Strikethrough:
+                mask |= kStyleStrikethrough;
+                break;
+            case ck::edit::MarkdownSpanKind::Code:
+                mask |= kStyleInlineCode;
+                break;
+            case ck::edit::MarkdownSpanKind::Link:
+                mask |= kStyleLink;
+                break;
+            case ck::edit::MarkdownSpanKind::InlineHtml:
+                mask |= kStyleLink;
+                break;
+            default:
+                break;
+            }
+            if (mask != kStyleNone)
+                applyStyleRange(styles, offset + span.start, offset + span.end, mask);
+        }
+    }
+
+    void appendWrapped(const std::string &text,
+                       const std::vector<std::uint16_t> &styles,
+                       bool hardWrap)
+    {
+        auto wrapped = wrapStyledLine(text, styles, width_, hardWrap);
+        lines_.insert(lines_.end(), wrapped.begin(), wrapped.end());
+    }
+
+    void flushTable()
+    {
+        if (tableBuffer_.empty())
+            return;
+
+        std::size_t columnCount = 0;
+        for (const auto &row : tableBuffer_)
+        {
+            columnCount = std::max(columnCount, row.info.tableCells.size());
+        }
+        if (columnCount == 0)
+        {
+            tableBuffer_.clear();
+            return;
+        }
+
+        std::vector<int> colWidths(columnCount, 1);
+        for (const auto &row : tableBuffer_)
+        {
+            for (std::size_t i = 0; i < row.info.tableCells.size(); ++i)
+            {
+                const auto &cell = row.info.tableCells[i];
+                colWidths[i] = std::max(colWidths[i], static_cast<int>(cell.text.size()));
+            }
+        }
+
+        int borderWidth = static_cast<int>(columnCount) + 1;
+        int totalWidth = borderWidth;
+        for (int w : colWidths)
+            totalWidth += w + 2;
+
+        if (totalWidth > width_)
+        {
+            int available = width_ - borderWidth;
+            if (available < static_cast<int>(columnCount))
+                available = static_cast<int>(columnCount);
+            for (std::size_t i = 0; i < colWidths.size(); ++i)
+            {
+                int maxAllow = std::max(1, available / static_cast<int>(columnCount));
+                if (colWidths[i] > maxAllow)
+                    colWidths[i] = maxAllow;
+            }
+        }
+
+        auto makeBorder = [&](char corner, char lineChar) {
+            std::string border;
+            border.reserve(static_cast<std::size_t>(totalWidth));
+            border.push_back(corner);
+            for (std::size_t c = 0; c < columnCount; ++c)
+            {
+                border.append(colWidths[c] + 2, lineChar);
+                border.push_back(corner);
+            }
+            std::vector<std::uint16_t> styles(border.size(), kStyleTableBorder);
+            appendWrapped(border, styles, true);
+        };
+
+        makeBorder('+', '-');
+
+        bool headerRendered = false;
+        for (const auto &row : tableBuffer_)
+        {
+            bool isSeparator = row.info.kind == ck::edit::MarkdownLineKind::TableSeparator;
+            if (isSeparator)
+            {
+                makeBorder('+', '=');
+                headerRendered = true;
+                continue;
+            }
+
+            bool headerStyle = row.info.isTableHeader && !headerRendered;
+
+            std::vector<std::vector<std::string>> cellLines(columnCount);
+            for (std::size_t c = 0; c < columnCount; ++c)
+            {
+                std::string cellText;
+                if (c < row.info.tableCells.size())
+                    cellText = row.info.tableCells[c].text;
+
+                auto wrapped = wrapStyledLine(cellText,
+                                              std::vector<std::uint16_t>(cellText.size(), kStyleNone),
+                                              colWidths[c],
+                                              false);
+                cellLines[c].reserve(wrapped.size());
+                for (auto &part : wrapped)
+                {
+                    std::string padded = part.text;
+                    if (static_cast<int>(padded.size()) < colWidths[c])
+                        padded.append(static_cast<std::size_t>(colWidths[c] - static_cast<int>(padded.size())), ' ');
+                    cellLines[c].push_back(std::move(padded));
+                }
+                if (cellLines[c].empty())
+                    cellLines[c].push_back(std::string(static_cast<std::size_t>(colWidths[c]), ' '));
+            }
+
+                std::size_t rowHeight = 0;
+                for (const auto &cl : cellLines)
+                    rowHeight = std::max(rowHeight, cl.size());
+
+                for (std::size_t r = 0; r < rowHeight; ++r)
+            {
+                std::string line;
+                std::vector<std::uint16_t> styles;
+                line.reserve(static_cast<std::size_t>(totalWidth));
+                styles.reserve(static_cast<std::size_t>(totalWidth));
+
+                    line.push_back('|');
+                    styles.push_back(kStyleTableBorder);
+
+                    for (std::size_t c = 0; c < columnCount; ++c)
+                    {
+                        line.push_back(' ');
+                        styles.push_back(headerStyle ? kStyleTableHeader : kStyleTableCell);
+
+                        const auto &cl = cellLines[c];
+                        const std::string &cellLine = r < cl.size() ? cl[r] : std::string(static_cast<std::size_t>(colWidths[c]), ' ');
+                        for (char ch : cellLine)
+                        {
+                            line.push_back(ch);
+                            styles.push_back(headerStyle ? kStyleTableHeader : kStyleTableCell);
+                        }
+
+                        line.push_back(' ');
+                        styles.push_back(headerStyle ? kStyleTableHeader : kStyleTableCell);
+
+                        line.push_back('|');
+                        styles.push_back(kStyleTableBorder);
+                    }
+
+                appendWrapped(line, styles, true);
+            }
+
+            if (row.info.isTableHeader && !headerRendered)
+                headerRendered = true;
+        }
+
+        makeBorder('+', '-');
+        tableBuffer_.clear();
+    }
+};
+
+std::vector<StyledLine> render_markdown_to_styled_lines(const std::string &text, int wrapWidth)
+{
+    MarkdownSegmentRenderer renderer(wrapWidth);
+    return renderer.render(text);
+}
+
+TColorAttr applyStyleToAttr(TColorAttr base, std::uint16_t mask)
+{
+    TColorAttr attr = base;
+
+    auto setFg = [&](int code) { setFore(attr, TColorDesired(TColorBIOS(code))); };
+    auto setBg = [&](int code) { setBack(attr, TColorDesired(TColorBIOS(code))); };
+
+    int fg = -1;
+    int bg = -1;
+
+    auto chooseFg = [&](int code) {
+        if (fg == -1)
+            fg = code;
+    };
+
+    if (mask & kStyleTableBorder)
+        chooseFg(0x08);
+    if (mask & kStyleTableHeader)
+        chooseFg(0x0E);
+    if (mask & kStyleTableCell)
+        chooseFg(0x07);
+    if (mask & kStyleHeading)
+        chooseFg(0x0E);
+    if (mask & kStyleInlineCode)
+    {
+        chooseFg(0x0A);
+        bg = 0x01;
+    }
+    if (mask & kStyleCodeBlock)
+    {
+        chooseFg(0x0A);
+        bg = 0x01;
+    }
+    if (mask & kStyleLink)
+        chooseFg(0x09);
+    if (mask & kStyleQuote)
+        chooseFg(0x0B);
+    if (mask & kStyleListMarker)
+        chooseFg(0x0D);
+    if (mask & kStyleStrikethrough)
+        chooseFg(0x08);
+    if (mask & kStyleItalic)
+        chooseFg(0x0C);
+    if ((mask & kStyleBold) && fg == -1)
+        fg = 0x0F;
+    if (mask & kStylePrefix)
+        fg = 0x0C;
+
+    if (fg != -1)
+        setFg(fg);
+    if (bg != -1)
+        setBg(bg);
+
+    return attr;
+}
+
 } // namespace
 
 ChatTranscriptView::ChatTranscriptView(const TRect &bounds, TScrollBar *hScroll, TScrollBar *vScroll)
@@ -422,7 +981,27 @@ void ChatTranscriptView::draw()
                     setFore(attr, TColorDesired(TColorBIOS(0x01)));
             }
             if (!row.text.empty())
-                buffer.moveStr(0, row.text.c_str(), attr);
+            {
+                if (row.styleMask.empty())
+                {
+                    buffer.moveStr(0, row.text.c_str(), attr);
+                }
+                else
+                {
+                    std::size_t pos = 0;
+                    while (pos < row.text.size())
+                    {
+                        std::size_t end = pos + 1;
+                        std::uint16_t mask = row.styleMask[pos];
+                        while (end < row.text.size() && row.styleMask[end] == mask)
+                            ++end;
+                        TColorAttr runAttr = (mask == 0) ? attr : applyStyleToAttr(attr, mask);
+                        TStringView fragment(row.text.c_str() + pos, end - pos);
+                        buffer.moveStr(static_cast<int>(pos), fragment, runAttr);
+                        pos = end;
+                    }
+                }
+            }
         }
         writeLine(0, y, size.x, 1, buffer);
     }
@@ -678,64 +1257,40 @@ void ChatTranscriptView::appendVisibleSegment(Role role,
                                               bool thinking,
                                               const std::string &channelLabel)
 {
+    int contentWidth = width - static_cast<int>(prefix.size());
+    if (contentWidth < 1)
+        contentWidth = 1;
+
+    auto styled = render_markdown_to_styled_lines(text, contentWidth);
+    if (styled.empty())
+        styled.push_back(StyledLine{});
+
     std::string indent(prefix.size(), ' ');
-    std::string_view content(text);
-    std::size_t start = 0;
-    bool segmentFirstLine = true;
 
-    auto emitWrapped = [&](const std::string &line, bool firstLineInSegment) {
-        const std::string &currentPrefix = firstLineInSegment ? prefix : indent;
-        std::string fullLine = currentPrefix + line;
-        auto wrappedLines = wrapLines(fullLine, width);
-        if (wrappedLines.empty())
-            wrappedLines.push_back(currentPrefix);
-        for (std::size_t idx = 0; idx < wrappedLines.size(); ++idx)
-        {
-            DisplayRow row;
-            row.role = role;
-            row.messageIndex = messageIndex;
-            row.isFirstLine = messageFirstRow && firstLineInSegment && idx == 0;
-            row.isThinking = thinking;
-            row.channelLabel = channelLabel;
-            row.text = wrappedLines[idx];
-            rows.push_back(std::move(row));
-            messageFirstRow = false;
-        }
-    };
-
-    if (content.empty())
+    for (std::size_t idx = 0; idx < styled.size(); ++idx)
     {
-        emitWrapped(std::string(), true);
-        return;
-    }
+        const StyledLine &line = styled[idx];
+        DisplayRow row;
+        row.role = role;
+        row.messageIndex = messageIndex;
+        row.isFirstLine = messageFirstRow && idx == 0;
+        row.isThinking = thinking;
+        row.channelLabel = channelLabel;
 
-    while (true)
-    {
-        std::size_t end = content.find('\n', start);
-        std::string segment;
-        if (end == std::string_view::npos)
-            segment = std::string(content.substr(start));
-        else
-            segment = std::string(content.substr(start, end - start));
+        const std::string &prefixToUse = (idx == 0) ? prefix : indent;
+        row.text = prefixToUse + line.text;
+        row.styleMask.assign(row.text.size(), 0);
+        if (!prefixToUse.empty())
+            applyStyleRange(row.styleMask, 0, prefixToUse.size(), static_cast<std::uint16_t>(kStylePrefix));
 
-        emitWrapped(segment, segmentFirstLine);
-
-        if (end == std::string_view::npos)
-            break;
-        start = end + 1;
-        segmentFirstLine = false;
-        if (start >= content.size())
+        for (std::size_t i = 0; i < line.text.size(); ++i)
         {
-            DisplayRow row;
-            row.role = role;
-            row.messageIndex = messageIndex;
-            row.isFirstLine = false;
-            row.isThinking = thinking;
-            row.channelLabel = channelLabel;
-            row.text = indent;
-            rows.push_back(std::move(row));
-            break;
+            if (prefixToUse.size() + i < row.styleMask.size())
+                row.styleMask[prefixToUse.size() + i] = line.styles.size() > i ? line.styles[i] : 0;
         }
+
+        rows.push_back(std::move(row));
+        messageFirstRow = false;
     }
 }
 
@@ -766,6 +1321,9 @@ void ChatTranscriptView::appendHiddenPlaceholder(const std::string &prefix,
     {
         row.text = prefix + "[Analysis finished – click to view]";
     }
+    row.styleMask.assign(row.text.size(), 0);
+    if (!prefix.empty())
+        applyStyleRange(row.styleMask, 0, prefix.size(), kStylePrefix);
 
     rows.push_back(std::move(row));
 }
@@ -784,63 +1342,4 @@ void ChatTranscriptView::notifyLayoutChanged()
 {
     if (layoutChangedCallback)
         layoutChangedCallback();
-}
-
-std::vector<std::string> ChatTranscriptView::wrapLines(const std::string &text, int width) const
-{
-    std::vector<std::string> result;
-    if (width <= 0)
-    {
-        result.push_back(text);
-        return result;
-    }
-
-    std::string current;
-    current.reserve(static_cast<std::size_t>(width));
-    const char *ptr = text.c_str();
-    std::size_t len = text.size();
-    std::size_t pos = 0;
-
-    while (pos < len)
-    {
-        std::size_t remaining = len - pos;
-        std::size_t spaceLeft = static_cast<std::size_t>(width > 0 ? width : 1);
-
-        if (remaining <= spaceLeft)
-        {
-            current.append(ptr + pos, remaining);
-            result.push_back(current);
-            break;
-        }
-
-        std::size_t wrapPos = pos + spaceLeft;
-        std::size_t lastSpace = std::string::npos;
-        for (std::size_t i = pos; i < wrapPos; ++i)
-        {
-            if (std::isspace(static_cast<unsigned char>(ptr[i])))
-                lastSpace = i;
-        }
-
-        if (lastSpace != std::string::npos && lastSpace >= pos)
-        {
-            current.append(ptr + pos, lastSpace - pos);
-            result.push_back(current);
-            current.clear();
-            pos = lastSpace + 1;
-            while (pos < len && std::isspace(static_cast<unsigned char>(ptr[pos])))
-                ++pos;
-        }
-        else
-        {
-            current.append(ptr + pos, spaceLeft);
-            result.push_back(current);
-            current.clear();
-            pos += spaceLeft;
-        }
-    }
-
-    if (result.empty())
-        result.push_back(std::string());
-
-    return result;
 }

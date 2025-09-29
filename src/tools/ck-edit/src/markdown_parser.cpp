@@ -100,12 +100,17 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
     }
 
     MarkdownLineInfo info;
+    auto parse = [&](std::string src) {
+        info.inlineText = std::move(src);
+        parseInline(info.inlineText, info);
+    };
+
     std::string trimmed = trim(line);
     if (trimmed.empty())
     {
         info.kind = MarkdownLineKind::Blank;
         resetTable();
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
@@ -113,7 +118,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
     {
         info.kind = MarkdownLineKind::Html;
         resetTable();
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
@@ -142,7 +147,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
                 state.fenceLabel = info.fenceLabel;
                 state.fenceLanguage = info.language;
                 resetTable();
-                parseInline(line, info);
+                parse(std::string(line));
                 return info;
             }
         }
@@ -166,7 +171,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
     {
         info.kind = MarkdownLineKind::IndentedCode;
         resetTable();
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
@@ -174,7 +179,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
     {
         info.kind = MarkdownLineKind::BlockQuote;
         resetTable();
-        parseInline(trimmed.substr(1), info);
+        parse(trimmed.substr(1));
         return info;
     }
 
@@ -188,7 +193,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
             info.kind = MarkdownLineKind::Heading;
             info.headingLevel = static_cast<int>(level);
             resetTable();
-            parseInline(trimmed.substr(level), info);
+            parse(trimmed.substr(level));
             return info;
         }
     }
@@ -197,7 +202,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
     {
         info.kind = MarkdownLineKind::HorizontalRule;
         resetTable();
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
@@ -212,7 +217,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
             state.tableRowCounter = 1;
         info.tableRowIndex = state.tableRowCounter;
         state.tableAlignments = info.tableAlignments;
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
@@ -266,7 +271,7 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
             info.isTask = true;
         }
         resetTable();
-        parseInline(rest, info);
+        parse(rest);
         return info;
     }
 
@@ -285,13 +290,13 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
         info.isTableHeader = !state.tableHeaderConfirmed;
         info.tableRowIndex = state.tableRowCounter + 1;
         state.tableRowCounter = info.tableRowIndex;
-        parseInline(line, info);
+        parse(std::string(line));
         return info;
     }
 
     info.kind = MarkdownLineKind::Paragraph;
     resetTable();
-    parseInline(line, info);
+    parse(std::string(line));
     return info;
 }
 
@@ -607,7 +612,8 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeFencedState(const std::string &line, M
     {
         info.kind = MarkdownLineKind::FencedCode;
     }
-    parseInline(line, info);
+    info.inlineText = line;
+    parseInline(info.inlineText, info);
     return info;
 }
 

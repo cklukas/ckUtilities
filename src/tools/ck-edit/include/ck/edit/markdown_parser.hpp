@@ -83,6 +83,7 @@ struct MarkdownLineInfo
     std::vector<MarkdownTableAlignment> tableAlignments;
     bool isTableHeader = false;
     int tableRowIndex = 0;
+    std::string inlineText;
 };
 
 struct MarkdownParserState
