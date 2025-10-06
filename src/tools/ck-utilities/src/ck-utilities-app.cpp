@@ -303,7 +303,8 @@ namespace
         {
             TDrawBuffer buffer;
             TColorAttr background{TColorBIOS(0x0), TColorBIOS(0x7)}; // Spaces: black on light gray.
-            TColorAttr blueText{TColorBIOS(0x1), TColorBIOS(0x7)};   // Banner glyphs: blue on light gray.
+            const bool useColorPalette = (TProgram::appPalette == ::apColor);
+            TColorAttr bannerText{TColorBIOS(useColorPalette ? 0x1 : 0x0), TColorBIOS(0x7)}; // Banner glyphs respect palette.
             for (int y = 0; y < size.y; ++y)
             {
                 buffer.moveChar(0, ' ', background, size.x);
@@ -330,7 +331,7 @@ namespace
                         {
                             Utf8Slice slice = utf8ColumnSlice(line, copyOffset, copyWidth);
                             TStringView fragment{line.data() + slice.offset, slice.length};
-                            buffer.moveStr(start, fragment, blueText);
+                            buffer.moveStr(start, fragment, bannerText);
                         }
                     }
                 }

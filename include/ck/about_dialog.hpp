@@ -178,7 +178,8 @@ namespace ck::ui
             {
                 const TColorAttr normal = getColor(1);
                 TColorAttr highlight = normal;
-                ::setFore(highlight, TColorBIOS(0x1));
+                const bool useColorPalette = (TProgram::appPalette == ::apColor);
+                ::setFore(highlight, useColorPalette ? TColorBIOS(0x1) : TColorBIOS(0x0));
                 TDrawBuffer buffer;
                 for (int y = 0; y < size.y; ++y)
                 {
