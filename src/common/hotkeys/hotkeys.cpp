@@ -8,6 +8,8 @@
 #include <cctype>
 #include <sstream>
 #include <fstream>
+#include <filesystem>
+#include <iomanip>
 
 #include "ck/options.hpp"
 #include <nlohmann/json.hpp>
@@ -42,6 +44,38 @@ std::unordered_map<std::string, std::unordered_map<std::uint16_t, std::string>> 
 std::string gActiveLocale = "en";
 std::unordered_map<std::uint16_t, std::string> gCommandTools;
 
+constexpr std::string_view kCustomSchemeId = "custom";
+constexpr std::string_view kAutoSchemeId = "auto";
+
+std::string platformDefaultSchemeId()
+{
+#ifdef __APPLE__
+    return "mac";
+#elif defined(_WIN32)
+    return "windows";
+#else
+    return "linux";
+#endif
+}
+
+bool gConfigLoaded = false;
+bool gConfigDirty = false;
+bool gCustomDirty = false;
+bool gRuntimeOverride = false;
+bool gHasCustom = false;
+std::string gPreferredScheme = std::string(kAutoSchemeId);
+std::string gCustomBase = platformDefaultSchemeId();
+
+std::filesystem::path configFilePath()
+{
+    if (const char *overridePath = std::getenv("CK_HOTKEYS_CONFIG"))
+    {
+        if (overridePath[0] != '\0')
+            return std::filesystem::path(overridePath);
+    }
+    return ck::config::OptionRegistry::configRoot() / "hotkeys.json";
+}
+
 SchemeData *findScheme(std::string_view id)
 {
     auto it = std::find_if(gSchemes.begin(), gSchemes.end(), [&](const SchemeData &scheme) {
@@ -75,6 +109,29 @@ void ensureActiveScheme()
         return;
     gActive.scheme = &gSchemes.front();
     gActiveId = gActive.scheme->id;
+}
+
+SchemeData &ensureCustomScheme()
+{
+    return ensureScheme(kCustomSchemeId);
+}
+
+void loadConfiguration();
+void saveConfiguration();
+void applyPreferredScheme();
+
+void ensureConfigurationLoaded()
+{
+    if (!gConfigLoaded)
+        loadConfiguration();
+}
+
+KeyBinding normalizeBinding(const KeyBinding &binding)
+{
+    KeyBinding normalized = binding;
+    if (normalized.display.empty())
+        normalized.display = formatKey(normalized.key);
+    return normalized;
 }
 
 const std::string *findLabel(const std::string &locale, std::uint16_t command)

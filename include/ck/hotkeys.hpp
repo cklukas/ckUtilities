@@ -67,6 +67,12 @@ void setActiveScheme(std::string_view id);
 
 std::string_view activeScheme();
 
+std::string defaultSchemeId();
+
+std::string preferredScheme();
+
+void setPreferredScheme(std::string_view id);
+
 const KeyBinding *lookup(std::uint16_t command) noexcept;
 
 TKey key(std::uint16_t command) noexcept;
@@ -89,7 +95,17 @@ void applyCommandLineScheme(int &argc, char **argv);
 
 void registerCommandLabels(std::span<const CommandLabel> labels, std::string_view locale = "en");
 
+bool customSchemeExists();
+
+std::string customBaseScheme();
+
+bool createCustomScheme(std::string_view templateId);
+
+void clearCustomScheme();
+
 std::string commandLabel(std::uint16_t command);
+
+std::string commandTool(std::uint16_t command);
 
 void setLocale(std::string_view locale);
 
