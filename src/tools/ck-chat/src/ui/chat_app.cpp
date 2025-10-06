@@ -6,6 +6,7 @@
 #include "ck/ai/llm.hpp"
 #include "ck/app_info.hpp"
 #include "ck/launcher.hpp"
+#include "ck/hotkeys.hpp"
 #include "model_dialog.hpp"
 #include "model_loading_dialog.hpp"
 #include "prompt_dialog.hpp"
@@ -187,15 +188,15 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   r.b.y = r.a.y + 1;
 
   TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                       *new TMenuItem("~N~ew Chat...", cmNewChat, kbCtrlN,
-                                      hcNoContext, "Ctrl-N") +
-                       *new TMenuItem("~C~lose Window", cmClose, kbAltF3,
-                                      hcNoContext, "Alt-F3") +
+                       *new TMenuItem("~N~ew Chat...", cmNewChat, kbNoKey,
+                                      hcNoContext) +
+                       *new TMenuItem("~C~lose Window", cmClose, kbNoKey,
+                                      hcNoContext) +
                        newLine();
   if (ck::launcher::launchedFromCkLauncher())
     fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher,
-                              kbCtrlL, hcNoContext, "Ctrl-L");
-  fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X");
+                              kbNoKey, hcNoContext);
+  fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcNoContext);
 
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);
 
@@ -248,10 +249,9 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   }
 
   modelsMenu + newLine() +
-      *new TMenuItem("Manage ~M~odels...", cmManageModels, kbF2, hcNoContext,
-                     "F2");
-  modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbF3,
-                              hcNoContext, "F3");
+      *new TMenuItem("Manage ~M~odels...", cmManageModels, kbNoKey, hcNoContext);
+  modelsMenu + *new TMenuItem("Manage ~P~rompts...", cmManagePrompts, kbNoKey,
+                              hcNoContext);
 
   TSubMenu &viewMenu = *new TSubMenu("~V~iew", hcNoContext);
   if (showThinking_)
@@ -270,35 +270,39 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   TMenuItem &menuChain =
       fileMenu + modelsMenu + viewMenu +
       *new TSubMenu("~W~indows", hcNoContext) +
-      *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext,
-                     "Ctrl-F5") +
-      *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
-      *new TMenuItem("~N~ext", cmNext, kbF6, hcNoContext, "F6") +
-      *new TMenuItem("~C~lose", cmClose, kbAltF3, hcNoContext, "Alt-F3") +
+      *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
+      *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
+      *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
+      *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
       *new TMenuItem("~T~ile", cmTile, kbNoKey) +
       *new TMenuItem("C~a~scade", cmCascade, kbNoKey) +
       *new TSubMenu("~H~elp", hcNoContext) +
-      *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+      *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
+  ck::hotkeys::configureMenuTree(menuChain);
   return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
 TStatusLine *ChatApp::initStatusLine(TRect r) {
   r.a.y = r.b.y - 1;
 
-  auto *newItem = new TStatusItem("~Ctrl-N~ New Chat", kbCtrlN, cmNewChat);
-  auto *closeItem = new TStatusItem("~Alt-F3~ Close", kbAltF3, cmClose);
+  auto *newItem = new TStatusItem("New Chat", kbNoKey, cmNewChat);
+  ck::hotkeys::configureStatusItem(*newItem, "New Chat");
+  auto *closeItem = new TStatusItem("Close", kbNoKey, cmClose);
+  ck::hotkeys::configureStatusItem(*closeItem, "Close");
   newItem->next = closeItem;
   TStatusItem *tail = closeItem;
 
   if (ck::launcher::launchedFromCkLauncher()) {
     auto *returnItem =
-        new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+        new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+    ck::hotkeys::configureStatusItem(*returnItem, "Return");
     tail->next = returnItem;
     tail = returnItem;
   }
 
-  auto *quitItem = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+  auto *quitItem = new TStatusItem("Quit", kbNoKey, cmQuit);
+  ck::hotkeys::configureStatusItem(*quitItem, "Quit");
   tail->next = quitItem;
 
   return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, newItem));

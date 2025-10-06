@@ -1,6 +1,7 @@
 #include "ck/edit/markdown_editor.hpp"
 
 #include "ck/about_dialog.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 
 #define Uses_TFindDialog
@@ -979,10 +980,12 @@ namespace ck::edit
                 if (markdownMode)
                 {
                     TMenuItem &items = makeFileMenu() + makeEditMenu(true) + makeInsertMenu() + makeTableMenu() + makeViewMenu() + makeWindowMenu() + makeHelpMenu();
+                    ck::hotkeys::configureMenuTree(items);
                     return new TMenu(items);
                 }
 
                 TMenuItem &items = makeFileMenu() + makeEditMenu(false) + makeViewMenu() + makeWindowMenu() + makeHelpMenu();
+                ck::hotkeys::configureMenuTree(items);
                 return new TMenu(items);
             }
         };

@@ -26,6 +26,8 @@
 
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/commands/json_view.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 
 #include <fstream>
@@ -201,22 +203,22 @@ private:
     void syncOutlineExpansion();
 };
 
-static const ushort cmFind = 1000;
-static const ushort cmFindNext = 1001;
-static const ushort cmFindPrev = 1002;
-static const ushort cmAbout = 1003;
-static const ushort cmEndSearch = 1004;
-static const ushort cmLevel0 = 1100;
-static const ushort cmLevel1 = 1101;
-static const ushort cmLevel2 = 1102;
-static const ushort cmLevel3 = 1103;
-static const ushort cmLevel4 = 1104;
-static const ushort cmLevel5 = 1105;
-static const ushort cmLevel6 = 1106;
-static const ushort cmLevel7 = 1107;
-static const ushort cmLevel8 = 1108;
-static const ushort cmLevel9 = 1109;
-static const ushort cmReturnToLauncher = 1200;
+static constexpr ushort cmFind = ck::commands::json_view::Find;
+static constexpr ushort cmFindNext = ck::commands::json_view::FindNext;
+static constexpr ushort cmFindPrev = ck::commands::json_view::FindPrev;
+static constexpr ushort cmAbout = ck::commands::json_view::About;
+static constexpr ushort cmEndSearch = ck::commands::json_view::EndSearch;
+static constexpr ushort cmLevel0 = ck::commands::json_view::Level0;
+static constexpr ushort cmLevel1 = ck::commands::json_view::Level1;
+static constexpr ushort cmLevel2 = ck::commands::json_view::Level2;
+static constexpr ushort cmLevel3 = ck::commands::json_view::Level3;
+static constexpr ushort cmLevel4 = ck::commands::json_view::Level4;
+static constexpr ushort cmLevel5 = ck::commands::json_view::Level5;
+static constexpr ushort cmLevel6 = ck::commands::json_view::Level6;
+static constexpr ushort cmLevel7 = ck::commands::json_view::Level7;
+static constexpr ushort cmLevel8 = ck::commands::json_view::Level8;
+static constexpr ushort cmLevel9 = ck::commands::json_view::Level9;
+static constexpr ushort cmReturnToLauncher = ck::commands::json_view::ReturnToLauncher;
 
 class JsonStatusLine : public TStatusLine
 {
@@ -229,12 +231,18 @@ public:
         TStatusItem *chain = nullptr;
         if (s.matches.empty())
         {
-            auto *i1 = new TStatusItem("~F3~ Open", kbF3, cmOpen);
-            auto *i2 = new TStatusItem("~Ctrl-F~ Find", kbCtrlF, cmFind);
+            auto *i1 = new TStatusItem("Open", kbNoKey, cmOpen);
+            ck::hotkeys::configureStatusItem(*i1, "Open");
+            auto *i2 = new TStatusItem("Find", kbNoKey, cmFind);
+            ck::hotkeys::configureStatusItem(*i2, "Find");
             TStatusItem *returnItem = nullptr;
             if (ck::launcher::launchedFromCkLauncher())
-                returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
-            auto *i3 = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+            {
+                returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+                ck::hotkeys::configureStatusItem(*returnItem, "Return");
+            }
+            auto *i3 = new TStatusItem("Quit", kbNoKey, cmQuit);
+            ck::hotkeys::configureStatusItem(*i3, "Quit");
             i1->next = i2;
             if (returnItem)
             {
@@ -253,16 +261,20 @@ public:
                                std::to_string(s.currentIndex + 1) + "/" +
                                std::to_string(s.matches.size());
             auto *i1 = new TStatusItem(info.c_str(), kbNoKey, 0);
-            auto *i2 = new TStatusItem("~F5~ Next", kbF5, cmFindNext);
-            auto *i3 = new TStatusItem("~Shift-F5~ Prev", kbShiftF5, cmFindPrev);
-            auto *i4 = new TStatusItem("~Esc~ End Search", kbEsc, cmEndSearch);
+            auto *i2 = new TStatusItem("Next", kbNoKey, cmFindNext);
+            ck::hotkeys::configureStatusItem(*i2, "Next");
+            auto *i3 = new TStatusItem("Prev", kbNoKey, cmFindPrev);
+            ck::hotkeys::configureStatusItem(*i3, "Prev");
+            auto *i4 = new TStatusItem("End Search", kbNoKey, cmEndSearch);
+            ck::hotkeys::configureStatusItem(*i4, "End Search");
             i1->next = i2;
             i2->next = i3;
             i3->next = i4;
             TStatusItem *tail = i4;
             if (ck::launcher::launchedFromCkLauncher())
             {
-                auto *returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+                auto *returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+                ck::hotkeys::configureStatusItem(*returnItem, "Return");
                 tail->next = returnItem;
                 tail = returnItem;
             }
@@ -609,35 +621,36 @@ TMenuBar *JsonViewApp::initMenuBar(TRect r)
 {
     r.b.y = r.a.y + 1;
     TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                         *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
-                         *new TMenuItem("~C~lose", cmClose, kbF4, hcNoContext, "F4") +
+                         *new TMenuItem("~O~pen", cmOpen, kbNoKey, hcNoContext) +
+                         *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
                          newLine();
     if (ck::launcher::launchedFromCkLauncher())
-        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
-    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X");
+        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
+    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcNoContext);
 
     TMenuItem &menuChain = fileMenu +
                            *new TSubMenu("~E~dit", hcNoContext) +
-                           *new TMenuItem("~C~opy", cmCopy, kbCtrlC, hcNoContext, "Ctrl-C") +
+                           *new TMenuItem("~C~opy", cmCopy, kbNoKey, hcNoContext) +
                            *new TSubMenu("~S~earch", hcNoContext) +
-                           *new TMenuItem("~F~ind", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                           *new TMenuItem("Find ~N~ext", cmFindNext, kbF5, hcNoContext, "F5") +
-                           *new TMenuItem("Find ~P~rev", cmFindPrev, kbShiftF5, hcNoContext, "Shift-F5") +
-                           *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext, "Esc") +
+                           *new TMenuItem("~F~ind", cmFind, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Find ~N~ext", cmFindNext, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Find ~P~rev", cmFindPrev, kbNoKey, hcNoContext) +
+                           *new TMenuItem("~E~nd Search", cmEndSearch, kbNoKey, hcNoContext) +
                            *new TSubMenu("~V~iew", hcNoContext) +
-                           *new TMenuItem("Level ~0~", cmLevel0, kbAlt0, hcNoContext, "Alt-0") +
-                           *new TMenuItem("Level ~1~", cmLevel1, kbAlt1, hcNoContext, "Alt-1") +
-                           *new TMenuItem("Level ~2~", cmLevel2, kbAlt2, hcNoContext, "Alt-2") +
-                           *new TMenuItem("Level ~3~", cmLevel3, kbAlt3, hcNoContext, "Alt-3") +
-                           *new TMenuItem("Level ~4~", cmLevel4, kbAlt4, hcNoContext, "Alt+4") +
-                           *new TMenuItem("Level ~5~", cmLevel5, kbAlt5, hcNoContext, "Alt+5") +
-                           *new TMenuItem("Level ~6~", cmLevel6, kbAlt6, hcNoContext, "Alt+6") +
-                           *new TMenuItem("Level ~7~", cmLevel7, kbAlt7, hcNoContext, "Alt+7") +
-                           *new TMenuItem("Level ~8~", cmLevel8, kbAlt8, hcNoContext, "Alt+8") +
-                           *new TMenuItem("Level ~9~", cmLevel9, kbAlt9, hcNoContext, "Alt+9") +
+                           *new TMenuItem("Level ~0~", cmLevel0, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~1~", cmLevel1, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~2~", cmLevel2, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~3~", cmLevel3, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~4~", cmLevel4, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~5~", cmLevel5, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~6~", cmLevel6, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~7~", cmLevel7, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~8~", cmLevel8, kbNoKey, hcNoContext) +
+                           *new TMenuItem("Level ~9~", cmLevel9, kbNoKey, hcNoContext) +
                            *new TSubMenu("~H~elp", hcNoContext) +
-                           *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+                           *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
+    ck::hotkeys::configureMenuTree(menuChain);
     return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
@@ -649,6 +662,10 @@ TStatusLine *JsonViewApp::initStatusLine(TRect r)
 
 int main(int argc, char **argv)
 {
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
+
     JsonViewApp app(argc, argv);
     app.run();
     return 0;

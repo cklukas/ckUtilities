@@ -60,6 +60,7 @@ add_ck_tool(ckedit
     src/ck-edit-app.cpp
   LIBRARIES
     ck_edit_core
+    ck_hotkeys
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

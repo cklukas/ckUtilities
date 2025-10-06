@@ -1,6 +1,8 @@
 #include "ck/options.hpp"
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/commands/ck_config.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "disk_usage_options.hpp"
 
@@ -450,6 +452,16 @@ int runCli(int argc, char **argv)
             printUsage();
             return 0;
         }
+        else if (arg == "--hotkeys")
+        {
+            if (i + 1 < argc)
+                ++i;
+            continue;
+        }
+        else if (arg.rfind("--hotkeys=", 0) == 0)
+        {
+            continue;
+        }
         else if (arg == "--list-apps")
         {
             if (opts.action != CliAction::None)
@@ -554,22 +566,22 @@ int runCli(int argc, char **argv)
 
 // UI components
 
-static const ushort cmReloadApps = 3000;
-static const ushort cmEditApp = 3001;
-static const ushort cmResetApp = 3002;
-static const ushort cmClearApp = 3003;
-static const ushort cmExportApp = 3004;
-static const ushort cmImportApp = 3005;
-static const ushort cmOpenConfigDir = 3006;
-static const ushort cmAbout = 3007;
+static constexpr ushort cmReloadApps = ck::commands::config::ReloadApps;
+static constexpr ushort cmEditApp = ck::commands::config::EditApp;
+static constexpr ushort cmResetApp = ck::commands::config::ResetApp;
+static constexpr ushort cmClearApp = ck::commands::config::ClearApp;
+static constexpr ushort cmExportApp = ck::commands::config::ExportApp;
+static constexpr ushort cmImportApp = ck::commands::config::ImportApp;
+static constexpr ushort cmOpenConfigDir = ck::commands::config::OpenConfigDir;
+static constexpr ushort cmAbout = ck::commands::config::About;
 
-static const ushort cmOptionEdit = 3100;
-static const ushort cmOptionResetValue = 3101;
-static const ushort cmOptionResetAll = 3102;
-static const ushort cmPatternAdd = 3200;
-static const ushort cmPatternEdit = 3201;
-static const ushort cmPatternDelete = 3202;
-static const ushort cmReturnToLauncher = 3300;
+static constexpr ushort cmOptionEdit = ck::commands::config::OptionEdit;
+static constexpr ushort cmOptionResetValue = ck::commands::config::OptionResetValue;
+static constexpr ushort cmOptionResetAll = ck::commands::config::OptionResetAll;
+static constexpr ushort cmPatternAdd = ck::commands::config::PatternAdd;
+static constexpr ushort cmPatternEdit = ck::commands::config::PatternEdit;
+static constexpr ushort cmPatternDelete = ck::commands::config::PatternDelete;
+static constexpr ushort cmReturnToLauncher = ck::commands::config::ReturnToLauncher;
 
 class AppListViewer : public TListViewer
 {
@@ -1130,17 +1142,21 @@ private:
     void rebuild()
     {
         disposeItems(items);
-        auto *edit = new TStatusItem("~Enter~ Edit", kbEnter, cmEditApp);
-        auto *reload = new TStatusItem("~F5~ Reload", kbF5, cmReloadApps);
+        auto *edit = new TStatusItem("Edit", kbNoKey, cmEditApp);
+        ck::hotkeys::configureStatusItem(*edit, "Edit");
+        auto *reload = new TStatusItem("Reload", kbNoKey, cmReloadApps);
+        ck::hotkeys::configureStatusItem(*reload, "Reload");
         edit->next = reload;
         TStatusItem *tail = reload;
         if (ck::launcher::launchedFromCkLauncher())
         {
-            auto *returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+            auto *returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+            ck::hotkeys::configureStatusItem(*returnItem, "Return");
             tail->next = returnItem;
             tail = returnItem;
         }
-        auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+        auto *quit = new TStatusItem("Quit", kbNoKey, cmQuit);
+        ck::hotkeys::configureStatusItem(*quit, "Quit");
         tail->next = quit;
         items = edit;
         defs->items = items;
@@ -1224,15 +1240,15 @@ public:
     {
         r.b.y = r.a.y + 1;
         TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                             *new TMenuItem("~R~eload", cmReloadApps, kbF5, hcNoContext, "F5") +
+                             *new TMenuItem("~R~eload", cmReloadApps, kbNoKey, hcNoContext) +
                              newLine();
         if (ck::launcher::launchedFromCkLauncher())
-            fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
-        fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X");
+            fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
+        fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcExit);
 
         TMenuItem &menuChain = fileMenu +
                                *new TSubMenu("~P~rofile", hcNoContext) +
-                               *new TMenuItem("~E~dit Options", cmEditApp, kbEnter, hcNoContext, "Enter") +
+                               *new TMenuItem("~E~dit Options", cmEditApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("Reset to ~D~efaults", cmResetApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("~C~lear Saved Defaults", cmClearApp, kbNoKey, hcNoContext) +
                                newLine() +
@@ -1240,8 +1256,9 @@ public:
                                *new TMenuItem("~I~mport...", cmImportApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("Open Config ~D~ir", cmOpenConfigDir, kbNoKey, hcNoContext) +
                                *new TSubMenu("~H~elp", hcNoContext) +
-                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+                               *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
+        ck::hotkeys::configureMenuTree(menuChain);
         return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
     }
 
@@ -1376,6 +1393,10 @@ private:
 
 int main(int argc, char **argv)
 {
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
+
     int cliResult = runCli(argc, argv);
     if (cliResult >= 0)
         return cliResult;

@@ -32,6 +32,7 @@ add_ck_tool(ckfind
     src/type_filters_dialog.cpp
   LIBRARIES
     ck_app_info
+    ck_hotkeys
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

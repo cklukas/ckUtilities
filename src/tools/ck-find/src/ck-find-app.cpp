@@ -3,6 +3,7 @@
 #include "ck/find/cli_buffer_utils.hpp"
 #include "ck/find/search_dialogs.hpp"
 #include "ck/find/search_model.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 
 #include "command_ids.hpp"
@@ -58,19 +59,24 @@ private:
     void rebuild()
     {
         disposeItems(items);
-        auto *newItem = new TStatusItem("~F2~ New Search", kbF2, cmNewSearch);
-        auto *loadItem = new TStatusItem("~Ctrl-O~ Load Spec", kbCtrlO, cmLoadSpec);
-        auto *saveItem = new TStatusItem("~Ctrl-S~ Save Spec", kbCtrlS, cmSaveSpec);
+        auto *newItem = new TStatusItem("New Search", kbNoKey, cmNewSearch);
+        ck::hotkeys::configureStatusItem(*newItem, "New Search");
+        auto *loadItem = new TStatusItem("Load Spec", kbNoKey, cmLoadSpec);
+        ck::hotkeys::configureStatusItem(*loadItem, "Load Spec");
+        auto *saveItem = new TStatusItem("Save Spec", kbNoKey, cmSaveSpec);
+        ck::hotkeys::configureStatusItem(*saveItem, "Save Spec");
         newItem->next = loadItem;
         loadItem->next = saveItem;
         TStatusItem *tail = saveItem;
         if (ck::launcher::launchedFromCkLauncher())
         {
-            auto *returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+            auto *returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+            ck::hotkeys::configureStatusItem(*returnItem, "Return");
             tail->next = returnItem;
             tail = returnItem;
         }
-        auto *quitItem = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+        auto *quitItem = new TStatusItem("Quit", kbNoKey, cmQuit);
+        ck::hotkeys::configureStatusItem(*quitItem, "Quit");
         tail->next = quitItem;
         items = newItem;
         defs->items = items;
@@ -259,18 +265,19 @@ public:
     {
         r.b.y = r.a.y + 1;
         TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                             *new TMenuItem("~N~ew Search...", cmNewSearch, kbF2, hcNoContext, "F2") +
-                             *new TMenuItem("~L~oad Search Spec...", cmLoadSpec, kbCtrlO, hcNoContext, "Ctrl-O") +
-                             *new TMenuItem("~S~ave Search Spec...", cmSaveSpec, kbCtrlS, hcNoContext, "Ctrl-S") +
+                             *new TMenuItem("~N~ew Search...", cmNewSearch, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~L~oad Search Spec...", cmLoadSpec, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~S~ave Search Spec...", cmSaveSpec, kbNoKey, hcNoContext) +
                              newLine();
         if (ck::launcher::launchedFromCkLauncher())
-            fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
-        fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X");
+            fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
+        fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcNoContext);
 
         TMenuItem &menuChain = fileMenu +
                                *new TSubMenu("~H~elp", hcNoContext) +
-                                   *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+                                   *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
+        ck::hotkeys::configureMenuTree(menuChain);
         return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
     }
 
@@ -299,8 +306,11 @@ private:
 
 int main(int argc, char **argv)
 {
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
+
     FindApp app(argc, argv);
     app.run();
     return 0;
 }
-

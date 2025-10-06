@@ -1,4 +1,6 @@
 #include "ck/app_info.hpp"
+#include "ck/commands/ck_utilities.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
 
@@ -60,6 +62,15 @@ extern char **environ;
 
 namespace
 {
+    using ck::commands::utilities::AsciiSelectionChanged;
+    using ck::commands::utilities::CalcButtonCommand;
+    using ck::commands::utilities::FindEventViewer;
+    using ck::commands::utilities::LaunchTool;
+    using ck::commands::utilities::NewLauncher;
+    using ck::commands::utilities::ShowAsciiTable;
+    using ck::commands::utilities::ShowCalculator;
+    using ck::commands::utilities::ShowCalendar;
+    using ck::commands::utilities::ToggleEventViewer;
 
     constexpr std::string_view kLauncherId = "ck-utilities";
     constexpr short kUtilityReserveLines = 16;
@@ -70,16 +81,6 @@ namespace
     {
         return ck::appinfo::requireTool(kLauncherId);
     }
-
-    constexpr ushort cmLaunchTool = 6000;
-    constexpr ushort cmNewLauncher = 6001;
-    constexpr ushort cmShowCalendar = 6002;
-    constexpr ushort cmShowAsciiTable = 6003;
-    constexpr ushort cmShowCalculator = 6004;
-    constexpr ushort cmToggleEventViewer = 6005;
-    constexpr ushort cmCalcButtonCommand = 6100;
-    constexpr ushort cmAsciiSelectionChanged = 6101;
-    constexpr ushort cmFindEventViewer = 6102;
 
     void showLaunchBanner(const std::filesystem::path &programPath,
                           const std::vector<std::string> &arguments)
@@ -455,7 +456,7 @@ namespace
             TListViewer::handleEvent(event);
             if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
             {
-                message(owner, evCommand, cmLaunchTool, this);
+                message(owner, evCommand, LaunchTool, this);
                 clearEvent(event);
             }
         }
@@ -494,7 +495,7 @@ namespace
             detailView = new ToolDetailView(TRect(0, 0, 0, 0));
             insert(detailView);
 
-            launchButton = new TButton(TRect(0, 0, 0, 0), "~L~aunch", cmLaunchTool, bfDefault);
+            launchButton = new TButton(TRect(0, 0, 0, 0), "~L~aunch", LaunchTool, bfDefault);
             insert(launchButton);
 
             layoutChildren();
@@ -520,7 +521,7 @@ namespace
         virtual void handleEvent(TEvent &event) override
         {
             TDialog::handleEvent(event);
-            if (event.what == evCommand && event.message.command == cmLaunchTool)
+            if (event.what == evCommand && event.message.command == LaunchTool)
             {
                 // Only forward the command to the application if it did not
                 // originate from this dialog (to avoid loops).
@@ -530,7 +531,7 @@ namespace
                     {
                         TEvent launchEvent{};
                         launchEvent.what = evCommand;
-                        launchEvent.message.command = cmLaunchTool;
+                        launchEvent.message.command = LaunchTool;
                         launchEvent.message.infoPtr = this;
                         TProgram::application->putEvent(launchEvent);
                     }
@@ -934,7 +935,7 @@ namespace
 
         virtual void handleEvent(TEvent &event) override
         {
-            if (event.what == evBroadcast && event.message.command == cmAsciiSelectionChanged)
+            if (event.what == evBroadcast && event.message.command == AsciiSelectionChanged)
             {
                 int value = static_cast<int>(reinterpret_cast<std::uintptr_t>(event.message.infoPtr));
                 selectedChar = std::clamp(value, 0, 255);
@@ -1057,7 +1058,7 @@ namespace
         void notifySelection()
         {
             unsigned value = static_cast<unsigned>(cursor.x + cursor.y * size.x);
-            message(owner, evBroadcast, cmAsciiSelectionChanged,
+            message(owner, evBroadcast, AsciiSelectionChanged,
                     reinterpret_cast<void *>(static_cast<std::uintptr_t>(value)));
         }
     };
@@ -1092,7 +1093,7 @@ namespace
             table->options |= ofFramed;
             insert(table);
             table->select();
-            message(this, evBroadcast, cmAsciiSelectionChanged, reinterpret_cast<void *>(0));
+            message(this, evBroadcast, AsciiSelectionChanged, reinterpret_cast<void *>(0));
         }
 
     protected:
@@ -1127,7 +1128,7 @@ namespace
                 calcKey(static_cast<unsigned char>(event.keyDown.charScan.charCode));
                 clearEvent(event);
             }
-            else if (event.what == evBroadcast && event.message.command == cmCalcButtonCommand)
+            else if (event.what == evBroadcast && event.message.command == CalcButtonCommand)
             {
                 if (auto *button = static_cast<TButton *>(event.message.infoPtr))
                 {
@@ -1362,7 +1363,7 @@ namespace
                 int x = static_cast<int>(i % 4) * 5 + 2;
                 int y = static_cast<int>(i / 4) * 2 + 4;
                 TRect r(x, y, x + 5, y + 2);
-                auto *button = new TButton(r, kButtonLabels[i], cmCalcButtonCommand, bfNormal | bfBroadcast);
+                auto *button = new TButton(r, kButtonLabels[i], CalcButtonCommand, bfNormal | bfBroadcast);
                 button->options &= ~ofSelectable;
                 insert(button);
             }
@@ -1428,7 +1429,7 @@ namespace
         virtual void handleEvent(TEvent &event) override
         {
             TWindow::handleEvent(event);
-            if (event.what == evBroadcast && event.message.command == cmFindEventViewer)
+            if (event.what == evBroadcast && event.message.command == FindEventViewer)
             {
                 event.message.infoPtr = this;
                 clearEvent(event);
@@ -1526,7 +1527,7 @@ namespace
             // to the focused views first (which caused a re-post loop).
             if (event.what == evCommand)
             {
-                if (event.message.command == cmLaunchTool)
+                if (event.message.command == LaunchTool)
                 {
                     LauncherDialog *dialog = nullptr;
                     if (event.message.infoPtr)
@@ -1543,31 +1544,31 @@ namespace
                     clearEvent(event);
                     return; // Don't propagate further.
                 }
-                else if (event.message.command == cmNewLauncher)
+                else if (event.message.command == NewLauncher)
                 {
                     openLauncher();
                     clearEvent(event);
                     return;
                 }
-                else if (event.message.command == cmShowCalendar)
+                else if (event.message.command == ShowCalendar)
                 {
                     openCalendarWindow();
                     clearEvent(event);
                     return;
                 }
-                else if (event.message.command == cmShowAsciiTable)
+                else if (event.message.command == ShowAsciiTable)
                 {
                     openAsciiTable();
                     clearEvent(event);
                     return;
                 }
-                else if (event.message.command == cmShowCalculator)
+                else if (event.message.command == ShowCalculator)
                 {
                     openCalculator();
                     clearEvent(event);
                     return;
                 }
-                else if (event.message.command == cmToggleEventViewer)
+                else if (event.message.command == ToggleEventViewer)
                 {
                     toggleEventViewer();
                     clearEvent(event);
@@ -1593,22 +1594,25 @@ namespace
         static TMenuBar *initMenuBar(TRect r)
         {
             r.b.y = r.a.y + 1;
-            return new TMenuBar(r,
-                                *new TSubMenu("~\360~", kbNoKey) +
-                                    *new TMenuItem("Ca~l~endar", cmShowCalendar, kbNoKey, hcNoContext) +
-                                    *new TMenuItem("Ascii ~T~able", cmShowAsciiTable, kbNoKey, hcNoContext) +
-                                    *new TMenuItem("~C~alculator", cmShowCalculator, kbNoKey, hcNoContext) +
-                                    *new TMenuItem("~E~vent Viewer", cmToggleEventViewer, kbAlt0, hcNoContext, "Alt-0") +
-                                    *new TSubMenu("~F~ile", kbAltF) +
-                                    *new TMenuItem("~N~ew Launcher", cmNewLauncher, kbNoKey, hcNoContext) +
-                                    *new TMenuItem("~E~xit", cmQuit, kbAltX));
+            TMenuItem &menuChain = *new TSubMenu("~\360~", kbNoKey) +
+                                   *new TMenuItem("Ca~l~endar", ShowCalendar, kbNoKey, hcNoContext) +
+                                   *new TMenuItem("Ascii ~T~able", ShowAsciiTable, kbNoKey, hcNoContext) +
+                                   *new TMenuItem("~C~alculator", ShowCalculator, kbNoKey, hcNoContext) +
+                                   *new TMenuItem("~E~vent Viewer", ToggleEventViewer, kbNoKey, hcNoContext) +
+                                   *new TSubMenu("~F~ile", kbAltF) +
+                                   *new TMenuItem("~N~ew Launcher", NewLauncher, kbNoKey, hcNoContext) +
+                                   *new TMenuItem("~E~xit", cmQuit, kbNoKey, hcNoContext);
+            ck::hotkeys::configureMenuTree(menuChain);
+            return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
         }
 
         static TStatusLine *initStatusLine(TRect r)
         {
             r.a.y = r.b.y - 1;
-            auto *launch = new TStatusItem("~Enter~ Launch", kbEnter, cmLaunchTool);
-            auto *exitItem = new TStatusItem("~Alt-X~ Exit", kbAltX, cmQuit);
+            auto *launch = new TStatusItem("Launch", kbNoKey, LaunchTool);
+            ck::hotkeys::configureStatusItem(*launch, "Launch");
+            auto *exitItem = new TStatusItem("Exit", kbNoKey, cmQuit);
+            ck::hotkeys::configureStatusItem(*exitItem, "Exit");
             launch->next = exitItem;
             return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, launch));
         }
@@ -1962,6 +1966,10 @@ namespace
 
 int main(int argc, char **argv)
 {
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
+
     std::filesystem::path toolDir = resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
 
     std::string launchTarget;

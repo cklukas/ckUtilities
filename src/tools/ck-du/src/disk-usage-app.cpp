@@ -31,6 +31,8 @@
 
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/commands/ck_du.hpp"
+#include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/options.hpp"
 
@@ -59,6 +61,7 @@
 
 using namespace ck::du;
 namespace config = ck::config;
+namespace commands = ck::commands::disk_usage;
 
 static constexpr std::string_view kToolId = "ck-du";
 
@@ -67,42 +70,42 @@ static const ck::appinfo::ToolInfo &toolInfo()
     return ck::appinfo::requireTool(kToolId);
 }
 
-static const ushort cmViewFiles = 2001;
-static const ushort cmViewFilesRecursive = 2002;
-static const ushort cmViewFileTypes = 2003;
-static const ushort cmViewFileTypesRecursive = 2004;
-static const ushort cmViewFilesForType = 2005;
-static const ushort cmAbout = 2100;
-static const ushort cmUnitAuto = 2200;
-static const ushort cmUnitBytes = 2201;
-static const ushort cmUnitKB = 2202;
-static const ushort cmUnitMB = 2203;
-static const ushort cmUnitGB = 2204;
-static const ushort cmUnitTB = 2205;
-static const ushort cmUnitBlocks = 2206;
-static const ushort cmSortUnsorted = 2300;
-static const ushort cmSortNameAsc = 2301;
-static const ushort cmSortNameDesc = 2302;
-static const ushort cmSortSizeDesc = 2303;
-static const ushort cmSortSizeAsc = 2304;
-static const ushort cmSortModifiedDesc = 2305;
-static const ushort cmSortModifiedAsc = 2306;
-static const ushort cmOptionFollowNever = 2400;
-static const ushort cmOptionFollowCommandLine = 2401;
-static const ushort cmOptionFollowAll = 2402;
-static const ushort cmOptionToggleHardLinks = 2403;
-static const ushort cmOptionToggleNodump = 2404;
-static const ushort cmOptionToggleErrors = 2405;
-static const ushort cmOptionToggleOneFs = 2406;
-static const ushort cmOptionEditIgnores = 2407;
-static const ushort cmOptionEditThreshold = 2408;
-static const ushort cmOptionLoad = 2409;
-static const ushort cmOptionSave = 2410;
-static const ushort cmOptionSaveDefaults = 2411;
-static const ushort cmPatternAdd = 2500;
-static const ushort cmPatternEdit = 2501;
-static const ushort cmPatternDelete = 2502;
-static const ushort cmReturnToLauncher = 2600;
+static constexpr unsigned short cmViewFiles = commands::ViewFiles;
+static constexpr unsigned short cmViewFilesRecursive = commands::ViewFilesRecursive;
+static constexpr unsigned short cmViewFileTypes = commands::ViewFileTypes;
+static constexpr unsigned short cmViewFileTypesRecursive = commands::ViewFileTypesRecursive;
+static constexpr unsigned short cmViewFilesForType = commands::ViewFilesForType;
+static constexpr unsigned short cmAbout = commands::About;
+static constexpr unsigned short cmUnitAuto = commands::UnitAuto;
+static constexpr unsigned short cmUnitBytes = commands::UnitBytes;
+static constexpr unsigned short cmUnitKB = commands::UnitKB;
+static constexpr unsigned short cmUnitMB = commands::UnitMB;
+static constexpr unsigned short cmUnitGB = commands::UnitGB;
+static constexpr unsigned short cmUnitTB = commands::UnitTB;
+static constexpr unsigned short cmUnitBlocks = commands::UnitBlocks;
+static constexpr unsigned short cmSortUnsorted = commands::SortUnsorted;
+static constexpr unsigned short cmSortNameAsc = commands::SortNameAsc;
+static constexpr unsigned short cmSortNameDesc = commands::SortNameDesc;
+static constexpr unsigned short cmSortSizeDesc = commands::SortSizeDesc;
+static constexpr unsigned short cmSortSizeAsc = commands::SortSizeAsc;
+static constexpr unsigned short cmSortModifiedDesc = commands::SortModifiedDesc;
+static constexpr unsigned short cmSortModifiedAsc = commands::SortModifiedAsc;
+static constexpr unsigned short cmOptionFollowNever = commands::OptionFollowNever;
+static constexpr unsigned short cmOptionFollowCommandLine = commands::OptionFollowCommandLine;
+static constexpr unsigned short cmOptionFollowAll = commands::OptionFollowAll;
+static constexpr unsigned short cmOptionToggleHardLinks = commands::OptionToggleHardLinks;
+static constexpr unsigned short cmOptionToggleNodump = commands::OptionToggleNodump;
+static constexpr unsigned short cmOptionToggleErrors = commands::OptionToggleErrors;
+static constexpr unsigned short cmOptionToggleOneFs = commands::OptionToggleOneFs;
+static constexpr unsigned short cmOptionEditIgnores = commands::OptionEditIgnores;
+static constexpr unsigned short cmOptionEditThreshold = commands::OptionEditThreshold;
+static constexpr unsigned short cmOptionLoad = commands::OptionLoad;
+static constexpr unsigned short cmOptionSave = commands::OptionSave;
+static constexpr unsigned short cmOptionSaveDefaults = commands::OptionSaveDefaults;
+static constexpr unsigned short cmPatternAdd = commands::PatternAdd;
+static constexpr unsigned short cmPatternEdit = commands::PatternEdit;
+static constexpr unsigned short cmPatternDelete = commands::PatternDelete;
+static constexpr unsigned short cmReturnToLauncher = commands::ReturnToLauncher;
 
 namespace
 {
@@ -987,18 +990,30 @@ private:
 
     TStatusItem *buildHintChain()
     {
-        auto *open = new TStatusItem("~F2~ Open", kbF2, cmOpen);
-        auto *files = new TStatusItem("~F3~ Files", kbF3, cmViewFiles);
-        auto *recursive = new TStatusItem("~Shift-F3~ Files+Sub", kbShiftF3, cmViewFilesRecursive);
-        auto *types = new TStatusItem("~F4~ Types", kbF4, cmViewFileTypes);
-        auto *typesRecursive = new TStatusItem("~Shift-F4~ Types+Sub", kbShiftF4, cmViewFileTypesRecursive);
-        auto *sortName = new TStatusItem("~Ctrl-N~ Sort Name", kbCtrlN, cmSortNameAsc);
-        auto *sortSize = new TStatusItem("~Ctrl-S~ Sort Size", kbCtrlS, cmSortSizeDesc);
-        auto *sortModified = new TStatusItem("~Ctrl-M~ Sort Modified", kbCtrlM, cmSortModifiedDesc);
-        auto *quit = new TStatusItem("~Alt-X~ Quit", kbAltX, cmQuit);
+        auto *open = new TStatusItem("Open", kbNoKey, cmOpen);
+        ck::hotkeys::configureStatusItem(*open, "Open");
+        auto *files = new TStatusItem("Files", kbNoKey, commands::ViewFiles);
+        ck::hotkeys::configureStatusItem(*files, "Files");
+        auto *recursive = new TStatusItem("Files+Sub", kbNoKey, commands::ViewFilesRecursive);
+        ck::hotkeys::configureStatusItem(*recursive, "Files+Sub");
+        auto *types = new TStatusItem("Types", kbNoKey, commands::ViewFileTypes);
+        ck::hotkeys::configureStatusItem(*types, "Types");
+        auto *typesRecursive = new TStatusItem("Types+Sub", kbNoKey, commands::ViewFileTypesRecursive);
+        ck::hotkeys::configureStatusItem(*typesRecursive, "Types+Sub");
+        auto *sortName = new TStatusItem("Sort Name", kbNoKey, cmSortNameAsc);
+        ck::hotkeys::configureStatusItem(*sortName, "Sort Name");
+        auto *sortSize = new TStatusItem("Sort Size", kbNoKey, cmSortSizeDesc);
+        ck::hotkeys::configureStatusItem(*sortSize, "Sort Size");
+        auto *sortModified = new TStatusItem("Sort Modified", kbNoKey, cmSortModifiedDesc);
+        ck::hotkeys::configureStatusItem(*sortModified, "Sort Modified");
+        auto *quit = new TStatusItem("Quit", kbNoKey, cmQuit);
+        ck::hotkeys::configureStatusItem(*quit, "Quit");
         TStatusItem *returnItem = nullptr;
         if (ck::launcher::launchedFromCkLauncher())
-            returnItem = new TStatusItem("~Ctrl-L~ Return", kbCtrlL, cmReturnToLauncher);
+        {
+            returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
+            ck::hotkeys::configureStatusItem(*returnItem, "Return");
+        }
         open->next = files;
         files->next = recursive;
         recursive->next = types;
@@ -1747,7 +1762,7 @@ void FileTypeListView::handleEvent(TEvent &event)
     if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
     {
         if (owner)
-            message(owner, evCommand, cmViewFilesForType, this);
+            message(owner, evCommand, commands::ViewFilesForType, this);
         clearEvent(event);
     }
     notifyHeader();
@@ -1960,7 +1975,7 @@ void FileTypeWindow::updateStatus()
 void FileTypeWindow::handleEvent(TEvent &event)
 {
     TWindow::handleEvent(event);
-    if (event.what == evCommand && event.message.command == cmViewFilesForType)
+    if (event.what == evCommand && event.message.command == commands::ViewFilesForType)
     {
         openFilesForSelectedType();
         clearEvent(event);
@@ -2223,16 +2238,16 @@ void DiskUsageApp::handleEvent(TEvent &event)
         case cmOpen:
             promptOpenDirectory();
             break;
-        case cmViewFiles:
+        case commands::ViewFiles:
             viewFiles(false);
             break;
-        case cmViewFilesRecursive:
+        case commands::ViewFilesRecursive:
             viewFiles(true);
             break;
-        case cmViewFileTypes:
+        case commands::ViewFileTypes:
             viewFileTypes(false);
             break;
-        case cmViewFileTypesRecursive:
+        case commands::ViewFileTypesRecursive:
             viewFileTypes(true);
             break;
         case cmUnitAuto:
@@ -2412,12 +2427,12 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
     auto *saveOptions = new TMenuItem("~S~ave Options...", cmOptionSave, kbNoKey, hcNoContext);
     auto *saveDefaults = new TMenuItem("Save ~D~efaults", cmOptionSaveDefaults, kbNoKey, hcNoContext);
     TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
-                         *new TMenuItem("~O~pen Directory", cmOpen, kbF2, hcOpen, "F2") +
-                         *new TMenuItem("~C~lose", cmClose, kbF4, hcClose, "F4") +
+                         *new TMenuItem("~O~pen Directory", cmOpen, kbNoKey, hcOpen) +
+                         *new TMenuItem("~C~lose", cmClose, kbNoKey, hcClose) +
                          newLine();
     if (ck::launcher::launchedFromCkLauncher())
-        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
-    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcExit, "Alt-X");
+        fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
+    fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcExit);
 
     TMenuItem &menuChain = fileMenu +
                            *new TSubMenu("~S~ort", hcNoContext) +
@@ -2451,21 +2466,22 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                                *loadOptions +
                                *saveOptions +
                                *saveDefaults +
-                           *new TSubMenu("~V~iew", hcNoContext) +
-                               *new TMenuItem("~F~iles", cmViewFiles, kbF3, hcNoContext, "F3") +
-                               *new TMenuItem("Files (~R~ecursive)", cmViewFilesRecursive, kbShiftF3, hcNoContext, "Shift-F3") +
-                               *new TMenuItem("~T~ypes", cmViewFileTypes, kbF4, hcNoContext, "F4") +
-                               *new TMenuItem("Types (~S~ubdirs)", cmViewFileTypesRecursive, kbShiftF4, hcNoContext, "Shift-F4") +
+                          *new TSubMenu("~V~iew", hcNoContext) +
+                               *new TMenuItem("~F~iles", commands::ViewFiles, kbNoKey, hcNoContext) +
+                               *new TMenuItem("Files (~R~ecursive)", commands::ViewFilesRecursive, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~T~ypes", commands::ViewFileTypes, kbNoKey, hcNoContext) +
+                               *new TMenuItem("Types (~S~ubdirs)", commands::ViewFileTypesRecursive, kbNoKey, hcNoContext) +
                            *new TSubMenu("~W~indows", hcNoContext) +
-                               *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext, "Ctrl-F5") +
-                               *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
-                               *new TMenuItem("~N~ext", cmNext, kbF6, hcNoContext, "F6") +
-                               *new TMenuItem("~C~lose", cmClose, kbAltF3, hcNoContext, "Alt-F3") +
+                               *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
+                               *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
                                *new TMenuItem("~T~ile", cmTile, kbNoKey, hcNoContext) +
                                *new TMenuItem("C~a~scade", cmCascade, kbNoKey, hcNoContext) +
                            *new TSubMenu("~H~elp", hcNoContext) +
-                               *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+                               *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
+    ck::hotkeys::configureMenuTree(menuChain);
     return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
@@ -3647,6 +3663,10 @@ int main(int argc, char **argv)
 {
     auto registry = std::make_shared<config::OptionRegistry>("ck-du");
     registerDiskUsageOptions(*registry);
+
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
 
     bool loadDefaults = true;
     bool forceReloadDefaults = false;

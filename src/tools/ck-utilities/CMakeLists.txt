@@ -29,6 +29,7 @@ add_ck_tool(ckutilities
     src/ck-utilities-app.cpp
   LIBRARIES
     ck_app_info
+    ck_hotkeys
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
@@ -38,4 +39,3 @@ add_ck_tool(ckutilities
   DEFINITIONS
     CK_UTILITIES_VERSION="${PROJECT_VERSION}"
 )
-

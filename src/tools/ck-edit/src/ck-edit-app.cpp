@@ -1,4 +1,5 @@
 #include "ck/edit/markdown_editor.hpp"
+#include "ck/hotkeys.hpp"
 
 #include <iostream>
 #include <string_view>
@@ -22,6 +23,10 @@ bool isHelpFlag(std::string_view arg)
 
 int main(int argc, char **argv)
 {
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
+
     for (int i = 1; i < argc; ++i)
     {
         if (isHelpFlag(std::string_view{argv[i]}))

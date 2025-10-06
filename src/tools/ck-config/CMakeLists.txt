@@ -21,6 +21,7 @@ add_ck_tool(ckconfig
     src/config-app.cpp
   LIBRARIES
     ck_app_info
+    ck_hotkeys
     ck_options
     ck_du_core
     tvision::tvision

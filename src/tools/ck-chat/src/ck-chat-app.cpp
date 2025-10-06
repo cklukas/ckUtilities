@@ -1,6 +1,7 @@
 #include "ck/ai/config.hpp"
 #include "ck/ai/llm.hpp"
 #include "ck/app_info.hpp"
+#include "ck/hotkeys.hpp"
 
 #include "ui/chat_app.hpp"
 
@@ -152,6 +153,10 @@ namespace
 int main(int argc, char **argv)
 {
     install_crash_handlers();
+
+    ck::hotkeys::registerDefaultSchemes();
+    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::applyCommandLineScheme(argc, argv);
 
     CliOptions options = parse_cli(argc, argv);
     if (options.prompt || options.showHelp)

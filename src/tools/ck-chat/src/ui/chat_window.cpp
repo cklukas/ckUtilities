@@ -4,6 +4,7 @@
 #include "prompt_input_view.hpp"
 #include "../clipboard.hpp"
 #include "../commands.hpp"
+#include "ck/hotkeys.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -127,7 +128,8 @@ TPalette &ChatWindow::getPalette() const
 
 void ChatWindow::handleEvent(TEvent &event)
 {
-    if (event.what == evKeyDown && event.keyDown.keyCode == kbAltS)
+    const TKey sendKey = ck::hotkeys::key(cmSendPrompt);
+    if (event.what == evKeyDown && sendKey.code != 0 && event.keyDown.keyCode == sendKey.code)
     {
         sendPrompt();
         clearEvent(event);

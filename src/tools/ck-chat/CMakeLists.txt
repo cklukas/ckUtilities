@@ -30,6 +30,7 @@ add_ck_tool(ckchat
     src/clipboard.cpp
   LIBRARIES
     ck_app_info
+    ck_hotkeys
     ck_edit_core
     ckai_core
     tvision::tvision

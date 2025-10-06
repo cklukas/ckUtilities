@@ -50,6 +50,7 @@ add_ck_tool(ckjsonview
     src/json-view-app.cpp
   LIBRARIES
     ck_app_info
+    ck_hotkeys
     ck_json_view_core
     tvision::tvision
     ${CURSES_LIBRARIES}

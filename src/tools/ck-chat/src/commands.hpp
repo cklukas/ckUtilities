@@ -1,34 +1,34 @@
 #pragma once
 
-#include <tvision/tv.h>
+#include "ck/commands/ck_chat.hpp"
 
-static constexpr ushort cmNewChat = 1000;
-static constexpr ushort cmReturnToLauncher = 1001;
-static constexpr ushort cmAbout = 1002;
-static constexpr ushort cmSendPrompt = 1003;
-static constexpr ushort cmCopyResponseBase = 2000;
-static constexpr ushort cmSelectModel1 = 1100;
-static constexpr ushort cmSelectModel2 = 1101;
-static constexpr ushort cmSelectModel3 = 1102;
-static constexpr ushort cmSelectModel4 = 1103;
-static constexpr ushort cmSelectModel5 = 1104;
-static constexpr ushort cmSelectModel6 = 1105;
-static constexpr ushort cmSelectModel7 = 1106;
-static constexpr ushort cmSelectModel8 = 1107;
-static constexpr ushort cmSelectModel9 = 1108;
-static constexpr ushort cmSelectModel10 = 1109;
-static constexpr ushort cmManageModels = 1110;
-static constexpr ushort cmDownloadModel = 1111;
-static constexpr ushort cmActivateModel = 1112;
-static constexpr ushort cmDeactivateModel = 1113;
-static constexpr ushort cmDeleteModel = 1114;
-static constexpr ushort cmRefreshModels = 1115;
-static constexpr ushort cmCancelDownload = 1116;
-static constexpr ushort cmNoOp = 1117;
-static constexpr ushort cmApplyRuntimeSettings = 1118;
-static constexpr ushort cmSelectPromptBase = 1200;
-static constexpr ushort cmManagePrompts = 1210;
-static constexpr ushort cmShowThinking = 1300;
-static constexpr ushort cmHideThinking = 1301;
-static constexpr ushort cmShowAnalysis = 1302;
-static constexpr ushort cmHideAnalysis = 1303;
+inline constexpr unsigned short cmNewChat = ck::commands::chat::NewChat;
+inline constexpr unsigned short cmReturnToLauncher = ck::commands::chat::ReturnToLauncher;
+inline constexpr unsigned short cmAbout = ck::commands::chat::About;
+inline constexpr unsigned short cmSendPrompt = ck::commands::chat::SendPrompt;
+inline constexpr unsigned short cmCopyResponseBase = ck::commands::chat::CopyResponseBase;
+inline constexpr unsigned short cmSelectModel1 = ck::commands::chat::SelectModel1;
+inline constexpr unsigned short cmSelectModel2 = ck::commands::chat::SelectModel2;
+inline constexpr unsigned short cmSelectModel3 = ck::commands::chat::SelectModel3;
+inline constexpr unsigned short cmSelectModel4 = ck::commands::chat::SelectModel4;
+inline constexpr unsigned short cmSelectModel5 = ck::commands::chat::SelectModel5;
+inline constexpr unsigned short cmSelectModel6 = ck::commands::chat::SelectModel6;
+inline constexpr unsigned short cmSelectModel7 = ck::commands::chat::SelectModel7;
+inline constexpr unsigned short cmSelectModel8 = ck::commands::chat::SelectModel8;
+inline constexpr unsigned short cmSelectModel9 = ck::commands::chat::SelectModel9;
+inline constexpr unsigned short cmSelectModel10 = ck::commands::chat::SelectModel10;
+inline constexpr unsigned short cmManageModels = ck::commands::chat::ManageModels;
+inline constexpr unsigned short cmDownloadModel = ck::commands::chat::DownloadModel;
+inline constexpr unsigned short cmActivateModel = ck::commands::chat::ActivateModel;
+inline constexpr unsigned short cmDeactivateModel = ck::commands::chat::DeactivateModel;
+inline constexpr unsigned short cmDeleteModel = ck::commands::chat::DeleteModel;
+inline constexpr unsigned short cmRefreshModels = ck::commands::chat::RefreshModels;
+inline constexpr unsigned short cmCancelDownload = ck::commands::chat::CancelDownload;
+inline constexpr unsigned short cmNoOp = ck::commands::chat::NoOp;
+inline constexpr unsigned short cmApplyRuntimeSettings = ck::commands::chat::ApplyRuntimeSettings;
+inline constexpr unsigned short cmSelectPromptBase = ck::commands::chat::SelectPromptBase;
+inline constexpr unsigned short cmManagePrompts = ck::commands::chat::ManagePrompts;
+inline constexpr unsigned short cmShowThinking = ck::commands::chat::ShowThinking;
+inline constexpr unsigned short cmHideThinking = ck::commands::chat::HideThinking;
+inline constexpr unsigned short cmShowAnalysis = ck::commands::chat::ShowAnalysis;
+inline constexpr unsigned short cmHideAnalysis = ck::commands::chat::HideAnalysis;
