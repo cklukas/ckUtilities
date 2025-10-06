@@ -10,8 +10,10 @@ namespace
 void printHelp()
 {
     std::cout << ck::edit::appName() << " - " << ck::edit::appShortDescription() << "\n\n";
-    std::cout << "Usage: " << ck::edit::appName() << " [FILE...]\n";
-    std::cout << "Launch the editor and open each FILE provided on the command line." << std::endl;
+    std::cout << "Usage: " << ck::edit::appName() << " [--hotkeys SCHEME] [FILE...]\n";
+    std::cout << "Launch the editor and open each FILE provided on the command line." << '\n';
+    std::cout << "Available schemes: linux, mac, windows, custom." << '\n';
+    std::cout << "Set CK_HOTKEY_SCHEME to choose a default hotkey scheme." << std::endl;
 }
 
 bool isHelpFlag(std::string_view arg)

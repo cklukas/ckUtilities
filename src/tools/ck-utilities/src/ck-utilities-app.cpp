@@ -1999,7 +1999,9 @@ int main(int argc, char **argv)
         else if (arg == "--help" || arg == "-h")
         {
             const char *binaryName = (argc > 0 && argv[0]) ? argv[0] : "ck-utilities";
-            std::printf("Usage: %s [--launch TOOL [ARGS...]]\n", binaryName);
+            std::printf("Usage: %s [--launch TOOL [ARGS...]] [--hotkeys SCHEME]\n", binaryName);
+            std::puts("Available schemes: linux, mac, windows, custom.");
+            std::puts("Set CK_HOTKEY_SCHEME to choose a default hotkey scheme.");
             return 0;
         }
     }

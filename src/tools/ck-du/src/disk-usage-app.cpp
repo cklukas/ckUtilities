@@ -3697,7 +3697,9 @@ int main(int argc, char **argv)
                   << "  --load-options FILE    Load options from FILE\n"
                   << "  --no-default-options   Do not load saved defaults\n"
                   << "  --default-options      Load saved defaults after parsing flags\n"
-                  << std::endl;
+                  << "  --hotkeys SCHEME       Use the specified hotkey scheme for this run\n\n"
+                  << "Available schemes: linux, mac, windows, custom.\n"
+                  << "Set CK_HOTKEY_SCHEME to choose a default hotkey scheme." << std::endl;
     };
 
     for (int i = 1; i < argc; ++i)

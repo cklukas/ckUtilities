@@ -2,6 +2,7 @@
 
 #include "markdown_parser.hpp"
 #include "ck/app_info.hpp"
+#include "ck/commands/ck_edit.hpp"
 
 #define Uses_TWindow
 #define Uses_TFrame
@@ -97,57 +98,7 @@ struct MarkdownStatusContext
     bool hasSpan = false;
 };
 
-inline constexpr ushort cmToggleWrap = 3000;
-inline constexpr ushort cmToggleMarkdownMode = 3001;
-inline constexpr ushort cmHeading1 = 3010;
-inline constexpr ushort cmHeading2 = 3011;
-inline constexpr ushort cmHeading3 = 3012;
-inline constexpr ushort cmHeading4 = 3013;
-inline constexpr ushort cmHeading5 = 3014;
-inline constexpr ushort cmHeading6 = 3015;
-inline constexpr ushort cmClearHeading = 3016;
-inline constexpr ushort cmMakeParagraph = 3017;
-inline constexpr ushort cmInsertLineBreak = 3018;
-inline constexpr ushort cmBold = 3020;
-inline constexpr ushort cmItalic = 3021;
-inline constexpr ushort cmBoldItalic = 3022;
-inline constexpr ushort cmStrikethrough = 3023;
-inline constexpr ushort cmInlineCode = 3024;
-inline constexpr ushort cmCodeBlock = 3025;
-inline constexpr ushort cmRemoveFormatting = 3026;
-inline constexpr ushort cmToggleBlockQuote = 3030;
-inline constexpr ushort cmToggleBulletList = 3031;
-inline constexpr ushort cmToggleNumberedList = 3032;
-inline constexpr ushort cmConvertTaskList = 3033;
-inline constexpr ushort cmToggleTaskCheckbox = 3034;
-inline constexpr ushort cmIncreaseIndent = 3035;
-inline constexpr ushort cmDecreaseIndent = 3036;
-inline constexpr ushort cmDefinitionList = 3037;
-inline constexpr ushort cmInsertLink = 3040;
-inline constexpr ushort cmInsertReferenceLink = 3041;
-inline constexpr ushort cmAutoLinkSelection = 3042;
-inline constexpr ushort cmInsertImage = 3043;
-inline constexpr ushort cmInsertFootnote = 3044;
-inline constexpr ushort cmInsertHorizontalRule = 3045;
-inline constexpr ushort cmEscapeSelection = 3046;
-inline constexpr ushort cmInsertTable = 3050;
-inline constexpr ushort cmTableInsertRowAbove = 3051;
-inline constexpr ushort cmTableInsertRowBelow = 3052;
-inline constexpr ushort cmTableDeleteRow = 3053;
-inline constexpr ushort cmTableInsertColumnBefore = 3054;
-inline constexpr ushort cmTableInsertColumnAfter = 3055;
-inline constexpr ushort cmTableDeleteColumn = 3056;
-inline constexpr ushort cmTableDeleteTable = 3057;
-inline constexpr ushort cmTableAlignDefault = 3058;
-inline constexpr ushort cmTableAlignLeft = 3059;
-inline constexpr ushort cmTableAlignCenter = 3060;
-inline constexpr ushort cmTableAlignRight = 3061;
-inline constexpr ushort cmTableAlignNumber = 3062;
-inline constexpr ushort cmReflowParagraphs = 3070;
-inline constexpr ushort cmFormatDocument = 3071;
-inline constexpr ushort cmToggleSmartList = 3080;
-inline constexpr ushort cmAbout = 3090;
-inline constexpr ushort cmReturnToLauncher = 3091;
+using namespace ck::commands::edit;
 
 class MarkdownFileEditor : public TFileEditor
 {

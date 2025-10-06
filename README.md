@@ -88,6 +88,19 @@ Unit tests exercise the shared libraries and each tool's core logic (JSON tree b
 
 For the ck-ai tooling, copy `configs/ckai.example.toml` to `~/.config/cktools/ckai.toml` and adjust the model path once you have a local GGUF file.
 
+### Hotkey Schemes
+
+All CK Utilities applications draw their shortcuts from a shared hotkey registry. Use the `--hotkeys <scheme>` flag (available on every tool) to override the scheme for a single launch. The built-in schemes are `linux`, `mac`, `windows`, and a user editable `custom` profile.
+
+To change the default scheme globally, set the `CK_HOTKEY_SCHEME` environment variable before launching any tool:
+
+```bash
+export CK_HOTKEY_SCHEME=mac
+./build/dev/bin/ck-utilities
+```
+
+Any customisations saved through `ck-config` are stored alongside the rest of the user configuration data.
+
 #### Install (to staging directory):
 
 ```bash

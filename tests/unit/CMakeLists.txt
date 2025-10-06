@@ -17,5 +17,6 @@ add_subdirectory(ck_edit)
 add_subdirectory(ck_find)
 add_subdirectory(ck_utilities)
 add_subdirectory(ck_chat)
+add_subdirectory(hotkeys)
 
 add_subdirectory(ckai_core)

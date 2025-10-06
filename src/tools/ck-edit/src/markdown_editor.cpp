@@ -391,79 +391,6 @@ namespace ck::edit
             return result;
         }
 
-        struct CommandHotkey
-        {
-            ushort command;
-            TKey key;
-            const char *label;
-        };
-
-        const std::array<CommandHotkey, 53> kCommandHotkeys = {{
-            {cmOpen, TKey(kbF3), "~F3~ Open"},
-            {cmSave, TKey(kbF2), "~F2~ Save"},
-            {cmSaveAs, TKey(kbShiftF12), "~Shift-F12~ Save As"},
-            {cmReturnToLauncher, TKey(kbCtrlL), "~Ctrl-L~ Return"},
-            {cmToggleWrap, TKey(kbCtrlW), "~Ctrl-W~ Wrap"},
-            {cmToggleMarkdownMode, TKey(kbCtrlM), "~Ctrl-M~ Markdown"},
-            {cmBold, TKey(kbCtrlB), "~Ctrl-B~ Bold"},
-            {cmItalic, TKey(kbCtrlI), "~Ctrl-I~ Italic"},
-            {cmBoldItalic, TKey('B', kbCtrlShift | kbShift), "~Ctrl+Shift+B~ Bold+Italic"},
-            {cmStrikethrough, TKey('S', kbCtrlShift | kbShift), "~Ctrl+Shift+S~ Strike"},
-            {cmInlineCode, TKey(kbCtrlK), "~Ctrl-K~ Inline Code"},
-            {cmCodeBlock, TKey('K', kbCtrlShift | kbShift), "~Ctrl+Shift+K~ Code Block"},
-            {cmRemoveFormatting, TKey('0', kbCtrlShift | kbShift), "~Ctrl+Shift+0~ Clear Format"},
-            {cmMakeParagraph, TKey('P', kbCtrlShift | kbShift), "~Ctrl+Shift+P~ Paragraph"},
-            {cmToggleBlockQuote, TKey('Q', kbCtrlShift | kbShift), "~Ctrl+Shift+Q~ Block Quote"},
-            {cmToggleBulletList, TKey('U', kbCtrlShift | kbShift), "~Ctrl+Shift+U~ Bullet List"},
-            {cmToggleNumberedList, TKey('O', kbCtrlShift | kbShift), "~Ctrl+Shift+O~ Numbered"},
-            {cmConvertTaskList, TKey('T', kbCtrlShift | kbShift), "~Ctrl+Shift+T~ Task List"},
-            {cmToggleTaskCheckbox, TKey('X', kbCtrlShift | kbShift), "~Ctrl+Shift+X~ Checkbox"},
-            {cmIncreaseIndent, TKey(kbRight, kbCtrlShift | kbShift), "~Ctrl+Shift+Right~ Indent"},
-            {cmDecreaseIndent, TKey(kbLeft, kbCtrlShift | kbShift), "~Ctrl+Shift+Left~ Outdent"},
-            {cmDefinitionList, TKey('D', kbCtrlShift | kbShift), "~Ctrl+Shift+D~ Definition"},
-            {cmToggleSmartList, TKey('A', kbCtrlShift | kbShift), "~Ctrl+Shift+A~ Auto List"},
-            {cmInsertLink, TKey('L', kbCtrlShift | kbShift), "~Ctrl+Shift+L~ Link"},
-            {cmInsertReferenceLink, TKey('R', kbCtrlShift | kbShift), "~Ctrl+Shift+R~ Reference"},
-            {cmAutoLinkSelection, TKey('Y', kbCtrlShift | kbShift), "~Ctrl+Shift+Y~ Auto Link"},
-            {cmInsertImage, TKey('I', kbCtrlShift | kbShift), "~Ctrl+Shift+I~ Image"},
-            {cmInsertFootnote, TKey('N', kbCtrlShift | kbShift), "~Ctrl+Shift+N~ Footnote"},
-            {cmInsertHorizontalRule, TKey('H', kbCtrlShift | kbShift), "~Ctrl+Shift+H~ Rule"},
-            {cmEscapeSelection, TKey('E', kbCtrlShift | kbShift), "~Ctrl+Shift+E~ Escape"},
-            {cmInsertTable, TKey('T', kbCtrlShift | kbAltShift), "~Ctrl+Alt+T~ Table"},
-            {cmTableInsertRowAbove, TKey(kbUp, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Up~ Row Above"},
-            {cmTableInsertRowBelow, TKey(kbDown, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Down~ Row Below"},
-            {cmTableDeleteRow, TKey(kbDown, kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+Down~ Delete Row"},
-            {cmTableInsertColumnBefore, TKey(kbLeft, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Left~ Col Before"},
-            {cmTableInsertColumnAfter, TKey(kbRight, kbCtrlShift | kbAltShift), "~Ctrl+Alt+Right~ Col After"},
-            {cmTableDeleteColumn, TKey(kbRight, kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+Right~ Delete Col"},
-            {cmTableDeleteTable, TKey('T', kbCtrlShift | kbAltShift | kbShift), "~Ctrl+Alt+Shift+T~ Delete Table"},
-            {cmTableAlignDefault, TKey('D', kbCtrlShift | kbAltShift), "~Ctrl+Alt+D~ Align Default"},
-            {cmTableAlignLeft, TKey('L', kbCtrlShift | kbAltShift), "~Ctrl+Alt+L~ Align Left"},
-            {cmTableAlignCenter, TKey('C', kbCtrlShift | kbAltShift), "~Ctrl+Alt+C~ Align Center"},
-            {cmTableAlignRight, TKey('R', kbCtrlShift | kbAltShift), "~Ctrl+Alt+R~ Align Right"},
-            {cmTableAlignNumber, TKey('N', kbCtrlShift | kbAltShift), "~Ctrl+Alt+N~ Align Number"},
-            {cmReflowParagraphs, TKey('P', kbCtrlShift | kbAltShift), "~Ctrl+Alt+P~ Reflow"},
-            {cmFormatDocument, TKey('F', kbCtrlShift | kbAltShift), "~Ctrl+Alt+F~ Format Doc"},
-            {cmHeading1, TKey('1', kbAltShift), "~Alt-1~ H1"},
-            {cmHeading2, TKey('2', kbAltShift), "~Alt-2~ H2"},
-            {cmHeading3, TKey('3', kbAltShift), "~Alt-3~ H3"},
-            {cmHeading4, TKey('4', kbAltShift), "~Alt-4~ H4"},
-            {cmHeading5, TKey('5', kbAltShift), "~Alt-5~ H5"},
-            {cmHeading6, TKey('6', kbAltShift), "~Alt-6~ H6"},
-            {cmClearHeading, TKey('0', kbAltShift), "~Alt-0~ Clear"},
-            {cmInsertLineBreak, TKey(kbCtrlEnter), "~Ctrl+Enter~ Line Break"},
-        }};
-
-        const CommandHotkey *findHotkey(ushort command) noexcept
-        {
-            for (const auto &entry : kCommandHotkeys)
-            {
-                if (entry.command == command)
-                    return &entry;
-            }
-            return nullptr;
-        }
-
         bool operator==(const MarkdownStatusContext &lhs, const MarkdownStatusContext &rhs) noexcept
         {
             return lhs.hasEditor == rhs.hasEditor && lhs.markdownMode == rhs.markdownMode &&
@@ -751,12 +678,13 @@ namespace ck::edit
                 TStatusItem **tail = &head;
                 for (ushort command : commands)
                 {
-                    if (const auto *hotkey = findHotkey(command))
-                    {
-                        auto *item = new TStatusItem(hotkey->label, hotkey->key, hotkey->command);
-                        *tail = item;
-                        tail = &item->next;
-                    }
+                    std::string label = ck::hotkeys::commandLabel(command);
+                    if (label.empty())
+                        continue;
+                    auto *item = new TStatusItem(label.c_str(), kbNoKey, command);
+                    ck::hotkeys::configureStatusItem(*item, label);
+                    *tail = item;
+                    tail = &item->next;
                 }
 
                 items = head;
@@ -778,17 +706,17 @@ namespace ck::edit
 
         TSubMenu &makeFileMenu()
         {
-            TSubMenu &menu = *new TSubMenu("~F~ile", kbAltF) +
-                             *new TMenuItem("~O~pen", cmOpen, kbF3, hcNoContext, "F3") +
-                             *new TMenuItem("~N~ew", cmNew, kbCtrlN, hcNoContext, "Ctrl-N") +
-                             *new TMenuItem("~S~ave", cmSave, kbF2, hcNoContext, "F2") +
+            TSubMenu &menu = *new TSubMenu("~F~ile", kbNoKey) +
+                             *new TMenuItem("~O~pen", cmOpen, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~N~ew", cmNew, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~S~ave", cmSave, kbNoKey, hcNoContext) +
                              *new TMenuItem("S~a~ve as...", cmSaveAs, kbNoKey) +
-                             *new TMenuItem("~C~lose", cmClose, kbF4, hcNoContext, "F4") +
+                             *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
                              newLine() +
                              *new TMenuItem("~C~hange dir...", cmChangeDir, kbNoKey);
             if (ck::launcher::launchedFromCkLauncher())
-                menu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbCtrlL, hcNoContext, "Ctrl-L");
-            menu + *new TMenuItem("E~x~it", cmQuit, kbAltX, hcNoContext, "Alt-X");
+                menu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
+            menu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcNoContext);
             return menu;
         }
 
@@ -808,8 +736,8 @@ namespace ck::edit
         TSubMenu &makeTextStyleMenu()
         {
             return *new TSubMenu("Te~x~t Style", kbNoKey) +
-                   *new TMenuItem("~B~old", cmBold, kbCtrlB, hcNoContext, "Ctrl-B") +
-                   *new TMenuItem("~I~talic", cmItalic, kbCtrlI, hcNoContext, "Ctrl-I") +
+                   *new TMenuItem("~B~old", cmBold, kbNoKey, hcNoContext) +
+                   *new TMenuItem("~I~talic", cmItalic, kbNoKey, hcNoContext) +
                    *new TMenuItem("Bold + Italic", cmBoldItalic, kbNoKey) +
                    *new TMenuItem("~S~trikethrough", cmStrikethrough, kbNoKey) +
                    *new TMenuItem("Remove Formatting", cmRemoveFormatting, kbNoKey);
@@ -862,7 +790,7 @@ namespace ck::edit
 
         TSubMenu &makeInsertMenu()
         {
-            return *new TSubMenu("~I~nsert", kbAltI) +
+            return *new TSubMenu("~I~nsert", kbNoKey) +
                    *new TMenuItem("Insert/Edit Link...", cmInsertLink, kbNoKey) +
                    *new TMenuItem("Reference Link...", cmInsertReferenceLink, kbNoKey) +
                    *new TMenuItem("Auto-link Selection", cmAutoLinkSelection, kbNoKey) +
@@ -872,7 +800,7 @@ namespace ck::edit
                    *new TMenuItem("Escape Selection", cmEscapeSelection, kbNoKey) +
                    *new TMenuItem("Footnote", cmInsertFootnote, kbNoKey) +
                    newLine() +
-                   *new TMenuItem("Inline Code", cmInlineCode, kbCtrlK, hcNoContext, "Ctrl-K") +
+                   *new TMenuItem("Inline Code", cmInlineCode, kbNoKey, hcNoContext) +
                    *new TMenuItem("Code Block...", cmCodeBlock, kbNoKey) +
                    *new TMenuItem("Insert Image...", cmInsertImage, kbNoKey);
         }
@@ -886,7 +814,7 @@ namespace ck::edit
 
         TSubMenu &makeTableMenu()
         {
-            return *new TSubMenu("Ta~b~le", kbAltB) +
+            return *new TSubMenu("Ta~b~le", kbNoKey) +
                    *new TMenuItem("Insert ~T~able...", cmInsertTable, kbNoKey) +
                    newLine() +
                    *new TMenuItem("Insert row ~a~bove", cmTableInsertRowAbove, kbNoKey) +
@@ -908,40 +836,40 @@ namespace ck::edit
 
         TSubMenu &makeViewMenu()
         {
-            return *new TSubMenu("~V~iew", kbAltV) +
-                   *new TMenuItem("Toggle ~w~rap", cmToggleWrap, kbCtrlW, hcNoContext, "Ctrl-W") +
-                   *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbCtrlM, hcNoContext, "Ctrl-M");
+            return *new TSubMenu("~V~iew", kbNoKey) +
+                   *new TMenuItem("Toggle ~w~rap", cmToggleWrap, kbNoKey, hcNoContext) +
+                   *new TMenuItem("Toggle ~M~arkdown mode", cmToggleMarkdownMode, kbNoKey, hcNoContext);
         }
 
         TSubMenu &makeWindowMenu()
         {
-            return *new TSubMenu("~W~indows", kbAltW) +
-                   *new TMenuItem("~R~esize/Move", cmResize, kbCtrlF5, hcNoContext, "Ctrl-F5") +
-                   *new TMenuItem("~Z~oom", cmZoom, kbF5, hcNoContext, "F5") +
-                   *new TMenuItem("~N~ext", cmNext, kbF6, hcNoContext, "F6") +
-                   *new TMenuItem("~C~lose", cmClose, kbAltF3, hcNoContext, "Alt-F3") +
+            return *new TSubMenu("~W~indows", kbNoKey) +
+                   *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
+                   *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
+                   *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
+                   *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
                    *new TMenuItem("~T~ile", cmTile, kbNoKey) +
                    *new TMenuItem("C~a~scade", cmCascade, kbNoKey);
         }
 
         TSubMenu &makeHelpMenu()
         {
-            return *new TSubMenu("~H~elp", kbAltH) +
-                   *new TMenuItem("~A~bout", cmAbout, kbF1, hcNoContext, "F1");
+            return *new TSubMenu("~H~elp", kbNoKey) +
+                   *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
         }
 
         TSubMenu &makeEditMenu(bool markdownMode)
         {
-            TSubMenu &edit = *new TSubMenu("~E~dit", kbAltE) +
-                             *new TMenuItem("~U~ndo", cmUndo, kbCtrlU, hcNoContext, "Ctrl-U") +
+            TSubMenu &edit = *new TSubMenu("~E~dit", kbNoKey) +
+                             *new TMenuItem("~U~ndo", cmUndo, kbNoKey, hcNoContext) +
                              newLine() +
-                             *new TMenuItem("Cu~t~", cmCut, kbShiftDel, hcNoContext, "Shift-Del") +
-                             *new TMenuItem("~C~opy", cmCopy, kbCtrlIns, hcNoContext, "Ctrl-Ins") +
-                             *new TMenuItem("~P~aste", cmPaste, kbShiftIns, hcNoContext, "Shift-Ins") +
+                             *new TMenuItem("Cu~t~", cmCut, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~C~opy", cmCopy, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~P~aste", cmPaste, kbNoKey, hcNoContext) +
                              newLine() +
-                             *new TMenuItem("~F~ind...", cmFind, kbCtrlF, hcNoContext, "Ctrl-F") +
-                             *new TMenuItem("~R~eplace...", cmReplace, kbCtrlR, hcNoContext, "Ctrl-R") +
-                             *new TMenuItem("Find ~N~ext", cmSearchAgain, kbCtrlL, hcNoContext, "Ctrl-L");
+                             *new TMenuItem("~F~ind...", cmFind, kbNoKey, hcNoContext) +
+                             *new TMenuItem("~R~eplace...", cmReplace, kbNoKey, hcNoContext) +
+                             *new TMenuItem("Find ~N~ext", cmSearchAgain, kbNoKey, hcNoContext);
 
             if (markdownMode)
             {

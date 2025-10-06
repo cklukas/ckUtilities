@@ -58,6 +58,10 @@ namespace
 
 constexpr std::string_view kToolId = "ck-config";
 
+static constexpr ushort cmEditHotkeys = 3400;
+static constexpr ushort cmHotkeyEditCommand = 3401;
+static constexpr ushort cmHotkeyClearCommand = 3402;
+
 const ck::appinfo::ToolInfo &toolInfo()
 {
     return ck::appinfo::requireTool(kToolId);
@@ -104,9 +108,21 @@ struct CliOptions
 
 const std::vector<ApplicationInfo> &knownApplications()
 {
-    static const std::vector<ApplicationInfo> apps = {
-        {"ck-du", "Disk Usage", &ck::du::registerDiskUsageOptions},
-    };
+    static std::vector<ApplicationInfo> apps;
+    static bool initialized = false;
+    if (!initialized)
+    {
+        auto toolSpan = ck::appinfo::tools();
+        apps.reserve(toolSpan.size());
+        for (const auto &tool : toolSpan)
+        {
+            RegisterFn reg = nullptr;
+            if (tool.id == "ck-du")
+                reg = &ck::du::registerDiskUsageOptions;
+            apps.push_back(ApplicationInfo{std::string(tool.id), std::string(tool.displayName), reg});
+        }
+        initialized = true;
+    }
     return apps;
 }
 
@@ -183,8 +199,6 @@ std::vector<ApplicationEntry> gatherApplicationEntries()
     std::unordered_set<std::string> savedProfiles(profiles.begin(), profiles.end());
     for (const auto &info : knownApplications())
     {
-        if (!info.registerFn)
-            continue;
         bool has = savedProfiles.find(info.id) != savedProfiles.end();
         entries.push_back({info, true, has});
     }
@@ -208,7 +222,10 @@ void printUsage()
               << "  --export APP FILE       Export APP defaults to FILE\n"
               << "  --import APP FILE       Import defaults for APP from FILE\n"
               << "  --set APP KEY VALUE     Set KEY to VALUE for APP\n"
-              << "  --help                  Show this help message\n";
+              << "  --hotkeys SCHEME       Use the specified hotkey scheme for this run\n"
+              << "  --help                  Show this help message\n"
+              << "\nAvailable schemes: linux, mac, windows, custom.\n"
+              << "Set CK_HOTKEY_SCHEME to choose a default hotkey scheme." << std::endl;
 }
 
 int listApps()

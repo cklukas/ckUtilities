@@ -129,11 +129,15 @@ TPalette &ChatWindow::getPalette() const
 void ChatWindow::handleEvent(TEvent &event)
 {
     const TKey sendKey = ck::hotkeys::key(cmSendPrompt);
-    if (event.what == evKeyDown && sendKey.code != 0 && event.keyDown.keyCode == sendKey.code)
+    if (event.what == evKeyDown && sendKey.code != 0)
     {
-        sendPrompt();
-        clearEvent(event);
-        return;
+        TKey pressed(event.keyDown.keyCode, event.keyDown.controlKeyState);
+        if (pressed == sendKey)
+        {
+            sendPrompt();
+            clearEvent(event);
+            return;
+        }
     }
 
     if (event.what == evCommand)

@@ -122,8 +122,10 @@ namespace
 
         if (options.showHelp && !options.prompt)
         {
-            std::cout << "Usage: " << tool_info().executable << " --prompt <TEXT>\n";
-            std::cout << "Launch the Turbo Vision interface without --prompt." << std::endl;
+            std::cout << "Usage: " << tool_info().executable << " [--hotkeys SCHEME] --prompt <TEXT>\n";
+            std::cout << "Launch the Turbo Vision interface without --prompt." << '\n';
+            std::cout << "Available schemes: linux, mac, windows, custom." << '\n';
+            std::cout << "Set CK_HOTKEY_SCHEME to select a default hotkey scheme." << std::endl;
             return 0;
         }
 
