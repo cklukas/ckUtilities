@@ -6,7 +6,6 @@ set(CK_LLAMA_CPP_TAG
 
 if(APPLE)
   set(GGML_METAL ON CACHE BOOL "Enable ggml Metal backend" FORCE)
-  set(LLAMA_METAL ON CACHE BOOL "Enable llama.cpp Metal backend" FORCE)
 endif()
 
 if(NOT TARGET llama)

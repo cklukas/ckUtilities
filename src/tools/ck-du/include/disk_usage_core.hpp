@@ -36,8 +36,11 @@ enum class SortKey
 struct DirectoryStats
 {
     std::uintmax_t totalSize = 0;
+    std::uintmax_t logicalSize = 0;
+    std::uintmax_t cloudOnlySize = 0;
     std::size_t fileCount = 0;
     std::size_t directoryCount = 0;
+    std::size_t cloudOnlyFileCount = 0;
 };
 
 struct DirectoryNode
@@ -55,19 +58,28 @@ struct FileEntry
     std::filesystem::path path;
     std::string displayPath;
     std::uintmax_t size = 0;
+    std::uintmax_t logicalSize = 0;
+    std::uintmax_t cloudOnlySize = 0;
     std::string owner;
     std::string group;
     std::string created;
     std::string modified;
     std::chrono::system_clock::time_point createdTime{};
     std::chrono::system_clock::time_point modifiedTime{};
+    bool isICloudItem = false;
+    bool isICloudDownloaded = true;
+    bool isICloudDownloading = false;
+    std::string iCloudStatus;
 };
 
 struct FileTypeSummary
 {
     std::string type;
     std::uintmax_t totalSize = 0;
+    std::uintmax_t logicalSize = 0;
+    std::uintmax_t cloudOnlySize = 0;
     std::size_t count = 0;
+    std::size_t cloudOnlyCount = 0;
 };
 
 struct BuildDirectoryTreeOptions
@@ -118,4 +130,3 @@ void setCurrentSortKey(SortKey key) noexcept;
 const char *sortKeyName(SortKey key) noexcept;
 
 } // namespace ck::du
-

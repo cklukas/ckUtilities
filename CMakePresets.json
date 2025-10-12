@@ -13,7 +13,12 @@
       "binaryDir": "build/dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY",
+        "GGML_OPENMP": "OFF",
+        "GGML_NATIVE": "OFF",
+        "GGML_CPU_ALL_VARIANTS": "OFF",
+        "GGML_CCACHE": "OFF"
       }
     },
     {

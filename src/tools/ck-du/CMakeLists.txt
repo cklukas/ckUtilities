@@ -29,6 +29,14 @@ target_include_directories(ck_du_core
 
 target_compile_features(ck_du_core PUBLIC cxx_std_20)
 
+if(APPLE)
+  target_link_libraries(ck_du_core
+    PUBLIC
+      "-framework CoreFoundation"
+      "-framework CoreServices"
+  )
+endif()
+
 install(TARGETS ck_du_core
   ARCHIVE DESTINATION lib
 )
@@ -56,3 +64,15 @@ add_ck_tool(ckdu
   DEFINITIONS
     CK_DU_VERSION="${PROJECT_VERSION}"
 )
+
+if(APPLE)
+  target_sources(ckdu
+    PRIVATE
+      src/mac_cloud_operations.mm
+  )
+  target_link_libraries(ckdu
+    PRIVATE
+      "-framework Foundation"
+      "-framework AppKit"
+  )
+endif()

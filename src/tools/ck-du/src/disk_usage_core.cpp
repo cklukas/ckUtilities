@@ -5,17 +5,17 @@
 #include "disk_usage_core.hpp"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
-#include <cstdlib>
 #include <cerrno>
 #include <cctype>
-#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fcntl.h>
 #include <grp.h>
 #include <iomanip>
 #include <map>
+#include <unordered_map>
 #include <pwd.h>
 #include <sstream>
 #include <string>
@@ -27,6 +27,11 @@
 
 #if !defined(_WIN32)
 #include <fnmatch.h>
+#endif
+
+#if defined(__APPLE__)
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreServices/CoreServices.h>
 #endif
 
 namespace ck::du
@@ -64,60 +69,274 @@ struct ScanContext
     fs::path rootPath;
 };
 
-std::string trimWhitespace(const std::string &value)
+std::string lowercase(const std::string &value)
 {
-    std::size_t start = 0;
-    while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])))
-        ++start;
-    std::size_t end = value.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])))
-        --end;
-    return value.substr(start, end - start);
+    std::string lowered;
+    lowered.reserve(value.size());
+    for (char ch : value)
+        lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    return lowered;
 }
 
-std::string shellEscape(const std::string &text)
-{
-    std::string escaped = "'";
-    for (char ch : text)
-    {
-        if (ch == '\'')
-            escaped += "'\\''";
-        else
-            escaped.push_back(ch);
-    }
-    escaped.push_back('\'');
-    return escaped;
-}
-
-std::string extensionFallback(const fs::path &path)
+std::string extensionWithoutDot(const fs::path &path)
 {
     std::string ext = path.extension().string();
-    if (!ext.empty())
+    if (!ext.empty() && ext.front() == '.')
+        ext.erase(ext.begin());
+    return lowercase(ext);
+}
+
+const std::unordered_map<std::string, const char *> &extensionMimeMap()
+{
+    static const std::unordered_map<std::string, const char *> kMap = {
+        {"txt", "text/plain"},           {"text", "text/plain"},           {"md", "text/markdown"},
+        {"markdown", "text/markdown"},   {"log", "text/plain"},            {"csv", "text/csv"},
+        {"tsv", "text/tab-separated-values"},                              {"json", "application/json"},
+        {"xml", "application/xml"},      {"html", "text/html"},            {"htm", "text/html"},
+        {"css", "text/css"},             {"js", "application/javascript"}, {"ts", "application/typescript"},
+        {"c", "text/x-c"},               {"cc", "text/x-c++"},             {"cpp", "text/x-c++"},
+        {"cxx", "text/x-c++"},           {"h", "text/x-c"},                {"hpp", "text/x-c++"},
+        {"hh", "text/x-c++"},            {"mm", "text/x-objective-c"},
+        {"m", "text/x-objective-c"},     {"swift", "text/x-swift"},        {"java", "text/x-java"},
+        {"kt", "text/x-kotlin"},         {"py", "text/x-python"},          {"rb", "text/x-ruby"},
+        {"go", "text/x-go"},             {"rs", "text/x-rust"},            {"php", "text/x-php"},
+        {"sh", "text/x-shellscript"},    {"bash", "text/x-shellscript"},   {"zsh", "text/x-shellscript"},
+        {"pl", "text/x-perl"},           {"lua", "text/x-lua"},            {"sql", "application/sql"},
+        {"yml", "text/yaml"},            {"yaml", "text/yaml"},            {"toml", "text/x-toml"},
+        {"ini", "text/plain"},           {"conf", "text/plain"},           {"cfg", "text/plain"},
+        {"png", "image/png"},            {"jpg", "image/jpeg"},            {"jpeg", "image/jpeg"},
+        {"gif", "image/gif"},            {"bmp", "image/bmp"},             {"svg", "image/svg+xml"},
+        {"webp", "image/webp"},          {"tiff", "image/tiff"},           {"tif", "image/tiff"},
+        {"heic", "image/heic"},          {"mp3", "audio/mpeg"},            {"aac", "audio/aac"},
+        {"wav", "audio/wav"},            {"flac", "audio/flac"},           {"aiff", "audio/aiff"},
+        {"ogg", "audio/ogg"},            {"m4a", "audio/mp4"},             {"mp4", "video/mp4"},
+        {"m4v", "video/x-m4v"},          {"mov", "video/quicktime"},       {"mkv", "video/x-matroska"},
+        {"avi", "video/x-msvideo"},      {"wmv", "video/x-ms-wmv"},        {"webm", "video/webm"},
+        {"mpg", "video/mpeg"},           {"mpeg", "video/mpeg"},           {"pdf", "application/pdf"},
+        {"rtf", "application/rtf"},      {"doc", "application/msword"},    {"docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        {"xls", "application/vnd.ms-excel"},
+        {"xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        {"ppt", "application/vnd.ms-powerpoint"},
+        {"pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+        {"zip", "application/zip"},      {"gz", "application/gzip"},       {"tgz", "application/gzip"},
+        {"tar", "application/x-tar"},    {"bz2", "application/x-bzip2"},   {"xz", "application/x-xz"},
+        {"7z", "application/x-7z-compressed"},                             {"sit", "application/x-stuffit"},
+        {"rar", "application/vnd.rar"},  {"dmg", "application/x-apple-diskimage"},
+        {"iso", "application/x-iso9660-image"},                            {"apk", "application/vnd.android.package-archive"},
+        {"ipa", "application/octet-stream"},                                {"app", "application/octet-stream"},
+        {"exe", "application/vnd.microsoft.portable-executable"},
+        {"dll", "application/x-msdownload"},                                {"so", "application/x-sharedlib"},
+        {"dylib", "application/x-mach-o-binary"},                          {"o", "application/x-object"},
+        {"obj", "application/x-tgif"},   {"psd", "image/vnd.adobe.photoshop"},
+        {"ai", "application/postscript"}
+    };
+    return kMap;
+}
+
+struct SizeBreakdown
+{
+    std::uintmax_t logicalSize = 0;
+    std::uintmax_t onDiskSize = 0;
+    std::uintmax_t cloudOnlySize = 0;
+    bool isICloudItem = false;
+    bool isICloudDownloaded = true;
+    bool isICloudDownloading = false;
+    bool isOfflinePlaceholder = false;
+    std::string iCloudStatus;
+};
+
+#if defined(__APPLE__)
+std::string cfStringToStd(CFStringRef value)
+{
+    if (!value)
+        return {};
+    CFIndex length = CFStringGetLength(value);
+    CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8);
+    if (maxSize < 0)
+        return {};
+    std::string buffer(static_cast<std::size_t>(maxSize) + 1, '\0');
+    if (CFStringGetCString(value, buffer.data(), static_cast<CFIndex>(buffer.size()), kCFStringEncodingUTF8))
     {
-        std::string lowered;
-        lowered.reserve(ext.size());
-        for (char ch : ext)
-            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        return lowered;
+        buffer.resize(std::strlen(buffer.c_str()));
+        return buffer;
     }
-    return "unknown";
+    return {};
+}
+
+bool copyBoolResource(CFURLRef url, CFStringRef key, bool &out)
+{
+    CFTypeRef value = nullptr;
+    Boolean ok = CFURLCopyResourcePropertyForKey(url, key, &value, nullptr);
+    if (!ok)
+        return false;
+    if (value)
+    {
+        if (CFGetTypeID(value) == CFBooleanGetTypeID())
+            out = CFBooleanGetValue(static_cast<CFBooleanRef>(value));
+        CFRelease(value);
+    }
+    return ok;
+}
+
+bool updateDownloadStatus(CFURLRef url, SizeBreakdown &breakdown)
+{
+    CFTypeRef value = nullptr;
+    Boolean ok = CFURLCopyResourcePropertyForKey(url, kCFURLUbiquitousItemDownloadingStatusKey, &value, nullptr);
+    if (!ok || !value)
+        return false;
+
+    if (CFGetTypeID(value) == CFStringGetTypeID())
+    {
+        CFStringRef status = static_cast<CFStringRef>(value);
+        breakdown.iCloudStatus = cfStringToStd(status);
+
+        if (CFEqual(status, kCFURLUbiquitousItemDownloadingStatusDownloaded) ||
+            CFEqual(status, kCFURLUbiquitousItemDownloadingStatusCurrent))
+        {
+            breakdown.isICloudDownloaded = true;
+        }
+        else if (CFEqual(status, kCFURLUbiquitousItemDownloadingStatusNotDownloaded))
+        {
+            breakdown.isICloudDownloaded = false;
+        }
+    }
+
+    CFRelease(value);
+    return true;
+}
+
+std::string mimeFromExtensionUTType(const std::string &ext)
+{
+    if (ext.empty())
+        return {};
+    CFStringRef tag = CFStringCreateWithCString(kCFAllocatorDefault, ext.c_str(), kCFStringEncodingUTF8);
+    if (!tag)
+        return {};
+    std::string result;
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+    CFStringRef uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, tag, nullptr);
+    if (uti)
+    {
+        CFStringRef mime = UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType);
+        if (mime)
+        {
+            result = cfStringToStd(mime);
+            CFRelease(mime);
+        }
+        CFRelease(uti);
+    }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+    CFRelease(tag);
+    return result;
+}
+#endif
+
+std::uintmax_t fileLogicalSize(const struct stat &sb)
+{
+    if (sb.st_size < 0)
+        return 0;
+    return static_cast<std::uintmax_t>(sb.st_size);
+}
+
+std::uintmax_t fileAllocatedBytes(const struct stat &sb)
+{
+#if defined(_WIN32)
+    return fileLogicalSize(sb);
+#else
+    if (sb.st_blocks < 0)
+        return 0;
+    return static_cast<std::uintmax_t>(sb.st_blocks) * 512ULL;
+#endif
+}
+
+SizeBreakdown computeSizeBreakdown(const fs::path &path, const struct stat &sb)
+{
+    SizeBreakdown breakdown;
+    breakdown.logicalSize = fileLogicalSize(sb);
+    breakdown.onDiskSize = fileAllocatedBytes(sb);
+
+#if defined(__APPLE__)
+#ifdef UF_OFFLINE
+    if ((sb.st_flags & UF_OFFLINE) != 0)
+    {
+        breakdown.isOfflinePlaceholder = true;
+        breakdown.isICloudItem = true;
+        breakdown.isICloudDownloaded = false;
+    }
+#endif
+    const std::string native = path.string();
+    CFURLRef url = CFURLCreateFromFileSystemRepresentation(
+        kCFAllocatorDefault,
+        reinterpret_cast<const UInt8 *>(native.c_str()),
+        static_cast<CFIndex>(native.size()),
+        S_ISDIR(sb.st_mode));
+    if (url)
+    {
+        bool boolValue = false;
+        if (copyBoolResource(url, kCFURLIsUbiquitousItemKey, boolValue) && boolValue)
+            breakdown.isICloudItem = true;
+        if (updateDownloadStatus(url, breakdown))
+            breakdown.isICloudItem = true;
+        if (copyBoolResource(url, kCFURLUbiquitousItemIsDownloadingKey, boolValue))
+            breakdown.isICloudDownloading = boolValue;
+        CFRelease(url);
+    }
+
+    if (breakdown.isICloudItem)
+    {
+        if (!breakdown.isICloudDownloaded)
+        {
+            if (breakdown.logicalSize > breakdown.onDiskSize)
+                breakdown.cloudOnlySize = breakdown.logicalSize - breakdown.onDiskSize;
+            else
+                breakdown.cloudOnlySize = breakdown.logicalSize;
+        }
+        else if (breakdown.logicalSize > breakdown.onDiskSize)
+        {
+            breakdown.cloudOnlySize = breakdown.logicalSize - breakdown.onDiskSize;
+        }
+    }
+#else
+    (void)path;
+    (void)sb;
+#endif
+
+    if (breakdown.cloudOnlySize > breakdown.logicalSize)
+        breakdown.cloudOnlySize = breakdown.logicalSize;
+    return breakdown;
+}
+
+int lstatCompat(const char *path, struct stat *sb)
+{
+#if defined(_WIN32)
+    return stat(path, sb);
+#else
+    return lstat(path, sb);
+#endif
 }
 
 std::string detectFileType(const fs::path &path)
 {
-    std::string command = "file -b --mime-type " + shellEscape(path.string());
-    std::array<char, 256> buffer{};
-    std::string output;
-    if (FILE *pipe = popen(command.c_str(), "r"))
+    std::string ext = extensionWithoutDot(path);
+#if defined(__APPLE__)
+    if (!ext.empty())
     {
-        while (std::fgets(buffer.data(), static_cast<int>(buffer.size()), pipe))
-            output.append(buffer.data());
-        pclose(pipe);
-        output = trimWhitespace(output);
-        if (!output.empty())
-            return output;
+        std::string mime = mimeFromExtensionUTType(ext);
+        if (!mime.empty())
+            return mime;
     }
-    return extensionFallback(path);
+#endif
+    if (ext.empty())
+        return "application/octet-stream";
+    const auto &map = extensionMimeMap();
+    if (auto it = map.find(ext); it != map.end())
+        return it->second;
+    return "application/x-" + ext;
 }
 
 bool hasNoDumpFlag(const struct stat &sb)
@@ -192,13 +411,6 @@ bool shouldIgnorePath(const fs::path &path, const ScanContext &context)
     return false;
 }
 
-std::uintmax_t fileSizeFromStat(const struct stat &sb)
-{
-    if (sb.st_size < 0)
-        return 0;
-    return static_cast<std::uintmax_t>(sb.st_size);
-}
-
 bool passesThreshold(std::uintmax_t size, const BuildDirectoryTreeOptions &options)
 {
     if (options.threshold == 0)
@@ -222,7 +434,7 @@ ScanContext makeScanContext(const fs::path &root, const BuildDirectoryTreeOption
     ScanContext context{options};
     context.rootPath = root;
     struct stat sb;
-    if (stat(root.c_str(), &sb) == 0)
+    if (lstatCompat(root.c_str(), &sb) == 0)
         context.rootDevice = static_cast<std::uintmax_t>(sb.st_dev);
     return context;
 }
@@ -276,16 +488,17 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
     node.path = path;
     DirectoryStats stats{};
 
-    struct stat sb;
-    if (stat(path.c_str(), &sb) == 0)
+    struct stat sb{};
+    bool haveStat = (lstatCompat(path.c_str(), &sb) == 0);
+    if (haveStat)
         node.modifiedTime = std::chrono::system_clock::from_time_t(sb.st_mtime);
     else
         node.modifiedTime = std::chrono::system_clock::time_point{};
 
-    if (context.options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+    if (haveStat && context.options.ignoreNodumpFlag && hasNoDumpFlag(sb))
         return stats;
 
-    if (!context.options.countHardLinksMultipleTimes)
+    if (haveStat && !context.options.countHardLinksMultipleTimes)
     {
         FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
         auto [it, inserted] = context.visited.insert(identity);
@@ -327,19 +540,19 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
 
         std::error_code entryEc;
         bool isDirectory = entry.is_directory(entryEc);
-        bool isSymlink = entry.is_symlink(entryEc);
         if (entryEc)
         {
             reportError(context, entryPath, entryEc);
             continue;
         }
 
-        struct stat entryStat;
-        if (stat(entryPath.c_str(), &entryStat) != 0)
+        struct stat entryStat{};
+        if (lstatCompat(entryPath.c_str(), &entryStat) != 0)
         {
             reportError(context, entryPath, std::error_code(errno, std::generic_category()));
             continue;
         }
+        bool isSymlink = S_ISLNK(entryStat.st_mode);
 
         if (context.options.ignoreNodumpFlag && hasNoDumpFlag(entryStat))
             continue;
@@ -362,8 +575,11 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
             childNode->stats = childStats;
 
             stats.totalSize += childStats.totalSize;
+            stats.logicalSize += childStats.logicalSize;
+            stats.cloudOnlySize += childStats.cloudOnlySize;
             stats.fileCount += childStats.fileCount;
             stats.directoryCount += childStats.directoryCount + 1;
+            stats.cloudOnlyFileCount += childStats.cloudOnlyFileCount;
 
             if (passesThreshold(childStats.totalSize, context.options))
                 node.children.push_back(std::move(childNode));
@@ -381,8 +597,12 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
             if (!count)
                 continue;
 
-            std::uintmax_t fileSize = fileSizeFromStat(entryStat);
-            stats.totalSize += fileSize;
+            SizeBreakdown breakdown = computeSizeBreakdown(entryPath, entryStat);
+            stats.totalSize += breakdown.onDiskSize;
+            stats.logicalSize += breakdown.logicalSize;
+            stats.cloudOnlySize += breakdown.cloudOnlySize;
+            if (breakdown.cloudOnlySize > 0)
+                ++stats.cloudOnlyFileCount;
             ++stats.fileCount;
         }
     }
@@ -391,7 +611,8 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
     return stats;
 }
 
-FileEntry makeFileEntry(const fs::path &path, const fs::path &base)
+FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const struct stat &sb,
+                        const SizeBreakdown &breakdown)
 {
     FileEntry entry;
     entry.path = path;
@@ -399,40 +620,33 @@ FileEntry makeFileEntry(const fs::path &path, const fs::path &base)
     if (entry.displayPath.empty())
         entry.displayPath = path.filename().string();
 
-    struct stat sb;
-    if (stat(path.c_str(), &sb) == 0)
-    {
-        entry.size = static_cast<std::uintmax_t>(sb.st_size);
-        entry.owner = ownerName(sb.st_uid);
-        entry.group = groupName(sb.st_gid);
-        entry.modifiedTime = std::chrono::system_clock::from_time_t(sb.st_mtime);
-        entry.modified = formatTimePoint(entry.modifiedTime);
+    entry.size = breakdown.onDiskSize;
+    entry.logicalSize = breakdown.logicalSize;
+    entry.cloudOnlySize = breakdown.cloudOnlySize;
+    entry.isICloudItem = breakdown.isICloudItem;
+    entry.isICloudDownloaded = breakdown.isICloudDownloaded;
+    entry.isICloudDownloading = breakdown.isICloudDownloading;
+    entry.iCloudStatus = breakdown.iCloudStatus;
+
+    entry.owner = ownerName(sb.st_uid);
+    entry.group = groupName(sb.st_gid);
+    entry.modifiedTime = std::chrono::system_clock::from_time_t(sb.st_mtime);
+    entry.modified = formatTimePoint(entry.modifiedTime);
 #if defined(__linux__) && defined(STATX_BTIME)
-        struct statx stx;
-        if (statx(AT_FDCWD, path.c_str(), AT_STATX_SYNC_AS_STAT, STATX_BTIME, &stx) == 0 &&
-            (stx.stx_mask & STATX_BTIME))
-        {
-            entry.createdTime =
-                std::chrono::system_clock::from_time_t(stx.stx_btime.tv_sec) +
-                std::chrono::nanoseconds(stx.stx_btime.tv_nsec);
-            entry.created = formatTimePoint(entry.createdTime);
-        }
-        else
-#endif
-        {
-            entry.createdTime = std::chrono::system_clock::from_time_t(sb.st_ctime);
-            entry.created = formatTimePoint(entry.createdTime);
-        }
+    struct statx stx;
+    if (statx(AT_FDCWD, path.c_str(), AT_STATX_SYNC_AS_STAT, STATX_BTIME, &stx) == 0 &&
+        (stx.stx_mask & STATX_BTIME))
+    {
+        entry.createdTime =
+            std::chrono::system_clock::from_time_t(stx.stx_btime.tv_sec) +
+            std::chrono::nanoseconds(stx.stx_btime.tv_nsec);
+        entry.created = formatTimePoint(entry.createdTime);
     }
     else
+#endif
     {
-        entry.size = 0;
-        entry.owner = "?";
-        entry.group = "?";
-        entry.created = "-";
-        entry.modified = "-";
-        entry.createdTime = std::chrono::system_clock::time_point{};
-        entry.modifiedTime = std::chrono::system_clock::time_point{};
+        entry.createdTime = std::chrono::system_clock::from_time_t(sb.st_ctime);
+        entry.created = formatTimePoint(entry.createdTime);
     }
 
     if (entry.displayPath.empty())
@@ -545,10 +759,10 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
             if (!inserted)
                 return;
         }
-        std::uintmax_t size = fileSizeFromStat(sb);
-        if (!passesThreshold(size, options))
+        SizeBreakdown breakdown = computeSizeBreakdown(path, sb);
+        if (!passesThreshold(breakdown.onDiskSize, options))
             return;
-        files.push_back(makeFileEntry(path, scanPath));
+        files.push_back(makeFileEntry(path, scanPath, sb, breakdown));
     };
 
     auto shouldSkipDirectory = [&](const fs::path &path, const struct stat &sb, bool isSymlink) {
@@ -592,7 +806,7 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
             reportProgress(path);
 
             struct stat sb;
-            if (stat(path.c_str(), &sb) != 0)
+            if (lstatCompat(path.c_str(), &sb) != 0)
             {
                 reportError(context, path, std::error_code(errno, std::generic_category()));
                 continue;
@@ -645,7 +859,7 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
                 continue;
 
             struct stat sb;
-            if (stat(path.c_str(), &sb) != 0)
+            if (lstatCompat(path.c_str(), &sb) != 0)
             {
                 reportError(context, path, std::error_code(errno, std::generic_category()));
                 continue;
@@ -712,14 +926,18 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
             if (!inserted)
                 return;
         }
-        std::uintmax_t size = fileSizeFromStat(sb);
-        if (!passesThreshold(size, options))
+        SizeBreakdown breakdown = computeSizeBreakdown(path, sb);
+        if (!passesThreshold(breakdown.onDiskSize, options))
             return;
         std::string type = detectFileType(path);
         FileTypeSummary &summary = summaries[type];
         if (summary.type.empty())
             summary.type = type;
-        summary.totalSize += size;
+        summary.totalSize += breakdown.onDiskSize;
+        summary.logicalSize += breakdown.logicalSize;
+        summary.cloudOnlySize += breakdown.cloudOnlySize;
+        if (breakdown.cloudOnlySize > 0)
+            ++summary.cloudOnlyCount;
         ++summary.count;
     };
 
@@ -764,7 +982,7 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
             reportProgress(path);
 
             struct stat sb;
-            if (stat(path.c_str(), &sb) != 0)
+            if (lstatCompat(path.c_str(), &sb) != 0)
             {
                 reportError(context, path, std::error_code(errno, std::generic_category()));
                 continue;
@@ -817,7 +1035,7 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
                 continue;
 
             struct stat sb;
-            if (stat(path.c_str(), &sb) != 0)
+            if (lstatCompat(path.c_str(), &sb) != 0)
             {
                 reportError(context, path, std::error_code(errno, std::generic_category()));
                 continue;
@@ -969,4 +1187,3 @@ const char *sortKeyName(SortKey key) noexcept
 }
 
 } // namespace ck::du
-

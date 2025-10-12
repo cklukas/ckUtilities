@@ -35,10 +35,12 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/options.hpp"
+#include "cloud_actions.hpp"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -54,6 +56,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -106,6 +109,11 @@ static constexpr unsigned short cmPatternAdd = commands::PatternAdd;
 static constexpr unsigned short cmPatternEdit = commands::PatternEdit;
 static constexpr unsigned short cmPatternDelete = commands::PatternDelete;
 static constexpr unsigned short cmReturnToLauncher = commands::ReturnToLauncher;
+static constexpr unsigned short cmManageCloud = commands::ManageCloudStorage;
+#if defined(__APPLE__)
+static constexpr unsigned short cmPauseOperation = 0x7100;
+static constexpr unsigned short cmResumeOperation = 0x7101;
+#endif
 
 namespace
 {
@@ -163,6 +171,34 @@ std::string trim(const std::string &text)
         --end;
     return text.substr(start, end - start);
 }
+
+#if defined(__APPLE__)
+std::string ellipsizeMiddle(const std::string &text, std::size_t maxLen)
+{
+    if (text.size() <= maxLen)
+        return text;
+    if (maxLen <= 3)
+        return text.substr(0, maxLen);
+    std::size_t front = maxLen / 2;
+    if (front < 1)
+        front = 1;
+    std::size_t back = maxLen - front - 3;
+    if (back < 1)
+        back = 1;
+    if (front + back + 3 > maxLen)
+        front = maxLen > 3 ? (maxLen - 3) / 2 : 0;
+    if (front + back + 3 > maxLen)
+        back = maxLen > 3 ? maxLen - 3 - front : 0;
+    return text.substr(0, front) + "..." + text.substr(text.size() - back);
+}
+
+std::string formatCountLabel(std::size_t count, std::string_view singular, std::string_view plural)
+{
+    std::ostringstream out;
+    out << count << ' ' << (count == 1 ? singular : plural);
+    return out.str();
+}
+#endif
 
 std::optional<std::int64_t> parseThresholdValue(const std::string &input)
 {
@@ -510,6 +546,108 @@ private:
 
 namespace
 {
+std::string listEntryName(const FileEntry &entry);
+
+std::uintmax_t combinedLogicalBytes(std::uintmax_t local, std::uintmax_t cloud, std::uintmax_t logical)
+{
+    std::uintmax_t combined = local + cloud;
+    if (logical > 0)
+        combined = std::max(combined, logical);
+    return combined;
+}
+
+std::string formatUsageBreakdown(std::uintmax_t local, std::uintmax_t cloud, std::uintmax_t logical)
+{
+    std::ostringstream out;
+    out << formatSize(local, getCurrentUnit()) << " local";
+    if (cloud > 0)
+        out << ", " << formatSize(cloud, getCurrentUnit()) << " cloud";
+    std::uintmax_t total = combinedLogicalBytes(local, cloud, logical);
+    if (cloud > 0 || total != local)
+        out << ", " << formatSize(total, getCurrentUnit()) << " total";
+    return out.str();
+}
+
+std::string formatDirectoryUsage(const DirectoryStats &stats)
+{
+    return formatUsageBreakdown(stats.totalSize, stats.cloudOnlySize, stats.logicalSize);
+}
+
+std::string describeICloudState(const FileEntry &entry)
+{
+    if (entry.isICloudDownloading)
+        return "downloading";
+    if (entry.cloudOnlySize > 0)
+    {
+        if (entry.size == 0)
+            return "not downloaded";
+        return "partially downloaded";
+    }
+    if (entry.isICloudItem)
+        return "downloaded";
+    return {};
+}
+
+std::string fileCloudLabel(const FileEntry &entry)
+{
+    if (entry.isICloudDownloading)
+        return " [downloading]";
+    if (entry.cloudOnlySize > 0)
+    {
+        if (entry.size == 0)
+            return " [cloud]";
+        return " [partial]";
+    }
+    return {};
+}
+
+std::string displayEntryName(const FileEntry &entry)
+{
+    std::string name = listEntryName(entry);
+    std::string label = fileCloudLabel(entry);
+    if (!label.empty())
+        name += label;
+    return name;
+}
+
+std::string fileSizeColumnText(const FileEntry &entry)
+{
+    std::string text = formatSize(entry.size, getCurrentUnit());
+    if (entry.cloudOnlySize > 0)
+    {
+        text += " + ";
+        text += formatSize(entry.cloudOnlySize, getCurrentUnit());
+        text += " cloud";
+    }
+    return text;
+}
+
+std::string formatFileUsage(const FileEntry &entry)
+{
+    return formatUsageBreakdown(entry.size, entry.cloudOnlySize, entry.logicalSize);
+}
+
+std::string fileTypeDisplayName(const FileTypeSummary &summary)
+{
+    if (summary.cloudOnlyCount == 0)
+        return summary.type;
+    std::ostringstream out;
+    out << summary.type << " (" << summary.cloudOnlyCount << " cloud-only)";
+    return out.str();
+}
+
+std::string fileTypeSizeColumnText(const FileTypeSummary &summary)
+{
+    std::string text = formatSize(summary.totalSize, getCurrentUnit());
+    if (summary.cloudOnlySize > 0)
+    {
+        text += " + ";
+        text += formatSize(summary.cloudOnlySize, getCurrentUnit());
+        text += " cloud";
+    }
+    return text;
+}
+
 std::string directoryLabel(const DirectoryNode *node)
 {
     std::string name;
@@ -521,10 +659,12 @@ std::string directoryLabel(const DirectoryNode *node)
         name = node->path.string();
 
     std::ostringstream out;
-    out << name << "  [" << formatSize(node->stats.totalSize, getCurrentUnit()) << "]";
-    out << "  " << node->stats.fileCount << " files";
+    out << name << "  [" << formatDirectoryUsage(node->stats) << "]";
+    out << "  " << node->stats.fileCount << (node->stats.fileCount == 1 ? " file" : " files");
+    if (node->stats.cloudOnlyFileCount > 0)
+        out << " (" << node->stats.cloudOnlyFileCount << " cloud-only)";
     if (node->stats.directoryCount > 0)
-        out << ", " << node->stats.directoryCount << " dirs";
+        out << ", " << node->stats.directoryCount << (node->stats.directoryCount == 1 ? " dir" : " dirs");
     return out.str();
 }
 
@@ -658,6 +798,548 @@ void applySortToFiles(std::vector<FileEntry> &entries)
         break;
     }
 }
+
+#if defined(__APPLE__)
+
+using CloudActionKind = cloud::ActionKind;
+using CloudUsageSnapshot = cloud::UsageSnapshot;
+using CloudOperationDefinition = cloud::OperationDefinition;
+using CloudDialogSelection = cloud::DialogSelection;
+using CloudOperationProgress = cloud::OperationProgress;
+
+class CloudOperationProgressDialog : public TDialog
+{
+public:
+    CloudOperationProgressDialog(const char *titleText, const char *messageText);
+
+    void setCancelHandler(std::function<void()> handler);
+    void setPauseHandler(std::function<void()> handler);
+    void setResumeHandler(std::function<void()> handler);
+
+    void update(const CloudOperationProgress &progress, bool paused, const std::string &statusText);
+
+    virtual void handleEvent(TEvent &event) override;
+
+private:
+    void applyPausedState(bool paused);
+    void setParamText(TParamText *view, const std::string &text);
+
+    TParamText *statusLine = nullptr;
+    TParamText *detailLine = nullptr;
+    TParamText *stateLine = nullptr;
+    TButton *pauseButton = nullptr;
+    TButton *resumeButton = nullptr;
+    std::function<void()> cancelHandler;
+    std::function<void()> pauseHandler;
+    std::function<void()> resumeHandler;
+    bool pausedState = false;
+};
+
+class ManageCloudDialog;
+
+class CloudActionListView : public TListViewer
+{
+public:
+    CloudActionListView(const TRect &bounds, TScrollBar *scrollBar,
+                        std::vector<CloudOperationDefinition> &definitions)
+        : TListViewer(bounds, 1, nullptr, scrollBar), actions(&definitions)
+    {
+        setRange(static_cast<short>(actions->size()));
+    }
+
+    void setOwner(ManageCloudDialog *dialog) { ownerDialog = dialog; }
+
+    short currentIndex() const { return focused; }
+
+    virtual void getText(char *dest, short item, short maxLen) override
+    {
+        if (!actions || item < 0 || static_cast<std::size_t>(item) >= actions->size())
+        {
+            if (maxLen > 0)
+                dest[0] = '\0';
+            return;
+        }
+        const auto &action = (*actions)[static_cast<std::size_t>(item)];
+        std::string text = action.label;
+        if (!action.enabled)
+            text += " (not applicable)";
+        if (static_cast<std::size_t>(maxLen) <= text.size())
+        {
+            if (maxLen > 1)
+                text.resize(static_cast<std::size_t>(maxLen) - 1);
+            else
+                text.clear();
+        }
+        std::snprintf(dest, static_cast<std::size_t>(maxLen), "%s", text.c_str());
+    }
+
+    virtual void focusItem(short item) override;
+    virtual void handleEvent(TEvent &event) override;
+
+private:
+    std::vector<CloudOperationDefinition> *actions = nullptr;
+    ManageCloudDialog *ownerDialog = nullptr;
+};
+
+CloudOperationProgressDialog::CloudOperationProgressDialog(const char *titleText, const char *messageText)
+    : TWindowInit(&TDialog::initFrame),
+      TDialog(TRect(0, 0, 68, 12), titleText ? titleText : "Cloud Operation")
+{
+    options |= ofCentered;
+    insert(new TStaticText(TRect(2, 2, 66, 3), messageText ? messageText : "Processing iCloud items..."));
+
+    stateLine = new TParamText(TRect(2, 3, 66, 4));
+    insert(stateLine);
+
+    statusLine = new TParamText(TRect(2, 4, 66, 5));
+    insert(statusLine);
+
+    detailLine = new TParamText(TRect(2, 5, 66, 6));
+    insert(detailLine);
+
+    pauseButton = new TButton(TRect(12, 8, 24, 10), "~P~ause", cmPauseOperation, bfNormal);
+    resumeButton = new TButton(TRect(26, 8, 38, 10), "~R~esume", cmResumeOperation, bfNormal);
+    resumeButton->setState(sfDisabled, True);
+    insert(pauseButton);
+    insert(resumeButton);
+    insert(new TButton(TRect(40, 8, 52, 10), "Cancel", cmCancel, bfNormal));
+
+    setParamText(stateLine, "Preparing operation...");
+    setParamText(statusLine, "");
+    setParamText(detailLine, "");
+}
+
+void CloudOperationProgressDialog::setCancelHandler(std::function<void()> handler)
+{
+    cancelHandler = std::move(handler);
+}
+
+void CloudOperationProgressDialog::setPauseHandler(std::function<void()> handler)
+{
+    pauseHandler = std::move(handler);
+}
+
+void CloudOperationProgressDialog::setResumeHandler(std::function<void()> handler)
+{
+    resumeHandler = std::move(handler);
+}
+
+void CloudOperationProgressDialog::setParamText(TParamText *view, const std::string &text)
+{
+    if (!view)
+        return;
+    view->setText("%s", text.c_str());
+    view->drawView();
+}
+
+void CloudOperationProgressDialog::applyPausedState(bool paused)
+{
+    pausedState = paused;
+    if (pauseButton)
+        pauseButton->setState(sfDisabled, paused ? True : False);
+    if (resumeButton)
+        resumeButton->setState(sfDisabled, paused ? False : True);
+}
+
+void CloudOperationProgressDialog::update(const CloudOperationProgress &progress, bool paused, const std::string &statusText)
+{
+    std::ostringstream status;
+    if (progress.totalItems > 0)
+    {
+        status << "Items: " << progress.processedItems << "/" << progress.totalItems;
+    }
+    if (progress.totalBytes > 0)
+    {
+        if (!status.str().empty())
+            status << " — ";
+        status << "Data: " << formatSize(progress.processedBytes, SizeUnit::Auto)
+               << "/" << formatSize(progress.totalBytes, SizeUnit::Auto);
+    }
+    setParamText(statusLine, status.str());
+
+    std::string detail;
+    if (!progress.currentItem.empty())
+        detail = "Current: " + ellipsizeMiddle(progress.currentItem, 58);
+    else
+        detail = "Current: (waiting)";
+    setParamText(detailLine, detail);
+
+    setParamText(stateLine, statusText);
+    applyPausedState(paused);
+}
+
+void CloudOperationProgressDialog::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmCancel:
+            if (cancelHandler)
+                cancelHandler();
+            clearEvent(event);
+            return;
+        case cmPauseOperation:
+            if (!pausedState)
+            {
+                applyPausedState(true);
+                if (pauseHandler)
+                    pauseHandler();
+            }
+            clearEvent(event);
+            return;
+        case cmResumeOperation:
+            if (pausedState)
+            {
+                applyPausedState(false);
+                if (resumeHandler)
+                    resumeHandler();
+            }
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+    TDialog::handleEvent(event);
+}
+
+class ManageCloudDialog : public TDialog
+{
+public:
+    ManageCloudDialog(const std::filesystem::path &targetPath,
+                      CloudUsageSnapshot snapshot,
+                      std::vector<CloudOperationDefinition> definitions,
+                      CloudDialogSelection *selection);
+
+    std::optional<CloudActionKind> chosenAction() const { return selected; }
+    std::optional<CloudOperationDefinition> selectedDefinition() const;
+
+    void updateDetails();
+    CloudOperationDefinition *currentDefinition();
+    const CloudOperationDefinition *currentDefinition() const;
+
+    virtual void handleEvent(TEvent &event) override;
+
+private:
+    void updateRunButtonState();
+    std::string pathLine() const;
+    std::string usageLine(const CloudUsageSnapshot &snapshot) const;
+
+    std::filesystem::path path;
+    CloudUsageSnapshot usage{};
+    std::vector<CloudOperationDefinition> actions;
+    CloudActionListView *listView = nullptr;
+    TScrollBar *listScroll = nullptr;
+    TParamText *explanation = nullptr;
+    TParamText *impact = nullptr;
+    TButton *runButton = nullptr;
+    std::optional<CloudActionKind> selected;
+    short chosenIndex = -1;
+    CloudDialogSelection *selectionOut = nullptr;
+};
+
+void CloudActionListView::focusItem(short item)
+{
+    TListViewer::focusItem(item);
+    if (ownerDialog)
+        ownerDialog->updateDetails();
+}
+
+void CloudActionListView::handleEvent(TEvent &event)
+{
+    TListViewer::handleEvent(event);
+    if (event.what == evKeyDown && event.keyDown.keyCode == kbEnter)
+    {
+        if (ownerDialog)
+            message(ownerDialog, evCommand, cmOK, this);
+        clearEvent(event);
+    }
+}
+
+ManageCloudDialog::ManageCloudDialog(const std::filesystem::path &targetPath,
+                                     CloudUsageSnapshot snapshot,
+                                     std::vector<CloudOperationDefinition> definitions,
+                                     CloudDialogSelection *selection)
+    : TWindowInit(&TDialog::initFrame),
+      TDialog(TRect(0, 0, 78, 22), "Manage Cloud Storage"),
+      path(targetPath),
+      usage(snapshot),
+      actions(std::move(definitions)),
+      selectionOut(selection)
+{
+    options |= ofCentered;
+    if (selectionOut)
+        selectionOut->confirmed = false;
+
+    insert(new TStaticText(TRect(2, 2, 76, 3), pathLine().c_str()));
+    insert(new TStaticText(TRect(2, 3, 76, 4), usageLine(snapshot).c_str()));
+
+    listScroll = new TScrollBar(TRect(74, 5, 75, 14));
+    insert(listScroll);
+
+    listView = new CloudActionListView(TRect(2, 5, 74, 14), listScroll, actions);
+    listView->growMode = gfGrowHiX | gfGrowHiY;
+    listScroll->growMode = gfGrowHiY;
+    listView->setOwner(this);
+    insert(listView);
+
+    explanation = new TParamText(TRect(2, 14, 76, 17));
+    insert(explanation);
+
+    impact = new TParamText(TRect(2, 17, 76, 19));
+    insert(impact);
+
+    runButton = new TButton(TRect(20, 19, 32, 21), "~R~un", cmOK, bfDefault);
+    insert(runButton);
+    insert(new TButton(TRect(34, 19, 46, 21), "Cancel", cmCancel, bfNormal));
+
+    if (!actions.empty())
+        listView->focusItem(0);
+    updateDetails();
+}
+
+std::string ManageCloudDialog::pathLine() const
+{
+    std::string display = path.empty() ? std::string("(no path selected)") : path.string();
+    display = ellipsizeMiddle(display, 70);
+    return "Directory: " + display;
+}
+
+std::string ManageCloudDialog::usageLine(const CloudUsageSnapshot &snapshot) const
+{
+    std::ostringstream out;
+    out << formatCountLabel(snapshot.totalFiles, "file", "files");
+    if (snapshot.cloudOnlyFiles > 0)
+        out << " — " << snapshot.cloudOnlyFiles << " cloud-only";
+    if (snapshot.localFiles > 0)
+    {
+        out << " — local " << formatSize(snapshot.localBytes, SizeUnit::Auto);
+        if (snapshot.cloudBytes > 0)
+            out << ", cloud " << formatSize(snapshot.cloudBytes, SizeUnit::Auto);
+    }
+    else if (snapshot.cloudBytes > 0)
+        out << " — downloads pending " << formatSize(snapshot.cloudBytes, SizeUnit::Auto);
+    return out.str();
+}
+
+CloudOperationDefinition *ManageCloudDialog::currentDefinition()
+{
+    if (!listView)
+        return nullptr;
+    short index = listView->currentIndex();
+    if (index < 0 || static_cast<std::size_t>(index) >= actions.size())
+        return nullptr;
+    return &actions[static_cast<std::size_t>(index)];
+}
+
+const CloudOperationDefinition *ManageCloudDialog::currentDefinition() const
+{
+    return const_cast<ManageCloudDialog *>(this)->currentDefinition();
+}
+
+void ManageCloudDialog::updateRunButtonState()
+{
+    if (!runButton)
+        return;
+    bool enable = false;
+    if (const auto *def = currentDefinition())
+        enable = def->enabled;
+    runButton->setState(sfDisabled, enable ? False : True);
+}
+
+void ManageCloudDialog::updateDetails()
+{
+    const auto *def = currentDefinition();
+    if (explanation)
+    {
+        std::string text = def ? def->explanation : "Select an action to review its details.";
+        explanation->setText("%s", text.c_str());
+        explanation->drawView();
+    }
+    if (impact)
+    {
+        std::string text = def ? def->impact : "";
+        impact->setText("%s", text.c_str());
+        impact->drawView();
+    }
+    updateRunButtonState();
+}
+
+void ManageCloudDialog::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        if (event.message.command == cmOK)
+        {
+            if (auto *def = currentDefinition(); def && def->enabled)
+            {
+                selected = def->kind;
+                chosenIndex = listView ? listView->currentIndex() : -1;
+                if (selectionOut)
+                {
+                    selectionOut->confirmed = true;
+                    selectionOut->action = def->kind;
+                    selectionOut->definition = *def;
+                }
+            }
+            else
+            {
+                messageBox("The selected action is not available.", mfInformation | mfOKButton);
+                clearEvent(event);
+                return;
+            }
+        }
+        else if (event.message.command == cmCancel)
+        {
+            selected.reset();
+            if (selectionOut)
+                selectionOut->confirmed = false;
+        }
+    }
+    TDialog::handleEvent(event);
+}
+
+std::size_t cloudOperationItemTarget(CloudActionKind action, const CloudUsageSnapshot &usage)
+{
+    switch (action)
+    {
+    case CloudActionKind::DownloadAll:
+        return usage.cloudOnlyFiles;
+    case CloudActionKind::EvictLocalCopies:
+    case CloudActionKind::KeepAlways:
+        return usage.localFiles;
+    case CloudActionKind::OptimizeStorage:
+        return usage.totalFiles;
+    case CloudActionKind::PauseSync:
+    case CloudActionKind::ResumeSync:
+    case CloudActionKind::RevealInFinder:
+        return 1;
+    default:
+        return usage.totalFiles;
+    }
+}
+
+std::uintmax_t cloudOperationByteTarget(CloudActionKind action, const CloudUsageSnapshot &usage)
+{
+    switch (action)
+    {
+    case CloudActionKind::DownloadAll:
+        return usage.cloudBytes;
+    case CloudActionKind::EvictLocalCopies:
+        return usage.localBytes;
+    case CloudActionKind::KeepAlways:
+        return usage.logicalBytes;
+    case CloudActionKind::OptimizeStorage:
+        return usage.logicalBytes;
+    case CloudActionKind::PauseSync:
+    case CloudActionKind::ResumeSync:
+    case CloudActionKind::RevealInFinder:
+        return 0;
+    default:
+        return usage.localBytes + usage.cloudBytes;
+    }
+}
+
+std::vector<CloudOperationDefinition> buildCloudOperationDefinitions(const CloudUsageSnapshot &usage, bool canPause = false)
+{
+    auto makeSize = [](std::uintmax_t bytes) { return formatSize(bytes, SizeUnit::Auto); };
+    std::vector<CloudOperationDefinition> actions;
+    actions.reserve(7);
+
+    CloudOperationDefinition download{CloudActionKind::DownloadAll,
+                                      "Download missing content",
+                                      "Downloads every file that currently lives only in iCloud so the entire selection is usable offline.",
+                                      ""};
+    if (usage.cloudOnlyFiles > 0)
+    {
+        std::ostringstream impact;
+        impact << "Would fetch " << formatCountLabel(usage.cloudOnlyFiles, "file", "files");
+        impact << " totaling " << makeSize(usage.cloudBytes) << '.';
+        download.impact = impact.str();
+    }
+    else
+    {
+        download.enabled = false;
+        download.impact = "All files are already stored locally.";
+    }
+    actions.push_back(download);
+
+    CloudOperationDefinition evict{CloudActionKind::EvictLocalCopies,
+                                   "Remove local copies",
+                                   "Evicts downloaded data while leaving placeholders intact so macOS can reclaim disk space.",
+                                   ""};
+    if (usage.localFiles > 0 && usage.localBytes > 0)
+    {
+        std::ostringstream impact;
+        impact << "Could free up to " << makeSize(usage.localBytes)
+               << " across " << formatCountLabel(usage.localFiles, "file", "files") << '.';
+        evict.impact = impact.str();
+    }
+    else
+    {
+        evict.enabled = false;
+        evict.impact = "No local content is available to evict.";
+    }
+    actions.push_back(evict);
+
+    CloudOperationDefinition keep{CloudActionKind::KeepAlways,
+                                  "Always keep on this device",
+                                  "Marks the selected files as \"Always Keep\" so macOS maintains local copies even under storage pressure.",
+                                  ""};
+    if (usage.localFiles > 0)
+    {
+        std::ostringstream impact;
+        impact << "Applies to " << formatCountLabel(usage.localFiles, "file", "files")
+               << " totaling " << makeSize(usage.logicalBytes) << '.';
+        keep.impact = impact.str();
+    }
+    else
+    {
+        keep.enabled = false;
+        keep.impact = "No downloaded files are available to pin locally.";
+    }
+    actions.push_back(keep);
+
+    CloudOperationDefinition optimize{CloudActionKind::OptimizeStorage,
+                                      "Let macOS optimize storage",
+                                      "Clears the \"Always Keep\" preference so macOS can evict downloads for this folder automatically.",
+                                      "Leaves data in iCloud; macOS may reclaim up to " +
+                                          makeSize(usage.localBytes) + " if space is needed."};
+    actions.push_back(optimize);
+
+    CloudOperationDefinition pause{CloudActionKind::PauseSync,
+                                   "Pause sync transfers",
+                                   "Requests iCloud Drive to pause uploads and downloads for this directory.",
+                                   "No files are modified; outstanding transfers remain pending until resumed."};
+    if (!canPause)
+    {
+        pause.enabled = false;
+        pause.impact = "Not supported on this macOS version.";
+    }
+    actions.push_back(pause);
+
+    CloudOperationDefinition resume{CloudActionKind::ResumeSync,
+                                    "Resume sync transfers",
+                                    "Resumes iCloud Drive activity for this directory after a pause.",
+                                    "Outstanding uploads and downloads will continue."};
+    if (!canPause)
+    {
+        resume.enabled = false;
+        resume.impact = "Not supported on this macOS version.";
+    }
+    actions.push_back(resume);
+
+    CloudOperationDefinition reveal{CloudActionKind::RevealInFinder,
+                                    "Show in Finder",
+                                    "Opens Finder and highlights the selected directory for further management.",
+                                    "Finder will open a new window for the directory."};
+    actions.push_back(reveal);
+
+    return actions;
+}
+
+#endif // defined(__APPLE__)
 
 void applySortToFileTypes(std::vector<FileTypeSummary> &entries)
 {
@@ -1066,6 +1748,7 @@ public:
 
     void showDefaultStatusHints();
     void showFilePath(const std::filesystem::path &path);
+    void showFileDetails(const FileEntry &entry);
     void showTypeSummary(const FileTypeSummary &summary, bool recursive);
 
     void notifyUnitsChanged();
@@ -1161,6 +1844,28 @@ private:
     std::deque<std::filesystem::path> pendingScanQueue;
     std::unique_ptr<FileListTask> activeFileList;
     std::unique_ptr<FileTypeTask> activeFileType;
+#if defined(__APPLE__)
+    struct CloudOperationTask
+    {
+        CloudActionKind action;
+        CloudOperationDefinition definition;
+        CloudUsageSnapshot usage;
+        std::filesystem::path rootPath;
+        std::thread worker;
+        std::mutex mutex;
+        CloudOperationProgress progress;
+        std::string statusMessage;
+        bool failed = false;
+        std::string errorMessage;
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<bool> pauseRequested{false};
+        std::atomic<bool> paused{false};
+        std::atomic<bool> finished{false};
+        CloudOperationProgressDialog *dialog = nullptr;
+        bool recursive = true;
+    };
+    std::unique_ptr<CloudOperationTask> activeCloudOperation;
+#endif
 
     void promptOpenDirectory();
     void openDirectory(const std::filesystem::path &path);
@@ -1187,6 +1892,19 @@ private:
     void toggleOneFilesystem();
     void editIgnorePatterns();
     void editThreshold();
+#if defined(__APPLE__)
+    void manageCloudStorage();
+    void startCloudOperation(CloudActionKind action, const CloudOperationDefinition &definition,
+                             const CloudUsageSnapshot &usage, const std::filesystem::path &path);
+    void updateCloudOperationProgress(CloudOperationTask &task);
+    void closeCloudOperationDialog(CloudOperationTask &task);
+    void processCloudOperationCompletion();
+    void runCloudOperation(CloudOperationTask &task);
+    void requestCloudOperationPause();
+    void requestCloudOperationResume();
+    void requestCloudOperationCancel();
+    void cancelActiveCloudOperation(bool waitForCompletion);
+#endif
     void loadOptionsFromFile();
     void saveOptionsToFile();
     void saveDefaultOptions();
@@ -1395,18 +2113,18 @@ void FileListView::computeWidths()
     nameWidth = std::string("Name").size();
     ownerWidth = std::string("Owner").size();
     groupWidth = std::string("Group").size();
-    sizeWidth = std::string("Size").size();
+    sizeWidth = std::string("Local").size();
     createdWidth = std::string("Created").size();
     modifiedWidth = std::string("Modified").size();
 
     for (const auto &entry : files)
     {
-        nameWidth = std::max(nameWidth, listEntryName(entry).size());
+        nameWidth = std::max(nameWidth, displayEntryName(entry).size());
         ownerWidth = std::max(ownerWidth, entry.owner.size());
         groupWidth = std::max(groupWidth, entry.group.size());
         createdWidth = std::max(createdWidth, entry.created.size());
         modifiedWidth = std::max(modifiedWidth, entry.modified.size());
-        sizeWidth = std::max(sizeWidth, formatSize(entry.size, getCurrentUnit()).size());
+        sizeWidth = std::max(sizeWidth, fileSizeColumnText(entry).size());
     }
     createdWidth = std::max(createdWidth, std::string("YYYY-MM-DD HH:MM").size());
     modifiedWidth = std::max(modifiedWidth, std::string("YYYY-MM-DD HH:MM").size());
@@ -1442,8 +2160,8 @@ void FileListView::getText(char *dest, short item, short maxLen)
     }
 
     const FileEntry &entry = files[item];
-    std::string sizeStr = formatSize(entry.size, getCurrentUnit());
-    std::string text = formatRow(listEntryName(entry), entry.owner, entry.group, sizeStr, entry.created, entry.modified);
+    std::string sizeStr = fileSizeColumnText(entry);
+    std::string text = formatRow(displayEntryName(entry), entry.owner, entry.group, sizeStr, entry.created, entry.modified);
     if (text.size() >= static_cast<std::size_t>(maxLen))
         text.resize(maxLen - 1);
     std::snprintf(dest, maxLen, "%s", text.c_str());
@@ -1491,7 +2209,7 @@ void FileListView::setHeader(FileListHeaderView *headerView)
 
 std::string FileListView::headerLine() const
 {
-    return formatRow("Name", "Owner", "Group", "Size", "Created", "Modified");
+    return formatRow("Name", "Owner", "Group", "Local", "Created", "Modified");
 }
 
 int FileListView::horizontalOffset() const
@@ -1670,7 +2388,7 @@ void FileListWindow::updateStatus()
     if (!getState(sfActive))
         return;
     if (const FileEntry *entry = selectedEntry())
-        app.showFilePath(entry->path);
+        app.showFileDetails(*entry);
     else
         app.showDefaultStatusHints();
 }
@@ -1700,13 +2418,13 @@ void FileTypeListView::computeWidths()
 {
     typeWidth = std::string("Type").size();
     countWidth = std::string("Files").size();
-    sizeWidth = std::string("Size").size();
+    sizeWidth = std::string("Local").size();
 
     for (const auto &entry : entries)
     {
-        typeWidth = std::max(typeWidth, entry.type.size());
+        typeWidth = std::max(typeWidth, fileTypeDisplayName(entry).size());
         countWidth = std::max<std::size_t>(countWidth, std::to_string(entry.count).size());
-        sizeWidth = std::max(sizeWidth, formatSize(entry.totalSize, getCurrentUnit()).size());
+        sizeWidth = std::max(sizeWidth, fileTypeSizeColumnText(entry).size());
     }
 
     countWidth = std::max(countWidth, std::string("0").size());
@@ -1743,8 +2461,8 @@ void FileTypeListView::getText(char *dest, short item, short maxLen)
 
     const FileTypeSummary &entry = entries[item];
     std::string countStr = std::to_string(entry.count);
-    std::string sizeStr = formatSize(entry.totalSize, getCurrentUnit());
-    std::string text = formatRow(entry.type, countStr, sizeStr);
+    std::string sizeStr = fileTypeSizeColumnText(entry);
+    std::string text = formatRow(fileTypeDisplayName(entry), countStr, sizeStr);
     if (text.size() >= static_cast<std::size_t>(maxLen))
         text.resize(maxLen - 1);
     std::snprintf(dest, maxLen, "%s", text.c_str());
@@ -1796,7 +2514,7 @@ const FileTypeSummary *FileTypeListView::currentEntry() const
 
 std::string FileTypeListView::headerLine() const
 {
-    return formatRow("Type", "Files", "Size");
+    return formatRow("Type", "Files", "Local");
 }
 
 int FileTypeListView::horizontalOffset() const
@@ -2225,6 +2943,9 @@ DiskUsageApp::~DiskUsageApp()
     cancelActiveScan(true);
     cancelActiveFileList(true);
     cancelActiveFileType(true);
+#if defined(__APPLE__)
+    cancelActiveCloudOperation(true);
+#endif
     pendingScanQueue.clear();
 }
 
@@ -2331,6 +3052,11 @@ void DiskUsageApp::handleEvent(TEvent &event)
         case cmReturnToLauncher:
             std::exit(ck::launcher::kReturnToLauncherExitCode);
             break;
+#if defined(__APPLE__)
+        case cmManageCloud:
+            manageCloudStorage();
+            break;
+#endif
         case cmAbout:
         {
             const auto &info = toolInfo();
@@ -2375,6 +3101,15 @@ void DiskUsageApp::idle()
         if (activeFileType->finished.load())
             processActiveFileTypeCompletion();
     }
+
+#if defined(__APPLE__)
+    if (activeCloudOperation)
+    {
+        updateCloudOperationProgress(*activeCloudOperation);
+        if (activeCloudOperation->finished.load())
+            processCloudOperationCompletion();
+    }
+#endif
 
     if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
     {
@@ -2428,8 +3163,11 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
     auto *saveDefaults = new TMenuItem("Save ~D~efaults", cmOptionSaveDefaults, kbNoKey, hcNoContext);
     TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
                          *new TMenuItem("~O~pen Directory", cmOpen, kbNoKey, hcOpen) +
-                         *new TMenuItem("~C~lose", cmClose, kbNoKey, hcClose) +
-                         newLine();
+                         *new TMenuItem("~C~lose", cmClose, kbNoKey, hcClose);
+#if defined(__APPLE__)
+    fileMenu + *new TMenuItem("Manage ~C~loud Storage...", cmManageCloud, kbNoKey, hcNoContext);
+#endif
+    fileMenu + newLine();
     if (ck::launcher::launchedFromCkLauncher())
         fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
     fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcExit);
@@ -3257,13 +3995,27 @@ void DiskUsageApp::showFilePath(const std::filesystem::path &path)
         line->showMessage(path.string());
 }
 
+void DiskUsageApp::showFileDetails(const FileEntry &entry)
+{
+    if (auto *line = dynamic_cast<DiskUsageStatusLine *>(statusLine))
+    {
+        std::ostringstream out;
+        out << entry.path.string() << " — " << formatFileUsage(entry);
+        if (std::string state = describeICloudState(entry); !state.empty())
+            out << " (" << state << ")";
+        line->showMessage(out.str());
+    }
+}
+
 void DiskUsageApp::showTypeSummary(const FileTypeSummary &summary, bool recursive)
 {
     if (auto *line = dynamic_cast<DiskUsageStatusLine *>(statusLine))
     {
         std::ostringstream out;
         out << summary.type << " — " << summary.count << (summary.count == 1 ? " file" : " files")
-            << ", " << formatSize(summary.totalSize, getCurrentUnit());
+            << ", " << formatUsageBreakdown(summary.totalSize, summary.cloudOnlySize, summary.logicalSize);
+        if (summary.cloudOnlyCount > 0)
+            out << " (" << summary.cloudOnlyCount << " cloud-only)";
         if (recursive)
             out << " (including subdirectories)";
         out << " — Press Enter to view files";
@@ -3564,6 +4316,297 @@ void DiskUsageApp::editThreshold()
         optionRegistry->set(kOptionThreshold, config::OptionValue(currentOptions.threshold));
     optionsChanged(true);
 }
+
+#if defined(__APPLE__)
+void DiskUsageApp::manageCloudStorage()
+{
+    DirectoryWindow *window = activeDirectoryWindow();
+    if (!window)
+    {
+        messageBox("Open a directory view before managing cloud storage.", mfInformation | mfOKButton);
+        return;
+    }
+    DirectoryNode *node = window->focusedNode();
+    if (!node)
+    {
+        messageBox("Select a directory in the tree before managing cloud storage.", mfInformation | mfOKButton);
+        return;
+    }
+
+    CloudUsageSnapshot usage;
+    usage.totalFiles = node->stats.fileCount;
+    usage.cloudOnlyFiles = node->stats.cloudOnlyFileCount;
+    if (usage.totalFiles >= usage.cloudOnlyFiles)
+        usage.localFiles = usage.totalFiles - usage.cloudOnlyFiles;
+    usage.localBytes = node->stats.totalSize;
+    usage.cloudBytes = node->stats.cloudOnlySize;
+    usage.logicalBytes = node->stats.logicalSize;
+
+    bool canPause = cloud::supportsPauseResume(node->path);
+    auto definitions = buildCloudOperationDefinitions(usage, canPause);
+    CloudDialogSelection selection;
+    auto *dialog = new ManageCloudDialog(node->path, usage, std::move(definitions), &selection);
+    if (TProgram::application->executeDialog(dialog, nullptr) != cmOK || !selection.confirmed)
+        return;
+
+    std::ostringstream confirm;
+    confirm << selection.definition.label << "\n\n"
+            << selection.definition.explanation << "\n"
+            << selection.definition.impact << "\n\nProceed?";
+
+    if (messageBox(confirm.str().c_str(), mfConfirmation | mfYesButton | mfNoButton) != cmYes)
+        return;
+
+    startCloudOperation(selection.action, selection.definition, usage, node->path);
+}
+
+void DiskUsageApp::startCloudOperation(CloudActionKind action, const CloudOperationDefinition &definition,
+                                       const CloudUsageSnapshot &usage, const std::filesystem::path &path)
+{
+    if (activeCloudOperation && !activeCloudOperation->finished.load())
+    {
+        messageBox("Another cloud operation is already running.", mfInformation | mfOKButton);
+        return;
+    }
+    if (activeCloudOperation && activeCloudOperation->finished.load())
+        processCloudOperationCompletion();
+    cancelActiveCloudOperation(true);
+
+    if (action == CloudActionKind::RevealInFinder)
+    {
+        auto result = cloud::revealInFinder(path);
+        if (!result.success)
+        {
+            messageBox(result.errorMessage.c_str(), mfError | mfOKButton);
+        }
+        return;
+    }
+
+    auto task = std::make_unique<CloudOperationTask>();
+    task->action = action;
+    task->definition = definition;
+    task->usage = usage;
+    task->rootPath = path;
+    task->statusMessage = "Starting operation...";
+    task->progress.totalItems = cloudOperationItemTarget(action, usage);
+    task->progress.totalBytes = cloudOperationByteTarget(action, usage);
+    if (task->progress.totalItems == 0)
+        task->progress.totalItems = 1;
+    task->recursive = true;
+
+    std::string title = definition.label;
+    auto *dialog = new CloudOperationProgressDialog(title.c_str(), definition.explanation.c_str());
+    dialog->setCancelHandler([this]() { requestCloudOperationCancel(); });
+    dialog->setPauseHandler([this]() { requestCloudOperationPause(); });
+    dialog->setResumeHandler([this]() { requestCloudOperationResume(); });
+    task->dialog = dialog;
+    deskTop->insert(dialog);
+    dialog->drawView();
+    dialog->update(task->progress, false, task->statusMessage);
+
+    CloudOperationTask *rawTask = task.get();
+    rawTask->worker = std::thread([this, rawTask]() { runCloudOperation(*rawTask); });
+
+    activeCloudOperation = std::move(task);
+}
+
+void DiskUsageApp::updateCloudOperationProgress(CloudOperationTask &task)
+{
+    if (!task.dialog)
+        return;
+    CloudOperationProgress snapshot;
+    std::string status;
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        snapshot = task.progress;
+        status = task.statusMessage;
+    }
+    bool paused = task.paused.load() || task.pauseRequested.load();
+    task.dialog->update(snapshot, paused, status);
+}
+
+void DiskUsageApp::closeCloudOperationDialog(CloudOperationTask &task)
+{
+    if (!task.dialog)
+        return;
+    TDialog *dialog = task.dialog;
+    task.dialog = nullptr;
+    if (dialog->owner)
+        dialog->close();
+    else
+    {
+        dialog->shutDown();
+        delete dialog;
+    }
+}
+
+void DiskUsageApp::processCloudOperationCompletion()
+{
+    if (!activeCloudOperation)
+        return;
+    CloudOperationTask &task = *activeCloudOperation;
+    if (task.worker.joinable())
+        task.worker.join();
+    closeCloudOperationDialog(task);
+    std::string status;
+    bool failed = task.failed;
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        status = failed && !task.errorMessage.empty() ? task.errorMessage : task.statusMessage;
+    }
+    if (status.empty())
+        status = failed ? "Cloud operation failed." : "Cloud operation finished.";
+    // Reset before showing the modal message box to avoid re-entrancy
+    // from idle() while the dialog is open.
+    activeCloudOperation.reset();
+    messageBox(status.c_str(), (failed ? mfError : mfInformation) | mfOKButton);
+}
+
+void DiskUsageApp::runCloudOperation(CloudOperationTask &task)
+{
+    try
+    {
+        cloud::OperationCallbacks callbacks;
+        callbacks.isCancelled = [&]() {
+            while (task.pauseRequested.load() && !task.cancelRequested.load())
+            {
+                task.paused.store(true);
+                {
+                    std::lock_guard<std::mutex> lock(task.mutex);
+                    task.statusMessage = "Paused.";
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (!task.cancelRequested.load())
+            {
+                task.paused.store(false);
+                std::lock_guard<std::mutex> lock(task.mutex);
+                if (task.statusMessage == "Paused.")
+                    task.statusMessage = "Working...";
+            }
+            return task.cancelRequested.load();
+        };
+        callbacks.onStatus = [&](const std::string &status) {
+            std::lock_guard<std::mutex> lock(task.mutex);
+            task.statusMessage = status;
+        };
+        callbacks.onItem = [&](const std::filesystem::path &item, std::uintmax_t bytes) -> bool {
+            if (task.cancelRequested.load())
+                return false;
+            std::lock_guard<std::mutex> lock(task.mutex);
+            if (task.progress.totalItems == 0)
+                task.progress.totalItems = 1;
+            task.progress.processedItems += 1;
+            if (task.progress.processedItems > task.progress.totalItems)
+                task.progress.totalItems = task.progress.processedItems;
+            if (task.progress.totalBytes > 0)
+            {
+                task.progress.processedBytes = std::min<std::uintmax_t>(task.progress.totalBytes,
+                                                                         task.progress.processedBytes + bytes);
+            }
+            else
+            {
+                task.progress.processedBytes += bytes;
+            }
+            task.progress.currentItem = item.string();
+            return !task.cancelRequested.load();
+        };
+
+        auto result = cloud::performCloudOperation(task.action, task.rootPath, callbacks, task.recursive);
+
+        {
+            std::lock_guard<std::mutex> lock(task.mutex);
+            if (result.processedItems > task.progress.processedItems)
+                task.progress.processedItems = result.processedItems;
+            if (result.processedBytes > task.progress.processedBytes)
+                task.progress.processedBytes = result.processedBytes;
+            if (task.progress.totalItems < task.progress.processedItems)
+                task.progress.totalItems = task.progress.processedItems;
+            if (task.progress.totalBytes < task.progress.processedBytes)
+                task.progress.totalBytes = task.progress.processedBytes;
+
+            if (result.cancelled || task.cancelRequested.load())
+            {
+                task.statusMessage = "Cloud operation cancelled.";
+                task.cancelRequested.store(true);
+            }
+            else if (!result.success)
+            {
+                task.failed = true;
+                task.errorMessage = result.errorMessage.empty() ? "Cloud operation failed." : result.errorMessage;
+                task.statusMessage = task.errorMessage;
+            }
+            else
+            {
+                task.statusMessage = "Cloud operation complete.";
+            }
+        }
+    }
+    catch (const std::exception &ex)
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.failed = true;
+        task.errorMessage = std::string("Cloud operation failed: ") + ex.what();
+        task.statusMessage = task.errorMessage;
+    }
+    catch (...)
+    {
+        std::lock_guard<std::mutex> lock(task.mutex);
+        task.failed = true;
+        task.errorMessage = "Cloud operation failed with an unknown error.";
+        task.statusMessage = task.errorMessage;
+    }
+
+    task.paused.store(false);
+    task.finished.store(true);
+}
+
+void DiskUsageApp::requestCloudOperationPause()
+{
+    if (!activeCloudOperation)
+        return;
+    activeCloudOperation->pauseRequested.store(true);
+    {
+        std::lock_guard<std::mutex> lock(activeCloudOperation->mutex);
+        activeCloudOperation->statusMessage = "Pausing...";
+    }
+}
+
+void DiskUsageApp::requestCloudOperationResume()
+{
+    if (!activeCloudOperation)
+        return;
+    activeCloudOperation->pauseRequested.store(false);
+    {
+        std::lock_guard<std::mutex> lock(activeCloudOperation->mutex);
+        activeCloudOperation->statusMessage = "Resuming...";
+    }
+}
+
+void DiskUsageApp::requestCloudOperationCancel()
+{
+    if (!activeCloudOperation)
+        return;
+    activeCloudOperation->cancelRequested.store(true);
+    activeCloudOperation->pauseRequested.store(false);
+    {
+        std::lock_guard<std::mutex> lock(activeCloudOperation->mutex);
+        activeCloudOperation->statusMessage = "Cancelling...";
+    }
+}
+
+void DiskUsageApp::cancelActiveCloudOperation(bool waitForCompletion)
+{
+    if (!activeCloudOperation)
+        return;
+    activeCloudOperation->cancelRequested.store(true);
+    activeCloudOperation->pauseRequested.store(false);
+    if (waitForCompletion && activeCloudOperation->worker.joinable())
+        activeCloudOperation->worker.join();
+    closeCloudOperationDialog(*activeCloudOperation);
+    activeCloudOperation.reset();
+}
+#endif
 
 void DiskUsageApp::loadOptionsFromFile()
 {
@@ -3879,4 +4922,10 @@ int main(int argc, char **argv)
     DiskUsageApp app(directories, registry);
     app.run();
     return 0;
+}
+std::optional<CloudOperationDefinition> ManageCloudDialog::selectedDefinition() const
+{
+    if (chosenIndex < 0 || static_cast<std::size_t>(chosenIndex) >= actions.size())
+        return std::nullopt;
+    return actions[static_cast<std::size_t>(chosenIndex)];
 }

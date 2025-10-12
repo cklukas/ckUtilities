@@ -47,6 +47,6 @@ inline constexpr std::uint16_t PatternEdit = 2501;
 inline constexpr std::uint16_t PatternDelete = 2502;
 
 inline constexpr std::uint16_t ReturnToLauncher = 2600;
+inline constexpr std::uint16_t ManageCloudStorage = 2601;
 
 } // namespace ck::commands::disk_usage
-
