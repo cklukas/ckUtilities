@@ -89,6 +89,8 @@ void initializeFromEnvironment();
 
 void registerDefaultSchemes();
 
+void init();
+
 void configureMenuTree(TMenuItem &root);
 
 void applyCommandLineScheme(int &argc, char **argv);

@@ -16,6 +16,24 @@
 
 #include <tvision/util.h>
 
+namespace nlohmann
+{
+template <>
+struct adl_serializer<TKey>
+{
+    static void to_json(json &j, const TKey &key)
+    {
+        j = json{{"code", key.code}, {"mods", key.mods}};
+    }
+
+    static void from_json(const json &j, TKey &key)
+    {
+        j.at("code").get_to(key.code);
+        j.at("mods").get_to(key.mods);
+    }
+};
+} // namespace nlohmann
+
 namespace ck::hotkeys
 {
 
@@ -116,9 +134,108 @@ SchemeData &ensureCustomScheme()
     return ensureScheme(kCustomSchemeId);
 }
 
-void loadConfiguration();
-void saveConfiguration();
-void applyPreferredScheme();
+void saveConfiguration()
+{
+    if (!gConfigDirty && !gCustomDirty)
+        return;
+
+    nlohmann::json j;
+    j["preferred_scheme"] = gPreferredScheme;
+
+    if (SchemeData* customScheme = findScheme(kCustomSchemeId))
+    {
+        j["custom_scheme_base"] = gCustomBase;
+        nlohmann::json bindings = nlohmann::json::object();
+        for (const auto& [command, binding] : customScheme->bindings)
+        {
+            nlohmann::json b;
+            b["key"] = binding.key;
+            b["display"] = binding.display;
+            bindings[std::to_string(command)] = b;
+        }
+        j["custom_scheme_bindings"] = bindings;
+    }
+
+    try
+    {
+        std::ofstream file(configFilePath());
+        file << std::setw(4) << j << std::endl;
+        gConfigDirty = false;
+        gCustomDirty = false;
+    }
+    catch (const std::exception& e)
+    {
+        // TODO: log error
+    }
+}
+
+void loadConfiguration()
+{
+    gConfigLoaded = true;
+    std::filesystem::path path = configFilePath();
+    if (!std::filesystem::exists(path))
+        return;
+
+    try
+    {
+        std::ifstream file(path);
+        nlohmann::json j;
+        file >> j;
+
+        if (j.contains("preferred_scheme"))
+            gPreferredScheme = j["preferred_scheme"].get<std::string>();
+
+        if (j.contains("custom_scheme_bindings"))
+        {
+            gHasCustom = true;
+            if (j.contains("custom_scheme_base"))
+                gCustomBase = j["custom_scheme_base"].get<std::string>();
+
+            SchemeData& customScheme = ensureCustomScheme();
+            customScheme.displayName = "Custom";
+            customScheme.description = "User-defined hotkey scheme";
+
+            const nlohmann::json& bindings = j["custom_scheme_bindings"];
+            for (auto it = bindings.begin(); it != bindings.end(); ++it)
+            {
+                try
+                {
+                    std::uint16_t command = std::stoul(it.key());
+                    const nlohmann::json& b = it.value();
+                    KeyBinding binding;
+                    binding.command = command;
+                    binding.key = b["key"].get<TKey>();
+                    binding.display = b["display"].get<std::string>();
+                    upsertBinding(customScheme, binding);
+                }
+                catch (const std::exception&)
+                {
+                    // Ignore malformed entries
+                }
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // TODO: log error
+    }
+}
+
+void applyPreferredScheme()
+{
+    std::string schemeId = gPreferredScheme;
+    if (schemeId == kAutoSchemeId)
+    {
+        schemeId = platformDefaultSchemeId();
+    }
+    else if (schemeId == kCustomSchemeId && !gHasCustom)
+    {
+        schemeId = platformDefaultSchemeId();
+    }
+
+    setActiveScheme(schemeId);
+}
+
 
 void ensureConfigurationLoaded()
 {
@@ -146,6 +263,13 @@ const std::string *findLabel(const std::string &locale, std::uint16_t command)
 }
 
 } // namespace
+
+void init()
+{
+    registerDefaultSchemes();
+    ensureConfigurationLoaded();
+    applyPreferredScheme();
+}
 
 void registerSchemes(std::span<const Scheme> schemes)
 {
@@ -224,7 +348,7 @@ void configureMenuItem(TMenuItem &item)
         return;
     if (const auto *binding = lookup(item.command))
     {
-        item.keyCode = binding->key;
+        item.keyCode = binding->key.code;
         if (!binding->display.empty())
         {
             delete[] (char *)item.param;
@@ -251,7 +375,7 @@ void configureStatusItem(TStatusItem &item, std::string_view action)
 {
     if (const auto *binding = lookup(item.command))
     {
-        item.keyCode = binding->key;
+        item.keyCode = binding->key.code;
         if (!binding->display.empty())
         {
             auto label = statusLabel(item.command, action);
@@ -275,6 +399,7 @@ void applyCommandLineScheme(int &argc, char **argv)
         std::string_view arg(argv[readIndex]);
         if (arg.rfind("--hotkeys=", 0) == 0)
         {
+            gRuntimeOverride = true;
             setActiveScheme(arg.substr(10));
             continue;
         }
@@ -282,6 +407,7 @@ void applyCommandLineScheme(int &argc, char **argv)
         {
             if (readIndex + 1 < argc)
             {
+                gRuntimeOverride = true;
                 setActiveScheme(argv[readIndex + 1]);
                 ++readIndex;
             }
@@ -477,7 +603,7 @@ std::string formatKey(TKey key)
     else if (code >= kbAltA && code <= kbAltZ)
     {
         alt = true;
-        base.assign(1, static_cast<char>('A' + (code - kbAltA)));
+        base.assign(1, 'A' + (code - kbAltA));
         code = 0;
     }
 
@@ -521,6 +647,11 @@ void setBinding(std::string_view schemeId, std::uint16_t command, TKey key, std:
         display = formatKey(key);
     KeyBinding binding{command, key, display};
     upsertBinding(scheme, binding);
+    if (schemeId == kCustomSchemeId)
+    {
+        gCustomDirty = true;
+        saveConfiguration();
+    }
 }
 
 void clearBinding(std::string_view schemeId, std::uint16_t command)
@@ -528,6 +659,11 @@ void clearBinding(std::string_view schemeId, std::uint16_t command)
     if (SchemeData *scheme = findScheme(schemeId))
     {
         scheme->bindings.erase(command);
+        if (schemeId == kCustomSchemeId)
+        {
+            gCustomDirty = true;
+            saveConfiguration();
+        }
     }
 }
 
@@ -541,6 +677,125 @@ void registerDefaultSchemes()
     registered = true;
     registerBuiltinHotkeySchemes();
     ensureActiveScheme();
+}
+
+std::string defaultSchemeId()
+{
+    return platformDefaultSchemeId();
+}
+
+std::string preferredScheme()
+{
+    ensureConfigurationLoaded();
+    return gPreferredScheme;
+}
+
+void setPreferredScheme(std::string_view id)
+{
+    if (gRuntimeOverride) return;
+    ensureConfigurationLoaded();
+    std::string newScheme(id);
+    if (gPreferredScheme == newScheme)
+        return;
+    gPreferredScheme = newScheme;
+    gConfigDirty = true;
+    saveConfiguration();
+    applyPreferredScheme();
+}
+
+bool customSchemeExists()
+{
+    ensureConfigurationLoaded();
+    return gHasCustom;
+}
+
+std::string customBaseScheme()
+{
+    ensureConfigurationLoaded();
+    return gCustomBase;
+}
+
+bool createCustomScheme(std::string_view templateId)
+{
+    ensureConfigurationLoaded();
+    if (gHasCustom)
+        return true;
+    SchemeData* templateScheme = findScheme(templateId);
+    if (!templateScheme)
+        return false;
+
+    gCustomBase = templateScheme->id;
+    SchemeData& customScheme = ensureCustomScheme();
+    customScheme.bindings = templateScheme->bindings;
+    gHasCustom = true;
+    gCustomDirty = true;
+    saveConfiguration();
+    return true;
+}
+
+void clearCustomScheme()
+{
+    ensureConfigurationLoaded();
+    if (!gHasCustom) return;
+    if (SchemeData* customScheme = findScheme(kCustomSchemeId))
+    {
+        customScheme->bindings.clear();
+    }
+    gHasCustom = false;
+    gCustomDirty = true;
+    saveConfiguration();
+    if (gPreferredScheme == kCustomSchemeId)
+    {
+        applyPreferredScheme();
+    }
+}
+
+std::string commandTool(std::uint16_t command)
+{
+    auto it = gCommandTools.find(command);
+    if (it != gCommandTools.end())
+        return it->second;
+    return {};
+}
+
+std::vector<std::pair<std::string, std::string>> availableSchemes()
+{
+    ensureConfigurationLoaded();
+    std::vector<std::pair<std::string, std::string>> result;
+    result.emplace_back(kAutoSchemeId, "Auto");
+    for (const auto& scheme : gSchemes)
+    {
+        if (scheme.id == kCustomSchemeId) continue;
+        result.emplace_back(scheme.id, scheme.displayName);
+    }
+    if (gHasCustom)
+    {
+        result.emplace_back(kCustomSchemeId, findScheme(kCustomSchemeId)->displayName);
+    }
+    return result;
+}
+
+void setCustomBindings(std::span<const KeyBinding> bindings, bool markDirty)
+{
+    if (!gHasCustom) return;
+    SchemeData& scheme = ensureCustomScheme();
+    scheme.bindings.clear();
+    for(const auto& binding : bindings)
+    {
+        upsertBinding(scheme, binding);
+    }
+    if (markDirty)
+    {
+        gCustomDirty = true;
+    }
+}
+
+void saveCustomScheme()
+{
+    if (gCustomDirty)
+    {
+        saveConfiguration();
+    }
 }
 
 } // namespace ck::hotkeys

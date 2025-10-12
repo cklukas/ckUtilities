@@ -32,8 +32,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <climits>
 #include <filesystem>
 #include <fstream>
@@ -56,11 +58,615 @@ namespace config = ck::config;
 namespace
 {
 
-constexpr std::string_view kToolId = "ck-config";
-
 static constexpr ushort cmEditHotkeys = 3400;
 static constexpr ushort cmHotkeyEditCommand = 3401;
 static constexpr ushort cmHotkeyClearCommand = 3402;
+static constexpr ushort cmSelectScheme = 3403;
+static constexpr ushort cmToolSelectionChanged = 3404;
+
+struct HotkeyEntry
+{
+    std::uint16_t command = 0;
+    std::string label;
+    std::string toolId;
+    std::string toolDisplay;
+    ck::hotkeys::KeyBinding binding;
+};
+
+class HotkeyListViewer : public TListViewer
+{
+public:
+    HotkeyListViewer(const TRect& bounds,
+                     TScrollBar* aScrollBar,
+                     std::vector<HotkeyEntry>& entries,
+                     bool& showToolColumn)
+        : TListViewer(bounds, 1, nullptr, aScrollBar),
+          hotkeyEntries(entries),
+          showToolNames(showToolColumn)
+    {
+    }
+
+    void getText(char* dest, short item, short maxChars) override
+    {
+        if (item >= 0 && item < hotkeyEntries.size())
+        {
+            const auto& entry = hotkeyEntries[item];
+            std::string display = entry.binding.display.empty() ? "(none)" : entry.binding.display;
+            std::string text;
+            if (showToolNames)
+            {
+                std::string toolName = entry.toolDisplay.empty() ? "Global" : entry.toolDisplay;
+                text = toolName + " - " + entry.label + ": " + display;
+            }
+            else
+            {
+                text = entry.label + ": " + display;
+            }
+            strncpy(dest, text.c_str(), maxChars);
+            dest[maxChars - 1] = '\0';
+        }
+        else if (maxChars > 0)
+        {
+            dest[0] = '\0';
+        }
+    }
+
+private:
+    std::vector<HotkeyEntry>& hotkeyEntries;
+    bool& showToolNames;
+};
+
+struct ToolEntry
+{
+    std::string id;
+    std::string display;
+    bool isAll = false;
+};
+
+class ToolListViewer : public TListViewer
+{
+public:
+    ToolListViewer(const TRect& bounds, TScrollBar* aScrollBar, std::vector<ToolEntry>& tools)
+        : TListViewer(bounds, 1, nullptr, aScrollBar), toolEntries(tools)
+    {
+    }
+
+    void getText(char* dest, short item, short maxChars) override
+    {
+        if (item >= 0 && item < toolEntries.size())
+        {
+            const auto& entry = toolEntries[item];
+            strncpy(dest, entry.display.c_str(), maxChars);
+            dest[maxChars - 1] = '\0';
+        }
+        else if (maxChars > 0)
+        {
+            dest[0] = '\0';
+        }
+    }
+
+    void focusItem(short item) override
+    {
+        short previous = focused;
+        TListViewer::focusItem(item);
+        if (owner && focused != previous)
+        {
+            message(owner, evBroadcast, cmToolSelectionChanged, this);
+        }
+    }
+
+private:
+    std::vector<ToolEntry>& toolEntries;
+};
+
+class KeyCaptureDialog : public TDialog
+{
+public:
+    KeyCaptureDialog(const std::string& commandLabel, TKey& key)
+        : TWindowInit(&TDialog::initFrame),
+          TDialog(TRect(0, 0, 40, 10), "Edit Binding"),
+          newKey(key)
+    {
+        options |= ofCentered;
+        std::string text = "Press new key for:\n" + commandLabel;
+        insert(new TStaticText(TRect(2, 2, 38, 5), text.c_str()));
+        insert(new TButton(TRect(15, 7, 25, 9), "Cancel", cmCancel, bfDefault));
+    }
+
+    void handleEvent(TEvent& event) override
+    {
+        TDialog::handleEvent(event);
+        if (event.what == evKeyDown)
+        {
+            newKey.code = event.keyDown.keyCode;
+            newKey.mods = event.keyDown.controlKeyState;
+            endModal(cmOK);
+            clearEvent(event);
+        }
+    }
+private:
+    TKey& newKey;
+};
+
+class SchemeListViewer : public TListViewer
+{
+public:
+    SchemeListViewer(const TRect& bounds,
+                     TScrollBar* aScrollBar,
+                     const std::vector<std::pair<std::string, std::string>>& schemes)
+        : TListViewer(bounds, 1, nullptr, aScrollBar), availableSchemes(schemes)
+    {
+    }
+
+    void getText(char* dest, short item, short maxChars) override
+    {
+        if (item >= 0 && item < availableSchemes.size())
+        {
+            strncpy(dest, availableSchemes[item].second.c_str(), maxChars);
+            dest[maxChars - 1] = '\0';
+        }
+        else if (maxChars > 0)
+        {
+            dest[0] = '\0';
+        }
+    }
+
+private:
+    const std::vector<std::pair<std::string, std::string>>& availableSchemes;
+};
+
+class SchemeSelectorDialog : public TDialog
+{
+public:
+    SchemeSelectorDialog(const std::vector<std::pair<std::string, std::string>>& schemes, std::string& selectedId)
+        : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 40, 15), "Select Scheme"),
+          availableSchemes(schemes), selectedSchemeId(selectedId)
+    {
+        options |= ofCentered;
+        TRect r = getExtent();
+        r.grow(-1, -1);
+        auto* scrollBar = new TScrollBar(TRect(r.b.x, r.a.y, r.b.x + 1, r.b.y));
+        insert(scrollBar);
+        schemeList = new SchemeListViewer(TRect(r.a.x, r.a.y, r.b.x, r.b.y), scrollBar, availableSchemes);
+        schemeList->setRange(availableSchemes.size());
+        insert(schemeList);
+        insert(new TButton(TRect(10, 12, 20, 14), "OK", cmOK, bfDefault));
+        insert(new TButton(TRect(22, 12, 32, 14), "Cancel", cmCancel, bfNormal));
+    }
+
+    void handleEvent(TEvent& event) override
+    {
+        TDialog::handleEvent(event);
+        if (event.what == evCommand && event.message.command == cmOK)
+        {
+            selectedSchemeId = availableSchemes[schemeList->focused].first;
+            endModal(cmOK);
+            clearEvent(event);
+        }
+    }
+
+private:
+    const std::vector<std::pair<std::string, std::string>>& availableSchemes;
+    std::string& selectedSchemeId;
+    SchemeListViewer* schemeList;
+};
+
+class HotkeyEditorDialog : public TDialog
+{
+public:
+    HotkeyEditorDialog();
+    void handleEvent(TEvent& event) override;
+
+private:
+    void setup();
+    void refreshBindings();
+    void onSchemeSelected();
+    void onToolSelectionChanged();
+    void updateControls();
+    void createCustom();
+    void resetCustom();
+    void editBinding();
+    void clearBinding();
+    void selectScheme();
+    void buildToolList();
+    std::string toolDisplayName(const std::string& toolId) const;
+    std::string effectiveSchemeId() const;
+    std::string schemeDisplayText() const;
+
+    TInputLine* schemeInput;
+    ToolListViewer* toolListView;
+    HotkeyListViewer* hotkeyListView;
+    TScrollBar* toolScrollBar;
+    TScrollBar* scrollBar;
+    TButton* createCustomButton;
+    TButton* resetCustomButton;
+    TButton* editButton;
+    TButton* clearButton;
+
+    std::vector<std::pair<std::string, std::string>> availableSchemes;
+    std::vector<ToolEntry> availableTools;
+    std::vector<HotkeyEntry> currentEntries;
+    std::string preferredSchemeId;
+    std::string activeSchemeId;
+    int selectedToolIndex = 0;
+    bool showToolColumn = true;
+    bool initializing = true;
+};
+
+HotkeyEditorDialog::HotkeyEditorDialog()
+    : TWindowInit(&TDialog::initFrame), TDialog(TRect(0, 0, 80, 24), "Hotkey Editor")
+{
+    options |= ofCentered;
+    setup();
+}
+
+void HotkeyEditorDialog::setup()
+{
+    initializing = true;
+
+    // Scheme selector
+    schemeInput = new TInputLine(TRect(12, 2, 48, 4), 255);
+    schemeInput->setState(ofSelectable, false);
+    insert(schemeInput);
+    insert(new TLabel(TRect(2, 2, 12, 3), "~S~cheme:", schemeInput));
+
+    insert(new TButton(TRect(50, 2, 62, 4), "Select", cmSelectScheme, bfNormal));
+
+    // Tool list
+    TRect toolRect(2, 5, 28, 18);
+    toolScrollBar = new TScrollBar(TRect(toolRect.b.x, toolRect.a.y, toolRect.b.x + 1, toolRect.b.y));
+    insert(toolScrollBar);
+    toolListView = new ToolListViewer(toolRect, toolScrollBar, availableTools);
+    insert(toolListView);
+    insert(new TLabel(TRect(2, 4, 16, 5), "~T~ool:", toolListView));
+
+    // Hotkey list
+    TRect listRect = TRect(30, 5, 78, 18);
+    scrollBar = new TScrollBar(TRect(listRect.b.x, listRect.a.y, listRect.b.x + 1, listRect.b.y));
+    insert(scrollBar);
+    hotkeyListView = new HotkeyListViewer(listRect, scrollBar, currentEntries, showToolColumn);
+    insert(hotkeyListView);
+    insert(new TLabel(TRect(30, 4, 60, 5), "~C~ommand Hotkeys", hotkeyListView));
+
+    // Buttons
+    createCustomButton = new TButton(TRect(2, 20, 20, 22), "Create Custom", 101, bfNormal);
+    insert(createCustomButton);
+    resetCustomButton = new TButton(TRect(22, 20, 40, 22), "Reset Custom", 102, bfNormal);
+    insert(resetCustomButton);
+    editButton = new TButton(TRect(42, 20, 52, 22), "Edit", cmHotkeyEditCommand, bfNormal);
+    insert(editButton);
+    clearButton = new TButton(TRect(54, 20, 64, 22), "Clear", cmHotkeyClearCommand, bfNormal);
+    insert(clearButton);
+    insert(new TButton(TRect(68, 20, 78, 22), "Done", cmOK, bfDefault));
+
+    buildToolList();
+    toolListView->setRange(availableTools.size());
+    toolListView->focused = 0;
+    toolListView->drawView();
+
+    onSchemeSelected();
+    initializing = false;
+}
+
+void HotkeyEditorDialog::refreshBindings()
+{
+    std::string schemeId = effectiveSchemeId();
+    std::vector<ck::hotkeys::KeyBinding> bindings = ck::hotkeys::schemeBindings(schemeId);
+    std::unordered_map<std::uint16_t, ck::hotkeys::KeyBinding> bindingMap;
+    bindingMap.reserve(bindings.size());
+    for (auto& binding : bindings)
+    {
+        bindingMap[binding.command] = binding;
+    }
+
+    if (availableTools.empty())
+        buildToolList();
+
+    if (toolListView)
+    {
+        toolListView->setRange(availableTools.size());
+        if (toolListView->focused < 0 || toolListView->focused >= static_cast<int>(availableTools.size()))
+            toolListView->focused =
+                selectedToolIndex < static_cast<int>(availableTools.size()) ? selectedToolIndex : 0;
+        toolListView->drawView();
+    }
+
+    if (availableTools.empty())
+    {
+        currentEntries.clear();
+        showToolColumn = true;
+        hotkeyListView->setRange(0);
+        hotkeyListView->drawView();
+        updateControls();
+        return;
+    }
+
+    if (selectedToolIndex < 0 || selectedToolIndex >= static_cast<int>(availableTools.size()))
+        selectedToolIndex = 0;
+
+    const auto& toolEntry = availableTools[selectedToolIndex];
+    std::vector<std::uint16_t> commands = toolEntry.isAll
+                                              ? ck::hotkeys::allCommands()
+                                              : ck::hotkeys::commandsForTool(toolEntry.id);
+
+    showToolColumn = toolEntry.isAll;
+
+    currentEntries.clear();
+    currentEntries.reserve(commands.size());
+
+    for (std::uint16_t command : commands)
+    {
+        HotkeyEntry entry;
+        entry.command = command;
+        entry.toolId = ck::hotkeys::commandTool(command);
+        entry.toolDisplay = toolDisplayName(entry.toolId);
+        entry.label = ck::hotkeys::commandLabel(command);
+        if (entry.label.empty())
+            entry.label = "Command " + std::to_string(command);
+
+        auto it = bindingMap.find(command);
+        if (it != bindingMap.end())
+            entry.binding = it->second;
+        else
+            entry.binding.command = command;
+
+        currentEntries.push_back(std::move(entry));
+    }
+
+    std::sort(currentEntries.begin(), currentEntries.end(), [](const HotkeyEntry& a, const HotkeyEntry& b) {
+        if (a.toolDisplay != b.toolDisplay)
+            return a.toolDisplay < b.toolDisplay;
+        return a.label < b.label;
+    });
+
+    hotkeyListView->setRange(currentEntries.size());
+    if (!currentEntries.empty() && (hotkeyListView->focused < 0 || hotkeyListView->focused >= currentEntries.size()))
+        hotkeyListView->focused = 0;
+    hotkeyListView->drawView();
+    updateControls();
+}
+
+void HotkeyEditorDialog::buildToolList()
+{
+    availableTools.clear();
+    ToolEntry allTools;
+    allTools.display = "All Tools";
+    allTools.isAll = true;
+    availableTools.push_back(std::move(allTools));
+
+    std::unordered_set<std::string> seen;
+    constexpr std::string_view kGlobalKey = "<global>";
+    for (auto command : ck::hotkeys::allCommands())
+    {
+        std::string toolId = ck::hotkeys::commandTool(command);
+        std::string key = toolId.empty() ? std::string(kGlobalKey) : toolId;
+        if (!seen.insert(key).second)
+            continue;
+        ToolEntry entry;
+        entry.id = toolId;
+        entry.display = toolDisplayName(toolId);
+        entry.isAll = false;
+        availableTools.push_back(std::move(entry));
+    }
+
+    if (availableTools.size() > 1)
+    {
+        std::sort(availableTools.begin() + 1, availableTools.end(), [](const ToolEntry& a, const ToolEntry& b) {
+            return a.display < b.display;
+        });
+    }
+    selectedToolIndex = 0;
+}
+
+std::string HotkeyEditorDialog::toolDisplayName(const std::string& toolId) const
+{
+    if (toolId.empty())
+        return "Global";
+    if (const auto* info = ck::appinfo::findTool(toolId))
+        return std::string(info->displayName);
+    return toolId;
+}
+
+std::string HotkeyEditorDialog::effectiveSchemeId() const
+{
+    if (preferredSchemeId == "auto")
+        return activeSchemeId;
+    return preferredSchemeId;
+}
+
+std::string HotkeyEditorDialog::schemeDisplayText() const
+{
+    auto findDisplay = [&](std::string_view id) -> std::string {
+        auto it = std::find_if(availableSchemes.begin(), availableSchemes.end(),
+                               [&](const auto& item) { return item.first == id; });
+        if (it != availableSchemes.end())
+            return it->second;
+        return std::string(id);
+    };
+
+    std::string text = findDisplay(preferredSchemeId);
+    if (preferredSchemeId == "auto" && !activeSchemeId.empty())
+    {
+        std::string activeDisplay = findDisplay(activeSchemeId);
+        if (!activeDisplay.empty())
+        {
+            text += " (";
+            text += activeDisplay;
+            text += ")";
+        }
+    }
+    else if (preferredSchemeId == "custom" && ck::hotkeys::customSchemeExists())
+    {
+        std::string baseId = ck::hotkeys::customBaseScheme();
+        if (!baseId.empty())
+        {
+            std::string baseDisplay = findDisplay(baseId);
+            text += " (base: " + baseDisplay + ")";
+        }
+    }
+    return text;
+}
+
+void HotkeyEditorDialog::onToolSelectionChanged()
+{
+    if (!toolListView || availableTools.empty())
+        return;
+
+    int focused = toolListView->focused;
+    if (focused < 0 || focused >= static_cast<int>(availableTools.size()))
+        focused = 0;
+    selectedToolIndex = focused;
+    refreshBindings();
+}
+
+void HotkeyEditorDialog::onSchemeSelected()
+{
+    preferredSchemeId = ck::hotkeys::preferredScheme();
+    activeSchemeId = std::string(ck::hotkeys::activeScheme());
+    availableSchemes = ck::hotkeys::availableSchemes();
+    std::string display = schemeDisplayText();
+    schemeInput->setData((void*)display.c_str());
+    refreshBindings();
+}
+
+void HotkeyEditorDialog::updateControls()
+{
+    bool customExists = ck::hotkeys::customSchemeExists();
+    bool editingAllowed = customExists && preferredSchemeId == "custom" && !currentEntries.empty();
+
+    createCustomButton->setState(ofSelectable, !customExists);
+    resetCustomButton->setState(ofSelectable, customExists);
+    editButton->setState(ofSelectable, editingAllowed);
+    clearButton->setState(ofSelectable, editingAllowed);
+
+    createCustomButton->drawView();
+    resetCustomButton->drawView();
+    editButton->drawView();
+    clearButton->drawView();
+}
+
+void HotkeyEditorDialog::createCustom()
+{
+    if (ck::hotkeys::customSchemeExists())
+    {
+        messageBox("Custom scheme already exists.", mfInformation | mfOKButton);
+        return;
+    }
+    std::string baseScheme = activeSchemeId.empty() ? ck::hotkeys::defaultSchemeId() : activeSchemeId;
+    if (!ck::hotkeys::createCustomScheme(baseScheme))
+    {
+        messageBox("Failed to create custom scheme.", mfError | mfOKButton);
+        return;
+    }
+    ck::hotkeys::setPreferredScheme("custom");
+    onSchemeSelected();
+}
+
+void HotkeyEditorDialog::resetCustom()
+{
+    if (!ck::hotkeys::customSchemeExists()) return;
+    if (messageBox("Are you sure you want to delete the custom scheme?",
+                   mfConfirmation | mfYesButton | mfNoButton) == cmYes)
+    {
+        ck::hotkeys::clearCustomScheme();
+        onSchemeSelected();
+    }
+}
+
+void HotkeyEditorDialog::editBinding()
+{
+    if (preferredSchemeId != "custom" || !ck::hotkeys::customSchemeExists())
+    {
+        messageBox("Bindings can only be edited in a custom scheme.", mfInformation | mfOKButton);
+        return;
+    }
+    int index = hotkeyListView->focused;
+    if (index < 0 || index >= static_cast<int>(currentEntries.size())) return;
+
+    HotkeyEntry& entry = currentEntries[index];
+    std::string label = entry.toolDisplay.empty() ? entry.label : entry.toolDisplay + " - " + entry.label;
+    TKey newKey = entry.binding.key;
+
+    auto* dialog = new KeyCaptureDialog(label, newKey);
+    if (TApplication::deskTop->execView(dialog) == cmOK)
+    {
+        ck::hotkeys::setBinding("custom", entry.command, newKey);
+        refreshBindings();
+    }
+}
+
+void HotkeyEditorDialog::clearBinding()
+{
+    if (preferredSchemeId != "custom" || !ck::hotkeys::customSchemeExists())
+    {
+        messageBox("Bindings can only be cleared in a custom scheme.", mfInformation | mfOKButton);
+        return;
+    }
+    int index = hotkeyListView->focused;
+    if (index < 0 || index >= static_cast<int>(currentEntries.size())) return;
+
+    const HotkeyEntry& entry = currentEntries[index];
+    std::string prefix = entry.toolDisplay.empty() ? "" : entry.toolDisplay + " - ";
+    std::string prompt = "Clear binding for " + prefix + entry.label + "?";
+    if (messageBox(prompt.c_str(), mfConfirmation | mfYesButton | mfNoButton) == cmYes)
+    {
+        ck::hotkeys::clearBinding("custom", entry.command);
+        refreshBindings();
+    }
+}
+
+void HotkeyEditorDialog::selectScheme()
+{
+    std::string newScheme = preferredSchemeId;
+    auto* dialog = new SchemeSelectorDialog(availableSchemes, newScheme);
+    if (TApplication::deskTop->execView(dialog) == cmOK)
+    {
+        ck::hotkeys::setPreferredScheme(newScheme);
+        onSchemeSelected();
+    }
+}
+
+void HotkeyEditorDialog::handleEvent(TEvent& event)
+{
+    TDialog::handleEvent(event);
+    if (event.what == evBroadcast && event.message.command == cmToolSelectionChanged &&
+        event.message.infoPtr == toolListView)
+    {
+        if (!initializing)
+            onToolSelectionChanged();
+        clearEvent(event);
+        return;
+    }
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case 101: // Create Custom
+            createCustom();
+            clearEvent(event);
+            break;
+        case 102: // Reset Custom
+            resetCustom();
+            clearEvent(event);
+            break;
+        case cmHotkeyEditCommand:
+            editBinding();
+            clearEvent(event);
+            break;
+        case cmHotkeyClearCommand:
+            clearBinding();
+            clearEvent(event);
+            break;
+        case cmSelectScheme:
+            selectScheme();
+            clearEvent(event);
+            break;
+        }
+    }
+}
+
+
+constexpr std::string_view kToolId = "ck-config";
 
 const ck::appinfo::ToolInfo &toolInfo()
 {
@@ -235,7 +841,7 @@ int listApps()
         std::cout << "(no applications found)" << std::endl;
     for (const auto &entry : entries)
     {
-        std::cout << entry.info.id << "\t" << entry.info.name;
+        std::cout << entry.info.id << '\t' << entry.info.name;
         if (entry.hasDefaults)
             std::cout << "\t[saved]";
         std::cout << std::endl;
@@ -1101,7 +1707,7 @@ private:
         }
         case config::OptionKind::StringList:
         {
-            auto *dialog = new StringListDialog("Edit " + item->definition.displayName,
+            auto *dialog = new StringListDialog("Edit " + item->definition.displayName, 
                                                "Use Insert/Delete keys to manage entries.",
                                                item->value.toStringList());
             if (TProgram::application->executeDialog(dialog, nullptr) != cmOK)
@@ -1235,12 +1841,15 @@ public:
             case cmReturnToLauncher:
                 std::exit(ck::launcher::kReturnToLauncherExitCode);
                 break;
-        case cmAbout:
-        {
-            const auto &info = toolInfo();
-            ck::ui::showAboutDialog(info.executable, CK_CONFIG_VERSION, info.aboutDescription);
-            break;
-        }
+            case cmEditHotkeys:
+                editHotkeys();
+                break;
+            case cmAbout:
+            {
+                const auto &info = toolInfo();
+                ck::ui::showAboutDialog(info.executable, CK_CONFIG_VERSION, info.aboutDescription);
+                break;
+            }
             default:
                 return;
             }
@@ -1266,6 +1875,7 @@ public:
         TMenuItem &menuChain = fileMenu +
                                *new TSubMenu("~P~rofile", hcNoContext) +
                                *new TMenuItem("~E~dit Options", cmEditApp, kbNoKey, hcNoContext) +
+                               *new TMenuItem("Edit ~H~otkeys...", cmEditHotkeys, kbNoKey, hcNoContext) +
                                *new TMenuItem("Reset to ~D~efaults", cmResetApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("~C~lear Saved Defaults", cmClearApp, kbNoKey, hcNoContext) +
                                newLine() +
@@ -1404,14 +2014,19 @@ private:
         std::string message = "Configuration files are stored in:\n" + path;
         messageBox(message.c_str(), mfInformation | mfOKButton);
     }
+
+    void editHotkeys()
+    {
+        auto *dialog = new HotkeyEditorDialog();
+        deskTop->execView(dialog);
+    }
 };
 
 } // namespace
 
 int main(int argc, char **argv)
 {
-    ck::hotkeys::registerDefaultSchemes();
-    ck::hotkeys::initializeFromEnvironment();
+    ck::hotkeys::init();
     ck::hotkeys::applyCommandLineScheme(argc, argv);
 
     int cliResult = runCli(argc, argv);
