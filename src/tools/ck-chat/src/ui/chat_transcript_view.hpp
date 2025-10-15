@@ -20,7 +20,8 @@ public:
     void setMessages(const std::vector<ck::chat::ChatSession::Message> &sessionMessages);
     void clearMessages();
     void scrollToBottom();
-    void setLayoutChangedCallback(std::function<void()> cb);
+    bool isAtBottom() const noexcept;
+    void setLayoutChangedCallback(std::function<void(bool)> cb);
     void setHiddenDetailCallback(std::function<void(std::size_t, const std::string &,
                                                    const std::string &)> cb);
     bool messageForCopy(std::size_t index, std::string &out) const;
@@ -62,7 +63,7 @@ private:
     std::vector<Message> messages;
     std::vector<DisplayRow> rows;
     bool layoutDirty = true;
-    std::function<void()> layoutChangedCallback;
+    std::function<void(bool)> layoutChangedCallback;
     bool showThinking_ = true;
     bool showAnalysis_ = true;
     int spinnerFrame_ = 0;
@@ -71,7 +72,7 @@ private:
     static std::string prefixForRole(Role role);
     void rebuildLayoutIfNeeded();
     void rebuildLayout();
-    void notifyLayoutChanged();
+    void notifyLayoutChanged(bool userScroll);
     void appendVisibleSegment(Role role,
                               const std::string &prefix,
                               const std::string &text,

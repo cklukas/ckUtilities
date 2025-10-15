@@ -55,6 +55,8 @@ private:
     void updateCopyButtonState(std::size_t messageIndex);
     void updateCopyButtonPositions();
     void updateCopyButtons();
+    void onTranscriptLayoutChanged(bool userScroll);
+    void clearCopyColumnBackground();
     void clearCopyButtons();
     CopyButtonInfo *findCopyButton(std::size_t messageIndex);
     CopyButtonInfo *findCopyButtonByCommand(ushort command);
@@ -66,5 +68,6 @@ private:
     std::string lastWindowTitle_;
     bool showThinking_ = true;
     bool showAnalysis_ = true;
+    bool autoScrollEnabled_ = true;
     std::vector<std::string> stopSequences_;
 };

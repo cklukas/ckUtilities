@@ -19,31 +19,39 @@
 #include <sstream>
 #include <thread>
 
-namespace {
-const ck::appinfo::ToolInfo &tool_info() {
-  return ck::appinfo::requireTool("ck-chat");
-}
+namespace
+{
+  const ck::appinfo::ToolInfo &tool_info()
+  {
+    return ck::appinfo::requireTool("ck-chat");
+  }
 
-ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config) {
-  ck::ai::RuntimeConfig runtime = config.runtime;
-  if (runtime.model_path.empty())
-    runtime.model_path = "stub-model.gguf";
-  return runtime;
-}
+  ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config)
+  {
+    ck::ai::RuntimeConfig runtime = config.runtime;
+    if (runtime.model_path.empty())
+      runtime.model_path = "stub-model.gguf";
+    return runtime;
+  }
 } // namespace
 
 ChatApp::ChatApp(int argc, char **argv)
     : TProgInit(&ChatApp::initStatusLine, nullptr, &TApplication::initDeskTop),
       TApplication(), modelLoadingInProgress_(false),
-      modelLoadingShouldStop_(false), modelLoadingStarted_(false) {
+      modelLoadingShouldStop_(false), modelLoadingStarted_(false)
+{
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 
-  if (argv && argc > 0 && argv[0]) {
-    try {
+  if (argv && argc > 0 && argv[0])
+  {
+    try
+    {
       binaryDir_ = std::filesystem::absolute(std::filesystem::path(argv[0]))
                        .parent_path();
-    } catch (...) {
+    }
+    catch (...)
+    {
       binaryDir_.clear();
     }
   }
@@ -71,7 +79,8 @@ ChatApp::ChatApp(int argc, char **argv)
 
 ChatApp::~ChatApp() { stopModelLoading(); }
 
-void ChatApp::registerWindow(ChatWindow *window) {
+void ChatApp::registerWindow(ChatWindow *window)
+{
   if (!window)
     return;
   windows.push_back(window);
@@ -80,12 +89,14 @@ void ChatApp::registerWindow(ChatWindow *window) {
   window->setStopSequences(stopSequences_);
 }
 
-void ChatApp::unregisterWindow(ChatWindow *window) {
+void ChatApp::unregisterWindow(ChatWindow *window)
+{
   auto it = std::remove(windows.begin(), windows.end(), window);
   windows.erase(it, windows.end());
 }
 
-void ChatApp::openChatWindow() {
+void ChatApp::openChatWindow()
+{
   if (!deskTop)
     return;
 
@@ -101,10 +112,13 @@ void ChatApp::openChatWindow() {
   window->select();
 }
 
-void ChatApp::handleEvent(TEvent &event) {
+void ChatApp::handleEvent(TEvent &event)
+{
   TApplication::handleEvent(event);
-  if (event.what == evCommand) {
-    switch (event.message.command) {
+  if (event.what == evCommand)
+  {
+    switch (event.message.command)
+    {
     case cmNewChat:
       openChatWindow();
       clearEvent(event);
@@ -155,12 +169,14 @@ void ChatApp::handleEvent(TEvent &event) {
       break;
     default:
       if (event.message.command >= cmSelectPromptBase &&
-          event.message.command < cmSelectPromptBase + 10) {
+          event.message.command < cmSelectPromptBase + 10)
+      {
         selectPrompt(event.message.command - cmSelectPromptBase);
         clearEvent(event);
         break;
       }
-      if (event.message.command == cmNoOp) {
+      if (event.message.command == cmNoOp)
+      {
         clearEvent(event);
         break;
       }
@@ -169,22 +185,26 @@ void ChatApp::handleEvent(TEvent &event) {
   }
 }
 
-void ChatApp::idle() {
+void ChatApp::idle()
+{
   TApplication::idle();
 
   // Start model loading if not already started and deskTop is available
-  if (!modelLoadingStarted_ && deskTop) {
+  if (!modelLoadingStarted_ && deskTop)
+  {
     modelLoadingStarted_ = true;
     updateActiveModel();
   }
 
-  for (auto *window : windows) {
+  for (auto *window : windows)
+  {
     if (window)
       window->processPendingResponses();
   }
 }
 
-TMenuBar *ChatApp::initMenuBar(TRect r) {
+TMenuBar *ChatApp::initMenuBar(TRect r)
+{
   r.b.y = r.a.y + 1;
 
   TSubMenu &fileMenu = *new TSubMenu("~F~ile", hcNoContext) +
@@ -203,12 +223,16 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   menuDownloadedModels_ = modelManager_.get_downloaded_models();
   auto activeInfo = activeModelInfo();
 
-  if (menuDownloadedModels_.empty()) {
+  if (menuDownloadedModels_.empty())
+  {
     modelsMenu +
         *new TMenuItem("~N~o downloaded models", cmNoOp, kbNoKey, hcNoContext);
-  } else {
+  }
+  else
+  {
     TMenuItem *defaultItem = nullptr;
-    for (size_t i = 0; i < menuDownloadedModels_.size() && i < 10; ++i) {
+    for (size_t i = 0; i < menuDownloadedModels_.size() && i < 10; ++i)
+    {
       const auto &model = menuDownloadedModels_[i];
       std::string menuText = model.name;
       if (model.is_active)
@@ -232,11 +256,15 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   menuPrompts_ = promptManager_.get_prompts();
   auto activePrompt = promptManager_.get_active_prompt();
 
-  if (menuPrompts_.empty()) {
+  if (menuPrompts_.empty())
+  {
     modelsMenu +
         *new TMenuItem("~N~o prompts defined", cmNoOp, kbNoKey, hcNoContext);
-  } else {
-    for (size_t i = 0; i < menuPrompts_.size() && i < 10; ++i) {
+  }
+  else
+  {
+    for (size_t i = 0; i < menuPrompts_.size() && i < 10; ++i)
+    {
       const auto &prompt = menuPrompts_[i];
       std::string label = prompt.name;
       if (activePrompt && activePrompt->id == prompt.id)
@@ -283,7 +311,8 @@ TMenuBar *ChatApp::initMenuBar(TRect r) {
   return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
 }
 
-TStatusLine *ChatApp::initStatusLine(TRect r) {
+TStatusLine *ChatApp::initStatusLine(TRect r)
+{
   r.a.y = r.b.y - 1;
 
   auto *newItem = new TStatusItem("New Chat", kbNoKey, cmNewChat);
@@ -293,7 +322,8 @@ TStatusLine *ChatApp::initStatusLine(TRect r) {
   newItem->next = closeItem;
   TStatusItem *tail = closeItem;
 
-  if (ck::launcher::launchedFromCkLauncher()) {
+  if (ck::launcher::launchedFromCkLauncher())
+  {
     auto *returnItem =
         new TStatusItem("Return", kbNoKey, cmReturnToLauncher);
     ck::hotkeys::configureStatusItem(*returnItem, "Return");
@@ -308,7 +338,8 @@ TStatusLine *ChatApp::initStatusLine(TRect r) {
   return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, newItem));
 }
 
-void ChatApp::showAboutDialog() {
+void ChatApp::showAboutDialog()
+{
   const auto &info = tool_info();
 #ifdef CK_CHAT_VERSION
   ck::ui::showAboutDialog(info.executable, CK_CHAT_VERSION,
@@ -318,12 +349,14 @@ void ChatApp::showAboutDialog() {
 #endif
 }
 
-void ChatApp::showModelManagerDialog() {
+void ChatApp::showModelManagerDialog()
+{
   // Fixed dialog size based on content needs
   TRect bounds(5, 3, 105, 33);
 
   auto *dialog = new ModelDialog(bounds, modelManager_, this);
-  if (dialog) {
+  if (dialog)
+  {
     deskTop->insert(dialog);
     dialog->select();
   }
@@ -331,20 +364,24 @@ void ChatApp::showModelManagerDialog() {
 
 void ChatApp::refreshModelsMenu() { rebuildMenuBar(); }
 
-void ChatApp::selectModel(int modelIndex) {
+void ChatApp::selectModel(int modelIndex)
+{
   if (menuDownloadedModels_.empty() || modelIndex < 0 ||
-      modelIndex >= static_cast<int>(menuDownloadedModels_.size())) {
+      modelIndex >= static_cast<int>(menuDownloadedModels_.size()))
+  {
     messageBox("Invalid model selection", mfError | mfOKButton);
     return;
   }
 
   const auto &model = menuDownloadedModels_[modelIndex];
-  if (!model.is_downloaded) {
+  if (!model.is_downloaded)
+  {
     messageBox("Model is not downloaded", mfError | mfOKButton);
     return;
   }
 
-  if (!modelManager_.activate_model(model.id)) {
+  if (!modelManager_.activate_model(model.id))
+  {
     messageBox("Failed to activate model: " + model.name, mfError | mfOKButton);
     return;
   }
@@ -352,21 +389,25 @@ void ChatApp::selectModel(int modelIndex) {
   handleModelManagerChange();
 }
 
-void ChatApp::handleModelManagerChange() {
+void ChatApp::handleModelManagerChange()
+{
   updateActiveModel();
   rebuildMenuBar();
   refreshWindowTitles();
 }
 
-void ChatApp::selectPrompt(int promptIndex) {
+void ChatApp::selectPrompt(int promptIndex)
+{
   if (menuPrompts_.empty() || promptIndex < 0 ||
-      promptIndex >= static_cast<int>(menuPrompts_.size())) {
+      promptIndex >= static_cast<int>(menuPrompts_.size()))
+  {
     messageBox("Invalid prompt selection", mfError | mfOKButton);
     return;
   }
 
   const auto &prompt = menuPrompts_[promptIndex];
-  if (!promptManager_.set_active_prompt(prompt.id)) {
+  if (!promptManager_.set_active_prompt(prompt.id))
+  {
     messageBox("Failed to activate prompt", mfError | mfOKButton);
     return;
   }
@@ -374,32 +415,40 @@ void ChatApp::selectPrompt(int promptIndex) {
   handlePromptManagerChange();
 }
 
-void ChatApp::showPromptManagerDialog() {
+void ChatApp::showPromptManagerDialog()
+{
   TRect bounds(10, 4, 77, 23);
   auto *dialog = new PromptDialog(bounds, promptManager_, this);
-  if (dialog) {
+  if (dialog)
+  {
     deskTop->insert(dialog);
     dialog->select();
   }
 }
 
-void ChatApp::applyConversationSettingsToWindows() {
-  for (auto *window : windows) {
-    if (window) {
+void ChatApp::applyConversationSettingsToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+    {
       window->applyConversationSettings(conversationSettings_);
       window->refreshWindowTitle();
     }
   }
 }
 
-void ChatApp::refreshWindowTitles() {
-  for (auto *window : windows) {
+void ChatApp::refreshWindowTitles()
+{
+  for (auto *window : windows)
+  {
     if (window)
       window->refreshWindowTitle();
   }
 }
 
-void ChatApp::setShowThinking(bool showThinking) {
+void ChatApp::setShowThinking(bool showThinking)
+{
   if (showThinking_ == showThinking)
     return;
   showThinking_ = showThinking;
@@ -407,7 +456,8 @@ void ChatApp::setShowThinking(bool showThinking) {
   rebuildMenuBar();
 }
 
-void ChatApp::setShowAnalysis(bool showAnalysis) {
+void ChatApp::setShowAnalysis(bool showAnalysis)
+{
   if (showAnalysis_ == showAnalysis)
     return;
   showAnalysis_ = showAnalysis;
@@ -415,7 +465,8 @@ void ChatApp::setShowAnalysis(bool showAnalysis) {
   rebuildMenuBar();
 }
 
-void ChatApp::appendLog(const std::string &text) {
+void ChatApp::appendLog(const std::string &text)
+{
   if (logPath_.empty())
     return;
   std::lock_guard<std::mutex> lock(llmMutex_);
@@ -427,22 +478,28 @@ void ChatApp::appendLog(const std::string &text) {
     file << '\n';
 }
 
-void ChatApp::applyThinkingVisibilityToWindows() {
-  for (auto *window : windows) {
+void ChatApp::applyThinkingVisibilityToWindows()
+{
+  for (auto *window : windows)
+  {
     if (window)
       window->setShowThinking(showThinking_);
   }
 }
 
-void ChatApp::applyAnalysisVisibilityToWindows() {
-  for (auto *window : windows) {
+void ChatApp::applyAnalysisVisibilityToWindows()
+{
+  for (auto *window : windows)
+  {
     if (window)
       window->setShowAnalysis(showAnalysis_);
   }
 }
 
-void ChatApp::applyStopSequencesToWindows() {
-  for (auto *window : windows) {
+void ChatApp::applyStopSequencesToWindows()
+{
+  for (auto *window : windows)
+  {
     if (window)
       window->setStopSequences(stopSequences_);
   }
@@ -450,11 +507,13 @@ void ChatApp::applyStopSequencesToWindows() {
 
 void ChatApp::updateConversationSettings(std::size_t contextTokens,
                                          std::size_t maxResponseTokens,
-                                         std::size_t summaryThresholdTokens) {
+                                         std::size_t summaryThresholdTokens)
+{
   if (contextTokens == 0)
     contextTokens = runtimeConfig.context_window_tokens;
 
-  if (maxResponseTokens == 0) {
+  if (maxResponseTokens == 0)
+  {
     maxResponseTokens = runtimeConfig.max_output_tokens > 0
                             ? runtimeConfig.max_output_tokens
                             : 512;
@@ -482,7 +541,8 @@ void ChatApp::updateConversationSettings(std::size_t contextTokens,
   ck::ai::ConfigLoader::save(config);
 }
 
-int ChatApp::gpuLayersForModel(const std::string &modelId) const {
+int ChatApp::gpuLayersForModel(const std::string &modelId) const
+{
   int layers = runtimeConfig.gpu_layers;
   auto it = config.model_overrides.find(modelId);
   if (it != config.model_overrides.end() && it->second.gpu_layers != -9999)
@@ -490,14 +550,16 @@ int ChatApp::gpuLayersForModel(const std::string &modelId) const {
   return layers;
 }
 
-int ChatApp::effectiveGpuLayers(const ck::ai::ModelInfo &model) const {
+int ChatApp::effectiveGpuLayers(const ck::ai::ModelInfo &model) const
+{
   int requested = gpuLayersForModel(model.id);
   if (requested == -1)
     return autoGpuLayersForModel(model);
   return requested;
 }
 
-int ChatApp::autoGpuLayersForModel(const ck::ai::ModelInfo &model) const {
+int ChatApp::autoGpuLayersForModel(const ck::ai::ModelInfo &model) const
+{
 #if defined(__APPLE__)
   std::size_t sizeGiB = model.size_bytes / (1024ull * 1024ull * 1024ull);
   if (sizeGiB <= 0)
@@ -519,7 +581,8 @@ int ChatApp::autoGpuLayersForModel(const ck::ai::ModelInfo &model) const {
 
 ChatApp::TokenLimits ChatApp::resolveTokenLimitsForModelInfo(
     const std::optional<std::string> &modelId,
-    std::optional<ck::ai::ModelInfo> modelInfo) const {
+    std::optional<ck::ai::ModelInfo> modelInfo) const
+{
   TokenLimits limits{};
   limits.context_tokens = runtimeConfig.context_window_tokens;
   limits.max_response_tokens = runtimeConfig.max_output_tokens;
@@ -531,7 +594,8 @@ ChatApp::TokenLimits ChatApp::resolveTokenLimitsForModelInfo(
   if (!modelInfo)
     modelInfo = modelManager_.get_model_by_id(*modelId);
 
-  if (modelInfo) {
+  if (modelInfo)
+  {
     if (modelInfo->default_context_window_tokens > 0)
       limits.context_tokens = modelInfo->default_context_window_tokens;
     if (modelInfo->default_max_output_tokens > 0)
@@ -541,7 +605,8 @@ ChatApp::TokenLimits ChatApp::resolveTokenLimitsForModelInfo(
   }
 
   auto overrideIt = config.model_overrides.find(*modelId);
-  if (overrideIt != config.model_overrides.end()) {
+  if (overrideIt != config.model_overrides.end())
+  {
     const auto &overrideConfig = overrideIt->second;
     if (overrideConfig.context_window_tokens != 0)
       limits.context_tokens = overrideConfig.context_window_tokens;
@@ -560,7 +625,8 @@ ChatApp::TokenLimits ChatApp::resolveTokenLimitsForModelInfo(
 }
 
 ChatApp::TokenLimits
-ChatApp::resolveTokenLimits(const std::optional<std::string> &modelId) const {
+ChatApp::resolveTokenLimits(const std::optional<std::string> &modelId) const
+{
   return resolveTokenLimitsForModelInfo(
       modelId, modelId ? modelManager_.get_model_by_id(*modelId)
                        : std::optional<ck::ai::ModelInfo>{});
@@ -568,7 +634,8 @@ ChatApp::resolveTokenLimits(const std::optional<std::string> &modelId) const {
 
 std::vector<std::string> ChatApp::resolveStopSequencesForModel(
     const std::optional<std::string> &modelId,
-    std::optional<ck::ai::ModelInfo> modelInfo) const {
+    std::optional<ck::ai::ModelInfo> modelInfo) const
+{
   std::vector<std::string> stops =
       ck::chat::ChatSession::defaultStopSequences();
   if (!modelId)
@@ -577,14 +644,16 @@ std::vector<std::string> ChatApp::resolveStopSequencesForModel(
   if (!modelInfo)
     modelInfo = modelManager_.get_model_by_id(*modelId);
 
-  if (modelInfo && !modelInfo->default_stop_sequences.empty()) {
+  if (modelInfo && !modelInfo->default_stop_sequences.empty())
+  {
     stops.insert(stops.end(), modelInfo->default_stop_sequences.begin(),
                  modelInfo->default_stop_sequences.end());
   }
 
   stops.erase(
       std::remove_if(stops.begin(), stops.end(),
-                     [](const std::string &value) { return value.empty(); }),
+                     [](const std::string &value)
+                     { return value.empty(); }),
       stops.end());
   std::sort(stops.begin(), stops.end());
   stops.erase(std::unique(stops.begin(), stops.end()), stops.end());
@@ -593,7 +662,8 @@ std::vector<std::string> ChatApp::resolveStopSequencesForModel(
   return stops;
 }
 
-void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers) {
+void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers)
+{
   if (gpuLayers < -1)
     gpuLayers = -1;
 
@@ -601,13 +671,15 @@ void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers) {
   overrideEntry.gpu_layers = gpuLayers;
 
   std::shared_ptr<ck::ai::Llm> newLlm;
-  if (currentActiveModel_ && currentActiveModel_->id == modelId) {
+  if (currentActiveModel_ && currentActiveModel_->id == modelId)
+  {
     newLlm = loadModel(*currentActiveModel_);
   }
 
   ck::ai::ConfigLoader::save(config);
 
-  if (newLlm) {
+  if (newLlm)
+  {
     std::lock_guard<std::mutex> lock(llmMutex_);
     activeLlm_ = std::move(newLlm);
     conversationSettings_.max_context_tokens =
@@ -624,7 +696,8 @@ void ChatApp::updateModelGpuLayers(const std::string &modelId, int gpuLayers) {
 void ChatApp::updateModelTokenSettings(const std::string &modelId,
                                        std::size_t contextTokens,
                                        std::size_t maxResponseTokens,
-                                       std::size_t summaryThresholdTokens) {
+                                       std::size_t summaryThresholdTokens)
+{
   if (contextTokens == 0)
     contextTokens = runtimeConfig.context_window_tokens;
 
@@ -644,13 +717,15 @@ void ChatApp::updateModelTokenSettings(const std::string &modelId,
   overrideEntry.summary_trigger_tokens = summaryThresholdTokens;
 
   std::shared_ptr<ck::ai::Llm> newLlm;
-  if (currentActiveModel_ && currentActiveModel_->id == modelId) {
+  if (currentActiveModel_ && currentActiveModel_->id == modelId)
+  {
     newLlm = loadModel(*currentActiveModel_);
   }
 
   ck::ai::ConfigLoader::save(config);
 
-  if (newLlm) {
+  if (newLlm)
+  {
     std::lock_guard<std::mutex> lock(llmMutex_);
     activeLlm_ = std::move(newLlm);
     conversationSettings_.max_context_tokens =
@@ -664,7 +739,8 @@ void ChatApp::updateModelTokenSettings(const std::string &modelId,
   refreshWindowTitles();
 }
 
-void ChatApp::handlePromptManagerChange() {
+void ChatApp::handlePromptManagerChange()
+{
   auto activePrompt = promptManager_.get_active_prompt();
   if (activePrompt)
     systemPrompt_ = activePrompt->message;
@@ -675,7 +751,8 @@ void ChatApp::handlePromptManagerChange() {
       activeLlm_->set_system_prompt(systemPrompt_);
   }
 
-  for (auto *window : windows) {
+  for (auto *window : windows)
+  {
     if (window)
       window->applySystemPrompt(systemPrompt_);
   }
@@ -683,36 +760,42 @@ void ChatApp::handlePromptManagerChange() {
   rebuildMenuBar();
 }
 
-std::shared_ptr<ck::ai::Llm> ChatApp::getActiveLlm() {
+std::shared_ptr<ck::ai::Llm> ChatApp::getActiveLlm()
+{
   std::lock_guard<std::mutex> lock(llmMutex_);
   return activeLlm_;
 }
 
-std::optional<ck::ai::ModelInfo> ChatApp::activeModelInfo() const {
+std::optional<ck::ai::ModelInfo> ChatApp::activeModelInfo() const
+{
   std::lock_guard<std::mutex> lock(llmMutex_);
   return currentActiveModel_;
 }
 
-void ChatApp::rebuildMenuBar() {
+void ChatApp::rebuildMenuBar()
+{
   if (!deskTop)
     return;
 
   TRect bounds;
   if (TProgram::menuBar)
     bounds = TProgram::menuBar->getBounds();
-  else {
+  else
+  {
     bounds = deskTop->getExtent();
     bounds.b.y = bounds.a.y + 1;
   }
 
-  if (TProgram::menuBar) {
+  if (TProgram::menuBar)
+  {
     TMenuBar *oldBar = TProgram::menuBar;
     remove(oldBar);
     TObject::destroy(oldBar);
   }
 
   TMenuBar *newBar = initMenuBar(bounds);
-  if (newBar) {
+  if (newBar)
+  {
     insert(newBar);
     TProgram::menuBar = newBar;
     newBar->drawView();
@@ -720,12 +803,14 @@ void ChatApp::rebuildMenuBar() {
 }
 
 std::shared_ptr<ck::ai::Llm>
-ChatApp::loadModel(const ck::ai::ModelInfo &model) {
+ChatApp::loadModel(const ck::ai::ModelInfo &model)
+{
   std::filesystem::path modelPath = model.local_path;
   if (modelPath.empty())
     modelPath = modelManager_.get_model_path(model.id);
 
-  if (modelPath.empty() || !std::filesystem::exists(modelPath)) {
+  if (modelPath.empty() || !std::filesystem::exists(modelPath))
+  {
     messageBox(("Model file not found: " + model.name).c_str(),
                mfError | mfOKButton);
     return nullptr;
@@ -761,7 +846,8 @@ ChatApp::loadModel(const ck::ai::ModelInfo &model) {
 
   newRuntime.gpu_layers = effectiveLayers;
 
-  try {
+  try
+  {
     auto uniqueLlm = ck::ai::Llm::open(newRuntime.model_path, newRuntime);
     uniqueLlm->set_system_prompt(systemPrompt_);
     runtimeConfig.model_path = newRuntime.model_path;
@@ -772,20 +858,24 @@ ChatApp::loadModel(const ck::ai::ModelInfo &model) {
     runtimeConfig.threads = newRuntime.threads;
     config.runtime = runtimeConfig;
     return std::shared_ptr<ck::ai::Llm>(std::move(uniqueLlm));
-  } catch (const std::exception &e) {
+  }
+  catch (const std::exception &e)
+  {
     messageBox(("Failed to load model: " + std::string(e.what())).c_str(),
                mfError | mfOKButton);
     return nullptr;
   }
 }
 
-void ChatApp::updateActiveModel() {
+void ChatApp::updateActiveModel()
+{
   auto activeModels = modelManager_.get_active_models();
   std::optional<ck::ai::ModelInfo> selected;
   if (!activeModels.empty())
     selected = activeModels.front();
 
-  if (!selected) {
+  if (!selected)
+  {
     {
       std::lock_guard<std::mutex> lock(llmMutex_);
       activeLlm_.reset();
@@ -810,7 +900,8 @@ void ChatApp::updateActiveModel() {
   loadModelInBackground();
 }
 
-void ChatApp::loadModelInBackground() {
+void ChatApp::loadModelInBackground()
+{
   auto activeModels = modelManager_.get_active_models();
   if (activeModels.empty())
     return;
@@ -823,7 +914,7 @@ void ChatApp::loadModelInBackground() {
   bounds.a.x = bounds.a.x + (bounds.b.x - bounds.a.x) / 2 - 20;
   bounds.a.y = bounds.a.y + (bounds.b.y - bounds.a.y) / 2 - 4;
   bounds.b.x = bounds.a.x + 40;
-  bounds.b.y = bounds.a.y + 8;
+  bounds.b.y = bounds.a.y + 9;
 
   auto *loadingDialog = ModelLoadingProgressDialog::create(bounds, model.name);
   deskTop->insert(loadingDialog);
@@ -835,7 +926,8 @@ void ChatApp::loadModelInBackground() {
   modelLoadingInProgress_ = true;
   modelLoadingShouldStop_ = false;
 
-  modelLoadingThread_ = std::thread([this, progressDialog, model]() {
+  modelLoadingThread_ = std::thread([this, progressDialog, model]()
+                                    {
     try {
       progressDialog->updateProgress("Opening model file: " + model.name +
                                      "...");
@@ -886,15 +978,17 @@ void ChatApp::loadModelInBackground() {
       progressDialog->setComplete(false, "Error: " + std::string(e.what()));
     }
 
-    modelLoadingInProgress_ = false;
-  });
+    modelLoadingInProgress_ = false; });
 }
 
-void ChatApp::stopModelLoading() {
-  if (modelLoadingInProgress_) {
-    modelLoadingShouldStop_ = true;
-    if (modelLoadingThread_.joinable()) {
-      modelLoadingThread_.join();
-    }
+void ChatApp::stopModelLoading()
+{
+  modelLoadingShouldStop_ = true;
+
+  if (modelLoadingThread_.joinable())
+  {
+    modelLoadingThread_.join();
   }
+
+  modelLoadingInProgress_ = false;
 }
