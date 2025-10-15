@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -56,7 +57,7 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
   ctx_params.n_ctx = runtime_.context_window_tokens > 0
                          ? static_cast<int>(runtime_.context_window_tokens)
                          : 4096; // Default context size
-  ctx_params.n_batch = 512;
+  ctx_params.n_batch = std::max<uint32_t>(512u, ctx_params.n_ctx);
   ctx_params.n_threads = runtime_.threads > 0
                              ? runtime_.threads
                              : std::thread::hardware_concurrency();
