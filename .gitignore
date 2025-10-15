@@ -10,3 +10,4 @@ compile_commands.json
 .vscode/
 .idea/
 third_party/llama.cpp/
+.DS_Store
