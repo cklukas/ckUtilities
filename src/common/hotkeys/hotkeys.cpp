@@ -10,6 +10,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iomanip>
+#include <limits>
 
 #include "ck/options.hpp"
 #include <nlohmann/json.hpp>
@@ -64,6 +65,44 @@ std::unordered_map<std::uint16_t, std::string> gCommandTools;
 
 constexpr std::string_view kCustomSchemeId = "custom";
 constexpr std::string_view kAutoSchemeId = "auto";
+
+using KeySignature = std::uint32_t;
+
+KeySignature keySignature(TKey key) noexcept
+{
+    return static_cast<KeySignature>(key.code) |
+           (static_cast<KeySignature>(key.mods) << 16);
+}
+
+ushort toKeyCode(TKey key) noexcept
+{
+    if (key.code == kbNoKey)
+        return kbNoKey;
+
+    static std::unordered_map<KeySignature, ushort> cache;
+    KeySignature signature = keySignature(key);
+    if (auto it = cache.find(signature); it != cache.end())
+        return it->second;
+
+    if (key.mods == 0)
+    {
+        cache.emplace(signature, key.code);
+        return key.code;
+    }
+
+    for (std::uint32_t raw = 0; raw <= std::numeric_limits<ushort>::max(); ++raw)
+    {
+        TKey candidate(static_cast<ushort>(raw));
+        if (candidate == key)
+        {
+            cache.emplace(signature, static_cast<ushort>(raw));
+            return static_cast<ushort>(raw);
+        }
+    }
+
+    cache.emplace(signature, kbNoKey);
+    return kbNoKey;
+}
 
 std::string platformDefaultSchemeId()
 {
@@ -348,7 +387,7 @@ void configureMenuItem(TMenuItem &item)
         return;
     if (const auto *binding = lookup(item.command))
     {
-        item.keyCode = binding->key.code;
+        item.keyCode = toKeyCode(binding->key);
         if (!binding->display.empty())
         {
             delete[] (char *)item.param;
@@ -375,7 +414,7 @@ void configureStatusItem(TStatusItem &item, std::string_view action)
 {
     if (const auto *binding = lookup(item.command))
     {
-        item.keyCode = binding->key.code;
+        item.keyCode = toKeyCode(binding->key);
         if (!binding->display.empty())
         {
             auto label = statusLabel(item.command, action);
