@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
+#include <limits>
 #include <sstream>
 #include <string_view>
 #include <unordered_map>
@@ -67,6 +68,260 @@ namespace
       lowered.push_back(
           static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
     return lowered;
+  }
+
+  std::string normalize_html_line_breaks(const std::string &text)
+  {
+    std::string output;
+    output.reserve(text.size());
+
+    for (std::size_t i = 0; i < text.size(); ++i)
+    {
+      char ch = text[i];
+      if (ch == '<')
+      {
+        std::size_t j = i + 1;
+        while (j < text.size() &&
+               std::isspace(static_cast<unsigned char>(text[j])))
+          ++j;
+        std::size_t tagStart = j;
+        while (j < text.size() &&
+               std::isalpha(static_cast<unsigned char>(text[j])))
+          ++j;
+        if (tagStart != j)
+        {
+          std::string tag = to_lower_copy(
+              std::string_view(text.data() + tagStart, j - tagStart));
+          if (tag == "br")
+          {
+            while (j < text.size() &&
+                   std::isspace(static_cast<unsigned char>(text[j])))
+              ++j;
+            if (j < text.size() && text[j] == '/')
+            {
+              ++j;
+              while (j < text.size() &&
+                     std::isspace(static_cast<unsigned char>(text[j])))
+                ++j;
+            }
+            if (j < text.size() && text[j] == '>')
+            {
+              output.push_back('\n');
+              i = j;
+              continue;
+            }
+          }
+        }
+      }
+
+      output.push_back(ch);
+    }
+
+    return output;
+  }
+
+  int max_line_length(std::string_view text)
+  {
+    int maxLen = 0;
+    int current = 0;
+    for (char ch : text)
+    {
+      if (ch == '\n')
+      {
+        maxLen = std::max(maxLen, current);
+        current = 0;
+      }
+      else if (ch != '\r')
+      {
+        ++current;
+      }
+    }
+    maxLen = std::max(maxLen, current);
+    return maxLen;
+  }
+
+  struct InlineContent
+  {
+    std::string text;
+    std::vector<ck::edit::MarkdownSpan> spans;
+  };
+
+  InlineContent sanitize_inline_markup(const std::string &text,
+                                       const std::vector<ck::edit::MarkdownSpan> &spans)
+  {
+    InlineContent result;
+    if (text.empty())
+    {
+      result.text = text;
+      result.spans = spans;
+      return result;
+    }
+
+    std::vector<bool> remove(text.size(), false);
+
+    auto check_before = [&](std::size_t pos, char marker, std::size_t count)
+    {
+      if (count == 0)
+        return true;
+      if (pos < count)
+        return false;
+      for (std::size_t i = 0; i < count; ++i)
+      {
+        if (text[pos - 1 - i] != marker)
+          return false;
+      }
+      return true;
+    };
+
+    auto check_after = [&](std::size_t pos, char marker, std::size_t count)
+    {
+      if (count == 0)
+        return true;
+      if (pos + count > text.size())
+        return false;
+      for (std::size_t i = 0; i < count; ++i)
+      {
+        if (text[pos + i] != marker)
+          return false;
+      }
+      return true;
+    };
+
+    auto mark_before = [&](std::size_t pos, char marker, std::size_t count)
+    {
+      for (std::size_t i = 0; i < count; ++i)
+        remove[pos - 1 - i] = true;
+    };
+
+    auto mark_after = [&](std::size_t pos, char marker, std::size_t count)
+    {
+      for (std::size_t i = 0; i < count; ++i)
+        remove[pos + i] = true;
+    };
+
+    for (const auto &span : spans)
+    {
+      if (span.start >= span.end || span.end > text.size())
+        continue;
+
+      switch (span.kind)
+      {
+      case ck::edit::MarkdownSpanKind::Bold:
+      case ck::edit::MarkdownSpanKind::Italic:
+      case ck::edit::MarkdownSpanKind::BoldItalic:
+      {
+        if (span.start == 0 || span.end >= text.size())
+          break;
+        char marker = text[span.start - 1];
+        char closingMarker = text[span.end];
+        if ((marker != '*' && marker != '_') || marker != closingMarker)
+          break;
+
+        std::size_t needed = 0;
+        if (span.kind == ck::edit::MarkdownSpanKind::Italic)
+          needed = 1;
+        else if (span.kind == ck::edit::MarkdownSpanKind::Bold)
+          needed = 2;
+        else
+          needed = 3;
+
+        if (check_before(span.start, marker, needed) &&
+            check_after(span.end, marker, needed))
+        {
+          mark_before(span.start, marker, needed);
+          mark_after(span.end, marker, needed);
+        }
+        break;
+      }
+      case ck::edit::MarkdownSpanKind::Strikethrough:
+      {
+        constexpr std::size_t needed = 2;
+        if (span.start < needed || span.end + needed > text.size())
+          break;
+        if (check_before(span.start, '~', needed) &&
+            check_after(span.end, '~', needed))
+        {
+          mark_before(span.start, '~', needed);
+          mark_after(span.end, '~', needed);
+        }
+        break;
+      }
+      case ck::edit::MarkdownSpanKind::Code:
+      {
+        std::size_t before = 0;
+        std::size_t pos = span.start;
+        while (pos > 0 && text[pos - 1] == '`')
+        {
+          ++before;
+          --pos;
+        }
+        std::size_t after = 0;
+        pos = span.end;
+        while (pos < text.size() && text[pos] == '`')
+        {
+          ++after;
+          ++pos;
+        }
+        std::size_t fence = std::min(before, after);
+        if (fence > 0)
+        {
+          if (check_before(span.start, '`', fence) &&
+              check_after(span.end, '`', fence))
+          {
+            mark_before(span.start, '`', fence);
+            mark_after(span.end, '`', fence);
+          }
+        }
+        break;
+      }
+      default:
+        break;
+      }
+    }
+
+    std::vector<int> indexMap(text.size(), -1);
+    result.text.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i)
+    {
+      if (!remove[i])
+      {
+        indexMap[i] = static_cast<int>(result.text.size());
+        result.text.push_back(text[i]);
+      }
+    }
+
+    if (result.text.empty())
+    {
+      result.spans.clear();
+      return result;
+    }
+
+    result.spans.reserve(spans.size());
+    for (const auto &span : spans)
+    {
+      if (span.start >= span.end || span.end > text.size())
+        continue;
+      std::size_t startIdx = span.start;
+      std::size_t endIdx = span.end;
+      if (startIdx >= text.size())
+        continue;
+      int mappedStart = indexMap[startIdx];
+      if (mappedStart < 0)
+        continue;
+      std::size_t lastOriginal = endIdx > 0 ? endIdx - 1 : startIdx;
+      if (lastOriginal >= text.size())
+        continue;
+      int mappedEnd = indexMap[lastOriginal];
+      if (mappedEnd < 0)
+        continue;
+      ck::edit::MarkdownSpan adjusted = span;
+      adjusted.start = static_cast<std::size_t>(mappedStart);
+      adjusted.end = static_cast<std::size_t>(mappedEnd + 1);
+      if (adjusted.start < adjusted.end)
+        result.spans.push_back(std::move(adjusted));
+    }
+
+    return result;
   }
 
   bool is_final_channel(std::string_view channel)
@@ -570,32 +825,38 @@ namespace
     void renderHeading(const std::string &line,
                        const ck::edit::MarkdownLineInfo &info)
     {
-      std::string content = info.inlineText;
+      InlineContent processed =
+          sanitize_inline_markup(info.inlineText, info.spans);
+      std::string content = std::move(processed.text);
       std::vector<std::uint16_t> styles(content.size(), kStyleHeading);
-      applyInlineSpans(styles, 0, info.spans);
+      applyInlineSpans(styles, 0, processed.spans);
       appendWrapped(content, styles, false);
     }
 
     void renderParagraph(const std::string &line,
                          const ck::edit::MarkdownLineInfo &info)
     {
-      std::string content = info.inlineText;
+      InlineContent processed =
+          sanitize_inline_markup(info.inlineText, info.spans);
+      std::string content = std::move(processed.text);
       std::vector<std::uint16_t> styles(content.size(), kStyleNone);
-      applyInlineSpans(styles, 0, info.spans);
+      applyInlineSpans(styles, 0, processed.spans);
       appendWrapped(content, styles, false);
     }
 
     void renderBlockQuote(const std::string &line,
                           const ck::edit::MarkdownLineInfo &info)
     {
-      std::string content = info.inlineText;
+      InlineContent processed =
+          sanitize_inline_markup(info.inlineText, info.spans);
+      std::string content = std::move(processed.text);
 
       std::string text = "> " + content;
       std::vector<std::uint16_t> styles(text.size(), kStyleQuote);
       applyStyleRange(styles, 0, 2,
                       static_cast<std::uint16_t>(kStyleQuote | kStyleListMarker));
       if (!content.empty())
-        applyInlineSpans(styles, 2, info.spans);
+        applyInlineSpans(styles, 2, processed.spans);
       appendWrapped(text, styles, false);
     }
 
@@ -606,7 +867,9 @@ namespace
           info.kind == ck::edit::MarkdownLineKind::OrderedListItem
               ? info.marker
               : std::string();
-      std::string content = info.inlineText;
+      InlineContent processed =
+          sanitize_inline_markup(info.inlineText, info.spans);
+      std::string content = std::move(processed.text);
 
       bool taskCompleted = false;
       if (info.isTask)
@@ -628,7 +891,7 @@ namespace
                       static_cast<std::uint16_t>(
                           kStyleListMarker | (info.isTask ? kStylePrefix : 0)));
       applyStyleRange(styles, marker.size(), marker.size() + 1, kStyleListMarker);
-      applyInlineSpans(styles, marker.size() + 1, info.spans);
+      applyInlineSpans(styles, marker.size() + 1, processed.spans);
       appendWrapped(text, styles, false);
     }
 
@@ -747,7 +1010,8 @@ namespace
         for (std::size_t i = 0; i < row.info.tableCells.size(); ++i)
         {
           const auto &cell = row.info.tableCells[i];
-          if (!trim_copy(cell.text).empty())
+          std::string normalized = normalize_html_line_breaks(cell.text);
+          if (!trim_copy(normalized).empty())
             columnHasContent[i] = true;
         }
       }
@@ -796,8 +1060,9 @@ namespace
           if (sourceIndex >= row.info.tableCells.size())
             continue;
           const auto &cell = row.info.tableCells[sourceIndex];
+          std::string normalized = normalize_html_line_breaks(cell.text);
           colWidths[idx] =
-              std::max(colWidths[idx], static_cast<int>(cell.text.size()));
+              std::max(colWidths[idx], max_line_length(normalized));
         }
       }
 
@@ -855,7 +1120,8 @@ namespace
           std::size_t sourceIndex = activeColumns[c];
           std::string cellText;
           if (sourceIndex < row.info.tableCells.size())
-            cellText = row.info.tableCells[sourceIndex].text;
+            cellText =
+                normalize_html_line_breaks(row.info.tableCells[sourceIndex].text);
 
           // Process markdown formatting within table cells
           if (cellText.length() >= 3 &&
@@ -1008,8 +1274,6 @@ namespace
       chooseFg(0x08);
     if (mask & kStyleTableHeader)
       chooseFg(0x0E);
-    if (mask & kStyleTableCell)
-      chooseFg(0x0F); // Use white/bright text instead of light gray
     if (mask & kStyleHeading)
       chooseFg(0x0E);
     if (mask & kStyleInlineCode)
@@ -1032,8 +1296,15 @@ namespace
       chooseFg(0x08);
     if (mask & kStyleItalic)
       chooseFg(0x0C);
-    if ((mask & kStyleBold) && fg == -1)
-      fg = 0x0F;
+    if (mask & kStyleBold)
+    {
+      setStyle(
+          attr,
+          static_cast<std::uint16_t>(getStyle(attr) |
+                                     static_cast<std::uint16_t>(slBold)));
+      if (fg == -1)
+        fg = 0x0F;
+    }
     if (mask & kStylePrefix)
       fg = 0x0C;
     if (mask & kStyleHorizontalRule)
@@ -1323,34 +1594,35 @@ void ChatTranscriptView::rebuildLayout()
           { return seg.from_marker; });
       bool finalSeen = false;
 
+      constexpr std::size_t kInvalidRowIndex =
+          std::numeric_limits<std::size_t>::max();
+
       struct HiddenAggregate
       {
         std::string channel;
         std::string text;
         bool pending = false;
         bool thinking = true;
+        std::size_t rowIndex = kInvalidRowIndex;
       };
       std::vector<HiddenAggregate> hidden;
       std::unordered_map<std::string, std::size_t> hiddenIndex;
 
-      auto recordHidden = [&](const std::string &channelLabel,
-                              const std::string &segmentText, bool thinking)
+      auto ensureHiddenAggregate = [&](const std::string &channelLabel,
+                                       bool thinking) -> HiddenAggregate &
       {
         std::string key =
             channelLabel.empty() ? std::string("analysis") : channelLabel;
         auto it = hiddenIndex.find(key);
         if (it == hiddenIndex.end())
         {
-          hidden.push_back(
-              HiddenAggregate{key, std::string(), msg.pending, thinking});
+          hidden.push_back(HiddenAggregate{key, std::string(), msg.pending,
+                                           thinking, kInvalidRowIndex});
           it = hiddenIndex.emplace(key, hidden.size() - 1).first;
         }
         auto &agg = hidden[it->second];
-        if (!agg.text.empty())
-          agg.text.push_back('\n');
-        agg.text += segmentText;
-        agg.pending = msg.pending;
-        agg.thinking = thinking;
+        agg.channel = key;
+        return agg;
       };
 
       auto handleVisibleSegment = [&](const std::string &channel,
@@ -1421,7 +1693,27 @@ void ChatTranscriptView::rebuildLayout()
 
         if (shouldHide(channelLower, thinkingSegment))
         {
-          recordHidden(printableChannel, cleaned, thinkingSegment);
+          auto &agg =
+              ensureHiddenAggregate(printableChannel, thinkingSegment);
+          if (!agg.text.empty())
+            agg.text.push_back('\n');
+          agg.text += cleaned;
+          agg.pending = msg.pending;
+          agg.thinking = thinkingSegment;
+          std::string trimmedHidden = trim_copy(agg.text);
+          std::string prefix = "Assistant (" + agg.channel + "): ";
+          if (agg.rowIndex == kInvalidRowIndex)
+          {
+            agg.rowIndex = appendHiddenPlaceholder(
+                prefix, agg.channel, trimmedHidden, i, agg.pending,
+                agg.thinking, messageFirstRow);
+          }
+          else
+          {
+            updateHiddenPlaceholder(agg.rowIndex, prefix, agg.channel,
+                                    trimmedHidden, i, agg.pending,
+                                    agg.thinking);
+          }
           messageFirstRow = false;
         }
         else
@@ -1474,7 +1766,27 @@ void ChatTranscriptView::rebuildLayout()
 
           if (shouldHide(channelLower, thinkingSegment))
           {
-            recordHidden(printableChannel, segmentText, thinkingSegment);
+            auto &agg =
+                ensureHiddenAggregate(printableChannel, thinkingSegment);
+            if (!agg.text.empty())
+              agg.text.push_back('\n');
+            agg.text += segmentText;
+            agg.pending = msg.pending;
+            agg.thinking = thinkingSegment;
+            std::string trimmedHidden = trim_copy(agg.text);
+            std::string prefix = "Assistant (" + agg.channel + "): ";
+            if (agg.rowIndex == kInvalidRowIndex)
+            {
+              agg.rowIndex = appendHiddenPlaceholder(
+                  prefix, agg.channel, trimmedHidden, i, agg.pending,
+                  agg.thinking, messageFirstRow);
+            }
+            else
+            {
+              updateHiddenPlaceholder(agg.rowIndex, prefix, agg.channel,
+                                      trimmedHidden, i, agg.pending,
+                                      agg.thinking);
+            }
             messageFirstRow = false;
           }
           else
@@ -1488,14 +1800,6 @@ void ChatTranscriptView::rebuildLayout()
         }
       }
 
-      for (auto &agg : hidden)
-      {
-        std::string trimmed = trim_copy(agg.text);
-        appendHiddenPlaceholder(
-            "Assistant (" + agg.channel + "): ", agg.channel,
-            std::string(trimmed), i, agg.pending, agg.thinking);
-        messageFirstRow = false;
-      }
     }
     else
     {
@@ -1603,15 +1907,33 @@ void ChatTranscriptView::appendVisibleSegment(
   }
 }
 
-void ChatTranscriptView::appendHiddenPlaceholder(
+std::size_t ChatTranscriptView::appendHiddenPlaceholder(
     const std::string &prefix, const std::string &channelLabel,
     const std::string &content, std::size_t messageIndex, bool pending,
-    bool thinking)
+    bool thinking, bool isFirstRow)
 {
   DisplayRow row;
   row.role = Role::Assistant;
   row.messageIndex = messageIndex;
-  row.isFirstLine = true;
+  row.isFirstLine = isFirstRow;
+  row.isPlaceholder = true;
+  rows.push_back(std::move(row));
+  std::size_t index = rows.size() - 1;
+  updateHiddenPlaceholder(index, prefix, channelLabel, content, messageIndex,
+                          pending, thinking);
+  return index;
+}
+
+void ChatTranscriptView::updateHiddenPlaceholder(
+    std::size_t rowIndex, const std::string &prefix,
+    const std::string &channelLabel, const std::string &content,
+    std::size_t messageIndex, bool pending, bool thinking)
+{
+  if (rowIndex >= rows.size())
+    return;
+  auto &row = rows[rowIndex];
+  row.role = Role::Assistant;
+  row.messageIndex = messageIndex;
   row.isThinking = thinking;
   row.isPlaceholder = true;
   row.isPending = pending;
@@ -1632,8 +1954,6 @@ void ChatTranscriptView::appendHiddenPlaceholder(
   row.styleMask.assign(row.text.size(), 0);
   if (!prefix.empty())
     applyStyleRange(row.styleMask, 0, prefix.size(), kStylePrefix);
-
-  rows.push_back(std::move(row));
 }
 
 void ChatTranscriptView::openHiddenRow(std::size_t rowIndex)

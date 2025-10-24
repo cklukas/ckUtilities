@@ -81,7 +81,15 @@ private:
                               int width,
                               bool thinking,
                               const std::string &channelLabel);
-    void appendHiddenPlaceholder(const std::string &prefix,
+    std::size_t appendHiddenPlaceholder(const std::string &prefix,
+                                        const std::string &channelLabel,
+                                        const std::string &content,
+                                        std::size_t messageIndex,
+                                        bool pending,
+                                        bool thinking,
+                                        bool isFirstRow);
+    void updateHiddenPlaceholder(std::size_t rowIndex,
+                                 const std::string &prefix,
                                  const std::string &channelLabel,
                                  const std::string &content,
                                  std::size_t messageIndex,
