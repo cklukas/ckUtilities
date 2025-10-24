@@ -193,7 +193,11 @@ MarkdownLineInfo MarkdownAnalyzer::analyzeLine(const std::string &line, Markdown
             info.kind = MarkdownLineKind::Heading;
             info.headingLevel = static_cast<int>(level);
             resetTable();
-            parse(trimmed.substr(level));
+            std::string content_str = std::string(trimmed.substr(level));
+            std::string_view content = content_str;
+            while (!content.empty() && content.front() == ' ')
+                content = content.substr(1);
+            parse(std::string(content));
             return info;
         }
     }

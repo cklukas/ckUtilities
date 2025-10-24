@@ -25,6 +25,7 @@ public:
     void setHiddenDetailCallback(std::function<void(std::size_t, const std::string &,
                                                    const std::string &)> cb);
     bool messageForCopy(std::size_t index, std::string &out) const;
+    void getAllMessagesForCopy(std::string &out) const;
     std::optional<std::size_t> lastAssistantMessageIndex() const;
     void setMessagePending(std::size_t index, bool pending);
     bool isMessagePending(std::size_t index) const;
@@ -73,8 +74,8 @@ private:
     std::vector<DisplayRow> rows;
     bool layoutDirty = true;
     std::function<void(bool)> layoutChangedCallback;
-    bool showThinking_ = true;
-    bool showAnalysis_ = true;
+    bool showThinking_ = false;
+    bool showAnalysis_ = false;
     int spinnerFrame_ = 0;
     std::function<void(std::size_t, const std::string &, const std::string &)> hiddenDetailCallback_;
 

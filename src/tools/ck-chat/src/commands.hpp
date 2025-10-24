@@ -25,6 +25,7 @@ inline constexpr unsigned short cmDeactivateModel = ck::commands::chat::Deactiva
 inline constexpr unsigned short cmDeleteModel = ck::commands::chat::DeleteModel;
 inline constexpr unsigned short cmRefreshModels = ck::commands::chat::RefreshModels;
 inline constexpr unsigned short cmCancelDownload = ck::commands::chat::CancelDownload;
+inline constexpr unsigned short cmCopyFullConversation = ck::commands::chat::CopyFullConversation;
 inline constexpr unsigned short cmNoOp = ck::commands::chat::NoOp;
 inline constexpr unsigned short cmApplyRuntimeSettings = ck::commands::chat::ApplyRuntimeSettings;
 inline constexpr unsigned short cmSelectPromptBase = ck::commands::chat::SelectPromptBase;

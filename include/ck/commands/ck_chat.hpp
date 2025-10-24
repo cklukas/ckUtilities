@@ -28,6 +28,7 @@ inline constexpr std::uint16_t DeactivateModel = 1113;
 inline constexpr std::uint16_t DeleteModel = 1114;
 inline constexpr std::uint16_t RefreshModels = 1115;
 inline constexpr std::uint16_t CancelDownload = 1116;
+inline constexpr std::uint16_t CopyFullConversation = 1117;
 inline constexpr std::uint16_t NoOp = 1117;
 inline constexpr std::uint16_t ApplyRuntimeSettings = 1118;
 inline constexpr std::uint16_t SelectPromptBase = 1200;

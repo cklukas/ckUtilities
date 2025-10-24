@@ -24,6 +24,7 @@ target_link_libraries(ckai_core
     llama
     ${CURL_LIBRARIES}
     nlohmann_json::nlohmann_json
+    ck_app_info
 )
 
 target_include_directories(ckai_core

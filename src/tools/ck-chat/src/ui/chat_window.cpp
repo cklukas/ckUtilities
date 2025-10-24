@@ -282,6 +282,12 @@ void ChatWindow::handleEvent(TEvent &event)
             clearEvent(event);
             return;
         }
+        if (command == cmCopyFullConversation)
+        {
+            copyFullConversation();
+            clearEvent(event);
+            return;
+        }
         if (command >= cmCopyResponseBase)
         {
             if (auto *info = findCopyButtonByCommand(command))
@@ -452,6 +458,24 @@ void ChatWindow::copyLastAssistantMessage()
     }
 
     copyAssistantMessage(*indexOpt);
+}
+
+void ChatWindow::copyFullConversation()
+{
+    if (!transcript)
+        return;
+
+    std::string content;
+    transcript->getAllMessagesForCopy(content);
+    if (content.empty())
+    {
+        messageBox("No conversation content to copy.",
+                   mfInformation | mfOKButton);
+        return;
+    }
+
+    clipboard::copyToClipboard(content);
+    messageBox(clipboard::statusMessage().c_str(), mfOKButton);
 }
 
 void ChatWindow::ensureCopyButton(std::size_t messageIndex)

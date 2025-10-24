@@ -221,6 +221,9 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
   TSubMenu &editMenu = *new TSubMenu("~E~dit", hcNoContext) +
                        *new TMenuItem("Copy ~L~ast Response",
                                       cmCopyLastResponse, kbNoKey,
+                                      hcNoContext) +
+                       *new TMenuItem("Copy ~F~ull Conversation",
+                                      cmCopyFullConversation, kbNoKey,
                                       hcNoContext);
 
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);

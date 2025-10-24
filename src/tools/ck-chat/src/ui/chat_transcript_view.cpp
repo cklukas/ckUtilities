@@ -14,9 +14,14 @@
 #include <utility>
 
 #include "ck/edit/markdown_parser.hpp"
+#include "../tvision_include.hpp"
 
 namespace
 {
+  // Style constants for text attributes
+  const ushort sfBold = 0x0800;
+  const ushort sfItalic = 0x0080;
+  const ushort sfUnderline = 0x0100;
 
   constexpr std::uint16_t kStyleNone = 0;
   constexpr std::uint16_t kStyleBold = 1u << 0;
@@ -25,6 +30,13 @@ namespace
   constexpr std::uint16_t kStyleInlineCode = 1u << 3;
   constexpr std::uint16_t kStyleLink = 1u << 4;
   constexpr std::uint16_t kStyleHeading = 1u << 5;
+  constexpr std::uint16_t kStyleHeading1 = kStyleHeading | (1u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeading2 = kStyleHeading | (2u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeading3 = kStyleHeading | (3u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeading4 = kStyleHeading | (4u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeading5 = kStyleHeading | (5u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeading6 = kStyleHeading | (6u << 14);  // Combined with heading
+  constexpr std::uint16_t kStyleHeadingLevelMask = 7u << 14;  // Mask to extract heading level
   constexpr std::uint16_t kStyleQuote = 1u << 6;
   constexpr std::uint16_t kStyleListMarker = 1u << 7;
   constexpr std::uint16_t kStyleTableBorder = 1u << 8;
@@ -1228,9 +1240,24 @@ namespace
       InlineContent processed =
           sanitize_inline_markup(info.inlineText, info.spans);
       std::string content = std::move(processed.text);
-      std::vector<std::uint16_t> styles(content.size(), kStyleHeading);
+      std::uint16_t headingStyle = kStyleHeading;
+      switch (info.headingLevel) {
+        case 1: headingStyle |= (1u << 14); break;
+        case 2: headingStyle |= (2u << 14); break;
+        case 3: headingStyle |= (3u << 14); break;
+        case 4: headingStyle |= (4u << 14); break;
+        case 5: headingStyle |= (5u << 14); break;
+        case 6: headingStyle |= (6u << 14); break;
+        default: break;
+      }
+      std::vector<std::uint16_t> styles(content.size(), headingStyle);
       applyInlineSpans(styles, 0, processed.spans);
       appendWrapped(content, styles, false);
+      
+      // Add a blank line after a heading unless we're in a table
+      if (tableBuffer_.empty()) {
+        addBlankLine();
+      }
     }
 
     void renderParagraph(const std::string &line,
@@ -1721,10 +1748,23 @@ namespace
 
     if (mask & kStyleTableBorder)
       chooseFg(0x08);
-    if (mask & kStyleTableHeader)
-      chooseFg(0x0E);
     if (mask & kStyleHeading)
-      chooseFg(0x0E);
+    {
+      int headingLevel = (mask & kStyleHeadingLevelMask) >> 14;
+      if (headingLevel == 1) {
+        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfBold | sfUnderline));
+      }
+      else if (headingLevel == 2) {
+        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfBold));
+      }
+      else if (headingLevel == 3) {
+        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfItalic));
+      }
+      else {
+        // h4 and following are italic
+        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfItalic));
+      }
+    }
     if (mask & kStyleInlineCode)
     {
       chooseFg(0x0A);
@@ -1739,8 +1779,6 @@ namespace
       chooseFg(0x09);
     if (mask & kStyleQuote)
       chooseFg(0x0B);
-    if (mask & kStyleListMarker)
-      chooseFg(0x0D);
     if (mask & kStyleStrikethrough)
     {
       chooseFg(0x08);
@@ -1770,7 +1808,7 @@ namespace
       fg = 0x0C;
     if (mask & kStyleHorizontalRule)
     {
-      chooseFg(0x01); // Dark blue line
+      chooseFg(0x08); // Dark gray line
     }
 
     if (fg != -1)
@@ -1910,6 +1948,30 @@ bool ChatTranscriptView::messageForCopy(std::size_t index,
   }
   out = msg.content;
   return true;
+}
+
+void ChatTranscriptView::getAllMessagesForCopy(std::string &out) const
+{
+  std::string result;
+  for (std::size_t i = 0; i < messages.size(); ++i)
+  {
+    const auto &msg = messages[i];
+    if (msg.role == Role::User)
+    {
+      if (!result.empty()) result += "\n\n";
+      result += "User: " + msg.content;
+    }
+    else if (msg.role == Role::Assistant)
+    {
+      std::string content;
+      if (messageForCopy(i, content))
+      {
+        if (!result.empty()) result += "\n\n";
+        result += "Assistant: " + content;
+      }
+    }
+  }
+  out = std::move(result);
 }
 
 std::optional<std::size_t>
@@ -2088,7 +2150,7 @@ void ChatTranscriptView::rebuildLayout()
 {
   rows.clear();
   int width = std::max(1, size.x);
-  spinnerFrame_ = (spinnerFrame_ + 1) % 4;
+  spinnerFrame_++;
 
   for (std::size_t i = 0; i < messages.size(); ++i)
   {
@@ -2424,6 +2486,15 @@ std::size_t ChatTranscriptView::appendHiddenPlaceholder(
     const std::string &content, std::size_t messageIndex, bool pending,
     bool thinking, bool isFirstRow)
 {
+  // Show spinner during pending state regardless of hide settings
+  // Only hide when not pending and the corresponding hide option is enabled
+  if (!pending) {
+    if (thinking && !showThinking_)
+      return rows.size();
+    if (!thinking && channelLabel == "analysis" && !showAnalysis_)
+      return rows.size();
+  }
+
   DisplayRow row;
   row.role = Role::Assistant;
   row.messageIndex = messageIndex;
@@ -2452,12 +2523,24 @@ void ChatTranscriptView::updateHiddenPlaceholder(
   row.channelLabel = channelLabel;
   row.hiddenContent = content.empty() ? std::string("(no content)") : content;
 
-  static const char spinnerChars[] = {'|', '/', '-', '\\'};
+  static const char* spinnerChars[] = {
+      "⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"  // Reversed order
+  };
+  
+  // Only update spinner every N rebuilds to slow down animation
+  static const int SPINNER_SPEED_DIVIDER = 3;
   if (pending)
   {
-    char frame = spinnerChars[spinnerFrame_ %
-                              (sizeof(spinnerChars) / sizeof(spinnerChars[0]))];
+    const char* frame = spinnerChars[(spinnerFrame_ / SPINNER_SPEED_DIVIDER) %
+                                   (sizeof(spinnerChars) / sizeof(spinnerChars[0]))];
     row.text = prefix + "Generating… " + frame;
+    
+    // Apply bold style to the spinner character
+    std::size_t spinnerPos = row.text.size() - strlen(frame);
+    row.styleMask.resize(row.text.size(), 0);
+    for (std::size_t i = spinnerPos; i < row.text.size(); i++) {
+        row.styleMask[i] = kStyleBold;
+    }
   }
   else
   {

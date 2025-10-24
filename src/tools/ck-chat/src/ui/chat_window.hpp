@@ -61,14 +61,15 @@ private:
     CopyButtonInfo *findCopyButton(std::size_t messageIndex);
     CopyButtonInfo *findCopyButtonByCommand(ushort command);
     void copyLastAssistantMessage();
+    void copyFullConversation();
     static void setButtonTitle(TButton &button, const char *title);
     TRect copyColumnBounds() const;
     void showHiddenContent(const std::string &channel, const std::string &content);
 
     ck::chat::ChatSession::ConversationSettings conversationSettings_{};
     std::string lastWindowTitle_;
-    bool showThinking_ = true;
-    bool showAnalysis_ = true;
+    bool showThinking_ = false;
+    bool showAnalysis_ = false;
     bool autoScrollEnabled_ = true;
     std::vector<std::string> stopSequences_;
 };

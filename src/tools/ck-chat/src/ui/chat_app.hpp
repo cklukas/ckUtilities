@@ -114,8 +114,8 @@ private:
   std::optional<ck::ai::ModelInfo> currentActiveModel_;
   mutable std::mutex llmMutex_;
   std::shared_ptr<ck::ai::Llm> activeLlm_;
-  bool showThinking_ = true;
-  bool showAnalysis_ = true;
+  bool showThinking_ = false;
+  bool showAnalysis_ = false;
   std::vector<std::string> stopSequences_;
   std::filesystem::path logPath_;
   std::filesystem::path binaryDir_;
