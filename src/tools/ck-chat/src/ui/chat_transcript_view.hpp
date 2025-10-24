@@ -25,6 +25,7 @@ public:
     void setHiddenDetailCallback(std::function<void(std::size_t, const std::string &,
                                                    const std::string &)> cb);
     bool messageForCopy(std::size_t index, std::string &out) const;
+    std::optional<std::size_t> lastAssistantMessageIndex() const;
     void setMessagePending(std::size_t index, bool pending);
     bool isMessagePending(std::size_t index) const;
     std::optional<int> firstRowForMessage(std::size_t index) const;

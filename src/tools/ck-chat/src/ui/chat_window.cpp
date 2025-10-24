@@ -276,6 +276,12 @@ void ChatWindow::handleEvent(TEvent &event)
             clearEvent(event);
             return;
         }
+        if (command == cmCopyLastResponse)
+        {
+            copyLastAssistantMessage();
+            clearEvent(event);
+            return;
+        }
         if (command >= cmCopyResponseBase)
         {
             if (auto *info = findCopyButtonByCommand(command))
@@ -430,6 +436,22 @@ void ChatWindow::copyAssistantMessage(std::size_t messageIndex)
 
     clipboard::copyToClipboard(content);
     messageBox(clipboard::statusMessage().c_str(), mfOKButton);
+}
+
+void ChatWindow::copyLastAssistantMessage()
+{
+    if (!transcript)
+        return;
+
+    auto indexOpt = transcript->lastAssistantMessageIndex();
+    if (!indexOpt)
+    {
+        messageBox("No completed assistant response to copy.",
+                   mfInformation | mfOKButton);
+        return;
+    }
+
+    copyAssistantMessage(*indexOpt);
 }
 
 void ChatWindow::ensureCopyButton(std::size_t messageIndex)

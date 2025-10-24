@@ -6,6 +6,7 @@ inline constexpr unsigned short cmNewChat = ck::commands::chat::NewChat;
 inline constexpr unsigned short cmReturnToLauncher = ck::commands::chat::ReturnToLauncher;
 inline constexpr unsigned short cmAbout = ck::commands::chat::About;
 inline constexpr unsigned short cmSendPrompt = ck::commands::chat::SendPrompt;
+inline constexpr unsigned short cmCopyLastResponse = ck::commands::chat::CopyLastResponse;
 inline constexpr unsigned short cmCopyResponseBase = ck::commands::chat::CopyResponseBase;
 inline constexpr unsigned short cmSelectModel1 = ck::commands::chat::SelectModel1;
 inline constexpr unsigned short cmSelectModel2 = ck::commands::chat::SelectModel2;

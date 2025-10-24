@@ -1742,7 +1742,13 @@ namespace
     if (mask & kStyleListMarker)
       chooseFg(0x0D);
     if (mask & kStyleStrikethrough)
+    {
       chooseFg(0x08);
+      setStyle(
+          attr,
+          static_cast<std::uint16_t>(getStyle(attr) |
+                                     static_cast<std::uint16_t>(slStrike)));
+    }
     if (mask & kStyleItalic)
       setStyle(
           attr,
@@ -1765,7 +1771,6 @@ namespace
     if (mask & kStyleHorizontalRule)
     {
       chooseFg(0x01); // Dark blue line
-      bg = 0x08;      // Gray background
     }
 
     if (fg != -1)
@@ -1905,6 +1910,18 @@ bool ChatTranscriptView::messageForCopy(std::size_t index,
   }
   out = msg.content;
   return true;
+}
+
+std::optional<std::size_t>
+ChatTranscriptView::lastAssistantMessageIndex() const
+{
+  for (std::size_t i = messages.size(); i-- > 0;)
+  {
+    const auto &msg = messages[i];
+    if (msg.role == Role::Assistant && !msg.pending)
+      return i;
+  }
+  return std::nullopt;
 }
 
 void ChatTranscriptView::setMessagePending(std::size_t index, bool pending)

@@ -127,6 +127,7 @@ const CommandLabel kDefaultLabels[] = {
     {commands::chat::HideThinking, "ck-chat", "Hide Thinking"},
     {commands::chat::ShowAnalysis, "ck-chat", "Show Analysis"},
     {commands::chat::HideAnalysis, "ck-chat", "Hide Analysis"},
+    {commands::chat::CopyLastResponse, "ck-chat", "Copy Last Response"},
     {commands::chat::About, "ck-chat", "About"},
 
     {commands::edit::cmToggleWrap, "ck-edit", "Toggle Wrap"},
@@ -193,6 +194,7 @@ const KeyBinding kLinuxBindings[] = {
     {cmCopy, TKey(kbCtrlC), "Ctrl-C"},
     {cmFind, TKey(kbCtrlF), "Ctrl-F"},
     {cmHelp, TKey(kbF1), "F1"},
+    {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl-Shift-C"},
 
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey(kbAlt0), "Alt-0"},
@@ -303,6 +305,7 @@ const KeyBinding kMacBindings[] = {
     {cmCopy, TKey(kbCtrlC), "Ctrl-C"},
     {cmFind, TKey(kbCtrlF), "Ctrl-F"},
     {cmHelp, TKey(kbF1), "F1"},
+    {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl-Shift-C"},
 
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey('0', kbCtrlShift), "Ctrl-0"},

@@ -9,6 +9,7 @@ inline constexpr std::uint16_t NewChat = 1000;
 inline constexpr std::uint16_t ReturnToLauncher = 1001;
 inline constexpr std::uint16_t About = 1002;
 inline constexpr std::uint16_t SendPrompt = 1003;
+inline constexpr std::uint16_t CopyLastResponse = 1004;
 inline constexpr std::uint16_t CopyResponseBase = 2000;
 inline constexpr std::uint16_t SelectModel1 = 1100;
 inline constexpr std::uint16_t SelectModel2 = 1101;
@@ -37,4 +38,3 @@ inline constexpr std::uint16_t ShowAnalysis = 1302;
 inline constexpr std::uint16_t HideAnalysis = 1303;
 
 } // namespace ck::commands::chat
-

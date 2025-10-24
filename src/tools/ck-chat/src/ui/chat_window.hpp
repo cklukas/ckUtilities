@@ -60,6 +60,7 @@ private:
     void clearCopyButtons();
     CopyButtonInfo *findCopyButton(std::size_t messageIndex);
     CopyButtonInfo *findCopyButtonByCommand(ushort command);
+    void copyLastAssistantMessage();
     static void setButtonTitle(TButton &button, const char *title);
     TRect copyColumnBounds() const;
     void showHiddenContent(const std::string &channel, const std::string &content);

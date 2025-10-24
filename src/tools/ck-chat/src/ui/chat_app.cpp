@@ -218,6 +218,11 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
                               kbNoKey, hcNoContext);
   fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcNoContext);
 
+  TSubMenu &editMenu = *new TSubMenu("~E~dit", hcNoContext) +
+                       *new TMenuItem("Copy ~L~ast Response",
+                                      cmCopyLastResponse, kbNoKey,
+                                      hcNoContext);
+
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);
 
   menuDownloadedModels_ = modelManager_.get_downloaded_models();
@@ -296,7 +301,7 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
         *new TMenuItem("Show ~A~nalysis", cmShowAnalysis, kbNoKey, hcNoContext);
 
   TMenuItem &menuChain =
-      fileMenu + modelsMenu + viewMenu +
+      fileMenu + editMenu + modelsMenu + viewMenu +
       *new TSubMenu("~W~indows", hcNoContext) +
       *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
       *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
