@@ -4,8 +4,11 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <sstream>
+#include <iostream>
+#include <fstream>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -30,6 +33,7 @@ namespace
   constexpr std::uint16_t kStyleCodeBlock = 1u << 11;
   constexpr std::uint16_t kStylePrefix = 1u << 12;
   constexpr std::uint16_t kStyleHorizontalRule = 1u << 13;
+  constexpr std::uint16_t kStyleUnderline = 1u << 14;
 
   struct StyledLine
   {
@@ -120,24 +124,332 @@ namespace
     return output;
   }
 
+  uint32_t next_codepoint(std::string_view text, std::size_t &index)
+  {
+    if (index >= text.size())
+      return 0;
+    unsigned char lead = static_cast<unsigned char>(text[index]);
+    if (lead < 0x80)
+    {
+      ++index;
+      return lead;
+    }
+    std::size_t remaining = text.size() - index;
+    if ((lead & 0xE0) == 0xC0 && remaining >= 2)
+    {
+      uint32_t cp = (lead & 0x1F) << 6;
+      unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+      if ((b1 & 0xC0) == 0x80)
+      {
+        cp |= (b1 & 0x3F);
+        index += 2;
+        return cp;
+      }
+    }
+    else if ((lead & 0xF0) == 0xE0 && remaining >= 3)
+    {
+      unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+      unsigned char b2 = static_cast<unsigned char>(text[index + 2]);
+      if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80)
+      {
+        uint32_t cp = (lead & 0x0F) << 12;
+        cp |= (b1 & 0x3F) << 6;
+        cp |= (b2 & 0x3F);
+        index += 3;
+        return cp;
+      }
+    }
+    else if ((lead & 0xF8) == 0xF0 && remaining >= 4)
+    {
+      unsigned char b1 = static_cast<unsigned char>(text[index + 1]);
+      unsigned char b2 = static_cast<unsigned char>(text[index + 2]);
+      unsigned char b3 = static_cast<unsigned char>(text[index + 3]);
+      if ((b1 & 0xC0) == 0x80 && (b2 & 0xC0) == 0x80 &&
+          (b3 & 0xC0) == 0x80)
+      {
+        uint32_t cp = (lead & 0x07) << 18;
+        cp |= (b1 & 0x3F) << 12;
+        cp |= (b2 & 0x3F) << 6;
+        cp |= (b3 & 0x3F);
+        index += 4;
+        return cp;
+      }
+    }
+
+    // Invalid sequence, consume one byte and replace with replacement char
+    ++index;
+    return lead;
+  }
+
+  struct Interval
+  {
+    uint32_t first;
+    uint32_t last;
+  };
+
+  int bisearch(uint32_t codepoint, const Interval *table, int length)
+  {
+    int low = 0;
+    int high = length - 1;
+    if (codepoint < table[0].first || codepoint > table[high].last)
+      return 0;
+    while (low <= high)
+    {
+      int mid = (low + high) / 2;
+      if (codepoint > table[mid].last)
+        low = mid + 1;
+      else if (codepoint < table[mid].first)
+        high = mid - 1;
+      else
+        return 1;
+    }
+    return 0;
+  }
+
+  static const Interval kCombiningIntervals[] = {
+      {0x0300, 0x036F}, {0x0483, 0x0489}, {0x0591, 0x05BD}, {0x05BF, 0x05BF},
+      {0x05C1, 0x05C2}, {0x05C4, 0x05C5}, {0x05C7, 0x05C7}, {0x0600, 0x0605},
+      {0x0610, 0x061A}, {0x064B, 0x065F}, {0x0670, 0x0670}, {0x06D6, 0x06DD},
+      {0x06DF, 0x06E4}, {0x06E7, 0x06E8}, {0x06EA, 0x06ED}, {0x070F, 0x070F},
+      {0x0711, 0x0711}, {0x0730, 0x074A}, {0x07A6, 0x07B0}, {0x07EB, 0x07F3},
+      {0x07FD, 0x07FD}, {0x0816, 0x0819}, {0x081B, 0x0823}, {0x0825, 0x0827},
+      {0x0829, 0x082D}, {0x0859, 0x085B}, {0x0898, 0x089F}, {0x08CA, 0x0903},
+      {0x093A, 0x093C}, {0x093E, 0x094F}, {0x0951, 0x0957}, {0x0962, 0x0963},
+      {0x0981, 0x0983}, {0x09BC, 0x09BC}, {0x09BE, 0x09C4}, {0x09C7, 0x09C8},
+      {0x09CB, 0x09CD}, {0x09D7, 0x09D7}, {0x09E2, 0x09E3}, {0x09FE, 0x09FE},
+      {0x0A01, 0x0A03}, {0x0A3C, 0x0A3C}, {0x0A3E, 0x0A42}, {0x0A47, 0x0A48},
+      {0x0A4B, 0x0A4D}, {0x0A51, 0x0A51}, {0x0A70, 0x0A71}, {0x0A75, 0x0A75},
+      {0x0A81, 0x0A83}, {0x0ABC, 0x0ABC}, {0x0ABE, 0x0AC5}, {0x0AC7, 0x0AC9},
+      {0x0ACB, 0x0ACD}, {0x0AE2, 0x0AE3}, {0x0AFA, 0x0AFF}, {0x0B01, 0x0B03},
+      {0x0B3C, 0x0B3C}, {0x0B3E, 0x0B44}, {0x0B47, 0x0B48}, {0x0B4B, 0x0B4D},
+      {0x0B56, 0x0B57}, {0x0B62, 0x0B63}, {0x0B82, 0x0B82}, {0x0BBE, 0x0BC2},
+      {0x0BC6, 0x0BC8}, {0x0BCA, 0x0BCD}, {0x0BD7, 0x0BD7}, {0x0C00, 0x0C04},
+      {0x0C3C, 0x0C3C}, {0x0C3E, 0x0C44}, {0x0C46, 0x0C48}, {0x0C4A, 0x0C4D},
+      {0x0C55, 0x0C56}, {0x0C62, 0x0C63}, {0x0C81, 0x0C83}, {0x0CBC, 0x0CBC},
+      {0x0CBE, 0x0CC4}, {0x0CC6, 0x0CC8}, {0x0CCA, 0x0CCD}, {0x0CD5, 0x0CD6},
+      {0x0CE2, 0x0CE3}, {0x0CF3, 0x0CF3}, {0x0D00, 0x0D03}, {0x0D3B, 0x0D3C},
+      {0x0D3E, 0x0D44}, {0x0D46, 0x0D48}, {0x0D4A, 0x0D4D}, {0x0D57, 0x0D57},
+      {0x0D62, 0x0D63}, {0x0D81, 0x0D83}, {0x0DCA, 0x0DCA}, {0x0DCF, 0x0DD4},
+      {0x0DD6, 0x0DD6}, {0x0DD8, 0x0DDF}, {0x0DF2, 0x0DF3}, {0x0E31, 0x0E31},
+      {0x0E34, 0x0E3A}, {0x0E47, 0x0E4E}, {0x0EB1, 0x0EB1}, {0x0EB4, 0x0EBC},
+      {0x0EC8, 0x0ECD}, {0x0F18, 0x0F19}, {0x0F3E, 0x0F3F}, {0x0F71, 0x0F84},
+      {0x0F86, 0x0F87}, {0x0F8D, 0x0F97}, {0x0F99, 0x0FBC}, {0x0FC6, 0x0FC6},
+      {0x102B, 0x103E}, {0x1056, 0x1059}, {0x105E, 0x1060}, {0x1062, 0x1064},
+      {0x1067, 0x106D}, {0x1071, 0x1074}, {0x1082, 0x108D}, {0x108F, 0x108F},
+      {0x109A, 0x109D}, {0x135D, 0x135F}, {0x1712, 0x1715}, {0x1732, 0x1734},
+      {0x1752, 0x1753}, {0x1772, 0x1773}, {0x17B4, 0x17D3}, {0x17DD, 0x17DD},
+      {0x180B, 0x180F}, {0x1885, 0x1886}, {0x18A9, 0x18A9}, {0x1920, 0x192B},
+      {0x1930, 0x193B}, {0x1A17, 0x1A1B}, {0x1A55, 0x1A7F}, {0x1AB0, 0x1ACE},
+      {0x1B00, 0x1B04}, {0x1B34, 0x1B44}, {0x1B6B, 0x1B73}, {0x1B80, 0x1B82},
+      {0x1BA1, 0x1BAD}, {0x1BE6, 0x1BF3}, {0x1C24, 0x1C37}, {0x1CD0, 0x1CD2},
+      {0x1CD4, 0x1CE8}, {0x1CED, 0x1CED}, {0x1CF2, 0x1CF4}, {0x1CF7, 0x1CF9},
+      {0x1DC0, 0x1DFF}, {0x200B, 0x200F}, {0x202A, 0x202E}, {0x2060, 0x2064},
+      {0x2066, 0x206F}, {0x20D0, 0x20F0}, {0x2CEF, 0x2CF1}, {0x2D7F, 0x2D7F},
+      {0x2DE0, 0x2DFF}, {0x302A, 0x302F}, {0x3099, 0x309A}, {0xA674, 0xA67D},
+      {0xA69E, 0xA69F}, {0xA6F0, 0xA6F1}, {0xA802, 0xA802}, {0xA806, 0xA806},
+      {0xA80B, 0xA80B}, {0xA823, 0xA827}, {0xA82C, 0xA82C}, {0xA880, 0xA881},
+      {0xA8B4, 0xA8C5}, {0xA8E0, 0xA8F1}, {0xA926, 0xA92D}, {0xA947, 0xA953},
+      {0xA980, 0xA983}, {0xA9B3, 0xA9C0}, {0xA9E5, 0xA9E5}, {0xAA29, 0xAA36},
+      {0xAA43, 0xAA43}, {0xAA4C, 0xAA4D}, {0xAA7B, 0xAA7D}, {0xAAB0, 0xAAB0},
+      {0xAAB2, 0xAAB4}, {0xAAB7, 0xAAB8}, {0xAABE, 0xAABF}, {0xAAC1, 0xAAC1},
+      {0xAAEB, 0xAAEF}, {0xAAF5, 0xAAF6}, {0xABE3, 0xABEA}, {0xABEC, 0xABED},
+      {0xFB1E, 0xFB1E}, {0xFE00, 0xFE0F}, {0xFE20, 0xFE2F}, {0xFEFF, 0xFEFF},
+      {0xFFF9, 0xFFFB}, {0x101FD, 0x101FD}, {0x102E0, 0x102E0},
+      {0x10376, 0x1037A}, {0x10A01, 0x10A03}, {0x10A05, 0x10A06},
+      {0x10A0C, 0x10A0F}, {0x10A38, 0x10A3A}, {0x10A3F, 0x10A3F},
+      {0x10AE5, 0x10AE6}, {0x11000, 0x11002}, {0x11038, 0x11046},
+      {0x1107F, 0x11082}, {0x110B0, 0x110BA}, {0x110C2, 0x110C2},
+      {0x11100, 0x11103}, {0x11127, 0x11134}, {0x11145, 0x11146},
+      {0x11173, 0x11173}, {0x11180, 0x11182}, {0x111B3, 0x111C0},
+      {0x111C9, 0x111CC}, {0x111CE, 0x111CF}, {0x1122C, 0x11237},
+      {0x1123E, 0x1123E}, {0x112DF, 0x112EA}, {0x11300, 0x11303},
+      {0x1133B, 0x1133C}, {0x1133E, 0x11344}, {0x11347, 0x11348},
+      {0x1134B, 0x1134D}, {0x11357, 0x11357}, {0x11362, 0x11363},
+      {0x11366, 0x1136C}, {0x11370, 0x11374}, {0x11435, 0x11446},
+      {0x1145E, 0x1145F}, {0x114B0, 0x114C3}, {0x115AF, 0x115B5},
+      {0x115B8, 0x115C0}, {0x115DC, 0x115DD}, {0x11630, 0x11640},
+      {0x116AB, 0x116B7}, {0x1171D, 0x1172B}, {0x1182C, 0x1183A},
+      {0x11838, 0x1183A}, {0x11930, 0x1193F}, {0x11940, 0x11940},
+      {0x11942, 0x11943}, {0x119D1, 0x119D7}, {0x119DA, 0x119E0},
+      {0x119E4, 0x119E4}, {0x11A01, 0x11A0A}, {0x11A33, 0x11A3E},
+      {0x11A47, 0x11A47}, {0x11A51, 0x11A5B}, {0x11A8A, 0x11A99},
+      {0x11C2F, 0x11C3F}, {0x11C92, 0x11CA7}, {0x11CA9, 0x11CB6},
+      {0x11D31, 0x11D45}, {0x11D47, 0x11D47}, {0x11D8A, 0x11D97},
+      {0x11EF3, 0x11EF6}, {0x11F00, 0x11F01}, {0x11F36, 0x11F3A},
+      {0x11F3E, 0x11F42}, {0x13430, 0x13438}, {0x13440, 0x13455},
+      {0x16AF0, 0x16AF4}, {0x16B30, 0x16B36}, {0x16F4F, 0x16F4F},
+      {0x16F51, 0x16F87}, {0x16F8F, 0x16F92}, {0x16FE4, 0x16FE4},
+      {0x16FF0, 0x16FF1}, {0x1BC9D, 0x1BC9E}, {0x1CF00, 0x1CF2D},
+      {0x1CF30, 0x1CF46}, {0x1D165, 0x1D169}, {0x1D16D, 0x1D172},
+      {0x1D17B, 0x1D182}, {0x1D185, 0x1D18B}, {0x1D1AA, 0x1D1AD},
+      {0x1D242, 0x1D244}, {0x1DA00, 0x1DA36}, {0x1DA3B, 0x1DA6C},
+      {0x1DA75, 0x1DA75}, {0x1DA84, 0x1DA84}, {0x1DA9B, 0x1DA9F},
+      {0x1DAA1, 0x1DAAF}, {0x1E000, 0x1E02A}, {0x1E130, 0x1E13D},
+      {0x1E2AE, 0x1E2AE}, {0x1E2EC, 0x1E2EF}, {0x1E8D0, 0x1E8D6},
+      {0x1E944, 0x1E94B}, {0x1F3FB, 0x1F3FF}, {0xE0100, 0xE01EF}};
+
+  static const Interval kDoubleWidthIntervals[] = {
+      {0x1100, 0x115F}, {0x231A, 0x231B}, {0x2329, 0x232A}, {0x23E9, 0x23EC},
+      {0x23F0, 0x23F0}, {0x23F3, 0x23F3}, {0x25FD, 0x25FE}, {0x2614, 0x2615},
+      {0x2648, 0x2653}, {0x267F, 0x267F}, {0x2693, 0x2693}, {0x26A1, 0x26A1},
+      {0x26AA, 0x26AB}, {0x26BD, 0x26BE}, {0x26C4, 0x26C5}, {0x26CE, 0x26CE},
+      {0x26D4, 0x26D4}, {0x26EA, 0x26EA}, {0x26F2, 0x26F3}, {0x26F5, 0x26F5},
+      {0x26FA, 0x26FA}, {0x26FD, 0x26FD}, {0x2705, 0x2705}, {0x270A, 0x270B},
+      {0x2728, 0x2728}, {0x274C, 0x274C}, {0x274E, 0x274E}, {0x2753, 0x2755},
+      {0x2757, 0x2757}, {0x2795, 0x2797}, {0x27B0, 0x27B0}, {0x27BF, 0x27BF},
+      {0x2B1B, 0x2B1C}, {0x2B50, 0x2B50}, {0x2B55, 0x2B55}, {0x2E80, 0x2E99},
+      {0x2E9B, 0x2EF3}, {0x2F00, 0x2FD5}, {0x2FF0, 0x2FFB}, {0x3000, 0x303E},
+      {0x3040, 0x3247}, {0x3250, 0x4DBF}, {0x4E00, 0xA4C6}, {0xA960, 0xA97C},
+      {0xAC00, 0xD7A3}, {0xF900, 0xFAFF}, {0xFE10, 0xFE19}, {0xFE30, 0xFE52},
+      {0xFE54, 0xFE66}, {0xFE68, 0xFE6B}, {0xFF01, 0xFF60}, {0xFFE0, 0xFFE6},
+      {0x1F004, 0x1F004}, {0x1F0CF, 0x1F0CF}, {0x1F18E, 0x1F18E},
+      {0x1F191, 0x1F19A}, {0x1F200, 0x1F202}, {0x1F210, 0x1F23B},
+      {0x1F240, 0x1F248}, {0x1F250, 0x1F251}, {0x1F260, 0x1F265},
+      {0x1F300, 0x1F320}, {0x1F32D, 0x1F335}, {0x1F337, 0x1F37C},
+      {0x1F37E, 0x1F393}, {0x1F3A0, 0x1F3CA}, {0x1F3CF, 0x1F3D3},
+      {0x1F3E0, 0x1F3F0}, {0x1F3F4, 0x1F3F4}, {0x1F3F8, 0x1F43E},
+      {0x1F440, 0x1F440}, {0x1F442, 0x1F4FC}, {0x1F4FF, 0x1F53D},
+      {0x1F54B, 0x1F54E}, {0x1F550, 0x1F567}, {0x1F57A, 0x1F57A},
+      {0x1F595, 0x1F596}, {0x1F5A4, 0x1F5A4}, {0x1F5FB, 0x1F64F},
+      {0x1F680, 0x1F6C5}, {0x1F6CC, 0x1F6CC}, {0x1F6D0, 0x1F6D2},
+      {0x1F6D5, 0x1F6D7}, {0x1F6DD, 0x1F6DF}, {0x1F6EB, 0x1F6EC},
+      {0x1F6F4, 0x1F6FC}, {0x1F7E0, 0x1F7EB}, {0x1F7F0, 0x1F7F0},
+      {0x1F90C, 0x1F93A}, {0x1F93C, 0x1F945}, {0x1F947, 0x1F9FF},
+      {0x1FA70, 0x1FA7C}, {0x1FA80, 0x1FA88}, {0x1FA90, 0x1FABD},
+      {0x1FABF, 0x1FAC5}, {0x1FACE, 0x1FADB}, {0x1FAE0, 0x1FAE8},
+      {0x1FAF0, 0x1FAF8}, {0x20000, 0x2FFFD}, {0x30000, 0x3FFFD}};
+
+  int mk_wcwidth(uint32_t codepoint)
+  {
+    if (codepoint == 0)
+      return 0;
+    if (codepoint < 0x20)
+      return 0;
+    if (codepoint >= 0x7F && codepoint < 0xA0)
+      return 0;
+    if (bisearch(codepoint, kCombiningIntervals,
+                 static_cast<int>(std::size(kCombiningIntervals))))
+      return 0;
+    if (bisearch(codepoint, kDoubleWidthIntervals,
+                 static_cast<int>(std::size(kDoubleWidthIntervals))))
+      return 2;
+    return 1;
+  }
+
+
+  int codepoint_display_width(uint32_t codepoint)
+  {
+    if (codepoint == '\n' || codepoint == '\r')
+      return 0;
+    int width = mk_wcwidth(codepoint);
+    if (width < 0)
+      return 0;
+    return width;
+  }
+
+  int display_width(std::string_view text)
+  {
+    int width = 0;
+    std::size_t index = 0;
+    while (index < text.size())
+    {
+      uint32_t cp = next_codepoint(text, index);
+      width += codepoint_display_width(cp);
+    }
+    return width;
+  }
+
   int max_line_length(std::string_view text)
   {
     int maxLen = 0;
     int current = 0;
-    for (char ch : text)
+    std::size_t index = 0;
+    while (index < text.size())
     {
-      if (ch == '\n')
+      uint32_t cp = next_codepoint(text, index);
+      if (cp == '\n')
       {
         maxLen = std::max(maxLen, current);
         current = 0;
       }
-      else if (ch != '\r')
+      else if (cp != '\r')
       {
-        ++current;
+        current += codepoint_display_width(cp);
       }
     }
     maxLen = std::max(maxLen, current);
     return maxLen;
+  }
+
+  constexpr std::string_view kBoxTopLeft = "\xE2\x94\x8C";
+  constexpr std::string_view kBoxTopJoin = "\xE2\x94\xAC";
+  constexpr std::string_view kBoxTopRight = "\xE2\x94\x90";
+  constexpr std::string_view kBoxBottomLeft = "\xE2\x94\x94";
+  constexpr std::string_view kBoxBottomJoin = "\xE2\x94\xB4";
+  constexpr std::string_view kBoxBottomRight = "\xE2\x94\x98";
+  constexpr std::string_view kBoxHorizontal = "\xE2\x94\x80";
+  constexpr std::string_view kBoxVertical = "\xE2\x94\x82";
+  constexpr std::string_view kBoxHeaderLeft = "\xE2\x95\x9E";
+  constexpr std::string_view kBoxHeaderJoin = "\xE2\x95\xAA";
+  constexpr std::string_view kBoxHeaderRight = "\xE2\x95\xA1";
+  constexpr std::string_view kBoxHeaderHorizontal = "\xE2\x95\x90";
+
+  bool table_debug_enabled()
+  {
+    static bool enabled = (std::getenv("CK_CHAT_DEBUG_TABLES") != nullptr);
+    return enabled;
+  }
+
+  std::ofstream &debug_log_stream()
+  {
+    static std::ofstream log;
+    static bool initialized = false;
+    if (!initialized)
+    {
+      initialized = true;
+      const char *path = std::getenv("CK_CHAT_DEBUG_LOG");
+      if (!path || !*path)
+        path = "debug.log";
+      log.open(path, std::ios::app);
+      if (!log)
+        std::cerr << "[ck-chat] failed to open debug log at '" << path << "'\n";
+    }
+    return log;
+  }
+
+  void append_text_with_style(std::string &line,
+                              std::vector<std::uint16_t> &styles,
+                              std::string_view text, std::uint16_t style)
+  {
+    for (unsigned char ch : text)
+    {
+      line.push_back(static_cast<char>(ch));
+      styles.push_back(style);
+    }
+  }
+
+  void append_char_with_style(std::string &line,
+                              std::vector<std::uint16_t> &styles, char ch,
+                              std::uint16_t style)
+  {
+    append_text_with_style(line, styles, std::string_view(&ch, 1), style);
+  }
+
+  void append_repeat_char_with_style(std::string &line,
+                                     std::vector<std::uint16_t> &styles,
+                                     char ch, std::uint16_t style, int count)
+  {
+    for (int i = 0; i < count; ++i)
+      append_char_with_style(line, styles, ch, style);
+  }
+
+  void append_repeat_text_with_style(std::string &line,
+                                     std::vector<std::uint16_t> &styles,
+                                     std::string_view text,
+                                     std::uint16_t style, int count)
+  {
+    for (int i = 0; i < count; ++i)
+      append_text_with_style(line, styles, text, style);
   }
 
   struct InlineContent
@@ -158,6 +470,7 @@ namespace
     }
 
     std::vector<bool> remove(text.size(), false);
+    std::vector<std::pair<std::size_t, std::size_t>> underlineRanges;
 
     auto check_before = [&](std::size_t pos, char marker, std::size_t count)
     {
@@ -279,6 +592,37 @@ namespace
       }
     }
 
+    // Detect simple <u>...</u> ranges for underline styling and remove tags.
+    std::size_t searchPos = 0;
+    while (searchPos < text.size())
+    {
+      std::size_t startLower = text.find("<u>", searchPos);
+      std::size_t startUpper = text.find("<U>", searchPos);
+      std::size_t start = std::min(startLower, startUpper);
+      if (startLower == std::string::npos)
+        start = startUpper;
+      if (startUpper == std::string::npos)
+        start = startLower;
+      if (start == std::string::npos)
+        break;
+      std::size_t endLower = text.find("</u>", start + 3);
+      std::size_t endUpper = text.find("</U>", start + 3);
+      std::size_t end = std::min(endLower, endUpper);
+      if (endLower == std::string::npos)
+        end = endUpper;
+      if (endUpper == std::string::npos)
+        end = endLower;
+      if (end == std::string::npos)
+        break;
+
+      for (std::size_t i = start; i < start + 3 && i < text.size(); ++i)
+        remove[i] = true;
+      for (std::size_t i = end; i < end + 4 && i < text.size(); ++i)
+        remove[i] = true;
+      underlineRanges.emplace_back(start + 3, end);
+      searchPos = end + 4;
+    }
+
     std::vector<int> indexMap(text.size(), -1);
     result.text.reserve(text.size());
     for (std::size_t i = 0; i < text.size(); ++i)
@@ -321,7 +665,76 @@ namespace
         result.spans.push_back(std::move(adjusted));
     }
 
+    if (!underlineRanges.empty())
+    {
+      for (const auto &range : underlineRanges)
+      {
+        std::size_t startIdx = range.first;
+        std::size_t endIdx = range.second;
+        int mappedStart = -1;
+        for (std::size_t i = startIdx; i < endIdx; ++i)
+        {
+          if (i < indexMap.size() && indexMap[i] >= 0)
+          {
+            mappedStart = indexMap[i];
+            break;
+          }
+        }
+        if (mappedStart < 0)
+          continue;
+        int mappedEnd = -1;
+        for (std::size_t i = endIdx; i-- > startIdx;)
+        {
+          if (i < indexMap.size() && indexMap[i] >= 0)
+          {
+            mappedEnd = indexMap[i] + 1;
+            break;
+          }
+        }
+        if (mappedEnd <= mappedStart)
+          continue;
+        ck::edit::MarkdownSpan underlineSpan;
+        underlineSpan.kind = ck::edit::MarkdownSpanKind::InlineHtml;
+        underlineSpan.start = static_cast<std::size_t>(mappedStart);
+        underlineSpan.end = static_cast<std::size_t>(mappedEnd);
+        underlineSpan.attribute = "underline";
+        result.spans.push_back(std::move(underlineSpan));
+      }
+    }
+
     return result;
+  }
+
+  int compute_markdown_display_width(const std::string &text)
+  {
+    if (text.empty())
+      return 0;
+    ck::edit::MarkdownAnalyzer analyzer;
+    ck::edit::MarkdownParserState state{};
+    int maxWidth = 0;
+    std::size_t offset = 0;
+    while (offset <= text.size())
+    {
+      std::size_t newline = text.find('\n', offset);
+      std::string line;
+      if (newline == std::string::npos)
+      {
+        line = text.substr(offset);
+        offset = text.size() + 1;
+      }
+      else
+      {
+        line = text.substr(offset, newline - offset);
+        offset = newline + 1;
+      }
+      auto info = analyzer.analyzeLine(line, state);
+      InlineContent processed =
+          sanitize_inline_markup(info.inlineText, info.spans);
+      int width = display_width(processed.text);
+      if (width > maxWidth)
+        maxWidth = width;
+    }
+    return maxWidth;
   }
 
   bool is_final_channel(std::string_view channel)
@@ -420,55 +833,7 @@ namespace
         output.push_back(ch);
       };
 
-      switch (codepoint)
-      {
-      case 0x2018:
-      case 0x2019:
-      case 0x201A:
-      case 0x2032:
-        append_replacement('\'');
-        break;
-      case 0x201C:
-      case 0x201D:
-      case 0x201E:
-      case 0x2033:
-        append_replacement('"');
-        break;
-      case 0x2013:
-      case 0x2014:
-      case 0x2212:
-        append_replacement('-');
-        break;
-      case 0x2026:
-        output.append("...");
-        break;
-      case 0x2122:
-        output.append("(TM)");
-        break;
-      case 0x00A9:
-        output.append("(C)");
-        break;
-      case 0x00AE:
-        output.append("(R)");
-        break;
-      case 0x00A0:
-      case 0x2007:
-      case 0x2009:
-      case 0x200A:
-      case 0x200B:
-        output.push_back(' ');
-        break;
-      default:
-        if (codepoint <= 0x7E)
-          append_replacement(static_cast<char>(codepoint));
-        else if (codepoint == '\n')
-          output.push_back('\n');
-        else if (codepoint == '\t')
-          output.push_back('\t');
-        else
-          output.append(input, startIndex, extra + 1);
-        break;
-      }
+        output.append(input, startIndex, extra + 1);
     }
 
     return output;
@@ -578,85 +943,120 @@ namespace
                                          const std::vector<std::uint16_t> &styles,
                                          int width, bool hardWrap)
   {
+    struct Glyph
+    {
+      std::size_t start = 0;
+      std::size_t end = 0;
+      uint32_t codepoint = 0;
+      int displayWidth = 0;
+    };
+
+    std::vector<Glyph> glyphs;
+    glyphs.reserve(text.size());
+    std::size_t index = 0;
+    while (index < text.size())
+    {
+      std::size_t start = index;
+      uint32_t cp = next_codepoint(text, index);
+      if (cp == '\r')
+        continue;
+      Glyph glyph;
+      glyph.start = start;
+      glyph.end = index;
+      glyph.codepoint = cp;
+      glyph.displayWidth = codepoint_display_width(cp);
+      glyphs.push_back(glyph);
+    }
+
     std::vector<StyledLine> result;
     if (width <= 0)
       width = 1;
 
-    std::size_t pos = 0;
-    while (pos < text.size())
+    std::size_t glyphIndex = 0;
+    while (glyphIndex < glyphs.size())
     {
-      if (text[pos] == '\n')
+      if (glyphs[glyphIndex].codepoint == '\n')
       {
-        // Only add a blank line if we don't already have one at the end
         if (result.empty() || !result.back().text.empty())
-        {
-          StyledLine blank;
-          blank.text = std::string();
-          result.push_back(std::move(blank));
-        }
-        ++pos;
+          result.push_back(StyledLine{});
+        ++glyphIndex;
         continue;
       }
 
-      std::size_t lineStart = pos;
-      std::size_t remaining = text.size() - pos;
-      std::size_t take = 0;
+      std::size_t lineStart = glyphIndex;
+      std::size_t wrapGlyph = lineStart;
+      int currentWidth = 0;
+      std::size_t lastBreakGlyph = std::numeric_limits<std::size_t>::max();
+      int widthAtLastBreak = 0;
+
+      while (wrapGlyph < glyphs.size())
+      {
+        const Glyph &glyph = glyphs[wrapGlyph];
+        if (glyph.codepoint == '\n')
+          break;
+
+        bool isBreakableSpace =
+            (glyph.codepoint == ' ' || glyph.codepoint == '\t');
+        if (!hardWrap && isBreakableSpace)
+        {
+          lastBreakGlyph = wrapGlyph + 1;
+          widthAtLastBreak = currentWidth + glyph.displayWidth;
+        }
+
+        if (width > 0 && currentWidth + glyph.displayWidth > width)
+        {
+          if (!hardWrap && lastBreakGlyph != std::numeric_limits<std::size_t>::max() &&
+              widthAtLastBreak <= width)
+          {
+            wrapGlyph = lastBreakGlyph;
+          }
+          else if (currentWidth == 0)
+          {
+            wrapGlyph = wrapGlyph + 1;
+          }
+          break;
+        }
+
+        currentWidth += glyph.displayWidth;
+        ++wrapGlyph;
+      }
+
+      if (wrapGlyph == lineStart)
+        wrapGlyph = std::min(lineStart + 1, glyphs.size());
+
+      std::size_t startByte = glyphs[lineStart].start;
+      std::size_t endByte =
+          (wrapGlyph < glyphs.size()) ? glyphs[wrapGlyph].start : text.size();
+
+      StyledLine line;
+      line.text.assign(text.begin() + startByte, text.begin() + endByte);
+      line.styles.reserve(endByte - startByte);
+      for (std::size_t i = startByte; i < endByte; ++i)
+      {
+        if (i < styles.size())
+          line.styles.push_back(styles[i]);
+        else
+          line.styles.push_back(0);
+      }
+      result.push_back(std::move(line));
+
+      glyphIndex = wrapGlyph;
+      if (glyphIndex < glyphs.size() &&
+          glyphs[glyphIndex].codepoint == '\n')
+        ++glyphIndex;
 
       if (!hardWrap)
       {
-        if (remaining <= static_cast<std::size_t>(width))
-        {
-          take = remaining;
-        }
-        else
-        {
-          std::size_t limit = pos + static_cast<std::size_t>(width);
-          std::size_t wrapPos = limit;
-          bool foundSpace = false;
-          for (std::size_t i = pos; i < limit; ++i)
-          {
-            char ch = text[i];
-            if (std::isspace(static_cast<unsigned char>(ch)))
-            {
-              wrapPos = i;
-              foundSpace = true;
-            }
-          }
-          if (foundSpace && wrapPos > pos)
-          {
-            take = wrapPos - pos;
-          }
-          else
-          {
-            take = static_cast<std::size_t>(width);
-          }
-        }
+        while (glyphIndex < glyphs.size() &&
+               glyphs[glyphIndex].codepoint != '\n' &&
+               (glyphs[glyphIndex].codepoint == ' ' ||
+                glyphs[glyphIndex].codepoint == '\t'))
+          ++glyphIndex;
       }
-      else
-      {
-        take = std::min<std::size_t>(remaining, static_cast<std::size_t>(width));
-      }
-
-      std::size_t lineEnd = pos + take;
-      StyledLine line;
-      line.text.assign(text.begin() + lineStart, text.begin() + lineEnd);
-      line.styles.reserve(line.text.size());
-      for (std::size_t i = lineStart; i < lineEnd; ++i)
-        line.styles.push_back(styles[i]);
-      result.push_back(std::move(line));
-
-      pos = lineEnd;
-      while (pos < text.size() &&
-             std::isspace(static_cast<unsigned char>(text[pos])) &&
-             text[pos] != '\n')
-        ++pos;
     }
 
     if (result.empty())
-    {
-      StyledLine blank;
-      result.push_back(std::move(blank));
-    }
+      result.push_back(StyledLine{});
 
     return result;
   }
@@ -922,9 +1322,7 @@ namespace
       std::string text;
       text.reserve(width_);
       for (int i = 0; i < width_; ++i)
-      {
-        text += "─"; // Use proper horizontal line character
-      }
+        text.append(kBoxHorizontal);
       std::vector<std::uint16_t> styles(text.size(), kStyleHorizontalRule);
       appendWrapped(text, styles, true);
     }
@@ -956,7 +1354,10 @@ namespace
           mask |= kStyleLink;
           break;
         case ck::edit::MarkdownSpanKind::InlineHtml:
-          mask |= kStyleLink;
+          if (span.attribute == "underline")
+            mask |= kStyleUnderline;
+          else
+            mask |= kStyleLink;
           break;
         default:
           break;
@@ -991,6 +1392,17 @@ namespace
         }
         tableBuffer_.clear();
         return;
+      }
+
+      // Remove any leading rows that are not actual table data (e.g., markdown
+      // prose that was misclassified while streaming).
+      while (!tableBuffer_.empty())
+      {
+        const auto &front = tableBuffer_.front();
+        if (front.info.kind == ck::edit::MarkdownLineKind::TableRow ||
+            front.info.kind == ck::edit::MarkdownLineKind::TableSeparator)
+          break;
+        tableBuffer_.erase(tableBuffer_.begin());
       }
 
       std::size_t rawColumnCount = 0;
@@ -1061,9 +1473,35 @@ namespace
             continue;
           const auto &cell = row.info.tableCells[sourceIndex];
           std::string normalized = normalize_html_line_breaks(cell.text);
-          colWidths[idx] =
-              std::max(colWidths[idx], max_line_length(normalized));
+          int measuredWidth = compute_markdown_display_width(normalized);
+          colWidths[idx] = std::max(colWidths[idx], measuredWidth);
         }
+      }
+
+      if (table_debug_enabled())
+      {
+        auto &log = debug_log_stream();
+        std::ostream *out = log ? static_cast<std::ostream *>(&log)
+                                : static_cast<std::ostream *>(&std::cerr);
+        *out << "[ck-chat][table] columns=" << columnCount
+             << " raw_width=" << width_ << "\n";
+        for (std::size_t idx = 0; idx < columnCount; ++idx)
+          *out << "  col[" << idx << "] width=" << colWidths[idx] << "\n";
+        for (const auto &row : tableBuffer_)
+        {
+          *out << "  row kind=" << static_cast<int>(row.info.kind)
+               << " cells=" << row.info.tableCells.size() << "\n";
+          for (std::size_t idx = 0; idx < row.info.tableCells.size(); ++idx)
+          {
+            const auto &cell = row.info.tableCells[idx];
+            std::string normalized = normalize_html_line_breaks(cell.text);
+            *out << "    cell[" << idx << "] text='" << normalized
+                 << "' display_width="
+                 << compute_markdown_display_width(normalized) << "\n";
+          }
+        }
+        if (log)
+          log.flush();
       }
 
       int borderWidth = static_cast<int>(columnCount) + 1;
@@ -1084,21 +1522,29 @@ namespace
         }
       }
 
-      auto makeBorder = [&](char corner, char lineChar)
+      auto makeBorder = [&](std::string_view left, std::string_view join,
+                            std::string_view right,
+                            std::string_view horizontal)
       {
         std::string border;
         border.reserve(static_cast<std::size_t>(totalWidth));
-        border.push_back(corner);
+        std::vector<std::uint16_t> styles;
+        styles.reserve(border.capacity());
+
+        append_text_with_style(border, styles, left, kStyleTableBorder);
         for (std::size_t c = 0; c < columnCount; ++c)
         {
-          border.append(colWidths[c] + 2, lineChar);
-          border.push_back(corner);
+          append_repeat_text_with_style(border, styles, horizontal,
+                                        kStyleTableBorder, colWidths[c] + 2);
+          if (c + 1 < columnCount)
+            append_text_with_style(border, styles, join, kStyleTableBorder);
+          else
+            append_text_with_style(border, styles, right, kStyleTableBorder);
         }
-        std::vector<std::uint16_t> styles(border.size(), kStyleTableBorder);
         appendWrapped(border, styles, true);
       };
 
-      makeBorder('+', '-');
+      makeBorder(kBoxTopLeft, kBoxTopJoin, kBoxTopRight, kBoxHorizontal);
 
       bool headerRendered = false;
       for (const auto &row : tableBuffer_)
@@ -1107,7 +1553,8 @@ namespace
             row.info.kind == ck::edit::MarkdownLineKind::TableSeparator;
         if (isSeparator)
         {
-          makeBorder('+', '=');
+          makeBorder(kBoxHeaderLeft, kBoxHeaderJoin, kBoxHeaderRight,
+                     kBoxHeaderHorizontal);
           headerRendered = true;
           continue;
         }
@@ -1148,15 +1595,17 @@ namespace
                                           colWidths[c], false);
             for (auto &wrappedLine : wrapped)
             {
-              // Pad the line to column width
-              if (static_cast<int>(wrappedLine.text.size()) < colWidths[c])
+              int lineDisplayWidth = display_width(wrappedLine.text);
+              if (lineDisplayWidth < colWidths[c])
               {
-                wrappedLine.text.append(
-                    static_cast<std::size_t>(
-                        colWidths[c] - static_cast<int>(wrappedLine.text.size())),
-                    ' ');
+                int diff = colWidths[c] - lineDisplayWidth;
+                std::size_t previousSize = wrappedLine.text.size();
+                wrappedLine.text.append(static_cast<std::size_t>(diff), ' ');
                 wrappedLine.styles.resize(wrappedLine.text.size(),
                                           kStyleTableCell);
+                for (std::size_t s = previousSize; s < wrappedLine.styles.size();
+                     ++s)
+                  wrappedLine.styles[s] = kStyleTableCell;
               }
               wrappedLines.push_back(std::move(wrappedLine));
             }
@@ -1181,11 +1630,10 @@ namespace
         {
           std::string line;
           std::vector<std::uint16_t> styles;
-          line.reserve(static_cast<std::size_t>(totalWidth));
-          styles.reserve(static_cast<std::size_t>(totalWidth));
+          line.reserve(static_cast<std::size_t>(totalWidth) * 3);
+          styles.reserve(static_cast<std::size_t>(totalWidth) * 3);
 
-          line.push_back('|');
-          styles.push_back(kStyleTableBorder);
+          append_text_with_style(line, styles, kBoxVertical, kStyleTableBorder);
 
           for (std::size_t c = 0; c < columnCount; ++c)
           {
@@ -1225,8 +1673,8 @@ namespace
             line.push_back(' ');
             styles.push_back(headerStyle ? kStyleTableHeader : kStyleTableCell);
 
-            line.push_back('|');
-            styles.push_back(kStyleTableBorder);
+            append_text_with_style(line, styles, kBoxVertical,
+                                   kStyleTableBorder);
           }
 
           appendWrapped(line, styles, true);
@@ -1236,7 +1684,8 @@ namespace
           headerRendered = true;
       }
 
-      makeBorder('+', '-');
+      makeBorder(kBoxBottomLeft, kBoxBottomJoin, kBoxBottomRight,
+                 kBoxHorizontal);
       tableBuffer_.clear();
     }
   };
@@ -1295,15 +1744,21 @@ namespace
     if (mask & kStyleStrikethrough)
       chooseFg(0x08);
     if (mask & kStyleItalic)
-      chooseFg(0x0C);
+      setStyle(
+          attr,
+          static_cast<std::uint16_t>(getStyle(attr) |
+                                     static_cast<std::uint16_t>(slItalic)));
+    if (mask & kStyleUnderline)
+      setStyle(
+          attr,
+          static_cast<std::uint16_t>(getStyle(attr) |
+                                     static_cast<std::uint16_t>(slUnderline)));
     if (mask & kStyleBold)
     {
       setStyle(
           attr,
           static_cast<std::uint16_t>(getStyle(attr) |
                                      static_cast<std::uint16_t>(slBold)));
-      if (fg == -1)
-        fg = 0x0F;
     }
     if (mask & kStylePrefix)
       fg = 0x0C;
@@ -1322,6 +1777,45 @@ namespace
   }
 
 } // namespace
+
+std::vector<ChatTranscriptView::DisplayRow::GlyphInfo>
+ChatTranscriptView::buildGlyphs(const std::string &text)
+{
+  std::vector<DisplayRow::GlyphInfo> glyphs;
+  glyphs.reserve(text.size());
+  std::size_t index = 0;
+  while (index < text.size())
+  {
+    std::size_t start = index;
+    uint32_t cp = next_codepoint(text, index);
+    DisplayRow::GlyphInfo glyph;
+    glyph.start = start;
+    glyph.end = index;
+    glyph.width = codepoint_display_width(cp);
+    glyphs.push_back(glyph);
+  }
+  return glyphs;
+}
+
+void ChatTranscriptView::finalizeDisplayRow(DisplayRow &row)
+{
+  row.glyphs = buildGlyphs(row.text);
+  row.displayWidth = 0;
+  for (const auto &glyph : row.glyphs)
+    row.displayWidth += glyph.width;
+}
+
+std::uint16_t ChatTranscriptView::glyphStyleMask(
+    const DisplayRow &row, const DisplayRow::GlyphInfo &glyph)
+{
+  if (row.styleMask.empty())
+    return 0;
+  std::uint16_t mask = 0;
+  std::size_t end = std::min<std::size_t>(glyph.end, row.styleMask.size());
+  for (std::size_t i = glyph.start; i < end; ++i)
+    mask |= row.styleMask[i];
+  return mask;
+}
 
 ChatTranscriptView::ChatTranscriptView(const TRect &bounds, TScrollBar *hScroll,
                                        TScrollBar *vScroll)
@@ -1486,46 +1980,45 @@ void ChatTranscriptView::draw()
         else
           setFore(attr, TColorDesired(TColorBIOS(0x01)));
       }
-      if (!row.text.empty())
+      if (!row.glyphs.empty())
       {
-        if (row.styleMask.empty())
+        int columnPos = 0;
+        std::size_t glyphIndex = 0;
+        while (glyphIndex < row.glyphs.size() && columnPos < viewWidth)
         {
-          int copyLen =
-              std::min(static_cast<int>(row.text.size()), viewWidth);
-          if (copyLen > 0)
+          const auto &startGlyph = row.glyphs[glyphIndex];
+          std::uint16_t mask = glyphStyleMask(row, startGlyph);
+          std::size_t runStartGlyph = glyphIndex;
+          std::size_t runEndGlyph = glyphIndex;
+          int runColumns = 0;
+
+          while (runEndGlyph < row.glyphs.size())
           {
-            TStringView fragment(row.text.c_str(), copyLen);
-            buffer.moveStr(0, fragment, attr);
-          }
-        }
-        else
-        {
-          std::size_t pos = 0;
-          while (pos < row.text.size() &&
-                 pos < static_cast<std::size_t>(viewWidth))
-          {
-            std::size_t end = pos + 1;
-            std::uint16_t mask = row.styleMask[pos];
-            while (end < row.text.size() && row.styleMask[end] == mask)
-              ++end;
-            TColorAttr runAttr =
-                (mask == 0) ? attr : applyStyleToAttr(attr, mask);
-            int start = static_cast<int>(pos);
-            if (start >= viewWidth)
+            const auto &glyph = row.glyphs[runEndGlyph];
+            std::uint16_t glyphMask = glyphStyleMask(row, glyph);
+            if (runEndGlyph > runStartGlyph && glyphMask != mask)
               break;
-            int available = viewWidth - start;
-            int runLength = static_cast<int>(
-                std::min<std::size_t>(end - pos,
-                                      static_cast<std::size_t>(available)));
-            if (runLength <= 0)
-            {
-              pos = end;
-              continue;
-            }
-            TStringView fragment(row.text.c_str() + pos, runLength);
-            buffer.moveStr(start, fragment, runAttr);
-            pos = end;
+            if (columnPos + runColumns + glyph.width > viewWidth)
+              break;
+            runColumns += glyph.width;
+            ++runEndGlyph;
           }
+
+          if (runColumns <= 0)
+            break;
+
+          std::size_t runStartByte = row.glyphs[runStartGlyph].start;
+          std::size_t runEndByte =
+              row.glyphs[runEndGlyph - 1].end;
+          std::string fragment =
+              row.text.substr(runStartByte, runEndByte - runStartByte);
+          TColorAttr runAttr =
+              (mask == 0) ? attr : applyStyleToAttr(attr, mask);
+          buffer.moveStr(columnPos, TStringView(fragment), runAttr,
+                         static_cast<ushort>(runColumns));
+
+          columnPos += runColumns;
+          glyphIndex = runEndGlyph;
         }
       }
     }
@@ -1817,6 +2310,7 @@ void ChatTranscriptView::rebuildLayout()
       spacer.messageIndex = i;
       spacer.isFirstLine = false;
       rows.push_back(std::move(spacer));
+      finalizeDisplayRow(rows.back());
     }
   }
 
@@ -1903,6 +2397,7 @@ void ChatTranscriptView::appendVisibleSegment(
     }
 
     rows.push_back(std::move(row));
+    finalizeDisplayRow(rows.back());
     messageFirstRow = false;
   }
 }
@@ -1954,6 +2449,7 @@ void ChatTranscriptView::updateHiddenPlaceholder(
   row.styleMask.assign(row.text.size(), 0);
   if (!prefix.empty())
     applyStyleRange(row.styleMask, 0, prefix.size(), kStylePrefix);
+  finalizeDisplayRow(row);
 }
 
 void ChatTranscriptView::openHiddenRow(std::size_t rowIndex)

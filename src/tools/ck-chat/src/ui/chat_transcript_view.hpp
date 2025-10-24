@@ -58,6 +58,14 @@ private:
         std::string channelLabel;
         std::string hiddenContent;
         std::vector<std::uint16_t> styleMask;
+        struct GlyphInfo
+        {
+            std::size_t start = 0;
+            std::size_t end = 0;
+            int width = 0;
+        };
+        std::vector<GlyphInfo> glyphs;
+        int displayWidth = 0;
     };
 
     std::vector<Message> messages;
@@ -96,4 +104,10 @@ private:
                                  bool pending,
                                  bool thinking);
     void openHiddenRow(std::size_t rowIndex);
+
+    static std::vector<DisplayRow::GlyphInfo> buildGlyphs(
+        const std::string &text);
+    static void finalizeDisplayRow(DisplayRow &row);
+    static std::uint16_t glyphStyleMask(
+        const DisplayRow &row, const DisplayRow::GlyphInfo &glyph);
 };
