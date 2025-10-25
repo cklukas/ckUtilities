@@ -1,12 +1,4 @@
-set(CURSES_NEED_WIDE TRUE)
-find_package(Curses REQUIRED)
-
-if(CURSES_INCLUDE_PATH MATCHES "/ncursesw$")
-  get_filename_component(_curses_parent "${CURSES_INCLUDE_PATH}" DIRECTORY)
-  set(CURSES_INCLUDE_PATH "${_curses_parent}" CACHE PATH "" FORCE)
-  set(CURSES_INCLUDE_DIR "${_curses_parent}" CACHE PATH "" FORCE)
-  set(CURSES_INCLUDE_DIRS "${_curses_parent}" CACHE PATH "" FORCE)
-endif()
+include(FindCursesWithFallback)
 
 include(FetchTurboVision)
 cktools_ensure_tvision()

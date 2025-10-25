@@ -1,20 +1,4 @@
-set(CURSES_NEED_WIDE TRUE)
-
-if(APPLE)
-    find_path(CURSES_INCLUDE_PATH
-        NAMES ncurses.h
-        PATHS ${CMAKE_OSX_SYSROOT}/usr/include
-        NO_DEFAULT_PATH)
-endif()
-
-find_package(Curses REQUIRED)
-
-if(CURSES_INCLUDE_PATH MATCHES "/ncursesw$")
-  get_filename_component(_curses_parent "${CURSES_INCLUDE_PATH}" DIRECTORY)
-  set(CURSES_INCLUDE_PATH "${_curses_parent}" CACHE PATH "" FORCE)
-  set(CURSES_INCLUDE_DIR "${_curses_parent}" CACHE PATH "" FORCE)
-  set(CURSES_INCLUDE_DIRS "${_curses_parent}" CACHE PATH "" FORCE)
-endif()
+include(FindCursesWithFallback)
 
 include(FetchTurboVision)
 cktools_ensure_tvision()
