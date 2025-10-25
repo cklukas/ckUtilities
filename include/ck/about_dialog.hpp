@@ -77,6 +77,8 @@
 #include "ck/app_info.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -168,8 +170,10 @@ namespace ck::ui
                             TStringView message,
                             std::vector<std::string> lines,
                             size_t highlightIndex,
-                            size_t highlightPrefixLength) noexcept
-                : TStaticText(bounds, message), m_lines(std::move(lines)), m_highlightIndex(highlightIndex), m_highlightPrefixLength(highlightPrefixLength)
+                            size_t highlightPrefixLength,
+                            size_t secondBoldIndex) noexcept
+                : TStaticText(bounds, message), m_lines(std::move(lines)), m_highlightIndex(highlightIndex), m_highlightPrefixLength(highlightPrefixLength),
+                  m_secondBoldIndex(secondBoldIndex)
             {
                 growMode |= gfFixed;
             }
@@ -180,6 +184,10 @@ namespace ck::ui
                 TColorAttr highlight = normal;
                 const bool useColorPalette = (TProgram::appPalette == ::apColor);
                 ::setFore(highlight, useColorPalette ? TColorBIOS(0x1) : TColorBIOS(0x0));
+                TColorAttr normalBold = normal;
+                TColorAttr highlightBold = highlight;
+                setStyle(normalBold, static_cast<std::uint16_t>(getStyle(normalBold) | sfBold));
+                setStyle(highlightBold, static_cast<std::uint16_t>(getStyle(highlightBold) | sfBold));
                 TDrawBuffer buffer;
                 for (int y = 0; y < size.y; ++y)
                 {
@@ -189,23 +197,26 @@ namespace ck::ui
                         const bool isHighlighted = (m_highlightIndex < m_lines.size()) &&
                                                    (static_cast<size_t>(y) == m_highlightIndex) &&
                                                    !m_lines[y].empty();
+                        const bool isBoldLine = isHighlighted || (m_secondBoldIndex < m_lines.size() && static_cast<size_t>(y) == m_secondBoldIndex);
+                        const TColorAttr &lineNormalAttr = isBoldLine ? normalBold : normal;
+                        const TColorAttr &lineHighlightAttr = isBoldLine ? highlightBold : highlight;
                         if (isHighlighted && m_highlightPrefixLength > 0)
                         {
                             const std::string &line = m_lines[y];
                             const size_t prefixLength = std::min(m_highlightPrefixLength, line.size());
                             const TStringView prefix(line.data(), prefixLength);
-                            buffer.moveStr(0, prefix, highlight);
+                            buffer.moveStr(0, prefix, lineHighlightAttr);
 
                             const TStringView suffix(line.data() + prefixLength, line.size() - prefixLength);
                             if (!suffix.empty())
                             {
                                 const int prefixWidth = strwidth(prefix);
-                                buffer.moveStr(prefixWidth, suffix, normal);
+                                buffer.moveStr(prefixWidth, suffix, lineNormalAttr);
                             }
                         }
                         else
                         {
-                            const TColorAttr attr = isHighlighted ? highlight : normal;
+                            const TColorAttr attr = isHighlighted ? lineHighlightAttr : lineNormalAttr;
                             buffer.moveStr(0, TStringView(m_lines[y]), attr);
                         }
                     }
@@ -217,6 +228,7 @@ namespace ck::ui
             std::vector<std::string> m_lines;
             size_t m_highlightIndex;
             size_t m_highlightPrefixLength;
+            size_t m_secondBoldIndex;
         };
 
         inline std::vector<std::string> splitLinesPreservingEmpties(const std::string &text)
@@ -269,6 +281,18 @@ namespace ck::ui
             if (line.compare(0, info.applicationName.size(), info.applicationName) == 0)
                 highlightPrefixLength = info.applicationName.size();
         }
+        size_t secondBoldIndex = std::numeric_limits<size_t>::max();
+        if (!info.toolName.empty())
+        {
+            for (size_t i = highlightIndex + 1; i < lines.size(); ++i)
+            {
+                if (!lines[i].empty())
+                {
+                    secondBoldIndex = i;
+                    break;
+                }
+            }
+        }
         const int maxLineWidth = detail::computeMaxLineWidth(lines);
 
         constexpr int kMinWidth = 40;
@@ -288,7 +312,8 @@ namespace ck::ui
                                                    message,
                                                    std::move(lines),
                                                    highlightIndex,
-                                                   highlightPrefixLength));
+                                                   highlightPrefixLength,
+                                                   secondBoldIndex));
 
         TButton *okButton = new TButton(TRect(0, 0, 10, 2), MsgBoxText::okText, cmOK, bfDefault);
         dialog->insert(okButton);
