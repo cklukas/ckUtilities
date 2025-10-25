@@ -8,6 +8,11 @@
 #define CK_HAS_ICLOUD_SYNC_PAUSE 0
 #endif
 
+#if CK_HAS_ICLOUD_SYNC_PAUSE && !defined(NSURLUbiquitousItemIsSyncPausedKey)
+static NSURLResourceKey const CKNSURLUbiquitousItemIsSyncPausedKey = @"NSURLUbiquitousItemIsSyncPausedKey";
+#define NSURLUbiquitousItemIsSyncPausedKey CKNSURLUbiquitousItemIsSyncPausedKey
+#endif
+
 #include "cloud_actions.hpp"
 
 namespace ck::du::cloud
