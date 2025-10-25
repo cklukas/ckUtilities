@@ -25,11 +25,16 @@ jobs:
             ninja-build \
             libncurses-dev \
             libncursesw6 \
-            libncursesw6-dev \
             libtinfo-dev \
             libgpm-dev \
             pkg-config \
             libcurl4-openssl-dev
+          multiarch=$(gcc -print-multiarch)
+          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
+          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
+          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
+          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -69,12 +74,17 @@ jobs:
             ninja-build \
             libncurses-dev \
             libncursesw6 \
-            libncursesw6-dev \
             libtinfo-dev \
             libgpm-dev \
             pkg-config \
             libcurl4-openssl-dev \
             rpm
+          multiarch=$(gcc -print-multiarch)
+          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
+          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
+          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
+          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Configure
         run: cmake --preset pkg

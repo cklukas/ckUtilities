@@ -4923,9 +4923,11 @@ int main(int argc, char **argv)
     app.run();
     return 0;
 }
+#if defined(__APPLE__)
 std::optional<CloudOperationDefinition> ManageCloudDialog::selectedDefinition() const
 {
     if (chosenIndex < 0 || static_cast<std::size_t>(chosenIndex) >= actions.size())
         return std::nullopt;
     return actions[static_cast<std::size_t>(chosenIndex)];
 }
+#endif // defined(__APPLE__)
