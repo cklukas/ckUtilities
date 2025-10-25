@@ -12,10 +12,10 @@ BREW_PACKAGES=(ninja ncurses curl)
 if command -v brew >/dev/null 2>&1; then
   echo "[ci-mac] Updating Homebrew formulae (override with CI_MAC_SKIP_BREW_UPDATE=1)..."
   if [[ "${CI_MAC_SKIP_BREW_UPDATE:-0}" != "1" ]]; then
-    brew update
+    brew update --quiet
   fi
   echo "[ci-mac] Installing required packages: ${BREW_PACKAGES[*]}"
-  brew install "${BREW_PACKAGES[@]}" >/dev/null || true
+  brew install --quiet "${BREW_PACKAGES[@]}" >/dev/null || true
 else
   echo "[ci-mac] Homebrew not found. Please install Homebrew before running this script." >&2
   exit 1
