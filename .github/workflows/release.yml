@@ -27,7 +27,8 @@ jobs:
             libncurses-dev \
             libncursesw6 \
             libtinfo-dev \
-            libgpm-dev
+            libgpm-dev \
+            pkg-config
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -67,6 +68,7 @@ jobs:
             libncursesw6 \
             libtinfo-dev \
             libgpm-dev \
+            pkg-config \
             rpm
 
       - name: Configure

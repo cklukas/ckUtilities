@@ -27,6 +27,7 @@ jobs:
             libncursesw6 \
             libtinfo-dev \
             libgpm-dev \
+            pkg-config \
             libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
@@ -69,6 +70,7 @@ jobs:
             libncursesw6 \
             libtinfo-dev \
             libgpm-dev \
+            pkg-config \
             libcurl4-openssl-dev \
             rpm
 

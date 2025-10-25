@@ -12,9 +12,12 @@ target_include_directories(ckai_core
     $<INSTALL_INTERFACE:include>
 )
 
-# Find required packages
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(CURL REQUIRED libcurl)
+# Find libcurl (prefer CMake package, fallback to pkg-config)
+find_package(CURL QUIET)
+if(NOT CURL_FOUND)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(CURL REQUIRED libcurl)
+endif()
 
 # Find nlohmann/json
 find_package(nlohmann_json QUIET)
