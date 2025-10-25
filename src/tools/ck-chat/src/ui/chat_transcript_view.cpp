@@ -47,10 +47,18 @@ namespace
   constexpr std::uint16_t kStyleHorizontalRule = 1u << 13;
   constexpr std::uint16_t kStyleUnderline = 1u << 14;
 
+  struct LinkRange
+  {
+    std::size_t start = 0;
+    std::size_t end = 0;
+    std::string url;
+  };
+
   struct StyledLine
   {
     std::string text;
     std::vector<std::uint16_t> styles;
+    std::vector<LinkRange> links;
   };
 
   struct ChannelSegment
@@ -468,6 +476,7 @@ namespace
   {
     std::string text;
     std::vector<ck::edit::MarkdownSpan> spans;
+    std::vector<LinkRange> links;
   };
 
   InlineContent sanitize_inline_markup(const std::string &text,
@@ -659,22 +668,32 @@ namespace
         continue;
       std::size_t startIdx = span.start;
       std::size_t endIdx = span.end;
-      if (startIdx >= text.size())
-        continue;
-      int mappedStart = indexMap[startIdx];
+      int mappedStart = -1;
+      for (std::size_t i = startIdx; i < endIdx; ++i)
+      {
+        if (i < indexMap.size() && indexMap[i] >= 0)
+        {
+          mappedStart = indexMap[i];
+          break;
+        }
+      }
       if (mappedStart < 0)
         continue;
-      std::size_t lastOriginal = endIdx > 0 ? endIdx - 1 : startIdx;
-      if (lastOriginal >= text.size())
-        continue;
-      int mappedEnd = indexMap[lastOriginal];
-      if (mappedEnd < 0)
+      int mappedEnd = -1;
+      for (std::size_t i = endIdx; i-- > startIdx;)
+      {
+        if (i < indexMap.size() && indexMap[i] >= 0)
+        {
+          mappedEnd = indexMap[i] + 1;
+          break;
+        }
+      }
+      if (mappedEnd <= mappedStart)
         continue;
       ck::edit::MarkdownSpan adjusted = span;
       adjusted.start = static_cast<std::size_t>(mappedStart);
-      adjusted.end = static_cast<std::size_t>(mappedEnd + 1);
-      if (adjusted.start < adjusted.end)
-        result.spans.push_back(std::move(adjusted));
+      adjusted.end = static_cast<std::size_t>(mappedEnd);
+      result.spans.push_back(std::move(adjusted));
     }
 
     if (!underlineRanges.empty())
@@ -715,6 +734,219 @@ namespace
     }
 
     return result;
+  }
+
+  std::vector<LinkRange> collapse_markdown_links(InlineContent &content)
+  {
+    std::vector<LinkRange> links;
+    if (content.text.empty())
+      return links;
+
+    std::vector<bool> remove(content.text.size(), false);
+    struct LinkCandidate
+    {
+      std::size_t labelStart = 0;
+      std::size_t labelEnd = 0;
+      std::string url;
+    };
+    std::vector<LinkCandidate> candidates;
+
+    for (const auto &span : content.spans)
+    {
+      if (span.kind != ck::edit::MarkdownSpanKind::Link)
+        continue;
+      std::size_t spanStart = span.start;
+      std::size_t spanEnd = std::min(span.end, content.text.size());
+      if (spanStart >= spanEnd)
+        continue;
+
+      std::size_t pos = spanStart;
+      if (content.text[pos] == '[')
+      {
+        remove[pos] = true;
+        ++pos;
+      }
+      std::size_t labelStart = pos;
+      int depth = 1;
+      while (pos < spanEnd)
+      {
+        char ch = content.text[pos];
+        if (ch == '[')
+          ++depth;
+        else if (ch == ']')
+        {
+          --depth;
+          if (depth == 0)
+            break;
+        }
+        ++pos;
+      }
+      std::size_t labelEnd = pos;
+      if (pos < spanEnd && content.text[pos] == ']')
+      {
+        remove[pos] = true;
+        ++pos;
+      }
+      while (pos < spanEnd &&
+             std::isspace(static_cast<unsigned char>(content.text[pos])))
+      {
+        remove[pos] = true;
+        ++pos;
+      }
+      if (pos < spanEnd && content.text[pos] == '(')
+      {
+        remove[pos] = true;
+        ++pos;
+        int parenDepth = 1;
+        while (pos < spanEnd && parenDepth > 0)
+        {
+          char ch = content.text[pos];
+          if (ch == '(')
+          {
+            ++parenDepth;
+            remove[pos] = true;
+            ++pos;
+          }
+          else if (ch == ')')
+          {
+            --parenDepth;
+            if (parenDepth == 0)
+            {
+              remove[pos] = true;
+              ++pos;
+              break;
+            }
+            else
+            {
+              remove[pos] = true;
+              ++pos;
+            }
+          }
+          else
+          {
+            remove[pos] = true;
+            ++pos;
+          }
+        }
+      }
+      else
+      {
+        // Autolink style [url] without parentheses: only brackets removed.
+      }
+
+      candidates.push_back({labelStart, labelEnd, span.attribute});
+    }
+
+    if (candidates.empty())
+      return links;
+
+    std::vector<int> indexMap(content.text.size(), -1);
+    std::string collapsed;
+    collapsed.reserve(content.text.size());
+    for (std::size_t i = 0; i < content.text.size(); ++i)
+    {
+      if (!remove[i])
+      {
+        indexMap[i] = static_cast<int>(collapsed.size());
+        collapsed.push_back(content.text[i]);
+      }
+    }
+
+    std::vector<ck::edit::MarkdownSpan> adjustedSpans;
+    adjustedSpans.reserve(content.spans.size());
+    for (const auto &span : content.spans)
+    {
+      std::size_t spanStart = span.start;
+      std::size_t spanEnd = std::min(span.end, content.text.size());
+      int mappedStart = -1;
+      for (std::size_t i = spanStart; i < spanEnd; ++i)
+      {
+        if (i < indexMap.size() && indexMap[i] >= 0)
+        {
+          mappedStart = indexMap[i];
+          break;
+        }
+      }
+      if (mappedStart < 0)
+        continue;
+      int mappedEnd = -1;
+      for (std::size_t i = spanEnd; i-- > spanStart;)
+      {
+        if (i < indexMap.size() && indexMap[i] >= 0)
+        {
+          mappedEnd = indexMap[i] + 1;
+          break;
+        }
+      }
+      if (mappedEnd <= mappedStart)
+        continue;
+      ck::edit::MarkdownSpan adjusted = span;
+      adjusted.start = static_cast<std::size_t>(mappedStart);
+      adjusted.end = static_cast<std::size_t>(mappedEnd);
+      adjustedSpans.push_back(std::move(adjusted));
+    }
+
+    for (const auto &candidate : candidates)
+    {
+      int mappedStart = -1;
+      int mappedEnd = -1;
+      for (std::size_t i = candidate.labelStart; i < candidate.labelEnd; ++i)
+      {
+        if (i < indexMap.size() && indexMap[i] >= 0)
+        {
+          if (mappedStart < 0)
+            mappedStart = indexMap[i];
+          mappedEnd = indexMap[i] + 1;
+        }
+      }
+      if (mappedStart < 0 || mappedEnd <= mappedStart)
+        continue;
+      links.push_back(
+          LinkRange{static_cast<std::size_t>(mappedStart),
+                    static_cast<std::size_t>(mappedEnd), candidate.url});
+    }
+
+    content.text = std::move(collapsed);
+    content.spans = std::move(adjustedSpans);
+    content.links = links;
+    return links;
+  }
+
+  std::string shell_escape(const std::string &value)
+  {
+    std::string escaped;
+    escaped.reserve(value.size() + 2);
+    escaped.push_back('\'');
+    for (char ch : value)
+    {
+      if (ch == '\'')
+        escaped.append("'\\''");
+      else
+        escaped.push_back(ch);
+    }
+    escaped.push_back('\'');
+    return escaped;
+  }
+
+  void open_hyperlink(const std::string &url)
+  {
+#ifdef _WIN32
+    std::string sanitized = url;
+    for (char &ch : sanitized)
+    {
+      if (ch == '"')
+        ch = ' ';
+    }
+    std::string command = "start \"\" \"" + sanitized + "\"";
+    std::system(command.c_str());
+#elif defined(__APPLE__)
+    std::string command = "open " + shell_escape(url) + " >/dev/null 2>&1 &";
+    std::system(command.c_str());
+#else
+    std::string command = "xdg-open " + shell_escape(url) +
+                          " >/dev/null 2>&1 &";
+    std::system(command.c_str());
+#endif
   }
 
   int compute_markdown_display_width(const std::string &text)
@@ -953,6 +1185,7 @@ namespace
 
   std::vector<StyledLine> wrapStyledLine(const std::string &text,
                                          const std::vector<std::uint16_t> &styles,
+                                         const std::vector<LinkRange> &links,
                                          int width, bool hardWrap)
   {
     struct Glyph
@@ -1050,6 +1283,19 @@ namespace
         else
           line.styles.push_back(0);
       }
+      for (const auto &link : links)
+      {
+        if (link.end <= startByte || link.start >= endByte)
+          continue;
+        LinkRange portion;
+        portion.start = (link.start > startByte) ? (link.start - startByte) : 0;
+        portion.end = std::min(link.end, endByte) - startByte;
+        if (portion.start < portion.end)
+        {
+          portion.url = link.url;
+          line.links.push_back(std::move(portion));
+        }
+      }
       result.push_back(std::move(line));
 
       glyphIndex = wrapGlyph;
@@ -1076,8 +1322,8 @@ namespace
   class MarkdownSegmentRenderer
   {
   public:
-    explicit MarkdownSegmentRenderer(int wrapWidth)
-        : width_(std::max(1, wrapWidth)) {}
+    explicit MarkdownSegmentRenderer(int wrapWidth, bool parseLinks)
+        : width_(std::max(1, wrapWidth)), parseLinks_(parseLinks) {}
 
     std::vector<StyledLine> render(const std::string &text)
     {
@@ -1133,6 +1379,7 @@ namespace
     };
 
     int width_;
+    bool parseLinks_ = false;
     ck::edit::MarkdownAnalyzer analyzer_;
     ck::edit::MarkdownParserState state_{};
     std::vector<StyledLine> lines_;
@@ -1239,6 +1486,8 @@ namespace
     {
       InlineContent processed =
           sanitize_inline_markup(info.inlineText, info.spans);
+      if (parseLinks_)
+        collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
       std::uint16_t headingStyle = kStyleHeading;
       switch (info.headingLevel) {
@@ -1252,7 +1501,7 @@ namespace
       }
       std::vector<std::uint16_t> styles(content.size(), headingStyle);
       applyInlineSpans(styles, 0, processed.spans);
-      appendWrapped(content, styles, false);
+      appendWrapped(content, styles, processed.links, false);
       
       // Add a blank line after a heading unless we're in a table
       if (tableBuffer_.empty()) {
@@ -1265,10 +1514,12 @@ namespace
     {
       InlineContent processed =
           sanitize_inline_markup(info.inlineText, info.spans);
+      if (parseLinks_)
+        collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
       std::vector<std::uint16_t> styles(content.size(), kStyleNone);
       applyInlineSpans(styles, 0, processed.spans);
-      appendWrapped(content, styles, false);
+      appendWrapped(content, styles, processed.links, false);
     }
 
     void renderBlockQuote(const std::string &line,
@@ -1276,6 +1527,8 @@ namespace
     {
       InlineContent processed =
           sanitize_inline_markup(info.inlineText, info.spans);
+      if (parseLinks_)
+        collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
 
       std::string text = "> " + content;
@@ -1284,7 +1537,14 @@ namespace
                       static_cast<std::uint16_t>(kStyleQuote | kStyleListMarker));
       if (!content.empty())
         applyInlineSpans(styles, 2, processed.spans);
-      appendWrapped(text, styles, false);
+      std::vector<LinkRange> links;
+      if (!processed.links.empty())
+      {
+        links.reserve(processed.links.size());
+        for (const auto &link : processed.links)
+          links.push_back(LinkRange{link.start + 2, link.end + 2, link.url});
+      }
+      appendWrapped(text, styles, links, false);
     }
 
     void renderListItem(const std::string &line,
@@ -1296,6 +1556,8 @@ namespace
               : std::string();
       InlineContent processed =
           sanitize_inline_markup(info.inlineText, info.spans);
+      if (parseLinks_)
+        collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
 
       bool taskCompleted = false;
@@ -1319,7 +1581,16 @@ namespace
                           kStyleListMarker | (info.isTask ? kStylePrefix : 0)));
       applyStyleRange(styles, marker.size(), marker.size() + 1, kStyleListMarker);
       applyInlineSpans(styles, marker.size() + 1, processed.spans);
-      appendWrapped(text, styles, false);
+      std::vector<LinkRange> links;
+      if (!processed.links.empty())
+      {
+        links.reserve(processed.links.size());
+        std::size_t offset = marker.size() + 1;
+        for (const auto &link : processed.links)
+          links.push_back(
+              LinkRange{link.start + offset, link.end + offset, link.url});
+      }
+      appendWrapped(text, styles, links, false);
     }
 
     void renderCode(const std::string &line,
@@ -1341,7 +1612,7 @@ namespace
       }
 
       std::vector<std::uint16_t> styles(text.size(), kStyleCodeBlock);
-      appendWrapped(text, styles, true);
+      appendWrapped(text, styles, std::vector<LinkRange>{}, true);
     }
 
     void renderHorizontalRule()
@@ -1351,7 +1622,7 @@ namespace
       for (int i = 0; i < width_; ++i)
         text.append(kBoxHorizontal);
       std::vector<std::uint16_t> styles(text.size(), kStyleHorizontalRule);
-      appendWrapped(text, styles, true);
+      appendWrapped(text, styles, std::vector<LinkRange>{}, true);
     }
 
     void applyInlineSpans(std::vector<std::uint16_t> &styles, std::size_t offset,
@@ -1395,9 +1666,10 @@ namespace
     }
 
     void appendWrapped(const std::string &text,
-                       const std::vector<std::uint16_t> &styles, bool hardWrap)
+                       const std::vector<std::uint16_t> &styles,
+                       const std::vector<LinkRange> &links, bool hardWrap)
     {
-      auto wrapped = wrapStyledLine(text, styles, width_, hardWrap);
+      auto wrapped = wrapStyledLine(text, styles, links, width_, hardWrap);
       lines_.insert(lines_.end(), wrapped.begin(), wrapped.end());
     }
 
@@ -1568,7 +1840,7 @@ namespace
           else
             append_text_with_style(border, styles, right, kStyleTableBorder);
         }
-        appendWrapped(border, styles, true);
+        appendWrapped(border, styles, std::vector<LinkRange>{}, true);
       };
 
       makeBorder(kBoxTopLeft, kBoxTopJoin, kBoxTopRight, kBoxHorizontal);
@@ -1602,7 +1874,7 @@ namespace
               cellText.find_first_of("#*`[]()-") != std::string::npos)
           {
             // Process markdown within the cell
-            MarkdownSegmentRenderer cellRenderer(colWidths[c]);
+            MarkdownSegmentRenderer cellRenderer(colWidths[c], parseLinks_);
             cellStyledLines[c] = cellRenderer.render(cellText);
           }
           else
@@ -1619,7 +1891,7 @@ namespace
           for (const auto &styledLine : cellStyledLines[c])
           {
             auto wrapped = wrapStyledLine(styledLine.text, styledLine.styles,
-                                          colWidths[c], false);
+                                          styledLine.links, colWidths[c], false);
             for (auto &wrappedLine : wrapped)
             {
               int lineDisplayWidth = display_width(wrappedLine.text);
@@ -1704,7 +1976,7 @@ namespace
                                    kStyleTableBorder);
           }
 
-          appendWrapped(line, styles, true);
+          appendWrapped(line, styles, std::vector<LinkRange>{}, true);
         }
 
         if (row.info.isTableHeader && !headerRendered)
@@ -1718,9 +1990,10 @@ namespace
   };
 
   std::vector<StyledLine> render_markdown_to_styled_lines(const std::string &text,
-                                                          int wrapWidth)
+                                                          int wrapWidth,
+                                                          bool parseLinks)
   {
-    MarkdownSegmentRenderer renderer(wrapWidth);
+    MarkdownSegmentRenderer renderer(wrapWidth, parseLinks);
     return renderer.render(text);
   }
 
@@ -2033,6 +2306,17 @@ void ChatTranscriptView::setShowAnalysis(bool show)
   notifyLayoutChanged(false);
 }
 
+void ChatTranscriptView::setParseMarkdownLinks(bool enable)
+{
+  if (parseMarkdownLinks_ == enable)
+    return;
+  parseMarkdownLinks_ = enable;
+  layoutDirty = true;
+  rebuildLayoutIfNeeded();
+  drawView();
+  notifyLayoutChanged(false);
+}
+
 void ChatTranscriptView::draw()
 {
   rebuildLayoutIfNeeded();
@@ -2120,6 +2404,45 @@ void ChatTranscriptView::changeBounds(const TRect &bounds)
 
 void ChatTranscriptView::handleEvent(TEvent &event)
 {
+  if (event.what == evMouseDown && (event.mouse.buttons & mbLeftButton))
+  {
+    rebuildLayoutIfNeeded();
+    TPoint local = makeLocal(event.mouse.where);
+    if (local.x >= 0 && local.x < size.x && local.y >= 0 && local.y < size.y)
+    {
+      std::size_t rowIndex =
+          static_cast<std::size_t>(delta.y + static_cast<int>(local.y));
+      if (rowIndex < rows.size())
+      {
+        const auto &row = rows[rowIndex];
+        if (!row.links.empty())
+        {
+          int column = local.x;
+          int cursor = 0;
+          for (const auto &glyph : row.glyphs)
+          {
+            if (cursor + glyph.width > column)
+            {
+              std::size_t bytePos = glyph.start;
+              for (const auto &link : row.links)
+              {
+                if (bytePos >= link.start && bytePos < link.end &&
+                    !link.url.empty())
+                {
+                  open_hyperlink(link.url);
+                  clearEvent(event);
+                  return;
+                }
+              }
+              break;
+            }
+            cursor += glyph.width;
+          }
+        }
+      }
+    }
+  }
+
   TPoint before = delta;
   TScroller::handleEvent(event);
   if (before.x != delta.x || before.y != delta.y)
@@ -2412,8 +2735,13 @@ void ChatTranscriptView::appendVisibleSegment(
 
   // Temporarily enable markdown rendering for all content to test formatting
   std::vector<StyledLine> styled;
-  if (text.length() < 10 || text.length() > 10000 ||
-      text.find_first_of("#*`[]()-") == std::string::npos)
+  bool hasMarkdownSyntax =
+      text.find_first_of("#*`[]()-") != std::string::npos;
+  bool forceMarkdownLinks =
+      parseMarkdownLinks_ && text.find('[') != std::string::npos &&
+      text.find(')') != std::string::npos;
+  if (!forceMarkdownLinks &&
+      (text.length() < 10 || text.length() > 10000 || !hasMarkdownSyntax))
   {
     // Skip markdown rendering for content that might cause stalls
     // But still preserve line breaks by splitting on newlines and apply word
@@ -2437,13 +2765,16 @@ void ChatTranscriptView::appendVisibleSegment(
       // Apply word wrapping to each line, even when markdown rendering is
       // skipped
       std::vector<std::uint16_t> lineStyles(line.size(), 0);
-      auto wrappedLines = wrapStyledLine(line, lineStyles, contentWidth, false);
+      auto wrappedLines =
+          wrapStyledLine(line, lineStyles, std::vector<LinkRange>{}, contentWidth,
+                         false);
       styled.insert(styled.end(), wrappedLines.begin(), wrappedLines.end());
     }
   }
   else
   {
-    styled = render_markdown_to_styled_lines(text, contentWidth);
+    styled = render_markdown_to_styled_lines(text, contentWidth,
+                                             parseMarkdownLinks_);
   }
 
   if (styled.empty())
@@ -2475,6 +2806,18 @@ void ChatTranscriptView::appendVisibleSegment(
             line.styles.size() > i ? line.styles[i] : 0;
     }
 
+    if (!line.links.empty())
+    {
+      row.links.reserve(line.links.size());
+      for (const auto &link : line.links)
+      {
+        DisplayRow::LinkInfo info;
+        info.start = prefixToUse.size() + link.start;
+        info.end = prefixToUse.size() + link.end;
+        info.url = link.url;
+        row.links.push_back(std::move(info));
+      }
+    }
     rows.push_back(std::move(row));
     finalizeDisplayRow(rows.back());
     messageFirstRow = false;
@@ -2522,6 +2865,7 @@ void ChatTranscriptView::updateHiddenPlaceholder(
   row.isPending = pending;
   row.channelLabel = channelLabel;
   row.hiddenContent = content.empty() ? std::string("(no content)") : content;
+  row.links.clear();
 
   static const char* spinnerChars[] = {
       "⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"  // Reversed order

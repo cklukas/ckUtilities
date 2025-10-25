@@ -34,3 +34,5 @@ inline constexpr unsigned short cmShowThinking = ck::commands::chat::ShowThinkin
 inline constexpr unsigned short cmHideThinking = ck::commands::chat::HideThinking;
 inline constexpr unsigned short cmShowAnalysis = ck::commands::chat::ShowAnalysis;
 inline constexpr unsigned short cmHideAnalysis = ck::commands::chat::HideAnalysis;
+inline constexpr unsigned short cmToggleParseMarkdownLinks =
+    ck::commands::chat::ToggleParseMarkdownLinks;

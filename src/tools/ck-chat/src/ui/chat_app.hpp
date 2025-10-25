@@ -4,6 +4,7 @@
 #include "../../../../include/ck/ai/llm.hpp"
 #include "../../../../include/ck/ai/model_manager.hpp"
 #include "../../../../include/ck/ai/system_prompt_manager.hpp"
+#include "../../../../include/ck/options.hpp"
 
 #include "../chat_session.hpp"
 #include "../tvision_include.hpp"
@@ -70,6 +71,8 @@ public:
   void setShowThinking(bool showThinking);
   bool showAnalysis() const noexcept { return showAnalysis_; }
   void setShowAnalysis(bool showAnalysis);
+  bool parseMarkdownLinks() const noexcept { return parseMarkdownLinks_; }
+  void setParseMarkdownLinks(bool enabled);
   const std::vector<std::string> &stopSequences() const noexcept {
     return stopSequences_;
   }
@@ -92,6 +95,7 @@ private:
       std::optional<ck::ai::ModelInfo> modelInfo) const;
   void applyThinkingVisibilityToWindows();
   void applyAnalysisVisibilityToWindows();
+  void applyParseMarkdownLinksToWindows();
   void applyStopSequencesToWindows();
   std::vector<std::string> resolveStopSequencesForModel(
       const std::optional<std::string> &modelId,
@@ -116,9 +120,12 @@ private:
   std::shared_ptr<ck::ai::Llm> activeLlm_;
   bool showThinking_ = false;
   bool showAnalysis_ = false;
+  bool parseMarkdownLinks_ = false;
   std::vector<std::string> stopSequences_;
   std::filesystem::path logPath_;
   std::filesystem::path binaryDir_;
+
+  std::shared_ptr<ck::config::OptionRegistry> optionRegistry_;
 
   // Background model loading
   std::thread modelLoadingThread_;

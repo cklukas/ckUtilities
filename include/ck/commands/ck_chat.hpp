@@ -37,5 +37,6 @@ inline constexpr std::uint16_t ShowThinking = 1300;
 inline constexpr std::uint16_t HideThinking = 1301;
 inline constexpr std::uint16_t ShowAnalysis = 1302;
 inline constexpr std::uint16_t HideAnalysis = 1303;
+inline constexpr std::uint16_t ToggleParseMarkdownLinks = 1304;
 
 } // namespace ck::commands::chat

@@ -26,6 +26,8 @@ namespace
     return ck::appinfo::requireTool("ck-chat");
   }
 
+  constexpr const char *kOptionParseMarkdownLinks = "parseMarkdownLinks";
+
   ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config)
   {
     ck::ai::RuntimeConfig runtime = config.runtime;
@@ -42,6 +44,15 @@ ChatApp::ChatApp(int argc, char **argv)
 {
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
+
+  optionRegistry_ = std::make_shared<ck::config::OptionRegistry>("ck-chat");
+  optionRegistry_->registerOption({
+      kOptionParseMarkdownLinks, ck::config::OptionKind::Boolean,
+      ck::config::OptionValue(false), "Parse Markdown Links",
+      "Render Markdown links using terminal-supported hyperlinks."});
+  optionRegistry_->loadDefaults();
+  parseMarkdownLinks_ =
+      optionRegistry_->getBool(kOptionParseMarkdownLinks, false);
 
   if (argv && argc > 0 && argv[0])
   {
@@ -86,6 +97,7 @@ void ChatApp::registerWindow(ChatWindow *window)
   windows.push_back(window);
   window->setShowThinking(showThinking_);
   window->setShowAnalysis(showAnalysis_);
+  window->setParseMarkdownLinks(parseMarkdownLinks_);
   window->setStopSequences(stopSequences_);
 }
 
@@ -148,6 +160,10 @@ void ChatApp::handleEvent(TEvent &event)
       break;
     case cmHideAnalysis:
       setShowAnalysis(false);
+      clearEvent(event);
+      break;
+    case cmToggleParseMarkdownLinks:
+      setParseMarkdownLinks(!parseMarkdownLinks_);
       clearEvent(event);
       break;
     case cmManagePrompts:
@@ -302,6 +318,11 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
   else
     viewMenu +
         *new TMenuItem("Show ~A~nalysis", cmShowAnalysis, kbNoKey, hcNoContext);
+
+  std::string parseLabel =
+      std::string(parseMarkdownLinks_ ? "[x] " : "[ ] ") + "Parse Markdown Links";
+  viewMenu + *new TMenuItem(parseLabel.c_str(), cmToggleParseMarkdownLinks,
+                            kbNoKey, hcNoContext);
 
   TMenuItem &menuChain =
       fileMenu + editMenu + modelsMenu + viewMenu +
@@ -473,6 +494,21 @@ void ChatApp::setShowAnalysis(bool showAnalysis)
   rebuildMenuBar();
 }
 
+void ChatApp::setParseMarkdownLinks(bool enabled)
+{
+  if (parseMarkdownLinks_ == enabled)
+    return;
+  parseMarkdownLinks_ = enabled;
+  if (optionRegistry_)
+  {
+    optionRegistry_->set(kOptionParseMarkdownLinks,
+                         ck::config::OptionValue(enabled));
+    optionRegistry_->saveDefaults();
+  }
+  applyParseMarkdownLinksToWindows();
+  rebuildMenuBar();
+}
+
 void ChatApp::appendLog(const std::string &text)
 {
   if (logPath_.empty())
@@ -501,6 +537,15 @@ void ChatApp::applyAnalysisVisibilityToWindows()
   {
     if (window)
       window->setShowAnalysis(showAnalysis_);
+  }
+}
+
+void ChatApp::applyParseMarkdownLinksToWindows()
+{
+  for (auto *window : windows)
+  {
+    if (window)
+      window->setParseMarkdownLinks(parseMarkdownLinks_);
   }
 }
 

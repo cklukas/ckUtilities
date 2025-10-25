@@ -179,6 +179,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
                                          { onTranscriptLayoutChanged(userScroll); });
     transcript->setShowThinking(showThinking_);
     transcript->setShowAnalysis(showAnalysis_);
+    transcript->setParseMarkdownLinks(parseMarkdownLinks_);
     transcript->setHiddenDetailCallback([this](std::size_t messageIndex, const std::string &channel,
                                                const std::string &content)
                                         {
@@ -371,6 +372,21 @@ void ChatWindow::setShowAnalysis(bool show)
     if (transcript)
     {
         transcript->setShowAnalysis(showAnalysis_);
+        if (changed)
+        {
+            updateTranscriptFromSession(false);
+            transcript->drawView();
+        }
+    }
+}
+
+void ChatWindow::setParseMarkdownLinks(bool enable)
+{
+    bool changed = (parseMarkdownLinks_ != enable);
+    parseMarkdownLinks_ = enable;
+    if (transcript)
+    {
+        transcript->setParseMarkdownLinks(parseMarkdownLinks_);
         if (changed)
         {
             updateTranscriptFromSession(false);
