@@ -28,17 +28,23 @@ jobs:
             libncursesw6 \
             libtinfo-dev \
             libgpm-dev \
-            pkg-config
+            pkg-config \
+            libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install ninja ncurses
+          brew install ninja ncurses curl
           NCURSES_PREFIX=$(brew --prefix ncurses)
           echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
           echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
           echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
+          CURL_PREFIX=$(brew --prefix curl)
+          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
+          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
 
       - name: Configure
         run: cmake --preset dev
@@ -69,6 +75,7 @@ jobs:
             libtinfo-dev \
             libgpm-dev \
             pkg-config \
+            libcurl4-openssl-dev \
             rpm
 
       - name: Configure
@@ -98,11 +105,16 @@ jobs:
       - name: Install packaging dependencies
         run: |
           brew update
-          brew install ninja ncurses
+          brew install ninja ncurses curl
           NCURSES_PREFIX=$(brew --prefix ncurses)
           echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
           echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
           echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
+          CURL_PREFIX=$(brew --prefix curl)
+          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
+          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
 
       - name: Configure
         run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
