@@ -2878,21 +2878,24 @@ void ChatTranscriptView::updateHiddenPlaceholder(
     const char* frame = spinnerChars[(spinnerFrame_ / SPINNER_SPEED_DIVIDER) %
                                    (sizeof(spinnerChars) / sizeof(spinnerChars[0]))];
     row.text = prefix + "Generating… " + frame;
-    
-    // Apply bold style to the spinner character
-    std::size_t spinnerPos = row.text.size() - strlen(frame);
-    row.styleMask.resize(row.text.size(), 0);
-    for (std::size_t i = spinnerPos; i < row.text.size(); i++) {
-        row.styleMask[i] = kStyleBold;
-    }
   }
   else
   {
     row.text = prefix + "[Analysis finished – click to view]";
   }
+
   row.styleMask.assign(row.text.size(), 0);
   if (!prefix.empty())
     applyStyleRange(row.styleMask, 0, prefix.size(), kStylePrefix);
+
+  if (pending)
+  {
+    const char* frame = spinnerChars[(spinnerFrame_ / SPINNER_SPEED_DIVIDER) %
+                                   (sizeof(spinnerChars) / sizeof(spinnerChars[0]))];
+    std::size_t spinnerPos = row.text.size() - strlen(frame);
+    for (std::size_t i = spinnerPos; i < row.text.size(); i++)
+      row.styleMask[i] = kStyleBold;
+  }
   finalizeDisplayRow(row);
 }
 
