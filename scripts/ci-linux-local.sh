@@ -35,7 +35,7 @@ container run --rm ${TTY_FLAGS} \
     apt-get install -y \
       git ca-certificates curl build-essential cmake ninja-build \
       libncurses-dev libncursesw6 libtinfo-dev libgpm-dev pkg-config \
-      libcurl4-openssl-dev
+      libcurl4-openssl-dev rpm
 
     # Ensure multiarch include/lib directories are visible to CMake.
     multiarch="$(gcc -print-multiarch)"
