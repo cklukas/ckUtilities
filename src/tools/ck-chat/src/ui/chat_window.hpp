@@ -29,6 +29,7 @@ public:
     void setShowThinking(bool show);
     void setStopSequences(const std::vector<std::string> &stops);
     void setShowAnalysis(bool show);
+    void setParseMarkdownLinks(bool enable);
     ChatApp &appRef() noexcept { return app; }
 
 private:
@@ -72,4 +73,5 @@ private:
     bool showAnalysis_ = false;
     bool autoScrollEnabled_ = true;
     std::vector<std::string> stopSequences_;
+    bool parseMarkdownLinks_ = false;
 };

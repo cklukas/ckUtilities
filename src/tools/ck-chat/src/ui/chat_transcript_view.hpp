@@ -34,6 +34,8 @@ public:
     void setShowAnalysis(bool show);
     bool showThinking() const noexcept { return showThinking_; }
     bool showAnalysis() const noexcept { return showAnalysis_; }
+    void setParseMarkdownLinks(bool enable);
+    bool parseMarkdownLinks() const noexcept { return parseMarkdownLinks_; }
 
 protected:
     virtual void draw() override;
@@ -68,6 +70,13 @@ private:
         };
         std::vector<GlyphInfo> glyphs;
         int displayWidth = 0;
+        struct LinkInfo
+        {
+            std::size_t start = 0;
+            std::size_t end = 0;
+            std::string url;
+        };
+        std::vector<LinkInfo> links;
     };
 
     std::vector<Message> messages;
@@ -76,6 +85,7 @@ private:
     std::function<void(bool)> layoutChangedCallback;
     bool showThinking_ = false;
     bool showAnalysis_ = false;
+    bool parseMarkdownLinks_ = false;
     int spinnerFrame_ = 0;
     std::function<void(std::size_t, const std::string &, const std::string &)> hiddenDetailCallback_;
 
