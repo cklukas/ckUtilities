@@ -6,6 +6,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   release-tests:
     name: Quick build and test
@@ -116,8 +119,8 @@ jobs:
 
       - name: Install packaging dependencies
         run: |
-          brew update
-          brew install ninja ncurses curl
+          brew update --quiet
+          brew install --quiet ninja ncurses curl
           NCURSES_PREFIX=$(brew --prefix ncurses)
           echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
           echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
