@@ -17,7 +17,10 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(CURL REQUIRED libcurl)
 
 # Find nlohmann/json
-find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+  include(${PROJECT_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
+endif()
 
 target_link_libraries(ckai_core
   PUBLIC
