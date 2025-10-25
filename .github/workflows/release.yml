@@ -162,8 +162,19 @@ jobs:
         with:
           arch: x64
 
+      - name: Install curl dependency (vcpkg)
+        shell: pwsh
+        env:
+          VCPKG_ROOT: C:\vcpkg
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & "$env:VCPKG_ROOT\vcpkg.exe" install curl:x64-windows
+
       - name: Configure
-        run: cmake --preset pkg
+        run: >
+          cmake --preset pkg
+          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
         run: cmake --build build/pkg --config Release
