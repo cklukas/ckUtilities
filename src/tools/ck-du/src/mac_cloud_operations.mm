@@ -1,6 +1,12 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 
+#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#define CK_HAS_ICLOUD_SYNC_PAUSE 1
+#else
+#define CK_HAS_ICLOUD_SYNC_PAUSE 0
+#endif
+
 #include "cloud_actions.hpp"
 
 namespace ck::du::cloud
@@ -92,7 +98,7 @@ NSArray<NSURLResourceKey> *resourceKeys()
         NSURLFileSizeKey,
         NSURLUbiquitousItemDownloadRequestedKey,
         NSURLUbiquitousItemIsExcludedFromSyncKey
-#if defined(NSURLUbiquitousItemIsSyncPausedKey)
+#if CK_HAS_ICLOUD_SYNC_PAUSE
         ,
         NSURLUbiquitousItemIsSyncPausedKey
 #endif
@@ -106,20 +112,28 @@ bool applyPauseState(ActionKind action,
                      OperationResult &result,
                      const OperationCallbacks &callbacks)
 {
-#if defined(NSURLUbiquitousItemIsSyncPausedKey)
-    bool pause = action == ActionKind::PauseSync;
-    NSError *error = nil;
-    if (![url setResourceValue:@(pause) forKey:NSURLUbiquitousItemIsSyncPausedKey error:&error])
+#if CK_HAS_ICLOUD_SYNC_PAUSE
+    if (@available(macOS 15.0, *))
     {
-        handleError(result, callbacks, urlToPath(url), error);
-        return false;
+        bool pause = action == ActionKind::PauseSync;
+        NSError *error = nil;
+        if (![url setResourceValue:@(pause) forKey:NSURLUbiquitousItemIsSyncPausedKey error:&error])
+        {
+            handleError(result, callbacks, urlToPath(url), error);
+            return false;
+        }
+        if (callbacks.onStatus)
+        {
+            callbacks.onStatus(pause ? "Paused iCloud syncing." : "Resumed iCloud syncing.");
+        }
+        result.processedItems = 1;
+        return true;
     }
-    if (callbacks.onStatus)
-    {
-        callbacks.onStatus(pause ? "Paused iCloud syncing." : "Resumed iCloud syncing.");
-    }
-    result.processedItems = 1;
-    return true;
+    (void)url;
+    (void)callbacks;
+    result.success = false;
+    result.errorMessage = "This version of macOS does not support pausing iCloud Drive sync.";
+    return false;
 #else
     (void)url;
     (void)callbacks;
