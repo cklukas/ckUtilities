@@ -79,6 +79,7 @@ public:
   bool deleteSelectedModel();
 
 private:
+  void reloadModelCaches();
   void notifyStatus(const std::string &message);
   void notifyError(const std::string &error);
   void notifyModelListUpdate();

@@ -447,8 +447,10 @@ std::size_t ModelManager::get_model_size(const std::string &model_id) const {
 }
 
 void ModelManager::set_models_directory(const std::filesystem::path &path) {
+  active_model_id_.clear();
   models_directory_ = path;
   std::filesystem::create_directories(models_directory_);
+  load_configuration();
   scan_downloaded_models();
 }
 

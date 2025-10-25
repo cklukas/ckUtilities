@@ -14,6 +14,7 @@ class ChatTranscriptView : public TScroller
 {
 public:
     using Role = ck::chat::ChatSession::Role;
+    using StyleMask = std::uint32_t;
 
     ChatTranscriptView(const TRect &bounds, TScrollBar *hScroll, TScrollBar *vScroll);
 
@@ -61,7 +62,7 @@ private:
         bool isPending = false;
         std::string channelLabel;
         std::string hiddenContent;
-        std::vector<std::uint16_t> styleMask;
+        std::vector<StyleMask> styleMask;
         struct GlyphInfo
         {
             std::size_t start = 0;
@@ -120,6 +121,6 @@ private:
     static std::vector<DisplayRow::GlyphInfo> buildGlyphs(
         const std::string &text);
     static void finalizeDisplayRow(DisplayRow &row);
-    static std::uint16_t glyphStyleMask(
+    static StyleMask glyphStyleMask(
         const DisplayRow &row, const DisplayRow::GlyphInfo &glyph);
 };

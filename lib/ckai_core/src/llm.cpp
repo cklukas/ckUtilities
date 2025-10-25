@@ -6,6 +6,8 @@
 
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <sstream>
 #include <string>
@@ -25,11 +27,55 @@ std::string build_stub_response(const std::string &prompt,
   stream << " Response to: " << prompt;
   return stream.str();
 }
+
+bool should_use_stub_model(const std::string &model_path) {
+  if (const char *force_stub = std::getenv("CK_AI_FORCE_STUB")) {
+    if (*force_stub)
+      return true;
+  }
+
+  if (model_path.empty())
+    return true;
+
+  std::filesystem::path path(model_path);
+  std::string name = path.filename().string();
+  std::string lower;
+  lower.reserve(name.size());
+  for (unsigned char ch : name)
+    lower.push_back(static_cast<char>(std::tolower(ch)));
+
+  return lower == "model" || lower == "model.gguf" ||
+         lower == "stub-model.gguf";
+}
+
+std::size_t stub_token_count(const std::string &text) {
+  std::size_t count = 0;
+  bool in_token = false;
+  for (unsigned char ch : text) {
+    if (std::isspace(ch)) {
+      if (in_token) {
+        ++count;
+        in_token = false;
+      }
+    } else {
+      in_token = true;
+    }
+  }
+  if (in_token)
+    ++count;
+  return count;
+}
 } // namespace
 
 Llm::Llm(std::string model_path, RuntimeConfig runtime)
     : model_path_(std::move(model_path)), runtime_(std::move(runtime)),
       model_(nullptr), context_(nullptr) {
+
+  if (should_use_stub_model(model_path_)) {
+    stub_mode_ = true;
+    return;
+  }
+
   // Initialize llama backend
   llama_backend_init();
 
@@ -49,7 +95,9 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
   model_ = llama_model_load_from_file(model_path_.c_str(), model_params);
 
   if (!model_) {
-    throw std::runtime_error("Failed to load model: " + model_path_);
+    llama_backend_free();
+    stub_mode_ = true;
+    return;
   }
 
   // Create context
@@ -67,12 +115,16 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
   if (!context_) {
     llama_model_free(model_);
     model_ = nullptr;
-    throw std::runtime_error("Failed to create context for model: " +
-                             model_path_);
+    llama_backend_free();
+    stub_mode_ = true;
+    return;
   }
 }
 
 Llm::~Llm() {
+  if (stub_mode_)
+    return;
+
   if (context_) {
     llama_free(context_);
   }
@@ -98,6 +150,14 @@ void Llm::generate(const std::string &prompt, const GenerationConfig &config,
     return;
 
   std::lock_guard<std::mutex> lock(mutex_);
+
+  if (stub_mode_) {
+    Chunk chunk;
+    chunk.text = build_stub_response(prompt, system_prompt_);
+    chunk.is_last = true;
+    on_token(chunk);
+    return;
+  }
 
   if (!context_ || !model_)
     return;
@@ -220,6 +280,10 @@ std::string Llm::embed(const std::string &text) const {
 
 std::size_t Llm::token_count(const std::string &text) const {
   std::lock_guard<std::mutex> lock(mutex_);
+
+  if (stub_mode_)
+    return stub_token_count(text);
+
   if (!context_ || !model_)
     return 0;
 

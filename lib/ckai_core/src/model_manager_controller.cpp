@@ -11,6 +11,11 @@ ModelManagerController::ModelManagerController(ModelManager &modelManager)
   refreshModels();
 }
 
+void ModelManagerController::reloadModelCaches() {
+  cachedAvailableModels_ = modelManager_.get_available_models();
+  cachedDownloadedModels_ = modelManager_.get_downloaded_models();
+}
+
 bool ModelManagerController::downloadModel(const std::string &modelId) {
   auto model = getModelById(modelId);
   if (!model) {
@@ -72,6 +77,7 @@ bool ModelManagerController::activateModel(const std::string &modelId) {
   if (modelManager_.activate_model(modelId)) {
     auto model = getModelById(modelId);
     std::string modelName = model ? model->name : modelId;
+    reloadModelCaches();
     notifyStatus("Model activated: " + modelName);
     notifyModelListUpdate();
     return true;
@@ -90,6 +96,7 @@ bool ModelManagerController::deactivateModel(const std::string &modelId) {
   if (modelManager_.deactivate_model(modelId)) {
     auto model = getModelById(modelId);
     std::string modelName = model ? model->name : modelId;
+    reloadModelCaches();
     notifyStatus("Model deactivated: " + modelName);
     notifyModelListUpdate();
     return true;
@@ -109,6 +116,7 @@ bool ModelManagerController::deleteModel(const std::string &modelId) {
   std::string modelName = model ? model->name : modelId;
 
   if (modelManager_.delete_model(modelId)) {
+    reloadModelCaches();
     notifyStatus("Model deleted: " + modelName);
     clearSelection(); // Clear selection since model was deleted
     notifyModelListUpdate();
@@ -122,8 +130,7 @@ bool ModelManagerController::deleteModel(const std::string &modelId) {
 void ModelManagerController::refreshModels() {
   try {
     modelManager_.refresh_model_list();
-    cachedAvailableModels_ = modelManager_.get_available_models();
-    cachedDownloadedModels_ = modelManager_.get_downloaded_models();
+    reloadModelCaches();
     notifyStatus("Model list refreshed");
     notifyModelListUpdate();
   } catch (const std::exception &e) {

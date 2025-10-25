@@ -23,29 +23,32 @@ namespace
   const ushort sfItalic = 0x0080;
   const ushort sfUnderline = 0x0100;
 
-  constexpr std::uint16_t kStyleNone = 0;
-  constexpr std::uint16_t kStyleBold = 1u << 0;
-  constexpr std::uint16_t kStyleItalic = 1u << 1;
-  constexpr std::uint16_t kStyleStrikethrough = 1u << 2;
-  constexpr std::uint16_t kStyleInlineCode = 1u << 3;
-  constexpr std::uint16_t kStyleLink = 1u << 4;
-  constexpr std::uint16_t kStyleHeading = 1u << 5;
-  constexpr std::uint16_t kStyleHeading1 = kStyleHeading | (1u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeading2 = kStyleHeading | (2u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeading3 = kStyleHeading | (3u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeading4 = kStyleHeading | (4u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeading5 = kStyleHeading | (5u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeading6 = kStyleHeading | (6u << 14);  // Combined with heading
-  constexpr std::uint16_t kStyleHeadingLevelMask = 7u << 14;  // Mask to extract heading level
-  constexpr std::uint16_t kStyleQuote = 1u << 6;
-  constexpr std::uint16_t kStyleListMarker = 1u << 7;
-  constexpr std::uint16_t kStyleTableBorder = 1u << 8;
-  constexpr std::uint16_t kStyleTableHeader = 1u << 9;
-  constexpr std::uint16_t kStyleTableCell = 1u << 10;
-  constexpr std::uint16_t kStyleCodeBlock = 1u << 11;
-  constexpr std::uint16_t kStylePrefix = 1u << 12;
-  constexpr std::uint16_t kStyleHorizontalRule = 1u << 13;
-  constexpr std::uint16_t kStyleUnderline = 1u << 14;
+  using StyleMask = ChatTranscriptView::StyleMask;
+
+  constexpr StyleMask kStyleNone = 0;
+  constexpr StyleMask kStyleBold = 1u << 0;
+  constexpr StyleMask kStyleItalic = 1u << 1;
+  constexpr StyleMask kStyleStrikethrough = 1u << 2;
+  constexpr StyleMask kStyleInlineCode = 1u << 3;
+  constexpr StyleMask kStyleLink = 1u << 4;
+  constexpr StyleMask kStyleHeading = 1u << 5;
+  constexpr unsigned kStyleHeadingLevelShift = 16;
+  constexpr StyleMask kStyleHeadingLevelMask = 7u << kStyleHeadingLevelShift;  // Mask to extract heading level
+  constexpr StyleMask kStyleHeading1 = kStyleHeading | (1u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleHeading2 = kStyleHeading | (2u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleHeading3 = kStyleHeading | (3u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleHeading4 = kStyleHeading | (4u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleHeading5 = kStyleHeading | (5u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleHeading6 = kStyleHeading | (6u << kStyleHeadingLevelShift);  // Combined with heading
+  constexpr StyleMask kStyleQuote = 1u << 6;
+  constexpr StyleMask kStyleListMarker = 1u << 7;
+  constexpr StyleMask kStyleTableBorder = 1u << 8;
+  constexpr StyleMask kStyleTableHeader = 1u << 9;
+  constexpr StyleMask kStyleTableCell = 1u << 10;
+  constexpr StyleMask kStyleCodeBlock = 1u << 11;
+  constexpr StyleMask kStylePrefix = 1u << 12;
+  constexpr StyleMask kStyleHorizontalRule = 1u << 13;
+  constexpr StyleMask kStyleUnderline = 1u << 14;
 
   struct LinkRange
   {
@@ -57,7 +60,7 @@ namespace
   struct StyledLine
   {
     std::string text;
-    std::vector<std::uint16_t> styles;
+    std::vector<StyleMask> styles;
     std::vector<LinkRange> links;
   };
 
@@ -438,8 +441,8 @@ namespace
   }
 
   void append_text_with_style(std::string &line,
-                              std::vector<std::uint16_t> &styles,
-                              std::string_view text, std::uint16_t style)
+                              std::vector<StyleMask> &styles,
+                              std::string_view text, StyleMask style)
   {
     for (unsigned char ch : text)
     {
@@ -449,24 +452,24 @@ namespace
   }
 
   void append_char_with_style(std::string &line,
-                              std::vector<std::uint16_t> &styles, char ch,
-                              std::uint16_t style)
+                              std::vector<StyleMask> &styles, char ch,
+                              StyleMask style)
   {
     append_text_with_style(line, styles, std::string_view(&ch, 1), style);
   }
 
   void append_repeat_char_with_style(std::string &line,
-                                     std::vector<std::uint16_t> &styles,
-                                     char ch, std::uint16_t style, int count)
+                                     std::vector<StyleMask> &styles,
+                                     char ch, StyleMask style, int count)
   {
     for (int i = 0; i < count; ++i)
       append_char_with_style(line, styles, ch, style);
   }
 
   void append_repeat_text_with_style(std::string &line,
-                                     std::vector<std::uint16_t> &styles,
+                                     std::vector<StyleMask> &styles,
                                      std::string_view text,
-                                     std::uint16_t style, int count)
+                                     StyleMask style, int count)
   {
     for (int i = 0; i < count; ++i)
       append_text_with_style(line, styles, text, style);
@@ -1172,19 +1175,19 @@ namespace
     return segments;
   }
 
-  void applyStyleRange(std::vector<std::uint16_t> &styles, std::size_t start,
-                       std::size_t end, std::uint16_t mask)
+  void applyStyleRange(std::vector<StyleMask> &styles, std::size_t start,
+                       std::size_t end, StyleMask mask)
   {
     if (start >= end)
       return;
     if (end > styles.size())
       end = styles.size();
     for (std::size_t i = start; i < end; ++i)
-      styles[i] = static_cast<std::uint16_t>(styles[i] | mask);
+      styles[i] |= mask;
   }
 
   std::vector<StyledLine> wrapStyledLine(const std::string &text,
-                                         const std::vector<std::uint16_t> &styles,
+                                         const std::vector<StyleMask> &styles,
                                          const std::vector<LinkRange> &links,
                                          int width, bool hardWrap)
   {
@@ -1489,7 +1492,7 @@ namespace
       if (parseLinks_)
         collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
-      std::uint16_t headingStyle = kStyleHeading;
+      StyleMask headingStyle = kStyleHeading;
       switch (info.headingLevel) {
         case 1: headingStyle |= (1u << 14); break;
         case 2: headingStyle |= (2u << 14); break;
@@ -1499,7 +1502,7 @@ namespace
         case 6: headingStyle |= (6u << 14); break;
         default: break;
       }
-      std::vector<std::uint16_t> styles(content.size(), headingStyle);
+      std::vector<StyleMask> styles(content.size(), headingStyle);
       applyInlineSpans(styles, 0, processed.spans);
       appendWrapped(content, styles, processed.links, false);
       
@@ -1517,7 +1520,7 @@ namespace
       if (parseLinks_)
         collapse_markdown_links(processed);
       std::string content = std::move(processed.text);
-      std::vector<std::uint16_t> styles(content.size(), kStyleNone);
+      std::vector<StyleMask> styles(content.size(), kStyleNone);
       applyInlineSpans(styles, 0, processed.spans);
       appendWrapped(content, styles, processed.links, false);
     }
@@ -1532,9 +1535,8 @@ namespace
       std::string content = std::move(processed.text);
 
       std::string text = "> " + content;
-      std::vector<std::uint16_t> styles(text.size(), kStyleQuote);
-      applyStyleRange(styles, 0, 2,
-                      static_cast<std::uint16_t>(kStyleQuote | kStyleListMarker));
+      std::vector<StyleMask> styles(text.size(), kStyleQuote);
+      applyStyleRange(styles, 0, 2, kStyleQuote | kStyleListMarker);
       if (!content.empty())
         applyInlineSpans(styles, 2, processed.spans);
       std::vector<LinkRange> links;
@@ -1575,10 +1577,9 @@ namespace
         marker = info.isTask ? (taskCompleted ? "☑" : "☐") : "•";
 
       std::string text = marker + " " + content;
-      std::vector<std::uint16_t> styles(text.size(), kStyleNone);
+      std::vector<StyleMask> styles(text.size(), kStyleNone);
       applyStyleRange(styles, 0, marker.size(),
-                      static_cast<std::uint16_t>(
-                          kStyleListMarker | (info.isTask ? kStylePrefix : 0)));
+                      kStyleListMarker | (info.isTask ? kStylePrefix : 0));
       applyStyleRange(styles, marker.size(), marker.size() + 1, kStyleListMarker);
       applyInlineSpans(styles, marker.size() + 1, processed.spans);
       std::vector<LinkRange> links;
@@ -1611,7 +1612,7 @@ namespace
         text = "```";
       }
 
-      std::vector<std::uint16_t> styles(text.size(), kStyleCodeBlock);
+      std::vector<StyleMask> styles(text.size(), kStyleCodeBlock);
       appendWrapped(text, styles, std::vector<LinkRange>{}, true);
     }
 
@@ -1621,16 +1622,16 @@ namespace
       text.reserve(width_);
       for (int i = 0; i < width_; ++i)
         text.append(kBoxHorizontal);
-      std::vector<std::uint16_t> styles(text.size(), kStyleHorizontalRule);
+      std::vector<StyleMask> styles(text.size(), kStyleHorizontalRule);
       appendWrapped(text, styles, std::vector<LinkRange>{}, true);
     }
 
-    void applyInlineSpans(std::vector<std::uint16_t> &styles, std::size_t offset,
+    void applyInlineSpans(std::vector<StyleMask> &styles, std::size_t offset,
                           const std::vector<ck::edit::MarkdownSpan> &spans)
     {
       for (const auto &span : spans)
       {
-        std::uint16_t mask = kStyleNone;
+        StyleMask mask = kStyleNone;
         switch (span.kind)
         {
         case ck::edit::MarkdownSpanKind::Bold:
@@ -1666,7 +1667,7 @@ namespace
     }
 
     void appendWrapped(const std::string &text,
-                       const std::vector<std::uint16_t> &styles,
+                       const std::vector<StyleMask> &styles,
                        const std::vector<LinkRange> &links, bool hardWrap)
     {
       auto wrapped = wrapStyledLine(text, styles, links, width_, hardWrap);
@@ -1827,7 +1828,7 @@ namespace
       {
         std::string border;
         border.reserve(static_cast<std::size_t>(totalWidth));
-        std::vector<std::uint16_t> styles;
+        std::vector<StyleMask> styles;
         styles.reserve(border.capacity());
 
         append_text_with_style(border, styles, left, kStyleTableBorder);
@@ -1928,7 +1929,7 @@ namespace
         for (std::size_t r = 0; r < rowHeight; ++r)
         {
           std::string line;
-          std::vector<std::uint16_t> styles;
+          std::vector<StyleMask> styles;
           line.reserve(static_cast<std::size_t>(totalWidth) * 3);
           styles.reserve(static_cast<std::size_t>(totalWidth) * 3);
 
@@ -1949,7 +1950,7 @@ namespace
                 line.push_back(cellLine.text[i]);
                 // Use the cell's style, but override with table header style if
                 // needed
-                std::uint16_t cellStyle = cellLine.styles[i];
+                StyleMask cellStyle = cellLine.styles[i];
                 if (headerStyle)
                 {
                   cellStyle = kStyleTableHeader;
@@ -1997,7 +1998,7 @@ namespace
     return renderer.render(text);
   }
 
-  TColorAttr applyStyleToAttr(TColorAttr base, std::uint16_t mask)
+  TColorAttr applyStyleToAttr(TColorAttr base, StyleMask mask)
   {
     TColorAttr attr = base;
 
@@ -2023,19 +2024,20 @@ namespace
       chooseFg(0x08);
     if (mask & kStyleHeading)
     {
-      int headingLevel = (mask & kStyleHeadingLevelMask) >> 14;
+      int headingLevel = static_cast<int>(
+          (mask & kStyleHeadingLevelMask) >> kStyleHeadingLevelShift);
       if (headingLevel == 1) {
-        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfBold | sfUnderline));
+        setStyle(attr, static_cast<ushort>(getStyle(attr) | sfBold | sfUnderline));
       }
       else if (headingLevel == 2) {
-        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfBold));
+        setStyle(attr, static_cast<ushort>(getStyle(attr) | sfBold));
       }
       else if (headingLevel == 3) {
-        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfItalic));
+        setStyle(attr, static_cast<ushort>(getStyle(attr) | sfItalic));
       }
       else {
         // h4 and following are italic
-        setStyle(attr, static_cast<std::uint16_t>(getStyle(attr) | sfItalic));
+        setStyle(attr, static_cast<ushort>(getStyle(attr) | sfItalic));
       }
     }
     if (mask & kStyleInlineCode)
@@ -2057,25 +2059,25 @@ namespace
       chooseFg(0x08);
       setStyle(
           attr,
-          static_cast<std::uint16_t>(getStyle(attr) |
-                                     static_cast<std::uint16_t>(slStrike)));
+          static_cast<ushort>(getStyle(attr) |
+                                   static_cast<ushort>(slStrike)));
     }
     if (mask & kStyleItalic)
       setStyle(
           attr,
-          static_cast<std::uint16_t>(getStyle(attr) |
-                                     static_cast<std::uint16_t>(slItalic)));
+          static_cast<ushort>(getStyle(attr) |
+                                   static_cast<ushort>(slItalic)));
     if (mask & kStyleUnderline)
       setStyle(
           attr,
-          static_cast<std::uint16_t>(getStyle(attr) |
-                                     static_cast<std::uint16_t>(slUnderline)));
+          static_cast<ushort>(getStyle(attr) |
+                                   static_cast<ushort>(slUnderline)));
     if (mask & kStyleBold)
     {
       setStyle(
           attr,
-          static_cast<std::uint16_t>(getStyle(attr) |
-                                     static_cast<std::uint16_t>(slBold)));
+          static_cast<ushort>(getStyle(attr) |
+                                   static_cast<ushort>(slBold)));
     }
     if (mask & kStylePrefix)
       fg = 0x0C;
@@ -2121,12 +2123,12 @@ void ChatTranscriptView::finalizeDisplayRow(DisplayRow &row)
     row.displayWidth += glyph.width;
 }
 
-std::uint16_t ChatTranscriptView::glyphStyleMask(
+StyleMask ChatTranscriptView::glyphStyleMask(
     const DisplayRow &row, const DisplayRow::GlyphInfo &glyph)
 {
   if (row.styleMask.empty())
     return 0;
-  std::uint16_t mask = 0;
+  StyleMask mask = 0;
   std::size_t end = std::min<std::size_t>(glyph.end, row.styleMask.size());
   for (std::size_t i = glyph.start; i < end; ++i)
     mask |= row.styleMask[i];
@@ -2350,7 +2352,7 @@ void ChatTranscriptView::draw()
         while (glyphIndex < row.glyphs.size() && columnPos < viewWidth)
         {
           const auto &startGlyph = row.glyphs[glyphIndex];
-          std::uint16_t mask = glyphStyleMask(row, startGlyph);
+          StyleMask mask = glyphStyleMask(row, startGlyph);
           std::size_t runStartGlyph = glyphIndex;
           std::size_t runEndGlyph = glyphIndex;
           int runColumns = 0;
@@ -2358,7 +2360,7 @@ void ChatTranscriptView::draw()
           while (runEndGlyph < row.glyphs.size())
           {
             const auto &glyph = row.glyphs[runEndGlyph];
-            std::uint16_t glyphMask = glyphStyleMask(row, glyph);
+            StyleMask glyphMask = glyphStyleMask(row, glyph);
             if (runEndGlyph > runStartGlyph && glyphMask != mask)
               break;
             if (columnPos + runColumns + glyph.width > viewWidth)
@@ -2764,7 +2766,7 @@ void ChatTranscriptView::appendVisibleSegment(
 
       // Apply word wrapping to each line, even when markdown rendering is
       // skipped
-      std::vector<std::uint16_t> lineStyles(line.size(), 0);
+      std::vector<StyleMask> lineStyles(line.size(), 0);
       auto wrappedLines =
           wrapStyledLine(line, lineStyles, std::vector<LinkRange>{}, contentWidth,
                          false);
@@ -2796,8 +2798,7 @@ void ChatTranscriptView::appendVisibleSegment(
     row.text = prefixToUse + line.text;
     row.styleMask.assign(row.text.size(), 0);
     if (!prefixToUse.empty())
-      applyStyleRange(row.styleMask, 0, prefixToUse.size(),
-                      static_cast<std::uint16_t>(kStylePrefix));
+      applyStyleRange(row.styleMask, 0, prefixToUse.size(), kStylePrefix);
 
     for (std::size_t i = 0; i < line.text.size(); ++i)
     {

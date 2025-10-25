@@ -16,6 +16,7 @@ if (TARGET ckchat)
   )
   set_tests_properties(ck_chat_cli_echo PROPERTIES
     PASS_REGULAR_EXPRESSION "Response to: hello"
+    ENVIRONMENT "CK_AI_FORCE_STUB=1"
   )
 else()
   message(STATUS "ckchat target not present; skipping ck_chat_cli_echo test")

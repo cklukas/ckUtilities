@@ -53,5 +53,6 @@ private:
   llama_model *model_;
   llama_context *context_;
   mutable std::mutex mutex_;
+  bool stub_mode_ = false;
 };
 } // namespace ck::ai
