@@ -186,8 +186,8 @@ namespace ck::ui
                 ::setFore(highlight, useColorPalette ? TColorBIOS(0x1) : TColorBIOS(0x0));
                 TColorAttr normalBold = normal;
                 TColorAttr highlightBold = highlight;
-                setStyle(normalBold, static_cast<std::uint16_t>(getStyle(normalBold) | sfBold));
-                setStyle(highlightBold, static_cast<std::uint16_t>(getStyle(highlightBold) | sfBold));
+                setStyle(normalBold, static_cast<std::uint16_t>(getStyle(normalBold) | slBold));
+                setStyle(highlightBold, static_cast<std::uint16_t>(getStyle(highlightBold) | slBold));
                 TDrawBuffer buffer;
                 for (int y = 0; y < size.y; ++y)
                 {
