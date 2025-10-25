@@ -1,7 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <AvailabilityVersions.h>
 
-#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && defined(__MAC_15_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_15_0
 #define CK_HAS_ICLOUD_SYNC_PAUSE 1
 #else
 #define CK_HAS_ICLOUD_SYNC_PAUSE 0
@@ -351,6 +352,7 @@ OperationResult revealInFinder(const std::filesystem::path &path)
 
 bool supportsPauseResume(const std::filesystem::path &path)
 {
+#if CK_HAS_ICLOUD_SYNC_PAUSE
     __block bool supported = false;
     @autoreleasepool
     {
@@ -365,6 +367,10 @@ bool supportsPauseResume(const std::filesystem::path &path)
         supported = ok && value != nil;
     }
     return supported;
+#else
+    (void)path;
+    return false;
+#endif
 }
 
 } // namespace ck::du::cloud
