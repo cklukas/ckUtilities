@@ -1,5 +1,11 @@
 # CK Utilities
 
+**Status:** concept / exploration
+
+![ck-chat conversation interface](images/Screenshot%202025-10-25%20at%2023.34.31.png)
+![ck-chat model loading](images/Screenshot%202025-10-25%20at%2023.34.40.png)
+![ck-cjat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
+
 **Status:** concept / exploration.
 
 Current prototypes:
@@ -16,30 +22,9 @@ Tech stack: **C++20 (or newer)** + **Turbo Vision**.
 
 ## Why
 
-Many GNU tools are extremely powerful but tricky to memorize. CkTools wraps a focused subset behind clean, keyboard-first TUIs with sensible defaults and visible dry-runs.
+Why not?
 
 ---
-
-## Planned tools (initial scope)
-
-* **ckfind** — Visual query builder for `find`: filter by type/mtime/size/perm, test patterns live, preview actions (copy/move/delete/archive) with safe confirmation.
-* **ckdiff** — Side-by-side diff & patch helper: browse files/dirs, stage/apply hunks, ignore rules, make backups automatically.
-* **ckdu** — Interactive disk-usage explorer: tree view, sort & filter by size/inodes, reveal sparse files, jump-to-path actions.
-* **cktext** — Minimal **Markdown** editor for quick notes and docs; optional export via system tools (e.g., to HTML/PDF) when available.
-* **ckrescue** — Read-only front-end for disk imaging/recovery workflows (e.g., plan → image → verify), emphasizing logs and safety.
-
-> The above list is **not final** and may change as we prototype. Tools not listed here are **out of scope** for this phase.
-
----
-
-## Design principles
-
-* **TUI-first, CLI-friendly:** every screen shows the equivalent command-line so users learn by doing.
-* **Safety by default:** destructive actions are opt-in, with dry-run previews and clear warnings.
-* **Portable & fast:** single static binaries where practical; minimal external deps.
-
----
-
 
 ## Building CK Utilities
 
