@@ -24,8 +24,8 @@ jobs:
           sudo apt-get install -y \
             ninja-build \
             libncurses-dev \
-            libncursesw5-dev \
             libncursesw6 \
+            libncursesw6-dev \
             libtinfo-dev \
             libgpm-dev \
             pkg-config \
@@ -68,8 +68,8 @@ jobs:
           sudo apt-get install -y \
             ninja-build \
             libncurses-dev \
-            libncursesw5-dev \
             libncursesw6 \
+            libncursesw6-dev \
             libtinfo-dev \
             libgpm-dev \
             pkg-config \
