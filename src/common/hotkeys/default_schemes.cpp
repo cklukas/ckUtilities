@@ -51,6 +51,7 @@ const CommandLabel kDefaultLabels[] = {
     {commands::utilities::ShowCalendar, "ck-utilities", "Calendar"},
     {commands::utilities::ShowAsciiTable, "ck-utilities", "ASCII Table"},
     {commands::utilities::ShowCalculator, "ck-utilities", "Calculator"},
+    {commands::utilities::ShowColorSelector, "ck-utilities", "Color Selector"},
 
     {commands::disk_usage::ViewFiles, "ck-du", "Files"},
     {commands::disk_usage::ViewFilesRecursive, "ck-du", "Files (Recursive)"},
@@ -207,6 +208,7 @@ const CommandHelp kDefaultHelps[] = {
     {commands::utilities::ShowCalendar, "Open the calendar window."},
     {commands::utilities::ShowAsciiTable, "Display the ASCII table."},
     {commands::utilities::ShowCalculator, "Open the calculator."},
+    {commands::utilities::ShowColorSelector, "Open the color selector dialog."},
 
     {commands::disk_usage::ViewFiles, "Show disk usage by files in the current directory."},
     {commands::disk_usage::ViewFilesRecursive, "Show disk usage by files including subdirectories."},

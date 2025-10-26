@@ -3,6 +3,7 @@ set(SOURCES
     clock_aware_application.cpp
     clock_settings.cpp
     clock_view.cpp
+    color_selector_dialog.cpp
     status_line.cpp
     window_menu.cpp
 )

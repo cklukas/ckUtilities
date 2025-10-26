@@ -4,8 +4,9 @@
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
 #include "ck/ui/clock_aware_application.hpp"
-#include "ck/ui/clock_view.hpp"
 #include "ck/ui/calendar.hpp"
+#include "ck/ui/clock_view.hpp"
+#include "ck/ui/color_selector_dialog.hpp"
 #include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 
@@ -75,10 +76,11 @@ namespace
     using ck::commands::utilities::ShowAsciiTable;
     using ck::commands::utilities::ShowCalculator;
     using ck::commands::utilities::ShowCalendar;
+    using ck::commands::utilities::ShowColorSelector;
     using ck::commands::utilities::ToggleEventViewer;
 
     constexpr std::string_view kLauncherId = "ck-utilities";
-    constexpr short kUtilityReserveLines = 16;
+    constexpr short kUtilityReserveLines = 17;
     constexpr short kUtilityWindowSpacing = 2;
     constexpr short kUtilityBottomMargin = 2;
 
@@ -1153,6 +1155,23 @@ namespace
         LauncherApp *launcher = nullptr;
     };
 
+    class LauncherColorSelectorDialog : public ck::ui::ColorSelectorDialog
+    {
+    public:
+        explicit LauncherColorSelectorDialog(LauncherApp &owner) noexcept
+            : TWindowInit(&ck::ui::ColorSelectorDialog::initFrame),
+              ck::ui::ColorSelectorDialog(),
+              launcher(&owner)
+        {
+        }
+
+    protected:
+        void shutDown() override;
+
+    private:
+        LauncherApp *launcher = nullptr;
+    };
+
     class EventViewerWindow : public TWindow
     {
     public:
@@ -1345,6 +1364,12 @@ namespace
                     clearEvent(event);
                     return;
                 }
+                else if (event.message.command == ShowColorSelector)
+                {
+                    openColorSelector();
+                    clearEvent(event);
+                    return;
+                }
                 else if (event.message.command == ToggleEventViewer)
                 {
                     toggleEventViewer();
@@ -1375,6 +1400,7 @@ namespace
                                  *new TMenuItem("Ca~l~endar", ShowCalendar, kbNoKey, hcNoContext) +
                                  *new TMenuItem("Ascii ~T~able", ShowAsciiTable, kbNoKey, hcNoContext) +
                                  *new TMenuItem("~C~alculator", ShowCalculator, kbNoKey, hcNoContext) +
+                                 *new TMenuItem("Color ~S~elector", ShowColorSelector, kbNoKey, hcNoContext) +
                                  *new TMenuItem("~E~vent Viewer", ToggleEventViewer, kbNoKey, hcNoContext);
 
             TSubMenu &fileMenu = *new TSubMenu("~F~ile", kbAltF) +
@@ -1545,6 +1571,15 @@ namespace
             if (!deskTop)
                 return;
             auto *dialog = new CalculatorDialog(*this);
+            deskTop->insert(dialog);
+            onUtilityWindowOpened(dialog);
+        }
+
+        void openColorSelector()
+        {
+            if (!deskTop)
+                return;
+            auto *dialog = new LauncherColorSelectorDialog(*this);
             deskTop->insert(dialog);
             onUtilityWindowOpened(dialog);
         }
@@ -1738,6 +1773,16 @@ namespace
             launcher = nullptr;
         }
         TDialog::shutDown();
+    }
+
+    void LauncherColorSelectorDialog::shutDown()
+    {
+        if (launcher)
+        {
+            launcher->onUtilityWindowClosed(this);
+            launcher = nullptr;
+        }
+        ck::ui::ColorSelectorDialog::shutDown();
     }
 
 } // namespace

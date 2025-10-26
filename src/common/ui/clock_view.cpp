@@ -10,6 +10,10 @@
 #include <ctime>
 #include <tvision/system.h>
 
+#include <tvision/tv.h>
+#include <limits>
+#include <algorithm>
+
 namespace ck::ui
 {
     namespace
@@ -87,7 +91,7 @@ namespace ck::ui
             return std::string(buffer);
         }
         case ClockDisplayMode::Icon:
-            return "\xF0\x9F\x93\x85"; // Calendar icon
+            return "«"; // "\xF0\x9F\x93\x85"; // Calendar icon
         }
         return std::string();
     }
@@ -128,11 +132,18 @@ namespace ck::ui
         applyMode(mode);
     }
 
-    void ClockView::ensureWidthFor(const std::string &text)
+
+    void ClockView::ensureWidthFor(const std::string& text)
     {
-        const short desiredWidth = static_cast<short>(std::max<std::size_t>(1, text.size()));
+        // Use Turbo Vision's display-width (columns), not UTF-8 bytes.
+        const int w = strwidth(TStringView{text});          // or cstrlen(...) if you use ~accelerators~
+        const short desiredWidth = static_cast<short>(
+            std::clamp(w, 1, static_cast<int>(std::numeric_limits<short>::max()))
+        );
+
         if (desiredWidth == size.x)
             return;
+
         bringIntoViewBounds(desiredWidth);
     }
 
