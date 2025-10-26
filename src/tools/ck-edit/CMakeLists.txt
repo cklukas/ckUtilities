@@ -46,8 +46,6 @@ add_ck_tool(ckedit
   LIBRARIES
     ck_edit_core
     ck_hotkeys
-    tvision::tvision
-    ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/include

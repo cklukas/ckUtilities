@@ -33,13 +33,11 @@ add_ck_tool(ckchat
     src/ui/prompt_dialog.cpp
     src/clipboard.cpp
   LIBRARIES
-    ck_app_info
     ck_hotkeys
     ck_edit_core
     ckai_core
     ck_chat_options
     ck_ui
-    tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${PROJECT_SOURCE_DIR}/include
