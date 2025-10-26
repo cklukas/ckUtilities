@@ -1,9 +1,13 @@
 #include "ck/ui/clock_view.hpp"
 
+#include "ck/ui/calendar.hpp"
+#include "ck/ui/clock_aware_application.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <tvision/system.h>
 
 namespace ck::ui
 {
@@ -24,10 +28,10 @@ namespace ck::ui
     ClockView::ClockView(const TRect &bounds)
         : TView(bounds)
     {
-        lastTime_.fill('\0');
+        eventMask |= evMouseDown;
         currentTime_.fill('\0');
         refreshTime();
-        lastTime_ = currentTime_;
+        displayedText_.clear();
     }
 
     void ClockView::draw()
@@ -37,9 +41,9 @@ namespace ck::ui
 
         buffer.moveChar(0, ' ', color, size.x);
 
-        const short textLength = static_cast<short>(std::strlen(currentTime_.data()));
+        const short textLength = static_cast<short>(displayedText_.size());
         const short startColumn = std::max<short>(0, static_cast<short>(size.x - textLength));
-        buffer.moveStr(startColumn, currentTime_.data(), color);
+        buffer.moveStr(startColumn, displayedText_.c_str(), color);
 
         writeLine(0, 0, size.x, 1, buffer);
     }
@@ -47,10 +51,12 @@ namespace ck::ui
     void ClockView::update()
     {
         refreshTime();
-        if (std::strncmp(lastTime_.data(), currentTime_.data(), kTimeStringSize) != 0)
+        const std::string nextDisplay = formatDisplay(mode_);
+        if (nextDisplay != displayedText_)
         {
+            ensureWidthFor(nextDisplay);
+            displayedText_ = nextDisplay;
             drawView();
-            lastTime_ = currentTime_;
         }
     }
 
@@ -58,20 +64,163 @@ namespace ck::ui
     {
         const auto now = std::chrono::system_clock::now();
         const auto currentTime = std::chrono::system_clock::to_time_t(now);
+        currentEpoch_ = currentTime;
         const std::tm local = localTime(currentTime);
 
         std::strftime(currentTime_.data(), currentTime_.size(), "%H:%M:%S", &local);
     }
 
-    TRect clockBoundsFrom(const TRect &extent)
+    std::string ClockView::formatDisplay(DisplayMode mode) const
+    {
+        switch (mode)
+        {
+        case DisplayMode::Time:
+            return std::string(currentTime_.data());
+        case DisplayMode::Date:
+        {
+            char buffer[64]{};
+            std::tm local = localTime(currentEpoch_);
+            if (std::strftime(buffer, sizeof(buffer), "%a %x", &local) == 0)
+                return "";
+            return std::string(buffer);
+        }
+        case DisplayMode::Icon:
+            return "\xF0\x9F\x93\x85"; // Calendar icon
+        }
+        return std::string();
+    }
+
+    void ClockView::cycleMode()
+    {
+        DisplayMode next = mode_;
+        switch (mode_)
+        {
+        case DisplayMode::Time:
+            next = DisplayMode::Date;
+            break;
+        case DisplayMode::Date:
+            next = DisplayMode::Icon;
+            break;
+        case DisplayMode::Icon:
+            next = DisplayMode::Time;
+            break;
+        }
+        applyMode(next);
+    }
+
+    void ClockView::applyMode(DisplayMode mode)
+    {
+        if (mode_ == mode && !displayedText_.empty())
+            return;
+
+        mode_ = mode;
+        refreshTime();
+        const std::string nextDisplay = formatDisplay(mode_);
+        ensureWidthFor(nextDisplay);
+        displayedText_ = nextDisplay;
+        drawView();
+    }
+
+    void ClockView::ensureWidthFor(const std::string &text)
+    {
+        const short desiredWidth = static_cast<short>(std::max<std::size_t>(1, text.size()));
+        if (desiredWidth == size.x)
+            return;
+        bringIntoViewBounds(desiredWidth);
+    }
+
+    void ClockView::bringIntoViewBounds(short desiredWidth)
+    {
+        if (desiredWidth <= 0)
+            return;
+
+        if (owner)
+        {
+            const TRect current = getBounds();
+            TRect parentExtent = owner->getExtent();
+            const short right = parentExtent.b.x;
+            const short width = std::min<short>(desiredWidth, static_cast<short>(right - parentExtent.a.x));
+            const short left = static_cast<short>(std::max<int>(parentExtent.a.x, right - width));
+            TRect newBounds{left, current.a.y, right, current.b.y};
+            changeBounds(newBounds);
+        }
+        else
+        {
+            size.x = desiredWidth;
+        }
+    }
+
+    void ClockView::clearDisplay()
+    {
+        if (size.x <= 0)
+            return;
+
+        displayedText_.assign(static_cast<std::size_t>(size.x), ' ');
+        TDrawBuffer buffer;
+        TColorAttr color = getColor(2);
+        buffer.moveChar(0, ' ', color, size.x);
+        writeLine(0, 0, size.x, 1, buffer);
+    }
+
+    void ClockView::handleEvent(TEvent &event)
+    {
+        if (event.what == evMouseDown)
+        {
+            bool handled = false;
+            const bool shiftHeld = (event.mouse.controlKeyState & kbShift) != 0;
+            if (host_)
+            {
+                handled = host_->handleClockMouseClick(*this, event);
+            }
+            else
+            {
+                auto buttons = event.mouse.buttons;
+                if (buttons & mbLeftButton)
+                {
+                    handled = true;
+                    if (shiftHeld)
+                    {
+                        advanceDisplayMode();
+                    }
+                    else
+                    {
+                        if (auto *window = createCalendarWindow())
+                        {
+                            if (TProgram::deskTop)
+                            {
+                                placeCalendarWindow(*TProgram::deskTop, *window);
+                                TProgram::deskTop->insert(window);
+                            }
+                            else
+                            {
+                                delete window;
+                            }
+                        }
+                    }
+                }
+            }
+            if (handled)
+                clearEvent(event);
+            return;
+        }
+        TView::handleEvent(event);
+    }
+
+    void ClockView::advanceDisplayMode()
+    {
+        clearDisplay();
+        cycleMode();
+    }
+
+    TRect clockBoundsFrom(const TRect &extent, short width)
     {
         TRect bounds = extent;
         const short right = extent.b.x;
-        const short left = static_cast<short>(std::max<int>(extent.a.x, right - ClockView::kViewWidth));
+        const short actualWidth = std::max<short>(1, width);
+        const short left = static_cast<short>(std::max<int>(extent.a.x, right - actualWidth));
         bounds.a.x = left;
         bounds.b.x = right;
         bounds.b.y = static_cast<short>(bounds.a.y + 1);
         return bounds;
     }
 } // namespace ck::ui
-

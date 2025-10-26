@@ -1,8 +1,10 @@
 #include "ck/ui/clock_aware_application.hpp"
 
+#include "ck/ui/calendar.hpp"
 #include "ck/ui/clock_view.hpp"
 
 #include <algorithm>
+#include <tvision/system.h>
 
 namespace ck::ui
 {
@@ -25,9 +27,11 @@ namespace ck::ui
         auto bounds = clockBoundsFrom(getExtent());
         auto *clock = new ClockView(bounds);
         clock->growMode = gfGrowLoX | gfGrowHiX;
+        clock->setHost(this);
         insert(clock);
         registerClockView(clock);
         bringClockToFront(clock);
+        clock->update();
         return clock;
     }
 
@@ -44,6 +48,29 @@ namespace ck::ui
     {
         auto it = std::remove(clockViews_.begin(), clockViews_.end(), clock);
         clockViews_.erase(it, clockViews_.end());
+    }
+
+    bool ClockAwareApplication::handleClockMouseClick(ClockView &clock, const TEvent &event)
+    {
+        const auto buttons = event.mouse.buttons;
+        if (buttons & mbLeftButton)
+        {
+            const bool withShift = (event.mouse.controlKeyState & kbShift) != 0;
+            onClockPrimaryClick(clock, withShift);
+            return true;
+        }
+        return false;
+    }
+
+    void ClockAwareApplication::onClockPrimaryClick(ClockView &clock, bool withShift)
+    {
+        if (withShift)
+        {
+            clock.advanceDisplayMode();
+            return;
+        }
+
+        toggleCalendarVisibility();
     }
 
     void ClockAwareApplication::updateClocks()
@@ -73,5 +100,66 @@ namespace ck::ui
             clock->show();
         else
             clock->hide();
+    }
+
+    void ClockAwareApplication::ensureCalendarWindow()
+    {
+        if (calendarWindow_)
+            return;
+
+        if (!deskTop)
+            return;
+
+        calendarWindow_ = createCalendarWindow();
+        if (!calendarWindow_)
+            return;
+
+        calendarWindow_->setCloseHandler([this](CalendarWindow *closed) {
+            if (calendarWindow_ == closed)
+                calendarWindow_ = nullptr;
+        });
+        repositionCalendarWindow();
+        deskTop->insert(calendarWindow_);
+    }
+
+    void ClockAwareApplication::toggleCalendarVisibility()
+    {
+        if (calendarWindow_ && calendarWindow_->owner && (calendarWindow_->state & sfVisible) != 0)
+        {
+            hideCalendarWindow();
+        }
+        else
+        {
+            showCalendarWindow();
+        }
+    }
+
+    void ClockAwareApplication::showCalendarWindow()
+    {
+        ensureCalendarWindow();
+        if (!calendarWindow_)
+            return;
+        if (!deskTop)
+            return;
+
+        repositionCalendarWindow();
+        calendarWindow_->show();
+        calendarWindow_->makeFirst();
+        if (deskTop)
+            deskTop->setCurrent(calendarWindow_, normalSelect);
+    }
+
+    void ClockAwareApplication::hideCalendarWindow()
+    {
+        if (!calendarWindow_)
+            return;
+        calendarWindow_->hide();
+    }
+
+    void ClockAwareApplication::repositionCalendarWindow()
+    {
+        if (!calendarWindow_ || !deskTop)
+            return;
+        placeCalendarWindow(*deskTop, *calendarWindow_);
     }
 } // namespace ck::ui

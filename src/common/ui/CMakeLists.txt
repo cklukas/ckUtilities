@@ -1,4 +1,5 @@
 set(SOURCES
+    calendar.cpp
     clock_aware_application.cpp
     clock_view.cpp
 )

@@ -5,6 +5,7 @@
 #include "ck/launcher/cli_utils.hpp"
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/calendar.hpp"
 
 #define Uses_TApplication
 #define Uses_TButton
@@ -675,236 +676,6 @@ namespace
         }
         return nullptr;
     }
-
-    constexpr std::array<const char *, 13> kMonthNames = {
-        "",
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    };
-
-    constexpr std::array<unsigned, 13> kMonthLengths = {
-        0,
-        31,
-        28,
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    };
-
-    bool isLeapYear(int year)
-    {
-        if (year % 400 == 0)
-            return true;
-        if (year % 100 == 0)
-            return false;
-        return year % 4 == 0;
-    }
-
-    unsigned daysInMonth(int year, unsigned month)
-    {
-        if (month == 0 || month >= kMonthLengths.size())
-            return 30;
-        unsigned days = kMonthLengths[month];
-        if (month == 2 && isLeapYear(year))
-            ++days;
-        return days;
-    }
-
-    int calendarDayOfWeek(int day, unsigned month, int year)
-    {
-        int m = static_cast<int>(month);
-        int y = year;
-        if (m < 3)
-        {
-            m += 12;
-            --y;
-        }
-        int K = y % 100;
-        int J = y / 100;
-        int h = (day + (13 * (m + 1)) / 5 + K + K / 4 + J / 4 + 5 * J) % 7;
-        // Zeller's congruence returns 0 = Saturday. Adjust so 0 = Sunday.
-        int dayOfWeek = ((h + 6) % 7);
-        return dayOfWeek;
-    }
-
-    class CalendarView : public TView
-    {
-    public:
-        CalendarView(const TRect &bounds)
-            : TView(bounds)
-        {
-            options |= ofSelectable;
-            eventMask |= evMouseAuto | evMouseDown | evKeyboard;
-
-            auto now = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
-            std::chrono::year_month_day ymd(now);
-            year = static_cast<int>(ymd.year());
-            month = static_cast<unsigned>(ymd.month());
-            currentYear = year;
-            currentMonth = month;
-            currentDay = static_cast<unsigned>(ymd.day());
-        }
-
-        virtual void draw() override
-        {
-            TDrawBuffer buf;
-            auto normal = getColor(6);
-            auto highlight = getColor(7);
-
-            buf.moveChar(0, ' ', normal, size.x);
-            std::ostringstream header;
-            header << std::setw(9) << kMonthNames[std::min<std::size_t>(month, kMonthNames.size() - 1)]
-                   << ' ' << std::setw(4) << year
-                   << ' ' << static_cast<char>(30) << "  " << static_cast<char>(31);
-            buf.moveStr(0, header.str().c_str(), normal);
-            writeLine(0, 0, size.x, 1, buf);
-
-            buf.moveChar(0, ' ', normal, size.x);
-            buf.moveStr(0, "Su Mo Tu We Th Fr Sa", normal);
-            writeLine(0, 1, size.x, 1, buf);
-
-            int firstWeekday = calendarDayOfWeek(1, month, year);
-            int current = 1 - firstWeekday;
-            int totalDays = static_cast<int>(daysInMonth(year, month));
-            for (int row = 0; row < 6; ++row)
-            {
-                buf.moveChar(0, ' ', normal, size.x);
-                for (int col = 0; col < 7; ++col)
-                {
-                    if (current < 1 || current > totalDays)
-                    {
-                        buf.moveStr(col * 3, "   ", normal);
-                    }
-                    else
-                    {
-                        std::ostringstream cell;
-                        cell << std::setw(2) << current;
-                        bool isToday = (year == currentYear && month == currentMonth && current == static_cast<int>(currentDay));
-                        buf.moveStr(col * 3, cell.str().c_str(), isToday ? highlight : normal);
-                    }
-                    ++current;
-                }
-                writeLine(0, static_cast<short>(row + 2), size.x, 1, buf);
-            }
-        }
-
-        virtual void handleEvent(TEvent &event) override
-        {
-            TView::handleEvent(event);
-            if (event.what == evKeyboard)
-            {
-                bool handled = false;
-                switch (event.keyDown.keyCode)
-                {
-                case kbLeft:
-                    changeMonth(-1);
-                    handled = true;
-                    break;
-                case kbRight:
-                    changeMonth(1);
-                    handled = true;
-                    break;
-                case kbUp:
-                case kbPgUp:
-                    changeMonth(-12);
-                    handled = true;
-                    break;
-                case kbDown:
-                case kbPgDn:
-                    changeMonth(12);
-                    handled = true;
-                    break;
-                case kbHome:
-                    year = currentYear;
-                    month = currentMonth;
-                    handled = true;
-                    break;
-                default:
-                    break;
-                }
-                if (handled)
-                {
-                    drawView();
-                    clearEvent(event);
-                }
-            }
-            else if (event.what == evMouseDown || event.what == evMouseAuto)
-            {
-                TPoint point = makeLocal(event.mouse.where);
-                if (point.y == 0)
-                {
-                    if (point.x == 15)
-                        changeMonth(1);
-                    else if (point.x == 18)
-                        changeMonth(-1);
-                    drawView();
-                }
-                clearEvent(event);
-            }
-        }
-
-    private:
-        int year = 0;
-        unsigned month = 1;
-        unsigned currentDay = 1;
-        int currentYear = 0;
-        unsigned currentMonth = 1;
-
-        void changeMonth(int delta)
-        {
-            int totalMonths = static_cast<int>(month) + delta;
-            int newYear = year + (totalMonths - 1) / 12;
-            int newMonth = (totalMonths - 1) % 12 + 1;
-            if (newMonth <= 0)
-            {
-                newMonth += 12;
-                --newYear;
-            }
-            year = newYear;
-            month = static_cast<unsigned>(newMonth);
-        }
-    };
-
-    class CalendarWindow : public TWindow
-    {
-    public:
-        explicit CalendarWindow(LauncherApp &owner)
-            : TWindowInit(&CalendarWindow::initFrame),
-              TWindow(TRect(0, 0, 24, 10), "Calendar", wnNoNumber),
-              launcher(&owner)
-        {
-            flags &= ~(wfGrow | wfZoom);
-            growMode = 0;
-            palette = wpGrayWindow;
-
-            TRect inner = getExtent();
-            inner.grow(-1, -1);
-            insert(new CalendarView(inner));
-        }
-
-    protected:
-        virtual void shutDown() override;
-
-    private:
-        LauncherApp *launcher = nullptr;
-    };
 
     class AsciiInfoView : public TView
     {
@@ -1742,7 +1513,13 @@ namespace
         {
             if (!deskTop)
                 return;
-            auto *window = new CalendarWindow(*this);
+            auto *window = ck::ui::createCalendarWindow();
+            if (!window)
+                return;
+            window->setCloseHandler([this](ck::ui::CalendarWindow *closed) {
+                onUtilityWindowClosed(closed);
+            });
+            ck::ui::placeCalendarWindow(*deskTop, *window);
             deskTop->insert(window);
             onUtilityWindowOpened(window);
         }
@@ -1934,16 +1711,6 @@ namespace
             launcher = nullptr;
         }
         TDialog::shutDown();
-    }
-
-    void CalendarWindow::shutDown()
-    {
-        if (launcher)
-        {
-            launcher->onUtilityWindowClosed(this);
-            launcher = nullptr;
-        }
-        TWindow::shutDown();
     }
 
     void AsciiTableWindow::shutDown()

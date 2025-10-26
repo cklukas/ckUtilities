@@ -112,3 +112,66 @@ PY
 }
 
 apply_tvision_ncurses_patch
+
+apply_tvision_shift_mouse_patch() {
+  local patched_any=0
+  local found_sources=0
+  for root in "${SEARCH_ROOTS[@]}"; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r file; do
+      [[ -z "$file" ]] && continue
+      found_sources=1
+      log "Applying Turbo Vision mouse modifier patch: ${file#"$REPO_ROOT/"}"
+
+      python3 - "$file" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+if "mmShift = 0x04" in text and "mmShift | mmAlt | mmCtrl" in text and "kbShift" in text:
+    sys.exit(0)
+
+old_const = "const ushort\n    mmAlt = 0x08,\n    mmCtrl = 0x10;\n"
+new_const = "const ushort\n    mmShift = 0x04,\n    mmAlt = 0x08,\n    mmCtrl = 0x10;\n"
+
+if old_const in text:
+    text = text.replace(old_const, new_const, 1)
+elif "mmShift = 0x04" not in text:
+    sys.stderr.write(f"Unable to locate mouse modifier constants in {path}\n")
+    sys.exit(1)
+
+mod_old = "uint mod = butm & (mmAlt | mmCtrl);"
+if mod_old in text:
+    text = text.replace(mod_old, "uint mod = butm & (mmShift | mmAlt | mmCtrl);")
+
+if "(mmAlt | mmCtrl)) - 32;" in text:
+    text = text.replace("(mmAlt | mmCtrl)) - 32;", "(mmShift | mmAlt | mmCtrl)) - 32;", 1)
+
+if "uint but = butm & ~(mmAlt | mmCtrl);" in text:
+    text = text.replace("uint but = butm & ~(mmAlt | mmCtrl);", "uint but = butm & ~(mmShift | mmAlt | mmCtrl);", 1)
+
+state_old = "ev.mouse.controlKeyState = (-!!(mod & mmAlt) & kbLeftAlt) | (-!!(mod & mmCtrl) & kbLeftCtrl);"
+state_new = "ev.mouse.controlKeyState = (-!!(mod & mmShift) & kbShift) | (-!!(mod & mmAlt) & kbLeftAlt) | (-!!(mod & mmCtrl) & kbLeftCtrl);"
+if state_old in text:
+    text = text.replace(state_old, state_new)
+
+if "mmShift = 0x04" not in text or "mmShift | mmAlt | mmCtrl" not in text or "kbShift" not in text:
+    sys.stderr.write(f"Turbo Vision mouse patch failed for {path}\n")
+    sys.exit(1)
+
+path.write_text(text)
+PY
+      patched_any=1
+    done < <(find "$root" -path "*/_deps/tvision-src/source/platform/termio.cpp" 2>/dev/null || true)
+  done
+
+  if [[ $found_sources -eq 0 ]]; then
+    log "Turbo Vision sources not present yet; mouse modifier patch will be applied after configure."
+  elif [[ $patched_any -eq 0 ]]; then
+    log "Turbo Vision mouse modifier patch already up to date in scanned build directories."
+  fi
+}
+
+apply_tvision_shift_mouse_patch
