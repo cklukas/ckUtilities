@@ -29,6 +29,7 @@
 #include "ck/commands/json_view.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_view.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -310,6 +311,11 @@ JsonViewApp::JsonViewApp(int argc, char **argv)
     : TProgInit(&JsonViewApp::initStatusLine, &JsonViewApp::initMenuBar, &TApplication::initDeskTop),
       TApplication()
 {
+    auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+    auto *clock = new ck::ui::ClockView(clockBounds);
+    clock->growMode = gfGrowLoX | gfGrowHiX;
+    insert(clock);
+
     for (int i = 1; i < argc; ++i)
         loadFile(argv[i]);
 }

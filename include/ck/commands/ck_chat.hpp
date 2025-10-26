@@ -2,12 +2,14 @@
 
 #include <cstdint>
 
+#include "ck/commands/common.hpp"
+
 namespace ck::commands::chat
 {
 
 inline constexpr std::uint16_t NewChat = 1000;
-inline constexpr std::uint16_t ReturnToLauncher = 1001;
-inline constexpr std::uint16_t About = 1002;
+inline constexpr std::uint16_t ReturnToLauncher = ck::commands::common::ReturnToLauncher;
+inline constexpr std::uint16_t About = ck::commands::common::About;
 inline constexpr std::uint16_t SendPrompt = 1003;
 inline constexpr std::uint16_t CopyLastResponse = 1004;
 inline constexpr std::uint16_t CopyResponseBase = 2000;

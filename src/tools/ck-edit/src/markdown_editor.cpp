@@ -3,6 +3,7 @@
 #include "ck/about_dialog.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_view.hpp"
 
 #define Uses_TFindDialog
 #define Uses_TReplaceDialog
@@ -1672,6 +1673,11 @@ namespace ck::edit
         : TProgInit(&MarkdownEditorApp::initStatusLine, &MarkdownEditorApp::initMenuBar, &TApplication::initDeskTop),
           TApplication()
     {
+        auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+        auto *clock = new ck::ui::ClockView(clockBounds);
+        clock->growMode = gfGrowLoX | gfGrowHiX;
+        insert(clock);
+
         TEditor::editorDialog = runEditorDialog;
 
         TCommandSet ts;

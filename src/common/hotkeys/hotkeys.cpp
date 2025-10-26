@@ -13,6 +13,7 @@
 #include <limits>
 
 #include "ck/options.hpp"
+#include "ck/commands/common.hpp"
 #include <nlohmann/json.hpp>
 
 #include <tvision/util.h>
@@ -258,6 +259,7 @@ void loadConfiguration()
     {
         // TODO: log error
     }
+
 }
 
 void applyPreferredScheme()
@@ -464,13 +466,16 @@ void registerCommandLabels(std::span<const CommandLabel> labels, std::string_vie
     auto &map = gLabelsByLocale[std::string(locale)];
     for (const auto &entry : labels)
     {
-        if (entry.command == 0)
+        std::uint16_t command = entry.command;
+        if (command == 0)
             continue;
-        map[entry.command] = entry.label;
-        if (!entry.toolId.empty())
-            gCommandTools[entry.command] = std::string(entry.toolId);
-        else if (!gCommandTools.count(entry.command))
-            gCommandTools[entry.command] = std::string{};
+        map[command] = entry.label;
+        bool isGlobalCommand = command == ck::commands::common::ReturnToLauncher ||
+                               command == ck::commands::common::About;
+        if (!entry.toolId.empty() && !isGlobalCommand)
+            gCommandTools[command] = std::string(entry.toolId);
+        else if (!gCommandTools.count(command))
+            gCommandTools[command] = std::string{};
     }
 }
 
@@ -479,8 +484,10 @@ std::string commandLabel(std::uint16_t command)
     if (const std::string *label = findLabel(gActiveLocale, command))
         return *label;
     if (gActiveLocale != "en")
+    {
         if (const std::string *label = findLabel("en", command))
             return *label;
+    }
     return {};
 }
 

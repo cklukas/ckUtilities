@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "ck/commands/common.hpp"
+
 namespace ck::commands::disk_usage
 {
 
@@ -11,7 +13,7 @@ inline constexpr std::uint16_t ViewFileTypes = 2003;
 inline constexpr std::uint16_t ViewFileTypesRecursive = 2004;
 inline constexpr std::uint16_t ViewFilesForType = 2005;
 
-inline constexpr std::uint16_t About = 2100;
+inline constexpr std::uint16_t About = ck::commands::common::About;
 
 inline constexpr std::uint16_t UnitAuto = 2200;
 inline constexpr std::uint16_t UnitBytes = 2201;
@@ -46,7 +48,8 @@ inline constexpr std::uint16_t PatternAdd = 2500;
 inline constexpr std::uint16_t PatternEdit = 2501;
 inline constexpr std::uint16_t PatternDelete = 2502;
 
-inline constexpr std::uint16_t ReturnToLauncher = 2600;
+inline constexpr std::uint16_t ReturnToLauncher = ck::commands::common::ReturnToLauncher;
 inline constexpr std::uint16_t ManageCloudStorage = 2601;
+inline constexpr std::uint16_t CopyPath = 2602;
 
 } // namespace ck::commands::disk_usage

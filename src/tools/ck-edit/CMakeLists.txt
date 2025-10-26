@@ -25,6 +25,7 @@ target_compile_features(ck_edit_core PUBLIC cxx_std_20)
 target_link_libraries(ck_edit_core
   PUBLIC
     ck_app_info
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
 )

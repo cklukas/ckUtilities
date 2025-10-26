@@ -18,6 +18,7 @@
 #define Uses_TMenu
 #define Uses_TMenuBar
 #define Uses_TMenuItem
+#define Uses_TClipboard
 #define Uses_TOutline
 #define Uses_TScrollBar
 #define Uses_TStatusDef
@@ -35,6 +36,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/options.hpp"
+#include "ck/ui/clock_view.hpp"
 #include "cloud_actions.hpp"
 
 #include <algorithm>
@@ -78,6 +80,7 @@ static constexpr unsigned short cmViewFilesRecursive = commands::ViewFilesRecurs
 static constexpr unsigned short cmViewFileTypes = commands::ViewFileTypes;
 static constexpr unsigned short cmViewFileTypesRecursive = commands::ViewFileTypesRecursive;
 static constexpr unsigned short cmViewFilesForType = commands::ViewFilesForType;
+static constexpr unsigned short cmCopyPath = commands::CopyPath;
 static constexpr unsigned short cmAbout = commands::About;
 static constexpr unsigned short cmUnitAuto = commands::UnitAuto;
 static constexpr unsigned short cmUnitBytes = commands::UnitBytes;
@@ -170,6 +173,48 @@ std::string trim(const std::string &text)
     while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])))
         --end;
     return text.substr(start, end - start);
+}
+
+#if !defined(_WIN32)
+bool clipboardOsc52Likely()
+{
+    const char *noOsc52 = std::getenv("NO_OSC52");
+    if (noOsc52 && *noOsc52)
+        return false;
+
+    const char *term = std::getenv("TERM");
+    if (!term)
+        return false;
+
+    std::string termStr(term);
+
+    if (termStr == "dumb" || termStr == "linux")
+        return false;
+
+    return termStr.find("xterm") != std::string::npos || termStr.find("tmux") != std::string::npos ||
+           termStr.find("screen") != std::string::npos || termStr.find("rxvt") != std::string::npos ||
+           termStr.find("alacritty") != std::string::npos || termStr.find("foot") != std::string::npos ||
+           termStr.find("kitty") != std::string::npos || termStr.find("wezterm") != std::string::npos;
+}
+#endif
+
+std::string clipboardStatusMessage()
+{
+#if defined(_WIN32)
+    return "Path copied to clipboard!";
+#else
+    bool likely = clipboardOsc52Likely();
+    if (likely)
+        return "Path copied to clipboard!";
+    if (std::getenv("TMUX") && !likely)
+        return "Clipboard not supported - tmux needs OSC 52 configuration";
+    return "Clipboard not supported by this terminal";
+#endif
+}
+
+void copyTextToClipboard(const std::string &text)
+{
+    TClipboard::setText(text.c_str());
 }
 
 #if defined(__APPLE__)
@@ -1869,6 +1914,7 @@ private:
 
     void promptOpenDirectory();
     void openDirectory(const std::filesystem::path &path);
+    void copySelectedPath();
     void viewFiles(bool recursive);
     void viewFileTypes(bool recursive);
     void viewFilesForType(const std::filesystem::path &directory, bool recursive, const std::string &type,
@@ -2876,6 +2922,11 @@ DiskUsageApp::DiskUsageApp(const std::vector<std::filesystem::path> &paths,
     : TProgInit(&DiskUsageApp::initStatusLine, &DiskUsageApp::initMenuBar, &TApplication::initDeskTop),
       TApplication(), optionRegistry(std::move(registry))
 {
+    auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+    auto *clock = new ck::ui::ClockView(clockBounds);
+    clock->growMode = gfGrowLoX | gfGrowHiX;
+    insert(clock);
+
     unitBaseLabels = {{SizeUnit::Auto, "~A~uto"},
                       {SizeUnit::Bytes, "~B~ytes"},
                       {SizeUnit::Kilobytes, "~K~ilobytes"},
@@ -2970,6 +3021,9 @@ void DiskUsageApp::handleEvent(TEvent &event)
             break;
         case commands::ViewFileTypesRecursive:
             viewFileTypes(true);
+            break;
+        case cmCopyPath:
+            copySelectedPath();
             break;
         case cmUnitAuto:
             applyUnit(SizeUnit::Auto);
@@ -3172,7 +3226,10 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
         fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
     fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcExit);
 
-    TMenuItem &menuChain = fileMenu +
+    TSubMenu &editMenu = *new TSubMenu("~E~dit", hcNoContext) +
+                         *new TMenuItem("~C~opy Path", cmCopyPath, kbNoKey, hcNoContext);
+
+    TMenuItem &menuChain = fileMenu + editMenu +
                            *new TSubMenu("~S~ort", hcNoContext) +
                                *sortUnsorted +
                                *sortNameAsc +
@@ -3254,6 +3311,30 @@ void DiskUsageApp::promptOpenDirectory()
 void DiskUsageApp::openDirectory(const std::filesystem::path &path)
 {
     requestDirectoryScan(path, false);
+}
+
+void DiskUsageApp::copySelectedPath()
+{
+    DirectoryWindow *window = activeDirectoryWindow();
+    if (!window)
+    {
+        messageBox("No directory window active", mfError | mfOKButton);
+        return;
+    }
+
+    DirectoryNode *node = window->focusedNode();
+    if (!node)
+    {
+        messageBox("No directory selected", mfError | mfOKButton);
+        return;
+    }
+
+    std::filesystem::path path = node->path;
+    std::string text = path.string();
+    copyTextToClipboard(text);
+    showFilePath(path);
+    std::string status = clipboardStatusMessage();
+    messageBox(status.c_str(), mfInformation | mfOKButton);
 }
 
 void DiskUsageApp::viewFiles(bool recursive)

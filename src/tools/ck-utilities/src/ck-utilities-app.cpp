@@ -3,6 +3,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
+#include "ck/ui/clock_view.hpp"
 
 #define Uses_TApplication
 #define Uses_TButton
@@ -1510,6 +1511,11 @@ namespace
             : TProgInit(&LauncherApp::initStatusLine, &LauncherApp::initMenuBar, &TApplication::initDeskTop),
               TApplication()
         {
+            auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+            auto *clock = new ck::ui::ClockView(clockBounds);
+            clock->growMode = gfGrowLoX | gfGrowHiX;
+            insert(clock);
+
             toolDirectory = resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
             openLauncher();
         }

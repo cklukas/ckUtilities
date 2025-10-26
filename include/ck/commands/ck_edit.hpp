@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "ck/commands/common.hpp"
+
 namespace ck::commands::edit
 {
 
@@ -54,8 +56,8 @@ inline constexpr std::uint16_t cmTableAlignNumber = 3062;
 inline constexpr std::uint16_t cmReflowParagraphs = 3070;
 inline constexpr std::uint16_t cmFormatDocument = 3071;
 inline constexpr std::uint16_t cmToggleSmartList = 3080;
-inline constexpr std::uint16_t cmAbout = 3090;
-inline constexpr std::uint16_t cmReturnToLauncher = 3091;
+inline constexpr std::uint16_t cmAbout = ck::commands::common::About;
+inline constexpr std::uint16_t cmReturnToLauncher = ck::commands::common::ReturnToLauncher;
 
 } // namespace ck::commands::edit
 

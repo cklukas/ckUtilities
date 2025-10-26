@@ -8,6 +8,7 @@
 #include "ck/app_info.hpp"
 #include "ck/launcher.hpp"
 #include "ck/hotkeys.hpp"
+#include "ck/ui/clock_view.hpp"
 #include "model_dialog.hpp"
 #include "model_loading_dialog.hpp"
 #include "prompt_dialog.hpp"
@@ -41,6 +42,11 @@ ChatApp::ChatApp(int argc, char **argv)
       TApplication(), modelLoadingInProgress_(false),
       modelLoadingShouldStop_(false), modelLoadingStarted_(false)
 {
+  auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+  auto *clock = new ck::ui::ClockView(clockBounds);
+  clock->growMode = gfGrowLoX | gfGrowHiX;
+  insert(clock);
+
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
 

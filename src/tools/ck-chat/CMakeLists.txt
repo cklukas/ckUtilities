@@ -38,6 +38,7 @@ add_ck_tool(ckchat
     ck_edit_core
     ckai_core
     ck_chat_options
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

@@ -6,6 +6,7 @@
 #include "ck/commands/ck_edit.hpp"
 #include "ck/commands/ck_find.hpp"
 #include "ck/commands/ck_utilities.hpp"
+#include "ck/commands/common.hpp"
 #include "ck/commands/json_view.hpp"
 
 #include <tvision/views.h>
@@ -41,6 +42,9 @@ const CommandLabel kDefaultLabels[] = {
     {cmSearchAgain, "", "Find Next"},
     {cmHelp, "", "Help"},
 
+    {commands::common::ReturnToLauncher, "", "Return"},
+    {commands::common::About, "", "About"},
+
     {commands::utilities::LaunchTool, "ck-utilities", "Launch"},
     {commands::utilities::ToggleEventViewer, "ck-utilities", "Event Viewer"},
     {commands::utilities::NewLauncher, "ck-utilities", "New Launcher"},
@@ -71,8 +75,6 @@ const CommandLabel kDefaultLabels[] = {
     {commands::disk_usage::OptionLoad, "ck-du", "Load Options"},
     {commands::disk_usage::OptionSave, "ck-du", "Save Options"},
     {commands::disk_usage::OptionSaveDefaults, "ck-du", "Save Defaults"},
-    {commands::disk_usage::ReturnToLauncher, "ck-du", "Return"},
-    {commands::disk_usage::About, "ck-du", "About"},
 
     {commands::config::ReloadApps, "ck-config", "Reload"},
     {commands::config::EditApp, "ck-config", "Edit Options"},
@@ -81,14 +83,10 @@ const CommandLabel kDefaultLabels[] = {
     {commands::config::ExportApp, "ck-config", "Export"},
     {commands::config::ImportApp, "ck-config", "Import"},
     {commands::config::OpenConfigDir, "ck-config", "Open Config Dir"},
-    {commands::config::ReturnToLauncher, "ck-config", "Return"},
-    {commands::config::About, "ck-config", "About"},
 
     {commands::find::NewSearch, "ck-find", "New Search"},
     {commands::find::LoadSpec, "ck-find", "Load Spec"},
     {commands::find::SaveSpec, "ck-find", "Save Spec"},
-    {commands::find::ReturnToLauncher, "ck-find", "Return"},
-    {commands::find::About, "ck-find", "About"},
     {commands::find::BrowseStart, "ck-find", "Browse"},
     {commands::find::TextOptions, "ck-find", "Text Options"},
     {commands::find::NamePathOptions, "ck-find", "Name/Path Options"},
@@ -105,7 +103,6 @@ const CommandLabel kDefaultLabels[] = {
     {commands::json_view::FindNext, "ck-json-view", "Find Next"},
     {commands::json_view::FindPrev, "ck-json-view", "Find Previous"},
     {commands::json_view::EndSearch, "ck-json-view", "End Search"},
-    {commands::json_view::ReturnToLauncher, "ck-json-view", "Return"},
     {commands::json_view::Level0, "ck-json-view", "Level 0"},
     {commands::json_view::Level1, "ck-json-view", "Level 1"},
     {commands::json_view::Level2, "ck-json-view", "Level 2"},
@@ -116,19 +113,16 @@ const CommandLabel kDefaultLabels[] = {
     {commands::json_view::Level7, "ck-json-view", "Level 7"},
     {commands::json_view::Level8, "ck-json-view", "Level 8"},
     {commands::json_view::Level9, "ck-json-view", "Level 9"},
-    {commands::json_view::About, "ck-json-view", "About"},
 
     {commands::chat::NewChat, "ck-chat", "New Chat"},
     {commands::chat::ManageModels, "ck-chat", "Manage Models"},
     {commands::chat::ManagePrompts, "ck-chat", "Manage Prompts"},
-    {commands::chat::ReturnToLauncher, "ck-chat", "Return"},
     {commands::chat::SendPrompt, "ck-chat", "Send"},
     {commands::chat::ShowThinking, "ck-chat", "Show Thinking"},
     {commands::chat::HideThinking, "ck-chat", "Hide Thinking"},
     {commands::chat::ShowAnalysis, "ck-chat", "Show Analysis"},
     {commands::chat::HideAnalysis, "ck-chat", "Hide Analysis"},
     {commands::chat::CopyLastResponse, "ck-chat", "Copy Last Response"},
-    {commands::chat::About, "ck-chat", "About"},
 
     {commands::edit::cmToggleWrap, "ck-edit", "Toggle Wrap"},
     {commands::edit::cmToggleMarkdownMode, "ck-edit", "Toggle Markdown"},
@@ -179,8 +173,6 @@ const CommandLabel kDefaultLabels[] = {
     {commands::edit::cmTableAlignNumber, "ck-edit", "Align Number"},
     {commands::edit::cmReflowParagraphs, "ck-edit", "Reflow"},
     {commands::edit::cmFormatDocument, "ck-edit", "Format Document"},
-    {commands::edit::cmReturnToLauncher, "ck-edit", "Return"},
-    {commands::edit::cmAbout, "ck-edit", "About"},
 };
 
 const KeyBinding kLinuxBindings[] = {
@@ -196,6 +188,9 @@ const KeyBinding kLinuxBindings[] = {
     {cmHelp, TKey(kbF1), "F1"},
     {commands::chat::CopyLastResponse, TKey('C', kbAltShift | kbShift), "Alt+Shift+C"},
 
+    {commands::common::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
+    {commands::common::About, TKey(kbF1), "F1"},
+
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey(kbAlt0), "Alt-0"},
 
@@ -206,25 +201,18 @@ const KeyBinding kLinuxBindings[] = {
     {commands::disk_usage::SortNameAsc, TKey(kbCtrlN), "Ctrl-N"},
     {commands::disk_usage::SortSizeDesc, TKey(kbCtrlS), "Ctrl-S"},
     {commands::disk_usage::SortModifiedDesc, TKey(kbCtrlM), "Ctrl-M"},
-    {commands::disk_usage::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::disk_usage::About, TKey(kbF1), "F1"},
 
     {commands::config::ReloadApps, TKey(kbF5), "F5"},
     {commands::config::EditApp, TKey(kbEnter), "Enter"},
-    {commands::config::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::config::About, TKey(kbF1), "F1"},
 
     {commands::find::NewSearch, TKey(kbF2), "F2"},
     {commands::find::LoadSpec, TKey(kbCtrlO), "Ctrl-O"},
     {commands::find::SaveSpec, TKey(kbCtrlS), "Ctrl-S"},
-    {commands::find::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::find::About, TKey(kbF1), "F1"},
 
     {commands::json_view::Find, TKey(kbCtrlF), "Ctrl-F"},
     {commands::json_view::FindNext, TKey(kbF5), "F5"},
     {commands::json_view::FindPrev, TKey(kbShiftF5), "Shift-F5"},
     {commands::json_view::EndSearch, TKey(kbEsc), "Esc"},
-    {commands::json_view::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
     {commands::json_view::Level0, TKey(kbAlt0), "Alt-0"},
     {commands::json_view::Level1, TKey(kbAlt1), "Alt-1"},
     {commands::json_view::Level2, TKey(kbAlt2), "Alt-2"},
@@ -239,9 +227,7 @@ const KeyBinding kLinuxBindings[] = {
     {commands::chat::NewChat, TKey(kbCtrlN), "Ctrl-N"},
     {commands::chat::ManageModels, TKey(kbF2), "F2"},
     {commands::chat::ManagePrompts, TKey(kbF3), "F3"},
-    {commands::chat::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
     {commands::chat::SendPrompt, TKey(kbAltS), "Alt-S"},
-    {commands::chat::About, TKey(kbF1), "F1"},
 
     {commands::edit::cmToggleWrap, TKey(kbCtrlW), "Ctrl-W"},
     {commands::edit::cmToggleMarkdownMode, TKey(kbCtrlM), "Ctrl-M"},
@@ -307,6 +293,9 @@ const KeyBinding kMacBindings[] = {
     {cmHelp, TKey(kbF1), "F1"},
     {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl+Shift+C"},
 
+    {commands::common::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
+    {commands::common::About, TKey(kbF1), "F1"},
+
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey('0', kbCtrlShift), "Ctrl-0"},
 
@@ -317,25 +306,18 @@ const KeyBinding kMacBindings[] = {
     {commands::disk_usage::SortNameAsc, TKey(kbCtrlN), "Ctrl-N"},
     {commands::disk_usage::SortSizeDesc, TKey(kbCtrlS), "Ctrl-S"},
     {commands::disk_usage::SortModifiedDesc, TKey(kbCtrlM), "Ctrl-M"},
-    {commands::disk_usage::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::disk_usage::About, TKey(kbF1), "F1"},
 
     {commands::config::ReloadApps, TKey(kbF5), "F5"},
     {commands::config::EditApp, TKey(kbEnter), "Enter"},
-    {commands::config::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::config::About, TKey(kbF1), "F1"},
 
     {commands::find::NewSearch, TKey(kbF2), "F2"},
     {commands::find::LoadSpec, TKey(kbCtrlO), "Ctrl-O"},
     {commands::find::SaveSpec, TKey(kbCtrlS), "Ctrl-S"},
-    {commands::find::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
-    {commands::find::About, TKey(kbF1), "F1"},
 
     {commands::json_view::Find, TKey(kbCtrlF), "Ctrl-F"},
     {commands::json_view::FindNext, TKey(kbF5), "F5"},
     {commands::json_view::FindPrev, TKey(kbShiftF5), "Shift-F5"},
     {commands::json_view::EndSearch, TKey(kbEsc), "Esc"},
-    {commands::json_view::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
     {commands::json_view::Level0, TKey('0', kbCtrlShift), "Ctrl-0"},
     {commands::json_view::Level1, TKey('1', kbCtrlShift), "Ctrl-1"},
     {commands::json_view::Level2, TKey('2', kbCtrlShift), "Ctrl-2"},
@@ -350,9 +332,7 @@ const KeyBinding kMacBindings[] = {
     {commands::chat::NewChat, TKey(kbCtrlN), "Ctrl-N"},
     {commands::chat::ManageModels, TKey(kbF2), "F2"},
     {commands::chat::ManagePrompts, TKey(kbF3), "F3"},
-    {commands::chat::ReturnToLauncher, TKey(kbCtrlL), "Ctrl-L"},
     {commands::chat::SendPrompt, TKey(kbCtrlEnter), "Ctrl-Enter"},
-    {commands::chat::About, TKey(kbF1), "F1"},
 
     {commands::edit::cmToggleWrap, TKey(kbCtrlW), "Ctrl-W"},
     {commands::edit::cmToggleMarkdownMode, TKey(kbCtrlM), "Ctrl-M"},

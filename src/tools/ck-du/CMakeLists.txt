@@ -47,6 +47,7 @@ add_ck_tool(ckdu
     ck_hotkeys
     ck_options
     ck_du_core
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

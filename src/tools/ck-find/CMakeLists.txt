@@ -25,6 +25,7 @@ add_ck_tool(ckfind
   LIBRARIES
     ck_app_info
     ck_hotkeys
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

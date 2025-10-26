@@ -36,6 +36,7 @@ add_ck_tool(ckjsonview
     ck_app_info
     ck_hotkeys
     ck_json_view_core
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

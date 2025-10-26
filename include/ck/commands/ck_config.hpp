@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "ck/commands/common.hpp"
+
 namespace ck::commands::config
 {
 
@@ -12,7 +14,7 @@ inline constexpr std::uint16_t ClearApp = 3003;
 inline constexpr std::uint16_t ExportApp = 3004;
 inline constexpr std::uint16_t ImportApp = 3005;
 inline constexpr std::uint16_t OpenConfigDir = 3006;
-inline constexpr std::uint16_t About = 3007;
+inline constexpr std::uint16_t About = ck::commands::common::About;
 
 inline constexpr std::uint16_t OptionEdit = 3100;
 inline constexpr std::uint16_t OptionResetValue = 3101;
@@ -22,7 +24,7 @@ inline constexpr std::uint16_t PatternAdd = 3200;
 inline constexpr std::uint16_t PatternEdit = 3201;
 inline constexpr std::uint16_t PatternDelete = 3202;
 
-inline constexpr std::uint16_t ReturnToLauncher = 3300;
+inline constexpr std::uint16_t ReturnToLauncher = ck::commands::common::ReturnToLauncher;
 
 } // namespace ck::commands::config
 

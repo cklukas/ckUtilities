@@ -14,7 +14,7 @@
 #define Uses_TButton
 #define Uses_TCheckBoxes
 #define Uses_TDialog
-#define Uses_TFileDialog
+#define Uses_TChDirDialog
 #define Uses_TInputLine
 #define Uses_TLabel
 #define Uses_TMessageBox
@@ -198,7 +198,7 @@ private:
         char location[PATH_MAX]{};
         std::snprintf(location, sizeof(location), "%s", m_data.startLocation[0] ? m_data.startLocation : ".");
 
-        auto *dialog = new TFileDialog("*", "Select Start Location", "~N~ame", fdOpenButton, 1);
+        auto *dialog = new TChDirDialog(cdNormal, 1);
         dialog->setData(location);
         unsigned short result = TProgram::application->executeDialog(dialog, location);
         TObject::destroy(dialog);

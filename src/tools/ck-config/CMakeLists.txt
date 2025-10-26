@@ -17,6 +17,7 @@ add_ck_tool(ckconfig
     ck_options
     ck_du_core
     ck_chat_options
+    ck_ui
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES

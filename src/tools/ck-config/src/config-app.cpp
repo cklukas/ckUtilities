@@ -4,6 +4,7 @@
 #include "ck/commands/ck_config.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_view.hpp"
 #include "disk_usage_options.hpp"
 #include "chat_options.hpp"
 
@@ -1807,6 +1808,11 @@ public:
         : TProgInit(&ConfigApp::initStatusLine, &ConfigApp::initMenuBar, &TApplication::initDeskTop),
           TApplication()
     {
+        auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
+        auto *clock = new ck::ui::ClockView(clockBounds);
+        clock->growMode = gfGrowLoX | gfGrowHiX;
+        insert(clock);
+
         auto *window = new AppBrowserWindow();
         appWindow = window;
         deskTop->insert(window);
