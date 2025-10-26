@@ -1671,12 +1671,9 @@ namespace ck::edit
 
     MarkdownEditorApp::MarkdownEditorApp(int argc, char **argv)
         : TProgInit(&MarkdownEditorApp::initStatusLine, &MarkdownEditorApp::initMenuBar, &TApplication::initDeskTop),
-          TApplication()
+          ck::ui::ClockAwareApplication()
     {
-        auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-        auto *clock = new ck::ui::ClockView(clockBounds);
-        clock->growMode = gfGrowLoX | gfGrowHiX;
-        insert(clock);
+        insertMenuClock();
 
         TEditor::editorDialog = runEditorDialog;
 
@@ -1876,7 +1873,7 @@ namespace ck::edit
 
     void MarkdownEditorApp::idle()
     {
-        TApplication::idle();
+        ck::ui::ClockAwareApplication::idle();
 
         if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
         {

@@ -1,8 +1,9 @@
 #pragma once
 
-#include "markdown_parser.hpp"
 #include "ck/app_info.hpp"
 #include "ck/commands/ck_edit.hpp"
+#include "ck/ui/clock_aware_application.hpp"
+#include "markdown_parser.hpp"
 
 #define Uses_TWindow
 #define Uses_TFrame
@@ -421,7 +422,7 @@ protected:
     static TFrame *initFrame(TRect bounds);
 };
 
-class MarkdownEditorApp : public TApplication
+class MarkdownEditorApp : public ck::ui::ClockAwareApplication
 {
 public:
     MarkdownEditorApp(int argc, char **argv);

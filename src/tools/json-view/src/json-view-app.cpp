@@ -29,6 +29,7 @@
 #include "ck/commands/json_view.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 
 #include <fstream>
@@ -178,13 +179,12 @@ public:
     }
 };
 
-class JsonViewApp : public TApplication
+class JsonViewApp : public ck::ui::ClockAwareApplication
 {
 public:
     JsonViewApp(int argc, char **argv);
 
     virtual void handleEvent(TEvent &event);
-    virtual void idle();
     static TMenuBar *initMenuBar(TRect r);
     static TStatusLine *initStatusLine(TRect r);
 
@@ -309,12 +309,9 @@ static void syncExpanded(JsonTNode *n)
 
 JsonViewApp::JsonViewApp(int argc, char **argv)
     : TProgInit(&JsonViewApp::initStatusLine, &JsonViewApp::initMenuBar, &TApplication::initDeskTop),
-      TApplication()
+      ck::ui::ClockAwareApplication()
 {
-    auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-    auto *clock = new ck::ui::ClockView(clockBounds);
-    clock->growMode = gfGrowLoX | gfGrowHiX;
-    insert(clock);
+    insertMenuClock();
 
     for (int i = 1; i < argc; ++i)
         loadFile(argv[i]);
@@ -414,11 +411,6 @@ void JsonViewApp::handleEvent(TEvent &event)
         }
         clearEvent(event);
     }
-}
-
-void JsonViewApp::idle()
-{
-    TApplication::idle();
 }
 
 void JsonViewApp::openFile()

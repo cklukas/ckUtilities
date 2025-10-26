@@ -4,6 +4,7 @@
 #include "ck/commands/ck_config.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 #include "disk_usage_options.hpp"
 #include "chat_options.hpp"
@@ -1801,17 +1802,14 @@ private:
     }
 };
 
-class ConfigApp : public TApplication
+class ConfigApp : public ck::ui::ClockAwareApplication
 {
 public:
     ConfigApp()
         : TProgInit(&ConfigApp::initStatusLine, &ConfigApp::initMenuBar, &TApplication::initDeskTop),
-          TApplication()
+          ck::ui::ClockAwareApplication()
     {
-        auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-        auto *clock = new ck::ui::ClockView(clockBounds);
-        clock->growMode = gfGrowLoX | gfGrowHiX;
-        insert(clock);
+        insertMenuClock();
 
         auto *window = new AppBrowserWindow();
         appWindow = window;
@@ -1864,11 +1862,6 @@ public:
             }
             clearEvent(event);
         }
-    }
-
-    virtual void idle() override
-    {
-        TApplication::idle();
     }
 
     static TMenuBar *initMenuBar(TRect r)

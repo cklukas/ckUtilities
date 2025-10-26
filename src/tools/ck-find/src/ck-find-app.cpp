@@ -5,6 +5,7 @@
 #include "ck/find/search_model.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
+#include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 
 #include "command_ids.hpp"
@@ -220,17 +221,14 @@ std::string buildPlaceholderSummary(const SearchSpecification &spec)
     return out.str();
 }
 
-class FindApp : public TApplication
+class FindApp : public ck::ui::ClockAwareApplication
 {
 public:
     FindApp(int, char **)
         : TProgInit(&FindApp::initStatusLine, &FindApp::initMenuBar, &TApplication::initDeskTop),
-          TApplication()
+          ck::ui::ClockAwareApplication()
     {
-        auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-        auto *clock = new ck::ui::ClockView(clockBounds);
-        clock->growMode = gfGrowLoX | gfGrowHiX;
-        insert(clock);
+        insertMenuClock();
 
         m_spec = makeDefaultSpecification();
     }

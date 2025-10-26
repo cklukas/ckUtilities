@@ -6,6 +6,8 @@
 #include "../../../../include/ck/ai/system_prompt_manager.hpp"
 #include "../../../../include/ck/options.hpp"
 
+#include "ck/ui/clock_aware_application.hpp"
+
 #include "../chat_session.hpp"
 #include "../tvision_include.hpp"
 
@@ -20,7 +22,7 @@
 
 class ChatWindow;
 
-class ChatApp : public TApplication {
+class ChatApp : public ck::ui::ClockAwareApplication {
 public:
   ChatApp(int argc, char **argv);
   ~ChatApp();

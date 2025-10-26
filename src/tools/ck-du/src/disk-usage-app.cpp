@@ -36,6 +36,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/options.hpp"
+#include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 #include "cloud_actions.hpp"
 
@@ -1771,7 +1772,7 @@ private:
     }
 };
 
-class DiskUsageApp : public TApplication
+class DiskUsageApp : public ck::ui::ClockAwareApplication
 {
 public:
     DiskUsageApp(const std::vector<std::filesystem::path> &paths,
@@ -2920,12 +2921,10 @@ void DirectoryWindow::refreshSort()
 DiskUsageApp::DiskUsageApp(const std::vector<std::filesystem::path> &paths,
                            std::shared_ptr<config::OptionRegistry> registry)
     : TProgInit(&DiskUsageApp::initStatusLine, &DiskUsageApp::initMenuBar, &TApplication::initDeskTop),
-      TApplication(), optionRegistry(std::move(registry))
+      ck::ui::ClockAwareApplication(),
+      optionRegistry(std::move(registry))
 {
-    auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-    auto *clock = new ck::ui::ClockView(clockBounds);
-    clock->growMode = gfGrowLoX | gfGrowHiX;
-    insert(clock);
+    insertMenuClock();
 
     unitBaseLabels = {{SizeUnit::Auto, "~A~uto"},
                       {SizeUnit::Bytes, "~B~ytes"},
@@ -3131,7 +3130,7 @@ static Boolean windowIsTileable(TView *view, void *)
 
 void DiskUsageApp::idle()
 {
-    TApplication::idle();
+    ck::ui::ClockAwareApplication::idle();
     processRescanRequests();
     if (activeScan)
     {

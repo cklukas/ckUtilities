@@ -3,6 +3,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
+#include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 
 #define Uses_TApplication
@@ -1504,17 +1505,14 @@ namespace
         }
     };
 
-    class LauncherApp : public TApplication
+    class LauncherApp : public ck::ui::ClockAwareApplication
     {
     public:
         LauncherApp(int argc, char **argv)
             : TProgInit(&LauncherApp::initStatusLine, &LauncherApp::initMenuBar, &TApplication::initDeskTop),
-              TApplication()
+              ck::ui::ClockAwareApplication()
         {
-            auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-            auto *clock = new ck::ui::ClockView(clockBounds);
-            clock->growMode = gfGrowLoX | gfGrowHiX;
-            insert(clock);
+            insertMenuClock();
 
             toolDirectory = resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
             openLauncher();

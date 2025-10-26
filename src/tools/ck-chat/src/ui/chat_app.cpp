@@ -39,13 +39,11 @@ namespace
 
 ChatApp::ChatApp(int argc, char **argv)
     : TProgInit(&ChatApp::initStatusLine, nullptr, &TApplication::initDeskTop),
-      TApplication(), modelLoadingInProgress_(false),
+      ck::ui::ClockAwareApplication(),
+      modelLoadingInProgress_(false),
       modelLoadingShouldStop_(false), modelLoadingStarted_(false)
 {
-  auto clockBounds = ck::ui::clockBoundsFrom(getExtent());
-  auto *clock = new ck::ui::ClockView(clockBounds);
-  clock->growMode = gfGrowLoX | gfGrowHiX;
-  insert(clock);
+  insertMenuClock();
 
   config = ck::ai::ConfigLoader::load_or_default();
   runtimeConfig = runtime_from_config(config);
@@ -220,7 +218,7 @@ void ChatApp::handleEvent(TEvent &event)
 
 void ChatApp::idle()
 {
-  TApplication::idle();
+  ck::ui::ClockAwareApplication::idle();
 
   // Start model loading if not already started and deskTop is available
   if (!modelLoadingStarted_ && deskTop)
