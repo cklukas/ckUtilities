@@ -20,6 +20,7 @@ namespace ck::ui
     {
         TApplication::idle();
         updateClocks();
+        windowMenuController_.update(*this, deskTop);
     }
 
     ClockView *ClockAwareApplication::insertMenuClock()
@@ -53,24 +54,34 @@ namespace ck::ui
     bool ClockAwareApplication::handleClockMouseClick(ClockView &clock, const TEvent &event)
     {
         const auto buttons = event.mouse.buttons;
+#ifdef mbMiddleButton
+        constexpr unsigned short kMiddleButtonMask = mbMiddleButton;
+#else
+        constexpr unsigned short kMiddleButtonMask = 0x04;
+#endif
+
+        if (buttons & kMiddleButtonMask)
+        {
+            onClockModeCycle(clock);
+            return true;
+        }
+
         if (buttons & mbLeftButton)
         {
-            const bool withShift = (event.mouse.controlKeyState & kbShift) != 0;
-            onClockPrimaryClick(clock, withShift);
+            onClockPrimaryClick(clock);
             return true;
         }
         return false;
     }
 
-    void ClockAwareApplication::onClockPrimaryClick(ClockView &clock, bool withShift)
+    void ClockAwareApplication::onClockPrimaryClick(ClockView &clock)
     {
-        if (withShift)
-        {
-            clock.advanceDisplayMode();
-            return;
-        }
-
         toggleCalendarVisibility();
+    }
+
+    void ClockAwareApplication::onClockModeCycle(ClockView &clock)
+    {
+        clock.advanceDisplayMode();
     }
 
     void ClockAwareApplication::updateClocks()

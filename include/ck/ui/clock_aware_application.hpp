@@ -8,6 +8,8 @@
 
 #include <vector>
 
+#include "ck/ui/window_menu.hpp"
+
 namespace ck::ui
 {
     class ClockView;
@@ -29,7 +31,8 @@ namespace ck::ui
         void unregisterClockView(ClockView *clock);
         void promoteClocksToFront();
         bool handleClockMouseClick(ClockView &clock, const TEvent &event);
-        virtual void onClockPrimaryClick(ClockView &clock, bool withShift);
+        virtual void onClockPrimaryClick(ClockView &clock);
+        virtual void onClockModeCycle(ClockView &clock);
 
     private:
         void updateClocks();
@@ -42,5 +45,6 @@ namespace ck::ui
 
         std::vector<ClockView *> clockViews_;
         CalendarWindow *calendarWindow_ = nullptr;
+        WindowMenuController windowMenuController_{};
     };
 } // namespace ck::ui

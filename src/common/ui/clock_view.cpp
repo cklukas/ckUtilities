@@ -2,6 +2,7 @@
 
 #include "ck/ui/calendar.hpp"
 #include "ck/ui/clock_aware_application.hpp"
+#include "ck/ui/clock_settings.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -31,6 +32,7 @@ namespace ck::ui
         eventMask |= evMouseDown;
         currentTime_.fill('\0');
         refreshTime();
+        mode_ = loadClockDisplayMode();
         displayedText_.clear();
     }
 
@@ -70,13 +72,13 @@ namespace ck::ui
         std::strftime(currentTime_.data(), currentTime_.size(), "%H:%M:%S", &local);
     }
 
-    std::string ClockView::formatDisplay(DisplayMode mode) const
+    std::string ClockView::formatDisplay(ClockDisplayMode mode) const
     {
         switch (mode)
         {
-        case DisplayMode::Time:
+        case ClockDisplayMode::Time:
             return std::string(currentTime_.data());
-        case DisplayMode::Date:
+        case ClockDisplayMode::Date:
         {
             char buffer[64]{};
             std::tm local = localTime(currentEpoch_);
@@ -84,7 +86,7 @@ namespace ck::ui
                 return "";
             return std::string(buffer);
         }
-        case DisplayMode::Icon:
+        case ClockDisplayMode::Icon:
             return "\xF0\x9F\x93\x85"; // Calendar icon
         }
         return std::string();
@@ -92,23 +94,23 @@ namespace ck::ui
 
     void ClockView::cycleMode()
     {
-        DisplayMode next = mode_;
+        ClockDisplayMode next = mode_;
         switch (mode_)
         {
-        case DisplayMode::Time:
-            next = DisplayMode::Date;
+        case ClockDisplayMode::Time:
+            next = ClockDisplayMode::Date;
             break;
-        case DisplayMode::Date:
-            next = DisplayMode::Icon;
+        case ClockDisplayMode::Date:
+            next = ClockDisplayMode::Icon;
             break;
-        case DisplayMode::Icon:
-            next = DisplayMode::Time;
+        case ClockDisplayMode::Icon:
+            next = ClockDisplayMode::Time;
             break;
         }
         applyMode(next);
     }
 
-    void ClockView::applyMode(DisplayMode mode)
+    void ClockView::applyMode(ClockDisplayMode mode)
     {
         if (mode_ == mode && !displayedText_.empty())
             return;
@@ -119,6 +121,11 @@ namespace ck::ui
         ensureWidthFor(nextDisplay);
         displayedText_ = nextDisplay;
         drawView();
+    }
+
+    void ClockView::setDisplayMode(ClockDisplayMode mode)
+    {
+        applyMode(mode);
     }
 
     void ClockView::ensureWidthFor(const std::string &text)
@@ -167,7 +174,6 @@ namespace ck::ui
         if (event.what == evMouseDown)
         {
             bool handled = false;
-            const bool shiftHeld = (event.mouse.controlKeyState & kbShift) != 0;
             if (host_)
             {
                 handled = host_->handleClockMouseClick(*this, event);
@@ -175,26 +181,30 @@ namespace ck::ui
             else
             {
                 auto buttons = event.mouse.buttons;
-                if (buttons & mbLeftButton)
+#ifdef mbMiddleButton
+                constexpr unsigned short kMiddleButtonMask = mbMiddleButton;
+#else
+                constexpr unsigned short kMiddleButtonMask = 0x04;
+#endif
+
+                if (buttons & kMiddleButtonMask)
                 {
                     handled = true;
-                    if (shiftHeld)
+                    advanceDisplayMode();
+                }
+                else if (buttons & mbLeftButton)
+                {
+                    handled = true;
+                    if (auto *window = createCalendarWindow())
                     {
-                        advanceDisplayMode();
-                    }
-                    else
-                    {
-                        if (auto *window = createCalendarWindow())
+                        if (TProgram::deskTop)
                         {
-                            if (TProgram::deskTop)
-                            {
-                                placeCalendarWindow(*TProgram::deskTop, *window);
-                                TProgram::deskTop->insert(window);
-                            }
-                            else
-                            {
-                                delete window;
-                            }
+                            placeCalendarWindow(*TProgram::deskTop, *window);
+                            TProgram::deskTop->insert(window);
+                        }
+                        else
+                        {
+                            delete window;
                         }
                     }
                 }
@@ -208,8 +218,11 @@ namespace ck::ui
 
     void ClockView::advanceDisplayMode()
     {
+        const ClockDisplayMode previous = mode_;
         clearDisplay();
         cycleMode();
+        if (mode_ != previous)
+            persistClockDisplayMode(mode_);
     }
 
     TRect clockBoundsFrom(const TRect &extent, short width)

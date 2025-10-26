@@ -1,7 +1,9 @@
 set(SOURCES
     calendar.cpp
     clock_aware_application.cpp
+    clock_settings.cpp
     clock_view.cpp
+    window_menu.cpp
 )
 
 add_library(ck_ui STATIC ${SOURCES})

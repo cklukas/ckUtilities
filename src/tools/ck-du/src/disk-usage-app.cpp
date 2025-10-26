@@ -38,6 +38,7 @@
 #include "ck/options.hpp"
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/window_menu.hpp"
 #include "cloud_actions.hpp"
 
 #include <algorithm>
@@ -3123,11 +3124,6 @@ void DiskUsageApp::handleEvent(TEvent &event)
     }
 }
 
-static Boolean windowIsTileable(TView *view, void *)
-{
-    return Boolean((view->options & ofTileable) != 0);
-}
-
 void DiskUsageApp::idle()
 {
     ck::ui::ClockAwareApplication::idle();
@@ -3164,16 +3160,6 @@ void DiskUsageApp::idle()
     }
 #endif
 
-    if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
-    {
-        enableCommand(cmTile);
-        enableCommand(cmCascade);
-    }
-    else
-    {
-        disableCommand(cmTile);
-        disableCommand(cmCascade);
-    }
 }
 
 TMenuBar *DiskUsageApp::initMenuBar(TRect r)
@@ -3265,14 +3251,8 @@ TMenuBar *DiskUsageApp::initMenuBar(TRect r)
                                *new TMenuItem("Files (~R~ecursive)", commands::ViewFilesRecursive, kbNoKey, hcNoContext) +
                                *new TMenuItem("~T~ypes", commands::ViewFileTypes, kbNoKey, hcNoContext) +
                                *new TMenuItem("Types (~S~ubdirs)", commands::ViewFileTypesRecursive, kbNoKey, hcNoContext) +
-                           *new TSubMenu("~W~indows", hcNoContext) +
-                               *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
-                               *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
-                               *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
-                               *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
-                               *new TMenuItem("~T~ile", cmTile, kbNoKey, hcNoContext) +
-                               *new TMenuItem("C~a~scade", cmCascade, kbNoKey, hcNoContext) +
-                           *new TSubMenu("~H~elp", hcNoContext) +
+                          ck::ui::createWindowMenu() +
+                          *new TSubMenu("~H~elp", hcNoContext) +
                                *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 
     ck::hotkeys::configureMenuTree(menuChain);

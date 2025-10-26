@@ -5,7 +5,9 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/ui/clock_aware_application.hpp"
+#include "ck/ui/clock_settings.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/window_menu.hpp"
 #include "disk_usage_options.hpp"
 #include "chat_options.hpp"
 
@@ -732,6 +734,7 @@ const std::vector<ApplicationInfo> &knownApplications()
                 reg = &ck::chat::registerChatOptions;
             apps.push_back(ApplicationInfo{std::string(tool.id), std::string(tool.displayName), reg});
         }
+        apps.push_back(ApplicationInfo{"ck-ui", "Clock Settings", &ck::ui::registerClockOptions});
         initialized = true;
     }
     return apps;
@@ -1874,6 +1877,8 @@ public:
             fileMenu + *new TMenuItem("Return to ~L~auncher", cmReturnToLauncher, kbNoKey, hcNoContext);
         fileMenu + *new TMenuItem("E~x~it", cmQuit, kbNoKey, hcExit);
 
+        TSubMenu &windowMenu = ck::ui::createWindowMenu();
+
         TMenuItem &menuChain = fileMenu +
                                *new TSubMenu("~P~rofile", hcNoContext) +
                                *new TMenuItem("~E~dit Options", cmEditApp, kbNoKey, hcNoContext) +
@@ -1884,6 +1889,7 @@ public:
                                *new TMenuItem("~E~xport...", cmExportApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("~I~mport...", cmImportApp, kbNoKey, hcNoContext) +
                                *new TMenuItem("Open Config ~D~ir", cmOpenConfigDir, kbNoKey, hcNoContext) +
+                               windowMenu +
                                *new TSubMenu("~H~elp", hcNoContext) +
                                *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 

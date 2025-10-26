@@ -9,6 +9,7 @@
 #include "ck/launcher.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/window_menu.hpp"
 #include "model_dialog.hpp"
 #include "model_loading_dialog.hpp"
 #include "prompt_dialog.hpp"
@@ -339,15 +340,10 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
   viewMenu + *new TMenuItem(parseLabel.c_str(), cmToggleParseMarkdownLinks,
                             kbNoKey, hcNoContext);
 
+  TSubMenu &windowMenu = ck::ui::createWindowMenu();
+
   TMenuItem &menuChain =
-      fileMenu + editMenu + modelsMenu + viewMenu +
-      *new TSubMenu("~W~indows", hcNoContext) +
-      *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
-      *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
-      *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
-      *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
-      *new TMenuItem("~T~ile", cmTile, kbNoKey) +
-      *new TMenuItem("C~a~scade", cmCascade, kbNoKey) +
+      fileMenu + editMenu + modelsMenu + viewMenu + windowMenu +
       *new TSubMenu("~H~elp", hcNoContext) +
       *new TMenuItem("~A~bout", cmAbout, kbNoKey, hcNoContext);
 

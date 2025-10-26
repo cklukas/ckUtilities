@@ -6,6 +6,7 @@
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 #include "ck/ui/calendar.hpp"
+#include "ck/ui/window_menu.hpp"
 
 #define Uses_TApplication
 #define Uses_TButton
@@ -1369,14 +1370,19 @@ namespace
         static TMenuBar *initMenuBar(TRect r)
         {
             r.b.y = r.a.y + 1;
-            TMenuItem &menuChain = *new TSubMenu("~\360~", kbNoKey) +
-                                   *new TMenuItem("Ca~l~endar", ShowCalendar, kbNoKey, hcNoContext) +
-                                   *new TMenuItem("Ascii ~T~able", ShowAsciiTable, kbNoKey, hcNoContext) +
-                                   *new TMenuItem("~C~alculator", ShowCalculator, kbNoKey, hcNoContext) +
-                                   *new TMenuItem("~E~vent Viewer", ToggleEventViewer, kbNoKey, hcNoContext) +
-                                   *new TSubMenu("~F~ile", kbAltF) +
-                                   *new TMenuItem("~N~ew Launcher", NewLauncher, kbNoKey, hcNoContext) +
-                                   *new TMenuItem("~E~xit", cmQuit, kbNoKey, hcNoContext);
+            TSubMenu &toolMenu = *new TSubMenu("~\360~", kbNoKey) +
+                                 *new TMenuItem("Ca~l~endar", ShowCalendar, kbNoKey, hcNoContext) +
+                                 *new TMenuItem("Ascii ~T~able", ShowAsciiTable, kbNoKey, hcNoContext) +
+                                 *new TMenuItem("~C~alculator", ShowCalculator, kbNoKey, hcNoContext) +
+                                 *new TMenuItem("~E~vent Viewer", ToggleEventViewer, kbNoKey, hcNoContext);
+
+            TSubMenu &fileMenu = *new TSubMenu("~F~ile", kbAltF) +
+                                 *new TMenuItem("~N~ew Launcher", NewLauncher, kbNoKey, hcNoContext) +
+                                 *new TMenuItem("~E~xit", cmQuit, kbNoKey, hcNoContext);
+
+            TSubMenu &windowMenu = ck::ui::createWindowMenu();
+
+            TMenuItem &menuChain = toolMenu + fileMenu + windowMenu;
             ck::hotkeys::configureMenuTree(menuChain);
             return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
         }

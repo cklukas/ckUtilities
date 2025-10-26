@@ -4,6 +4,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/window_menu.hpp"
 
 #define Uses_TFindDialog
 #define Uses_TReplaceDialog
@@ -844,13 +845,7 @@ namespace ck::edit
 
         TSubMenu &makeWindowMenu()
         {
-            return *new TSubMenu("~W~indows", kbNoKey) +
-                   *new TMenuItem("~R~esize/Move", cmResize, kbNoKey, hcNoContext) +
-                   *new TMenuItem("~Z~oom", cmZoom, kbNoKey, hcNoContext) +
-                   *new TMenuItem("~N~ext", cmNext, kbNoKey, hcNoContext) +
-                   *new TMenuItem("~C~lose", cmClose, kbNoKey, hcNoContext) +
-                   *new TMenuItem("~T~ile", cmTile, kbNoKey) +
-                   *new TMenuItem("C~a~scade", cmCascade, kbNoKey);
+            return ck::ui::createWindowMenu();
         }
 
         TSubMenu &makeHelpMenu()
@@ -1866,25 +1861,9 @@ namespace ck::edit
         refreshUiMode();
     }
 
-    static Boolean windowIsTileable(TView *view, void *)
-    {
-        return Boolean((view->options & ofTileable) != 0);
-    }
-
     void MarkdownEditorApp::idle()
     {
         ck::ui::ClockAwareApplication::idle();
-
-        if (deskTop && deskTop->firstThat(windowIsTileable, nullptr) != nullptr)
-        {
-            enableCommand(cmTile);
-            enableCommand(cmCascade);
-        }
-        else
-        {
-            disableCommand(cmTile);
-            disableCommand(cmCascade);
-        }
 
         uint32_t token = pendingStatusMessageClear.load(std::memory_order_acquire);
         if (token == 0)

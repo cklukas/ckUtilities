@@ -6,6 +6,8 @@
 #define Uses_TView
 #include <tvision/tv.h>
 
+#include "ck/ui/clock_settings.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>
@@ -21,13 +23,6 @@ namespace ck::ui
         static constexpr short kViewWidth = 9;
         static constexpr std::size_t kTimeStringSize = 9;
 
-        enum class DisplayMode
-        {
-            Time,
-            Date,
-            Icon
-        };
-
         explicit ClockView(const TRect &bounds);
 
         void draw() override;
@@ -35,19 +30,21 @@ namespace ck::ui
         void handleEvent(TEvent &event) override;
         void setHost(ClockAwareApplication *host) noexcept { host_ = host; }
         void advanceDisplayMode();
+        void setDisplayMode(ClockDisplayMode mode);
+        ClockDisplayMode displayMode() const noexcept { return mode_; }
 
     private:
         void refreshTime();
-        std::string formatDisplay(DisplayMode mode) const;
+        std::string formatDisplay(ClockDisplayMode mode) const;
         void cycleMode();
-        void applyMode(DisplayMode mode);
+        void applyMode(ClockDisplayMode mode);
         void ensureWidthFor(const std::string &text);
         void bringIntoViewBounds(short desiredWidth);
         void clearDisplay();
 
         std::array<char, kTimeStringSize> currentTime_{};
         std::time_t currentEpoch_{};
-        DisplayMode mode_{DisplayMode::Time};
+        ClockDisplayMode mode_{ClockDisplayMode::Time};
         std::string displayedText_;
         ClockAwareApplication *host_{nullptr};
     };
