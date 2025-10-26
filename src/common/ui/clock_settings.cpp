@@ -4,6 +4,8 @@
 
 #include <string>
 
+namespace config = ck::config;
+
 namespace ck::ui
 {
     namespace
@@ -24,7 +26,7 @@ namespace ck::ui
 
         config::OptionRegistry &clockRegistry()
         {
-            static config::OptionRegistry registry(std::string(kClockAppId));
+            static config::OptionRegistry registry{std::string(kClockAppId)};
             static bool initialized = false;
             if (!initialized)
             {
@@ -83,4 +85,3 @@ namespace ck::ui
     }
 
 } // namespace ck::ui
-

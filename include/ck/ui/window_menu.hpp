@@ -5,6 +5,7 @@
 #define Uses_TMenu
 #define Uses_TMenuItem
 #define Uses_TSubMenu
+#define Uses_TKeys
 #include <tvision/tv.h>
 
 #include <optional>
