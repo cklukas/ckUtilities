@@ -7,6 +7,7 @@
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_settings.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 #include "disk_usage_options.hpp"
 #include "chat_options.hpp"
@@ -1760,11 +1761,11 @@ private:
     }
 };
 
-class ConfigStatusLine : public TStatusLine
+class ConfigStatusLine : public ck::ui::CommandAwareStatusLine
 {
 public:
     ConfigStatusLine(TRect r)
-        : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+        : ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
     {
         rebuild();
     }

@@ -7,6 +7,7 @@
 #include "ck/launcher.hpp"
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 
 #include "command_ids.hpp"
 
@@ -48,11 +49,11 @@ using ck::find::bufferToString;
 using ck::find::configureSearchSpecification;
 using ck::find::makeDefaultSpecification;
 
-class FindStatusLine : public TStatusLine
+class FindStatusLine : public ck::ui::CommandAwareStatusLine
 {
 public:
     FindStatusLine(TRect r)
-        : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+        : ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
     {
         rebuild();
     }

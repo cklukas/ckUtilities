@@ -15,6 +15,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "ck/ui/status_line.hpp"
+
 #include "gridlayout.hpp"
 
 using namespace gridlayout;
@@ -296,7 +298,7 @@ public:
     static TStatusLine *initStatusLine(TRect r)
     {
         r.a.y = r.b.y - 1;
-        return new TStatusLine(r, *new TStatusDef(0, 0, nullptr));
+        return new ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0, nullptr));
     }
 
     void run() override

@@ -38,6 +38,7 @@
 #include "ck/options.hpp"
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 #include "cloud_actions.hpp"
 
@@ -1684,11 +1685,11 @@ private:
     std::string lastDisplay;
 };
 
-class DiskUsageStatusLine : public TStatusLine
+class DiskUsageStatusLine : public ck::ui::CommandAwareStatusLine
 {
 public:
     DiskUsageStatusLine(TRect r)
-        : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+        : ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
     {
         showDefaultHints();
     }

@@ -63,6 +63,7 @@ std::string gActiveId;
 std::unordered_map<std::string, std::unordered_map<std::uint16_t, std::string>> gLabelsByLocale;
 std::string gActiveLocale = "en";
 std::unordered_map<std::uint16_t, std::string> gCommandTools;
+std::unordered_map<std::string, std::unordered_map<std::uint16_t, std::string>> gHelpByLocale;
 
 constexpr std::string_view kCustomSchemeId = "custom";
 constexpr std::string_view kAutoSchemeId = "auto";
@@ -303,6 +304,17 @@ const std::string *findLabel(const std::string &locale, std::uint16_t command)
     return &it->second;
 }
 
+const std::string *findHelp(const std::string &locale, std::uint16_t command)
+{
+    auto itLocale = gHelpByLocale.find(locale);
+    if (itLocale == gHelpByLocale.end())
+        return nullptr;
+    auto it = itLocale->second.find(command);
+    if (it == itLocale->second.end())
+        return nullptr;
+    return &it->second;
+}
+
 } // namespace
 
 void init()
@@ -396,6 +408,12 @@ void configureMenuItem(TMenuItem &item)
             item.param = newStr(binding->display.c_str());
         }
     }
+    if (item.helpCtx == hcNoContext || item.helpCtx == 0)
+    {
+        std::string help = commandHelp(item.command);
+        if (!help.empty())
+            item.helpCtx = item.command;
+    }
 }
 
 void configureMenuTree(TMenuItem &root)
@@ -463,19 +481,42 @@ void applyCommandLineScheme(int &argc, char **argv)
 
 void registerCommandLabels(std::span<const CommandLabel> labels, std::string_view locale)
 {
-    auto &map = gLabelsByLocale[std::string(locale)];
+    std::string localeKey(locale);
+    auto &labelMap = gLabelsByLocale[localeKey];
+    auto &helpMap = gHelpByLocale[localeKey];
     for (const auto &entry : labels)
     {
         std::uint16_t command = entry.command;
         if (command == 0)
             continue;
-        map[command] = entry.label;
+        labelMap[command] = entry.label;
+        if (!entry.help.empty())
+        {
+            helpMap[command] = std::string(entry.help);
+        }
+        else if (!entry.label.empty() && !helpMap.contains(command))
+        {
+            helpMap.emplace(command, entry.label);
+        }
         bool isGlobalCommand = command == ck::commands::common::ReturnToLauncher ||
                                command == ck::commands::common::About;
         if (!entry.toolId.empty() && !isGlobalCommand)
             gCommandTools[command] = std::string(entry.toolId);
         else if (!gCommandTools.count(command))
             gCommandTools[command] = std::string{};
+    }
+}
+
+void registerCommandHelps(std::span<const CommandHelp> helps, std::string_view locale)
+{
+    std::string localeKey(locale);
+    auto &helpMap = gHelpByLocale[localeKey];
+    for (const auto &entry : helps)
+    {
+        std::uint16_t command = entry.command;
+        if (command == 0)
+            continue;
+        helpMap[command] = std::string(entry.text);
     }
 }
 
@@ -487,6 +528,18 @@ std::string commandLabel(std::uint16_t command)
     {
         if (const std::string *label = findLabel("en", command))
             return *label;
+    }
+    return {};
+}
+
+std::string commandHelp(std::uint16_t command)
+{
+    if (const std::string *help = findHelp(gActiveLocale, command))
+        return *help;
+    if (gActiveLocale != "en")
+    {
+        if (const std::string *help = findHelp("en", command))
+            return *help;
     }
     return {};
 }

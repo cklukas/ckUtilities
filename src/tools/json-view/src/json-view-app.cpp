@@ -31,6 +31,7 @@
 #include "ck/launcher.hpp"
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -221,10 +222,13 @@ static constexpr ushort cmLevel8 = ck::commands::json_view::Level8;
 static constexpr ushort cmLevel9 = ck::commands::json_view::Level9;
 static constexpr ushort cmReturnToLauncher = ck::commands::json_view::ReturnToLauncher;
 
-class JsonStatusLine : public TStatusLine
+class JsonStatusLine : public ck::ui::CommandAwareStatusLine
 {
 public:
-    JsonStatusLine(TRect r) : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr)) { setSearchState(SearchState()); }
+    JsonStatusLine(TRect r) : ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+    {
+        setSearchState(SearchState());
+    }
 
     void setSearchState(const SearchState &s)
     {

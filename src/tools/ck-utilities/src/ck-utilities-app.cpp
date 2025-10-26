@@ -6,6 +6,7 @@
 #include "ck/ui/clock_aware_application.hpp"
 #include "ck/ui/clock_view.hpp"
 #include "ck/ui/calendar.hpp"
+#include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 
 #define Uses_TApplication
@@ -1395,7 +1396,7 @@ namespace
             auto *exitItem = new TStatusItem("Exit", kbNoKey, cmQuit);
             ck::hotkeys::configureStatusItem(*exitItem, "Exit");
             launch->next = exitItem;
-            return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, launch));
+            return new ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, launch));
         }
 
     private:

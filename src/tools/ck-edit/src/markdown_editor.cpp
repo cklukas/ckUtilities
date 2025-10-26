@@ -4,6 +4,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 
 #define Uses_TFindDialog
@@ -610,11 +611,11 @@ namespace ck::edit
             return commands;
         }
 
-        class MarkdownStatusLine : public TStatusLine
+        class MarkdownStatusLine : public ck::ui::CommandAwareStatusLine
         {
         public:
             MarkdownStatusLine(TRect r)
-                : TStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
+                : ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, nullptr))
             {
                 setContext(MarkdownStatusContext{});
             }
@@ -657,7 +658,7 @@ namespace ck::edit
             {
                 if (showingTemporaryMessage)
                     return temporaryMessage.c_str();
-                return TStatusLine::hint(helpCtx);
+                return ck::ui::CommandAwareStatusLine::hint(helpCtx);
             }
 
         private:

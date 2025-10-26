@@ -59,6 +59,13 @@ struct CommandLabel
     std::uint16_t command = 0;
     std::string_view toolId;
     std::string label;
+    std::string_view help{};
+};
+
+struct CommandHelp
+{
+    std::uint16_t command = 0;
+    std::string_view text;
 };
 
 void registerSchemes(std::span<const Scheme> schemes);
@@ -97,6 +104,8 @@ void applyCommandLineScheme(int &argc, char **argv);
 
 void registerCommandLabels(std::span<const CommandLabel> labels, std::string_view locale = "en");
 
+void registerCommandHelps(std::span<const CommandHelp> helps, std::string_view locale = "en");
+
 bool customSchemeExists();
 
 std::string customBaseScheme();
@@ -108,6 +117,8 @@ void clearCustomScheme();
 std::string commandLabel(std::uint16_t command);
 
 std::string commandTool(std::uint16_t command);
+
+std::string commandHelp(std::uint16_t command);
 
 void setLocale(std::string_view locale);
 

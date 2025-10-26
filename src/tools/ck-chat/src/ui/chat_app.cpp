@@ -9,6 +9,7 @@
 #include "ck/launcher.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/ui/clock_view.hpp"
+#include "ck/ui/status_line.hpp"
 #include "ck/ui/window_menu.hpp"
 #include "model_dialog.hpp"
 #include "model_loading_dialog.hpp"
@@ -375,7 +376,7 @@ TStatusLine *ChatApp::initStatusLine(TRect r)
   ck::hotkeys::configureStatusItem(*quitItem, "Quit");
   tail->next = quitItem;
 
-  return new TStatusLine(r, *new TStatusDef(0, 0xFFFF, newItem));
+  return new ck::ui::CommandAwareStatusLine(r, *new TStatusDef(0, 0xFFFF, newItem));
 }
 
 void ChatApp::showAboutDialog()
