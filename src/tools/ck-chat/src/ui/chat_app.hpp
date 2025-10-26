@@ -99,6 +99,7 @@ private:
   void applyAnalysisVisibilityToWindows();
   void applyParseMarkdownLinksToWindows();
   void applyStopSequencesToWindows();
+  void updateModelMenuHelps();
   std::vector<std::string> resolveStopSequencesForModel(
       const std::optional<std::string> &modelId,
       std::optional<ck::ai::ModelInfo> modelInfo) const;

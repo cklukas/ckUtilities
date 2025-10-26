@@ -16,6 +16,7 @@
 #include "prompt_dialog.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -262,6 +263,7 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
   TSubMenu &modelsMenu = *new TSubMenu("~M~odels", hcNoContext);
 
   menuDownloadedModels_ = modelManager_.get_downloaded_models();
+  updateModelMenuHelps();
   auto activeInfo = activeModelInfo();
 
   if (menuDownloadedModels_.empty())
@@ -350,6 +352,29 @@ TMenuBar *ChatApp::initMenuBar(TRect r)
 
   ck::hotkeys::configureMenuTree(menuChain);
   return new TMenuBar(r, static_cast<TSubMenu &>(menuChain));
+}
+
+void ChatApp::updateModelMenuHelps()
+{
+  constexpr std::size_t kMaxModelMenuItems = 10;
+  for (std::size_t i = 0; i < kMaxModelMenuItems; ++i)
+  {
+    std::string helpText;
+    if (i < menuDownloadedModels_.size())
+    {
+      const auto &model = menuDownloadedModels_[i];
+      helpText = model.description;
+      if (helpText.empty())
+        helpText = "Activate " + model.name;
+      auto newlinePos = helpText.find_first_of("\r\n");
+      if (newlinePos != std::string::npos)
+        helpText.erase(newlinePos);
+    }
+
+    const auto command = static_cast<std::uint16_t>(
+        cmSelectModel1 + static_cast<unsigned short>(i));
+    ck::hotkeys::setCommandHelp(command, std::move(helpText));
+  }
 }
 
 TStatusLine *ChatApp::initStatusLine(TRect r)

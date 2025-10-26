@@ -520,6 +520,15 @@ void registerCommandHelps(std::span<const CommandHelp> helps, std::string_view l
     }
 }
 
+void setCommandHelp(std::uint16_t command, std::string text, std::string_view locale)
+{
+    if (command == 0)
+        return;
+    std::string localeKey(locale);
+    auto &helpMap = gHelpByLocale[localeKey];
+    helpMap[command] = std::move(text);
+}
+
 std::string commandLabel(std::uint16_t command)
 {
     if (const std::string *label = findLabel(gActiveLocale, command))

@@ -106,6 +106,9 @@ void registerCommandLabels(std::span<const CommandLabel> labels, std::string_vie
 
 void registerCommandHelps(std::span<const CommandHelp> helps, std::string_view locale = "en");
 
+void setCommandHelp(std::uint16_t command, std::string text,
+                    std::string_view locale = "en");
+
 bool customSchemeExists();
 
 std::string customBaseScheme();
