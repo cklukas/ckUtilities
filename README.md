@@ -4,7 +4,7 @@
 
 ![ck-chat conversation interface](images/Screenshot%202025-10-25%20at%2023.34.31.png)
 ![ck-chat model loading](images/Screenshot%202025-10-25%20at%2023.34.40.png)
-![ck-cjat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
+![ck-chat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
 
 **Status:** concept / exploration.
 
