@@ -50,6 +50,12 @@ cmake --preset dev         # Debug build (recommended for development)
 cmake --preset release     # Optimized build
 ```
 
+If you're configuring CMake by hand (rather than using the convenience wrappers in `scripts/`, such as `ci-mac-local.sh`, `ci-linux-local.sh`, or `build_ck_chat.sh`), run the patch helper once per build tree to keep third-party dependencies in sync with our macOS ncurses fixes:
+
+```bash
+scripts/apply_patches.sh   # Safe to re-run; scans build/* for Turbo Vision sources
+```
+
 #### Build all tools:
 
 ```bash

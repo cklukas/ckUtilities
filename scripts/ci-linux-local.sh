@@ -33,7 +33,7 @@ container run --rm ${TTY_FLAGS} \
     # * Keep: libncurses-dev, libncursesw6, libtinfo-dev, libgpm-dev.
     # * Add: git, cmake, build-essential (GH image has them preinstalled).
     apt-get install -y \
-      git ca-certificates curl build-essential cmake ninja-build \
+      git ca-certificates curl build-essential cmake ninja-build python3 \
       libncurses-dev libncursesw6 libtinfo-dev libgpm-dev pkg-config \
       libcurl4-openssl-dev rpm
 
@@ -49,11 +49,13 @@ container run --rm ${TTY_FLAGS} \
     # Configure / Build / Test (from your ci.yml)
     rm -rf build/dev build/pkg
     cmake --preset dev
+    scripts/apply_patches.sh
     cmake --build build/dev
     ctest --test-dir build/dev --output-on-failure
 
     # (Optional) Also exercise packaging like your package-linux job:
     cmake --preset pkg
+    scripts/apply_patches.sh
     cmake --build build/pkg -t package
     ls -R1 build/pkg || true
   '

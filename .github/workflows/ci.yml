@@ -23,6 +23,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             ninja-build \
+            python3 \
             libncurses-dev \
             libncursesw6 \
             libtinfo-dev \
@@ -54,6 +55,9 @@ jobs:
       - name: Configure
         run: cmake --preset dev
 
+      - name: Apply repository patches
+        run: scripts/apply_patches.sh
+
       - name: Build all targets
         run: cmake --build build/dev
 
@@ -72,6 +76,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             ninja-build \
+            python3 \
             libncurses-dev \
             libncursesw6 \
             libtinfo-dev \
@@ -88,6 +93,9 @@ jobs:
 
       - name: Configure
         run: cmake --preset pkg
+
+      - name: Apply repository patches
+        run: scripts/apply_patches.sh
 
       - name: Build packages
         run: cmake --build build/pkg -t package
@@ -127,6 +135,9 @@ jobs:
 
       - name: Configure
         run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+
+      - name: Apply repository patches
+        run: scripts/apply_patches.sh
 
       - name: Build macOS archive
         run: cmake --build build/pkg -t package

@@ -41,6 +41,9 @@ rm -rf build/dev build/pkg
 echo "[ci-mac] Configuring debug build..."
 cmake --preset dev
 
+echo "[ci-mac] Ensuring external patches are applied..."
+scripts/apply_patches.sh
+
 echo "[ci-mac] Building all targets..."
 cmake --build build/dev
 
@@ -49,6 +52,9 @@ ctest --test-dir build/dev --output-on-failure
 
 echo "[ci-mac] Configuring packaging build..."
 cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+
+echo "[ci-mac] Re-applying patches for packaging build..."
+scripts/apply_patches.sh
 
 echo "[ci-mac] Building macOS package artifacts..."
 cmake --build build/pkg -t package

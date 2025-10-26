@@ -15,10 +15,12 @@ if [ "${BUILD_DIR}" = "${DEFAULT_BUILD_DIR}" ]; then
     if [ ! -f "${BUILD_DIR}/CMakeCache.txt" ]; then
         cmake --preset dev
     fi
+    "${ROOT_DIR}/scripts/apply_patches.sh" "${BUILD_DIR}"
     cmake --build "${BUILD_DIR}" --target ckchat
 else
     if [ ! -d "${BUILD_DIR}" ] || [ ! -f "${BUILD_DIR}/CMakeCache.txt" ]; then
         cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}"
     fi
+    "${ROOT_DIR}/scripts/apply_patches.sh" "${BUILD_DIR}"
     cmake --build "${BUILD_DIR}" --target ckchat
 fi
