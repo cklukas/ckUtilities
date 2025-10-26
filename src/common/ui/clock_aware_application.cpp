@@ -27,6 +27,7 @@ namespace ck::ui
         clock->growMode = gfGrowLoX | gfGrowHiX;
         insert(clock);
         registerClockView(clock);
+        bringClockToFront(clock);
         return clock;
     }
 
@@ -52,5 +53,25 @@ namespace ck::ui
             if (clock)
                 clock->update();
         }
+    }
+
+    void ClockAwareApplication::promoteClocksToFront()
+    {
+        for (auto *clock : clockViews_)
+            bringClockToFront(clock);
+    }
+
+    void ClockAwareApplication::bringClockToFront(ClockView *clock)
+    {
+        if (!clock || clock->owner != this)
+            return;
+
+        const bool wasVisible = (clock->state & sfVisible) != 0;
+        remove(clock);
+        insert(clock);
+        if (wasVisible)
+            clock->show();
+        else
+            clock->hide();
     }
 } // namespace ck::ui

@@ -22,9 +22,11 @@ namespace ck::ui
         ClockView *insertMenuClock();
         void registerClockView(ClockView *clock);
         void unregisterClockView(ClockView *clock);
+        void promoteClocksToFront();
 
     private:
         void updateClocks();
+        void bringClockToFront(ClockView *clock);
 
         std::vector<ClockView *> clockViews_;
     };

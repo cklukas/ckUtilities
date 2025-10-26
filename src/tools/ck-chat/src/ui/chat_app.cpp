@@ -891,6 +891,7 @@ void ChatApp::rebuildMenuBar()
     insert(newBar);
     TProgram::menuBar = newBar;
     newBar->drawView();
+    promoteClocksToFront();
   }
 }
 
