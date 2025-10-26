@@ -1,5 +1,6 @@
 #include "chat_app.hpp"
 #include "../commands.hpp"
+#include "chat_options.hpp"
 #include "chat_window.hpp"
 #include "ck/about_dialog.hpp"
 #include "ck/ai/config.hpp"
@@ -26,8 +27,6 @@ namespace
     return ck::appinfo::requireTool("ck-chat");
   }
 
-  constexpr const char *kOptionParseMarkdownLinks = "parseMarkdownLinks";
-
   ck::ai::RuntimeConfig runtime_from_config(const ck::ai::Config &config)
   {
     ck::ai::RuntimeConfig runtime = config.runtime;
@@ -46,13 +45,25 @@ ChatApp::ChatApp(int argc, char **argv)
   runtimeConfig = runtime_from_config(config);
 
   optionRegistry_ = std::make_shared<ck::config::OptionRegistry>("ck-chat");
-  optionRegistry_->registerOption({
-      kOptionParseMarkdownLinks, ck::config::OptionKind::Boolean,
-      ck::config::OptionValue(false), "Parse Markdown Links",
-      "Render Markdown links using terminal-supported hyperlinks."});
+  ck::chat::registerChatOptions(*optionRegistry_);
   optionRegistry_->loadDefaults();
+  showThinking_ =
+      optionRegistry_->getBool(ck::chat::kOptionShowThinking, false);
+  showAnalysis_ =
+      optionRegistry_->getBool(ck::chat::kOptionShowAnalysis, false);
   parseMarkdownLinks_ =
-      optionRegistry_->getBool(kOptionParseMarkdownLinks, false);
+      optionRegistry_->getBool(ck::chat::kOptionParseMarkdownLinks, false);
+
+  const std::string savedModelId =
+      optionRegistry_->getString(ck::chat::kOptionActiveModelId, std::string());
+  if (!savedModelId.empty() &&
+      !modelManager_.is_model_active(savedModelId))
+    modelManager_.activate_model(savedModelId);
+
+  const std::string savedPromptId = optionRegistry_->getString(
+      ck::chat::kOptionActivePromptId, std::string());
+  if (!savedPromptId.empty())
+    promptManager_.set_active_prompt(savedPromptId);
 
   if (argv && argc > 0 && argv[0])
   {
@@ -481,6 +492,7 @@ void ChatApp::setShowThinking(bool showThinking)
   if (showThinking_ == showThinking)
     return;
   showThinking_ = showThinking;
+  persistBoolOption(ck::chat::kOptionShowThinking, showThinking_);
   applyThinkingVisibilityToWindows();
   rebuildMenuBar();
 }
@@ -490,6 +502,7 @@ void ChatApp::setShowAnalysis(bool showAnalysis)
   if (showAnalysis_ == showAnalysis)
     return;
   showAnalysis_ = showAnalysis;
+  persistBoolOption(ck::chat::kOptionShowAnalysis, showAnalysis_);
   applyAnalysisVisibilityToWindows();
   rebuildMenuBar();
 }
@@ -499,12 +512,7 @@ void ChatApp::setParseMarkdownLinks(bool enabled)
   if (parseMarkdownLinks_ == enabled)
     return;
   parseMarkdownLinks_ = enabled;
-  if (optionRegistry_)
-  {
-    optionRegistry_->set(kOptionParseMarkdownLinks,
-                         ck::config::OptionValue(enabled));
-    optionRegistry_->saveDefaults();
-  }
+  persistBoolOption(ck::chat::kOptionParseMarkdownLinks, parseMarkdownLinks_);
   applyParseMarkdownLinksToWindows();
   rebuildMenuBar();
 }
@@ -520,6 +528,29 @@ void ChatApp::appendLog(const std::string &text)
   file << text;
   if (!text.empty() && text.back() != '\n')
     file << '\n';
+}
+
+void ChatApp::persistBoolOption(const std::string &key, bool value)
+{
+  if (!optionRegistry_)
+    return;
+  ck::config::OptionValue desired(value);
+  if (optionRegistry_->get(key) == desired)
+    return;
+  optionRegistry_->set(key, desired);
+  optionRegistry_->saveDefaults();
+}
+
+void ChatApp::persistStringOption(const std::string &key,
+                                  const std::string &value)
+{
+  if (!optionRegistry_)
+    return;
+  ck::config::OptionValue desired(value);
+  if (optionRegistry_->get(key) == desired)
+    return;
+  optionRegistry_->set(key, desired);
+  optionRegistry_->saveDefaults();
 }
 
 void ChatApp::applyThinkingVisibilityToWindows()
@@ -797,6 +828,10 @@ void ChatApp::handlePromptManagerChange()
   auto activePrompt = promptManager_.get_active_prompt();
   if (activePrompt)
     systemPrompt_ = activePrompt->message;
+  if (activePrompt)
+    persistStringOption(ck::chat::kOptionActivePromptId, activePrompt->id);
+  else
+    persistStringOption(ck::chat::kOptionActivePromptId, std::string());
 
   {
     std::lock_guard<std::mutex> lock(llmMutex_);
@@ -926,6 +961,11 @@ void ChatApp::updateActiveModel()
   std::optional<ck::ai::ModelInfo> selected;
   if (!activeModels.empty())
     selected = activeModels.front();
+
+  if (selected)
+    persistStringOption(ck::chat::kOptionActiveModelId, selected->id);
+  else
+    persistStringOption(ck::chat::kOptionActiveModelId, std::string());
 
   if (!selected)
   {

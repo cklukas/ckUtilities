@@ -194,7 +194,7 @@ const KeyBinding kLinuxBindings[] = {
     {cmCopy, TKey(kbCtrlC), "Ctrl-C"},
     {cmFind, TKey(kbCtrlF), "Ctrl-F"},
     {cmHelp, TKey(kbF1), "F1"},
-    {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl-Shift-C"},
+    {commands::chat::CopyLastResponse, TKey('C', kbAltShift | kbShift), "Alt+Shift+C"},
 
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey(kbAlt0), "Alt-0"},
@@ -305,7 +305,7 @@ const KeyBinding kMacBindings[] = {
     {cmCopy, TKey(kbCtrlC), "Ctrl-C"},
     {cmFind, TKey(kbCtrlF), "Ctrl-F"},
     {cmHelp, TKey(kbF1), "F1"},
-    {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl-Shift-C"},
+    {commands::chat::CopyLastResponse, TKey('C', kbCtrlShift | kbShift), "Ctrl+Shift+C"},
 
     {commands::utilities::LaunchTool, TKey(kbEnter), "Enter"},
     {commands::utilities::ToggleEventViewer, TKey('0', kbCtrlShift), "Ctrl-0"},

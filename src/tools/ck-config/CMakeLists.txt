@@ -16,11 +16,13 @@ add_ck_tool(ckconfig
     ck_hotkeys
     ck_options
     ck_du_core
+    ck_chat_options
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include
     ${CURSES_INCLUDE_DIRS}
   DEFINITIONS
     CK_CONFIG_VERSION="${PROJECT_VERSION}"

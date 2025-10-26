@@ -102,6 +102,8 @@ private:
       std::optional<ck::ai::ModelInfo> modelInfo) const;
   void loadModelInBackground();
   void stopModelLoading();
+  void persistBoolOption(const std::string &key, bool value);
+  void persistStringOption(const std::string &key, const std::string &value);
 
   std::vector<ChatWindow *> windows;
   int nextWindowNumber = 1;

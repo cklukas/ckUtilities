@@ -30,6 +30,19 @@ namespace
     constexpr int kCopyButtonColumnWidth = 12;
 }
 
+class AlwaysVisibleScrollBar : public TScrollBar
+{
+public:
+    using TScrollBar::TScrollBar;
+
+    virtual void setState(ushort aState, Boolean enable) override
+    {
+        if (aState == sfVisible && !enable)
+            return;
+        TScrollBar::setState(aState, enable);
+    }
+};
+
 class PanelFrame : public TView
 {
 public:
@@ -162,7 +175,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
     TRect transcriptScrollRect(transcriptScrollLeft + 1, transcriptInterior.a.y,
                                transcriptInterior.b.x + 1, transcriptInterior.b.y);
 
-    auto *transcriptScroll = new TScrollBar(transcriptScrollRect);
+    auto *transcriptScroll = new AlwaysVisibleScrollBar(transcriptScrollRect);
     transcriptScroll->growMode = gfGrowLoX | gfGrowHiX | gfGrowLoY | gfGrowHiY;
     transcriptScroll->setState(sfVisible, True);
     insert(transcriptScroll);
@@ -206,7 +219,7 @@ ChatWindow::ChatWindow(ChatApp &owner, const TRect &bounds, int number)
 
     TRect promptScrollRect(scrollLeft, promptInterior.a.y,
                            static_cast<short>(scrollLeft + inputScrollWidth), promptInterior.b.y);
-    promptScrollBar = new TScrollBar(promptScrollRect);
+    promptScrollBar = new AlwaysVisibleScrollBar(promptScrollRect);
     promptScrollBar->growMode = gfGrowLoY | gfGrowHiY | gfGrowLoX | gfGrowHiX;
     promptScrollBar->setState(sfVisible, True);
     insert(promptScrollBar);

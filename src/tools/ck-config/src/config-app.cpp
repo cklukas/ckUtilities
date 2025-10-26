@@ -5,6 +5,7 @@
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
 #include "disk_usage_options.hpp"
+#include "chat_options.hpp"
 
 #define Uses_TApplication
 #define Uses_TButton
@@ -725,6 +726,8 @@ const std::vector<ApplicationInfo> &knownApplications()
             RegisterFn reg = nullptr;
             if (tool.id == "ck-du")
                 reg = &ck::du::registerDiskUsageOptions;
+            else if (tool.id == "ck-chat")
+                reg = &ck::chat::registerChatOptions;
             apps.push_back(ApplicationInfo{std::string(tool.id), std::string(tool.displayName), reg});
         }
         initialized = true;
