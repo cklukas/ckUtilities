@@ -175,24 +175,6 @@ bool editTimeFilters(TimeFilterOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        presetButtons->getData(&data.preset);
-        fieldBoxes->getData(&data.fields);
-        fromInput->getData(data.from);
-        toInput->getData(data.to);
-        mtimeInput->getData(data.mtime);
-        mminInput->getData(data.mmin);
-        atimeInput->getData(data.atime);
-        aminInput->getData(data.amin);
-        ctimeInput->getData(data.ctime);
-        cminInput->getData(data.cmin);
-        usedInput->getData(data.used);
-        newerInput->getData(data.newer);
-        anewerInput->getData(data.anewer);
-        cnewerInput->getData(data.cnewer);
-        newermtInput->getData(data.newermt);
-        neweratInput->getData(data.newerat);
-        newerctInput->getData(data.newerct);
-
         options.preset = static_cast<TimeFilterOptions::Preset>(data.preset);
         options.includeModified = (data.fields & 0x0001) != 0;
         options.includeCreated = (data.fields & 0x0002) != 0;
@@ -230,9 +212,7 @@ bool editTimeFilters(TimeFilterOptions &options)
         options.useNewerct = data.newerct[0] != '\0';
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

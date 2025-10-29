@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <string>
 
 #define Uses_MsgBox
 #define Uses_TButton
@@ -198,15 +200,54 @@ private:
         char location[PATH_MAX]{};
         std::snprintf(location, sizeof(location), "%s", m_data.startLocation[0] ? m_data.startLocation : ".");
 
+        std::filesystem::path originalDir;
+        try
+        {
+            originalDir = std::filesystem::current_path();
+        }
+        catch (...)
+        {
+        }
+
+        if (location[0] != '\0')
+        {
+            try
+            {
+                std::filesystem::current_path(std::filesystem::path(location));
+            }
+            catch (...)
+            {
+            }
+        }
+
         auto *dialog = new TChDirDialog(cdNormal, 1);
-        dialog->setData(location);
-        unsigned short result = TProgram::application->executeDialog(dialog, location);
-        TObject::destroy(dialog);
-        if (result == cmCancel)
+        unsigned short result = TProgram::application->executeDialog(dialog);
+        std::filesystem::path selectedDir;
+        try
+        {
+            selectedDir = std::filesystem::current_path();
+        }
+        catch (...)
+        {
+        }
+
+        if (!originalDir.empty())
+        {
+            try
+            {
+                std::filesystem::current_path(originalDir);
+            }
+            catch (...)
+            {
+            }
+        }
+
+        if (result == cmCancel || selectedDir.empty())
             return;
 
-        std::snprintf(m_data.startLocation, sizeof(m_data.startLocation), "%s", location);
-        m_startInput->setData(location);
+        const std::string newDirStr = selectedDir.string();
+        std::snprintf(m_data.startLocation, sizeof(m_data.startLocation), "%s", newDirStr.c_str());
+        m_startInput->setData(m_data.startLocation);
     }
 
     SearchSpecification &m_spec;
@@ -335,15 +376,6 @@ bool configureSearchSpecification(SearchSpecification &spec)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        specNameInput->getData(data.specName);
-        startInput->getData(data.startLocation);
-        textInput->getData(data.searchText);
-        includeInput->getData(data.includePatterns);
-        excludeInput->getData(data.excludePatterns);
-        generalBoxes->getData(&data.generalFlags);
-        primaryBoxes->getData(&data.optionPrimaryFlags);
-        secondaryBoxes->getData(&data.optionSecondaryFlags);
-
         copyToArray(spec.specName, data.specName);
         copyToArray(spec.startLocation, data.startLocation);
         copyToArray(spec.searchText, data.searchText);
@@ -373,9 +405,7 @@ bool configureSearchSpecification(SearchSpecification &spec)
         spec.enableActionOptions = (data.optionSecondaryFlags & kOptionActionBit) != 0;
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

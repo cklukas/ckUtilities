@@ -124,15 +124,6 @@ bool editPermissionOwnership(PermissionOwnershipOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        permBoxes->getData(&data.permFlags);
-        permMode->getData(&data.mode);
-        ownerBoxes->getData(&data.ownerFlags);
-        permInput->getData(data.permSpec);
-        userInput->getData(data.user);
-        uidInput->getData(data.uid);
-        groupInput->getData(data.group);
-        gidInput->getData(data.gid);
-
         options.permEnabled = (data.permFlags & 0x0001) != 0;
         options.readable = (data.permFlags & 0x0002) != 0;
         options.writable = (data.permFlags & 0x0004) != 0;
@@ -153,9 +144,7 @@ bool editPermissionOwnership(PermissionOwnershipOptions &options)
         copyToArray(options.gid, data.gid);
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

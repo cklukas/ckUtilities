@@ -62,8 +62,6 @@ bool editTextOptions(TextSearchOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        modeButtons->getData(&data.mode);
-        optionBoxes->getData(&data.flags);
         options.mode = static_cast<TextSearchOptions::Mode>(data.mode);
         options.matchCase = (data.flags & 0x0001) != 0;
         options.searchInContents = (data.flags & 0x0002) != 0;
@@ -71,9 +69,7 @@ bool editTextOptions(TextSearchOptions &options)
         options.allowMultipleTerms = (data.flags & 0x0008) != 0;
         options.treatBinaryAsText = (data.flags & 0x0010) != 0;
     }
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

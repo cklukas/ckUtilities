@@ -159,18 +159,6 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        symlinkButtons->getData(&data.symlinkMode);
-        warningButtons->getData(&data.warningMode);
-        flagBoxes->getData(&data.flags);
-        valueBoxes->getData(&data.valueFlags);
-        maxInput->getData(data.maxDepth);
-        minInput->getData(data.minDepth);
-        filesFromInput->getData(data.filesFrom);
-        fsTypeInput->getData(data.fsType);
-        linkCountInput->getData(data.linkCount);
-        sameFileInput->getData(data.sameFile);
-        inodeInput->getData(data.inode);
-
         options.depthFirst = (data.flags & 0x0001) != 0;
         options.stayOnFilesystem = (data.flags & 0x0002) != 0;
         options.assumeNoLeaf = (data.flags & 0x0004) != 0;
@@ -198,9 +186,7 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
         copyToArray(options.inode, data.inode);
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

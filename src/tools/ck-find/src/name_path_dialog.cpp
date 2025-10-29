@@ -156,19 +156,6 @@ bool editNamePathOptions(NamePathOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        patternBoxes->getData(&data.flags);
-        pruneBoxes->getData(&data.pruneFlags);
-        pruneModeButtons->getData(&data.pruneMode);
-        nameInput->getData(data.name);
-        inameInput->getData(data.iname);
-        pathInput->getData(data.path);
-        ipathInput->getData(data.ipath);
-        regexInput->getData(data.regex);
-        iregexInput->getData(data.iregex);
-        lnameInput->getData(data.lname);
-        ilnameInput->getData(data.ilname);
-        pruneInput->getData(data.prune);
-
         options.nameEnabled = (data.flags & 0x0001) != 0;
         options.inameEnabled = (data.flags & 0x0002) != 0;
         options.pathEnabled = (data.flags & 0x0004) != 0;
@@ -192,9 +179,7 @@ bool editNamePathOptions(NamePathOptions &options)
         copyToArray(options.prunePattern, data.prune);
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

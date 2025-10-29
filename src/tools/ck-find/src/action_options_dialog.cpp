@@ -146,17 +146,6 @@ bool editActionOptions(ActionOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        actionBoxes->getData(&data.flags);
-        appendBoxes->getData(&data.appendFlags);
-        execButtons->getData(&data.execVariant);
-        execInput->getData(data.execCommand);
-        fprintInput->getData(data.fprintFile);
-        fprint0Input->getData(data.fprint0File);
-        flsInput->getData(data.flsFile);
-        printfInput->getData(data.printfFormat);
-        fprintfFileInput->getData(data.fprintfFile);
-        fprintfFormatInput->getData(data.fprintfFormat);
-
         options.print = (data.flags & 0x0001) != 0;
         options.print0 = (data.flags & 0x0002) != 0;
         options.ls = (data.flags & 0x0004) != 0;
@@ -186,9 +175,7 @@ bool editActionOptions(ActionOptions &options)
         options.fprintfEnabled = data.fprintfFile[0] != '\0' || data.fprintfFormat[0] != '\0';
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

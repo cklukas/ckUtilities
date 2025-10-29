@@ -138,12 +138,6 @@ bool editTypeFilters(TypeFilterOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        flagBoxes->getData(&data.flags);
-        typeBoxes->getData(&data.typeFlags);
-        xtypeBoxes->getData(&data.xtypeFlags);
-        extensionInput->getData(data.extensions);
-        detectorInput->getData(data.detectors);
-
         options.typeEnabled = (data.flags & 0x0001) != 0;
         options.xtypeEnabled = (data.flags & 0x0002) != 0;
         options.useExtensions = (data.flags & 0x0004) != 0;
@@ -179,9 +173,7 @@ bool editTypeFilters(TypeFilterOptions &options)
         copyToArray(options.detectorTags, data.detectors);
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-

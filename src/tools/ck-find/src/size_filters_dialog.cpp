@@ -89,11 +89,6 @@ bool editSizeFilters(SizeFilterOptions &options)
     bool accepted = (result == cmOK);
     if (accepted)
     {
-        flagBoxes->getData(&data.flags);
-        minInput->getData(data.minSpec);
-        maxInput->getData(data.maxSpec);
-        exactInput->getData(data.exactSpec);
-
         options.minEnabled = (data.flags & 0x0001) != 0;
         options.maxEnabled = (data.flags & 0x0002) != 0;
         options.exactEnabled = (data.flags & 0x0004) != 0;
@@ -108,9 +103,7 @@ bool editSizeFilters(SizeFilterOptions &options)
         copyToArray(options.exactSpec, data.exactSpec);
     }
 
-    TObject::destroy(dialog);
     return accepted;
 }
 
 } // namespace ck::find
-
