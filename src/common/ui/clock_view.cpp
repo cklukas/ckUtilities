@@ -91,7 +91,7 @@ namespace ck::ui
             return std::string(buffer);
         }
         case ClockDisplayMode::Icon:
-            return "«"; // "\xF0\x9F\x93\x85"; // Calendar icon
+            return "«";
         }
         return std::string();
     }
