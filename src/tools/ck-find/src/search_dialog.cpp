@@ -20,6 +20,7 @@
 #define Uses_TDialog
 #define Uses_TInputLine
 #define Uses_TLabel
+#define Uses_TRadioButtons
 #define Uses_TMessageBox
 #define Uses_TProgram
 #define Uses_TStaticText
@@ -65,6 +66,8 @@ struct SearchNotebookState
     unsigned short generalFlags = 0;
     unsigned short optionPrimaryFlags = 0;
     unsigned short optionSecondaryFlags = 0;
+    unsigned short quickSearchMode = 2; // 0 = contents, 1 = names, 2 = both
+    unsigned short quickTypePreset = 0; // 0 = all, 1 = documents, 2 = images, 3 = audio, 4 = archives, 5 = custom
 };
 
 class PlaceholderPage : public ck::ui::TabPageView
@@ -104,6 +107,8 @@ private:
     TCheckBoxes *m_generalBoxes = nullptr;
     TCheckBoxes *m_primaryBoxes = nullptr;
     TCheckBoxes *m_secondaryBoxes = nullptr;
+    TRadioButtons *m_searchModeButtons = nullptr;
+    TRadioButtons *m_typePresetButtons = nullptr;
 };
 
 QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
@@ -119,30 +124,36 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
                            "Use other tabs for advanced filters."));
 
     m_startInput = new TInputLine(TRect(2, 4, 60, 5), sizeof(m_state.startLocation) - 1);
-    insert(new TLabel(TRect(1, 3, 27, 4), "Start ~l~ocation:", m_startInput));
+    insert(new TLabel(TRect(1, 3, 27, 4), "Start ~L~ocation:", m_startInput));
     insert(m_startInput);
     insert(new TButton(TRect(61, 4, 77, 6), "~B~rowse...", cmBrowseStart, bfNormal));
 
     m_searchTextInput = new TInputLine(TRect(2, 6, 77, 7), sizeof(m_state.searchText) - 1);
-    insert(new TLabel(TRect(1, 5, 25, 6), "Te~x~t to find:", m_searchTextInput));
+    insert(new TLabel(TRect(1, 5, 25, 6), "~S~earch text:", m_searchTextInput));
     insert(m_searchTextInput);
 
+    m_searchModeButtons = new TRadioButtons(TRect(2, 7, 30, 11),
+                                            makeItemList({"Search ~c~ontents",
+                                                          "Search ~n~ames only",
+                                                          "Search ~b~oth"}));
+    insert(m_searchModeButtons);
+
     m_includeInput = new TInputLine(TRect(2, 8, 38, 9), sizeof(m_state.includePatterns) - 1);
-    insert(new TLabel(TRect(1, 7, 28, 8), "Include patterns:", m_includeInput));
+    insert(new TLabel(TRect(1, 7, 28, 8), "~I~nclude patterns:", m_includeInput));
     insert(m_includeInput);
 
     m_excludeInput = new TInputLine(TRect(40, 8, 77, 9), sizeof(m_state.excludePatterns) - 1);
-    insert(new TLabel(TRect(39, 7, 76, 8), "Exclude patterns:", m_excludeInput));
+    insert(new TLabel(TRect(39, 7, 76, 8), "~E~xclude patterns:", m_excludeInput));
     insert(m_excludeInput);
 
-    m_generalBoxes = new TCheckBoxes(TRect(2, 10, 32, 15),
+    m_generalBoxes = new TCheckBoxes(TRect(32, 7, 62, 12),
                                      makeItemList({"~R~ecursive",
                                                    "Include ~h~idden",
                                                    "Follow s~y~mlinks",
                                                    "Stay on same file ~s~ystem"}));
     insert(m_generalBoxes);
 
-    m_primaryBoxes = new TCheckBoxes(TRect(34, 10, 56, 15),
+    m_primaryBoxes = new TCheckBoxes(TRect(2, 12, 30, 17),
                                      makeItemList({"~T~ext search",
                                                    "Name/~P~ath",
                                                    "~T~ime filters",
@@ -150,21 +161,26 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
                                                    "File ~t~ype filters"}));
     insert(m_primaryBoxes);
 
-    m_secondaryBoxes = new TCheckBoxes(TRect(58, 10, 77, 15),
+    m_secondaryBoxes = new TCheckBoxes(TRect(32, 12, 51, 17),
                                        makeItemList({"~P~ermissions",
                                                      "T~r~aversal",
                                                      "~A~ctions"}));
     insert(m_secondaryBoxes);
 
-    insert(new TButton(TRect(2, 16, 18, 18), "Text ~O~ptions...", cmTextOptions, bfNormal));
-    insert(new TButton(TRect(20, 16, 36, 18), "Name/~P~ath...", cmNamePathOptions, bfNormal));
-    insert(new TButton(TRect(38, 16, 54, 18), "Time ~T~ests...", cmTimeFilters, bfNormal));
-    insert(new TButton(TRect(56, 16, 72, 18), "Si~z~e Filters...", cmSizeFilters, bfNormal));
+    m_typePresetButtons = new TRadioButtons(TRect(53, 12, 77, 17),
+                                            makeItemList({"All ~f~iles",
+                                                          "~D~ocuments",
+                                                          "~I~mages",
+                                                          "~A~udio",
+                                                          "~R~chives",
+                                                          "~C~ustom"}));
+    insert(m_typePresetButtons);
+    insert(new TLabel(TRect(53, 11, 77, 12), "Type ~Y~preset:", m_typePresetButtons));
 
-    insert(new TButton(TRect(2, 18, 18, 20), "File ~T~ypes...", cmTypeFilters, bfNormal));
-    insert(new TButton(TRect(20, 18, 38, 20), "~P~ermissions...", cmPermissionOwnership, bfNormal));
-    insert(new TButton(TRect(40, 18, 58, 20), "T~r~aversal...", cmTraversalFilters, bfNormal));
-    insert(new TButton(TRect(60, 18, 78, 20), "~A~ctions...", cmActionOptions, bfNormal));
+    insert(new TButton(TRect(2, 18, 22, 20), "Adva~n~ced filters...", cmTabContentNames, bfNormal));
+    insert(new TButton(TRect(24, 18, 40, 20), "Text ~O~ptions...", cmTextOptions, bfNormal));
+    insert(new TButton(TRect(42, 18, 58, 20), "Name/~P~ath...", cmNamePathOptions, bfNormal));
+    insert(new TButton(TRect(60, 18, 76, 20), "Time ~T~ests...", cmTimeFilters, bfNormal));
 
     populateFromState();
 }
@@ -187,6 +203,10 @@ void QuickStartPage::populateFromState()
         m_includeInput->setData(m_state.includePatterns);
     if (m_excludeInput)
         m_excludeInput->setData(m_state.excludePatterns);
+    if (m_searchModeButtons)
+        m_searchModeButtons->setData(&m_state.quickSearchMode);
+    if (m_typePresetButtons)
+        m_typePresetButtons->setData(&m_state.quickTypePreset);
     syncOptionFlags();
 }
 
@@ -221,6 +241,17 @@ void QuickStartPage::collect()
         m_secondaryBoxes->getData(&flags);
         m_state.optionSecondaryFlags = flags;
     }
+    if (m_searchModeButtons)
+        m_searchModeButtons->getData(&m_state.quickSearchMode);
+    if (m_typePresetButtons)
+        m_typePresetButtons->getData(&m_state.quickTypePreset);
+
+    if (m_state.searchText[0] != '\0')
+        m_state.optionPrimaryFlags |= kOptionTextBit;
+    if (m_state.quickTypePreset == 0)
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTypeBit);
+    else if (m_state.quickTypePreset != 5)
+        m_state.optionPrimaryFlags |= kOptionTypeBit;
 }
 
 void QuickStartPage::setStartLocation(const char *path)
@@ -254,6 +285,10 @@ void QuickStartPage::syncOptionFlags()
         unsigned short flags = m_state.optionSecondaryFlags;
         m_secondaryBoxes->setData(&flags);
     }
+    if (m_searchModeButtons)
+        m_searchModeButtons->setData(&m_state.quickSearchMode);
+    if (m_typePresetButtons)
+        m_typePresetButtons->setData(&m_state.quickTypePreset);
 }
 
 class SearchNotebookDialog : public TDialog
@@ -522,6 +557,71 @@ void SearchNotebookDialog::applyStateToSpecification()
     m_spec.enablePermissionOwnership = (m_state.optionSecondaryFlags & kOptionPermissionBit) != 0;
     m_spec.enableTraversalFilters = (m_state.optionSecondaryFlags & kOptionTraversalBit) != 0;
     m_spec.enableActionOptions = (m_state.optionSecondaryFlags & kOptionActionBit) != 0;
+
+    const bool hasText = m_state.searchText[0] != '\0';
+    m_spec.enableTextSearch = hasText;
+    if (hasText)
+    {
+        switch (m_state.quickSearchMode)
+        {
+        case 0: // contents
+            m_spec.textOptions.searchInContents = true;
+            m_spec.textOptions.searchInFileNames = false;
+            break;
+        case 1: // names
+            m_spec.textOptions.searchInContents = false;
+            m_spec.textOptions.searchInFileNames = true;
+            break;
+        default: // both
+            m_spec.textOptions.searchInContents = true;
+            m_spec.textOptions.searchInFileNames = true;
+            break;
+        }
+    }
+
+    if (m_state.quickTypePreset == 0)
+    {
+        if (m_state.optionPrimaryFlags & kOptionTypeBit)
+            m_spec.enableTypeFilters = true;
+        else
+            m_spec.enableTypeFilters = false;
+    }
+    else if (m_state.quickTypePreset == 5)
+    {
+        // Custom – leave existing configuration untouched but ensure flag reflects checkbox state
+        m_spec.enableTypeFilters = (m_state.optionPrimaryFlags & kOptionTypeBit) != 0;
+    }
+    else
+    {
+        const char *extensions = nullptr;
+        switch (m_state.quickTypePreset)
+        {
+        case 1:
+            extensions = "pdf,doc,docx,txt,md,rtf";
+            break;
+        case 2:
+            extensions = "jpg,jpeg,png,gif,bmp,svg,webp";
+            break;
+        case 3:
+            extensions = "mp3,flac,wav,ogg,aac";
+            break;
+        case 4:
+        default:
+            extensions = "zip,tar,gz,bz2,xz,7z";
+            break;
+        }
+        if (extensions)
+        {
+            m_spec.enableTypeFilters = true;
+            m_spec.typeOptions.typeEnabled = false;
+            m_spec.typeOptions.xtypeEnabled = false;
+            m_spec.typeOptions.useExtensions = true;
+            m_spec.typeOptions.extensionCaseInsensitive = true;
+            copyToArray(m_spec.typeOptions.extensions, extensions);
+            m_spec.typeOptions.useDetectors = false;
+            m_spec.typeOptions.detectorTags[0] = '\0';
+        }
+    }
 }
 
 } // namespace

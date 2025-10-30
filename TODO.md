@@ -41,15 +41,15 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
 ## 2. Tab Content Breakdown
 
 ### 2.1: Quick Start
-- [ ] Controls:
+- [x] Controls:
   - Start location `TInputLine` + “Browse…” `TButton` (reuse browse handler).
   - Checkboxes: Include subfolders, Include hidden items.
-  - Search text `TInputLine` with `TComboBox` selector (“Search contents”, “Search names”, “Both”).
+  - Search text `TInputLine` with mode selector (contents / names / both).
   - Include patterns / Exclude patterns `TInputLine`s.
-  - Quick type filter cluster (`TCluster`): All files / Documents / Images / Audio / Archives / Custom → hitting “Custom” activates Type tab.
+  - Quick type filter selector (All / Documents / Images / Audio / Archives / Custom) with state integration.
   - Search name field (optional label for saved specs).
-- [ ] Shortcuts: Alt+L (location), Alt+S (search text), Alt+I (include patterns), Alt+E (exclude patterns), Alt+Y (type filter).
-- [ ] Buttons: “Go to advanced filters…” opens Content & Names tab (use `parent->selectPage(index)`).
+- [x] Shortcuts: Alt+L (location), Alt+S (search text), Alt+I (include patterns), Alt+E (exclude patterns), Alt+Y (type filter via radio cluster).
+- [x] Buttons: “Go to advanced filters…” opens Content & Names tab.
 
 ### 2.2: Content & Names Tab
 - [ ] Section A – Text Matching:
