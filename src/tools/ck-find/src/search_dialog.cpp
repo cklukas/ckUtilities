@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <array>
 #include <filesystem>
 #include <string>
 
@@ -55,6 +56,55 @@ constexpr unsigned short kOptionTypeBit = 0x0010;
 constexpr unsigned short kOptionPermissionBit = 0x0001;
 constexpr unsigned short kOptionTraversalBit = 0x0002;
 constexpr unsigned short kOptionActionBit = 0x0004;
+
+constexpr unsigned short cmClearTypeFiltersLocal = 0xf200;
+constexpr unsigned short cmClearOwnershipFiltersLocal = 0xf201;
+
+constexpr std::array<char, 4> kTypeLettersLeft{'b', 'c', 'd', 'p'};
+constexpr std::array<char, 4> kTypeLettersRight{'f', 'l', 's', 'D'};
+
+std::string buildTypeSummary(const TypeFilterOptions &options)
+{
+    std::string summary = "Extensions: ";
+    if (options.useExtensions && options.extensions[0] != '\0')
+    {
+        summary += bufferToString(options.extensions);
+        if (!options.extensionCaseInsensitive)
+            summary += " (case-sensitive)";
+    }
+    else
+    {
+        summary += "off";
+    }
+
+    summary += " | Detectors: ";
+    if (options.useDetectors && options.detectorTags[0] != '\0')
+        summary += bufferToString(options.detectorTags);
+    else
+        summary += "off";
+
+    return summary;
+}
+
+unsigned short clusterBitsFromLetters(const std::string &letters, const std::array<char, 4> &mapping)
+{
+    unsigned short bits = 0;
+    for (std::size_t i = 0; i < mapping.size(); ++i)
+    {
+        if (letters.find(mapping[i]) != std::string::npos)
+            bits |= static_cast<unsigned short>(1u << i);
+    }
+    return bits;
+}
+
+void lettersFromClusterBits(unsigned short bits, const std::array<char, 4> &mapping, std::string &out)
+{
+    for (std::size_t i = 0; i < mapping.size(); ++i)
+    {
+        if (bits & (1u << i))
+            out.push_back(mapping[i]);
+    }
+}
 
 struct SearchNotebookState
 {
@@ -173,6 +223,7 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
 
 void QuickStartPage::onActivated()
 {
+    syncOptionFlags();
     if (m_specNameInput)
         m_specNameInput->selectAll(True, True);
 }
@@ -362,6 +413,54 @@ private:
     TInputLine *m_maxSizeInput = nullptr;
     TInputLine *m_exactSizeInput = nullptr;
     TCheckBoxes *m_sizeFlagBoxes = nullptr;
+};
+
+class TypesOwnershipPage : public ck::ui::TabPageView
+{
+public:
+    TypesOwnershipPage(const TRect &bounds,
+                       SearchNotebookState &state,
+                       TypeFilterOptions &typeOptions,
+                       PermissionOwnershipOptions &permOptions);
+
+    void populate();
+    void collect();
+
+protected:
+    void onActivated() override;
+    void onDeactivated() override;
+    void handleEvent(TEvent &event) override;
+
+private:
+    void updateTypeControls();
+    void updatePermissionControls();
+    void updateOwnershipControls();
+    void updateExtensionSummary();
+    void applyOptionFlags();
+
+    SearchNotebookState &m_state;
+    TypeFilterOptions &m_typeOptions;
+    PermissionOwnershipOptions &m_permOptions;
+
+    TCheckBoxes *m_typeEnableBoxes = nullptr;
+    TCheckBoxes *m_typeBoxesLeft = nullptr;
+    TCheckBoxes *m_typeBoxesRight = nullptr;
+    TCheckBoxes *m_xtypeBoxesLeft = nullptr;
+    TCheckBoxes *m_xtypeBoxesRight = nullptr;
+    TInputLine *m_extensionSummary = nullptr;
+    std::array<char, 128> m_extensionBuffer{};
+    TButton *m_clearTypeButton = nullptr;
+
+    TCheckBoxes *m_permBoxes = nullptr;
+    TRadioButtons *m_permModeButtons = nullptr;
+    TInputLine *m_permInput = nullptr;
+
+    TCheckBoxes *m_ownerBoxes = nullptr;
+    TInputLine *m_userInput = nullptr;
+    TInputLine *m_uidInput = nullptr;
+    TInputLine *m_groupInput = nullptr;
+    TInputLine *m_gidInput = nullptr;
+    TButton *m_clearOwnershipButton = nullptr;
 };
 
 ContentNamesPage::ContentNamesPage(const TRect &bounds,
@@ -1000,6 +1099,407 @@ void DatesSizesPage::handleEvent(TEvent &event)
     updateSizeInputs();
 }
 
+TypesOwnershipPage::TypesOwnershipPage(const TRect &bounds,
+                                       SearchNotebookState &state,
+                                       TypeFilterOptions &typeOptions,
+                                       PermissionOwnershipOptions &permOptions)
+    : ck::ui::TabPageView(bounds),
+      m_state(state),
+      m_typeOptions(typeOptions),
+      m_permOptions(permOptions)
+{
+    insert(new TStaticText(TRect(2, 0, 78, 1), "Filter files by type, permissions, and ownership."));
+
+    m_typeEnableBoxes = new TCheckBoxes(TRect(2, 1, 42, 3),
+                                        makeItemList({"Enable -~t~ype (-type)",
+                                                      "Enable -~x~type (-xtype)"}));
+    insert(m_typeEnableBoxes);
+
+    m_typeBoxesLeft = new TCheckBoxes(TRect(2, 3, 22, 7),
+                                      makeItemList({"Block device (b)",
+                                                    "Character device (c)",
+                                                    "Directory (d)",
+                                                    "FIFO / pipe (p)"}));
+    insert(m_typeBoxesLeft);
+
+    m_typeBoxesRight = new TCheckBoxes(TRect(22, 3, 42, 7),
+                                       makeItemList({"Regular file (f)",
+                                                     "Symbolic link (l)",
+                                                     "Socket (s)",
+                                                     "Door (D)"}));
+    insert(m_typeBoxesRight);
+
+    m_xtypeBoxesLeft = new TCheckBoxes(TRect(42, 3, 62, 7),
+                                       makeItemList({"b (post)",
+                                                     "c (post)",
+                                                     "d (post)",
+                                                     "p (post)"}));
+    insert(m_xtypeBoxesLeft);
+
+    m_xtypeBoxesRight = new TCheckBoxes(TRect(62, 3, 78, 7),
+                                        makeItemList({"f (post)",
+                                                      "l (post)",
+                                                      "s (post)",
+                                                      "D (post)"}));
+    insert(m_xtypeBoxesRight);
+
+    m_extensionSummary = new TInputLine(TRect(2, 7, 56, 8), static_cast<int>(m_extensionBuffer.size()) - 1);
+    insert(new TLabel(TRect(2, 6, 56, 7), "Extension / detector summary:", m_extensionSummary));
+    insert(m_extensionSummary);
+    m_extensionSummary->setState(sfDisabled, True);
+
+    insert(new TButton(TRect(58, 6, 78, 8), "Advanced ~t~ype...", cmTypeFilters, bfNormal));
+    m_clearTypeButton = new TButton(TRect(58, 8, 78, 10), "Clear type filter", cmClearTypeFiltersLocal, bfNormal);
+    insert(m_clearTypeButton);
+
+    insert(new TStaticText(TRect(2, 9, 78, 10), "Permissions"));
+
+    m_permBoxes = new TCheckBoxes(TRect(2, 10, 28, 14),
+                                  makeItemList({"Use -~p~erm value",
+                                                "-~r~eadable",
+                                                "-~w~ritable",
+                                                "-~e~xecutable"}));
+    insert(m_permBoxes);
+
+    m_permModeButtons = new TRadioButtons(TRect(30, 10, 58, 14),
+                                          makeItemList({"Exact (-perm value)",
+                                                        "All bits (-perm -mode)",
+                                                        "Any bit (-perm /mode)"}));
+    insert(m_permModeButtons);
+
+    m_permInput = new TInputLine(TRect(58, 10, 78, 11), sizeof(m_permOptions.permSpec) - 1);
+    insert(new TLabel(TRect(58, 9, 78, 10), "-perm:", m_permInput));
+    insert(m_permInput);
+
+    insert(new TButton(TRect(58, 11, 78, 13), "Advanced ~p~erms...", cmPermissionOwnership, bfNormal));
+
+    insert(new TStaticText(TRect(2, 14, 78, 15), "Ownership"));
+
+    m_ownerBoxes = new TCheckBoxes(TRect(2, 15, 28, 20),
+                                   makeItemList({"Filter ~u~ser (-user)",
+                                                 "Match ~U~ID (-uid)",
+                                                 "Filter ~g~roup (-group)",
+                                                 "Match ~G~ID (-gid)",
+                                                 "-~n~ouser",
+                                                 "-~n~ogroup"}));
+    insert(m_ownerBoxes);
+
+    m_userInput = new TInputLine(TRect(30, 15, 78, 16), sizeof(m_permOptions.user) - 1);
+    insert(new TLabel(TRect(30, 14, 78, 15), "User name:", m_userInput));
+    insert(m_userInput);
+
+    m_uidInput = new TInputLine(TRect(30, 16, 78, 17), sizeof(m_permOptions.uid) - 1);
+    insert(new TLabel(TRect(30, 15, 78, 16), "UID:", m_uidInput));
+    insert(m_uidInput);
+
+    m_groupInput = new TInputLine(TRect(30, 17, 78, 18), sizeof(m_permOptions.group) - 1);
+    insert(new TLabel(TRect(30, 16, 78, 17), "Group:", m_groupInput));
+    insert(m_groupInput);
+
+    m_gidInput = new TInputLine(TRect(30, 18, 78, 19), sizeof(m_permOptions.gid) - 1);
+    insert(new TLabel(TRect(30, 17, 78, 18), "GID:", m_gidInput));
+    insert(m_gidInput);
+
+    m_clearOwnershipButton = new TButton(TRect(58, 18, 78, 20), "Clear ownership", cmClearOwnershipFiltersLocal, bfNormal);
+    insert(m_clearOwnershipButton);
+
+    populate();
+}
+
+void TypesOwnershipPage::populate()
+{
+    unsigned short enableFlags = 0;
+    if (m_typeOptions.typeEnabled)
+        enableFlags |= 0x0001;
+    if (m_typeOptions.xtypeEnabled)
+        enableFlags |= 0x0002;
+    if (m_typeEnableBoxes)
+        m_typeEnableBoxes->setData(&enableFlags);
+
+    std::string typeLetters = bufferToString(m_typeOptions.typeLetters);
+    unsigned short leftBits = clusterBitsFromLetters(typeLetters, kTypeLettersLeft);
+    if (m_typeBoxesLeft)
+        m_typeBoxesLeft->setData(&leftBits);
+    unsigned short rightBits = clusterBitsFromLetters(typeLetters, kTypeLettersRight);
+    if (m_typeBoxesRight)
+        m_typeBoxesRight->setData(&rightBits);
+
+    std::string xtypeLetters = bufferToString(m_typeOptions.xtypeLetters);
+    leftBits = clusterBitsFromLetters(xtypeLetters, kTypeLettersLeft);
+    if (m_xtypeBoxesLeft)
+        m_xtypeBoxesLeft->setData(&leftBits);
+    rightBits = clusterBitsFromLetters(xtypeLetters, kTypeLettersRight);
+    if (m_xtypeBoxesRight)
+        m_xtypeBoxesRight->setData(&rightBits);
+
+    updateExtensionSummary();
+
+    unsigned short permFlags = 0;
+    if (m_permOptions.permEnabled)
+        permFlags |= 0x0001;
+    if (m_permOptions.readable)
+        permFlags |= 0x0002;
+    if (m_permOptions.writable)
+        permFlags |= 0x0004;
+    if (m_permOptions.executable)
+        permFlags |= 0x0008;
+    if (m_permBoxes)
+        m_permBoxes->setData(&permFlags);
+
+    unsigned short mode = static_cast<unsigned short>(m_permOptions.permMode);
+    if (m_permModeButtons)
+        m_permModeButtons->setData(&mode);
+
+    if (m_permInput)
+        m_permInput->setData(m_permOptions.permSpec.data());
+
+    unsigned short ownerFlags = 0;
+    if (m_permOptions.userEnabled)
+        ownerFlags |= 0x0001;
+    if (m_permOptions.uidEnabled)
+        ownerFlags |= 0x0002;
+    if (m_permOptions.groupEnabled)
+        ownerFlags |= 0x0004;
+    if (m_permOptions.gidEnabled)
+        ownerFlags |= 0x0008;
+    if (m_permOptions.noUser)
+        ownerFlags |= 0x0010;
+    if (m_permOptions.noGroup)
+        ownerFlags |= 0x0020;
+    if (m_ownerBoxes)
+        m_ownerBoxes->setData(&ownerFlags);
+
+    if (m_userInput)
+        m_userInput->setData(m_permOptions.user.data());
+    if (m_uidInput)
+        m_uidInput->setData(m_permOptions.uid.data());
+    if (m_groupInput)
+        m_groupInput->setData(m_permOptions.group.data());
+    if (m_gidInput)
+        m_gidInput->setData(m_permOptions.gid.data());
+
+    updateTypeControls();
+    updatePermissionControls();
+    updateOwnershipControls();
+    applyOptionFlags();
+}
+
+void TypesOwnershipPage::collect()
+{
+    unsigned short enableFlags = 0;
+    if (m_typeEnableBoxes)
+        m_typeEnableBoxes->getData(&enableFlags);
+    m_typeOptions.typeEnabled = (enableFlags & 0x0001) != 0;
+    m_typeOptions.xtypeEnabled = (enableFlags & 0x0002) != 0;
+
+    std::string typeLetters;
+    unsigned short leftBits = 0;
+    if (m_typeBoxesLeft)
+        m_typeBoxesLeft->getData(&leftBits);
+    lettersFromClusterBits(leftBits, kTypeLettersLeft, typeLetters);
+    unsigned short rightBits = 0;
+    if (m_typeBoxesRight)
+        m_typeBoxesRight->getData(&rightBits);
+    lettersFromClusterBits(rightBits, kTypeLettersRight, typeLetters);
+    copyToArray(m_typeOptions.typeLetters, typeLetters.c_str());
+    if (!m_typeOptions.typeEnabled)
+        m_typeOptions.typeLetters[0] = '\0';
+
+    std::string xtypeLetters;
+    if (m_xtypeBoxesLeft)
+        m_xtypeBoxesLeft->getData(&leftBits);
+    else
+        leftBits = 0;
+    lettersFromClusterBits(leftBits, kTypeLettersLeft, xtypeLetters);
+    if (m_xtypeBoxesRight)
+        m_xtypeBoxesRight->getData(&rightBits);
+    else
+        rightBits = 0;
+    lettersFromClusterBits(rightBits, kTypeLettersRight, xtypeLetters);
+    copyToArray(m_typeOptions.xtypeLetters, xtypeLetters.c_str());
+    if (!m_typeOptions.xtypeEnabled)
+        m_typeOptions.xtypeLetters[0] = '\0';
+
+    unsigned short permFlags = 0;
+    if (m_permBoxes)
+        m_permBoxes->getData(&permFlags);
+    m_permOptions.permEnabled = (permFlags & 0x0001) != 0;
+    m_permOptions.readable = (permFlags & 0x0002) != 0;
+    m_permOptions.writable = (permFlags & 0x0004) != 0;
+    m_permOptions.executable = (permFlags & 0x0008) != 0;
+    if (m_permOptions.permEnabled)
+    {
+        if (m_permModeButtons)
+        {
+            unsigned short mode = 0;
+            m_permModeButtons->getData(&mode);
+            m_permOptions.permMode = static_cast<PermissionOwnershipOptions::PermMode>(mode);
+        }
+        if (m_permInput)
+            m_permInput->getData(m_permOptions.permSpec.data());
+    }
+    else
+    {
+        m_permOptions.permSpec.fill('\0');
+    }
+
+    unsigned short ownerFlags = 0;
+    if (m_ownerBoxes)
+        m_ownerBoxes->getData(&ownerFlags);
+    m_permOptions.userEnabled = (ownerFlags & 0x0001) != 0;
+    m_permOptions.uidEnabled = (ownerFlags & 0x0002) != 0;
+    m_permOptions.groupEnabled = (ownerFlags & 0x0004) != 0;
+    m_permOptions.gidEnabled = (ownerFlags & 0x0008) != 0;
+    m_permOptions.noUser = (ownerFlags & 0x0010) != 0;
+    m_permOptions.noGroup = (ownerFlags & 0x0020) != 0;
+
+    if (m_permOptions.userEnabled && m_userInput)
+        m_userInput->getData(m_permOptions.user.data());
+    else
+        m_permOptions.user.fill('\0');
+
+    if (m_permOptions.uidEnabled && m_uidInput)
+        m_uidInput->getData(m_permOptions.uid.data());
+    else
+        m_permOptions.uid.fill('\0');
+
+    if (m_permOptions.groupEnabled && m_groupInput)
+        m_groupInput->getData(m_permOptions.group.data());
+    else
+        m_permOptions.group.fill('\0');
+
+    if (m_permOptions.gidEnabled && m_gidInput)
+        m_gidInput->getData(m_permOptions.gid.data());
+    else
+        m_permOptions.gid.fill('\0');
+
+    applyOptionFlags();
+}
+
+void TypesOwnershipPage::onActivated()
+{
+    populate();
+}
+
+void TypesOwnershipPage::onDeactivated()
+{
+    collect();
+}
+
+void TypesOwnershipPage::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmClearTypeFiltersLocal:
+            m_typeOptions = TypeFilterOptions{};
+            applyOptionFlags();
+            populate();
+            clearEvent(event);
+            return;
+        case cmClearOwnershipFiltersLocal:
+            m_permOptions = PermissionOwnershipOptions{};
+            applyOptionFlags();
+            populate();
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+
+    TGroup::handleEvent(event);
+    updateTypeControls();
+    updatePermissionControls();
+    updateOwnershipControls();
+}
+
+void TypesOwnershipPage::updateTypeControls()
+{
+    unsigned short enableFlags = 0;
+    if (m_typeEnableBoxes)
+        m_typeEnableBoxes->getData(&enableFlags);
+
+    const Boolean disableType = (enableFlags & 0x0001) != 0 ? False : True;
+    const Boolean disableXType = (enableFlags & 0x0002) != 0 ? False : True;
+
+    if (m_typeBoxesLeft)
+        m_typeBoxesLeft->setState(sfDisabled, disableType);
+    if (m_typeBoxesRight)
+        m_typeBoxesRight->setState(sfDisabled, disableType);
+    if (m_xtypeBoxesLeft)
+        m_xtypeBoxesLeft->setState(sfDisabled, disableXType);
+    if (m_xtypeBoxesRight)
+        m_xtypeBoxesRight->setState(sfDisabled, disableXType);
+}
+
+void TypesOwnershipPage::updatePermissionControls()
+{
+    unsigned short flags = 0;
+    if (m_permBoxes)
+        m_permBoxes->getData(&flags);
+    const Boolean enablePerm = (flags & 0x0001) != 0 ? False : True;
+
+    if (m_permModeButtons)
+        m_permModeButtons->setState(sfDisabled, enablePerm);
+    if (m_permInput)
+        m_permInput->setState(sfDisabled, enablePerm);
+}
+
+void TypesOwnershipPage::updateOwnershipControls()
+{
+    unsigned short ownerFlags = 0;
+    if (m_ownerBoxes)
+        m_ownerBoxes->getData(&ownerFlags);
+
+    const Boolean userDisabled = (ownerFlags & 0x0001) != 0 ? False : True;
+    const Boolean uidDisabled = (ownerFlags & 0x0002) != 0 ? False : True;
+    const Boolean groupDisabled = (ownerFlags & 0x0004) != 0 ? False : True;
+    const Boolean gidDisabled = (ownerFlags & 0x0008) != 0 ? False : True;
+
+    if (m_userInput)
+        m_userInput->setState(sfDisabled, userDisabled);
+    if (m_uidInput)
+        m_uidInput->setState(sfDisabled, uidDisabled);
+    if (m_groupInput)
+        m_groupInput->setState(sfDisabled, groupDisabled);
+    if (m_gidInput)
+        m_gidInput->setState(sfDisabled, gidDisabled);
+}
+
+void TypesOwnershipPage::updateExtensionSummary()
+{
+    if (!m_extensionSummary)
+        return;
+    m_extensionBuffer.fill('\0');
+    std::string summary = buildTypeSummary(m_typeOptions);
+    std::snprintf(m_extensionBuffer.data(), m_extensionBuffer.size(), "%s", summary.c_str());
+    m_extensionSummary->setData(m_extensionBuffer.data());
+}
+
+void TypesOwnershipPage::applyOptionFlags()
+{
+    const bool hasTypeLetters = m_typeOptions.typeEnabled && m_typeOptions.typeLetters[0] != '\0';
+    const bool hasXTypeLetters = m_typeOptions.xtypeEnabled && m_typeOptions.xtypeLetters[0] != '\0';
+    const bool hasTypeFilters = hasTypeLetters || hasXTypeLetters ||
+                                m_typeOptions.useExtensions || m_typeOptions.useDetectors;
+    if (hasTypeFilters)
+        m_state.optionPrimaryFlags |= kOptionTypeBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTypeBit);
+
+    const bool hasPermFilters = m_permOptions.permEnabled || m_permOptions.readable ||
+                                m_permOptions.writable || m_permOptions.executable;
+    const bool hasOwnerFilters = m_permOptions.userEnabled || m_permOptions.uidEnabled ||
+                                 m_permOptions.groupEnabled || m_permOptions.gidEnabled ||
+                                 m_permOptions.noUser || m_permOptions.noGroup;
+    if (hasPermFilters || hasOwnerFilters)
+        m_state.optionSecondaryFlags |= kOptionPermissionBit;
+    else
+        m_state.optionSecondaryFlags &= static_cast<unsigned short>(~kOptionPermissionBit);
+}
+
 class SearchNotebookDialog : public TDialog
 {
 public:
@@ -1020,7 +1520,7 @@ private:
     QuickStartPage *m_quickStartPage = nullptr;
     ContentNamesPage *m_contentPage = nullptr;
     DatesSizesPage *m_datesPage = nullptr;
-    ck::ui::TabPageView *m_typesPage = nullptr;
+    TypesOwnershipPage *m_typesPage = nullptr;
     ck::ui::TabPageView *m_traversalPage = nullptr;
     ck::ui::TabPageView *m_actionsPage = nullptr;
 };
@@ -1045,9 +1545,8 @@ SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNote
     m_datesPage = new DatesSizesPage(TRect(0, 0, 81, 20), m_state, m_spec.timeOptions, m_spec.sizeOptions);
     m_tabControl->addTab("Dates", m_datesPage, cmTabDatesSizes);
 
-    m_typesPage = m_tabControl->createTab("Types", cmTabTypesOwnership);
-    if (m_typesPage)
-        m_typesPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Types & Ownership tab coming soon."));
+    m_typesPage = new TypesOwnershipPage(TRect(0, 0, 81, 20), m_state, m_spec.typeOptions, m_spec.permissionOptions);
+    m_tabControl->addTab("Types", m_typesPage, cmTabTypesOwnership);
 
     m_traversalPage = m_tabControl->createTab("Traverse", cmTabTraversal);
     if (m_traversalPage)
@@ -1152,6 +1651,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                     m_quickStartPage->syncOptionFlags();
                 if (m_contentPage)
                     m_contentPage->populate();
+                if (m_typesPage)
+                    m_typesPage->populate();
             }
             clearEvent(event);
             return;
@@ -1161,6 +1662,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionSecondaryFlags |= kOptionPermissionBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_typesPage)
+                    m_typesPage->populate();
             }
             clearEvent(event);
             return;
@@ -1201,6 +1704,8 @@ Boolean SearchNotebookDialog::valid(ushort command)
             m_contentPage->collect();
         if (m_datesPage)
             m_datesPage->collect();
+        if (m_typesPage)
+            m_typesPage->collect();
         applyStateToSpecification();
     }
     return TDialog::valid(command);

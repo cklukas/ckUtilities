@@ -79,14 +79,14 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
   - [x] Checkboxes: Inclusive range, Include zero-byte, Treat directories as files, Use decimal units, Match empty entries.
 
 ### 2.4: Types & Ownership Tab
-- [ ] Types:
+- [x] Types:
   - Primary `TCheckBoxes` for file types (Regular files, Folders, Symlinks, Block devices, etc.) – map to `-type`.
   - Secondary `TCheckBoxes` for `-xtype`.
-- [ ] Extensions/Detectors: duplicated from Content tab but optionally hidden unless user wants deeper control (or present summary plus “Edit…” button).
-- [ ] Permissions:
+- [x] Extensions/Detectors: provide read-only summary with “Advanced type…” button to open the detailed editor without duplicating inputs on the page.
+- [x] Permissions:
   - Simple checkboxes: Readable, Writable, Executable.
   - `TRadioButtons` for permission mode (Exact / All bits / Any bit) and `TInputLine` for octal/symbolic value.
-- [ ] Ownership:
+- [x] Ownership:
   - Fields for Owner (name), UID, Group, GID.
   - Checkboxes: Orphaned owner (`-nouser`), Orphaned group (`-nogroup`).
 
