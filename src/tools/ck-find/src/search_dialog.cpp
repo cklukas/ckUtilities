@@ -76,6 +76,7 @@ public:
     QuickStartPage(const TRect &bounds, SearchNotebookState &state);
 
     void onActivated() override;
+    void onDeactivated() override;
     void populateFromState();
     void collect();
     void setStartLocation(const char *path);
@@ -94,33 +95,6 @@ private:
     TCheckBoxes *m_secondaryBoxes = nullptr;
     TRadioButtons *m_searchModeButtons = nullptr;
     TRadioButtons *m_typePresetButtons = nullptr;
-};
-
-class ContentNamesPage : public ck::ui::TabPageView
-{
-public:
-    ContentNamesPage(const TRect &bounds, TextSearchOptions &textOptions, NamePathOptions &nameOptions);
-
-    void populate();
-    void collect();
-
-private:
-    TextSearchOptions &m_textOptions;
-    NamePathOptions &m_nameOptions;
-    TRadioButtons *m_textModeButtons = nullptr;
-    TCheckBoxes *m_textFlagBoxes = nullptr;
-    TCheckBoxes *m_matcherBoxes = nullptr;
-    TInputLine *m_nameInput = nullptr;
-    TInputLine *m_inameInput = nullptr;
-    TInputLine *m_pathInput = nullptr;
-    TInputLine *m_ipathInput = nullptr;
-    TInputLine *m_regexInput = nullptr;
-    TInputLine *m_iregexInput = nullptr;
-    TInputLine *m_lnameInput = nullptr;
-    TInputLine *m_ilnameInput = nullptr;
-    TCheckBoxes *m_pruneFlags = nullptr;
-    TRadioButtons *m_pruneModeButtons = nullptr;
-    TInputLine *m_pruneInput = nullptr;
 };
 
 QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
@@ -201,6 +175,11 @@ void QuickStartPage::onActivated()
 {
     if (m_specNameInput)
         m_specNameInput->selectAll(True, True);
+}
+
+void QuickStartPage::onDeactivated()
+{
+    collect();
 }
 
 void QuickStartPage::populateFromState()
@@ -303,10 +282,98 @@ void QuickStartPage::syncOptionFlags()
         m_typePresetButtons->setData(&m_state.quickTypePreset);
 }
 
-ContentNamesPage::ContentNamesPage(const TRect &bounds, TextSearchOptions &textOptions, NamePathOptions &nameOptions)
+class ContentNamesPage : public ck::ui::TabPageView
+{
+public:
+    ContentNamesPage(const TRect &bounds,
+                     SearchNotebookState &state,
+                     TextSearchOptions &textOptions,
+                     NamePathOptions &nameOptions,
+                     TypeFilterOptions &typeOptions);
+
+    void populate();
+    void collect();
+
+protected:
+    void onActivated() override;
+    void onDeactivated() override;
+    void handleEvent(TEvent &event) override;
+
+private:
+    void updateCopyButtonState();
+    void updateExtensionControls();
+    void updateDetectorControls();
+
+    SearchNotebookState &m_state;
+    TextSearchOptions &m_textOptions;
+    NamePathOptions &m_nameOptions;
+    TypeFilterOptions &m_typeOptions;
+    TRadioButtons *m_textModeButtons = nullptr;
+    TCheckBoxes *m_textFlagBoxes = nullptr;
+    TCheckBoxes *m_matcherBoxes = nullptr;
+    TInputLine *m_nameInput = nullptr;
+    TInputLine *m_inameInput = nullptr;
+    TInputLine *m_pathInput = nullptr;
+    TInputLine *m_ipathInput = nullptr;
+    TInputLine *m_regexInput = nullptr;
+    TInputLine *m_iregexInput = nullptr;
+    TInputLine *m_lnameInput = nullptr;
+    TInputLine *m_ilnameInput = nullptr;
+    TCheckBoxes *m_pruneFlags = nullptr;
+    TRadioButtons *m_pruneModeButtons = nullptr;
+    TInputLine *m_pruneInput = nullptr;
+    TCheckBoxes *m_extensionToggle = nullptr;
+    TInputLine *m_extensionInput = nullptr;
+    TCheckBoxes *m_detectorToggle = nullptr;
+    TInputLine *m_detectorInput = nullptr;
+    TButton *m_copyButton = nullptr;
+    TButton *m_clearButton = nullptr;
+};
+
+class DatesSizesPage : public ck::ui::TabPageView
+{
+public:
+    DatesSizesPage(const TRect &bounds,
+                   SearchNotebookState &state,
+                   TimeFilterOptions &timeOptions,
+                   SizeFilterOptions &sizeOptions);
+
+    void populate();
+    void collect();
+
+protected:
+    void onActivated() override;
+    void onDeactivated() override;
+    void handleEvent(TEvent &event) override;
+
+private:
+    void updateCustomRangeControls();
+    void updateSizeInputs();
+
+    SearchNotebookState &m_state;
+    TimeFilterOptions &m_timeOptions;
+    SizeFilterOptions &m_sizeOptions;
+    TRadioButtons *m_presetButtons = nullptr;
+    TCheckBoxes *m_timeFieldBoxes = nullptr;
+    TInputLine *m_fromInput = nullptr;
+    TInputLine *m_toInput = nullptr;
+    TCheckBoxes *m_sizeEnableBoxes = nullptr;
+    TInputLine *m_minSizeInput = nullptr;
+    TInputLine *m_maxSizeInput = nullptr;
+    TInputLine *m_exactSizeInput = nullptr;
+    TCheckBoxes *m_sizeFlagBoxes = nullptr;
+};
+
+ContentNamesPage::ContentNamesPage(const TRect &bounds,
+                                   SearchNotebookState &state,
+                                   TextSearchOptions &textOptions,
+                                   NamePathOptions &nameOptions,
+                                   TypeFilterOptions &typeOptions)
     : ck::ui::TabPageView(bounds),
+      m_state(state),
       m_textOptions(textOptions),
-      m_nameOptions(nameOptions)
+      m_nameOptions(nameOptions),
+      m_typeOptions(typeOptions)
 {
     m_textModeButtons = new TRadioButtons(TRect(2, 1, 30, 5),
                                           makeItemList({"Contains te~x~t",
@@ -367,14 +434,13 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds, TextSearchOptions &textO
     insert(new TLabel(TRect(57, 9, 78, 10), "Case-insensitive l~n~ame:", m_ilnameInput));
     insert(m_ilnameInput);
 
-    insert(new TStaticText(TRect(2, 15, 78, 16), "Prune matching directories"));
+    insert(new TStaticText(TRect(2, 13, 78, 14), "Prune matching directories"));
 
-    m_pruneFlags = new TCheckBoxes(TRect(2, 16, 16, 18),
-                                   makeItemList({"Enable -p~r~une",
-                                                 "Directories ~o~nly"}));
+    m_pruneFlags = new TCheckBoxes(TRect(2, 14, 18, 16), makeItemList({"Enable -p~r~une",
+                                                                       "Directories ~o~nly"}));
     insert(m_pruneFlags);
 
-    m_pruneModeButtons = new TRadioButtons(TRect(18, 16, 54, 20),
+    m_pruneModeButtons = new TRadioButtons(TRect(20, 14, 54, 18),
                                            makeItemList({"Use -name",
                                                          "Use -iname",
                                                          "Use -path",
@@ -383,13 +449,29 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds, TextSearchOptions &textO
                                                          "Use -iregex"}));
     insert(m_pruneModeButtons);
 
-    m_pruneInput = new TInputLine(TRect(56, 16, 78, 17), sizeof(m_nameOptions.prunePattern) - 1);
-    insert(new TLabel(TRect(56, 15, 78, 16), "Pattern:", m_pruneInput));
+    m_pruneInput = new TInputLine(TRect(56, 14, 78, 15), sizeof(m_nameOptions.prunePattern) - 1);
+    insert(new TLabel(TRect(56, 13, 78, 14), "Pattern:", m_pruneInput));
     insert(m_pruneInput);
+
+    insert(new TStaticText(TRect(2, 16, 78, 17), "Extensions and detectors"));
+
+    m_extensionToggle = new TCheckBoxes(TRect(2, 17, 22, 18), makeItemList({"Filter by e~x~tension"}));
+    insert(m_extensionToggle);
+    m_extensionInput = new TInputLine(TRect(24, 17, 78, 18), sizeof(m_typeOptions.extensions) - 1);
+    insert(m_extensionInput);
+
+    m_detectorToggle = new TCheckBoxes(TRect(2, 18, 22, 19), makeItemList({"Use detector ~t~ags"}));
+    insert(m_detectorToggle);
+    m_detectorInput = new TInputLine(TRect(24, 18, 78, 19), sizeof(m_typeOptions.detectorTags) - 1);
+    insert(m_detectorInput);
+
+    m_copyButton = new TButton(TRect(24, 19, 50, 20), "~U~se quick search text", cmCopySearchToName, bfNormal);
+    insert(m_copyButton);
+    m_clearButton = new TButton(TRect(52, 19, 78, 20), "C~l~ear name filters", cmClearNameFilters, bfNormal);
+    insert(m_clearButton);
 
     populate();
 }
-
 void ContentNamesPage::populate()
 {
     unsigned short mode = static_cast<unsigned short>(m_textOptions.mode);
@@ -461,6 +543,22 @@ void ContentNamesPage::populate()
 
     if (m_pruneInput)
         m_pruneInput->setData(m_nameOptions.prunePattern.data());
+
+    unsigned short extensionFlag = m_typeOptions.useExtensions ? 0x0001 : 0;
+    if (m_extensionToggle)
+        m_extensionToggle->setData(&extensionFlag);
+    if (m_extensionInput)
+        m_extensionInput->setData(m_typeOptions.extensions.data());
+
+    unsigned short detectorFlag = m_typeOptions.useDetectors ? 0x0001 : 0;
+    if (m_detectorToggle)
+        m_detectorToggle->setData(&detectorFlag);
+    if (m_detectorInput)
+        m_detectorInput->setData(m_typeOptions.detectorTags.data());
+
+    updateCopyButtonState();
+    updateExtensionControls();
+    updateDetectorControls();
 }
 
 void ContentNamesPage::collect()
@@ -523,6 +621,383 @@ void ContentNamesPage::collect()
 
     if (m_pruneInput)
         m_pruneInput->getData(m_nameOptions.prunePattern.data());
+
+    if (m_extensionToggle)
+    {
+        unsigned short flag = 0;
+        m_extensionToggle->getData(&flag);
+        m_typeOptions.useExtensions = (flag & 0x0001) != 0;
+        if (!m_typeOptions.useExtensions)
+            m_typeOptions.extensions.fill('\0');
+    }
+    if (m_extensionInput && m_typeOptions.useExtensions)
+        m_extensionInput->getData(m_typeOptions.extensions.data());
+
+    if (m_detectorToggle)
+    {
+        unsigned short flag = 0;
+        m_detectorToggle->getData(&flag);
+        m_typeOptions.useDetectors = (flag & 0x0001) != 0;
+        if (!m_typeOptions.useDetectors)
+            m_typeOptions.detectorTags.fill('\0');
+    }
+    if (m_detectorInput && m_typeOptions.useDetectors)
+        m_detectorInput->getData(m_typeOptions.detectorTags.data());
+
+    const bool hasNameFilters = (matcherFlags != 0) || (pruneFlags & 0x0001);
+    if (hasNameFilters)
+        m_state.optionPrimaryFlags |= kOptionNamePathBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionNamePathBit);
+
+    const bool hasText = m_state.searchText[0] != '\0';
+    const bool textEnabled = m_textOptions.searchInContents || m_textOptions.searchInFileNames;
+    if (hasText && textEnabled)
+        m_state.optionPrimaryFlags |= kOptionTextBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTextBit);
+
+    const bool hasTypeFilters = m_typeOptions.useExtensions || m_typeOptions.useDetectors ||
+                                m_typeOptions.typeEnabled || m_typeOptions.xtypeEnabled;
+    if (hasTypeFilters)
+        m_state.optionPrimaryFlags |= kOptionTypeBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTypeBit);
+}
+
+void ContentNamesPage::onActivated()
+{
+    populate();
+}
+
+void ContentNamesPage::onDeactivated()
+{
+    collect();
+}
+
+void ContentNamesPage::updateCopyButtonState()
+{
+    if (!m_copyButton)
+        return;
+    const bool hasText = m_state.searchText[0] != '\0';
+    m_copyButton->setState(sfDisabled, hasText ? False : True);
+}
+
+void ContentNamesPage::updateExtensionControls()
+{
+    if (!m_extensionToggle || !m_extensionInput)
+        return;
+
+    unsigned short flag = 0;
+    m_extensionToggle->getData(&flag);
+    const bool enabled = (flag & 0x0001) != 0;
+    m_extensionInput->setState(sfDisabled, enabled ? False : True);
+}
+
+void ContentNamesPage::updateDetectorControls()
+{
+    if (!m_detectorToggle || !m_detectorInput)
+        return;
+
+    unsigned short flag = 0;
+    m_detectorToggle->getData(&flag);
+    const bool enabled = (flag & 0x0001) != 0;
+    m_detectorInput->setState(sfDisabled, enabled ? False : True);
+}
+
+void ContentNamesPage::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmCopySearchToName:
+            if (m_state.searchText[0] != '\0')
+            {
+                copyToArray(m_nameOptions.namePattern, m_state.searchText);
+                m_nameOptions.nameEnabled = true;
+                m_state.optionPrimaryFlags |= kOptionNamePathBit;
+                populate();
+            }
+            clearEvent(event);
+            return;
+        case cmClearNameFilters:
+            m_nameOptions = NamePathOptions{};
+            m_typeOptions.typeEnabled = false;
+            m_typeOptions.xtypeEnabled = false;
+            m_typeOptions.useExtensions = false;
+            m_typeOptions.extensions.fill('\0');
+            m_typeOptions.useDetectors = false;
+            m_typeOptions.detectorTags.fill('\0');
+            m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionNamePathBit);
+            populate();
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+    TGroup::handleEvent(event);
+    updateCopyButtonState();
+    updateExtensionControls();
+    updateDetectorControls();
+}
+
+DatesSizesPage::DatesSizesPage(const TRect &bounds,
+                               SearchNotebookState &state,
+                               TimeFilterOptions &timeOptions,
+                               SizeFilterOptions &sizeOptions)
+    : ck::ui::TabPageView(bounds),
+      m_state(state),
+      m_timeOptions(timeOptions),
+      m_sizeOptions(sizeOptions)
+{
+    m_presetButtons = new TRadioButtons(TRect(2, 1, 26, 9),
+                                        makeItemList({"Any ~t~ime",
+                                                      "Past ~1~ day",
+                                                      "Past ~7~ days",
+                                                      "Past ~1~ month",
+                                                      "Past ~6~ months",
+                                                      "Past ~1~ year",
+                                                      "Past ~6~ years",
+                                                      "~C~ustom range"}));
+    insert(m_presetButtons);
+
+    m_timeFieldBoxes = new TCheckBoxes(TRect(28, 1, 54, 5),
+                                       makeItemList({"Last ~m~odified",
+                                                     "~C~reation time",
+                                                     "Last ~a~ccess"}));
+    insert(m_timeFieldBoxes);
+
+    m_fromInput = new TInputLine(TRect(28, 5, 54, 6), sizeof(m_timeOptions.customFrom) - 1);
+    insert(new TLabel(TRect(28, 4, 54, 5), "~F~rom (YYYY-MM-DD):", m_fromInput));
+    insert(m_fromInput);
+
+    m_toInput = new TInputLine(TRect(56, 5, 78, 6), sizeof(m_timeOptions.customTo) - 1);
+    insert(new TLabel(TRect(56, 4, 78, 5), "~T~o (YYYY-MM-DD):", m_toInput));
+    insert(m_toInput);
+
+    insert(new TButton(TRect(56, 7, 78, 9), "Advanced ~T~ime...", cmTimeFilters, bfNormal));
+
+    insert(new TStaticText(TRect(2, 9, 78, 10), "Size filters"));
+
+    m_sizeEnableBoxes = new TCheckBoxes(TRect(2, 10, 24, 14),
+                                        makeItemList({"Use ~m~in size",
+                                                      "Use ma~x~ size",
+                                                      "Use e~x~act size"}));
+    insert(m_sizeEnableBoxes);
+
+    m_minSizeInput = new TInputLine(TRect(26, 10, 42, 11), sizeof(m_sizeOptions.minSpec) - 1);
+    insert(new TLabel(TRect(26, 9, 42, 10), "Min:", m_minSizeInput));
+    insert(m_minSizeInput);
+
+    m_maxSizeInput = new TInputLine(TRect(44, 10, 60, 11), sizeof(m_sizeOptions.maxSpec) - 1);
+    insert(new TLabel(TRect(44, 9, 60, 10), "Max:", m_maxSizeInput));
+    insert(m_maxSizeInput);
+
+    m_exactSizeInput = new TInputLine(TRect(62, 10, 78, 11), sizeof(m_sizeOptions.exactSpec) - 1);
+    insert(new TLabel(TRect(62, 9, 78, 10), "Exact:", m_exactSizeInput));
+    insert(m_exactSizeInput);
+
+    insert(new TStaticText(TRect(26, 11, 78, 12), "Hint: 10K, 5M, 1G etc."));
+
+    m_sizeFlagBoxes = new TCheckBoxes(TRect(26, 12, 78, 17),
+                                      makeItemList({"Inclusive rang~e~ ends",
+                                                    "Include ~0~-byte entries",
+                                                    "Treat ~d~irectories as files",
+                                                    "Use ~d~ecimal units",
+                                                    "Match ~e~mpty entries"}));
+    insert(m_sizeFlagBoxes);
+
+    insert(new TButton(TRect(26, 17, 44, 19), "Advanced ~S~ize...", cmSizeFilters, bfNormal));
+
+    populate();
+}
+
+void DatesSizesPage::populate()
+{
+    unsigned short preset = static_cast<unsigned short>(m_timeOptions.preset);
+    if (m_presetButtons)
+        m_presetButtons->setData(&preset);
+
+    unsigned short fields = 0;
+    if (m_timeOptions.includeModified)
+        fields |= 0x0001;
+    if (m_timeOptions.includeCreated)
+        fields |= 0x0002;
+    if (m_timeOptions.includeAccessed)
+        fields |= 0x0004;
+    if (m_timeFieldBoxes)
+        m_timeFieldBoxes->setData(&fields);
+
+    if (m_fromInput)
+        m_fromInput->setData(m_timeOptions.customFrom.data());
+    if (m_toInput)
+        m_toInput->setData(m_timeOptions.customTo.data());
+
+    unsigned short sizeEnable = 0;
+    if (m_sizeOptions.minEnabled)
+        sizeEnable |= 0x0001;
+    if (m_sizeOptions.maxEnabled)
+        sizeEnable |= 0x0002;
+    if (m_sizeOptions.exactEnabled)
+        sizeEnable |= 0x0004;
+    if (m_sizeEnableBoxes)
+        m_sizeEnableBoxes->setData(&sizeEnable);
+
+    if (m_minSizeInput)
+        m_minSizeInput->setData(m_sizeOptions.minSpec.data());
+    if (m_maxSizeInput)
+        m_maxSizeInput->setData(m_sizeOptions.maxSpec.data());
+    if (m_exactSizeInput)
+        m_exactSizeInput->setData(m_sizeOptions.exactSpec.data());
+
+    unsigned short sizeFlags = 0;
+    if (m_sizeOptions.rangeInclusive)
+        sizeFlags |= 0x0001;
+    if (m_sizeOptions.includeZeroByte)
+        sizeFlags |= 0x0002;
+    if (m_sizeOptions.treatDirectoriesAsFiles)
+        sizeFlags |= 0x0004;
+    if (m_sizeOptions.useDecimalUnits)
+        sizeFlags |= 0x0008;
+    if (m_sizeOptions.emptyEnabled)
+        sizeFlags |= 0x0010;
+    if (m_sizeFlagBoxes)
+        m_sizeFlagBoxes->setData(&sizeFlags);
+
+    updateCustomRangeControls();
+    updateSizeInputs();
+}
+
+void DatesSizesPage::collect()
+{
+    unsigned short preset = 0;
+    if (m_presetButtons)
+    {
+        m_presetButtons->getData(&preset);
+        m_timeOptions.preset = static_cast<TimeFilterOptions::Preset>(preset);
+    }
+
+    unsigned short fields = 0;
+    if (m_timeFieldBoxes)
+        m_timeFieldBoxes->getData(&fields);
+    m_timeOptions.includeModified = (fields & 0x0001) != 0;
+    m_timeOptions.includeCreated = (fields & 0x0002) != 0;
+    m_timeOptions.includeAccessed = (fields & 0x0004) != 0;
+
+    if (m_fromInput)
+        m_fromInput->getData(m_timeOptions.customFrom.data());
+    if (m_toInput)
+        m_toInput->getData(m_timeOptions.customTo.data());
+
+    unsigned short sizeEnable = 0;
+    if (m_sizeEnableBoxes)
+        m_sizeEnableBoxes->getData(&sizeEnable);
+    m_sizeOptions.minEnabled = (sizeEnable & 0x0001) != 0;
+    m_sizeOptions.maxEnabled = (sizeEnable & 0x0002) != 0;
+    m_sizeOptions.exactEnabled = (sizeEnable & 0x0004) != 0;
+
+    if (m_minSizeInput)
+        m_minSizeInput->getData(m_sizeOptions.minSpec.data());
+    if (m_maxSizeInput)
+        m_maxSizeInput->getData(m_sizeOptions.maxSpec.data());
+    if (m_exactSizeInput)
+        m_exactSizeInput->getData(m_sizeOptions.exactSpec.data());
+
+    unsigned short sizeFlags = 0;
+    if (m_sizeFlagBoxes)
+        m_sizeFlagBoxes->getData(&sizeFlags);
+    m_sizeOptions.rangeInclusive = (sizeFlags & 0x0001) != 0;
+    m_sizeOptions.includeZeroByte = (sizeFlags & 0x0002) != 0;
+    m_sizeOptions.treatDirectoriesAsFiles = (sizeFlags & 0x0004) != 0;
+    m_sizeOptions.useDecimalUnits = (sizeFlags & 0x0008) != 0;
+    m_sizeOptions.emptyEnabled = (sizeFlags & 0x0010) != 0;
+
+    const bool timeEnabled = (m_timeOptions.preset != TimeFilterOptions::Preset::AnyTime) ||
+                             !m_timeOptions.includeModified || m_timeOptions.includeCreated ||
+                             m_timeOptions.includeAccessed ||
+                             m_timeOptions.customFrom[0] != '\0' || m_timeOptions.customTo[0] != '\0';
+    if (timeEnabled)
+        m_state.optionPrimaryFlags |= kOptionTimeBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTimeBit);
+
+    const bool sizeEnabled = m_sizeOptions.minEnabled || m_sizeOptions.maxEnabled ||
+                              m_sizeOptions.exactEnabled || m_sizeOptions.emptyEnabled;
+    if (sizeEnabled)
+        m_state.optionPrimaryFlags |= kOptionSizeBit;
+    else
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionSizeBit);
+}
+
+void DatesSizesPage::onActivated()
+{
+    populate();
+}
+
+void DatesSizesPage::onDeactivated()
+{
+    collect();
+}
+
+void DatesSizesPage::updateCustomRangeControls()
+{
+    if (!m_presetButtons)
+        return;
+
+    unsigned short preset = 0;
+    m_presetButtons->getData(&preset);
+    const bool custom = (preset == static_cast<unsigned short>(TimeFilterOptions::Preset::CustomRange));
+
+    if (m_fromInput)
+        m_fromInput->setState(sfDisabled, custom ? False : True);
+    if (m_toInput)
+        m_toInput->setState(sfDisabled, custom ? False : True);
+}
+
+void DatesSizesPage::updateSizeInputs()
+{
+    if (!m_sizeEnableBoxes)
+        return;
+
+    unsigned short enabled = 0;
+    m_sizeEnableBoxes->getData(&enabled);
+    const bool minEnabled = (enabled & 0x0001) != 0;
+    const bool maxEnabled = (enabled & 0x0002) != 0;
+    const bool exactEnabled = (enabled & 0x0004) != 0;
+
+    if (m_minSizeInput)
+        m_minSizeInput->setState(sfDisabled, minEnabled ? False : True);
+    if (m_maxSizeInput)
+        m_maxSizeInput->setState(sfDisabled, maxEnabled ? False : True);
+    if (m_exactSizeInput)
+        m_exactSizeInput->setState(sfDisabled, exactEnabled ? False : True);
+}
+
+void DatesSizesPage::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmTimeFilters:
+            if (editTimeFilters(m_timeOptions))
+                populate();
+            clearEvent(event);
+            return;
+        case cmSizeFilters:
+            if (editSizeFilters(m_sizeOptions))
+                populate();
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+    TGroup::handleEvent(event);
+    updateCustomRangeControls();
+    updateSizeInputs();
 }
 
 class SearchNotebookDialog : public TDialog
@@ -544,7 +1019,7 @@ private:
     ck::ui::TabControl *m_tabControl = nullptr;
     QuickStartPage *m_quickStartPage = nullptr;
     ContentNamesPage *m_contentPage = nullptr;
-    ck::ui::TabPageView *m_datesPage = nullptr;
+    DatesSizesPage *m_datesPage = nullptr;
     ck::ui::TabPageView *m_typesPage = nullptr;
     ck::ui::TabPageView *m_traversalPage = nullptr;
     ck::ui::TabPageView *m_actionsPage = nullptr;
@@ -564,11 +1039,11 @@ SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNote
     m_quickStartPage = new QuickStartPage(TRect(0, 0, 81, 20), m_state);
     m_tabControl->addTab("Quick", m_quickStartPage, cmTabQuickStart);
 
-    m_contentPage = new ContentNamesPage(TRect(0, 0, 81, 20), m_spec.textOptions, m_spec.namePathOptions);
+    m_contentPage = new ContentNamesPage(TRect(0, 0, 81, 20), m_state, m_spec.textOptions, m_spec.namePathOptions, m_spec.typeOptions);
     m_tabControl->addTab("Content", m_contentPage, cmTabContentNames);
-    m_datesPage = m_tabControl->createTab("Dates", cmTabDatesSizes);
-    if (m_datesPage)
-        m_datesPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Dates & Sizes tab coming soon."));
+
+    m_datesPage = new DatesSizesPage(TRect(0, 0, 81, 20), m_state, m_spec.timeOptions, m_spec.sizeOptions);
+    m_tabControl->addTab("Dates", m_datesPage, cmTabDatesSizes);
 
     m_typesPage = m_tabControl->createTab("Types", cmTabTypesOwnership);
     if (m_typesPage)
@@ -653,6 +1128,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionPrimaryFlags |= kOptionTimeBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_datesPage)
+                    m_datesPage->populate();
             }
             clearEvent(event);
             return;
@@ -662,6 +1139,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionPrimaryFlags |= kOptionSizeBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_datesPage)
+                    m_datesPage->populate();
             }
             clearEvent(event);
             return;
@@ -671,6 +1150,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionPrimaryFlags |= kOptionTypeBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_contentPage)
+                    m_contentPage->populate();
             }
             clearEvent(event);
             return;
@@ -718,6 +1199,8 @@ Boolean SearchNotebookDialog::valid(ushort command)
         applyQuickSelections();
         if (m_contentPage)
             m_contentPage->collect();
+        if (m_datesPage)
+            m_datesPage->collect();
         applyStateToSpecification();
     }
     return TDialog::valid(command);
@@ -807,8 +1290,12 @@ void SearchNotebookDialog::applyStateToSpecification()
     m_spec.enableTraversalFilters = (m_state.optionSecondaryFlags & kOptionTraversalBit) != 0;
     m_spec.enableActionOptions = (m_state.optionSecondaryFlags & kOptionActionBit) != 0;
 
-    const bool hasText = m_spec.searchText[0] != '\0';
-    m_spec.enableTextSearch = hasText && (m_spec.textOptions.searchInContents || m_spec.textOptions.searchInFileNames);
+    m_spec.enableTextSearch = (m_state.optionPrimaryFlags & kOptionTextBit) != 0;
+    if (!m_spec.enableTextSearch)
+    {
+        m_spec.textOptions.searchInContents = false;
+        m_spec.textOptions.searchInFileNames = false;
+    }
 }
 
 void SearchNotebookDialog::applyQuickSelections()
@@ -818,6 +1305,7 @@ void SearchNotebookDialog::applyQuickSelections()
     {
         m_spec.textOptions.searchInContents = false;
         m_spec.textOptions.searchInFileNames = false;
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTextBit);
     }
     else
     {
@@ -842,9 +1330,6 @@ void SearchNotebookDialog::applyQuickSelections()
     switch (m_state.quickTypePreset)
     {
     case 0: // all files
-        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTypeBit);
-        m_spec.enableTypeFilters = false;
-        m_spec.typeOptions.useExtensions = false;
         break;
     case 5: // custom – leave as-is
         if (m_state.optionPrimaryFlags & kOptionTypeBit)

@@ -30,5 +30,7 @@ inline constexpr std::uint16_t TabDatesSizes = 5022;
 inline constexpr std::uint16_t TabTypesOwnership = 5023;
 inline constexpr std::uint16_t TabTraversal = 5024;
 inline constexpr std::uint16_t TabActions = 5025;
+inline constexpr std::uint16_t CopySearchToName = 5026;
+inline constexpr std::uint16_t ClearNameFilters = 5027;
 
 } // namespace ck::commands::find

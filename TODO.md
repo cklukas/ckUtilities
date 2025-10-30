@@ -55,28 +55,28 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
 - [x] Section A – Text Matching:
   - Radio buttons for mode (Contains, Whole word, Regular expression).
   - Checkboxes: Match case, Search file contents, Search file names, Allow multiple terms, Treat binary as text.
-- [ ] Section B – Name/Path filters:
+- [x] Section B – Name/Path filters:
   - [x] For each matcher (`-name`, `-iname`, `-path`, `-ipath`, `-regex`, `-iregex`, `-lname`, `-ilname`), pair a checkbox and `TInputLine` with friendly labels.
-  - [ ] Buttons: “Copy text query”, “Clear all”.
+  - [x] Buttons: “Use quick search text”, “Clear name filters”.
 - [x] Section C – Prune:
   - Checkbox “Skip matching folders (prune)”.
   - Radio to choose prune test (name/iname/path/ipath/regex/iregex).
   - Input for prune pattern.
-- [ ] Section D – Extensions & Detectors:
+- [x] Section D – Extensions & Detectors:
   - Checkbox “Filter by file extensions” + input (comma separated).
   - Checkbox “Use detector tags” + input.
 
 ### 2.3: Dates & Sizes Tab
-- [ ] Layout: Two columns (left: dates, right: sizes).
-- [ ] Dates:
-  - Preset `TRadioButtons`: Any time, Past day, Past week, etc., Custom range.
-  - Checkboxes: Modified, Created, Accessed.
-  - `TInputLine`s for Custom From / To (enabled when preset is Custom).
-  - Advanced area toggle button (“Advanced expressions…”) opens either inline panel or temporary modal showing `-mtime`, `-mmin`, `-newer` fields (reuse existing code).
-- [ ] Sizes:
-  - Inputs for Minimum size and Maximum size (with unit hints).
-  - Exact size expression field.
-  - Checkboxes: Inclusive range, Include zero-byte, Treat directories as files, Use decimal units, Match empty entries.
+- [x] Layout: Two columns (left: dates, right: sizes).
+- [x] Dates:
+  - [x] Preset `TRadioButtons`: Any time, Past day, Past week, etc., Custom range.
+  - [x] Checkboxes: Modified, Created, Accessed.
+  - [x] `TInputLine`s for Custom From / To (enabled when preset is Custom).
+  - [x] Advanced area toggle button (“Advanced expressions…”) opens either inline panel or temporary modal showing `-mtime`, `-mmin`, `-newer` fields (reuse existing code).
+- [x] Sizes:
+  - [x] Inputs for Minimum size and Maximum size (with unit hints).
+  - [x] Exact size expression field.
+  - [x] Checkboxes: Inclusive range, Include zero-byte, Treat directories as files, Use decimal units, Match empty entries.
 
 ### 2.4: Types & Ownership Tab
 - [ ] Types:

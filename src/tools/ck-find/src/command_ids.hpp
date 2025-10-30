@@ -30,4 +30,6 @@ enum CommandId : unsigned short
     cmTabActions = ck::commands::find::TabActions,
     cmTabNext = ck::commands::common::TabNext,
     cmTabPrevious = ck::commands::common::TabPrevious,
+    cmCopySearchToName = ck::commands::find::CopySearchToName,
+    cmClearNameFilters = ck::commands::find::ClearNameFilters,
 };

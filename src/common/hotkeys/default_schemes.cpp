@@ -266,6 +266,8 @@ const CommandHelp kDefaultHelps[] = {
     {commands::find::DialogLoadSpec, "Load a saved search specification."},
     {commands::find::DialogSaveSpec, "Save the current search specification."},
     {commands::find::TogglePreview, "Toggle live preview of matches."},
+    {commands::find::CopySearchToName, "Copy the search text into name filters."},
+    {commands::find::ClearNameFilters, "Clear all name/path filter inputs."},
     {commands::find::TabQuickStart, "Switch to the Quick Start tab."},
     {commands::find::TabContentNames, "Switch to the Content & Names tab."},
     {commands::find::TabDatesSizes, "Switch to the Dates & Sizes tab."},
