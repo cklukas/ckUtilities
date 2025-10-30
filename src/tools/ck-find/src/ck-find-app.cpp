@@ -71,6 +71,22 @@ private:
         newItem->next = loadItem;
         loadItem->next = saveItem;
         TStatusItem *tail = saveItem;
+        auto addTabItem = [&](const char *title, unsigned short command) {
+            auto *item = new TStatusItem(title, kbNoKey, command);
+            ck::hotkeys::configureStatusItem(*item, title);
+            tail->next = item;
+            tail = item;
+        };
+        addTabItem("Quick Tab", cmTabQuickStart);
+        addTabItem("Content Tab", cmTabContentNames);
+        addTabItem("Dates Tab", cmTabDatesSizes);
+        addTabItem("Types Tab", cmTabTypesOwnership);
+        addTabItem("Traversal Tab", cmTabTraversal);
+        addTabItem("Actions Tab", cmTabActions);
+        auto *previewItem = new TStatusItem("Preview", kbNoKey, cmTogglePreview);
+        ck::hotkeys::configureStatusItem(*previewItem, "Preview");
+        tail->next = previewItem;
+        tail = previewItem;
         if (ck::launcher::launchedFromCkLauncher())
         {
             auto *returnItem = new TStatusItem("Return", kbNoKey, cmReturnToLauncher);

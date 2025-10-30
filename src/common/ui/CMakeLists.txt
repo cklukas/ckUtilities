@@ -4,6 +4,7 @@ set(SOURCES
     clock_settings.cpp
     clock_view.cpp
     color_selector_dialog.cpp
+    tab_control.cpp
     status_line.cpp
     window_menu.cpp
 )

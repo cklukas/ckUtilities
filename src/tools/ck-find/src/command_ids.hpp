@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ck/commands/ck_find.hpp"
+#include "ck/commands/common.hpp"
 
 enum CommandId : unsigned short
 {
@@ -20,4 +21,13 @@ enum CommandId : unsigned short
     cmActionOptions = ck::commands::find::ActionOptions,
     cmDialogLoadSpec = ck::commands::find::DialogLoadSpec,
     cmDialogSaveSpec = ck::commands::find::DialogSaveSpec,
+    cmTogglePreview = ck::commands::find::TogglePreview,
+    cmTabQuickStart = ck::commands::find::TabQuickStart,
+    cmTabContentNames = ck::commands::find::TabContentNames,
+    cmTabDatesSizes = ck::commands::find::TabDatesSizes,
+    cmTabTypesOwnership = ck::commands::find::TabTypesOwnership,
+    cmTabTraversal = ck::commands::find::TabTraversal,
+    cmTabActions = ck::commands::find::TabActions,
+    cmTabNext = ck::commands::common::TabNext,
+    cmTabPrevious = ck::commands::common::TabPrevious,
 };

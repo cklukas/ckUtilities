@@ -23,5 +23,12 @@ inline constexpr std::uint16_t TraversalFilters = 5012;
 inline constexpr std::uint16_t ActionOptions = 5013;
 inline constexpr std::uint16_t DialogLoadSpec = 5014;
 inline constexpr std::uint16_t DialogSaveSpec = 5015;
+inline constexpr std::uint16_t TogglePreview = 5016;
+inline constexpr std::uint16_t TabQuickStart = 5020;
+inline constexpr std::uint16_t TabContentNames = 5021;
+inline constexpr std::uint16_t TabDatesSizes = 5022;
+inline constexpr std::uint16_t TabTypesOwnership = 5023;
+inline constexpr std::uint16_t TabTraversal = 5024;
+inline constexpr std::uint16_t TabActions = 5025;
 
 } // namespace ck::commands::find

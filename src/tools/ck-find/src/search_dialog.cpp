@@ -3,6 +3,7 @@
 #include "ck/find/cli_buffer_utils.hpp"
 #include "ck/find/dialog_utils.hpp"
 #include "ck/find/search_model.hpp"
+#include "ck/ui/tab_control.hpp"
 
 #include "command_ids.hpp"
 
@@ -15,8 +16,8 @@
 #define Uses_MsgBox
 #define Uses_TButton
 #define Uses_TCheckBoxes
-#define Uses_TDialog
 #define Uses_TChDirDialog
+#define Uses_TDialog
 #define Uses_TInputLine
 #define Uses_TLabel
 #define Uses_TMessageBox
@@ -54,7 +55,7 @@ constexpr unsigned short kOptionPermissionBit = 0x0001;
 constexpr unsigned short kOptionTraversalBit = 0x0002;
 constexpr unsigned short kOptionActionBit = 0x0004;
 
-struct SearchDialogData
+struct SearchNotebookState
 {
     char specName[128]{};
     char startLocation[PATH_MAX]{};
@@ -66,346 +67,504 @@ struct SearchDialogData
     unsigned short optionSecondaryFlags = 0;
 };
 
-class SearchDialog : public TDialog
+class PlaceholderPage : public ck::ui::TabPageView
 {
 public:
-    SearchDialog(SearchSpecification &spec, SearchDialogData &data)
-        : TWindowInit(&TDialog::initFrame),
-          TDialog(TRect(0, 0, 83, 25), "New Search"),
-          m_spec(spec),
-          m_data(data)
+    PlaceholderPage(const TRect &bounds, const char *message)
+        : ck::ui::TabPageView(bounds)
     {
-        options |= ofCentered;
+        TRect textRect = bounds;
+        textRect.a.x += 2;
+        textRect.a.y += 2;
+        textRect.b.x = std::max<short>(textRect.a.x + 32, textRect.b.x - 2);
+        textRect.b.y = std::max<short>(textRect.a.y + 2, textRect.b.y - 2);
+        insert(new TStaticText(textRect, message));
     }
+};
 
-    void setPrimaryBoxes(TCheckBoxes *boxes)
-    {
-        m_primaryBoxes = boxes;
-    }
+class QuickStartPage : public ck::ui::TabPageView
+{
+public:
+    QuickStartPage(const TRect &bounds, SearchNotebookState &state);
 
-    void setSecondaryBoxes(TCheckBoxes *boxes)
-    {
-        m_secondaryBoxes = boxes;
-    }
-
-    void setStartInput(TInputLine *input)
-    {
-        m_startInput = input;
-    }
-
-protected:
-    void handleEvent(TEvent &event) override
-    {
-        if (event.what == evCommand)
-        {
-            switch (event.message.command)
-            {
-            case cmTextOptions:
-                if (editTextOptions(m_spec.textOptions))
-                {
-                    m_data.optionPrimaryFlags |= kOptionTextBit;
-                    if (m_primaryBoxes)
-                        m_primaryBoxes->setData(&m_data.optionPrimaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmNamePathOptions:
-                if (editNamePathOptions(m_spec.namePathOptions))
-                {
-                    m_data.optionPrimaryFlags |= kOptionNamePathBit;
-                    if (m_primaryBoxes)
-                        m_primaryBoxes->setData(&m_data.optionPrimaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmTimeFilters:
-                if (editTimeFilters(m_spec.timeOptions))
-                {
-                    m_data.optionPrimaryFlags |= kOptionTimeBit;
-                    if (m_primaryBoxes)
-                        m_primaryBoxes->setData(&m_data.optionPrimaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmSizeFilters:
-                if (editSizeFilters(m_spec.sizeOptions))
-                {
-                    m_data.optionPrimaryFlags |= kOptionSizeBit;
-                    if (m_primaryBoxes)
-                        m_primaryBoxes->setData(&m_data.optionPrimaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmTypeFilters:
-                if (editTypeFilters(m_spec.typeOptions))
-                {
-                    m_data.optionPrimaryFlags |= kOptionTypeBit;
-                    if (m_primaryBoxes)
-                        m_primaryBoxes->setData(&m_data.optionPrimaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmPermissionOwnership:
-                if (editPermissionOwnership(m_spec.permissionOptions))
-                {
-                    m_data.optionSecondaryFlags |= kOptionPermissionBit;
-                    if (m_secondaryBoxes)
-                        m_secondaryBoxes->setData(&m_data.optionSecondaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmTraversalFilters:
-                if (editTraversalFilters(m_spec.traversalOptions))
-                {
-                    m_data.optionSecondaryFlags |= kOptionTraversalBit;
-                    if (m_secondaryBoxes)
-                        m_secondaryBoxes->setData(&m_data.optionSecondaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmActionOptions:
-                if (editActionOptions(m_spec.actionOptions))
-                {
-                    m_data.optionSecondaryFlags |= kOptionActionBit;
-                    if (m_secondaryBoxes)
-                        m_secondaryBoxes->setData(&m_data.optionSecondaryFlags);
-                }
-                clearEvent(event);
-                return;
-            case cmDialogSaveSpec:
-                messageBox("Saving search specifications will be available in a future update.", mfInformation | mfOKButton);
-                clearEvent(event);
-                return;
-            case cmDialogLoadSpec:
-                messageBox("Loading search specifications will be available in a future update.", mfInformation | mfOKButton);
-                clearEvent(event);
-                return;
-            case cmBrowseStart:
-                browseStartLocation();
-                clearEvent(event);
-                return;
-            default:
-                break;
-            }
-        }
-        TDialog::handleEvent(event);
-    }
+    void onActivated() override;
+    void populateFromState();
+    void collect();
+    void setStartLocation(const char *path);
+    const char *startLocation() const noexcept;
+    void syncOptionFlags();
 
 private:
-    void browseStartLocation()
-    {
-        if (!m_startInput)
-            return;
-
-        char location[PATH_MAX]{};
-        std::snprintf(location, sizeof(location), "%s", m_data.startLocation[0] ? m_data.startLocation : ".");
-
-        std::filesystem::path originalDir;
-        try
-        {
-            originalDir = std::filesystem::current_path();
-        }
-        catch (...)
-        {
-        }
-
-        if (location[0] != '\0')
-        {
-            try
-            {
-                std::filesystem::current_path(std::filesystem::path(location));
-            }
-            catch (...)
-            {
-            }
-        }
-
-        auto *dialog = new TChDirDialog(cdNormal, 1);
-        unsigned short result = TProgram::application->executeDialog(dialog);
-        std::filesystem::path selectedDir;
-        try
-        {
-            selectedDir = std::filesystem::current_path();
-        }
-        catch (...)
-        {
-        }
-
-        if (!originalDir.empty())
-        {
-            try
-            {
-                std::filesystem::current_path(originalDir);
-            }
-            catch (...)
-            {
-            }
-        }
-
-        if (result == cmCancel || selectedDir.empty())
-            return;
-
-        const std::string newDirStr = selectedDir.string();
-        std::snprintf(m_data.startLocation, sizeof(m_data.startLocation), "%s", newDirStr.c_str());
-        m_startInput->setData(m_data.startLocation);
-    }
-
-    SearchSpecification &m_spec;
-    SearchDialogData &m_data;
+    SearchNotebookState &m_state;
+    TInputLine *m_specNameInput = nullptr;
+    TInputLine *m_startInput = nullptr;
+    TInputLine *m_searchTextInput = nullptr;
+    TInputLine *m_includeInput = nullptr;
+    TInputLine *m_excludeInput = nullptr;
+    TCheckBoxes *m_generalBoxes = nullptr;
     TCheckBoxes *m_primaryBoxes = nullptr;
     TCheckBoxes *m_secondaryBoxes = nullptr;
-    TInputLine *m_startInput = nullptr;
 };
+
+QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
+    : ck::ui::TabPageView(bounds),
+      m_state(state)
+{
+    m_specNameInput = new TInputLine(TRect(2, 1, 60, 2), sizeof(m_state.specName) - 1);
+    insert(new TLabel(TRect(1, 0, 18, 1), "~N~ame:", m_specNameInput));
+    insert(m_specNameInput);
+
+    insert(new TStaticText(TRect(2, 2, 78, 4),
+                           "Choose a starting folder and optional patterns.\n"
+                           "Use other tabs for advanced filters."));
+
+    m_startInput = new TInputLine(TRect(2, 4, 60, 5), sizeof(m_state.startLocation) - 1);
+    insert(new TLabel(TRect(1, 3, 27, 4), "Start ~l~ocation:", m_startInput));
+    insert(m_startInput);
+    insert(new TButton(TRect(61, 4, 77, 6), "~B~rowse...", cmBrowseStart, bfNormal));
+
+    m_searchTextInput = new TInputLine(TRect(2, 6, 77, 7), sizeof(m_state.searchText) - 1);
+    insert(new TLabel(TRect(1, 5, 25, 6), "Te~x~t to find:", m_searchTextInput));
+    insert(m_searchTextInput);
+
+    m_includeInput = new TInputLine(TRect(2, 8, 38, 9), sizeof(m_state.includePatterns) - 1);
+    insert(new TLabel(TRect(1, 7, 28, 8), "Include patterns:", m_includeInput));
+    insert(m_includeInput);
+
+    m_excludeInput = new TInputLine(TRect(40, 8, 77, 9), sizeof(m_state.excludePatterns) - 1);
+    insert(new TLabel(TRect(39, 7, 76, 8), "Exclude patterns:", m_excludeInput));
+    insert(m_excludeInput);
+
+    m_generalBoxes = new TCheckBoxes(TRect(2, 10, 32, 15),
+                                     makeItemList({"~R~ecursive",
+                                                   "Include ~h~idden",
+                                                   "Follow s~y~mlinks",
+                                                   "Stay on same file ~s~ystem"}));
+    insert(m_generalBoxes);
+
+    m_primaryBoxes = new TCheckBoxes(TRect(34, 10, 56, 15),
+                                     makeItemList({"~T~ext search",
+                                                   "Name/~P~ath",
+                                                   "~T~ime filters",
+                                                   "Si~z~e filters",
+                                                   "File ~t~ype filters"}));
+    insert(m_primaryBoxes);
+
+    m_secondaryBoxes = new TCheckBoxes(TRect(58, 10, 77, 15),
+                                       makeItemList({"~P~ermissions",
+                                                     "T~r~aversal",
+                                                     "~A~ctions"}));
+    insert(m_secondaryBoxes);
+
+    insert(new TButton(TRect(2, 16, 18, 18), "Text ~O~ptions...", cmTextOptions, bfNormal));
+    insert(new TButton(TRect(20, 16, 36, 18), "Name/~P~ath...", cmNamePathOptions, bfNormal));
+    insert(new TButton(TRect(38, 16, 54, 18), "Time ~T~ests...", cmTimeFilters, bfNormal));
+    insert(new TButton(TRect(56, 16, 72, 18), "Si~z~e Filters...", cmSizeFilters, bfNormal));
+
+    insert(new TButton(TRect(2, 18, 18, 20), "File ~T~ypes...", cmTypeFilters, bfNormal));
+    insert(new TButton(TRect(20, 18, 38, 20), "~P~ermissions...", cmPermissionOwnership, bfNormal));
+    insert(new TButton(TRect(40, 18, 58, 20), "T~r~aversal...", cmTraversalFilters, bfNormal));
+    insert(new TButton(TRect(60, 18, 78, 20), "~A~ctions...", cmActionOptions, bfNormal));
+
+    populateFromState();
+}
+
+void QuickStartPage::onActivated()
+{
+    if (m_specNameInput)
+        m_specNameInput->selectAll(True, True);
+}
+
+void QuickStartPage::populateFromState()
+{
+    if (m_specNameInput)
+        m_specNameInput->setData(m_state.specName);
+    if (m_startInput)
+        m_startInput->setData(m_state.startLocation);
+    if (m_searchTextInput)
+        m_searchTextInput->setData(m_state.searchText);
+    if (m_includeInput)
+        m_includeInput->setData(m_state.includePatterns);
+    if (m_excludeInput)
+        m_excludeInput->setData(m_state.excludePatterns);
+    syncOptionFlags();
+}
+
+void QuickStartPage::collect()
+{
+    if (m_specNameInput)
+        m_specNameInput->getData(m_state.specName);
+    if (m_startInput)
+        m_startInput->getData(m_state.startLocation);
+    if (m_searchTextInput)
+        m_searchTextInput->getData(m_state.searchText);
+    if (m_includeInput)
+        m_includeInput->getData(m_state.includePatterns);
+    if (m_excludeInput)
+        m_excludeInput->getData(m_state.excludePatterns);
+
+    if (m_generalBoxes)
+    {
+        unsigned short flags = m_state.generalFlags;
+        m_generalBoxes->getData(&flags);
+        m_state.generalFlags = flags;
+    }
+    if (m_primaryBoxes)
+    {
+        unsigned short flags = m_state.optionPrimaryFlags;
+        m_primaryBoxes->getData(&flags);
+        m_state.optionPrimaryFlags = flags;
+    }
+    if (m_secondaryBoxes)
+    {
+        unsigned short flags = m_state.optionSecondaryFlags;
+        m_secondaryBoxes->getData(&flags);
+        m_state.optionSecondaryFlags = flags;
+    }
+}
+
+void QuickStartPage::setStartLocation(const char *path)
+{
+    if (!path)
+        return;
+    std::snprintf(m_state.startLocation, sizeof(m_state.startLocation), "%s", path);
+    if (m_startInput)
+        m_startInput->setData(m_state.startLocation);
+}
+
+const char *QuickStartPage::startLocation() const noexcept
+{
+    return m_state.startLocation;
+}
+
+void QuickStartPage::syncOptionFlags()
+{
+    if (m_generalBoxes)
+    {
+        unsigned short flags = m_state.generalFlags;
+        m_generalBoxes->setData(&flags);
+    }
+    if (m_primaryBoxes)
+    {
+        unsigned short flags = m_state.optionPrimaryFlags;
+        m_primaryBoxes->setData(&flags);
+    }
+    if (m_secondaryBoxes)
+    {
+        unsigned short flags = m_state.optionSecondaryFlags;
+        m_secondaryBoxes->setData(&flags);
+    }
+}
+
+class SearchNotebookDialog : public TDialog
+{
+public:
+    SearchNotebookDialog(SearchSpecification &spec, SearchNotebookState &state);
+
+protected:
+    void handleEvent(TEvent &event) override;
+    Boolean valid(ushort command) override;
+
+private:
+    void browseStartLocation();
+    void applyStateToSpecification();
+
+    SearchSpecification &m_spec;
+    SearchNotebookState &m_state;
+    ck::ui::TabControl *m_tabControl = nullptr;
+    QuickStartPage *m_quickStartPage = nullptr;
+};
+
+SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNotebookState &state)
+    : TWindowInit(&TDialog::initFrame),
+      TDialog(TRect(0, 0, 83, 25), "Search Builder"),
+      m_spec(spec),
+      m_state(state)
+{
+    options |= ofCentered;
+
+    m_tabControl = new ck::ui::TabControl(TRect(1, 1, 82, 22), 2);
+    insert(m_tabControl);
+
+    m_quickStartPage = new QuickStartPage(TRect(0, 0, 81, 20), m_state);
+    m_tabControl->addTab("Quick", m_quickStartPage, cmTabQuickStart);
+
+    auto createPlaceholder = [&](const char *title, const char *message, unsigned short command) {
+        auto *page = m_tabControl->createTab(title, command);
+        if (page)
+        {
+            TRect textBounds(2, 2, 78, 18);
+            page->insert(new TStaticText(textBounds, message));
+        }
+    };
+
+    createPlaceholder("Content", "Content & Names tab coming soon.", cmTabContentNames);
+    createPlaceholder("Dates", "Dates & Sizes tab coming soon.", cmTabDatesSizes);
+    createPlaceholder("Types", "Types & Ownership tab coming soon.", cmTabTypesOwnership);
+    createPlaceholder("Traverse", "Traversal tab coming soon.", cmTabTraversal);
+    createPlaceholder("Actions", "Actions tab coming soon.", cmTabActions);
+
+    insert(new TButton(TRect(2, 22, 18, 24), "~P~review", cmTogglePreview, bfNormal));
+    insert(new TButton(TRect(58, 22, 72, 24), "~S~earch", cmOK, bfDefault));
+    insert(new TButton(TRect(73, 22, 82, 24), "Cancel", cmCancel, bfNormal));
+}
+
+void SearchNotebookDialog::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmBrowseStart:
+            browseStartLocation();
+            clearEvent(event);
+            return;
+        case cmTabQuickStart:
+        case cmTabContentNames:
+        case cmTabDatesSizes:
+        case cmTabTypesOwnership:
+        case cmTabTraversal:
+        case cmTabActions:
+            if (m_tabControl && m_tabControl->selectByCommand(event.message.command))
+            {
+                clearEvent(event);
+                return;
+            }
+            break;
+        case cmTabNext:
+            if (m_tabControl)
+            {
+                m_tabControl->nextTab();
+                clearEvent(event);
+                return;
+            }
+            break;
+        case cmTabPrevious:
+            if (m_tabControl)
+            {
+                m_tabControl->previousTab();
+                clearEvent(event);
+                return;
+            }
+            break;
+        case cmTextOptions:
+            if (editTextOptions(m_spec.textOptions))
+            {
+                m_state.optionPrimaryFlags |= kOptionTextBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmNamePathOptions:
+            if (editNamePathOptions(m_spec.namePathOptions))
+            {
+                m_state.optionPrimaryFlags |= kOptionNamePathBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmTimeFilters:
+            if (editTimeFilters(m_spec.timeOptions))
+            {
+                m_state.optionPrimaryFlags |= kOptionTimeBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmSizeFilters:
+            if (editSizeFilters(m_spec.sizeOptions))
+            {
+                m_state.optionPrimaryFlags |= kOptionSizeBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmTypeFilters:
+            if (editTypeFilters(m_spec.typeOptions))
+            {
+                m_state.optionPrimaryFlags |= kOptionTypeBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmPermissionOwnership:
+            if (editPermissionOwnership(m_spec.permissionOptions))
+            {
+                m_state.optionSecondaryFlags |= kOptionPermissionBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmTraversalFilters:
+            if (editTraversalFilters(m_spec.traversalOptions))
+            {
+                m_state.optionSecondaryFlags |= kOptionTraversalBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        case cmActionOptions:
+            if (editActionOptions(m_spec.actionOptions))
+            {
+                m_state.optionSecondaryFlags |= kOptionActionBit;
+                if (m_quickStartPage)
+                    m_quickStartPage->syncOptionFlags();
+            }
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+
+    TDialog::handleEvent(event);
+}
+
+Boolean SearchNotebookDialog::valid(ushort command)
+{
+    if (command == cmOK)
+    {
+        if (m_quickStartPage)
+            m_quickStartPage->collect();
+        applyStateToSpecification();
+    }
+    return TDialog::valid(command);
+}
+
+void SearchNotebookDialog::browseStartLocation()
+{
+    char location[PATH_MAX]{};
+    std::snprintf(location, sizeof(location), "%s", m_state.startLocation[0] ? m_state.startLocation : ".");
+
+    std::filesystem::path originalDir;
+    try
+    {
+        originalDir = std::filesystem::current_path();
+    }
+    catch (...)
+    {
+    }
+
+    try
+    {
+        std::filesystem::current_path(std::filesystem::path(location));
+    }
+    catch (...)
+    {
+    }
+
+    auto *dialog = new TChDirDialog(cdNormal, 1);
+    unsigned short result = TProgram::application->executeDialog(dialog);
+    TObject::destroy(dialog);
+
+    std::filesystem::path selectedDir;
+    try
+    {
+        selectedDir = std::filesystem::current_path();
+    }
+    catch (...)
+    {
+    }
+
+    if (!originalDir.empty())
+    {
+        try
+        {
+            std::filesystem::current_path(originalDir);
+        }
+        catch (...)
+        {
+        }
+    }
+
+    if (result == cmCancel || selectedDir.empty())
+        return;
+
+    std::string newDir = selectedDir.string();
+    std::snprintf(m_state.startLocation, sizeof(m_state.startLocation), "%s", newDir.c_str());
+    if (m_quickStartPage)
+        m_quickStartPage->setStartLocation(m_state.startLocation);
+}
+
+void SearchNotebookDialog::applyStateToSpecification()
+{
+    copyToArray(m_spec.specName, m_state.specName);
+    copyToArray(m_spec.startLocation, m_state.startLocation);
+    copyToArray(m_spec.searchText, m_state.searchText);
+    copyToArray(m_spec.includePatterns, m_state.includePatterns);
+    copyToArray(m_spec.excludePatterns, m_state.excludePatterns);
+
+    m_spec.includeSubdirectories = (m_state.generalFlags & kGeneralRecursiveBit) != 0;
+    m_spec.includeHidden = (m_state.generalFlags & kGeneralHiddenBit) != 0;
+    m_spec.followSymlinks = (m_state.generalFlags & kGeneralSymlinkBit) != 0;
+    m_spec.stayOnSameFilesystem = (m_state.generalFlags & kGeneralStayOnFsBit) != 0;
+
+    if (m_spec.followSymlinks)
+        m_spec.traversalOptions.symlinkMode = TraversalFilesystemOptions::SymlinkMode::Everywhere;
+    else if (m_spec.traversalOptions.symlinkMode == TraversalFilesystemOptions::SymlinkMode::Everywhere)
+        m_spec.traversalOptions.symlinkMode = TraversalFilesystemOptions::SymlinkMode::Physical;
+
+    m_spec.traversalOptions.stayOnFilesystem = m_spec.stayOnSameFilesystem;
+
+    m_spec.enableTextSearch = (m_state.optionPrimaryFlags & kOptionTextBit) != 0;
+    m_spec.enableNamePathTests = (m_state.optionPrimaryFlags & kOptionNamePathBit) != 0;
+    m_spec.enableTimeFilters = (m_state.optionPrimaryFlags & kOptionTimeBit) != 0;
+    m_spec.enableSizeFilters = (m_state.optionPrimaryFlags & kOptionSizeBit) != 0;
+    m_spec.enableTypeFilters = (m_state.optionPrimaryFlags & kOptionTypeBit) != 0;
+
+    m_spec.enablePermissionOwnership = (m_state.optionSecondaryFlags & kOptionPermissionBit) != 0;
+    m_spec.enableTraversalFilters = (m_state.optionSecondaryFlags & kOptionTraversalBit) != 0;
+    m_spec.enableActionOptions = (m_state.optionSecondaryFlags & kOptionActionBit) != 0;
+}
 
 } // namespace
 
 bool configureSearchSpecification(SearchSpecification &spec)
 {
-    SearchDialogData data{};
-    std::snprintf(data.specName, sizeof(data.specName), "%s", bufferToString(spec.specName).c_str());
-    std::snprintf(data.startLocation, sizeof(data.startLocation), "%s", bufferToString(spec.startLocation).c_str());
-    std::snprintf(data.searchText, sizeof(data.searchText), "%s", bufferToString(spec.searchText).c_str());
-    std::snprintf(data.includePatterns, sizeof(data.includePatterns), "%s", bufferToString(spec.includePatterns).c_str());
-    std::snprintf(data.excludePatterns, sizeof(data.excludePatterns), "%s", bufferToString(spec.excludePatterns).c_str());
+    SearchNotebookState state{};
+    std::snprintf(state.specName, sizeof(state.specName), "%s", bufferToString(spec.specName).c_str());
+    std::snprintf(state.startLocation, sizeof(state.startLocation), "%s", bufferToString(spec.startLocation).c_str());
+    std::snprintf(state.searchText, sizeof(state.searchText), "%s", bufferToString(spec.searchText).c_str());
+    std::snprintf(state.includePatterns, sizeof(state.includePatterns), "%s", bufferToString(spec.includePatterns).c_str());
+    std::snprintf(state.excludePatterns, sizeof(state.excludePatterns), "%s", bufferToString(spec.excludePatterns).c_str());
 
     if (spec.includeSubdirectories)
-        data.generalFlags |= kGeneralRecursiveBit;
+        state.generalFlags |= kGeneralRecursiveBit;
     if (spec.includeHidden)
-        data.generalFlags |= kGeneralHiddenBit;
+        state.generalFlags |= kGeneralHiddenBit;
     if (spec.followSymlinks)
-        data.generalFlags |= kGeneralSymlinkBit;
+        state.generalFlags |= kGeneralSymlinkBit;
     if (spec.stayOnSameFilesystem)
-        data.generalFlags |= kGeneralStayOnFsBit;
+        state.generalFlags |= kGeneralStayOnFsBit;
 
     if (spec.enableTextSearch)
-        data.optionPrimaryFlags |= kOptionTextBit;
+        state.optionPrimaryFlags |= kOptionTextBit;
     if (spec.enableNamePathTests)
-        data.optionPrimaryFlags |= kOptionNamePathBit;
+        state.optionPrimaryFlags |= kOptionNamePathBit;
     if (spec.enableTimeFilters)
-        data.optionPrimaryFlags |= kOptionTimeBit;
+        state.optionPrimaryFlags |= kOptionTimeBit;
     if (spec.enableSizeFilters)
-        data.optionPrimaryFlags |= kOptionSizeBit;
+        state.optionPrimaryFlags |= kOptionSizeBit;
     if (spec.enableTypeFilters)
-        data.optionPrimaryFlags |= kOptionTypeBit;
+        state.optionPrimaryFlags |= kOptionTypeBit;
 
     if (spec.enablePermissionOwnership)
-        data.optionSecondaryFlags |= kOptionPermissionBit;
+        state.optionSecondaryFlags |= kOptionPermissionBit;
     if (spec.enableTraversalFilters)
-        data.optionSecondaryFlags |= kOptionTraversalBit;
+        state.optionSecondaryFlags |= kOptionTraversalBit;
     if (spec.enableActionOptions)
-        data.optionSecondaryFlags |= kOptionActionBit;
+        state.optionSecondaryFlags |= kOptionActionBit;
 
-    auto *dialog = new SearchDialog(spec, data);
-
-    auto *specNameInput = new TInputLine(TRect(3, 2, 60, 3), sizeof(data.specName) - 1);
-    dialog->insert(new TLabel(TRect(2, 1, 18, 2), "~N~ame:", specNameInput));
-    dialog->insert(specNameInput);
-    specNameInput->setData(data.specName);
-
-    dialog->insert(new TStaticText(TRect(3, 3, 79, 5),
-                                   "Start with directories and optional text. Advanced buttons\n"
-                                   "map directly to sensible find(1) switches."));
-
-    auto *startInput = new TInputLine(TRect(3, 6, 60, 7), sizeof(data.startLocation) - 1);
-    dialog->insert(new TLabel(TRect(2, 5, 26, 6), "Start ~l~ocation:", startInput));
-    dialog->insert(startInput);
-    startInput->setData(data.startLocation);
-    dialog->setStartInput(startInput);
-    dialog->insert(new TButton(TRect(61, 6, 75, 8), "~B~rowse...", cmBrowseStart, bfNormal));
-
-    auto *textInput = new TInputLine(TRect(3, 8, 75, 9), sizeof(data.searchText) - 1);
-    dialog->insert(new TLabel(TRect(2, 7, 24, 8), "Te~x~t to find:", textInput));
-    dialog->insert(textInput);
-    textInput->setData(data.searchText);
-
-    auto *includeInput = new TInputLine(TRect(3, 10, 38, 11), sizeof(data.includePatterns) - 1);
-    dialog->insert(new TLabel(TRect(2, 9, 28, 10), "Include patterns:", includeInput));
-    dialog->insert(includeInput);
-    includeInput->setData(data.includePatterns);
-
-    auto *excludeInput = new TInputLine(TRect(40, 10, 79, 11), sizeof(data.excludePatterns) - 1);
-    dialog->insert(new TLabel(TRect(39, 9, 79, 10), "Exclude patterns:", excludeInput));
-    dialog->insert(excludeInput);
-    excludeInput->setData(data.excludePatterns);
-
-    auto *generalBoxes = new TCheckBoxes(TRect(3, 11, 38, 17),
-                                         makeItemList({"~R~ecursive",
-                                                       "Include ~h~idden",
-                                                       "Follow s~y~mlinks (-L)",
-                                                       "Stay on same file ~s~ystem"}));
-    dialog->insert(generalBoxes);
-    generalBoxes->setData(&data.generalFlags);
-
-    auto *primaryBoxes = new TCheckBoxes(TRect(39, 11, 61, 17),
-                                         makeItemList({"~T~ext search",
-                                                       "Name/~P~ath tests",
-                                                       "~T~ime tests",
-                                                       "Si~z~e filters",
-                                                       "File ~t~ype filters"}));
-    dialog->insert(primaryBoxes);
-    primaryBoxes->setData(&data.optionPrimaryFlags);
-    dialog->setPrimaryBoxes(primaryBoxes);
-
-    auto *secondaryBoxes = new TCheckBoxes(TRect(62, 11, 81, 17),
-                                           makeItemList({"~P~ermissions & owners",
-                                                         "T~r~aversal / FS",
-                                                         "~A~ctions & output"}));
-    dialog->insert(secondaryBoxes);
-    secondaryBoxes->setData(&data.optionSecondaryFlags);
-    dialog->setSecondaryBoxes(secondaryBoxes);
-
-    dialog->insert(new TButton(TRect(3, 18, 21, 20), "Text ~O~ptions...", cmTextOptions, bfNormal));
-    dialog->insert(new TButton(TRect(23, 18, 41, 20), "Name/~P~ath...", cmNamePathOptions, bfNormal));
-    dialog->insert(new TButton(TRect(43, 18, 61, 20), "Time ~T~ests...", cmTimeFilters, bfNormal));
-    dialog->insert(new TButton(TRect(63, 18, 81, 20), "Si~z~e Filters...", cmSizeFilters, bfNormal));
-
-    dialog->insert(new TButton(TRect(3, 20, 21, 22), "File ~T~ypes...", cmTypeFilters, bfNormal));
-    dialog->insert(new TButton(TRect(23, 20, 45, 22), "~P~ermissions...", cmPermissionOwnership, bfNormal));
-    dialog->insert(new TButton(TRect(47, 20, 71, 22), "T~r~aversal / FS...", cmTraversalFilters, bfNormal));
-
-    dialog->insert(new TButton(TRect(3, 22, 21, 24), "~A~ctions...", cmActionOptions, bfNormal));
-    dialog->insert(new TButton(TRect(23, 22, 37, 24), "~L~oad Spec...", cmDialogLoadSpec, bfNormal));
-    dialog->insert(new TButton(TRect(39, 22, 53, 24), "Sa~v~e Spec...", cmDialogSaveSpec, bfNormal));
-
-    dialog->insert(new TButton(TRect(55, 22, 69, 24), "~S~earch", cmOK, bfDefault));
-    dialog->insert(new TButton(TRect(71, 22, 81, 24), "Cancel", cmCancel, bfNormal));
-
-    dialog->selectNext(False);
-
-    unsigned short result = TProgram::application->executeDialog(dialog, &data);
-    bool accepted = (result == cmOK);
-    if (accepted)
-    {
-        copyToArray(spec.specName, data.specName);
-        copyToArray(spec.startLocation, data.startLocation);
-        copyToArray(spec.searchText, data.searchText);
-        copyToArray(spec.includePatterns, data.includePatterns);
-        copyToArray(spec.excludePatterns, data.excludePatterns);
-
-        spec.includeSubdirectories = (data.generalFlags & kGeneralRecursiveBit) != 0;
-        spec.includeHidden = (data.generalFlags & kGeneralHiddenBit) != 0;
-        spec.followSymlinks = (data.generalFlags & kGeneralSymlinkBit) != 0;
-        spec.stayOnSameFilesystem = (data.generalFlags & kGeneralStayOnFsBit) != 0;
-
-        if (spec.followSymlinks)
-            spec.traversalOptions.symlinkMode = TraversalFilesystemOptions::SymlinkMode::Everywhere;
-        else if (spec.traversalOptions.symlinkMode == TraversalFilesystemOptions::SymlinkMode::Everywhere)
-            spec.traversalOptions.symlinkMode = TraversalFilesystemOptions::SymlinkMode::Physical;
-
-        spec.traversalOptions.stayOnFilesystem = spec.stayOnSameFilesystem;
-
-        spec.enableTextSearch = (data.optionPrimaryFlags & kOptionTextBit) != 0;
-        spec.enableNamePathTests = (data.optionPrimaryFlags & kOptionNamePathBit) != 0;
-        spec.enableTimeFilters = (data.optionPrimaryFlags & kOptionTimeBit) != 0;
-        spec.enableSizeFilters = (data.optionPrimaryFlags & kOptionSizeBit) != 0;
-        spec.enableTypeFilters = (data.optionPrimaryFlags & kOptionTypeBit) != 0;
-
-        spec.enablePermissionOwnership = (data.optionSecondaryFlags & kOptionPermissionBit) != 0;
-        spec.enableTraversalFilters = (data.optionSecondaryFlags & kOptionTraversalBit) != 0;
-        spec.enableActionOptions = (data.optionSecondaryFlags & kOptionActionBit) != 0;
-    }
-
-    return accepted;
+    auto *dialog = new SearchNotebookDialog(spec, state);
+    unsigned short result = TProgram::application->executeDialog(dialog);
+    return result == cmOK;
 }
 
 } // namespace ck::find
