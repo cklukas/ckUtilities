@@ -52,13 +52,13 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
 - [x] Buttons: “Go to advanced filters…” opens Content & Names tab.
 
 ### 2.2: Content & Names Tab
-- [ ] Section A – Text Matching:
+- [x] Section A – Text Matching:
   - Radio buttons for mode (Contains, Whole word, Regular expression).
   - Checkboxes: Match case, Search file contents, Search file names, Allow multiple terms, Treat binary as text.
 - [ ] Section B – Name/Path filters:
-  - For each matcher (`-name`, `-iname`, `-path`, `-ipath`, `-regex`, `-iregex`, `-lname`, `-ilname`), pair a checkbox and `TInputLine`.
-  - Buttons: “Copy text query”, “Clear all”.
-- [ ] Section C – Prune:
+  - [x] For each matcher (`-name`, `-iname`, `-path`, `-ipath`, `-regex`, `-iregex`, `-lname`, `-ilname`), pair a checkbox and `TInputLine` with friendly labels.
+  - [ ] Buttons: “Copy text query”, “Clear all”.
+- [x] Section C – Prune:
   - Checkbox “Skip matching folders (prune)”.
   - Radio to choose prune test (name/iname/path/ipath/regex/iregex).
   - Input for prune pattern.
@@ -126,9 +126,12 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
 - [ ] On cancel: discard state changes.
 - [ ] When showing dialog with an existing spec, set notebook page to the highest-priority tab that has active filters (e.g., if time filters enabled, jump to Dates & Sizes, otherwise remain on Quick Start).
 
-### 3.3: Legacy Dialog Bridge
-- [ ] For parity, add “Use classic editor…” buttons in each tab that call existing modal `edit*` functions until we migrate validation logic.
-- [ ] Once inline versions are feature-complete, mark the legacy dialogs for removal.
+### 3.3: Legacy
+- [ ] We only need to keep current and new code, as we do not need to be backwards compatible with older ck-find versions!
+- [ ] Remove any older code and logic, that is not currently intended to be used in the new tabbed UI.
+- [ ] Check if we have already some file find location helpers, that we can use for the new UI, if they do not fit
+      perfectly, adapt them as needed. We only want the the newly designed tabbed UI to be present in the codebase
+      for ck-find.
 
 ---
 

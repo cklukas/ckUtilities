@@ -70,21 +70,6 @@ struct SearchNotebookState
     unsigned short quickTypePreset = 0; // 0 = all, 1 = documents, 2 = images, 3 = audio, 4 = archives, 5 = custom
 };
 
-class PlaceholderPage : public ck::ui::TabPageView
-{
-public:
-    PlaceholderPage(const TRect &bounds, const char *message)
-        : ck::ui::TabPageView(bounds)
-    {
-        TRect textRect = bounds;
-        textRect.a.x += 2;
-        textRect.a.y += 2;
-        textRect.b.x = std::max<short>(textRect.a.x + 32, textRect.b.x - 2);
-        textRect.b.y = std::max<short>(textRect.a.y + 2, textRect.b.y - 2);
-        insert(new TStaticText(textRect, message));
-    }
-};
-
 class QuickStartPage : public ck::ui::TabPageView
 {
 public:
@@ -109,6 +94,33 @@ private:
     TCheckBoxes *m_secondaryBoxes = nullptr;
     TRadioButtons *m_searchModeButtons = nullptr;
     TRadioButtons *m_typePresetButtons = nullptr;
+};
+
+class ContentNamesPage : public ck::ui::TabPageView
+{
+public:
+    ContentNamesPage(const TRect &bounds, TextSearchOptions &textOptions, NamePathOptions &nameOptions);
+
+    void populate();
+    void collect();
+
+private:
+    TextSearchOptions &m_textOptions;
+    NamePathOptions &m_nameOptions;
+    TRadioButtons *m_textModeButtons = nullptr;
+    TCheckBoxes *m_textFlagBoxes = nullptr;
+    TCheckBoxes *m_matcherBoxes = nullptr;
+    TInputLine *m_nameInput = nullptr;
+    TInputLine *m_inameInput = nullptr;
+    TInputLine *m_pathInput = nullptr;
+    TInputLine *m_ipathInput = nullptr;
+    TInputLine *m_regexInput = nullptr;
+    TInputLine *m_iregexInput = nullptr;
+    TInputLine *m_lnameInput = nullptr;
+    TInputLine *m_ilnameInput = nullptr;
+    TCheckBoxes *m_pruneFlags = nullptr;
+    TRadioButtons *m_pruneModeButtons = nullptr;
+    TInputLine *m_pruneInput = nullptr;
 };
 
 QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
@@ -291,6 +303,228 @@ void QuickStartPage::syncOptionFlags()
         m_typePresetButtons->setData(&m_state.quickTypePreset);
 }
 
+ContentNamesPage::ContentNamesPage(const TRect &bounds, TextSearchOptions &textOptions, NamePathOptions &nameOptions)
+    : ck::ui::TabPageView(bounds),
+      m_textOptions(textOptions),
+      m_nameOptions(nameOptions)
+{
+    m_textModeButtons = new TRadioButtons(TRect(2, 1, 30, 5),
+                                          makeItemList({"Contains te~x~t",
+                                                        "Match ~w~hole word",
+                                                        "Regular ~e~xpression"}));
+    insert(m_textModeButtons);
+
+    m_textFlagBoxes = new TCheckBoxes(TRect(32, 1, 58, 6),
+                                      makeItemList({"~M~atch case",
+                                                    "Search file ~c~ontents",
+                                                    "Search file ~n~ames",
+                                                    "Allow ~m~ultiple terms",
+                                                    "Treat ~b~inary as text"}));
+    insert(m_textFlagBoxes);
+
+    insert(new TStaticText(TRect(2, 6, 78, 7), "Name and path filters"));
+
+    m_matcherBoxes = new TCheckBoxes(TRect(2, 7, 28, 15),
+                                     makeItemList({"~N~ame",
+                                                   "Case-insensitive ~n~ame",
+                                                   "~P~ath",
+                                                   "Case-insensitive pa~t~h",
+                                                   "Regular e~x~pression",
+                                                   "Case-insensitive re~g~ex",
+                                                   "Symlink ~l~name",
+                                                   "Case-insensitive l~n~ame"}));
+    insert(m_matcherBoxes);
+
+    m_nameInput = new TInputLine(TRect(30, 7, 55, 8), sizeof(m_nameOptions.namePattern) - 1);
+    insert(new TLabel(TRect(30, 6, 55, 7), "~N~ame pattern:", m_nameInput));
+    insert(m_nameInput);
+
+    m_inameInput = new TInputLine(TRect(57, 7, 78, 8), sizeof(m_nameOptions.inamePattern) - 1);
+    insert(new TLabel(TRect(57, 6, 78, 7), "Case-insensitive ~n~ame:", m_inameInput));
+    insert(m_inameInput);
+
+    m_pathInput = new TInputLine(TRect(30, 8, 55, 9), sizeof(m_nameOptions.pathPattern) - 1);
+    insert(new TLabel(TRect(30, 7, 55, 8), "~P~ath glob:", m_pathInput));
+    insert(m_pathInput);
+
+    m_ipathInput = new TInputLine(TRect(57, 8, 78, 9), sizeof(m_nameOptions.ipathPattern) - 1);
+    insert(new TLabel(TRect(57, 7, 78, 8), "Case-insensitive pa~t~h:", m_ipathInput));
+    insert(m_ipathInput);
+
+    m_regexInput = new TInputLine(TRect(30, 9, 55, 10), sizeof(m_nameOptions.regexPattern) - 1);
+    insert(new TLabel(TRect(30, 8, 55, 9), "Re~g~ex:", m_regexInput));
+    insert(m_regexInput);
+
+    m_iregexInput = new TInputLine(TRect(57, 9, 78, 10), sizeof(m_nameOptions.iregexPattern) - 1);
+    insert(new TLabel(TRect(57, 8, 78, 9), "Case-insensitive re~g~ex:", m_iregexInput));
+    insert(m_iregexInput);
+
+    m_lnameInput = new TInputLine(TRect(30, 10, 55, 11), sizeof(m_nameOptions.lnamePattern) - 1);
+    insert(new TLabel(TRect(30, 9, 55, 10), "Symlink ~l~name:", m_lnameInput));
+    insert(m_lnameInput);
+
+    m_ilnameInput = new TInputLine(TRect(57, 10, 78, 11), sizeof(m_nameOptions.ilnamePattern) - 1);
+    insert(new TLabel(TRect(57, 9, 78, 10), "Case-insensitive l~n~ame:", m_ilnameInput));
+    insert(m_ilnameInput);
+
+    insert(new TStaticText(TRect(2, 15, 78, 16), "Prune matching directories"));
+
+    m_pruneFlags = new TCheckBoxes(TRect(2, 16, 16, 18),
+                                   makeItemList({"Enable -p~r~une",
+                                                 "Directories ~o~nly"}));
+    insert(m_pruneFlags);
+
+    m_pruneModeButtons = new TRadioButtons(TRect(18, 16, 54, 20),
+                                           makeItemList({"Use -name",
+                                                         "Use -iname",
+                                                         "Use -path",
+                                                         "Use -ipath",
+                                                         "Use -regex",
+                                                         "Use -iregex"}));
+    insert(m_pruneModeButtons);
+
+    m_pruneInput = new TInputLine(TRect(56, 16, 78, 17), sizeof(m_nameOptions.prunePattern) - 1);
+    insert(new TLabel(TRect(56, 15, 78, 16), "Pattern:", m_pruneInput));
+    insert(m_pruneInput);
+
+    populate();
+}
+
+void ContentNamesPage::populate()
+{
+    unsigned short mode = static_cast<unsigned short>(m_textOptions.mode);
+    if (m_textModeButtons)
+        m_textModeButtons->setData(&mode);
+
+    unsigned short textFlags = 0;
+    if (m_textOptions.matchCase)
+        textFlags |= 0x0001;
+    if (m_textOptions.searchInContents)
+        textFlags |= 0x0002;
+    if (m_textOptions.searchInFileNames)
+        textFlags |= 0x0004;
+    if (m_textOptions.allowMultipleTerms)
+        textFlags |= 0x0008;
+    if (m_textOptions.treatBinaryAsText)
+        textFlags |= 0x0010;
+    if (m_textFlagBoxes)
+        m_textFlagBoxes->setData(&textFlags);
+
+    unsigned short matcherFlags = 0;
+    if (m_nameOptions.nameEnabled)
+        matcherFlags |= 0x0001;
+    if (m_nameOptions.inameEnabled)
+        matcherFlags |= 0x0002;
+    if (m_nameOptions.pathEnabled)
+        matcherFlags |= 0x0004;
+    if (m_nameOptions.ipathEnabled)
+        matcherFlags |= 0x0008;
+    if (m_nameOptions.regexEnabled)
+        matcherFlags |= 0x0010;
+    if (m_nameOptions.iregexEnabled)
+        matcherFlags |= 0x0020;
+    if (m_nameOptions.lnameEnabled)
+        matcherFlags |= 0x0040;
+    if (m_nameOptions.ilnameEnabled)
+        matcherFlags |= 0x0080;
+    if (m_matcherBoxes)
+        m_matcherBoxes->setData(&matcherFlags);
+
+    if (m_nameInput)
+        m_nameInput->setData(m_nameOptions.namePattern.data());
+    if (m_inameInput)
+        m_inameInput->setData(m_nameOptions.inamePattern.data());
+    if (m_pathInput)
+        m_pathInput->setData(m_nameOptions.pathPattern.data());
+    if (m_ipathInput)
+        m_ipathInput->setData(m_nameOptions.ipathPattern.data());
+    if (m_regexInput)
+        m_regexInput->setData(m_nameOptions.regexPattern.data());
+    if (m_iregexInput)
+        m_iregexInput->setData(m_nameOptions.iregexPattern.data());
+    if (m_lnameInput)
+        m_lnameInput->setData(m_nameOptions.lnamePattern.data());
+    if (m_ilnameInput)
+        m_ilnameInput->setData(m_nameOptions.ilnamePattern.data());
+
+    unsigned short pruneFlags = 0;
+    if (m_nameOptions.pruneEnabled)
+        pruneFlags |= 0x0001;
+    if (m_nameOptions.pruneDirectoriesOnly)
+        pruneFlags |= 0x0002;
+    if (m_pruneFlags)
+        m_pruneFlags->setData(&pruneFlags);
+
+    unsigned short pruneMode = static_cast<unsigned short>(m_nameOptions.pruneTest);
+    if (m_pruneModeButtons)
+        m_pruneModeButtons->setData(&pruneMode);
+
+    if (m_pruneInput)
+        m_pruneInput->setData(m_nameOptions.prunePattern.data());
+}
+
+void ContentNamesPage::collect()
+{
+    unsigned short mode = 0;
+    if (m_textModeButtons)
+    {
+        m_textModeButtons->getData(&mode);
+        m_textOptions.mode = static_cast<TextSearchOptions::Mode>(mode);
+    }
+
+    unsigned short textFlags = 0;
+    if (m_textFlagBoxes)
+        m_textFlagBoxes->getData(&textFlags);
+    m_textOptions.matchCase = (textFlags & 0x0001) != 0;
+    m_textOptions.searchInContents = (textFlags & 0x0002) != 0;
+    m_textOptions.searchInFileNames = (textFlags & 0x0004) != 0;
+    m_textOptions.allowMultipleTerms = (textFlags & 0x0008) != 0;
+    m_textOptions.treatBinaryAsText = (textFlags & 0x0010) != 0;
+
+    unsigned short matcherFlags = 0;
+    if (m_matcherBoxes)
+        m_matcherBoxes->getData(&matcherFlags);
+    m_nameOptions.nameEnabled = (matcherFlags & 0x0001) != 0;
+    m_nameOptions.inameEnabled = (matcherFlags & 0x0002) != 0;
+    m_nameOptions.pathEnabled = (matcherFlags & 0x0004) != 0;
+    m_nameOptions.ipathEnabled = (matcherFlags & 0x0008) != 0;
+    m_nameOptions.regexEnabled = (matcherFlags & 0x0010) != 0;
+    m_nameOptions.iregexEnabled = (matcherFlags & 0x0020) != 0;
+    m_nameOptions.lnameEnabled = (matcherFlags & 0x0040) != 0;
+    m_nameOptions.ilnameEnabled = (matcherFlags & 0x0080) != 0;
+
+    if (m_nameInput)
+        m_nameInput->getData(m_nameOptions.namePattern.data());
+    if (m_inameInput)
+        m_inameInput->getData(m_nameOptions.inamePattern.data());
+    if (m_pathInput)
+        m_pathInput->getData(m_nameOptions.pathPattern.data());
+    if (m_ipathInput)
+        m_ipathInput->getData(m_nameOptions.ipathPattern.data());
+    if (m_regexInput)
+        m_regexInput->getData(m_nameOptions.regexPattern.data());
+    if (m_iregexInput)
+        m_iregexInput->getData(m_nameOptions.iregexPattern.data());
+    if (m_lnameInput)
+        m_lnameInput->getData(m_nameOptions.lnamePattern.data());
+    if (m_ilnameInput)
+        m_ilnameInput->getData(m_nameOptions.ilnamePattern.data());
+
+    unsigned short pruneFlags = 0;
+    if (m_pruneFlags)
+        m_pruneFlags->getData(&pruneFlags);
+    m_nameOptions.pruneEnabled = (pruneFlags & 0x0001) != 0;
+    m_nameOptions.pruneDirectoriesOnly = (pruneFlags & 0x0002) != 0;
+
+    unsigned short pruneMode = 0;
+    if (m_pruneModeButtons)
+        m_pruneModeButtons->getData(&pruneMode);
+    m_nameOptions.pruneTest = static_cast<NamePathOptions::PruneTest>(pruneMode);
+
+    if (m_pruneInput)
+        m_pruneInput->getData(m_nameOptions.prunePattern.data());
+}
+
 class SearchNotebookDialog : public TDialog
 {
 public:
@@ -303,11 +537,17 @@ protected:
 private:
     void browseStartLocation();
     void applyStateToSpecification();
+    void applyQuickSelections();
 
     SearchSpecification &m_spec;
     SearchNotebookState &m_state;
     ck::ui::TabControl *m_tabControl = nullptr;
     QuickStartPage *m_quickStartPage = nullptr;
+    ContentNamesPage *m_contentPage = nullptr;
+    ck::ui::TabPageView *m_datesPage = nullptr;
+    ck::ui::TabPageView *m_typesPage = nullptr;
+    ck::ui::TabPageView *m_traversalPage = nullptr;
+    ck::ui::TabPageView *m_actionsPage = nullptr;
 };
 
 SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNotebookState &state)
@@ -324,20 +564,23 @@ SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNote
     m_quickStartPage = new QuickStartPage(TRect(0, 0, 81, 20), m_state);
     m_tabControl->addTab("Quick", m_quickStartPage, cmTabQuickStart);
 
-    auto createPlaceholder = [&](const char *title, const char *message, unsigned short command) {
-        auto *page = m_tabControl->createTab(title, command);
-        if (page)
-        {
-            TRect textBounds(2, 2, 78, 18);
-            page->insert(new TStaticText(textBounds, message));
-        }
-    };
+    m_contentPage = new ContentNamesPage(TRect(0, 0, 81, 20), m_spec.textOptions, m_spec.namePathOptions);
+    m_tabControl->addTab("Content", m_contentPage, cmTabContentNames);
+    m_datesPage = m_tabControl->createTab("Dates", cmTabDatesSizes);
+    if (m_datesPage)
+        m_datesPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Dates & Sizes tab coming soon."));
 
-    createPlaceholder("Content", "Content & Names tab coming soon.", cmTabContentNames);
-    createPlaceholder("Dates", "Dates & Sizes tab coming soon.", cmTabDatesSizes);
-    createPlaceholder("Types", "Types & Ownership tab coming soon.", cmTabTypesOwnership);
-    createPlaceholder("Traverse", "Traversal tab coming soon.", cmTabTraversal);
-    createPlaceholder("Actions", "Actions tab coming soon.", cmTabActions);
+    m_typesPage = m_tabControl->createTab("Types", cmTabTypesOwnership);
+    if (m_typesPage)
+        m_typesPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Types & Ownership tab coming soon."));
+
+    m_traversalPage = m_tabControl->createTab("Traverse", cmTabTraversal);
+    if (m_traversalPage)
+        m_traversalPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Traversal tab coming soon."));
+
+    m_actionsPage = m_tabControl->createTab("Actions", cmTabActions);
+    if (m_actionsPage)
+        m_actionsPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Actions tab coming soon."));
 
     insert(new TButton(TRect(2, 22, 18, 24), "~P~review", cmTogglePreview, bfNormal));
     insert(new TButton(TRect(58, 22, 72, 24), "~S~earch", cmOK, bfDefault));
@@ -388,6 +631,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionPrimaryFlags |= kOptionTextBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_contentPage)
+                    m_contentPage->populate();
             }
             clearEvent(event);
             return;
@@ -397,6 +642,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionPrimaryFlags |= kOptionNamePathBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_contentPage)
+                    m_contentPage->populate();
             }
             clearEvent(event);
             return;
@@ -468,6 +715,9 @@ Boolean SearchNotebookDialog::valid(ushort command)
     {
         if (m_quickStartPage)
             m_quickStartPage->collect();
+        applyQuickSelections();
+        if (m_contentPage)
+            m_contentPage->collect();
         applyStateToSpecification();
     }
     return TDialog::valid(command);
@@ -548,7 +798,6 @@ void SearchNotebookDialog::applyStateToSpecification()
 
     m_spec.traversalOptions.stayOnFilesystem = m_spec.stayOnSameFilesystem;
 
-    m_spec.enableTextSearch = (m_state.optionPrimaryFlags & kOptionTextBit) != 0;
     m_spec.enableNamePathTests = (m_state.optionPrimaryFlags & kOptionNamePathBit) != 0;
     m_spec.enableTimeFilters = (m_state.optionPrimaryFlags & kOptionTimeBit) != 0;
     m_spec.enableSizeFilters = (m_state.optionPrimaryFlags & kOptionSizeBit) != 0;
@@ -558,17 +807,27 @@ void SearchNotebookDialog::applyStateToSpecification()
     m_spec.enableTraversalFilters = (m_state.optionSecondaryFlags & kOptionTraversalBit) != 0;
     m_spec.enableActionOptions = (m_state.optionSecondaryFlags & kOptionActionBit) != 0;
 
+    const bool hasText = m_spec.searchText[0] != '\0';
+    m_spec.enableTextSearch = hasText && (m_spec.textOptions.searchInContents || m_spec.textOptions.searchInFileNames);
+}
+
+void SearchNotebookDialog::applyQuickSelections()
+{
     const bool hasText = m_state.searchText[0] != '\0';
-    m_spec.enableTextSearch = hasText;
-    if (hasText)
+    if (!hasText)
+    {
+        m_spec.textOptions.searchInContents = false;
+        m_spec.textOptions.searchInFileNames = false;
+    }
+    else
     {
         switch (m_state.quickSearchMode)
         {
-        case 0: // contents
+        case 0: // contents only
             m_spec.textOptions.searchInContents = true;
             m_spec.textOptions.searchInFileNames = false;
             break;
-        case 1: // names
+        case 1: // names only
             m_spec.textOptions.searchInContents = false;
             m_spec.textOptions.searchInFileNames = true;
             break;
@@ -577,21 +836,21 @@ void SearchNotebookDialog::applyStateToSpecification()
             m_spec.textOptions.searchInFileNames = true;
             break;
         }
+        m_state.optionPrimaryFlags |= kOptionTextBit;
     }
 
-    if (m_state.quickTypePreset == 0)
+    switch (m_state.quickTypePreset)
     {
+    case 0: // all files
+        m_state.optionPrimaryFlags &= static_cast<unsigned short>(~kOptionTypeBit);
+        m_spec.enableTypeFilters = false;
+        m_spec.typeOptions.useExtensions = false;
+        break;
+    case 5: // custom – leave as-is
         if (m_state.optionPrimaryFlags & kOptionTypeBit)
             m_spec.enableTypeFilters = true;
-        else
-            m_spec.enableTypeFilters = false;
-    }
-    else if (m_state.quickTypePreset == 5)
-    {
-        // Custom – leave existing configuration untouched but ensure flag reflects checkbox state
-        m_spec.enableTypeFilters = (m_state.optionPrimaryFlags & kOptionTypeBit) != 0;
-    }
-    else
+        break;
+    default:
     {
         const char *extensions = nullptr;
         switch (m_state.quickTypePreset)
@@ -612,6 +871,7 @@ void SearchNotebookDialog::applyStateToSpecification()
         }
         if (extensions)
         {
+            m_state.optionPrimaryFlags |= kOptionTypeBit;
             m_spec.enableTypeFilters = true;
             m_spec.typeOptions.typeEnabled = false;
             m_spec.typeOptions.xtypeEnabled = false;
@@ -621,6 +881,8 @@ void SearchNotebookDialog::applyStateToSpecification()
             m_spec.typeOptions.useDetectors = false;
             m_spec.typeOptions.detectorTags[0] = '\0';
         }
+        break;
+    }
     }
 }
 
@@ -661,6 +923,15 @@ bool configureSearchSpecification(SearchSpecification &spec)
         state.optionSecondaryFlags |= kOptionTraversalBit;
     if (spec.enableActionOptions)
         state.optionSecondaryFlags |= kOptionActionBit;
+
+    if (spec.textOptions.searchInContents && !spec.textOptions.searchInFileNames)
+        state.quickSearchMode = 0;
+    else if (!spec.textOptions.searchInContents && spec.textOptions.searchInFileNames)
+        state.quickSearchMode = 1;
+    else
+        state.quickSearchMode = 2;
+
+    state.quickTypePreset = spec.enableTypeFilters ? 5 : 0;
 
     auto *dialog = new SearchNotebookDialog(spec, state);
     unsigned short result = TProgram::application->executeDialog(dialog);
