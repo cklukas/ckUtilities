@@ -91,12 +91,12 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
   - Checkboxes: Orphaned owner (`-nouser`), Orphaned group (`-nogroup`).
 
 ### 2.5: Traversal Tab
-- [ ] Symlink handling radio buttons: Physical, CLI only, Everywhere.
-- [ ] Checkboxes: Depth-first, Stay on filesystem, Assume no leaf, Ignore readdir race, Day start.
-- [ ] Numeric inputs: Max depth, Min depth.
-- [ ] File inputs: Files-from (with browse), Samefile target.
-- [ ] Text inputs: Filesystem type, Link count, Inode number.
-- [ ] `TStaticText` footnote describing performance impact.
+- [x] Symlink handling radio buttons: Physical, CLI only, Everywhere.
+- [x] Checkboxes: Depth-first, Stay on filesystem, Assume no leaf, Ignore readdir race, Day start.
+- [x] Numeric inputs: Max depth, Min depth.
+- [x] File inputs: Files-from (with browse), Samefile target.
+- [x] Text inputs: Filesystem type, Link count, Inode number.
+- [x] `TStaticText` footnote describing performance impact.
 
 ### 2.6: Actions Tab
 - [ ] Output options:

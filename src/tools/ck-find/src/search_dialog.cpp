@@ -59,6 +59,8 @@ constexpr unsigned short kOptionActionBit = 0x0004;
 
 constexpr unsigned short cmClearTypeFiltersLocal = 0xf200;
 constexpr unsigned short cmClearOwnershipFiltersLocal = 0xf201;
+constexpr unsigned short cmClearTraversalFiltersLocal = 0xf202;
+constexpr unsigned short cmClearActionsLocal = 0xf203;
 
 constexpr std::array<char, 4> kTypeLettersLeft{'b', 'c', 'd', 'p'};
 constexpr std::array<char, 4> kTypeLettersRight{'f', 'l', 's', 'D'};
@@ -461,6 +463,83 @@ private:
     TInputLine *m_groupInput = nullptr;
     TInputLine *m_gidInput = nullptr;
     TButton *m_clearOwnershipButton = nullptr;
+};
+
+class TraversalPage : public ck::ui::TabPageView
+{
+public:
+    TraversalPage(const TRect &bounds,
+                  SearchNotebookState &state,
+                  TraversalFilesystemOptions &options);
+
+    void populate();
+    void collect();
+
+protected:
+    void onActivated() override;
+    void onDeactivated() override;
+    void handleEvent(TEvent &event) override;
+
+private:
+    void updateValueControls();
+    void updateFlags();
+
+    SearchNotebookState &m_state;
+    TraversalFilesystemOptions &m_options;
+
+    TRadioButtons *m_symlinkButtons = nullptr;
+    TRadioButtons *m_warningButtons = nullptr;
+    TCheckBoxes *m_flagBoxes = nullptr;
+    TCheckBoxes *m_valueBoxes = nullptr;
+    TInputLine *m_maxDepthInput = nullptr;
+    TInputLine *m_minDepthInput = nullptr;
+    TInputLine *m_filesFromInput = nullptr;
+    TInputLine *m_fsTypeInput = nullptr;
+    TInputLine *m_linkCountInput = nullptr;
+    TInputLine *m_sameFileInput = nullptr;
+    TInputLine *m_inodeInput = nullptr;
+    TButton *m_clearButton = nullptr;
+};
+
+class ActionsPage : public ck::ui::TabPageView
+{
+public:
+    ActionsPage(const TRect &bounds,
+                SearchNotebookState &state,
+                ActionOptions &options);
+
+    void populate();
+    void collect();
+
+protected:
+    void onActivated() override;
+    void onDeactivated() override;
+    void handleEvent(TEvent &event) override;
+
+private:
+    void updateExecControls();
+    void updateFileOutputs();
+    void updateWarning();
+    void applyOptionFlags();
+
+    SearchNotebookState &m_state;
+    ActionOptions &m_options;
+
+    TCheckBoxes *m_outputBoxes = nullptr;
+    TCheckBoxes *m_execBoxes = nullptr;
+    TRadioButtons *m_execVariantButtons = nullptr;
+    TInputLine *m_execInput = nullptr;
+
+    TCheckBoxes *m_fileToggleBoxes = nullptr;
+    TCheckBoxes *m_appendBoxes = nullptr;
+    TInputLine *m_fprintInput = nullptr;
+    TInputLine *m_fprint0Input = nullptr;
+    TInputLine *m_flsInput = nullptr;
+    TInputLine *m_printfInput = nullptr;
+    TInputLine *m_fprintfFileInput = nullptr;
+    TInputLine *m_fprintfFormatInput = nullptr;
+    TStaticText *m_warningText = nullptr;
+    TButton *m_clearButton = nullptr;
 };
 
 ContentNamesPage::ContentNamesPage(const TRect &bounds,
@@ -1500,6 +1579,739 @@ void TypesOwnershipPage::applyOptionFlags()
         m_state.optionSecondaryFlags &= static_cast<unsigned short>(~kOptionPermissionBit);
 }
 
+TraversalPage::TraversalPage(const TRect &bounds,
+                             SearchNotebookState &state,
+                             TraversalFilesystemOptions &options)
+    : ck::ui::TabPageView(bounds),
+      m_state(state),
+      m_options(options)
+{
+    insert(new TStaticText(TRect(2, 0, 78, 1),
+                           "Control how ck-find walks directories and limits traversal scope."));
+
+    m_symlinkButtons = new TRadioButtons(TRect(2, 1, 26, 5),
+                                         makeItemList({"Physical walk (-~P~)",
+                                                       "Follow args only (-~H~)",
+                                                       "Follow all symlinks (-~L~)"}));
+    insert(m_symlinkButtons);
+
+    m_warningButtons = new TRadioButtons(TRect(28, 1, 56, 5),
+                                         makeItemList({"Default warnings",
+                                                       "Always warn (-warn)",
+                                                       "Suppress warn (-nowarn)"}));
+    insert(m_warningButtons);
+
+    m_flagBoxes = new TCheckBoxes(TRect(2, 5, 28, 11),
+                                  makeItemList({"Use -~d~epth",
+                                                "Stay on file~s~ystem",
+                                                "Assume -nolea~f~",
+                                                "Ignore readdir race",
+                                                "Use -day~s~tart"}));
+    insert(m_flagBoxes);
+
+    m_valueBoxes = new TCheckBoxes(TRect(28, 5, 56, 13),
+                                   makeItemList({"Limit ~m~ax depth",
+                                                 "Limit mi~n~ depth",
+                                                 "Paths from ~f~ile",
+                                                 "List is NU~L~-separated",
+                                                 "Filter ~f~stype",
+                                                 "Match link ~c~ount",
+                                                 "Match ~s~amefile",
+                                                 "Match ~i~node"}));
+    insert(m_valueBoxes);
+
+    m_maxDepthInput = new TInputLine(TRect(58, 6, 78, 7), static_cast<int>(m_options.maxDepth.size()) - 1);
+    insert(new TLabel(TRect(58, 5, 78, 6), "Max depth:", m_maxDepthInput));
+    insert(m_maxDepthInput);
+
+    m_minDepthInput = new TInputLine(TRect(58, 8, 78, 9), static_cast<int>(m_options.minDepth.size()) - 1);
+    insert(new TLabel(TRect(58, 7, 78, 8), "Min depth:", m_minDepthInput));
+    insert(m_minDepthInput);
+
+    m_filesFromInput = new TInputLine(TRect(2, 13, 60, 14), std::min<int>(static_cast<int>(m_options.filesFrom.size()) - 1, 255));
+    insert(new TLabel(TRect(2, 12, 60, 13), "-files-from list:", m_filesFromInput));
+    insert(m_filesFromInput);
+
+    m_fsTypeInput = new TInputLine(TRect(62, 13, 78, 14), static_cast<int>(m_options.fsType.size()) - 1);
+    insert(new TLabel(TRect(60, 12, 78, 13), "fstype:", m_fsTypeInput));
+    insert(m_fsTypeInput);
+
+    m_linkCountInput = new TInputLine(TRect(62, 14, 78, 15), static_cast<int>(m_options.linkCount.size()) - 1);
+    insert(new TLabel(TRect(60, 13, 78, 14), "Links:", m_linkCountInput));
+    insert(m_linkCountInput);
+
+    m_sameFileInput = new TInputLine(TRect(2, 15, 60, 16), std::min<int>(static_cast<int>(m_options.sameFile.size()) - 1, 255));
+    insert(new TLabel(TRect(2, 14, 60, 15), "-samefile target:", m_sameFileInput));
+    insert(m_sameFileInput);
+
+    m_inodeInput = new TInputLine(TRect(62, 15, 78, 16), static_cast<int>(m_options.inode.size()) - 1);
+    insert(new TLabel(TRect(60, 14, 78, 15), "Inode:", m_inodeInput));
+    insert(m_inodeInput);
+
+    insert(new TButton(TRect(60, 17, 78, 19), "Advanced ~t~raversal...", cmTraversalFilters, bfNormal));
+    m_clearButton = new TButton(TRect(42, 17, 60, 19), "Clear traversal", cmClearTraversalFiltersLocal, bfNormal);
+    insert(m_clearButton);
+
+    insert(new TStaticText(TRect(2, 17, 40, 19), "Tip: depth, fstype, and samefile can impact performance."));
+
+    populate();
+}
+
+void TraversalPage::populate()
+{
+    if (m_symlinkButtons)
+    {
+        unsigned short mode = static_cast<unsigned short>(m_options.symlinkMode);
+        m_symlinkButtons->setData(&mode);
+    }
+
+    if (m_warningButtons)
+    {
+        unsigned short warn = static_cast<unsigned short>(m_options.warningMode);
+        m_warningButtons->setData(&warn);
+    }
+
+    unsigned short flagBits = 0;
+    if (m_options.depthFirst)
+        flagBits |= 0x0001;
+    if (m_options.stayOnFilesystem)
+        flagBits |= 0x0002;
+    if (m_options.assumeNoLeaf)
+        flagBits |= 0x0004;
+    if (m_options.ignoreReaddirRace)
+        flagBits |= 0x0008;
+    if (m_options.dayStart)
+        flagBits |= 0x0010;
+    if (m_flagBoxes)
+        m_flagBoxes->setData(&flagBits);
+
+    unsigned short valueBits = 0;
+    if (m_options.maxDepthEnabled)
+        valueBits |= 0x0001;
+    if (m_options.minDepthEnabled)
+        valueBits |= 0x0002;
+    if (m_options.filesFromEnabled)
+        valueBits |= 0x0004;
+    if (m_options.filesFromNullSeparated)
+        valueBits |= 0x0008;
+    if (m_options.fstypeEnabled)
+        valueBits |= 0x0010;
+    if (m_options.linksEnabled)
+        valueBits |= 0x0020;
+    if (m_options.sameFileEnabled)
+        valueBits |= 0x0040;
+    if (m_options.inumEnabled)
+        valueBits |= 0x0080;
+    if (m_valueBoxes)
+        m_valueBoxes->setData(&valueBits);
+
+    if (m_maxDepthInput)
+        m_maxDepthInput->setData(m_options.maxDepth.data());
+    if (m_minDepthInput)
+        m_minDepthInput->setData(m_options.minDepth.data());
+    if (m_filesFromInput)
+        m_filesFromInput->setData(m_options.filesFrom.data());
+    if (m_fsTypeInput)
+        m_fsTypeInput->setData(m_options.fsType.data());
+    if (m_linkCountInput)
+        m_linkCountInput->setData(m_options.linkCount.data());
+    if (m_sameFileInput)
+        m_sameFileInput->setData(m_options.sameFile.data());
+    if (m_inodeInput)
+        m_inodeInput->setData(m_options.inode.data());
+
+    updateValueControls();
+    updateFlags();
+}
+
+void TraversalPage::collect()
+{
+    unsigned short mode = 0;
+    if (m_symlinkButtons)
+    {
+        m_symlinkButtons->getData(&mode);
+        m_options.symlinkMode = static_cast<TraversalFilesystemOptions::SymlinkMode>(mode);
+    }
+
+    unsigned short warn = 0;
+    if (m_warningButtons)
+    {
+        m_warningButtons->getData(&warn);
+        m_options.warningMode = static_cast<TraversalFilesystemOptions::WarningMode>(warn);
+    }
+
+    unsigned short flagBits = 0;
+    if (m_flagBoxes)
+        m_flagBoxes->getData(&flagBits);
+    m_options.depthFirst = (flagBits & 0x0001) != 0;
+    m_options.stayOnFilesystem = (flagBits & 0x0002) != 0;
+    m_options.assumeNoLeaf = (flagBits & 0x0004) != 0;
+    m_options.ignoreReaddirRace = (flagBits & 0x0008) != 0;
+    m_options.dayStart = (flagBits & 0x0010) != 0;
+
+    unsigned short valueBits = 0;
+    if (m_valueBoxes)
+        m_valueBoxes->getData(&valueBits);
+    m_options.maxDepthEnabled = (valueBits & 0x0001) != 0;
+    m_options.minDepthEnabled = (valueBits & 0x0002) != 0;
+    m_options.filesFromEnabled = (valueBits & 0x0004) != 0;
+    m_options.fstypeEnabled = (valueBits & 0x0010) != 0;
+    m_options.linksEnabled = (valueBits & 0x0020) != 0;
+    m_options.sameFileEnabled = (valueBits & 0x0040) != 0;
+    m_options.inumEnabled = (valueBits & 0x0080) != 0;
+
+    bool filesFromNull = (valueBits & 0x0008) != 0;
+    m_options.filesFromNullSeparated = m_options.filesFromEnabled && filesFromNull;
+
+    if (m_options.maxDepthEnabled && m_maxDepthInput)
+        m_maxDepthInput->getData(m_options.maxDepth.data());
+    else
+        m_options.maxDepth.fill('\0');
+
+    if (m_options.minDepthEnabled && m_minDepthInput)
+        m_minDepthInput->getData(m_options.minDepth.data());
+    else
+        m_options.minDepth.fill('\0');
+
+    if (m_options.filesFromEnabled && m_filesFromInput)
+        m_filesFromInput->getData(m_options.filesFrom.data());
+    else
+        m_options.filesFrom.fill('\0');
+
+    if (m_options.fstypeEnabled && m_fsTypeInput)
+        m_fsTypeInput->getData(m_options.fsType.data());
+    else
+        m_options.fsType.fill('\0');
+
+    if (m_options.linksEnabled && m_linkCountInput)
+        m_linkCountInput->getData(m_options.linkCount.data());
+    else
+        m_options.linkCount.fill('\0');
+
+    if (m_options.sameFileEnabled && m_sameFileInput)
+        m_sameFileInput->getData(m_options.sameFile.data());
+    else
+        m_options.sameFile.fill('\0');
+
+    if (m_options.inumEnabled && m_inodeInput)
+        m_inodeInput->getData(m_options.inode.data());
+    else
+        m_options.inode.fill('\0');
+
+    updateValueControls();
+    updateFlags();
+}
+
+void TraversalPage::onActivated()
+{
+    populate();
+}
+
+void TraversalPage::onDeactivated()
+{
+    collect();
+}
+
+void TraversalPage::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmClearTraversalFiltersLocal:
+            m_options = TraversalFilesystemOptions{};
+            updateFlags();
+            populate();
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+
+    TGroup::handleEvent(event);
+    updateValueControls();
+}
+
+void TraversalPage::updateValueControls()
+{
+    if (!m_valueBoxes)
+        return;
+
+    unsigned short flags = 0;
+    m_valueBoxes->getData(&flags);
+
+    const bool maxEnabled = (flags & 0x0001) != 0;
+    const bool minEnabled = (flags & 0x0002) != 0;
+    bool filesFromEnabled = (flags & 0x0004) != 0;
+    bool nullSeparated = (flags & 0x0008) != 0;
+    const bool fstypeEnabled = (flags & 0x0010) != 0;
+    const bool linksEnabled = (flags & 0x0020) != 0;
+    const bool sameFileEnabled = (flags & 0x0040) != 0;
+    const bool inodeEnabled = (flags & 0x0080) != 0;
+
+    if (!filesFromEnabled && nullSeparated)
+    {
+        flags &= static_cast<unsigned short>(~0x0008);
+        m_valueBoxes->setData(&flags);
+        nullSeparated = false;
+    }
+
+    if (m_maxDepthInput)
+        m_maxDepthInput->setState(sfDisabled, maxEnabled ? False : True);
+    if (m_minDepthInput)
+        m_minDepthInput->setState(sfDisabled, minEnabled ? False : True);
+    if (m_filesFromInput)
+        m_filesFromInput->setState(sfDisabled, filesFromEnabled ? False : True);
+    if (m_fsTypeInput)
+        m_fsTypeInput->setState(sfDisabled, fstypeEnabled ? False : True);
+    if (m_linkCountInput)
+        m_linkCountInput->setState(sfDisabled, linksEnabled ? False : True);
+    if (m_sameFileInput)
+        m_sameFileInput->setState(sfDisabled, sameFileEnabled ? False : True);
+    if (m_inodeInput)
+        m_inodeInput->setState(sfDisabled, inodeEnabled ? False : True);
+}
+
+void TraversalPage::updateFlags()
+{
+    if (m_options.symlinkMode == TraversalFilesystemOptions::SymlinkMode::Everywhere)
+        m_state.generalFlags |= kGeneralSymlinkBit;
+    else
+        m_state.generalFlags &= static_cast<unsigned short>(~kGeneralSymlinkBit);
+
+    if (m_options.stayOnFilesystem)
+        m_state.generalFlags |= kGeneralStayOnFsBit;
+    else
+        m_state.generalFlags &= static_cast<unsigned short>(~kGeneralStayOnFsBit);
+
+    const bool traversalActive = m_options.depthFirst || m_options.stayOnFilesystem ||
+                                 m_options.assumeNoLeaf || m_options.ignoreReaddirRace ||
+                                 m_options.dayStart || m_options.maxDepthEnabled ||
+                                 m_options.minDepthEnabled || m_options.filesFromEnabled ||
+                                 m_options.filesFromNullSeparated || m_options.fstypeEnabled ||
+                                 m_options.linksEnabled || m_options.sameFileEnabled ||
+                                 m_options.inumEnabled ||
+                                 m_options.symlinkMode != TraversalFilesystemOptions::SymlinkMode::Physical ||
+                                 m_options.warningMode != TraversalFilesystemOptions::WarningMode::Default;
+
+    if (traversalActive)
+        m_state.optionSecondaryFlags |= kOptionTraversalBit;
+    else
+        m_state.optionSecondaryFlags &= static_cast<unsigned short>(~kOptionTraversalBit);
+}
+
+ActionsPage::ActionsPage(const TRect &bounds,
+                         SearchNotebookState &state,
+                         ActionOptions &options)
+    : ck::ui::TabPageView(bounds),
+      m_state(state),
+      m_options(options)
+{
+    insert(new TStaticText(TRect(2, 0, 78, 1),
+                           "Select outputs for matches or run commands on each result."));
+
+    m_outputBoxes = new TCheckBoxes(TRect(2, 1, 24, 7),
+                                    makeItemList({"Print (-print)",
+                                                  "Print\0 (-print0)",
+                                                  "Verbose list (-ls)",
+                                                  "Delete matches",
+                                                  "Stop after first (-quit)"}));
+    insert(m_outputBoxes);
+
+    m_execBoxes = new TCheckBoxes(TRect(26, 1, 52, 4),
+                                  makeItemList({"Run command on matches (-exec/-ok)",
+                                                "Use '+' terminator"}));
+    insert(m_execBoxes);
+
+    m_execVariantButtons = new TRadioButtons(TRect(26, 4, 52, 8),
+                                             makeItemList({"-exec",
+                                                           "-execdir",
+                                                           "-ok",
+                                                           "-okdir"}));
+    insert(m_execVariantButtons);
+
+    m_execInput = new TInputLine(TRect(2, 7, 78, 8), static_cast<int>(m_options.execCommand.size()) - 1);
+    insert(new TLabel(TRect(2, 6, 78, 7), "Command template (use {} for path):", m_execInput));
+    insert(m_execInput);
+
+    insert(new TStaticText(TRect(2, 8, 78, 9), "File outputs"));
+
+    m_fileToggleBoxes = new TCheckBoxes(TRect(2, 9, 28, 15),
+                                        makeItemList({"Enable -fprint",
+                                                      "Enable -fprint0",
+                                                      "Enable -fls",
+                                                      "Enable -printf",
+                                                      "Enable -fprintf"}));
+    insert(m_fileToggleBoxes);
+
+    m_appendBoxes = new TCheckBoxes(TRect(30, 9, 52, 13),
+                                    makeItemList({"Append -fprint",
+                                                  "Append -fprint0",
+                                                  "Append -fls",
+                                                  "Append -fprintf"}));
+    insert(m_appendBoxes);
+
+    const int pathLen = std::min<int>(static_cast<int>(m_options.fprintFile.size()) - 1, 255);
+    m_fprintInput = new TInputLine(TRect(54, 9, 78, 10), pathLen);
+    insert(new TLabel(TRect(54, 8, 78, 9), "-fprint file:", m_fprintInput));
+    insert(m_fprintInput);
+
+    m_fprint0Input = new TInputLine(TRect(54, 10, 78, 11), pathLen);
+    insert(new TLabel(TRect(54, 9, 78, 10), "-fprint0 file:", m_fprint0Input));
+    insert(m_fprint0Input);
+
+    m_flsInput = new TInputLine(TRect(54, 11, 78, 12), pathLen);
+    insert(new TLabel(TRect(54, 10, 78, 11), "-fls file:", m_flsInput));
+    insert(m_flsInput);
+
+    m_printfInput = new TInputLine(TRect(30, 12, 78, 13), static_cast<int>(m_options.printfFormat.size()) - 1);
+    insert(new TLabel(TRect(30, 11, 56, 12), "-printf format:", m_printfInput));
+    insert(m_printfInput);
+
+    m_fprintfFileInput = new TInputLine(TRect(30, 13, 54, 14), pathLen);
+    insert(new TLabel(TRect(30, 12, 54, 13), "-fprintf file:", m_fprintfFileInput));
+    insert(m_fprintfFileInput);
+
+    m_fprintfFormatInput = new TInputLine(TRect(56, 13, 78, 14), static_cast<int>(m_options.fprintfFormat.size()) - 1);
+    insert(new TLabel(TRect(56, 12, 78, 13), "-fprintf format:", m_fprintfFormatInput));
+    insert(m_fprintfFormatInput);
+
+    m_warningText = new TStaticText(TRect(2, 15, 78, 16),
+                                    "Warning: Delete or Exec options can remove or modify files.");
+    insert(m_warningText);
+
+    insert(new TButton(TRect(2, 17, 22, 19), "Advanced ~a~ctions...", cmActionOptions, bfNormal));
+    m_clearButton = new TButton(TRect(24, 17, 42, 19), "Clear actions", cmClearActionsLocal, bfNormal);
+    insert(m_clearButton);
+
+    populate();
+}
+
+void ActionsPage::populate()
+{
+    if (m_outputBoxes)
+    {
+        unsigned short bits = 0;
+        if (m_options.print)
+            bits |= 0x0001;
+        if (m_options.print0)
+            bits |= 0x0002;
+        if (m_options.ls)
+            bits |= 0x0004;
+        if (m_options.deleteMatches)
+            bits |= 0x0008;
+        if (m_options.quitEarly)
+            bits |= 0x0010;
+        m_outputBoxes->setData(&bits);
+    }
+
+    if (m_execBoxes)
+    {
+        unsigned short bits = 0;
+        if (m_options.execEnabled)
+            bits |= 0x0001;
+        if (m_options.execUsePlus && m_options.execEnabled)
+            bits |= 0x0002;
+        m_execBoxes->setData(&bits);
+    }
+
+    if (m_execVariantButtons)
+    {
+        unsigned short variant = static_cast<unsigned short>(m_options.execVariant);
+        m_execVariantButtons->setData(&variant);
+    }
+
+    if (m_execInput)
+        m_execInput->setData(m_options.execCommand.data());
+
+    if (m_fileToggleBoxes)
+    {
+        unsigned short bits = 0;
+        if (m_options.fprintEnabled)
+            bits |= 0x0001;
+        if (m_options.fprint0Enabled)
+            bits |= 0x0002;
+        if (m_options.flsEnabled)
+            bits |= 0x0004;
+        if (m_options.printfEnabled)
+            bits |= 0x0008;
+        if (m_options.fprintfEnabled)
+            bits |= 0x0010;
+        m_fileToggleBoxes->setData(&bits);
+    }
+
+    if (m_appendBoxes)
+    {
+        unsigned short bits = 0;
+        if (m_options.fprintAppend)
+            bits |= 0x0001;
+        if (m_options.fprint0Append)
+            bits |= 0x0002;
+        if (m_options.flsAppend)
+            bits |= 0x0004;
+        if (m_options.fprintfAppend)
+            bits |= 0x0008;
+        m_appendBoxes->setData(&bits);
+    }
+
+    if (m_fprintInput)
+        m_fprintInput->setData(m_options.fprintFile.data());
+    if (m_fprint0Input)
+        m_fprint0Input->setData(m_options.fprint0File.data());
+    if (m_flsInput)
+        m_flsInput->setData(m_options.flsFile.data());
+    if (m_printfInput)
+        m_printfInput->setData(m_options.printfFormat.data());
+    if (m_fprintfFileInput)
+        m_fprintfFileInput->setData(m_options.fprintfFile.data());
+    if (m_fprintfFormatInput)
+        m_fprintfFormatInput->setData(m_options.fprintfFormat.data());
+
+    updateExecControls();
+    updateFileOutputs();
+    updateWarning();
+    applyOptionFlags();
+}
+
+void ActionsPage::collect()
+{
+    if (m_outputBoxes)
+    {
+        unsigned short bits = 0;
+        m_outputBoxes->getData(&bits);
+        m_options.print = (bits & 0x0001) != 0;
+        m_options.print0 = (bits & 0x0002) != 0;
+        m_options.ls = (bits & 0x0004) != 0;
+        m_options.deleteMatches = (bits & 0x0008) != 0;
+        m_options.quitEarly = (bits & 0x0010) != 0;
+    }
+
+    bool execEnabled = false;
+    if (m_execBoxes)
+    {
+        unsigned short bits = 0;
+        m_execBoxes->getData(&bits);
+        execEnabled = (bits & 0x0001) != 0;
+        m_options.execEnabled = execEnabled;
+        m_options.execUsePlus = execEnabled && ((bits & 0x0002) != 0);
+    }
+    else
+    {
+        m_options.execEnabled = false;
+        m_options.execUsePlus = false;
+    }
+
+    if (m_execVariantButtons)
+    {
+        unsigned short variant = 0;
+        m_execVariantButtons->getData(&variant);
+        m_options.execVariant = static_cast<ActionOptions::ExecVariant>(variant);
+    }
+
+    if (execEnabled && m_execInput)
+        m_execInput->getData(m_options.execCommand.data());
+    else
+        m_options.execCommand.fill('\0');
+
+    unsigned short fileBits = 0;
+    if (m_fileToggleBoxes)
+        m_fileToggleBoxes->getData(&fileBits);
+
+    unsigned short appendBits = 0;
+    if (m_appendBoxes)
+        m_appendBoxes->getData(&appendBits);
+
+    m_options.fprintEnabled = (fileBits & 0x0001) != 0;
+    m_options.fprint0Enabled = (fileBits & 0x0002) != 0;
+    m_options.flsEnabled = (fileBits & 0x0004) != 0;
+    m_options.printfEnabled = (fileBits & 0x0008) != 0;
+    m_options.fprintfEnabled = (fileBits & 0x0010) != 0;
+
+    m_options.fprintAppend = m_options.fprintEnabled && ((appendBits & 0x0001) != 0);
+    m_options.fprint0Append = m_options.fprint0Enabled && ((appendBits & 0x0002) != 0);
+    m_options.flsAppend = m_options.flsEnabled && ((appendBits & 0x0004) != 0);
+    m_options.fprintfAppend = m_options.fprintfEnabled && ((appendBits & 0x0008) != 0);
+
+    if (m_options.fprintEnabled && m_fprintInput)
+        m_fprintInput->getData(m_options.fprintFile.data());
+    else
+        m_options.fprintFile.fill('\0');
+
+    if (m_options.fprint0Enabled && m_fprint0Input)
+        m_fprint0Input->getData(m_options.fprint0File.data());
+    else
+        m_options.fprint0File.fill('\0');
+
+    if (m_options.flsEnabled && m_flsInput)
+        m_flsInput->getData(m_options.flsFile.data());
+    else
+        m_options.flsFile.fill('\0');
+
+    if (m_options.printfEnabled && m_printfInput)
+        m_printfInput->getData(m_options.printfFormat.data());
+    else
+        m_options.printfFormat.fill('\0');
+
+    if (m_options.fprintfEnabled)
+    {
+        if (m_fprintfFileInput)
+            m_fprintfFileInput->getData(m_options.fprintfFile.data());
+        if (m_fprintfFormatInput)
+            m_fprintfFormatInput->getData(m_options.fprintfFormat.data());
+    }
+    else
+    {
+        m_options.fprintfFile.fill('\0');
+        m_options.fprintfFormat.fill('\0');
+    }
+
+    updateExecControls();
+    updateFileOutputs();
+    updateWarning();
+    applyOptionFlags();
+}
+
+void ActionsPage::onActivated()
+{
+    populate();
+}
+
+void ActionsPage::onDeactivated()
+{
+    collect();
+}
+
+void ActionsPage::handleEvent(TEvent &event)
+{
+    if (event.what == evCommand)
+    {
+        switch (event.message.command)
+        {
+        case cmClearActionsLocal:
+            m_options = ActionOptions{};
+            populate();
+            clearEvent(event);
+            return;
+        default:
+            break;
+        }
+    }
+
+    TGroup::handleEvent(event);
+    updateExecControls();
+    updateFileOutputs();
+    updateWarning();
+}
+
+void ActionsPage::updateExecControls()
+{
+    if (!m_execBoxes)
+        return;
+
+    unsigned short bits = 0;
+    m_execBoxes->getData(&bits);
+    if ((bits & 0x0001) == 0 && (bits & 0x0002) != 0)
+    {
+        bits &= static_cast<unsigned short>(~0x0002);
+        m_execBoxes->setData(&bits);
+    }
+
+    const Boolean execDisabled = (bits & 0x0001) != 0 ? False : True;
+
+    if (m_execVariantButtons)
+        m_execVariantButtons->setState(sfDisabled, execDisabled);
+    if (m_execInput)
+        m_execInput->setState(sfDisabled, execDisabled);
+}
+
+void ActionsPage::updateFileOutputs()
+{
+    if (!m_fileToggleBoxes)
+        return;
+
+    unsigned short fileBits = 0;
+    m_fileToggleBoxes->getData(&fileBits);
+
+    unsigned short appendBits = 0;
+    if (m_appendBoxes)
+        m_appendBoxes->getData(&appendBits);
+
+    const Boolean fprintDisabled = (fileBits & 0x0001) != 0 ? False : True;
+    const Boolean fprint0Disabled = (fileBits & 0x0002) != 0 ? False : True;
+    const Boolean flsDisabled = (fileBits & 0x0004) != 0 ? False : True;
+    const Boolean printfDisabled = (fileBits & 0x0008) != 0 ? False : True;
+    const Boolean fprintfDisabled = (fileBits & 0x0010) != 0 ? False : True;
+
+    if (fprintDisabled)
+        appendBits &= static_cast<unsigned short>(~0x0001);
+    if (fprint0Disabled)
+        appendBits &= static_cast<unsigned short>(~0x0002);
+    if (flsDisabled)
+        appendBits &= static_cast<unsigned short>(~0x0004);
+    if (fprintfDisabled)
+        appendBits &= static_cast<unsigned short>(~0x0008);
+
+    if (m_appendBoxes)
+        m_appendBoxes->setData(&appendBits);
+
+    if (m_fprintInput)
+        m_fprintInput->setState(sfDisabled, fprintDisabled);
+    if (m_fprint0Input)
+        m_fprint0Input->setState(sfDisabled, fprint0Disabled);
+    if (m_flsInput)
+        m_flsInput->setState(sfDisabled, flsDisabled);
+    if (m_printfInput)
+        m_printfInput->setState(sfDisabled, printfDisabled);
+    if (m_fprintfFileInput)
+        m_fprintfFileInput->setState(sfDisabled, fprintfDisabled);
+    if (m_fprintfFormatInput)
+        m_fprintfFormatInput->setState(sfDisabled, fprintfDisabled);
+}
+
+void ActionsPage::updateWarning()
+{
+    if (!m_warningText)
+        return;
+
+    bool destructive = false;
+    if (m_outputBoxes)
+    {
+        unsigned short bits = 0;
+        m_outputBoxes->getData(&bits);
+        destructive = (bits & 0x0008) != 0;
+    }
+    if (!destructive && m_execBoxes)
+    {
+        unsigned short bits = 0;
+        m_execBoxes->getData(&bits);
+        if (bits & 0x0001)
+        {
+            char command[512]{};
+            if (m_execInput)
+                m_execInput->getData(command);
+            destructive = command[0] != '\0';
+        }
+    }
+
+    m_warningText->setState(sfVisible, destructive ? True : False);
+}
+
+void ActionsPage::applyOptionFlags()
+{
+    const bool outputActive = m_options.print || m_options.print0 || m_options.ls ||
+                              m_options.deleteMatches || m_options.quitEarly;
+    const bool execActive = m_options.execEnabled && m_options.execCommand[0] != '\0';
+    const bool fileOutputsActive = m_options.fprintEnabled || m_options.fprint0Enabled ||
+                                   m_options.flsEnabled || m_options.printfEnabled ||
+                                   m_options.fprintfEnabled;
+
+    if (outputActive || execActive || fileOutputsActive)
+        m_state.optionSecondaryFlags |= kOptionActionBit;
+    else
+        m_state.optionSecondaryFlags &= static_cast<unsigned short>(~kOptionActionBit);
+}
+
 class SearchNotebookDialog : public TDialog
 {
 public:
@@ -1521,8 +2333,8 @@ private:
     ContentNamesPage *m_contentPage = nullptr;
     DatesSizesPage *m_datesPage = nullptr;
     TypesOwnershipPage *m_typesPage = nullptr;
-    ck::ui::TabPageView *m_traversalPage = nullptr;
-    ck::ui::TabPageView *m_actionsPage = nullptr;
+    TraversalPage *m_traversalPage = nullptr;
+    ActionsPage *m_actionsPage = nullptr;
 };
 
 SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNotebookState &state)
@@ -1548,13 +2360,11 @@ SearchNotebookDialog::SearchNotebookDialog(SearchSpecification &spec, SearchNote
     m_typesPage = new TypesOwnershipPage(TRect(0, 0, 81, 20), m_state, m_spec.typeOptions, m_spec.permissionOptions);
     m_tabControl->addTab("Types", m_typesPage, cmTabTypesOwnership);
 
-    m_traversalPage = m_tabControl->createTab("Traverse", cmTabTraversal);
-    if (m_traversalPage)
-        m_traversalPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Traversal tab coming soon."));
+    m_traversalPage = new TraversalPage(TRect(0, 0, 81, 20), m_state, m_spec.traversalOptions);
+    m_tabControl->addTab("Traverse", m_traversalPage, cmTabTraversal);
 
-    m_actionsPage = m_tabControl->createTab("Actions", cmTabActions);
-    if (m_actionsPage)
-        m_actionsPage->insert(new TStaticText(TRect(2, 2, 78, 18), "Actions tab coming soon."));
+    m_actionsPage = new ActionsPage(TRect(0, 0, 81, 20), m_state, m_spec.actionOptions);
+    m_tabControl->addTab("Actions", m_actionsPage, cmTabActions);
 
     insert(new TButton(TRect(2, 22, 18, 24), "~P~review", cmTogglePreview, bfNormal));
     insert(new TButton(TRect(58, 22, 72, 24), "~S~earch", cmOK, bfDefault));
@@ -1673,6 +2483,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionSecondaryFlags |= kOptionTraversalBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_traversalPage)
+                    m_traversalPage->populate();
             }
             clearEvent(event);
             return;
@@ -1706,6 +2518,8 @@ Boolean SearchNotebookDialog::valid(ushort command)
             m_datesPage->collect();
         if (m_typesPage)
             m_typesPage->collect();
+        if (m_traversalPage)
+            m_traversalPage->collect();
         applyStateToSpecification();
     }
     return TDialog::valid(command);
