@@ -99,17 +99,17 @@ This plan replaces the “scrollable drawers” concept with a tabbed experience
 - [x] `TStaticText` footnote describing performance impact.
 
 ### 2.6: Actions Tab
-- [ ] Output options:
+- [x] Output options:
   - Checkboxes: Print results, Print with NUL, Verbose list, Delete matches, Stop after first.
-- [ ] Exec command:
+- [x] Exec command:
   - Checkbox “Run command on matches”.
   - `TInputLine` for command template (with `{}` placeholder).
   - Radio group for command variant (`-exec`, `-execdir`, `-ok`, `-okdir`).
   - Checkbox “Group with + terminator”.
-- [ ] File outputs:
+- [x] File outputs:
   - Individual toggles for `-fprint`, `-fprint0`, `-fls`, `-printf`, `-fprintf`.
   - Each toggle reveals path and/or format input plus “append” checkbox.
-- [ ] Warning text whenever destructive options enabled.
+- [x] Warning text whenever destructive options enabled.
 
 ---
 

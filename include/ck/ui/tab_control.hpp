@@ -22,6 +22,7 @@ public:
 
     virtual void onActivated();
     virtual void onDeactivated();
+    void draw() override;
 };
 
 class TabControl : public TGroup

@@ -158,8 +158,8 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
     insert(m_specNameInput);
 
     insert(new TStaticText(TRect(2, 2, 78, 4),
-                           "Choose a starting folder and optional patterns.\n"
-                           "Use other tabs for advanced filters."));
+                           "Pick a starting folder and add any quick filters.\n"
+                           "Switch tabs for the full set of options."));
 
     m_startInput = new TInputLine(TRect(2, 4, 60, 5), sizeof(m_state.startLocation) - 1);
     insert(new TLabel(TRect(1, 3, 27, 4), "Start ~L~ocation:", m_startInput));
@@ -193,16 +193,16 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
 
     m_primaryBoxes = new TCheckBoxes(TRect(2, 12, 30, 17),
                                      makeItemList({"~T~ext search",
-                                                   "Name/~P~ath",
-                                                   "~T~ime filters",
+                                                   "Name/~p~ath",
+                                                   "~D~ate filters",
                                                    "Si~z~e filters",
                                                    "File ~t~ype filters"}));
     insert(m_primaryBoxes);
 
     m_secondaryBoxes = new TCheckBoxes(TRect(32, 12, 51, 17),
-                                       makeItemList({"~P~ermissions",
-                                                     "T~r~aversal",
-                                                     "~A~ctions"}));
+                                       makeItemList({"~P~ermissions & ownership",
+                                                     "T~r~aversal options",
+                                                     "~A~ctions & output"}));
     insert(m_secondaryBoxes);
 
     m_typePresetButtons = new TRadioButtons(TRect(53, 12, 77, 17),
@@ -210,10 +210,10 @@ QuickStartPage::QuickStartPage(const TRect &bounds, SearchNotebookState &state)
                                                           "~D~ocuments",
                                                           "~I~mages",
                                                           "~A~udio",
-                                                          "~R~chives",
+                                                          "A~r~chives",
                                                           "~C~ustom"}));
     insert(m_typePresetButtons);
-    insert(new TLabel(TRect(53, 11, 77, 12), "Type ~Y~preset:", m_typePresetButtons));
+    insert(new TLabel(TRect(53, 11, 77, 12), "Type filter ~p~reset:", m_typePresetButtons));
 
     insert(new TButton(TRect(2, 18, 22, 20), "Adva~n~ced filters...", cmTabContentNames, bfNormal));
     insert(new TButton(TRect(24, 18, 40, 20), "Text ~O~ptions...", cmTextOptions, bfNormal));
@@ -614,24 +614,24 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
 
     insert(new TStaticText(TRect(2, 13, 78, 14), "Prune matching directories"));
 
-    m_pruneFlags = new TCheckBoxes(TRect(2, 14, 18, 16), makeItemList({"Enable -p~r~une",
-                                                                       "Directories ~o~nly"}));
+    m_pruneFlags = new TCheckBoxes(TRect(2, 14, 18, 16), makeItemList({"Skip matching folders",
+                                                                       "Only skip directories"}));
     insert(m_pruneFlags);
 
     m_pruneModeButtons = new TRadioButtons(TRect(20, 14, 54, 18),
-                                           makeItemList({"Use -name",
-                                                         "Use -iname",
-                                                         "Use -path",
-                                                         "Use -ipath",
-                                                         "Use -regex",
-                                                         "Use -iregex"}));
+                                           makeItemList({"Match name (case-sensitive)",
+                                                         "Match name (ignore case)",
+                                                         "Match path (case-sensitive)",
+                                                         "Match path (ignore case)",
+                                                         "Match regex",
+                                                         "Match regex (ignore case)"}));
     insert(m_pruneModeButtons);
 
     m_pruneInput = new TInputLine(TRect(56, 14, 78, 15), sizeof(m_nameOptions.prunePattern) - 1);
     insert(new TLabel(TRect(56, 13, 78, 14), "Pattern:", m_pruneInput));
     insert(m_pruneInput);
 
-    insert(new TStaticText(TRect(2, 16, 78, 17), "Extensions and detectors"));
+    insert(new TStaticText(TRect(2, 16, 78, 17), "Quick type filters"));
 
     m_extensionToggle = new TCheckBoxes(TRect(2, 17, 22, 18), makeItemList({"Filter by e~x~tension"}));
     insert(m_extensionToggle);
@@ -1190,8 +1190,8 @@ TypesOwnershipPage::TypesOwnershipPage(const TRect &bounds,
     insert(new TStaticText(TRect(2, 0, 78, 1), "Filter files by type, permissions, and ownership."));
 
     m_typeEnableBoxes = new TCheckBoxes(TRect(2, 1, 42, 3),
-                                        makeItemList({"Enable -~t~ype (-type)",
-                                                      "Enable -~x~type (-xtype)"}));
+                                        makeItemList({"Filter by file type",
+                                                      "Filter by resolved type"}));
     insert(m_typeEnableBoxes);
 
     m_typeBoxesLeft = new TCheckBoxes(TRect(2, 3, 22, 7),
@@ -1223,44 +1223,44 @@ TypesOwnershipPage::TypesOwnershipPage(const TRect &bounds,
     insert(m_xtypeBoxesRight);
 
     m_extensionSummary = new TInputLine(TRect(2, 7, 56, 8), static_cast<int>(m_extensionBuffer.size()) - 1);
-    insert(new TLabel(TRect(2, 6, 56, 7), "Extension / detector summary:", m_extensionSummary));
+    insert(new TLabel(TRect(2, 6, 56, 7), "Quick filter summary:", m_extensionSummary));
     insert(m_extensionSummary);
     m_extensionSummary->setState(sfDisabled, True);
 
-    insert(new TButton(TRect(58, 6, 78, 8), "Advanced ~t~ype...", cmTypeFilters, bfNormal));
+    insert(new TButton(TRect(58, 6, 78, 8), "More type options...", cmTypeFilters, bfNormal));
     m_clearTypeButton = new TButton(TRect(58, 8, 78, 10), "Clear type filter", cmClearTypeFiltersLocal, bfNormal);
     insert(m_clearTypeButton);
 
     insert(new TStaticText(TRect(2, 9, 78, 10), "Permissions"));
 
     m_permBoxes = new TCheckBoxes(TRect(2, 10, 28, 14),
-                                  makeItemList({"Use -~p~erm value",
-                                                "-~r~eadable",
-                                                "-~w~ritable",
-                                                "-~e~xecutable"}));
+                                  makeItemList({"Match specific perm bits",
+                                                "Require ~r~ead access",
+                                                "Require ~w~rite access",
+                                                "Require e~x~ecute access"}));
     insert(m_permBoxes);
 
     m_permModeButtons = new TRadioButtons(TRect(30, 10, 58, 14),
-                                          makeItemList({"Exact (-perm value)",
-                                                        "All bits (-perm -mode)",
-                                                        "Any bit (-perm /mode)"}));
+                                          makeItemList({"Match exactly",
+                                                        "All selected bits required",
+                                                        "Any selected bit allowed"}));
     insert(m_permModeButtons);
 
     m_permInput = new TInputLine(TRect(58, 10, 78, 11), sizeof(m_permOptions.permSpec) - 1);
-    insert(new TLabel(TRect(58, 9, 78, 10), "-perm:", m_permInput));
+    insert(new TLabel(TRect(58, 9, 78, 10), "Permission value:", m_permInput));
     insert(m_permInput);
 
-    insert(new TButton(TRect(58, 11, 78, 13), "Advanced ~p~erms...", cmPermissionOwnership, bfNormal));
+    insert(new TButton(TRect(58, 11, 78, 13), "More permission options...", cmPermissionOwnership, bfNormal));
 
     insert(new TStaticText(TRect(2, 14, 78, 15), "Ownership"));
 
     m_ownerBoxes = new TCheckBoxes(TRect(2, 15, 28, 20),
-                                   makeItemList({"Filter ~u~ser (-user)",
-                                                 "Match ~U~ID (-uid)",
-                                                 "Filter ~g~roup (-group)",
-                                                 "Match ~G~ID (-gid)",
-                                                 "-~n~ouser",
-                                                 "-~n~ogroup"}));
+                                   makeItemList({"Owned by ~u~ser",
+                                                 "Owned by ~U~ID",
+                                                 "Member of ~g~roup",
+                                                 "Matches ~G~ID",
+                                                 "No user assigned",
+                                                 "No group assigned"}));
     insert(m_ownerBoxes);
 
     m_userInput = new TInputLine(TRect(30, 15, 78, 16), sizeof(m_permOptions.user) - 1);
@@ -1590,34 +1590,34 @@ TraversalPage::TraversalPage(const TRect &bounds,
                            "Control how ck-find walks directories and limits traversal scope."));
 
     m_symlinkButtons = new TRadioButtons(TRect(2, 1, 26, 5),
-                                         makeItemList({"Physical walk (-~P~)",
-                                                       "Follow args only (-~H~)",
-                                                       "Follow all symlinks (-~L~)"}));
+                                         makeItemList({"Never follow symlinks",
+                                                       "Follow symlinks from start",
+                                                       "Follow every symlink"}));
     insert(m_symlinkButtons);
 
     m_warningButtons = new TRadioButtons(TRect(28, 1, 56, 5),
-                                         makeItemList({"Default warnings",
-                                                       "Always warn (-warn)",
-                                                       "Suppress warn (-nowarn)"}));
+                                         makeItemList({"Standard warnings",
+                                                       "Always show warnings",
+                                                       "Hide warnings"}));
     insert(m_warningButtons);
 
     m_flagBoxes = new TCheckBoxes(TRect(2, 5, 28, 11),
-                                  makeItemList({"Use -~d~epth",
-                                                "Stay on file~s~ystem",
-                                                "Assume -nolea~f~",
+                                  makeItemList({"Depth-first order",
+                                                "Stay on starting filesystem",
+                                                "Assume directories are leaves",
                                                 "Ignore readdir race",
-                                                "Use -day~s~tart"}));
+                                                "Start days at midnight"}));
     insert(m_flagBoxes);
 
     m_valueBoxes = new TCheckBoxes(TRect(28, 5, 56, 13),
-                                   makeItemList({"Limit ~m~ax depth",
-                                                 "Limit mi~n~ depth",
-                                                 "Paths from ~f~ile",
-                                                 "List is NU~L~-separated",
-                                                 "Filter ~f~stype",
+                                   makeItemList({"Limit ~m~aximum depth",
+                                                 "Limit mi~n~imum depth",
+                                                 "Load paths from ~f~ile",
+                                                 "File list uses NU~L~ separator",
+                                                 "Filter by ~f~ilesystem type",
                                                  "Match link ~c~ount",
-                                                 "Match ~s~amefile",
-                                                 "Match ~i~node"}));
+                                                 "Match same-file target",
+                                                 "Match ~i~node number"}));
     insert(m_valueBoxes);
 
     m_maxDepthInput = new TInputLine(TRect(58, 6, 78, 7), static_cast<int>(m_options.maxDepth.size()) - 1);
@@ -1629,7 +1629,7 @@ TraversalPage::TraversalPage(const TRect &bounds,
     insert(m_minDepthInput);
 
     m_filesFromInput = new TInputLine(TRect(2, 13, 60, 14), std::min<int>(static_cast<int>(m_options.filesFrom.size()) - 1, 255));
-    insert(new TLabel(TRect(2, 12, 60, 13), "-files-from list:", m_filesFromInput));
+    insert(new TLabel(TRect(2, 12, 60, 13), "Load paths from file:", m_filesFromInput));
     insert(m_filesFromInput);
 
     m_fsTypeInput = new TInputLine(TRect(62, 13, 78, 14), static_cast<int>(m_options.fsType.size()) - 1);
@@ -1641,18 +1641,18 @@ TraversalPage::TraversalPage(const TRect &bounds,
     insert(m_linkCountInput);
 
     m_sameFileInput = new TInputLine(TRect(2, 15, 60, 16), std::min<int>(static_cast<int>(m_options.sameFile.size()) - 1, 255));
-    insert(new TLabel(TRect(2, 14, 60, 15), "-samefile target:", m_sameFileInput));
+    insert(new TLabel(TRect(2, 14, 60, 15), "Same-file target:", m_sameFileInput));
     insert(m_sameFileInput);
 
     m_inodeInput = new TInputLine(TRect(62, 15, 78, 16), static_cast<int>(m_options.inode.size()) - 1);
-    insert(new TLabel(TRect(60, 14, 78, 15), "Inode:", m_inodeInput));
+    insert(new TLabel(TRect(60, 14, 78, 15), "Inode number:", m_inodeInput));
     insert(m_inodeInput);
 
-    insert(new TButton(TRect(60, 17, 78, 19), "Advanced ~t~raversal...", cmTraversalFilters, bfNormal));
+    insert(new TButton(TRect(60, 17, 78, 19), "More traversal options...", cmTraversalFilters, bfNormal));
     m_clearButton = new TButton(TRect(42, 17, 60, 19), "Clear traversal", cmClearTraversalFiltersLocal, bfNormal);
     insert(m_clearButton);
 
-    insert(new TStaticText(TRect(2, 17, 40, 19), "Tip: depth, fstype, and samefile can impact performance."));
+    insert(new TStaticText(TRect(2, 17, 40, 19), "Tip: Depth, filters, and files can impact performance."));
 
     populate();
 }
@@ -1912,76 +1912,76 @@ ActionsPage::ActionsPage(const TRect &bounds,
                            "Select outputs for matches or run commands on each result."));
 
     m_outputBoxes = new TCheckBoxes(TRect(2, 1, 24, 7),
-                                    makeItemList({"Print (-print)",
-                                                  "Print\0 (-print0)",
-                                                  "Verbose list (-ls)",
-                                                  "Delete matches",
-                                                  "Stop after first (-quit)"}));
+                                    makeItemList({"Show matches in list",
+                                                  "List matches (NUL)",
+                                                  "Show detailed listing",
+                                                  "Delete matching files",
+                                                  "Stop after first match"}));
     insert(m_outputBoxes);
 
     m_execBoxes = new TCheckBoxes(TRect(26, 1, 52, 4),
-                                  makeItemList({"Run command on matches (-exec/-ok)",
-                                                "Use '+' terminator"}));
+                                  makeItemList({"Run command per match",
+                                                "Group matches when running"}));
     insert(m_execBoxes);
 
     m_execVariantButtons = new TRadioButtons(TRect(26, 4, 52, 8),
-                                             makeItemList({"-exec",
-                                                           "-execdir",
-                                                           "-ok",
-                                                           "-okdir"}));
+                                             makeItemList({"Run from current folder",
+                                                           "Run inside match folder",
+                                                           "Ask before running",
+                                                           "Ask inside match folder"}));
     insert(m_execVariantButtons);
 
     m_execInput = new TInputLine(TRect(2, 7, 78, 8), static_cast<int>(m_options.execCommand.size()) - 1);
     insert(new TLabel(TRect(2, 6, 78, 7), "Command template (use {} for path):", m_execInput));
     insert(m_execInput);
 
-    insert(new TStaticText(TRect(2, 8, 78, 9), "File outputs"));
+    insert(new TStaticText(TRect(2, 8, 78, 9), "Save results"));
 
     m_fileToggleBoxes = new TCheckBoxes(TRect(2, 9, 28, 15),
-                                        makeItemList({"Enable -fprint",
-                                                      "Enable -fprint0",
-                                                      "Enable -fls",
-                                                      "Enable -printf",
-                                                      "Enable -fprintf"}));
+                                        makeItemList({"Write results to text",
+                                                      "Write results (NUL)",
+                                                      "Write detailed list",
+                                                      "Custom formatted output",
+                                                      "Formatted output to file"}));
     insert(m_fileToggleBoxes);
 
     m_appendBoxes = new TCheckBoxes(TRect(30, 9, 52, 13),
-                                    makeItemList({"Append -fprint",
-                                                  "Append -fprint0",
-                                                  "Append -fls",
-                                                  "Append -fprintf"}));
+                                    makeItemList({"Append text file",
+                                                  "Append NUL file",
+                                                  "Append detailed list",
+                                                  "Append formatted file"}));
     insert(m_appendBoxes);
 
     const int pathLen = std::min<int>(static_cast<int>(m_options.fprintFile.size()) - 1, 255);
     m_fprintInput = new TInputLine(TRect(54, 9, 78, 10), pathLen);
-    insert(new TLabel(TRect(54, 8, 78, 9), "-fprint file:", m_fprintInput));
+    insert(new TLabel(TRect(54, 8, 78, 9), "Text file path:", m_fprintInput));
     insert(m_fprintInput);
 
     m_fprint0Input = new TInputLine(TRect(54, 10, 78, 11), pathLen);
-    insert(new TLabel(TRect(54, 9, 78, 10), "-fprint0 file:", m_fprint0Input));
+    insert(new TLabel(TRect(54, 9, 78, 10), "NUL file path:", m_fprint0Input));
     insert(m_fprint0Input);
 
     m_flsInput = new TInputLine(TRect(54, 11, 78, 12), pathLen);
-    insert(new TLabel(TRect(54, 10, 78, 11), "-fls file:", m_flsInput));
+    insert(new TLabel(TRect(54, 10, 78, 11), "Detailed list file:", m_flsInput));
     insert(m_flsInput);
 
     m_printfInput = new TInputLine(TRect(30, 12, 78, 13), static_cast<int>(m_options.printfFormat.size()) - 1);
-    insert(new TLabel(TRect(30, 11, 56, 12), "-printf format:", m_printfInput));
+    insert(new TLabel(TRect(30, 11, 56, 12), "Custom printf format:", m_printfInput));
     insert(m_printfInput);
 
     m_fprintfFileInput = new TInputLine(TRect(30, 13, 54, 14), pathLen);
-    insert(new TLabel(TRect(30, 12, 54, 13), "-fprintf file:", m_fprintfFileInput));
+    insert(new TLabel(TRect(30, 12, 54, 13), "Formatted output file:", m_fprintfFileInput));
     insert(m_fprintfFileInput);
 
     m_fprintfFormatInput = new TInputLine(TRect(56, 13, 78, 14), static_cast<int>(m_options.fprintfFormat.size()) - 1);
-    insert(new TLabel(TRect(56, 12, 78, 13), "-fprintf format:", m_fprintfFormatInput));
+    insert(new TLabel(TRect(56, 12, 78, 13), "Formatted output text:", m_fprintfFormatInput));
     insert(m_fprintfFormatInput);
 
     m_warningText = new TStaticText(TRect(2, 15, 78, 16),
-                                    "Warning: Delete or Exec options can remove or modify files.");
+                                    "Warning: Delete or command actions can change your files.");
     insert(m_warningText);
 
-    insert(new TButton(TRect(2, 17, 22, 19), "Advanced ~a~ctions...", cmActionOptions, bfNormal));
+    insert(new TButton(TRect(2, 17, 22, 19), "More action options...", cmActionOptions, bfNormal));
     m_clearButton = new TButton(TRect(24, 17, 42, 19), "Clear actions", cmClearActionsLocal, bfNormal);
     insert(m_clearButton);
 
@@ -2494,6 +2494,8 @@ void SearchNotebookDialog::handleEvent(TEvent &event)
                 m_state.optionSecondaryFlags |= kOptionActionBit;
                 if (m_quickStartPage)
                     m_quickStartPage->syncOptionFlags();
+                if (m_actionsPage)
+                    m_actionsPage->populate();
             }
             clearEvent(event);
             return;
@@ -2520,6 +2522,8 @@ Boolean SearchNotebookDialog::valid(ushort command)
             m_typesPage->collect();
         if (m_traversalPage)
             m_traversalPage->collect();
+        if (m_actionsPage)
+            m_actionsPage->collect();
         applyStateToSpecification();
     }
     return TDialog::valid(command);

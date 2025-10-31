@@ -33,6 +33,23 @@ void TabPageView::onDeactivated()
 {
 }
 
+void TabPageView::draw()
+{
+    const TRect extent = getExtent();
+    const int width = extent.b.x - extent.a.x;
+    const int height = extent.b.y - extent.a.y;
+
+    TDrawBuffer buffer;
+    const ushort color = getColor(1);
+    for (int row = 0; row < height; ++row)
+    {
+        buffer.moveChar(0, ' ', color, width);
+        writeLine(0, row, width, 1, buffer);
+    }
+
+    TGroup::draw();
+}
+
 TabControl::TabControl(const TRect &bounds, unsigned short tabHeight) noexcept
     : TGroup(bounds),
       m_tabHeight(std::max<unsigned short>(1, tabHeight))
