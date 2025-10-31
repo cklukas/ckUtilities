@@ -571,13 +571,13 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
 
     m_matcherBoxes = new TCheckBoxes(TRect(2, 7, 28, 15),
                                      makeItemList({"~N~ame",
-                                                   "Case-insensitive ~n~ame",
+                                                   "Name (ignore case)",
                                                    "~P~ath",
-                                                   "Case-insensitive pa~t~h",
+                                                   "Path (ignore case)",
                                                    "Regular e~x~pression",
-                                                   "Case-insensitive re~g~ex",
+                                                   "Regex (ignore case)",
                                                    "Symlink ~l~name",
-                                                   "Case-insensitive l~n~ame"}));
+                                                   "Link target (ignore case)"}));
     insert(m_matcherBoxes);
 
     m_nameInput = new TInputLine(TRect(30, 7, 55, 8), sizeof(m_nameOptions.namePattern) - 1);
@@ -585,7 +585,7 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
     insert(m_nameInput);
 
     m_inameInput = new TInputLine(TRect(57, 7, 78, 8), sizeof(m_nameOptions.inamePattern) - 1);
-    insert(new TLabel(TRect(57, 6, 78, 7), "Case-insensitive ~n~ame:", m_inameInput));
+    insert(new TLabel(TRect(57, 6, 78, 7), "Name (ignore case):", m_inameInput));
     insert(m_inameInput);
 
     m_pathInput = new TInputLine(TRect(30, 8, 55, 9), sizeof(m_nameOptions.pathPattern) - 1);
@@ -593,7 +593,7 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
     insert(m_pathInput);
 
     m_ipathInput = new TInputLine(TRect(57, 8, 78, 9), sizeof(m_nameOptions.ipathPattern) - 1);
-    insert(new TLabel(TRect(57, 7, 78, 8), "Case-insensitive pa~t~h:", m_ipathInput));
+    insert(new TLabel(TRect(57, 7, 78, 8), "Path (ignore case):", m_ipathInput));
     insert(m_ipathInput);
 
     m_regexInput = new TInputLine(TRect(30, 9, 55, 10), sizeof(m_nameOptions.regexPattern) - 1);
@@ -601,7 +601,7 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
     insert(m_regexInput);
 
     m_iregexInput = new TInputLine(TRect(57, 9, 78, 10), sizeof(m_nameOptions.iregexPattern) - 1);
-    insert(new TLabel(TRect(57, 8, 78, 9), "Case-insensitive re~g~ex:", m_iregexInput));
+    insert(new TLabel(TRect(57, 8, 78, 9), "Regex (ignore case):", m_iregexInput));
     insert(m_iregexInput);
 
     m_lnameInput = new TInputLine(TRect(30, 10, 55, 11), sizeof(m_nameOptions.lnamePattern) - 1);
@@ -609,7 +609,7 @@ ContentNamesPage::ContentNamesPage(const TRect &bounds,
     insert(m_lnameInput);
 
     m_ilnameInput = new TInputLine(TRect(57, 10, 78, 11), sizeof(m_nameOptions.ilnamePattern) - 1);
-    insert(new TLabel(TRect(57, 9, 78, 10), "Case-insensitive l~n~ame:", m_ilnameInput));
+    insert(new TLabel(TRect(57, 9, 78, 10), "Link (ignore case):", m_ilnameInput));
     insert(m_ilnameInput);
 
     insert(new TStaticText(TRect(2, 13, 78, 14), "Prune matching directories"));
@@ -1195,31 +1195,31 @@ TypesOwnershipPage::TypesOwnershipPage(const TRect &bounds,
     insert(m_typeEnableBoxes);
 
     m_typeBoxesLeft = new TCheckBoxes(TRect(2, 3, 22, 7),
-                                      makeItemList({"Block device (b)",
-                                                    "Character device (c)",
-                                                    "Directory (d)",
-                                                    "FIFO / pipe (p)"}));
+                                      makeItemList({"Block device",
+                                                    "Character device",
+                                                    "Folder",
+                                                    "Named pipe"}));
     insert(m_typeBoxesLeft);
 
     m_typeBoxesRight = new TCheckBoxes(TRect(22, 3, 42, 7),
-                                       makeItemList({"Regular file (f)",
-                                                     "Symbolic link (l)",
-                                                     "Socket (s)",
-                                                     "Door (D)"}));
+                                       makeItemList({"Regular file",
+                                                     "Symbolic link",
+                                                     "Socket",
+                                                     "Door"}));
     insert(m_typeBoxesRight);
 
-    m_xtypeBoxesLeft = new TCheckBoxes(TRect(42, 3, 62, 7),
-                                       makeItemList({"b (post)",
-                                                     "c (post)",
-                                                     "d (post)",
-                                                     "p (post)"}));
+    m_xtypeBoxesLeft = new TCheckBoxes(TRect(42, 3, 60, 7),
+                                       makeItemList({"Block (after)",
+                                                     "Character (after)",
+                                                     "Folder (after)",
+                                                     "Pipe (after)"}));
     insert(m_xtypeBoxesLeft);
 
-    m_xtypeBoxesRight = new TCheckBoxes(TRect(62, 3, 78, 7),
-                                        makeItemList({"f (post)",
-                                                      "l (post)",
-                                                      "s (post)",
-                                                      "D (post)"}));
+    m_xtypeBoxesRight = new TCheckBoxes(TRect(60, 3, 78, 7),
+                                        makeItemList({"File (after)",
+                                                      "Symlink (after)",
+                                                      "Socket (after)",
+                                                      "Door (after)"}));
     insert(m_xtypeBoxesRight);
 
     m_extensionSummary = new TInputLine(TRect(2, 7, 56, 8), static_cast<int>(m_extensionBuffer.size()) - 1);
@@ -1633,11 +1633,11 @@ TraversalPage::TraversalPage(const TRect &bounds,
     insert(m_filesFromInput);
 
     m_fsTypeInput = new TInputLine(TRect(62, 13, 78, 14), static_cast<int>(m_options.fsType.size()) - 1);
-    insert(new TLabel(TRect(60, 12, 78, 13), "fstype:", m_fsTypeInput));
+    insert(new TLabel(TRect(60, 12, 78, 13), "Filesystem type:", m_fsTypeInput));
     insert(m_fsTypeInput);
 
     m_linkCountInput = new TInputLine(TRect(62, 14, 78, 15), static_cast<int>(m_options.linkCount.size()) - 1);
-    insert(new TLabel(TRect(60, 13, 78, 14), "Links:", m_linkCountInput));
+    insert(new TLabel(TRect(60, 13, 78, 14), "Hard link count:", m_linkCountInput));
     insert(m_linkCountInput);
 
     m_sameFileInput = new TInputLine(TRect(2, 15, 60, 16), std::min<int>(static_cast<int>(m_options.sameFile.size()) - 1, 255));
