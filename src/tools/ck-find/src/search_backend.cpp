@@ -9,11 +9,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
-#include <cerrno>
-#include <csignal>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -25,13 +21,6 @@
 #include <vector>
 #include <regex>
 #include <initializer_list>
-
-#include <spawn.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-extern char **environ;
 
 namespace ck::find
 {
@@ -826,6 +815,867 @@ std::vector<std::string> parseStartLocations(const SearchSpecification &spec)
     return paths;
 }
 
+std::string wildcardToRegex(const std::string &pattern)
+{
+    std::string regex;
+    regex.reserve(pattern.size() * 2 + 2);
+    regex.push_back('^');
+    for (char ch : pattern)
+    {
+        switch (ch)
+        {
+        case '*':
+            regex.append(".*");
+            break;
+        case '?':
+            regex.push_back('.');
+            break;
+        case '.':
+        case '\\':
+        case '+':
+        case '(': 
+        case ')':
+        case '[':
+        case ']':
+        case '{':
+        case '}':
+        case '^':
+        case '$':
+        case '|':
+            regex.push_back('\\');
+            regex.push_back(ch);
+            break;
+        default:
+            regex.push_back(ch);
+            break;
+        }
+    }
+    regex.push_back('$');
+    return regex;
+}
+
+std::optional<std::regex> compileWildcardPattern(const std::string &pattern, bool caseInsensitive)
+{
+    std::string trimmed = trimCopy(pattern);
+    if (trimmed.empty())
+        return std::nullopt;
+    std::string regexPattern = wildcardToRegex(trimmed);
+    auto flags = std::regex::ECMAScript;
+    if (caseInsensitive)
+        flags = static_cast<std::regex::flag_type>(flags | std::regex::icase);
+    try
+    {
+        return std::regex(regexPattern, flags);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+}
+
+std::optional<std::regex> compileRegexPattern(const std::string &pattern, bool caseInsensitive)
+{
+    std::string trimmed = trimCopy(pattern);
+    if (trimmed.empty())
+        return std::nullopt;
+    auto flags = std::regex::ECMAScript;
+    if (caseInsensitive)
+        flags = static_cast<std::regex::flag_type>(flags | std::regex::icase);
+    try
+    {
+        return std::regex(trimmed, flags);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+}
+
+bool matchesAnyRegex(const std::string &value, const std::vector<std::regex> &patterns)
+{
+    if (patterns.empty())
+        return false;
+    for (const auto &pattern : patterns)
+    {
+        if (std::regex_match(value, pattern))
+            return true;
+    }
+    return false;
+}
+
+bool regexSearchAny(const std::string &value, const std::vector<std::regex> &patterns)
+{
+    if (patterns.empty())
+        return false;
+    for (const auto &pattern : patterns)
+    {
+        if (std::regex_search(value, pattern))
+            return true;
+    }
+    return false;
+}
+
+bool isHiddenPath(const std::filesystem::path &path)
+{
+    for (const auto &component : path)
+    {
+        std::string name = component.string();
+        if (name.empty() || name == "." || name == "..")
+            continue;
+        if (!name.empty() && name.front() == '.')
+            return true;
+    }
+    return false;
+}
+
+std::string pathToComparableString(const std::filesystem::path &path)
+{
+    std::string value = path.generic_string();
+    if (value.empty())
+        value = path.filename().generic_string();
+    if (value.empty())
+        value = path.string();
+    return value;
+}
+
+std::string relativePathString(const std::filesystem::path &root, const std::filesystem::path &candidate)
+{
+    std::error_code ec;
+    auto relative = std::filesystem::relative(candidate, root, ec);
+    if (ec)
+        return pathToComparableString(candidate);
+    std::string value = relative.generic_string();
+    if (value.empty() || value == ".")
+        value = candidate.filename().generic_string();
+    return value;
+}
+
+struct PreparedSpecification
+{
+    std::vector<std::filesystem::path> roots;
+    bool includeHidden = false;
+    bool includeSubdirectories = true;
+    bool followSymlinks = false;
+    bool stayOnSameFilesystem = false;
+
+    std::vector<std::regex> includePatterns;
+    std::vector<std::regex> excludePatterns;
+
+    bool nameTestsEnabled = false;
+    std::vector<std::regex> namePatterns;
+    std::vector<std::regex> inamePatterns;
+    std::vector<std::regex> pathPatterns;
+    std::vector<std::regex> ipathPatterns;
+    std::vector<std::regex> regexPatterns;
+    std::vector<std::regex> iregexPatterns;
+    std::vector<std::regex> lnamePatterns;
+    std::vector<std::regex> ilnamePatterns;
+
+    struct PruneInfo
+    {
+        enum class Mode
+        {
+            None,
+            Name,
+            Path,
+            Regex
+        } mode = Mode::None;
+        bool enabled = false;
+        bool directoriesOnly = true;
+        std::vector<std::regex> patterns;
+    } prune;
+
+    bool textSearchEnabled = false;
+    bool textSearchNames = false;
+    bool textSearchContents = false;
+    TextSearchOptions textOptions{};
+    std::vector<std::string> textTerms;
+    std::string rawSearchText;
+    std::optional<std::regex> textRegex;
+
+    bool sizeFiltersEnabled = false;
+    bool sizeMinEnabled = false;
+    bool sizeMaxEnabled = false;
+    bool sizeExactEnabled = false;
+    std::uintmax_t sizeMin = 0;
+    std::uintmax_t sizeMax = 0;
+    std::uintmax_t sizeExact = 0;
+    bool sizeRangeInclusive = true;
+    bool sizeEmptyRequired = false;
+    bool includeZeroByte = true;
+    bool treatDirectoriesAsFiles = false;
+
+    bool typeFiltersEnabled = false;
+    bool typeEnabled = false;
+    std::vector<char> typeLetters;
+    bool xtypeEnabled = false;
+    std::vector<char> xtypeLetters;
+    bool extensionFilterEnabled = false;
+    std::vector<std::regex> extensionPatterns;
+
+    bool traversalFiltersEnabled = false;
+    bool maxDepthEnabled = false;
+    bool minDepthEnabled = false;
+    int maxDepth = 0;
+    int minDepth = 0;
+
+    bool timeFiltersEnabled = false;
+    TimeFilterOptions timeOptions{};
+
+    bool permissionFiltersEnabled = false;
+    PermissionOwnershipOptions permissionOptions{};
+    bool hasUnsupportedPermissionFilters = false;
+};
+
+template <std::size_t N>
+void appendPatternIfPresent(std::vector<std::regex> &target,
+                            const std::array<char, N> &buffer,
+                            bool caseInsensitive,
+                            bool treatAsRegex)
+{
+    if (buffer[0] == '\0')
+        return;
+    auto value = arrayToString(buffer);
+    auto pattern = treatAsRegex ? compileRegexPattern(value, caseInsensitive)
+                                : compileWildcardPattern(value, caseInsensitive);
+    if (pattern)
+        target.push_back(*pattern);
+}
+
+std::vector<char> parseTypeLetters(const std::string &value)
+{
+    std::vector<char> letters;
+    for (char ch : value)
+    {
+        if (std::isspace(static_cast<unsigned char>(ch)))
+            continue;
+        letters.push_back(ch);
+    }
+    return letters;
+}
+
+std::optional<std::uintmax_t> parseSizeSpecification(const std::string &value, bool decimalUnits)
+{
+    std::string trimmed = trimCopy(value);
+    if (trimmed.empty())
+        return std::nullopt;
+
+    char suffix = '\0';
+    if (!trimmed.empty() && !std::isdigit(static_cast<unsigned char>(trimmed.back())))
+    {
+        suffix = static_cast<char>(std::tolower(static_cast<unsigned char>(trimmed.back())));
+        trimmed.pop_back();
+    }
+    if (trimmed.empty())
+        return std::nullopt;
+
+    double number = 0.0;
+    try
+    {
+        number = std::stod(trimmed);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+
+    double base = decimalUnits ? 1000.0 : 1024.0;
+    double multiplier = 1.0;
+    switch (suffix)
+    {
+    case '\0':
+        multiplier = 1.0;
+        break;
+    case 'b':
+        multiplier = 512.0;
+        break;
+    case 'k':
+        multiplier = base;
+        break;
+    case 'm':
+        multiplier = base * base;
+        break;
+    case 'g':
+        multiplier = base * base * base;
+        break;
+    case 't':
+        multiplier = base * base * base * base;
+        break;
+    case 'p':
+        multiplier = base * base * base * base * base;
+        break;
+    default:
+        return std::nullopt;
+    }
+
+    if (number < 0)
+        number = 0;
+    auto bytes = static_cast<std::uintmax_t>(number * multiplier);
+    return bytes;
+}
+
+PreparedSpecification prepareSpecification(const SearchSpecification &spec)
+{
+    PreparedSpecification prepared;
+    for (const auto &start : parseStartLocations(spec))
+        prepared.roots.emplace_back(start);
+
+    prepared.includeHidden = spec.includeHidden;
+    prepared.includeSubdirectories = spec.includeSubdirectories;
+    prepared.followSymlinks = spec.followSymlinks;
+    prepared.stayOnSameFilesystem = spec.stayOnSameFilesystem;
+
+    auto includePatterns = splitExtensions(arrayToString(spec.includePatterns));
+    for (const auto &pattern : includePatterns)
+        if (auto compiled = compileWildcardPattern(pattern, false))
+            prepared.includePatterns.push_back(*compiled);
+
+    auto excludePatterns = splitExtensions(arrayToString(spec.excludePatterns));
+    for (const auto &pattern : excludePatterns)
+        if (auto compiled = compileWildcardPattern(pattern, false))
+            prepared.excludePatterns.push_back(*compiled);
+
+    prepared.nameTestsEnabled = spec.enableNamePathTests;
+    if (prepared.nameTestsEnabled)
+    {
+        const auto &np = spec.namePathOptions;
+        appendPatternIfPresent(prepared.namePatterns, np.namePattern, false, false);
+        appendPatternIfPresent(prepared.inamePatterns, np.inamePattern, true, false);
+        appendPatternIfPresent(prepared.pathPatterns, np.pathPattern, false, false);
+        appendPatternIfPresent(prepared.ipathPatterns, np.ipathPattern, true, false);
+        appendPatternIfPresent(prepared.regexPatterns, np.regexPattern, false, true);
+        appendPatternIfPresent(prepared.iregexPatterns, np.iregexPattern, true, true);
+        appendPatternIfPresent(prepared.lnamePatterns, np.lnamePattern, false, false);
+        appendPatternIfPresent(prepared.ilnamePatterns, np.ilnamePattern, true, false);
+
+        if (np.pruneEnabled && np.prunePattern[0] != '\0')
+        {
+            prepared.prune.enabled = true;
+            prepared.prune.directoriesOnly = np.pruneDirectoriesOnly;
+            std::string pruneValue = arrayToString(np.prunePattern);
+            switch (np.pruneTest)
+            {
+            case NamePathOptions::PruneTest::Name:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Name;
+                if (auto re = compileWildcardPattern(pruneValue, false))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            case NamePathOptions::PruneTest::Iname:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Name;
+                if (auto re = compileWildcardPattern(pruneValue, true))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            case NamePathOptions::PruneTest::Path:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Path;
+                if (auto re = compileWildcardPattern(pruneValue, false))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            case NamePathOptions::PruneTest::Ipath:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Path;
+                if (auto re = compileWildcardPattern(pruneValue, true))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            case NamePathOptions::PruneTest::Regex:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Regex;
+                if (auto re = compileRegexPattern(pruneValue, false))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            case NamePathOptions::PruneTest::Iregex:
+                prepared.prune.mode = PreparedSpecification::PruneInfo::Mode::Regex;
+                if (auto re = compileRegexPattern(pruneValue, true))
+                    prepared.prune.patterns.push_back(*re);
+                break;
+            }
+            if (prepared.prune.patterns.empty())
+                prepared.prune.enabled = false;
+        }
+    }
+
+    prepared.textSearchEnabled = spec.enableTextSearch;
+    prepared.textOptions = spec.textOptions;
+    prepared.rawSearchText = trimCopy(arrayToString(spec.searchText));
+    if (prepared.textSearchEnabled && !prepared.rawSearchText.empty())
+    {
+        prepared.textSearchNames = spec.textOptions.searchInFileNames;
+        prepared.textSearchContents = spec.textOptions.searchInContents;
+        if (spec.textOptions.allowMultipleTerms)
+            prepared.textTerms = tokenizeTerms(prepared.rawSearchText);
+        else
+            prepared.textTerms.push_back(prepared.rawSearchText);
+        if (spec.textOptions.mode == TextSearchOptions::Mode::RegularExpression)
+            prepared.textRegex = compileRegexPattern(prepared.rawSearchText, !spec.textOptions.matchCase);
+    }
+
+    prepared.sizeFiltersEnabled = spec.enableSizeFilters;
+    if (prepared.sizeFiltersEnabled)
+    {
+        const auto &size = spec.sizeOptions;
+        prepared.sizeRangeInclusive = size.rangeInclusive;
+        prepared.sizeEmptyRequired = size.emptyEnabled;
+        prepared.includeZeroByte = size.includeZeroByte;
+        prepared.treatDirectoriesAsFiles = size.treatDirectoriesAsFiles;
+        prepared.sizeMinEnabled = size.minEnabled;
+        prepared.sizeMaxEnabled = size.maxEnabled;
+        prepared.sizeExactEnabled = size.exactEnabled;
+        if (size.minEnabled)
+        {
+            if (auto parsed = parseSizeSpecification(arrayToString(size.minSpec), size.useDecimalUnits))
+                prepared.sizeMin = *parsed;
+            else
+                prepared.sizeMinEnabled = false;
+        }
+        if (size.maxEnabled)
+        {
+            if (auto parsed = parseSizeSpecification(arrayToString(size.maxSpec), size.useDecimalUnits))
+                prepared.sizeMax = *parsed;
+            else
+                prepared.sizeMaxEnabled = false;
+        }
+        if (size.exactEnabled)
+        {
+            if (auto parsed = parseSizeSpecification(arrayToString(size.exactSpec), size.useDecimalUnits))
+                prepared.sizeExact = *parsed;
+            else
+                prepared.sizeExactEnabled = false;
+        }
+    }
+
+    prepared.typeFiltersEnabled = spec.enableTypeFilters;
+    if (prepared.typeFiltersEnabled)
+    {
+        const auto &type = spec.typeOptions;
+        prepared.typeEnabled = type.typeEnabled;
+        prepared.typeLetters = parseTypeLetters(arrayToString(type.typeLetters));
+        prepared.xtypeEnabled = type.xtypeEnabled;
+        prepared.xtypeLetters = parseTypeLetters(arrayToString(type.xtypeLetters));
+        prepared.extensionFilterEnabled = type.useExtensions && type.extensions[0] != '\0';
+        if (prepared.extensionFilterEnabled)
+        {
+            auto extensions = splitExtensions(arrayToString(type.extensions));
+            for (const auto &ext : extensions)
+            {
+                std::string pattern = ext;
+                if (!pattern.empty() && pattern.front() != '*')
+                {
+                    if (!pattern.empty() && pattern.front() == '.')
+                        pattern = "*" + pattern;
+                    else
+                        pattern = "*." + pattern;
+                }
+                if (auto compiled = compileWildcardPattern(pattern, type.extensionCaseInsensitive))
+                    prepared.extensionPatterns.push_back(*compiled);
+            }
+            if (prepared.extensionPatterns.empty())
+                prepared.extensionFilterEnabled = false;
+        }
+    }
+
+    prepared.traversalFiltersEnabled = spec.enableTraversalFilters;
+    if (prepared.traversalFiltersEnabled)
+    {
+        const auto &trav = spec.traversalOptions;
+        prepared.maxDepthEnabled = trav.maxDepthEnabled;
+        prepared.minDepthEnabled = trav.minDepthEnabled;
+        if (trav.maxDepthEnabled)
+        {
+            try
+            {
+                prepared.maxDepth = std::stoi(arrayToString(trav.maxDepth));
+            }
+            catch (...)
+            {
+                prepared.maxDepthEnabled = false;
+            }
+        }
+        if (trav.minDepthEnabled)
+        {
+            try
+            {
+                prepared.minDepth = std::stoi(arrayToString(trav.minDepth));
+            }
+            catch (...)
+            {
+                prepared.minDepthEnabled = false;
+            }
+        }
+    }
+
+    prepared.timeFiltersEnabled = spec.enableTimeFilters;
+    if (prepared.timeFiltersEnabled)
+        prepared.timeOptions = spec.timeOptions;
+
+    prepared.permissionFiltersEnabled = spec.enablePermissionOwnership;
+    if (prepared.permissionFiltersEnabled)
+    {
+        prepared.permissionOptions = spec.permissionOptions;
+        if (spec.permissionOptions.userEnabled || spec.permissionOptions.uidEnabled ||
+            spec.permissionOptions.groupEnabled || spec.permissionOptions.gidEnabled ||
+            spec.permissionOptions.noUser || spec.permissionOptions.noGroup)
+            prepared.hasUnsupportedPermissionFilters = true;
+    }
+
+    return prepared;
+}
+
+bool matchesIncludeExclude(const PreparedSpecification &prepared, const std::string &name)
+{
+    if (!prepared.includePatterns.empty() && !matchesAnyRegex(name, prepared.includePatterns))
+        return false;
+    if (!prepared.excludePatterns.empty() && matchesAnyRegex(name, prepared.excludePatterns))
+        return false;
+    return true;
+}
+
+bool matchesNameFilters(const PreparedSpecification &prepared,
+                        const std::filesystem::path &path,
+                        const std::string &name,
+                        const std::string &relativePath)
+{
+    if (!prepared.nameTestsEnabled)
+        return true;
+
+    if (!prepared.namePatterns.empty() && !matchesAnyRegex(name, prepared.namePatterns))
+        return false;
+    if (!prepared.inamePatterns.empty() && !matchesAnyRegex(name, prepared.inamePatterns))
+        return false;
+    if (!prepared.lnamePatterns.empty() && !matchesAnyRegex(name, prepared.lnamePatterns))
+        return false;
+    if (!prepared.ilnamePatterns.empty() && !matchesAnyRegex(name, prepared.ilnamePatterns))
+        return false;
+
+    std::string pathString = relativePath.empty() ? pathToComparableString(path) : relativePath;
+    if (!prepared.pathPatterns.empty() && !matchesAnyRegex(pathString, prepared.pathPatterns))
+        return false;
+    if (!prepared.ipathPatterns.empty() && !matchesAnyRegex(pathString, prepared.ipathPatterns))
+        return false;
+    if (!prepared.regexPatterns.empty() && !matchesAnyRegex(pathString, prepared.regexPatterns))
+        return false;
+    if (!prepared.iregexPatterns.empty() && !matchesAnyRegex(pathString, prepared.iregexPatterns))
+        return false;
+
+    return true;
+}
+
+bool matchesTextInName(const PreparedSpecification &prepared, const std::string &name)
+{
+    if (!prepared.textSearchEnabled || !prepared.textSearchNames || prepared.textTerms.empty())
+        return true;
+
+    switch (prepared.textOptions.mode)
+    {
+    case TextSearchOptions::Mode::RegularExpression:
+        return matchRegex(name, prepared.rawSearchText, !prepared.textOptions.matchCase);
+    case TextSearchOptions::Mode::WholeWord:
+        return matchWholeWord(name, prepared.textTerms, !prepared.textOptions.matchCase);
+    case TextSearchOptions::Mode::Contains:
+    default:
+        return matchContains(name, prepared.textTerms, !prepared.textOptions.matchCase);
+    }
+}
+
+bool matchesExtensionFilters(const PreparedSpecification &prepared, const std::string &name)
+{
+    if (!prepared.extensionFilterEnabled || prepared.extensionPatterns.empty())
+        return true;
+    return matchesAnyRegex(name, prepared.extensionPatterns);
+}
+
+char fileTypeLetter(const std::filesystem::file_status &status)
+{
+    using std::filesystem::file_type;
+    switch (status.type())
+    {
+    case file_type::regular:
+        return 'f';
+    case file_type::directory:
+        return 'd';
+    case file_type::symlink:
+        return 'l';
+#ifdef __unix__
+    case file_type::block:
+        return 'b';
+    case file_type::character:
+        return 'c';
+    case file_type::fifo:
+        return 'p';
+    case file_type::socket:
+        return 's';
+#endif
+    default:
+        return '?';
+    }
+}
+
+bool matchesTypeFilters(const PreparedSpecification &prepared, const std::filesystem::directory_entry &entry)
+{
+    if (!prepared.typeFiltersEnabled)
+        return true;
+
+    std::error_code ec;
+    if (prepared.typeEnabled && !prepared.typeLetters.empty())
+    {
+        auto status = entry.symlink_status(ec);
+        if (ec)
+            return false;
+        char letter = fileTypeLetter(status);
+        if (std::find(prepared.typeLetters.begin(), prepared.typeLetters.end(), letter) == prepared.typeLetters.end())
+            return false;
+    }
+
+    if (prepared.xtypeEnabled && !prepared.xtypeLetters.empty())
+    {
+        auto status = entry.status(ec);
+        if (ec)
+            return false;
+        char letter = fileTypeLetter(status);
+        if (std::find(prepared.xtypeLetters.begin(), prepared.xtypeLetters.end(), letter) == prepared.xtypeLetters.end())
+            return false;
+    }
+
+    if (!matchesExtensionFilters(prepared, entry.path().filename().string()))
+        return false;
+
+    return true;
+}
+
+bool matchesSizeFilters(const PreparedSpecification &prepared, const std::filesystem::directory_entry &entry)
+{
+    if (!prepared.sizeFiltersEnabled)
+        return true;
+
+    std::error_code ec;
+    bool isRegular = entry.is_regular_file(ec);
+    if (ec)
+        return false;
+    bool isDirectory = entry.is_directory(ec);
+    if (ec)
+        return false;
+
+    if (!prepared.treatDirectoriesAsFiles && isDirectory && !isRegular)
+    {
+        if (prepared.sizeEmptyRequired)
+            return false;
+        return true;
+    }
+
+    std::uintmax_t sizeValue = 0;
+    ec.clear();
+    sizeValue = entry.file_size(ec);
+    if (ec)
+    {
+        if (isDirectory)
+            sizeValue = 0;
+        else
+            return false;
+    }
+
+    if (!prepared.includeZeroByte && sizeValue == 0)
+        return false;
+    if (prepared.sizeEmptyRequired && sizeValue != 0)
+        return false;
+    if (prepared.sizeExactEnabled && sizeValue != prepared.sizeExact)
+        return false;
+    if (prepared.sizeMinEnabled)
+    {
+        if (prepared.sizeRangeInclusive)
+        {
+            if (sizeValue < prepared.sizeMin)
+                return false;
+        }
+        else
+        {
+            if (sizeValue <= prepared.sizeMin)
+                return false;
+        }
+    }
+    if (prepared.sizeMaxEnabled)
+    {
+        if (prepared.sizeRangeInclusive)
+        {
+            if (sizeValue > prepared.sizeMax)
+                return false;
+        }
+        else
+        {
+            if (sizeValue >= prepared.sizeMax)
+                return false;
+        }
+    }
+    return true;
+}
+
+std::optional<std::filesystem::perms> parsePermissionBits(const std::string &spec)
+{
+    try
+    {
+        std::size_t idx = 0;
+        unsigned long value = std::stoul(spec, &idx, 8);
+        if (idx != spec.size())
+            return std::nullopt;
+        return static_cast<std::filesystem::perms>(value);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+}
+
+bool matchesPermissionFilters(const PreparedSpecification &prepared, const std::filesystem::directory_entry &entry)
+{
+    if (!prepared.permissionFiltersEnabled)
+        return true;
+    if (prepared.hasUnsupportedPermissionFilters)
+        return true;
+
+    std::error_code ec;
+    auto status = entry.symlink_status(ec);
+    if (ec)
+        status = entry.status(ec);
+    if (ec)
+        return false;
+
+    auto perms = status.permissions();
+    auto anyOf = [](std::filesystem::perms perms, std::filesystem::perms mask) {
+        return (perms & mask) != std::filesystem::perms::none;
+    };
+
+    if (prepared.permissionOptions.readable)
+    {
+        constexpr auto mask = std::filesystem::perms::owner_read | std::filesystem::perms::group_read |
+                               std::filesystem::perms::others_read;
+        if (!anyOf(perms, mask))
+            return false;
+    }
+    if (prepared.permissionOptions.writable)
+    {
+        constexpr auto mask = std::filesystem::perms::owner_write | std::filesystem::perms::group_write |
+                               std::filesystem::perms::others_write;
+        if (!anyOf(perms, mask))
+            return false;
+    }
+    if (prepared.permissionOptions.executable)
+    {
+        constexpr auto mask = std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec |
+                               std::filesystem::perms::others_exec;
+        if (!anyOf(perms, mask))
+            return false;
+    }
+
+    if (prepared.permissionOptions.permEnabled && prepared.permissionOptions.permSpec[0] != '\0')
+    {
+        auto bits = parsePermissionBits(arrayToString(prepared.permissionOptions.permSpec));
+        if (bits)
+        {
+            constexpr auto mask = std::filesystem::perms::owner_all | std::filesystem::perms::group_all |
+                                   std::filesystem::perms::others_all;
+            switch (prepared.permissionOptions.permMode)
+            {
+            case PermissionOwnershipOptions::PermMode::Exact:
+                if ((perms & mask) != (*bits & mask))
+                    return false;
+                break;
+            case PermissionOwnershipOptions::PermMode::AllBits:
+                if ((perms & *bits) != *bits)
+                    return false;
+                break;
+            case PermissionOwnershipOptions::PermMode::AnyBit:
+                if ((perms & *bits) == std::filesystem::perms::none)
+                    return false;
+                break;
+            }
+        }
+    }
+
+    return true;
+}
+
+int presetDays(TimeFilterOptions::Preset preset)
+{
+    switch (preset)
+    {
+    case TimeFilterOptions::Preset::PastDay:
+        return 1;
+    case TimeFilterOptions::Preset::PastWeek:
+        return 7;
+    case TimeFilterOptions::Preset::PastMonth:
+        return 30;
+    case TimeFilterOptions::Preset::PastSixMonths:
+        return 182;
+    case TimeFilterOptions::Preset::PastYear:
+        return 365;
+    case TimeFilterOptions::Preset::PastSixYears:
+        return 365 * 6;
+    default:
+        return 0;
+    }
+}
+
+bool matchesTimeFilters(const PreparedSpecification &prepared, const std::filesystem::directory_entry &entry)
+{
+    if (!prepared.timeFiltersEnabled)
+        return true;
+
+    const auto &options = prepared.timeOptions;
+    int days = presetDays(options.preset);
+    if (days <= 0)
+        return true;
+
+    std::error_code ec;
+    auto fileTime = entry.last_write_time(ec);
+    if (ec)
+        return false;
+
+    auto systemTime = std::chrono::clock_cast<std::chrono::system_clock>(fileTime);
+    auto now = std::chrono::system_clock::now();
+    auto threshold = now - std::chrono::hours(24 * days);
+
+    bool considerModified = options.includeModified || (!options.includeCreated && !options.includeAccessed);
+    if (considerModified)
+        return systemTime >= threshold;
+
+    // If only created/accessed requested, approximate using modification time.
+    return systemTime >= threshold;
+}
+
+bool shouldPruneEntry(const PreparedSpecification &prepared,
+                      const std::filesystem::directory_entry &entry,
+                      const std::string &name,
+                      const std::string &relativePath)
+{
+    if (!prepared.prune.enabled)
+        return false;
+    if (prepared.prune.directoriesOnly)
+    {
+        std::error_code ec;
+        if (!entry.is_directory(ec) || ec)
+            return false;
+    }
+
+    switch (prepared.prune.mode)
+    {
+    case PreparedSpecification::PruneInfo::Mode::Name:
+        return matchesAnyRegex(name, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::Path:
+        return matchesAnyRegex(relativePath, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::Regex:
+        return regexSearchAny(relativePath, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::None:
+    default:
+        return false;
+    }
+}
+
+bool withinDepthLimits(const PreparedSpecification &prepared, int depth)
+{
+    if (prepared.maxDepthEnabled && depth > prepared.maxDepth)
+        return false;
+    if (prepared.minDepthEnabled && depth < prepared.minDepth)
+        return false;
+    return true;
+}
+
+
+
 void applySymlinkMode(const TraversalFilesystemOptions &options, std::vector<std::string> &args)
 {
     switch (options.symlinkMode)
@@ -841,140 +1691,6 @@ void applySymlinkMode(const TraversalFilesystemOptions &options, std::vector<std
         args.emplace_back("-P");
         break;
     }
-}
-
-int waitForChild(pid_t pid)
-{
-    int status = 0;
-    while (waitpid(pid, &status, 0) == -1)
-    {
-        if (errno != EINTR)
-        {
-            return -1;
-        }
-    }
-    if (WIFSIGNALED(status))
-        return 128 + WTERMSIG(status);
-    if (WIFEXITED(status))
-        return WEXITSTATUS(status);
-    return status;
-}
-
-SearchExecutionResult executeCommand(const std::vector<std::string> &command,
-                                     bool captureMatches,
-                                     std::ostream *forwardStdout,
-                                     std::ostream *forwardStderr)
-{
-    SearchExecutionResult result;
-    result.command = command;
-
-    bool interceptStdout = captureMatches || forwardStdout != nullptr;
-    int stdoutPipe[2]{-1, -1};
-    if (interceptStdout)
-    {
-        if (pipe(stdoutPipe) == -1)
-        {
-            result.exitCode = -1;
-            return result;
-        }
-    }
-
-    bool interceptStderr = forwardStderr != nullptr;
-    int stderrPipe[2]{-1, -1};
-    if (interceptStderr)
-    {
-        if (pipe(stderrPipe) == -1)
-        {
-            if (interceptStdout)
-            {
-                close(stdoutPipe[0]);
-                close(stdoutPipe[1]);
-            }
-            result.exitCode = -1;
-            return result;
-        }
-    }
-
-    posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
-    if (interceptStdout)
-    {
-        posix_spawn_file_actions_adddup2(&actions, stdoutPipe[1], STDOUT_FILENO);
-        posix_spawn_file_actions_addclose(&actions, stdoutPipe[0]);
-        posix_spawn_file_actions_addclose(&actions, stdoutPipe[1]);
-    }
-    if (interceptStderr)
-    {
-        posix_spawn_file_actions_adddup2(&actions, stderrPipe[1], STDERR_FILENO);
-        posix_spawn_file_actions_addclose(&actions, stderrPipe[0]);
-        posix_spawn_file_actions_addclose(&actions, stderrPipe[1]);
-    }
-
-    std::vector<char *> argv;
-    argv.reserve(command.size() + 1);
-    for (const auto &token : command)
-        argv.push_back(const_cast<char *>(token.c_str()));
-    argv.push_back(nullptr);
-
-    pid_t childPid = -1;
-    int spawnStatus = posix_spawnp(&childPid, command.front().c_str(), &actions, nullptr, argv.data(), environ);
-    posix_spawn_file_actions_destroy(&actions);
-    if (interceptStdout)
-        close(stdoutPipe[1]);
-    if (interceptStderr)
-        close(stderrPipe[1]);
-
-    if (spawnStatus != 0)
-    {
-        if (interceptStdout)
-            close(stdoutPipe[0]);
-        if (interceptStderr)
-            close(stderrPipe[0]);
-        result.exitCode = spawnStatus;
-        return result;
-    }
-
-    constexpr std::size_t kBufferSize = 8192;
-    std::array<char, kBufferSize> buffer{};
-    std::string pending;
-
-    if (interceptStdout)
-    {
-        ssize_t bytesRead = 0;
-        while ((bytesRead = read(stdoutPipe[0], buffer.data(), buffer.size())) > 0)
-        {
-            if (!captureMatches && forwardStdout)
-                forwardStdout->write(buffer.data(), bytesRead);
-            if (captureMatches)
-                pending.append(buffer.data(), static_cast<std::size_t>(bytesRead));
-        }
-        close(stdoutPipe[0]);
-    }
-
-    if (interceptStderr)
-    {
-        ssize_t bytesRead = 0;
-        while ((bytesRead = read(stderrPipe[0], buffer.data(), buffer.size())) > 0)
-            forwardStderr->write(buffer.data(), bytesRead);
-        close(stderrPipe[0]);
-    }
-
-    result.exitCode = waitForChild(childPid);
-
-    if (captureMatches && !pending.empty())
-    {
-        std::stringstream stream(pending);
-        std::string line;
-        while (std::getline(stream, line))
-        {
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-            if (!line.empty())
-                result.matches.emplace_back(line);
-        }
-    }
-
-    return result;
 }
 
 std::vector<std::string> buildActionTokens(const ActionOptions &options)
@@ -1815,40 +2531,174 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
     SearchSpecification execSpec = spec;
     if (!options.includeActions)
         execSpec.enableActionOptions = false;
-    auto command = buildFindCommand(execSpec, options.includeActions);
-    auto result = executeCommand(command, options.captureMatches, forwardStdout, forwardStderr);
 
-    if (options.captureMatches && options.filterContent && spec.enableTextSearch && spec.textOptions.searchInContents)
-    {
-        std::vector<std::filesystem::path> filtered;
-        std::vector<std::string> terms = spec.textOptions.allowMultipleTerms
-                                             ? tokenizeTerms(trimCopy(arrayToString(spec.searchText)))
-                                             : std::vector<std::string>{trimCopy(arrayToString(spec.searchText))};
-        std::string pattern = arrayToString(spec.searchText);
-        for (const auto &match : result.matches)
+    SearchExecutionResult result;
+    result.command = buildFindCommand(execSpec, options.includeActions);
+    result.exitCode = 0;
+
+    PreparedSpecification prepared = prepareSpecification(execSpec);
+
+    if (prepared.hasUnsupportedPermissionFilters && forwardStderr)
+        (*forwardStderr) << "ck-find: owner/group permission filters are not yet supported in the builtin engine.\n";
+
+    auto recordMatch = [&](const std::filesystem::path &path) {
+        if (options.captureMatches)
+            result.matches.push_back(path);
+        if (forwardStdout)
+            (*forwardStdout) << path.string() << '\n';
+    };
+
+    auto evaluateEntry = [&](const std::filesystem::directory_entry &entry,
+                             const std::filesystem::path &root,
+                             int depth,
+                             bool isRoot) {
+        if (!prepared.includeHidden && !isRoot && isHiddenPath(entry.path()))
+            return;
+
+        std::string name = entry.path().filename().string();
+        if (name.empty())
+            name = entry.path().string();
+        if (!matchesIncludeExclude(prepared, name))
+            return;
+
+        std::string relative = relativePathString(root, entry.path());
+
+        if (!matchesNameFilters(prepared, entry.path(), name, relative))
+            return;
+
+        if (!withinDepthLimits(prepared, depth))
+            return;
+
+        if (!matchesTextInName(prepared, name))
+            return;
+
+        if (!matchesTypeFilters(prepared, entry))
+            return;
+
+        if (!matchesSizeFilters(prepared, entry))
+            return;
+
+        if (!matchesPermissionFilters(prepared, entry))
+            return;
+
+        if (!matchesTimeFilters(prepared, entry))
+            return;
+
+        if (prepared.textSearchEnabled && prepared.textSearchContents && options.filterContent)
         {
-            if (!std::filesystem::is_regular_file(match))
+            std::error_code ec;
+            if (!entry.is_regular_file(ec) || ec)
+                return;
+            if (!fileMatchesContent(entry.path(), prepared.textOptions, prepared.textTerms, prepared.rawSearchText))
+                return;
+        }
+
+        recordMatch(entry.path());
+    };
+
+    bool hadError = false;
+    auto handleError = [&](const std::filesystem::path &path, const std::error_code &ec) {
+        if (forwardStderr)
+            (*forwardStderr) << "ck-find: " << path << ": " << ec.message() << '\n';
+        hadError = true;
+    };
+
+    auto traverseDirectory = [&](const std::filesystem::directory_entry &dirEntry,
+                                 const std::filesystem::path &root) {
+        std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied;
+        if (prepared.followSymlinks)
+            opts |= std::filesystem::directory_options::follow_directory_symlink;
+
+        if (prepared.includeSubdirectories)
+        {
+            std::error_code ec;
+            std::filesystem::recursive_directory_iterator it(dirEntry.path(), opts, ec);
+            if (ec)
             {
-                filtered.push_back(match);
-                continue;
+                handleError(dirEntry.path(), ec);
+                return;
             }
-            if (fileMatchesContent(match,
-                                   spec.textOptions,
-                                   terms,
-                                   pattern))
+            std::filesystem::recursive_directory_iterator end;
+            for (; it != end; ++it)
             {
-                filtered.push_back(match);
+                const auto &entry = *it;
+                int depth = it.depth() + 1;
+                std::string name = entry.path().filename().string();
+                std::string relative = relativePathString(root, entry.path());
+
+                if (prepared.maxDepthEnabled && depth > prepared.maxDepth)
+                {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+
+                if (shouldPruneEntry(prepared, entry, name, relative))
+                {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+
+                bool entryHidden = !prepared.includeHidden && isHiddenPath(entry.path());
+                if (entryHidden)
+                {
+                    std::error_code hiddenEc;
+                    if (entry.is_directory(hiddenEc) && !hiddenEc)
+                        it.disable_recursion_pending();
+                    continue;
+                }
+
+                evaluateEntry(entry, root, depth, false);
             }
         }
-        result.matches = std::move(filtered);
+        else
+        {
+            std::error_code ec;
+            std::filesystem::directory_iterator it(dirEntry.path(), opts, ec);
+            if (ec)
+            {
+                handleError(dirEntry.path(), ec);
+                return;
+            }
+            std::filesystem::directory_iterator end;
+            for (; it != end; ++it)
+            {
+                const auto &entry = *it;
+                std::string name = entry.path().filename().string();
+                std::string relative = relativePathString(root, entry.path());
+
+                if (shouldPruneEntry(prepared, entry, name, relative))
+                    continue;
+
+                if (!prepared.includeHidden && isHiddenPath(entry.path()))
+                    continue;
+
+                evaluateEntry(entry, root, 1, false);
+            }
+        }
+    };
+
+    for (const auto &start : prepared.roots)
+    {
+        std::error_code ec;
+        std::filesystem::directory_entry entry(start, ec);
+        if (ec)
+        {
+            handleError(start, ec);
+            continue;
+        }
+
+        evaluateEntry(entry, entry.path(), 0, true);
+
+        ec.clear();
+        if (entry.is_directory(ec) && !ec)
+            traverseDirectory(entry, entry.path());
     }
 
-    if (options.captureMatches && forwardStdout)
-    {
-        for (const auto &match : result.matches)
-            (*forwardStdout) << match.string() << '\n';
+    if (forwardStdout)
         forwardStdout->flush();
-    }
+
+    if (hadError)
+        result.exitCode = 1;
 
     return result;
 }

@@ -2,7 +2,12 @@
 #include "ck/find/search_model.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
+#include <string>
 #include <vector>
 
 TEST(SearchBackend, BuildsDefaultFindCommand)
@@ -30,4 +35,45 @@ TEST(SearchBackend, NormalisesSpecificationNames)
 {
     EXPECT_EQ(ck::find::normaliseSpecificationName("  Example Spec  "), "Example Spec");
     EXPECT_EQ(ck::find::normaliseSpecificationName("\t\n"), "");
+}
+
+TEST(SearchBackend, ExecutesSpecificationWithoutExternalFind)
+{
+    namespace fs = std::filesystem;
+    fs::path tempDir = fs::temp_directory_path() /
+                       fs::path("ck-find-backend-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(tempDir);
+
+    fs::path textFile = tempDir / "example.txt";
+    {
+        std::ofstream stream(textFile);
+        stream << "hello world" << std::endl;
+    }
+
+    fs::path hiddenFile = tempDir / ".ignored";
+    {
+        std::ofstream stream(hiddenFile);
+        stream << "secret" << std::endl;
+    }
+
+    auto spec = ck::find::makeDefaultSpecification();
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.c_str());
+    std::snprintf(spec.searchText.data(), spec.searchText.size(), "%s", "hello");
+    spec.textOptions.searchInContents = true;
+    spec.textOptions.searchInFileNames = false;
+    spec.includeHidden = false;
+
+    ck::find::SearchExecutionOptions options;
+    options.includeActions = false;
+    options.captureMatches = true;
+    options.filterContent = true;
+
+    auto result = ck::find::executeSpecification(spec, options, nullptr, nullptr);
+    EXPECT_EQ(result.exitCode, 0);
+    ASSERT_EQ(result.matches.size(), 1u);
+    EXPECT_EQ(result.matches.front(), textFile);
+
+    fs::remove(hiddenFile);
+    fs::remove(textFile);
+    fs::remove_all(tempDir);
 }
