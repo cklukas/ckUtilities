@@ -1,6 +1,7 @@
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
 #include "ck/find/cli_buffer_utils.hpp"
+#include "ck/find/search_backend.hpp"
 #include "ck/find/search_dialogs.hpp"
 #include "ck/find/search_model.hpp"
 #include "ck/hotkeys.hpp"
@@ -15,6 +16,7 @@
 #define Uses_TApplication
 #define Uses_TDeskTop
 #define Uses_TKeys
+#define Uses_TInputLine
 #define Uses_TMenu
 #define Uses_TMenuBar
 #define Uses_TMenuItem
@@ -27,6 +29,10 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -43,11 +49,19 @@ const ck::appinfo::ToolInfo &toolInfo()
 }
 
 using ck::find::ActionOptions;
+using ck::find::SavedSpecification;
+using ck::find::SearchExecutionOptions;
 using ck::find::SearchSpecification;
 using ck::find::TraversalFilesystemOptions;
+using ck::find::copyToArray;
 using ck::find::bufferToString;
 using ck::find::configureSearchSpecification;
+using ck::find::executeSpecification;
+using ck::find::listSavedSpecifications;
+using ck::find::loadSpecification;
 using ck::find::makeDefaultSpecification;
+using ck::find::normaliseSpecificationName;
+using ck::find::saveSpecification;
 
 class FindStatusLine : public ck::ui::CommandAwareStatusLine
 {
@@ -261,10 +275,10 @@ public:
                 newSearch();
                 break;
             case cmLoadSpec:
-                messageBox("Loading saved specifications will arrive in a future milestone.", mfInformation | mfOKButton);
+                loadSavedSpecification();
                 break;
             case cmSaveSpec:
-                messageBox("Saving specifications will arrive in a future milestone.", mfInformation | mfOKButton);
+                saveCurrentSpecification();
                 break;
             case cmReturnToLauncher:
                 std::exit(ck::launcher::kReturnToLauncherExitCode);
@@ -311,17 +325,93 @@ public:
 private:
     SearchSpecification m_spec{};
 
-    void newSearch()
-    {
-        SearchSpecification candidate = m_spec;
-        if (configureSearchSpecification(candidate))
-        {
-            m_spec = candidate;
-            std::string summary = buildPlaceholderSummary(m_spec);
-            messageBox(summary.c_str(), mfInformation | mfOKButton);
-        }
-    }
+    void newSearch();
+    void saveCurrentSpecification();
+    void loadSavedSpecification();
 };
+
+void FindApp::newSearch()
+{
+    SearchSpecification candidate = m_spec;
+    if (configureSearchSpecification(candidate))
+    {
+        m_spec = candidate;
+        std::string summary = buildPlaceholderSummary(m_spec);
+        messageBox(summary.c_str(), mfInformation | mfOKButton);
+    }
+}
+
+void FindApp::saveCurrentSpecification()
+{
+    char buffer[128];
+    std::string currentName = normaliseSpecificationName(bufferToString(m_spec.specName));
+    if (currentName.empty())
+        currentName = "Unnamed";
+    std::snprintf(buffer, sizeof(buffer), "%s", currentName.c_str());
+    if (inputBox("Save Search", "Specification name:", buffer, sizeof(buffer) - 1) == cmCancel)
+        return;
+
+    std::string desiredName = normaliseSpecificationName(buffer);
+    if (desiredName.empty())
+    {
+        messageBox("Name cannot be empty.", mfError | mfOKButton);
+        return;
+    }
+
+    SearchSpecification specToSave = m_spec;
+    copyToArray(specToSave.specName, desiredName.c_str());
+    if (saveSpecification(specToSave, desiredName))
+    {
+        copyToArray(m_spec.specName, desiredName.c_str());
+        std::string message = "Saved search specification '" + desiredName + "'.";
+        messageBox(message.c_str(), mfInformation | mfOKButton);
+    }
+    else
+    {
+        messageBox("Failed to save search specification.", mfError | mfOKButton);
+    }
+}
+
+void FindApp::loadSavedSpecification()
+{
+    auto specs = listSavedSpecifications();
+    if (specs.empty())
+    {
+        messageBox("No saved search specifications found.", mfInformation | mfOKButton);
+        return;
+    }
+
+    std::ostringstream list;
+    list << "Saved searches:" << '\n';
+    for (const auto &spec : specs)
+        list << "  - " << spec.name << '\n';
+    std::string listText = list.str();
+    messageBox(listText.c_str(), mfInformation | mfOKButton);
+
+    char buffer[128] = "";
+    std::snprintf(buffer, sizeof(buffer), "%s", specs.front().name.c_str());
+    if (inputBox("Load Search", "Specification name:", buffer, sizeof(buffer) - 1) == cmCancel)
+        return;
+
+    std::string desiredName = normaliseSpecificationName(buffer);
+    if (desiredName.empty())
+    {
+        messageBox("Name cannot be empty.", mfError | mfOKButton);
+        return;
+    }
+
+    if (auto loaded = loadSpecification(desiredName))
+    {
+        m_spec = *loaded;
+        std::string message = "Loaded search specification '" + desiredName + "'.";
+        messageBox(message.c_str(), mfInformation | mfOKButton);
+    }
+    else
+    {
+        std::string message = "No saved specification named '" + desiredName + "'.";
+        messageBox(message.c_str(), mfError | mfOKButton);
+    }
+}
 
 } // namespace
 
@@ -330,6 +420,58 @@ int main(int argc, char **argv)
     ck::hotkeys::registerDefaultSchemes();
     ck::hotkeys::initializeFromEnvironment();
     ck::hotkeys::applyCommandLineScheme(argc, argv);
+
+    bool listSpecsOnly = false;
+    std::optional<std::string> searchName;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string_view arg(argv[i]);
+        if (arg == "--search")
+        {
+            if (i + 1 >= argc)
+            {
+                std::fprintf(stderr, "--search requires a specification name.\n");
+                return EXIT_FAILURE;
+            }
+            searchName = std::string(argv[++i]);
+        }
+        else if (arg == "--list-specs")
+        {
+            listSpecsOnly = true;
+        }
+        else if (arg == "--help" || arg == "-h")
+        {
+            const char *binaryName = (argc > 0 && argv[0]) ? argv[0] : "ck-find";
+            std::printf("Usage: %s [--search NAME] [--list-specs] [--hotkeys SCHEME]\n", binaryName);
+            return 0;
+        }
+    }
+
+    if (listSpecsOnly)
+    {
+        auto specs = listSavedSpecifications();
+        for (const auto &spec : specs)
+            std::cout << spec.name << std::endl;
+        return 0;
+    }
+
+    if (searchName)
+    {
+        auto loaded = loadSpecification(normaliseSpecificationName(*searchName));
+        if (!loaded)
+        {
+            std::fprintf(stderr, "No saved specification named '%s'.\n", searchName->c_str());
+            return EXIT_FAILURE;
+        }
+
+        SearchExecutionOptions options;
+        options.includeActions = false;
+        options.captureMatches = true;
+        options.filterContent = true;
+        auto result = executeSpecification(*loaded, options, &std::cout, &std::cerr);
+        return result.exitCode;
+    }
 
     FindApp app(argc, argv);
     app.run();

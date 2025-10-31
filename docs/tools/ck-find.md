@@ -3,16 +3,15 @@
 ## SYNOPSIS
 
 ```
-ck-find [--help]
+ck-find [--help] [--list-specs] [--search NAME]
 ```
 
 ## DESCRIPTION
 
-`ck-find` is the new search planner for CK Utilities. The current build
-focuses on the Turbo Vision user interface so we can refine the workflow
-before wiring in the underlying file system engine. Launch the tool to
+`ck-find` is the new search planner for CK Utilities. Launch the tool to
 open a desktop with a **File → New Search…** command that displays a
-multi-stage dialog for composing a search specification.
+multi-stage dialog for composing a search specification and executing it
+with a native `find(1)` backend.
 
 The main form keeps the essentials visible—specification name, starting
 location, and optional text to look for—while grouping everything else
@@ -39,19 +38,22 @@ modelled after the corresponding `find(1)` feature set:
 
 The dialog also includes check boxes for recursive traversal, hidden
 files, symbolic links, and filesystem boundaries plus quick
-include/exclude glob patterns. Save and load buttons are already present
-to demonstrate where preset management will live, although persistence
-is not yet wired up.
+include/exclude glob patterns. Saved specifications are stored under the
+CK config directory, and the **File → Save/Search Spec…** commands now
+persist and reload those presets. Choose **Load Search Spec…** to
+rehydrate a preset into the notebook for further editing.
 
-When you accept the form, `ck-find` stores the specification in memory
-and confirms that execution and saving will ship in later milestones.
-This iteration is all about getting the ergonomics right.
+When you accept the form, `ck-find` builds a `find(1)` invocation that
+mirrors the captured options. The current build still shows a textual
+summary inside the UI, but the same specification can be executed from
+the command line with `ck-find --search NAME`, which prints the matched
+paths (after applying any content filters) to standard output.
 
 ## STATUS
 
-Search execution, persistence, and directory browsing are intentionally
-stubbed. Expect the next milestones to add storage for saved specs and a
-command runner that translates the UI into real `find` invocations.
+The CLI runner executes saved specifications and lists them with
+`--list-specs`. Future milestones will integrate richer previews inside
+the Turbo Vision UI and extend detector-based filters.
 
 ## SEE ALSO
 

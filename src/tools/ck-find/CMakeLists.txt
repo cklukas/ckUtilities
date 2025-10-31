@@ -3,6 +3,8 @@ include(FindCursesWithFallback)
 include(FetchTurboVision)
 cktools_ensure_tvision()
 
+include(${PROJECT_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
+
 if(TARGET tvision)
   target_include_directories(tvision PRIVATE ${CURSES_INCLUDE_DIRS})
 endif()
@@ -15,6 +17,7 @@ add_ck_tool(ckfind
     src/dialog_utils.cpp
     src/name_path_dialog.cpp
     src/permission_ownership_dialog.cpp
+    src/search_backend.cpp
     src/search_dialog.cpp
     src/search_model.cpp
     src/size_filters_dialog.cpp
@@ -26,6 +29,7 @@ add_ck_tool(ckfind
     ck_app_info
     ck_hotkeys
     ck_ui
+    nlohmann_json::nlohmann_json
     tvision::tvision
     ${CURSES_LIBRARIES}
   INCLUDE_DIRECTORIES
