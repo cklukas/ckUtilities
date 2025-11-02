@@ -118,6 +118,10 @@ std::vector<std::string> splitList(const std::string &value, char separator = ',
 nlohmann::json toJson(const TextSearchOptions &options);
 nlohmann::json toJson(const NamePathOptions &options);
 nlohmann::json toJson(const TimeFilterOptions &options);
+
+bool matchContains(const std::string &haystack, const std::vector<std::string> &needles, bool caseInsensitive);
+bool matchWholeWord(const std::string &haystack, const std::vector<std::string> &needles, bool caseInsensitive);
+bool matchRegex(const std::string &haystack, const std::string &pattern, bool caseInsensitive);
 nlohmann::json toJson(const SizeFilterOptions &options);
 nlohmann::json toJson(const TypeFilterOptions &options);
 nlohmann::json toJson(const PermissionOwnershipOptions &options);
@@ -1625,8 +1629,10 @@ bool matchesTimeFilters(const PreparedSpecification &prepared, const std::filesy
     if (ec)
         return false;
 
-    auto systemTime = std::chrono::clock_cast<std::chrono::system_clock>(fileTime);
+    auto fileClockNow = decltype(fileTime)::clock::now();
     auto now = std::chrono::system_clock::now();
+    auto systemTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        now + (fileTime - fileClockNow));
     auto threshold = now - std::chrono::hours(24 * days);
 
     bool considerModified = options.includeModified || (!options.includeCreated && !options.includeAccessed);
