@@ -66,7 +66,7 @@ bool editTimeFilters(TimeFilterOptions &options)
     std::snprintf(data.newerat, sizeof(data.newerat), "%s", bufferToString(options.newerat).c_str());
     std::snprintf(data.newerct, sizeof(data.newerct), "%s", bufferToString(options.newerct).c_str());
 
-    auto *dialog = new TDialog(TRect(0, 0, 78, 24), "Time Tests");
+    auto *dialog = new TDialog(TRect(0, 0, 78, 24), "Date & Time Filters");
     dialog->options |= ofCentered;
 
     auto *presetButtons = new TRadioButtons(TRect(3, 3, 30, 12),
@@ -99,72 +99,72 @@ bool editTimeFilters(TimeFilterOptions &options)
     toInput->setData(data.to);
 
     dialog->insert(new TStaticText(TRect(3, 12, 74, 14),
-                                   "Manual fields mirror find(1) tests. Use prefixes like +7 or -5"
-                                   " and timestamp strings supported by find."));
+                                   "Fine-tune date rules. Enter +7 to match files at least 7 days old.\n"
+                                   "Use -5 for changes within 5 days, or supply full timestamps."));
 
-    auto *mtimeInput = new TInputLine(TRect(18, 14, 34, 15), sizeof(data.mtime) - 1);
-    dialog->insert(new TLabel(TRect(3, 14, 18, 15), "-mti~m~e:", mtimeInput));
+    auto *mtimeInput = new TInputLine(TRect(32, 14, 48, 15), sizeof(data.mtime) - 1);
+    dialog->insert(new TLabel(TRect(3, 14, 32, 15), "~M~odified in past (days):", mtimeInput));
     dialog->insert(mtimeInput);
     mtimeInput->setData(data.mtime);
 
-    auto *mminInput = new TInputLine(TRect(18, 15, 34, 16), sizeof(data.mmin) - 1);
-    dialog->insert(new TLabel(TRect(3, 15, 18, 16), "-~m~min:", mminInput));
+    auto *mminInput = new TInputLine(TRect(32, 15, 48, 16), sizeof(data.mmin) - 1);
+    dialog->insert(new TLabel(TRect(3, 15, 32, 16), "Modified in past (m~i~nutes):", mminInput));
     dialog->insert(mminInput);
     mminInput->setData(data.mmin);
 
-    auto *atimeInput = new TInputLine(TRect(18, 16, 34, 17), sizeof(data.atime) - 1);
-    dialog->insert(new TLabel(TRect(3, 16, 18, 17), "-~a~time:", atimeInput));
+    auto *atimeInput = new TInputLine(TRect(32, 16, 48, 17), sizeof(data.atime) - 1);
+    dialog->insert(new TLabel(TRect(3, 16, 32, 17), "~A~ccessed in past (days):", atimeInput));
     dialog->insert(atimeInput);
     atimeInput->setData(data.atime);
 
-    auto *aminInput = new TInputLine(TRect(18, 17, 34, 18), sizeof(data.amin) - 1);
-    dialog->insert(new TLabel(TRect(3, 17, 18, 18), "-a~m~in:", aminInput));
+    auto *aminInput = new TInputLine(TRect(32, 17, 48, 18), sizeof(data.amin) - 1);
+    dialog->insert(new TLabel(TRect(3, 17, 32, 18), "Accessed in past (m~i~nutes):", aminInput));
     dialog->insert(aminInput);
     aminInput->setData(data.amin);
 
-    auto *ctimeInput = new TInputLine(TRect(18, 18, 34, 19), sizeof(data.ctime) - 1);
-    dialog->insert(new TLabel(TRect(3, 18, 18, 19), "-~c~time:", ctimeInput));
+    auto *ctimeInput = new TInputLine(TRect(32, 18, 48, 19), sizeof(data.ctime) - 1);
+    dialog->insert(new TLabel(TRect(3, 18, 32, 19), "Meta~d~ata change in (days):", ctimeInput));
     dialog->insert(ctimeInput);
     ctimeInput->setData(data.ctime);
 
-    auto *cminInput = new TInputLine(TRect(18, 19, 34, 20), sizeof(data.cmin) - 1);
-    dialog->insert(new TLabel(TRect(3, 19, 18, 20), "-c~m~in:", cminInput));
+    auto *cminInput = new TInputLine(TRect(32, 19, 48, 20), sizeof(data.cmin) - 1);
+    dialog->insert(new TLabel(TRect(3, 19, 32, 20), "Metadata change in (m~i~nutes):", cminInput));
     dialog->insert(cminInput);
     cminInput->setData(data.cmin);
 
-    auto *usedInput = new TInputLine(TRect(18, 20, 34, 21), sizeof(data.used) - 1);
-    dialog->insert(new TLabel(TRect(3, 20, 18, 21), "-~u~sed:", usedInput));
+    auto *usedInput = new TInputLine(TRect(32, 20, 48, 21), sizeof(data.used) - 1);
+    dialog->insert(new TLabel(TRect(3, 20, 32, 21), "Last ~u~sed in past (days):", usedInput));
     dialog->insert(usedInput);
     usedInput->setData(data.used);
 
     auto pathLen = std::min<int>(static_cast<int>(sizeof(data.newer)) - 1, 255);
-    auto *newerInput = new TInputLine(TRect(51, 14, 74, 15), pathLen);
-    dialog->insert(new TLabel(TRect(36, 14, 51, 15), "-~n~ewer:", newerInput));
+    auto *newerInput = new TInputLine(TRect(57, 14, 74, 15), pathLen);
+    dialog->insert(new TLabel(TRect(34, 14, 57, 15), "Cutoff file (~m~odified):", newerInput));
     dialog->insert(newerInput);
     newerInput->setData(data.newer);
 
-    auto *anewerInput = new TInputLine(TRect(51, 15, 74, 16), pathLen);
-    dialog->insert(new TLabel(TRect(36, 15, 51, 16), "-~a~newer:", anewerInput));
+    auto *anewerInput = new TInputLine(TRect(57, 15, 74, 16), pathLen);
+    dialog->insert(new TLabel(TRect(34, 15, 57, 16), "Cutoff file (~a~ccessed):", anewerInput));
     dialog->insert(anewerInput);
     anewerInput->setData(data.anewer);
 
-    auto *cnewerInput = new TInputLine(TRect(51, 16, 74, 17), pathLen);
-    dialog->insert(new TLabel(TRect(36, 16, 51, 17), "-~c~newer:", cnewerInput));
+    auto *cnewerInput = new TInputLine(TRect(57, 16, 74, 17), pathLen);
+    dialog->insert(new TLabel(TRect(34, 16, 57, 17), "Cutoff file (meta~d~ata):", cnewerInput));
     dialog->insert(cnewerInput);
     cnewerInput->setData(data.cnewer);
 
-    auto *newermtInput = new TInputLine(TRect(51, 17, 74, 18), sizeof(data.newermt) - 1);
-    dialog->insert(new TLabel(TRect(36, 17, 51, 18), "-newer~m~t:", newermtInput));
+    auto *newermtInput = new TInputLine(TRect(57, 17, 74, 18), sizeof(data.newermt) - 1);
+    dialog->insert(new TLabel(TRect(34, 17, 57, 18), "Cutoff time (~m~odified):", newermtInput));
     dialog->insert(newermtInput);
     newermtInput->setData(data.newermt);
 
-    auto *neweratInput = new TInputLine(TRect(51, 18, 74, 19), sizeof(data.newerat) - 1);
-    dialog->insert(new TLabel(TRect(36, 18, 51, 19), "-newer~a~t:", neweratInput));
+    auto *neweratInput = new TInputLine(TRect(57, 18, 74, 19), sizeof(data.newerat) - 1);
+    dialog->insert(new TLabel(TRect(34, 18, 57, 19), "Cutoff time (~a~ccessed):", neweratInput));
     dialog->insert(neweratInput);
     neweratInput->setData(data.newerat);
 
-    auto *newerctInput = new TInputLine(TRect(51, 19, 74, 20), sizeof(data.newerct) - 1);
-    dialog->insert(new TLabel(TRect(36, 19, 51, 20), "-newer~c~t:", newerctInput));
+    auto *newerctInput = new TInputLine(TRect(57, 19, 74, 20), sizeof(data.newerct) - 1);
+    dialog->insert(new TLabel(TRect(34, 19, 57, 20), "Cutoff time (meta~d~ata):", newerctInput));
     dialog->insert(newerctInput);
     newerctInput->setData(data.newerct);
 

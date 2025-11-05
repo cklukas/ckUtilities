@@ -187,9 +187,31 @@ void TabControl::draw()
                 const std::string &title = m_tabs[i].title;
                 const bool active = (i == m_current);
                 const ushort color = active ? highlightColor : baseColor;
-                if (x < width - 1)
-                    buffer.moveStr(x, title.c_str(), color, width - x - 1);
-                x += static_cast<int>(title.size()) + 3;
+                if (x >= width - 1)
+                    break;
+
+                std::string label;
+                if (active)
+                {
+                    label.push_back('[');
+                    label += title;
+                    label.push_back(']');
+                }
+                else
+                {
+                    label.push_back(' ');
+                    label += title;
+                    label.push_back(' ');
+                }
+                label.push_back(' ');
+
+                const int room = width - x - 1;
+                if (room <= 0)
+                    break;
+
+                buffer.moveStr(x, label.c_str(), color, room);
+                const int drawn = std::min<int>(static_cast<int>(label.size()), room);
+                x += drawn;
             }
         }
         writeLine(0, row, width, 1, buffer);

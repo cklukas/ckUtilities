@@ -23,8 +23,8 @@ modelled after the corresponding `find(1)` feature set:
   binary data should be included.
 * **Name & Path Tests…** wires in `-name`, `-path`, regex, and symlink
   tests plus a configurable `-prune` helper.
-* **Time Tests…** layers presets like “Past 7 days” with direct access
-  to `-mtime`, `-newer`, and related operators.
+* **Date & Time Filters…** layers presets like “Past 7 days” with direct
+  access to `-mtime`, `-newer`, and related operators.
 * **Size Filters…** captures ranges and exact `-size` expressions along
   with an `-empty` shortcut.
 * **File Types…** lets you outline `-type`/`-xtype` letters and optional
