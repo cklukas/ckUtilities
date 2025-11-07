@@ -28,6 +28,7 @@
 #define Uses_TStringCollection
 #define Uses_TRadioButtons
 #define Uses_TProgram
+#define Uses_TParamText
 #define Uses_TStaticText
 #include <tvision/tv.h>
 
@@ -86,7 +87,7 @@ public:
         m_list = new TListBox(TRect(2, 2, 28, 13), 1, nullptr);
         insert(m_list);
 
-        m_summary = new TStaticText(TRect(30, 2, 58, 13), "");
+        m_summary = new TParamText(TRect(30, 2, 58, 13));
         insert(m_summary);
 
         insert(new TButton(TRect(16, 14, 28, 16), "~U~se preset", cmOK, bfDefault));
@@ -142,19 +143,19 @@ private:
         const GuidedSearchPreset *entry = selectedPreset();
         if (!entry)
         {
-            m_summary->setText("Select a preset to see details.");
+            m_summary->setText("%s", "Select a preset to see details.");
             return;
         }
         std::snprintf(m_summaryBuffer.data(),
                       m_summaryBuffer.size(),
                       "%s",
                       entry->subtitle.data());
-        m_summary->setText(m_summaryBuffer.data());
+        m_summary->setText("%s", m_summaryBuffer.data());
     }
 
     std::vector<const GuidedSearchPreset *> m_entries;
     TListBox *m_list = nullptr;
-    TStaticText *m_summary = nullptr;
+    TParamText *m_summary = nullptr;
     std::array<char, 128> m_summaryBuffer{};
 };
 
@@ -171,7 +172,7 @@ public:
         m_list = new TListBox(TRect(2, 2, 30, 13), 1, nullptr);
         insert(m_list);
 
-        m_summary = new TStaticText(TRect(32, 2, 60, 13), "");
+        m_summary = new TParamText(TRect(32, 2, 60, 13));
         insert(m_summary);
 
         insert(new TButton(TRect(18, 14, 30, 16), "~R~un recipe", cmOK, bfDefault));
@@ -216,19 +217,19 @@ private:
         const GuidedRecipe *entry = selectedRecipe();
         if (!entry)
         {
-            m_summary->setText("Pick a recipe to see details.");
+            m_summary->setText("%s", "Pick a recipe to see details.");
             return;
         }
         std::snprintf(m_summaryBuffer.data(),
                       m_summaryBuffer.size(),
                       "%s",
                       entry->description.data());
-        m_summary->setText(m_summaryBuffer.data());
+        m_summary->setText("%s", m_summaryBuffer.data());
     }
 
     std::vector<const GuidedRecipe *> m_entries;
     TListBox *m_list = nullptr;
-    TStaticText *m_summary = nullptr;
+    TParamText *m_summary = nullptr;
     std::array<char, 160> m_summaryBuffer{};
 };
 
@@ -244,7 +245,7 @@ public:
 
         m_list = new TListBox(TRect(2, 2, 36, 14), 1, nullptr);
         insert(m_list);
-        m_summary = new TStaticText(TRect(38, 2, 68, 14), "");
+        m_summary = new TParamText(TRect(38, 2, 68, 14));
         insert(m_summary);
 
         m_loadButton = new TButton(TRect(10, 15, 22, 17), "~L~oad", cmOK, bfDefault);
@@ -304,14 +305,14 @@ private:
         const SavedSpecification *entry = selectedSpecification();
         if (!entry)
         {
-            m_summary->setText("No saved search selected.");
+            m_summary->setText("%s", "No saved search selected.");
             return;
         }
         std::snprintf(m_summaryBuffer.data(),
                       m_summaryBuffer.size(),
                       "%s",
-                      entry->path.u8string().c_str());
-        m_summary->setText(m_summaryBuffer.data());
+                      entry->path.string().c_str());
+        m_summary->setText("%s", m_summaryBuffer.data());
     }
 
     void updateButtons()
@@ -344,7 +345,7 @@ private:
 
     std::vector<SavedSpecification> m_specs;
     TListBox *m_list = nullptr;
-    TStaticText *m_summary = nullptr;
+    TParamText *m_summary = nullptr;
     TButton *m_loadButton = nullptr;
     TButton *m_deleteButton = nullptr;
     std::array<char, 256> m_summaryBuffer{};
@@ -450,7 +451,7 @@ private:
     TInputLine *m_includeInput = nullptr;
     TInputLine *m_excludeInput = nullptr;
     TRadioButtons *m_typePresetButtons = nullptr;
-    TStaticText *m_typeSummary = nullptr;
+    TParamText *m_typeSummary = nullptr;
     TRadioButtons *m_datePresetButtons = nullptr;
     TInputLine *m_dateFromInput = nullptr;
     TInputLine *m_dateToInput = nullptr;
@@ -542,7 +543,7 @@ GuidedSearchDialog::GuidedSearchDialog(SearchSpecification &spec, GuidedSearchSt
                                                           "Custom"}));
     insert(m_typePresetButtons);
 
-    m_typeSummary = new TStaticText(lineRect(4, 28, 44), "");
+    m_typeSummary = new TParamText(lineRect(4, 28, 44));
     insert(m_typeSummary);
 
     m_datePresetButtons = new TRadioButtons(TRect(26, 22, 46, 29),
@@ -966,7 +967,7 @@ void GuidedSearchDialog::updateTypeSummary()
         }
         text = m_typeSummaryBuffer.data();
     }
-    m_typeSummary->setText(text);
+    m_typeSummary->setText("%s", text ? text : "");
 }
 
 void GuidedSearchDialog::updateDateControls()

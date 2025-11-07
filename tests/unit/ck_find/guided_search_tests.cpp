@@ -1,3 +1,4 @@
+#include "ck/find/cli_buffer_utils.hpp"
 #include "ck/find/guided_search.hpp"
 #include "ck/find/search_model.hpp"
 

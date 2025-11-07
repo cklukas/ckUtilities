@@ -26,5 +26,11 @@ std::string bufferToString(const std::array<char, N> &buffer)
     return std::string(buffer.data(), buffer.size());
 }
 
-} // namespace ck::find
+template <std::size_t N, std::size_t M>
+void copyToArray(std::array<char, N> &dest, const std::array<char, M> &src)
+{
+    const std::string value = bufferToString(src);
+    copyToArray(dest, value.c_str());
+}
 
+} // namespace ck::find

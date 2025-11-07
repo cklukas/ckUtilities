@@ -178,7 +178,6 @@ GuidedSearchState guidedStateFromSpecification(const SearchSpecification &spec)
         copyToArray(state.dateFrom, spec.timeOptions.customFrom);
         copyToArray(state.dateTo, spec.timeOptions.customTo);
         break;
-    case TimeFilterOptions::Preset::PastSixMonths:
     case TimeFilterOptions::Preset::PastSixYears:
     case TimeFilterOptions::Preset::AnyTime:
     default:

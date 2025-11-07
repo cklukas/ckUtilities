@@ -19,6 +19,7 @@ add_ck_tool(ckfind
     src/permission_ownership_dialog.cpp
     src/search_backend.cpp
     src/search_dialog.cpp
+    src/guided_search.cpp
     src/search_model.cpp
     src/size_filters_dialog.cpp
     src/text_options_dialog.cpp
