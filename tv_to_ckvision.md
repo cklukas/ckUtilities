@@ -49,11 +49,13 @@ Historical application baseline: `legacy_tv`
   non-destructive and bounds rendered matches to 200, while preserving the
   full match count. Confirmation workflows for destructive action mutations
   remain the next slice.
-- WP-6: `ck-du-ckvision` now accepts an application-owned directory-scan
-  snapshot and maps it into a native TreeView plus selected-directory Table.
-  The initial executable performs its scan in the composition root before
-  constructing the UI; injected asynchronous scan services, cancellation,
-  file lists, and cloud actions remain the next slices.
+- WP-6: `ck-du-ckvision` maps application-owned directory snapshots into a
+  native TreeView plus selected-directory Table. Its production composition
+  root now starts immediately and delegates scanning to an injected joinable
+  service; progress and completion cross back to the UI through
+  `Application::post()` behind a teardown lifetime gate, and cancellation is
+  propagated into the existing scan-core cancellation probe. File lists and
+  cloud actions remain the next slices.
 - WP-7: `ck-config-ckvision` accepts an injected option registry and exposes
   a native provider-backed table with typed edit/reset commands keyed by the
   option's stable string name. Persistence remains a composition-root policy.

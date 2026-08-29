@@ -6,6 +6,9 @@
 #include "ck/options.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -52,6 +55,25 @@ TEST(DiskUsageCore, ProvidesUnitLabels)
 {
     EXPECT_STREQ(ck::du::unitName(ck::du::SizeUnit::Auto), "Auto");
     EXPECT_STREQ(ck::du::unitName(ck::du::SizeUnit::Terabytes), "Terabytes");
+}
+
+TEST(DiskUsageCore, ReportsCancelledDirectoryScans)
+{
+    namespace fs = std::filesystem;
+    const fs::path directory = fs::temp_directory_path() /
+                               ("ck-du-cancel-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(directory);
+    {
+        std::ofstream file(directory / "item.txt");
+        file << "data";
+    }
+
+    ck::du::BuildDirectoryTreeOptions options;
+    options.cancelRequested = [] { return true; };
+    const auto result = ck::du::buildDirectoryTree(directory, options);
+    EXPECT_TRUE(result.cancelled);
+    EXPECT_EQ(result.root, nullptr);
+    fs::remove_all(directory);
 }
 
 TEST(DiskUsageOptions, RegistersExpectedDefinitions)

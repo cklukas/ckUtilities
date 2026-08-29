@@ -5,6 +5,10 @@
 #include <vector>
 
 #include <cvision/widgets/splitter.hpp>
+#include <cvision/widgets/command_presentation.hpp>
+#include <cvision/widgets/menu.hpp>
+#include <cvision/widgets/text_layout.hpp>
+#include <cvision/widgets/text_view.hpp>
 
 namespace ck::vision
 {
@@ -20,29 +24,155 @@ std::string node_name(const ck::du::DirectoryNode &node)
 } // namespace
 
 DiskUsageApp::DiskUsageApp(ckv::ui::Application &application, ck::du::BuildDirectoryTreeResult snapshot)
-    : application_(application), snapshot_(std::move(snapshot)),
-      shell_(std::make_unique<SuiteShell>(application_, make_shell_options()))
+    : application_(application), snapshot_(std::move(snapshot))
 {
+    declare_commands();
+    shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     if (snapshot_.root != nullptr)
-        create_snapshot_window();
+    {
+        create_window("Disk usage: " + snapshot_.root->path.string());
+        rebuild_snapshot_view();
+    }
+}
+
+DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
+                           DiskUsageScanService &scan_service,
+                           std::filesystem::path root,
+                           ck::du::BuildDirectoryTreeOptions options)
+    : application_(application), scan_service_(&scan_service), scan_root_(std::move(root)), scan_options_(std::move(options))
+{
+    declare_commands();
+    shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
+    create_window("Disk usage: scanning");
+    start_scan();
+}
+
+DiskUsageApp::~DiskUsageApp()
+{
+    lifetime_.reset();
+    if (scan_service_ != nullptr)
+        scan_service_->cancel();
+}
+
+void DiskUsageApp::declare_commands()
+{
+    rescan_command_ = application_.commands().declare({
+        .key = "ck.du.rescan", .title = "&Rescan", .category = "Disk usage", .chord = "F5",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { start_scan(); }});
+    cancel_scan_command_ = application_.commands().declare({
+        .key = "ck.du.cancel_scan", .title = "&Cancel scan", .category = "Disk usage", .chord = "Ctrl+C",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { cancel_scan(); }});
 }
 
 SuiteShellOptions DiskUsageApp::make_shell_options() const
 {
     return {
         .application_name = "ck Disk Usage",
-        .about_text = "A native ckVision browser for an application-owned disk-usage snapshot.",
+        .about_text = "A native ckVision browser for cancellable, application-owned disk-usage snapshots.",
+        .application_menus = {ckv::widgets::MenuBarItem{"&Scan", {
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}),
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel scan"}),
+        }}},
+        .application_status_items = {
+            ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}, 30},
+            ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel"}, 30},
+        },
     };
 }
 
-void DiskUsageApp::create_snapshot_window()
+void DiskUsageApp::create_window(std::string title)
 {
-    auto window = std::make_unique<ckv::widgets::Window>("Disk usage: " + snapshot_.root->path.string());
+    auto window = std::make_unique<ckv::widgets::Window>(std::move(title));
     window->set_bounds(shell_->desktop().content_area());
     window->set_min_size(ckv::Size{60, 16});
     window->set_grow_policy(ckv::widgets::DesktopGrowPolicy::KeepFilling);
     window->on_closed = [this] { application_.request_quit(); };
     window_ = shell_->desktop().add_window(std::move(window));
+}
+
+void DiskUsageApp::show_scan_state(std::string text)
+{
+    if (window_ == nullptr)
+        create_window("Disk usage: scanning");
+    window_->set_title("Disk usage: scanning");
+    window_->set_footer("Scanning " + scan_root_.string());
+    auto content = std::make_unique<ckv::widgets::TextView>();
+    content->set_wrap_mode(ckv::widgets::WrapMode::Word);
+    content->set_text(std::move(text));
+    window_->set_content(std::move(content));
+    tree_ = nullptr;
+    table_ = nullptr;
+}
+
+void DiskUsageApp::start_scan()
+{
+    if (scan_service_ == nullptr)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("No scan service was provided for this supplied snapshot.");
+        return;
+    }
+    if (scan_service_->running())
+    {
+        show_scan_state("A disk-usage scan is already running. Use Cancel scan before starting another.");
+        return;
+    }
+
+    snapshot_ = {};
+    show_scan_state("Scanning disk usage in the background. The current directory is shown in the window footer.");
+    const std::weak_ptr<void> lifetime = lifetime_;
+    scan_service_->start(scan_root_, scan_options_,
+                         [this, lifetime](const std::filesystem::path &path) {
+                             application_.post([this, lifetime, path] {
+                                 if (lifetime.expired() || window_ == nullptr)
+                                     return;
+                                 window_->set_footer("Scanning " + path.string());
+                             });
+                         },
+                         [this, lifetime](ck::du::BuildDirectoryTreeResult result) mutable {
+                             auto delivered = std::make_shared<ck::du::BuildDirectoryTreeResult>(std::move(result));
+                             application_.post([this, lifetime, delivered] {
+                                 if (lifetime.expired())
+                                     return;
+                                 complete_scan(std::move(*delivered));
+                             });
+                         });
+}
+
+void DiskUsageApp::cancel_scan()
+{
+    if (scan_service_ == nullptr)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("No scan service was provided for this supplied snapshot.");
+        return;
+    }
+    if (!scan_service_->running())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("There is no running disk-usage scan to cancel.");
+        return;
+    }
+    scan_service_->cancel();
+    show_scan_state("Cancellation requested. The scan will stop at its next filesystem boundary.");
+}
+
+void DiskUsageApp::complete_scan(ck::du::BuildDirectoryTreeResult snapshot)
+{
+    snapshot_ = std::move(snapshot);
+    if (snapshot_.cancelled)
+    {
+        show_scan_state("Disk-usage scan cancelled. Run Rescan to build a new snapshot.");
+        return;
+    }
+    if (snapshot_.root == nullptr)
+    {
+        show_scan_state("Disk-usage scan did not produce a directory snapshot.");
+        return;
+    }
+    window_->set_title("Disk usage: " + snapshot_.root->path.string());
     rebuild_snapshot_view();
 }
 
@@ -77,6 +207,11 @@ void DiskUsageApp::rebuild_snapshot_view()
     auto splitter = std::make_unique<ckv::widgets::Splitter>(window_->content_rect(), std::move(tree), std::move(table));
     window_->set_content(std::move(splitter));
     application_.set_focus(tree_);
+}
+
+bool DiskUsageApp::scan_running() const noexcept
+{
+    return scan_service_ != nullptr && scan_service_->running();
 }
 
 ckv::widgets::TreeNode DiskUsageApp::make_tree_node(ck::du::DirectoryNode &node)

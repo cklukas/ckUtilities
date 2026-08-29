@@ -21,17 +21,11 @@ int main(int argc, char **argv)
     const std::filesystem::path path = argc > 1 ? argv[1] : ".";
     ck::du::BuildDirectoryTreeOptions options;
     options.reportErrors = false;
-    ck::du::BuildDirectoryTreeResult snapshot = ck::du::buildDirectoryTree(path, options);
-    if (snapshot.root == nullptr)
-    {
-        std::fprintf(stderr, "Unable to scan %s\n", path.c_str());
-        return 1;
-    }
-
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
-    ck::vision::DiskUsageApp disk_usage(application, std::move(snapshot));
+    ck::vision::ThreadedDiskUsageScanService scan_service;
+    ck::vision::DiskUsageApp disk_usage(application, scan_service, path, std::move(options));
     application.run();
     return 0;
 }

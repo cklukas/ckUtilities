@@ -1,5 +1,6 @@
 add_library(ck_vision_du STATIC
   disk_usage_app.cpp
+  disk_usage_services.cpp
 )
 target_include_directories(ck_vision_du
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
