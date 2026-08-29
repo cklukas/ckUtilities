@@ -12,7 +12,7 @@ what users must be able to do, not how Turbo Vision implemented it.
 | CKU-JSON | `ck-json-view` | open/close, navigate, expand level, find, copy | WP-3 | native pilot implemented; headless scenario passing |
 | CKU-LAUNCH | `ck-utilities` | launch tool, multi-window utilities, calculator, ASCII, color, event diagnostics | WP-4 | initial native launcher conversion implemented: calendar, ASCII table, calculator, color selector, and bounded application diagnostics all run as native Desktop surfaces |
 | CKU-FIND | `ck-find` | compose, validate, persist, preview, and execute a search specification | WP-5 | native guided-search form and command preview implemented; persistence and injected execution remain |
-| CKU-DU | `ck-du` | scan, navigate, sort, inspect, cancel, and execute cloud actions | WP-6 | inventory captured |
+| CKU-DU | `ck-du` | scan, navigate, sort, inspect, cancel, and execute cloud actions | WP-6 | native snapshot TreeView and selected-directory Table implemented; injected asynchronous scanning, cancellation, file lists, and cloud actions remain |
 | CKU-CONFIG | `ck-config` | inspect/edit/reset/import/export configuration and key bindings | WP-7 | inventory captured |
 | CKU-EDIT | `ck-edit` | edit, format, search, save, resolve conflict, and close Markdown documents | WP-8 | inventory captured |
 | CKU-CHAT | `ck-chat` | edit/send/cancel prompts, stream/copy responses, manage models/prompts | WP-9 | inventory captured |

@@ -45,6 +45,11 @@ Historical application baseline: `legacy_tv`
   terminal. The form round-trips the guided location, text, pattern,
   traversal, type, date, size, permission, and action state. Saved
   specifications and injected command execution are the next slices.
+- WP-6: `ck-du-ckvision` now accepts an application-owned directory-scan
+  snapshot and maps it into a native TreeView plus selected-directory Table.
+  The initial executable performs its scan in the composition root before
+  constructing the UI; injected asynchronous scan services, cancellation,
+  file lists, and cloud actions remain the next slices.
 
 ## 1. Mandate
 

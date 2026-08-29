@@ -14,6 +14,7 @@ target_link_libraries(ck_vision_shell PUBLIC ckvision::cvision)
 add_subdirectory(json-view)
 add_subdirectory(launcher)
 add_subdirectory(find)
+add_subdirectory(du)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_shell_tests
