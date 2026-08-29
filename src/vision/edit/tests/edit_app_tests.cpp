@@ -46,6 +46,13 @@ int main()
             "The native editor must retain the loaded document and its path.");
     require(editor.syntax_profile() == "markdown",
             "Markdown documents must select the suite-owned syntax profile through ckVision's registry.");
+    editor.document().set_text("# Heading  \n\nBody \n\n\n");
+    editor.document().mark_clean();
+    require(application.execute_command(editor.normalise_markdown_command()),
+            "Markdown normalization must dispatch through the command registry.");
+    require(editor.document().text() == "# Heading  \n\nBody\n",
+            "Markdown normalization must preserve hard breaks while removing accidental whitespace in one transaction.");
+    require(editor.document().modified(), "Markdown normalization must remain an undoable document edit.");
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");
     application.step(0);

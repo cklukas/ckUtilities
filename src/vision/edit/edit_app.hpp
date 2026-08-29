@@ -30,9 +30,11 @@ public:
     const ckv::widgets::EditorDocument &document() const noexcept;
     std::string path() const;
     std::string syntax_profile() const;
+    bool normalise_markdown();
     ckv::ui::CommandId open_command() const noexcept { return open_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId save_as_command() const noexcept { return save_as_command_; }
+    ckv::ui::CommandId normalise_markdown_command() const noexcept { return normalise_markdown_command_; }
 
 private:
     void declare_commands();
@@ -55,6 +57,7 @@ private:
     ckv::ui::CommandId open_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_as_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId normalise_markdown_command_ = ckv::ui::kInvalidCommand;
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;

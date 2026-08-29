@@ -1,5 +1,7 @@
 #include "edit_app.hpp"
 
+#include "markdown_normalization.hpp"
+
 #include <utility>
 
 #include <cvision/widgets/command_presentation.hpp>
@@ -38,6 +40,9 @@ void EditApp::declare_commands()
     save_as_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.edit.save_as", .title = "Save &As...", .category = "Editor",
         .visibility = CommandVisibility::Palette, .handler = [this] { show_save_as_dialog(); }});
+    normalise_markdown_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.edit.normalise_markdown", .title = "&Normalize Markdown whitespace", .category = "Editor",
+        .visibility = CommandVisibility::Palette, .handler = [this] { normalise_markdown(); }});
 }
 
 SuiteShellOptions EditApp::make_shell_options() const
@@ -48,10 +53,12 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{open_command_, "&Open document..."}),
                 MenuItem::command(CommandPresentation{save_command_, "&Save"}),
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
+                MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{open_command_, "&Open"}, 20},
                 StatusLineItem{CommandPresentation{save_command_, "&Save"}, 20},
+                StatusLineItem{CommandPresentation{normalise_markdown_command_, "&Normalize"}, 25},
             }};
 }
 
@@ -198,6 +205,35 @@ std::string EditApp::path() const
 std::string EditApp::syntax_profile() const
 {
     return window_ == nullptr ? std::string{} : window_->editor().profile_id();
+}
+
+bool EditApp::normalise_markdown()
+{
+    if (window_ == nullptr)
+        return false;
+    if (window_->editor().profile_id() != "markdown")
+    {
+        window_->set_footer("Markdown normalization is available for Markdown documents only.");
+        return false;
+    }
+
+    const std::string original = document_->text();
+    const std::string normalised = normalise_markdown_whitespace(original);
+    if (normalised == original)
+    {
+        window_->set_footer("Markdown whitespace is already normalized.");
+        return true;
+    }
+
+    auto transaction = document_->transaction();
+    transaction.replace({document_->begin(), document_->end()}, normalised);
+    if (!document_->commit(std::move(transaction)))
+    {
+        window_->set_footer("Could not normalize Markdown whitespace.");
+        return false;
+    }
+    window_->set_footer("Normalized Markdown whitespace.");
+    return true;
 }
 
 void EditApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)
