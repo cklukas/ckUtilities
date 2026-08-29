@@ -17,6 +17,7 @@ add_subdirectory(find)
 add_subdirectory(du)
 add_subdirectory(config)
 add_subdirectory(edit)
+add_subdirectory(chat)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_shell_tests

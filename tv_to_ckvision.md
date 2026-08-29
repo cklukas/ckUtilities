@@ -60,6 +60,11 @@ Historical application baseline: `legacy_tv`
   analyzer now builds as a framework-independent `ck_markdown_core` target.
   Markdown transformations, profiles, and conflict/close workflows remain
   the next slices.
+- WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
+  workflow with registry commands for new/send/copy. It consumes an injected
+  responder so the presentation tree does not own a model worker or transport
+  lifetime. Streaming, cancellation, Markdown adaptation, models, prompts,
+  and progress management remain the next slices.
 
 ## 1. Mandate
 

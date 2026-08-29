@@ -15,7 +15,7 @@ what users must be able to do, not how Turbo Vision implemented it.
 | CKU-DU | `ck-du` | scan, navigate, sort, inspect, cancel, and execute cloud actions | WP-6 | native snapshot TreeView and selected-directory Table implemented; injected asynchronous scanning, cancellation, file lists, and cloud actions remain |
 | CKU-CONFIG | `ck-config` | inspect/edit/reset/import/export configuration and key bindings | WP-7 | native injected-registry inspector/editor implemented with stable string keys; persistence and keymap workflows remain |
 | CKU-EDIT | `ck-edit` | edit, format, search, save, resolve conflict, and close Markdown documents | WP-8 | native injected-file editor with open/save/save-as implemented; Markdown transformations, profiles, and conflict/close workflows remain |
-| CKU-CHAT | `ck-chat` | edit/send/cancel prompts, stream/copy responses, manage models/prompts | WP-9 | inventory captured |
+| CKU-CHAT | `ck-chat` | edit/send/cancel prompts, stream/copy responses, manage models/prompts | WP-9 | native FlowView transcript, prompt dialog, and injected responder seam implemented; streaming, cancellation, Markdown, models, and prompts remain |
 | CKU-RELEASE | packaging | build, test, install, package, and run every executable | WP-10 | inventory captured |
 
 Every row will gain links to domain tests, deterministic headless scenarios,
