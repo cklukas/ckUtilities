@@ -91,7 +91,7 @@ Historical application baseline: `legacy_tv`
   `SystemPromptManager` adapter; the active prompt is carried in every response
   request. Downloaded-model selection, deactivation, and confirmed local
   deletion now use an injected `ModelManager` adapter, and the active model ID
-  is carried in every response request. The adapter now owns cancellable
+  and completed prior turns are carried in every response request. The adapter now owns cancellable
   background downloads behind a cached catalog, so rate-limited typed progress
   and completion reach the UI without racing `ModelManager` or retaining view
   pointers. The production response adapter now opens the activated local
