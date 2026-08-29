@@ -9,6 +9,7 @@
 #include <cvision/widgets/text_layout.hpp>
 
 #include "ck/find/cli_buffer_utils.hpp"
+#include "ck/find/guided_search.hpp"
 #include "ck/find/search_backend.hpp"
 
 namespace ck::vision
@@ -35,7 +36,7 @@ void FindApp::declare_commands()
 {
     new_search_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.find.new_search", .title = "&New search...", .category = "Find", .chord = "Ctrl+N",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_search_dialog(); }});
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_guided_search_dialog(); }});
     preview_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.find.preview_command", .title = "&Preview command", .category = "Find", .chord = "F5",
         .visibility = CommandVisibility::Palette, .handler = [this] { show_preview(); }});
@@ -55,35 +56,111 @@ SuiteShellOptions FindApp::make_shell_options() const
             }};
 }
 
-void FindApp::show_search_dialog()
+void FindApp::show_guided_search_dialog()
 {
     search_dialog_.reset();
+    const ck::find::GuidedSearchState state = ck::find::guidedStateFromSpecification(specification_);
     ckv::widgets::DialogDescriptor dialog;
-    dialog.title = "New search";
-    dialog.fields.push_back({"&Start location:", ck::find::bufferToString(specification_.startLocation),
+    dialog.title = "Guided search";
+    dialog.resizable = true;
+    dialog.minimum_window_size = ckv::Size{64, 20};
+    dialog.fields.push_back({"&Search name:", ck::find::bufferToString(state.specName), nullptr});
+    dialog.fields.push_back({"&Start location:", ck::find::bufferToString(state.startLocation),
                              [](const std::string &value) { return !value.empty(); }});
-    dialog.fields.push_back({"Search &text:", ck::find::bufferToString(specification_.searchText), nullptr});
-    ckv::widgets::FieldDescriptor recursive;
-    recursive.label = "Search &subdirectories";
-    recursive.kind = ckv::widgets::FieldKind::Check;
-    recursive.initial_checked = specification_.includeSubdirectories;
-    dialog.fields.push_back(std::move(recursive));
-    ckv::widgets::FieldDescriptor hidden;
-    hidden.label = "Include &hidden files";
-    hidden.kind = ckv::widgets::FieldKind::Check;
-    hidden.initial_checked = specification_.includeHidden;
-    dialog.fields.push_back(std::move(hidden));
+    dialog.fields.push_back({"Search &text:", ck::find::bufferToString(state.searchText), nullptr});
+    dialog.fields.push_back({"Include &patterns:", ck::find::bufferToString(state.includePatterns), nullptr});
+    dialog.fields.push_back({"E&xclude patterns:", ck::find::bufferToString(state.excludePatterns), nullptr});
+    dialog.fields.push_back({"Search &subdirectories", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.includeSubdirectories});
+    dialog.fields.push_back({"Include &hidden files", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.includeHidden});
+    dialog.fields.push_back({"Follow symbolic &links", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.followSymlinks});
+    dialog.fields.push_back({"Stay on the same &filesystem", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.stayOnSameFilesystem});
+    dialog.fields.push_back({"Search &target", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"Contents and file names", "Contents only", "File names only"},
+                             state.searchFileContents && state.searchFileNames ? 0 : state.searchFileContents ? 1 : 2});
+    dialog.fields.push_back({"Text &matching", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"Contains", "Whole word", "Regular expression"}, static_cast<int>(state.textMode)});
+    dialog.fields.push_back({"Match &case", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.textMatchCase});
+    dialog.fields.push_back({"Allow &multiple terms", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.textAllowMultipleTerms});
+    dialog.fields.push_back({"Treat &binary files as text", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.textTreatBinaryAsText});
+    dialog.fields.push_back({"File &type", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"All", "Documents", "Images", "Audio", "Archives", "Code", "Custom"},
+                             static_cast<int>(state.typePreset)});
+    dialog.fields.push_back({"Custom e&xtensions:", ck::find::bufferToString(state.typeCustomExtensions), nullptr});
+    dialog.fields.push_back({"Date &range", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"Any time", "Past day", "Past week", "Past month", "Past six months", "Past year", "Custom range"},
+                             static_cast<int>(state.datePreset)});
+    dialog.fields.push_back({"Date &from:", ck::find::bufferToString(state.dateFrom), nullptr});
+    dialog.fields.push_back({"Date &to:", ck::find::bufferToString(state.dateTo), nullptr});
+    dialog.fields.push_back({"&Size", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"Any size", "Larger than", "Smaller than", "Between", "Exactly", "Empty only"},
+                             static_cast<int>(state.sizePreset)});
+    dialog.fields.push_back({"Primary size:", ck::find::bufferToString(state.sizePrimary), nullptr});
+    dialog.fields.push_back({"Secondary size:", ck::find::bufferToString(state.sizeSecondary), nullptr});
+    dialog.fields.push_back({"Use &decimal size units", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.sizeUseDecimalUnits});
+    dialog.fields.push_back({"Include permission &audit", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.includePermissionAudit});
+    dialog.fields.push_back({"Fine-tune &traversal", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.includeTraversalFineTune});
+    dialog.fields.push_back({"Enable &actions", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.includeActionTweaks});
+    dialog.fields.push_back({"&List matches", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.listMatches});
+    dialog.fields.push_back({"&Delete matches", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.deleteMatches});
+    dialog.fields.push_back({"&Run command", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
+                             state.runCommand});
+    dialog.fields.push_back({"Custom command:", ck::find::bufferToString(state.customCommand), nullptr});
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     search_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
-        if (!result.accepted || result.values.size() < 4 || result.checked.size() < 4)
+        constexpr std::size_t kFieldCount = 30;
+        if (!result.accepted || result.values.size() != kFieldCount || result.checked.size() != kFieldCount ||
+            result.selected.size() != kFieldCount || result.selected[9] < 0 || result.selected[10] < 0 ||
+            result.selected[14] < 0 || result.selected[16] < 0 || result.selected[19] < 0)
             return;
-        ck::find::copyToArray(specification_.startLocation, result.values[0].c_str());
-        ck::find::copyToArray(specification_.searchText, result.values[1].c_str());
-        specification_.includeSubdirectories = result.checked[2];
-        specification_.includeHidden = result.checked[3];
-        specification_.enableTextSearch = !result.values[1].empty();
+
+        ck::find::GuidedSearchState applied = ck::find::guidedStateFromSpecification(specification_);
+        ck::find::copyToArray(applied.specName, result.values[0].c_str());
+        ck::find::copyToArray(applied.startLocation, result.values[1].c_str());
+        ck::find::copyToArray(applied.searchText, result.values[2].c_str());
+        ck::find::copyToArray(applied.includePatterns, result.values[3].c_str());
+        ck::find::copyToArray(applied.excludePatterns, result.values[4].c_str());
+        applied.includeSubdirectories = result.checked[5];
+        applied.includeHidden = result.checked[6];
+        applied.followSymlinks = result.checked[7];
+        applied.stayOnSameFilesystem = result.checked[8];
+        applied.searchFileContents = result.selected[9] != 2;
+        applied.searchFileNames = result.selected[9] != 1;
+        applied.textMode = static_cast<ck::find::TextSearchOptions::Mode>(result.selected[10]);
+        applied.textMatchCase = result.checked[11];
+        applied.textAllowMultipleTerms = result.checked[12];
+        applied.textTreatBinaryAsText = result.checked[13];
+        applied.typePreset = static_cast<ck::find::GuidedTypePreset>(result.selected[14]);
+        ck::find::copyToArray(applied.typeCustomExtensions, result.values[15].c_str());
+        applied.datePreset = static_cast<ck::find::GuidedDatePreset>(result.selected[16]);
+        ck::find::copyToArray(applied.dateFrom, result.values[17].c_str());
+        ck::find::copyToArray(applied.dateTo, result.values[18].c_str());
+        applied.sizePreset = static_cast<ck::find::GuidedSizePreset>(result.selected[19]);
+        ck::find::copyToArray(applied.sizePrimary, result.values[20].c_str());
+        ck::find::copyToArray(applied.sizeSecondary, result.values[21].c_str());
+        applied.sizeUseDecimalUnits = result.checked[22];
+        applied.includePermissionAudit = result.checked[23];
+        applied.includeTraversalFineTune = result.checked[24];
+        applied.includeActionTweaks = result.checked[25];
+        applied.listMatches = result.checked[26];
+        applied.deleteMatches = result.checked[27];
+        applied.runCommand = result.checked[28];
+        ck::find::copyToArray(applied.customCommand, result.values[29].c_str());
+        ck::find::applyGuidedStateToSpecification(applied, specification_);
         show_preview();
     });
 }

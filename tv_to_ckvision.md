@@ -40,10 +40,11 @@ Historical application baseline: `legacy_tv`
   workflow-depth, resizing, and input coverage will grow with release gates.
 - WP-5: `ck-find-ckvision` is an initial native search-specification slice.
   It keeps the specification and command-plan generation in the framework-
-  independent search core, exposes command-registry actions for a validated
-  search dialog and command preview, and renders under a headless terminal.
-  Saved specifications, the remaining typed filters, and injected command
-  execution are the next slices.
+  independent search core, exposes command-registry actions for a validated,
+  scrolling guided form and command preview, and renders under a headless
+  terminal. The form round-trips the guided location, text, pattern,
+  traversal, type, date, size, permission, and action state. Saved
+  specifications and injected command execution are the next slices.
 
 ## 1. Mandate
 
