@@ -81,7 +81,8 @@ Historical application baseline: `legacy_tv`
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
   the UI thread behind a request-generation and teardown lifetime gate, while
-  the production default adapter keeps a responder on a joinable worker.
+  the production adapter loads the activated local model and generates on a
+  joinable worker.
   Assistant Markdown is adapted by the shared framework-independent analyzer
   into styled FlowView content and link targets. Transcript export is delegated
   to an injected storage service. Native prompt selection, add/edit, default
