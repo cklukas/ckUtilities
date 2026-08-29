@@ -50,11 +50,15 @@ public:
     bool add_or_update_prompt(ChatSystemPrompt prompt);
     bool remove_prompt(std::string_view id);
     bool restore_default_prompt(std::string_view id);
+    std::vector<ChatModel> available_models() const;
     std::vector<ChatModel> downloaded_models() const;
     std::optional<ChatModel> active_model() const;
     bool activate_model(std::string_view id);
     bool deactivate_model(std::string_view id);
     bool remove_model(std::string_view id);
+    bool start_model_download(std::string_view id);
+    void cancel_model_download();
+    bool model_download_running() const noexcept;
     const std::vector<ChatMessage> &messages() const noexcept { return messages_; }
     bool response_running() const noexcept;
     ckv::widgets::FlowView *transcript() const noexcept { return transcript_; }
@@ -69,6 +73,8 @@ public:
     ckv::ui::CommandId restore_active_prompt_command() const noexcept { return restore_active_prompt_command_; }
     ckv::ui::CommandId delete_active_prompt_command() const noexcept { return delete_active_prompt_command_; }
     ckv::ui::CommandId select_model_command() const noexcept { return select_model_command_; }
+    ckv::ui::CommandId download_model_command() const noexcept { return download_model_command_; }
+    ckv::ui::CommandId cancel_model_download_command() const noexcept { return cancel_model_download_command_; }
     ckv::ui::CommandId deactivate_model_command() const noexcept { return deactivate_model_command_; }
     ckv::ui::CommandId delete_active_model_command() const noexcept { return delete_active_model_command_; }
 
@@ -83,6 +89,7 @@ private:
     void restore_active_prompt();
     void request_delete_active_prompt();
     void show_select_model_dialog();
+    void show_download_model_dialog();
     void deactivate_active_model();
     void request_delete_active_model();
     void new_chat();
@@ -94,6 +101,8 @@ private:
     std::string model_status() const;
     void append_response_chunk(std::uint64_t request, std::string chunk);
     void complete_response(std::uint64_t request, bool cancelled);
+    void update_model_download_progress(ChatModelDownloadProgress progress);
+    void complete_model_download(ChatModelDownloadResult result);
     void refresh_transcript();
 
     ckv::ui::Application &application_;
@@ -116,6 +125,8 @@ private:
     ckv::ui::CommandId restore_active_prompt_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_active_prompt_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId select_model_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId download_model_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId cancel_model_download_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId deactivate_model_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_active_model_command_ = ckv::ui::kInvalidCommand;
     std::optional<ckv::widgets::DescriptorDialogPresentation> send_dialog_;
@@ -127,6 +138,7 @@ private:
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::uint64_t active_request_ = 0;
     bool response_pending_ = false;
+    std::string model_download_status_;
 };
 
 } // namespace ck::vision

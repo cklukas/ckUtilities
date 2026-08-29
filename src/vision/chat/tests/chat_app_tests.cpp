@@ -167,12 +167,22 @@ class MemoryModelService final : public ck::vision::ChatModelService
 {
 public:
     MemoryModelService()
-        : models_{{"local", "Local assistant", "A locally available assistant.", "CPU", 512, true},
-                  {"writer", "Technical writer", "A local writing model.", "CPU", 768, false}}
+        : models_{{"local", "Local assistant", "A locally available assistant.", "CPU", 512, true, true},
+                  {"writer", "Technical writer", "A local writing model.", "CPU", 768, true, false},
+                  {"download", "Downloadable assistant", "A model ready to download.", "CPU", 1024, false, false}}
     {
     }
 
-    std::vector<ck::vision::ChatModel> downloaded_models() const override { return models_; }
+    std::vector<ck::vision::ChatModel> available_models() const override { return models_; }
+
+    std::vector<ck::vision::ChatModel> downloaded_models() const override
+    {
+        std::vector<ck::vision::ChatModel> downloaded;
+        for (const auto &model : models_)
+            if (model.is_downloaded)
+                downloaded.push_back(model);
+        return downloaded;
+    }
 
     std::optional<ck::vision::ChatModel> active_model() const override
     {
@@ -185,7 +195,7 @@ public:
     bool activate(std::string_view id) override
     {
         const auto found = std::find_if(models_.begin(), models_.end(), [id](const auto &model) {
-            return model.id == id;
+            return model.id == id && model.is_downloaded;
         });
         if (found == models_.end())
             return false;
@@ -197,7 +207,7 @@ public:
     bool deactivate(std::string_view id) override
     {
         for (auto &model : models_)
-            if (model.id == id && model.is_active)
+            if (model.id == id && model.is_downloaded && model.is_active)
             {
                 model.is_active = false;
                 return true;
@@ -208,7 +218,7 @@ public:
     bool remove(std::string_view id) override
     {
         const auto found = std::find_if(models_.begin(), models_.end(), [id](const auto &model) {
-            return model.id == id;
+            return model.id == id && model.is_downloaded;
         });
         if (found == models_.end())
             return false;
@@ -216,8 +226,55 @@ public:
         return true;
     }
 
+    bool start_download(std::string_view id, DownloadProgressHandler on_progress,
+                        DownloadCompletionHandler on_complete) override
+    {
+        if (running_)
+            return false;
+        const auto found = std::find_if(models_.begin(), models_.end(), [id](const auto &model) {
+            return model.id == id && !model.is_downloaded;
+        });
+        if (found == models_.end())
+            return false;
+        running_ = true;
+        cancelled_ = false;
+        downloading_id_ = std::string(id);
+        on_progress_ = std::move(on_progress);
+        on_complete_ = std::move(on_complete);
+        return true;
+    }
+
+    void cancel_download() noexcept override { cancelled_ = true; }
+    bool download_running() const noexcept override { return running_; }
+
+    void emit_download_progress(std::size_t downloaded, std::size_t total)
+    {
+        on_progress_({.model_id = downloading_id_,
+                      .bytes_downloaded = downloaded,
+                      .total_bytes = total,
+                      .progress_percentage = total == 0 ? 0.0 : (100.0 * downloaded) / total});
+    }
+
+    void complete_download(bool success, bool cancelled = false)
+    {
+        running_ = false;
+        cancelled_ = cancelled_ || cancelled;
+        if (success)
+            for (auto &model : models_)
+                if (model.id == downloading_id_)
+                    model.is_downloaded = true;
+        on_complete_({.model_id = downloading_id_, .success = success, .cancelled = cancelled_});
+    }
+
+    bool download_cancelled() const noexcept { return cancelled_; }
+
 private:
     std::vector<ck::vision::ChatModel> models_;
+    bool running_ = false;
+    bool cancelled_ = false;
+    std::string downloading_id_;
+    DownloadProgressHandler on_progress_;
+    DownloadCompletionHandler on_complete_;
 };
 }
 
@@ -274,6 +331,18 @@ int main()
     require(chat.active_model() && chat.active_model()->id == "writer",
             "The selected downloaded model must become the active model.");
     require(application.execute_command(chat.select_model_command()), "Model selection must dispatch through the command registry.");
+    require(application.execute_command(chat.download_model_command()), "Model download must dispatch through the command registry.");
+    require(chat.start_model_download("download"), "The chat app must start a requested model download through the service.");
+    require(chat.model_download_running(), "A started model download must be observable through the chat app.");
+    models.emit_download_progress(256, 1024);
+    application.step(0);
+    chat.cancel_model_download();
+    require(models.download_cancelled(), "Model download cancellation must be delegated to the model service.");
+    models.complete_download(false, true);
+    application.step(0);
+    require(!chat.model_download_running(), "Completed model downloads must clear the active download state.");
+    require(application.execute_command(chat.cancel_model_download_command()),
+            "Model download cancellation must dispatch through the command registry.");
     require(application.execute_command(chat.deactivate_model_command()), "Model deactivation must dispatch through the command registry.");
     require(chat.activate_model("writer"), "A deactivated model must be activatable again.");
     require(application.execute_command(chat.delete_active_model_command()),

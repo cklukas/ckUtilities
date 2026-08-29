@@ -38,6 +38,7 @@ ChatApp::~ChatApp()
 {
     lifetime_.reset();
     response_service_.cancel();
+    model_service_.cancel_download();
 }
 
 void ChatApp::declare_commands()
@@ -75,6 +76,12 @@ void ChatApp::declare_commands()
     select_model_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.select_model", .title = "Select active &model...", .category = "Chat",
         .visibility = CommandVisibility::Palette, .handler = [this] { show_select_model_dialog(); }});
+    download_model_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.download_model", .title = "&Download model...", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_download_model_dialog(); }});
+    cancel_model_download_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.cancel_model_download", .title = "Cancel model &download", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_model_download(); }});
     deactivate_model_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.deactivate_model", .title = "&Deactivate active model", .category = "Chat",
         .visibility = CommandVisibility::Palette, .handler = [this] { deactivate_active_model(); }});
@@ -103,6 +110,8 @@ SuiteShellOptions ChatApp::make_shell_options() const
             }},
             MenuBarItem{"&Models", {
                 MenuItem::command(CommandPresentation{select_model_command_, "Select active &model..."}),
+                MenuItem::command(CommandPresentation{download_model_command_, "&Download model..."}),
+                MenuItem::command(CommandPresentation{cancel_model_download_command_, "Cancel model &download"}),
                 MenuItem::command(CommandPresentation{deactivate_model_command_, "&Deactivate active model"}),
                 MenuItem::command(CommandPresentation{delete_active_model_command_, "&Delete active model"}),
             }}},
@@ -239,6 +248,11 @@ std::vector<ChatModel> ChatApp::downloaded_models() const
     return model_service_.downloaded_models();
 }
 
+std::vector<ChatModel> ChatApp::available_models() const
+{
+    return model_service_.available_models();
+}
+
 std::optional<ChatModel> ChatApp::active_model() const
 {
     return model_service_.active_model();
@@ -249,7 +263,9 @@ bool ChatApp::activate_model(std::string_view id)
     if (id.empty() || !model_service_.activate(id))
     {
         if (window_ != nullptr)
-            window_->set_footer("Could not activate the selected downloaded model.");
+            window_->set_footer(model_service_.download_running()
+                                    ? "Models cannot change while a download is in progress."
+                                    : "Could not activate the selected downloaded model.");
         return false;
     }
     refresh_transcript();
@@ -261,7 +277,9 @@ bool ChatApp::deactivate_model(std::string_view id)
     if (id.empty() || !model_service_.deactivate(id))
     {
         if (window_ != nullptr)
-            window_->set_footer("Could not deactivate the selected model.");
+            window_->set_footer(model_service_.download_running()
+                                    ? "Models cannot change while a download is in progress."
+                                    : "Could not deactivate the selected model.");
         return false;
     }
     refresh_transcript();
@@ -273,11 +291,68 @@ bool ChatApp::remove_model(std::string_view id)
     if (id.empty() || !model_service_.remove(id))
     {
         if (window_ != nullptr)
-            window_->set_footer("Could not delete that local model.");
+            window_->set_footer(model_service_.download_running()
+                                    ? "Models cannot change while a download is in progress."
+                                    : "Could not delete that local model.");
         return false;
     }
     refresh_transcript();
     return true;
+}
+
+bool ChatApp::start_model_download(std::string_view id)
+{
+    if (id.empty() || model_service_.download_running())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("A model download is already in progress.");
+        return false;
+    }
+
+    const std::weak_ptr<void> lifetime = lifetime_;
+    if (!model_service_.start_download(
+            id,
+            [this, lifetime](ChatModelDownloadProgress progress) mutable {
+                application_.post([this, lifetime, progress = std::move(progress)]() mutable {
+                    if (lifetime.expired())
+                        return;
+                    update_model_download_progress(std::move(progress));
+                });
+            },
+            [this, lifetime](ChatModelDownloadResult result) mutable {
+                application_.post([this, lifetime, result = std::move(result)]() mutable {
+                    if (lifetime.expired())
+                        return;
+                    complete_model_download(std::move(result));
+                });
+            }))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Could not start the selected model download.");
+        return false;
+    }
+
+    model_download_status_ = "Starting model download: " + std::string(id);
+    refresh_transcript();
+    return true;
+}
+
+void ChatApp::cancel_model_download()
+{
+    if (!model_service_.download_running())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("There is no active model download to cancel.");
+        return;
+    }
+    model_service_.cancel_download();
+    model_download_status_ = "Cancellation requested for model download.";
+    refresh_transcript();
+}
+
+bool ChatApp::model_download_running() const noexcept
+{
+    return model_service_.download_running();
 }
 
 void ChatApp::show_select_prompt_dialog()
@@ -422,7 +497,7 @@ void ChatApp::show_select_model_dialog()
     if (available.empty())
     {
         if (window_ != nullptr)
-            window_->set_footer("No downloaded models are available. Download support is the next chat workflow slice.");
+            window_->set_footer("No downloaded models are available. Choose Download model to add one.");
         return;
     }
 
@@ -453,6 +528,49 @@ void ChatApp::show_select_model_dialog()
             static_cast<std::size_t>(result.selected[0]) >= ids.size())
             return;
         activate_model(ids[static_cast<std::size_t>(result.selected[0])]);
+    });
+}
+
+void ChatApp::show_download_model_dialog()
+{
+    if (model_service_.download_running())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("A model download is already in progress.");
+        return;
+    }
+
+    const std::vector<ChatModel> all_models = available_models();
+    std::vector<std::string> labels;
+    std::vector<std::string> ids;
+    for (const ChatModel &model : all_models)
+    {
+        if (model.is_downloaded)
+            continue;
+        labels.push_back(model.name + " (" + model.hardware_requirements + ")");
+        ids.push_back(model.id);
+    }
+    if (ids.empty())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("All known models are already downloaded.");
+        return;
+    }
+
+    model_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Download model";
+    dialog.fields.push_back({"&Model:", "", nullptr, false, '*', ckv::widgets::FieldKind::Combo,
+                             false, std::move(labels), 0});
+    dialog.buttons.push_back({"&Download", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    model_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    model_dialog_->set_completion_handler([this, ids = std::move(ids)](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0 ||
+            static_cast<std::size_t>(result.selected[0]) >= ids.size())
+            return;
+        start_model_download(ids[static_cast<std::size_t>(result.selected[0])]);
     });
 }
 
@@ -544,7 +662,8 @@ std::string ChatApp::prompt_status() const
 std::string ChatApp::model_status() const
 {
     const std::optional<ChatModel> current = active_model();
-    return current ? "model: " + current->name : "no active model";
+    const std::string current_status = current ? "model: " + current->name : "no active model";
+    return model_download_status_.empty() ? current_status : model_download_status_ + "; " + current_status;
 }
 
 bool ChatApp::export_transcript(const std::string &path)
@@ -597,6 +716,25 @@ void ChatApp::complete_response(std::uint64_t request, bool cancelled)
     refresh_transcript();
     if (window_ != nullptr && cancelled)
         window_->set_footer("Response cancelled; " + std::to_string(messages_.size()) + " messages");
+}
+
+void ChatApp::update_model_download_progress(ChatModelDownloadProgress progress)
+{
+    model_download_status_ = "Downloading " + progress.model_id + ": " +
+                             std::to_string(static_cast<int>(progress.progress_percentage)) + "%";
+    refresh_transcript();
+}
+
+void ChatApp::complete_model_download(ChatModelDownloadResult result)
+{
+    if (result.success)
+        model_download_status_ = "Downloaded model: " + result.model_id;
+    else if (result.cancelled)
+        model_download_status_ = "Model download cancelled: " + result.model_id;
+    else
+        model_download_status_ = "Model download failed: " + result.model_id +
+                                 (result.error_message.empty() ? std::string{} : " (" + result.error_message + ")");
+    refresh_transcript();
 }
 
 bool ChatApp::response_running() const noexcept

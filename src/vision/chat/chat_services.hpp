@@ -70,37 +70,77 @@ struct ChatModel
     std::string description;
     std::string hardware_requirements;
     std::size_t size_bytes = 0;
+    bool is_downloaded = false;
     bool is_active = false;
 };
 
-// Model selection and local deletion are application workflows. Download and
-// runtime loading remain separate asynchronous concerns rather than making a
-// dialog reach into the model runtime or filesystem itself.
+struct ChatModelDownloadProgress
+{
+    std::string model_id;
+    std::size_t bytes_downloaded = 0;
+    std::size_t total_bytes = 0;
+    double progress_percentage = 0.0;
+};
+
+struct ChatModelDownloadResult
+{
+    std::string model_id;
+    bool success = false;
+    bool cancelled = false;
+    std::string error_message;
+};
+
+// Model selection, local deletion, and downloads are application workflows.
+// The presentation talks to this service only; the production adapter owns the
+// worker and keeps the ModelManager isolated from the UI thread while a
+// download is in flight.
 class ChatModelService
 {
 public:
+    using DownloadProgressHandler = std::function<void(ChatModelDownloadProgress)>;
+    using DownloadCompletionHandler = std::function<void(ChatModelDownloadResult)>;
+
     virtual ~ChatModelService() = default;
 
+    virtual std::vector<ChatModel> available_models() const = 0;
     virtual std::vector<ChatModel> downloaded_models() const = 0;
     virtual std::optional<ChatModel> active_model() const = 0;
     virtual bool activate(std::string_view id) = 0;
     virtual bool deactivate(std::string_view id) = 0;
     virtual bool remove(std::string_view id) = 0;
+    virtual bool start_download(std::string_view id, DownloadProgressHandler on_progress,
+                                DownloadCompletionHandler on_complete) = 0;
+    virtual void cancel_download() noexcept = 0;
+    virtual bool download_running() const noexcept = 0;
 };
 
 class ModelManagerService final : public ChatModelService
 {
 public:
-    explicit ModelManagerService(ck::ai::ModelManager &manager) noexcept;
+    explicit ModelManagerService(ck::ai::ModelManager &manager);
+    ~ModelManagerService() override;
 
+    std::vector<ChatModel> available_models() const override;
     std::vector<ChatModel> downloaded_models() const override;
     std::optional<ChatModel> active_model() const override;
     bool activate(std::string_view id) override;
     bool deactivate(std::string_view id) override;
     bool remove(std::string_view id) override;
+    bool start_download(std::string_view id, DownloadProgressHandler on_progress,
+                        DownloadCompletionHandler on_complete) override;
+    void cancel_download() noexcept override;
+    bool download_running() const noexcept override;
 
 private:
+    void refresh_models_locked();
+
     ck::ai::ModelManager &manager_;
+    mutable std::mutex mutex_;
+    std::vector<ChatModel> available_models_;
+    std::vector<ChatModel> downloaded_models_;
+    std::jthread worker_;
+    std::shared_ptr<std::atomic_bool> cancellation_;
+    std::atomic_bool download_running_{false};
 };
 
 struct ChatResponseRequest
