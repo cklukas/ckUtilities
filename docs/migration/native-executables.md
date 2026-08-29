@@ -6,7 +6,7 @@ dependencies; it does not mix ckVision with Turbo Vision in the same process.
 
 | Product | Native executable | Current native scope | Remaining scope before cutover |
 |---|---|---|---|
-| Utilities launcher | `ck-utilities-ckvision` | launcher, calendar, ASCII table, calculator, color selector, bounded diagnostics | failure/repeat-window interaction coverage and release acceptance |
+| Utilities launcher | `ck-utilities-ckvision` | launcher, calendar, ASCII table, calculator, color selector, bounded diagnostics, staged missing-tool failure, and repeat/close/quit window lifecycle | resize/input coverage and release acceptance |
 | JSON view | `ck-json-view-ckvision` | open, tree navigation, find, copy, expansion | large/provider-backed tree measurement and final cutover |
 | Find | `ck-find-ckvision` | guided specification form, command preview, save/load, background execution/cancellation, and confirmed deletion of matching regular files or symbolic links | sandboxed custom-command policy and parity acceptance |
 | Disk usage | `ck-du-ckvision` | background cancellable snapshot scan, tree, selected-directory and file-list tables; selected-directory iCloud download and confirmation-gated local-copy eviction via a cancellable macOS adapter | recursive/provider policy, parity acceptance |
