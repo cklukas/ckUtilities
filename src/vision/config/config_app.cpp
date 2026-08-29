@@ -131,8 +131,10 @@ private:
 
 ConfigApp::~ConfigApp() = default;
 
-ConfigApp::ConfigApp(ckv::ui::Application &application, ck::config::OptionRegistry &registry)
-    : application_(application), registry_(registry), model_(std::make_unique<OptionTableModel>(registry_))
+ConfigApp::ConfigApp(ckv::ui::Application &application,
+                     ck::config::OptionRegistry &registry,
+                     ConfigPersistence &persistence)
+    : application_(application), registry_(registry), persistence_(persistence), model_(std::make_unique<OptionTableModel>(registry_))
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -147,19 +149,29 @@ void ConfigApp::declare_commands()
     reset_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.config.reset_selected", .title = "&Reset selected option", .category = "Configuration",
         .visibility = CommandVisibility::Palette, .handler = [this] { reset_selected(); }});
+    save_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.config.save", .title = "&Save configuration", .category = "Configuration", .chord = "Ctrl+S",
+        .visibility = CommandVisibility::Palette, .handler = [this] { save(); }});
+    reload_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.config.reload", .title = "&Reload saved configuration", .category = "Configuration", .chord = "Ctrl+R",
+        .visibility = CommandVisibility::Palette, .handler = [this] { reload(); }});
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const
 {
     return {.application_name = "ck Config",
-            .about_text = "A native ckVision editor for an injected option registry.",
+            .about_text = "A native ckVision editor for an injected option registry and persistence policy.",
             .application_menus = {MenuBarItem{"&Options", {
                 MenuItem::command(CommandPresentation{edit_command_, "&Edit selected option"}),
                 MenuItem::command(CommandPresentation{reset_command_, "&Reset selected option"}),
+                MenuItem::command(CommandPresentation{save_command_, "&Save configuration"}),
+                MenuItem::command(CommandPresentation{reload_command_, "&Reload saved configuration"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{edit_command_, "&Edit"}, 20},
                 StatusLineItem{CommandPresentation{reset_command_, "&Reset"}, 20},
+                StatusLineItem{CommandPresentation{save_command_, "&Save"}, 20},
+                StatusLineItem{CommandPresentation{reload_command_, "&Reload"}, 25},
             }};
 }
 
@@ -194,8 +206,7 @@ void ConfigApp::refresh()
         selected_key_ = model_->definition(1)->key;
     if (const auto id = model_->id_for_key(selected_key_))
         table_->set_selected_cell({*id, 0});
-    if (window_ != nullptr)
-        window_->set_footer(std::to_string(option_count()) + " registered options; persistence is owned by the composition root.");
+    set_status(std::to_string(option_count()) + " registered options.");
 }
 
 bool ConfigApp::select_option(std::string_view key)
@@ -267,6 +278,31 @@ void ConfigApp::reset_selected()
         registry_.reset(definition->key);
         refresh();
     }
+}
+
+void ConfigApp::save()
+{
+    if (persistence_.save(registry_))
+        set_status("Saved configuration for " + registry_.appId() + ".");
+    else
+        set_status("Could not save configuration for " + registry_.appId() + ".");
+}
+
+void ConfigApp::reload()
+{
+    if (!persistence_.load(registry_))
+    {
+        set_status("No saved configuration could be loaded for " + registry_.appId() + ".");
+        return;
+    }
+    refresh();
+    set_status("Reloaded saved configuration for " + registry_.appId() + ".");
+}
+
+void ConfigApp::set_status(std::string text)
+{
+    if (window_ != nullptr)
+        window_->set_footer(std::move(text));
 }
 
 std::size_t ConfigApp::option_count() const noexcept

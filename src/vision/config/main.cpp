@@ -10,10 +10,12 @@ int main()
 {
     ck::config::OptionRegistry registry("ck-du");
     ck::du::registerDiskUsageOptions(registry);
+    ck::vision::DefaultConfigPersistence persistence;
+    persistence.load(registry);
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
-    ck::vision::ConfigApp config(application, registry);
+    ck::vision::ConfigApp config(application, registry, persistence);
     application.run();
     return 0;
 }

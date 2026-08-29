@@ -10,7 +10,7 @@ dependencies; it does not mix ckVision with Turbo Vision in the same process.
 | JSON view | `ck-json-view-ckvision` | open, tree navigation, find, copy, expansion | large/provider-backed tree measurement and final cutover |
 | Find | `ck-find-ckvision` | guided specification form, command preview, save/load, background non-destructive execution, and cancellation | destructive action confirmation and parity acceptance |
 | Disk usage | `ck-du-ckvision` | background cancellable snapshot scan, tree, selected-directory table | file lists, cloud actions, parity acceptance |
-| Config | `ck-config-ckvision` | injected option registry inspect/edit/reset | persistence, keymap capture/conflicts, import/export, reload |
+| Config | `ck-config-ckvision` | injected option registry inspect/edit/reset/save/reload | keymap capture/conflicts, import/export, cross-app reload |
 | Edit | `ck-edit-ckvision` | native document open/save/save-as | Markdown transactions/profiles, conflict and close decisions |
 | Chat | `ck-chat-ckvision` | FlowView transcript, prompt, copy, injected responder | streaming, cancellation, Markdown, models/prompts, progress |
 
