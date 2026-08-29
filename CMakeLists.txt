@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.25)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(VersionFromGit)
+include(CkVisionPackage)
+include(CheckUiBoundaries)
 set(CKTOOLS_VERSION "0.1.0" CACHE STRING "ck-utilities version" FORCE)
 message(STATUS "ck-utilities version: ${CKTOOLS_VERSION}")
 
@@ -25,6 +27,9 @@ include(CTest)
 if(BUILD_TESTING)
   enable_testing()
 endif()
+
+cktools_add_ui_boundary_check()
+cktools_add_ckvision_package_verification()
 
 add_subdirectory(src/tools)
 add_subdirectory(src/common)
