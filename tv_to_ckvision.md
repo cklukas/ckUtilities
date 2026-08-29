@@ -135,10 +135,13 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `bf4c1c6404d58f33693d84e7654789cf60413839` now provides
+  ckVision candidate `b3b754f` provides
   a checked `FlowView::replace_block` API with incremental realized-tail
   reflow, which the active response uses to avoid rebuilding prior
-  rich-content blocks. Real-model runtime evidence remains before acceptance.
+  rich-content blocks. The same candidate retains materialized `TreeView`
+  visible rows until roots or expansion state changes, so an unchanged tree is
+  not re-flattened on every redraw. Real-model runtime evidence remains before
+  acceptance.
 - All seven native executables build together against the installed ckVision
   candidate SDK. Their headless suite, JSON-domain, and architecture tests
   pass as one 19-test checkpoint. A separate installed-product gate builds the
@@ -160,7 +163,9 @@ Historical application baseline: `legacy_tv`
   `CKVISION_SANITIZE=address,undefined` also passes all 74 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
-  release SDK built with ad-hoc sanitizer flags.
+  release SDK built with ad-hoc sanitizer flags. The clean detached candidate
+  passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
+  cutover configuration's 74-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 
@@ -520,11 +525,12 @@ Deliverables:
 Likely ckVision gap to validate:
 
 - TreeView's current 0.1 model is materialized, with lazy expansion but no
-  provider-backed stable-identity tree model. Large JSON and later disk trees
-  may require a generic provider-backed tree with stable node IDs,
-  incremental refresh, and selection/expansion preservation. If the measured
-  scenarios need it, this becomes a ckVision work package rather than a
-  ckUtilities shadow tree widget.
+  provider-backed stable-identity tree model. The current candidate avoids
+  re-flattening unchanged visible rows through a retained materialized cache;
+  large JSON and later disk trees may still require a generic provider-backed
+  tree with stable node IDs, incremental refresh, and selection/expansion
+  preservation. If the measured scenarios need it, this becomes a ckVision
+  work package rather than a ckUtilities shadow tree widget.
 
 Exit criteria:
 
