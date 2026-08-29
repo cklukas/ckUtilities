@@ -62,7 +62,7 @@ void FindApp::declare_commands()
         .visibility = CommandVisibility::Palette, .handler = [this] { show_load_dialog(); }});
     execute_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.find.execute_search", .title = "&Run search", .category = "Find", .chord = "F9",
-        .visibility = CommandVisibility::Palette, .handler = [this] { start_execution(); }});
+        .visibility = CommandVisibility::Palette, .handler = [this] { request_execution(); }});
     cancel_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.find.cancel_search", .title = "&Cancel search", .category = "Find", .chord = "Ctrl+C",
         .visibility = CommandVisibility::Palette, .handler = [this] { cancel_execution(); }});
@@ -284,12 +284,17 @@ std::string FindApp::command_preview() const
     return output.str();
 }
 
+void FindApp::set_specification(ck::find::SearchSpecification specification)
+{
+    specification_ = std::move(specification);
+}
+
 void FindApp::show_preview()
 {
     present_text_window("Find command preview", command_preview());
 }
 
-void FindApp::start_execution()
+void FindApp::request_execution()
 {
     if (execution_service_.running())
     {
@@ -297,16 +302,50 @@ void FindApp::start_execution()
         return;
     }
 
+    if (specification_.enableActionOptions && specification_.actionOptions.deleteMatches)
+    {
+        destructive_confirmation_.reset();
+        destructive_confirmation_.emplace(ckv::widgets::present_message_box(
+            application_, shell_->desktop(), shell_->roles(),
+            {ckv::widgets::MessageBoxKind::Warning,
+             "Delete matched files",
+             "Delete matching regular files and symbolic links under '" +
+                 ck::find::bufferToString(specification_.startLocation) +
+                 "'? Directories and custom commands will not be executed. This cannot be undone.",
+             ckv::widgets::MessageBoxButtons::YesNoCancel}));
+        destructive_confirmation_->set_completion_handler([this](ckv::widgets::MessageBoxResult result) {
+            if (result == ckv::widgets::MessageBoxResult::Yes)
+                start_execution(true);
+        });
+        return;
+    }
+
+    if (specification_.enableActionOptions && specification_.actionOptions.execEnabled)
+    {
+        present_text_window("Find execution",
+                            "Custom command actions are preview-only in the native workflow until a separately sandboxed executor is available.");
+        return;
+    }
+
+    start_execution(false);
+}
+
+void FindApp::start_execution(bool delete_matched_files)
+{
+
     last_execution_result_.reset();
     const std::weak_ptr<void> lifetime = lifetime_;
-    execution_service_.start(specification_, [this, lifetime](ck::find::SearchExecutionResult result) mutable {
+    execution_service_.start(specification_, delete_matched_files,
+                             [this, lifetime](ck::find::SearchExecutionResult result) mutable {
         application_.post([this, lifetime, result = std::move(result)]() mutable {
             if (lifetime.expired())
-                return;
+            return;
             complete_execution(std::move(result));
         });
     });
-    present_text_window("Find execution", "Search is running. The search stays non-destructive; action mutations require their own confirmation workflow.");
+    present_text_window("Find execution", delete_matched_files
+                                             ? "Confirmed deletion is running. Only matching regular files and symbolic links can be removed."
+                                             : "Search is running without actions.");
 }
 
 void FindApp::cancel_execution()
@@ -329,6 +368,13 @@ void FindApp::complete_execution(ck::find::SearchExecutionResult result)
         output << "Search completed with " << result.matchCount << " match(es).\n";
     else
         output << "Search completed with exit code " << result.exitCode << " after " << result.matchCount << " match(es).\n";
+
+    if (result.deletedCount != 0 || result.failedDeletionCount != 0)
+    {
+        output << "Deleted " << result.deletedCount << " matching file(s) or symbolic link(s).\n";
+        if (result.failedDeletionCount != 0)
+            output << result.failedDeletionCount << " matching file(s) could not be deleted.\n";
+    }
 
     for (const auto &match : result.matches)
         output << match.string() << '\n';

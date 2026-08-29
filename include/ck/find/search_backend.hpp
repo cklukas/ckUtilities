@@ -45,6 +45,10 @@ struct SearchExecutionResult
     int exitCode = 0;
     bool cancelled = false;
     std::size_t matchCount = 0;
+    // Application adapters that apply an explicitly authorized file action
+    // report its outcome separately from matching and traversal errors.
+    std::size_t deletedCount = 0;
+    std::size_t failedDeletionCount = 0;
     std::vector<std::filesystem::path> matches;
     std::vector<std::string> command;
 };

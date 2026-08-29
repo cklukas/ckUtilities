@@ -36,9 +36,11 @@ public:
 class ManualExecution final : public ck::vision::FindExecutionService
 {
 public:
-    void start(ck::find::SearchSpecification, CompletionHandler on_complete) override
+    void start(ck::find::SearchSpecification, bool delete_matched_files, CompletionHandler on_complete) override
     {
         running_ = true;
+        cancelled_ = false;
+        delete_matched_files_ = delete_matched_files;
         on_complete_ = std::move(on_complete);
     }
 
@@ -52,10 +54,12 @@ public:
     }
 
     bool cancelled() const noexcept { return cancelled_; }
+    bool delete_matched_files() const noexcept { return delete_matched_files_; }
 
 private:
     bool running_ = false;
     bool cancelled_ = false;
+    bool delete_matched_files_ = false;
     CompletionHandler on_complete_;
 };
 }
@@ -91,13 +95,30 @@ int main()
         file << "match";
     }
 
+    auto destructive_specification = ck::find::makeDefaultSpecification();
+    ck::find::copyToArray(destructive_specification.startLocation, directory.string().c_str());
+    destructive_specification.enableActionOptions = true;
+    destructive_specification.actionOptions.deleteMatches = true;
+    find.set_specification(destructive_specification);
+    require(application.execute_command(find.execute_command()),
+            "Destructive execution must dispatch through the command registry.");
+    require(!execution.running(), "Destructive execution must wait for explicit confirmation.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(execution.running() && execution.delete_matched_files(),
+            "Accepting the native confirmation must grant only the deletion capability to the execution service.");
+    execution.finish({.exitCode = 0, .matchCount = 1, .deletedCount = 1});
+    application.step(0);
+    require(find.last_execution_result()->deletedCount == 1,
+            "Confirmed deletion outcomes must return to the native presentation on the UI thread.");
+
     auto specification = ck::find::makeDefaultSpecification();
     ck::find::copyToArray(specification.startLocation, directory.string().c_str());
     ck::vision::ThreadedFindExecutionService threaded_execution;
     std::mutex completion_mutex;
     std::condition_variable completion_ready;
     std::optional<ck::find::SearchExecutionResult> threaded_result;
-    threaded_execution.start(specification, [&](ck::find::SearchExecutionResult result) {
+    threaded_execution.start(specification, false, [&](ck::find::SearchExecutionResult result) {
         {
             std::scoped_lock lock(completion_mutex);
             threaded_result = std::move(result);
@@ -111,5 +132,27 @@ int main()
     }
     require(threaded_result->exitCode == 0 && threaded_result->matchCount >= 1,
             "The threaded execution service must return the search-core result.");
+
+    const fs::path deletable = directory / "delete-me.txt";
+    {
+        std::ofstream file(deletable);
+        file << "delete";
+    }
+    std::optional<ck::find::SearchExecutionResult> deletion_result;
+    threaded_execution.start(specification, true, [&](ck::find::SearchExecutionResult result) {
+        {
+            std::scoped_lock lock(completion_mutex);
+            deletion_result = std::move(result);
+        }
+        completion_ready.notify_one();
+    });
+    {
+        std::unique_lock lock(completion_mutex);
+        require(completion_ready.wait_for(lock, std::chrono::seconds(2), [&] { return deletion_result.has_value(); }),
+                "Confirmed deletion must complete through the injected execution service.");
+    }
+    require(!fs::exists(deletable) && !fs::exists(directory / "match.txt") && fs::exists(directory) &&
+                deletion_result->deletedCount == 2 && deletion_result->failedDeletionCount == 0,
+            "Confirmed deletion must remove matching regular files without deleting the containing directory.");
     fs::remove_all(directory);
 }

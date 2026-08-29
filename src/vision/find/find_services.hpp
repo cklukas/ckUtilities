@@ -45,7 +45,10 @@ public:
 
     virtual ~FindExecutionService() = default;
 
-    virtual void start(ck::find::SearchSpecification specification, CompletionHandler on_complete) = 0;
+    // Deletion is an explicit execution capability granted only after the UI
+    // has confirmed the specification. All other actions remain disabled.
+    virtual void start(ck::find::SearchSpecification specification, bool delete_matched_files,
+                       CompletionHandler on_complete) = 0;
     virtual void cancel() noexcept = 0;
     virtual bool running() const noexcept = 0;
 };
@@ -58,7 +61,8 @@ class ThreadedFindExecutionService final : public FindExecutionService
 public:
     ~ThreadedFindExecutionService() override;
 
-    void start(ck::find::SearchSpecification specification, CompletionHandler on_complete) override;
+    void start(ck::find::SearchSpecification specification, bool delete_matched_files,
+               CompletionHandler on_complete) override;
     void cancel() noexcept override;
     bool running() const noexcept override;
 
