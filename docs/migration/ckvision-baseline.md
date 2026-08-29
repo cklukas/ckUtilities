@@ -81,11 +81,18 @@ to CI as an installed package.
 ```sh
 cmake -S . -B build/cutover \
   -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
 cmake --build build/cutover
 ctest --test-dir build/cutover --output-on-failure
+cmake --build build/cutover --target verify_ckvision_cutover
 ```
+
+The final command rebuilds and stages the product, verifies each production
+binary's runtime linkage, and rejects any installed legacy runtime artifact or
+legacy public-header reference. It is a negative gate for the cutover product,
+not evidence that the remaining tracked legacy sources have been removed.
 
 ## Pin update rule
 

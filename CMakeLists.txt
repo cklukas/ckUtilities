@@ -61,6 +61,7 @@ endif()
 cktools_add_ui_boundary_check()
 cktools_add_ckvision_package_verification()
 cktools_add_ckvision_install_verification()
+cktools_add_ckvision_cutover_verification()
 
 if(CKTOOLS_CKVISION_CUTOVER)
   include(AddCkTool)

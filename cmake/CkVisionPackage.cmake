@@ -65,3 +65,17 @@ function(cktools_add_ckvision_install_verification)
     USES_TERMINAL
     COMMENT "Install and smoke-test every native ckVision executable")
 endfunction()
+
+function(cktools_add_ckvision_cutover_verification)
+  if(NOT CKTOOLS_CKVISION_CUTOVER OR NOT CKTOOLS_VERIFY_CKVISION_INSTALL)
+    return()
+  endif()
+
+  add_custom_target(verify_ckvision_cutover
+    COMMAND "${CMAKE_COMMAND}"
+      "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
+      -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionCutover.cmake"
+    DEPENDS verify_ckvision_install
+    USES_TERMINAL
+    COMMENT "Verify that the staged cutover product has no legacy UI artifacts")
+endfunction()

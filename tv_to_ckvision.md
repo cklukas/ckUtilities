@@ -142,8 +142,10 @@ Historical application baseline: `legacy_tv`
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
   74-test cutover configuration, independent package consumer, and staged
-  installed-product smoke gate pass. It remains opt-in until the candidate is
-  accepted upstream and can be installed reproducibly in CI.
+  installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
+  rejects legacy product linkage, installed legacy artifacts, and legacy
+  references in installed public headers. It remains opt-in until the
+  candidate is accepted upstream and can be installed reproducibly in CI.
 
 ## 1. Mandate
 

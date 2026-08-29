@@ -25,3 +25,7 @@ only these native products and framework-neutral cores, publishes the standard
 product names, and excludes the legacy UI runtime from configuration and
 installation. It remains opt-in while the selected ckVision candidate awaits
 trunk acceptance and a CI-consumable installed package.
+
+With `CKTOOLS_VERIFY_CKVISION_INSTALL=ON`, the
+`verify_ckvision_cutover` target also rejects legacy runtime linkage, installed
+legacy artifacts, and legacy references in the product's public headers.
