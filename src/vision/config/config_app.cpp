@@ -155,6 +155,12 @@ void ConfigApp::declare_commands()
     reload_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.config.reload", .title = "&Reload saved configuration", .category = "Configuration", .chord = "Ctrl+R",
         .visibility = CommandVisibility::Palette, .handler = [this] { reload(); }});
+    import_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.config.import", .title = "&Import configuration...", .category = "Configuration",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_import_dialog(); }});
+    export_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.config.export", .title = "&Export configuration...", .category = "Configuration",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_export_dialog(); }});
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const
@@ -166,12 +172,16 @@ SuiteShellOptions ConfigApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{reset_command_, "&Reset selected option"}),
                 MenuItem::command(CommandPresentation{save_command_, "&Save configuration"}),
                 MenuItem::command(CommandPresentation{reload_command_, "&Reload saved configuration"}),
+                MenuItem::command(CommandPresentation{import_command_, "&Import configuration..."}),
+                MenuItem::command(CommandPresentation{export_command_, "&Export configuration..."}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{edit_command_, "&Edit"}, 20},
                 StatusLineItem{CommandPresentation{reset_command_, "&Reset"}, 20},
                 StatusLineItem{CommandPresentation{save_command_, "&Save"}, 20},
                 StatusLineItem{CommandPresentation{reload_command_, "&Reload"}, 25},
+                StatusLineItem{CommandPresentation{import_command_, "&Import"}, 20},
+                StatusLineItem{CommandPresentation{export_command_, "&Export"}, 20},
             }};
 }
 
@@ -216,6 +226,29 @@ bool ConfigApp::select_option(std::string_view key)
         return false;
     selected_key_ = std::string(key);
     table_->set_selected_cell({*id, 0});
+    return true;
+}
+
+bool ConfigApp::import_configuration(const std::string &path)
+{
+    if (path.empty() || !persistence_.import_from(registry_, path))
+    {
+        set_status("Could not import configuration from " + path + ".");
+        return false;
+    }
+    refresh();
+    set_status("Imported configuration from " + path + ".");
+    return true;
+}
+
+bool ConfigApp::export_configuration(const std::string &path)
+{
+    if (path.empty() || !persistence_.export_to(registry_, path))
+    {
+        set_status("Could not export configuration to " + path + ".");
+        return false;
+    }
+    set_status("Exported configuration to " + path + ".");
     return true;
 }
 
@@ -297,6 +330,37 @@ void ConfigApp::reload()
     }
     refresh();
     set_status("Reloaded saved configuration for " + registry_.appId() + ".");
+}
+
+void ConfigApp::show_import_dialog()
+{
+    transfer_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Import configuration";
+    dialog.fields.push_back({"&Path:", "", [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Import", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    transfer_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    transfer_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (result.accepted && result.values.size() == 1)
+            import_configuration(result.values.front());
+    });
+}
+
+void ConfigApp::show_export_dialog()
+{
+    transfer_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Export configuration";
+    dialog.fields.push_back({"&Path:", registry_.defaultOptionsPath().string() + ".export.json",
+                             [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Export", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    transfer_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    transfer_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (result.accepted && result.values.size() == 1)
+            export_configuration(result.values.front());
+    });
 }
 
 void ConfigApp::set_status(std::string text)

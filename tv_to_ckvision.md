@@ -61,9 +61,9 @@ Historical application baseline: `legacy_tv`
   option's stable string name. Save and reload are now registry commands
   delegated to an injected persistence policy; the production composition
   root retains the established JSON defaults format without giving the UI a
-  filesystem dependency. Runtime keymap capture, normalized chords, conflict
-  analysis, import/export, and cross-app reload remain contingent on a
-  ckVision-native keymap design.
+  filesystem dependency. Import and export use that same injected boundary.
+  Runtime keymap capture, normalized chords, conflict analysis, and cross-app
+  reload remain contingent on a ckVision-native keymap design.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
   injected file service for native open/save/save-as workflows. Dirty-window
   close now presents an explicit Save/Discard/Cancel decision and invokes the

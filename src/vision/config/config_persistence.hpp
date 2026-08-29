@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "ck/options.hpp"
 
 namespace ck::vision
@@ -15,6 +17,8 @@ public:
 
     virtual bool load(ck::config::OptionRegistry &registry) = 0;
     virtual bool save(const ck::config::OptionRegistry &registry) = 0;
+    virtual bool import_from(ck::config::OptionRegistry &registry, const std::string &path) = 0;
+    virtual bool export_to(const ck::config::OptionRegistry &registry, const std::string &path) = 0;
 };
 
 // Retains the suite's JSON defaults format while keeping its location outside
@@ -24,6 +28,8 @@ class DefaultConfigPersistence final : public ConfigPersistence
 public:
     bool load(ck::config::OptionRegistry &registry) override;
     bool save(const ck::config::OptionRegistry &registry) override;
+    bool import_from(ck::config::OptionRegistry &registry, const std::string &path) override;
+    bool export_to(const ck::config::OptionRegistry &registry, const std::string &path) override;
 };
 
 } // namespace ck::vision

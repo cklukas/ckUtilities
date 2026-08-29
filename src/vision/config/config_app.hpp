@@ -31,6 +31,8 @@ public:
     ~ConfigApp();
 
     bool select_option(std::string_view key);
+    bool import_configuration(const std::string &path);
+    bool export_configuration(const std::string &path);
     std::string selected_key() const { return selected_key_; }
     std::size_t option_count() const noexcept;
     ckv::widgets::Table *table() const noexcept { return table_; }
@@ -38,6 +40,8 @@ public:
     ckv::ui::CommandId reset_command() const noexcept { return reset_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId reload_command() const noexcept { return reload_command_; }
+    ckv::ui::CommandId import_command() const noexcept { return import_command_; }
+    ckv::ui::CommandId export_command() const noexcept { return export_command_; }
 
 private:
     void declare_commands();
@@ -48,6 +52,8 @@ private:
     void reset_selected();
     void save();
     void reload();
+    void show_import_dialog();
+    void show_export_dialog();
     void set_status(std::string text);
     const ck::config::OptionDefinition *selected_definition() const;
 
@@ -62,8 +68,11 @@ private:
     ckv::ui::CommandId reset_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId reload_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId import_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId export_command_ = ckv::ui::kInvalidCommand;
     std::string selected_key_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> edit_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> transfer_dialog_;
 };
 
 } // namespace ck::vision
