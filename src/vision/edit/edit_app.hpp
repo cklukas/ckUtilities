@@ -11,8 +11,10 @@
 #include <cvision/widgets/editor_window.hpp>
 #include <cvision/widgets/file_dialog.hpp>
 #include <cvision/widgets/message_box.hpp>
+#include <cvision/widgets/syntax_profile.hpp>
 
 #include "ck/vision/suite_shell.hpp"
+#include "markdown_profile.hpp"
 
 namespace ck::vision
 {
@@ -27,6 +29,7 @@ public:
     ckv::widgets::EditorDocument &document() noexcept;
     const ckv::widgets::EditorDocument &document() const noexcept;
     std::string path() const;
+    std::string syntax_profile() const;
     ckv::ui::CommandId open_command() const noexcept { return open_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId save_as_command() const noexcept { return save_as_command_; }
@@ -46,6 +49,7 @@ private:
     ckv::ui::Application &application_;
     ckv::FileSystem &files_;
     std::shared_ptr<ckv::widgets::EditorDocument> document_;
+    ckv::widgets::SyntaxProfileRegistry profiles_;
     std::unique_ptr<SuiteShell> shell_;
     ckv::widgets::EditorWindow *window_ = nullptr;
     ckv::ui::CommandId open_command_ = ckv::ui::kInvalidCommand;

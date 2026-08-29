@@ -20,6 +20,8 @@ using ckv::widgets::StatusLineItem;
 EditApp::EditApp(ckv::ui::Application &application, ckv::FileSystem &files)
     : application_(application), files_(files), document_(std::make_shared<ckv::widgets::EditorDocument>())
 {
+    ckv::widgets::register_standard_syntax_profiles(profiles_);
+    register_markdown_syntax_profile(profiles_);
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     create_editor_window();
@@ -55,7 +57,7 @@ SuiteShellOptions EditApp::make_shell_options() const
 
 void EditApp::create_editor_window()
 {
-    auto window = std::make_unique<ckv::widgets::EditorWindow>("ck Edit", document_, files_);
+    auto window = std::make_unique<ckv::widgets::EditorWindow>("ck Edit", document_, files_, &profiles_);
     window->set_bounds(shell_->desktop().content_area());
     window->set_min_size(ckv::Size{60, 16});
     window->set_grow_policy(ckv::widgets::DesktopGrowPolicy::KeepFilling);
@@ -191,6 +193,11 @@ const ckv::widgets::EditorDocument &EditApp::document() const noexcept
 std::string EditApp::path() const
 {
     return window_ == nullptr ? std::string{} : window_->controller().path();
+}
+
+std::string EditApp::syntax_profile() const
+{
+    return window_ == nullptr ? std::string{} : window_->editor().profile_id();
 }
 
 void EditApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)

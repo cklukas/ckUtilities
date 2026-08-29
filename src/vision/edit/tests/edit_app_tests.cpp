@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -19,6 +20,21 @@ void require(bool value, const char *message)
 
 int main()
 {
+    ckv::widgets::SyntaxProfileRegistry profiles;
+    require(ck::vision::register_markdown_syntax_profile(profiles),
+            "The suite Markdown profile must register in an application-owned registry.");
+    const auto *markdown = profiles.find("markdown");
+    require(markdown != nullptr && markdown->detect({std::nullopt, "notes.md", {}, {}}).score > 0,
+            "The Markdown profile must detect Markdown filenames without global registration.");
+    const auto heading = markdown->highlight_line("# Heading", "");
+    require(!heading.spans.empty() && heading.spans.front().kind == ckv::widgets::SyntaxTokenKind::Keyword,
+            "The Markdown profile must style headings through syntax tokens.");
+    const auto fence = markdown->highlight_line("```cpp", "");
+    const auto code = markdown->highlight_line("int value = 1;", fence.next_state);
+    require(!fence.next_state.empty() && !code.spans.empty() &&
+                code.spans.front().kind == ckv::widgets::SyntaxTokenKind::String,
+            "The Markdown profile must carry fenced-code state between lines.");
+
     ckv::MemoryFileSystem files;
     files.add_file("/notes.md", "# Notes\n\nNative editor test.\n");
     ckv::ManualClock clock;
@@ -28,6 +44,8 @@ int main()
     require(editor.open_file("/notes.md"), "The native editor must open through its injected file service.");
     require(editor.path() == "/notes.md" && editor.document().text().find("Native editor") != std::string::npos,
             "The native editor must retain the loaded document and its path.");
+    require(editor.syntax_profile() == "markdown",
+            "Markdown documents must select the suite-owned syntax profile through ckVision's registry.");
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");
     application.step(0);

@@ -71,8 +71,9 @@ Historical application baseline: `legacy_tv`
   close now presents an explicit Save/Discard/Cancel decision and invokes the
   file controller's typed close contract before allowing teardown. The
   Markdown analyzer now builds as a framework-independent `ck_markdown_core`
-  target. Markdown transformations, profiles, and richer external-conflict
-  resolution remain the next slices.
+  target and supplies an application-owned Markdown syntax profile through
+  ckVision's documented profile registry. Markdown transformations and richer
+  external-conflict resolution remain the next slices.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
