@@ -87,9 +87,9 @@ Historical application baseline: `legacy_tv`
   request. Downloaded-model selection, deactivation, and confirmed local
   deletion now use an injected `ModelManager` adapter, and the active model ID
   is carried in every response request. The adapter now owns cancellable
-  background downloads behind a cached catalog, so the UI posts typed progress
-  and completion without racing `ModelManager` or retaining view pointers.
-  Model runtime loading and richer progress coalescing remain the next slices.
+  background downloads behind a cached catalog, so rate-limited typed progress
+  and completion reach the UI without racing `ModelManager` or retaining view
+  pointers. Model runtime loading remains the next slice.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately

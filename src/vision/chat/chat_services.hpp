@@ -93,7 +93,8 @@ struct ChatModelDownloadResult
 // Model selection, local deletion, and downloads are application workflows.
 // The presentation talks to this service only; the production adapter owns the
 // worker and keeps the ModelManager isolated from the UI thread while a
-// download is in flight.
+// download is in flight. Its progress callback is rate-limited before it can
+// enqueue UI-thread work.
 class ChatModelService
 {
 public:

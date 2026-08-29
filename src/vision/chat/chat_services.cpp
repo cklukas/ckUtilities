@@ -1,6 +1,7 @@
 #include "chat_services.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <utility>
 
@@ -182,12 +183,15 @@ bool ModelManagerService::start_download(std::string_view id, DownloadProgressHa
         worker_ = std::jthread([this, model_id, cancellation, on_progress = std::move(on_progress),
                                 on_complete = std::move(on_complete)]() mutable {
             std::string error_message;
+            auto next_progress_update = std::chrono::steady_clock::time_point{};
             const bool success = manager_.download_model_cancellable(
                 model_id,
-                [cancellation, &on_progress](const ck::ai::ModelDownloadProgress &progress) {
+                [cancellation, &on_progress, &next_progress_update](const ck::ai::ModelDownloadProgress &progress) {
                     const bool keep_downloading = !cancellation->load(std::memory_order_acquire);
-                    if (keep_downloading && on_progress)
+                    const auto now = std::chrono::steady_clock::now();
+                    if (keep_downloading && on_progress && now >= next_progress_update)
                     {
+                        next_progress_update = now + std::chrono::milliseconds(100);
                         on_progress({.model_id = progress.model_id,
                                      .bytes_downloaded = progress.bytes_downloaded,
                                      .total_bytes = progress.total_bytes,
