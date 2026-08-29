@@ -11,8 +11,8 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `351592db6219ff7a2f744fdbb4249562020755a7` (detached clean-worktree integration candidate) |
-| Current migration change | `TreeView::reveal_and_select` plus validated multiline `Memo` fields in declarative dialogs, needed for JSON result navigation and system-prompt editing |
+| Current migration commit | `0bef919b5234bf070018b9ba61d209a61efeafb5` (detached clean-worktree integration candidate) |
+| Current migration change | `TreeView::reveal_and_select`, validated multiline `Memo` fields in declarative dialogs, and command-safe normalized `KeyChord` capture needed for the native shortcut editor |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
@@ -20,9 +20,11 @@ never a neighbouring source tree.
 
 The foundation commit was selected from a detached clean worktree. The current
 migration commits were created in that same clean worktree after the JSON pilot
-identified a reusable TreeView result-navigation gap and chat prompt editing
-identified a reusable declarative-dialog multiline-field gap. Both changes have
-unit coverage and public documentation in ckVision. The ordinary ckVision checkout contained
+identified a reusable TreeView result-navigation gap, chat prompt editing
+identified a reusable declarative-dialog multiline-field gap, and shortcut
+configuration identified a reusable command-safe key-capture gap. All changes
+have unit coverage, rendering evidence where applicable, and public
+documentation in ckVision. The ordinary ckVision checkout contained
 unrelated staged, unstaged, and untracked work at the time of selection and is
 not a valid dependency input.
 

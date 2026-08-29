@@ -65,8 +65,13 @@ Historical application baseline: `legacy_tv`
   delegated to an injected persistence policy; the production composition
   root retains the established JSON defaults format without giving the UI a
   filesystem dependency. Import and export use that same injected boundary.
-  Runtime keymap capture, normalized chords, conflict analysis, and cross-app
-  reload remain contingent on a ckVision-native keymap design.
+  The native keyboard-shortcut window now lists stable command identities,
+  captures normalized `KeyChord` values without dispatching them, requires an
+  explicit confirmation before replacing an occupied chord, and persists
+  overrides by command key. Every native executable reloads shared `ckv.*`
+  framework bindings at startup. A suite-wide catalog for editing the
+  application-specific bindings of another executable, selectable schemes,
+  and import rollback remain before acceptance.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
   injected file service for native open/save/save-as workflows. Dirty-window
   close now presents an explicit Save/Discard/Cancel decision and invokes the
@@ -604,8 +609,9 @@ Gap checkpoints:
 
 Exit criteria:
 
-- A binding changed in `ck-config` is observed by every migrated application
-  after the defined reload/restart boundary.
+- A shared framework binding changed in `ck-config` is observed by every
+  migrated application after the defined restart boundary; application-specific
+  bindings must gain the same suite-wide editor catalog before this WP closes.
 - Persistence is deterministic, forward-tolerant, and collision-safe.
 - All app configuration behavior is testable without a terminal or real home
   directory.
