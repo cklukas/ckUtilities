@@ -7,6 +7,8 @@
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
 
+#include "markdown_normalization.hpp"
+
 namespace
 {
 void require(bool value, const char *message)
@@ -34,6 +36,11 @@ int main()
     require(!fence.next_state.empty() && !code.spans.empty() &&
                 code.spans.front().kind == ckv::widgets::SyntaxTokenKind::String,
             "The Markdown profile must carry fenced-code state between lines.");
+
+    const std::string normalized_markdown = ck::vision::normalise_markdown_whitespace(
+        "Intro   \n\n```cpp\nint value = 1;   \n\n```\n\n    keep trailing   \n\nAfter\t \n\n\n");
+    require(normalized_markdown == "Intro  \n\n```cpp\nint value = 1;   \n\n```\n\n    keep trailing   \n\nAfter\n",
+            "Markdown normalization must preserve fenced and indented code verbatim while normalizing ordinary prose.");
 
     ckv::MemoryFileSystem files;
     files.add_file("/notes.md", "# Notes\n\nNative editor test.\n");

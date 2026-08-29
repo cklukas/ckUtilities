@@ -88,7 +88,8 @@ Historical application baseline: `legacy_tv`
   target and supplies an application-owned Markdown syntax profile through
   ckVision's documented profile registry. A conservative Markdown-whitespace
   normalization command now commits one revision-bound document transaction,
-  preserving two-space hard breaks while removing accidental whitespace.
+  preserving two-space hard breaks and fenced/indented code verbatim while
+  removing accidental prose whitespace.
   A save conflict now preserves the externally changed file and gives the user
   an explicit Save As, reload/discard, or continue-editing choice. Broader
   Markdown transformations remain the next slice.
