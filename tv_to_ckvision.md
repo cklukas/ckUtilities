@@ -1,6 +1,6 @@
 # Work Package: ckUtilities migration to ckVision
 
-Status: Active — WP-0/WP-1 and the initial WP-2 shell are implemented; WP-3 is in progress.
+Status: Active — WP-0/WP-1, the initial WP-2 shell, and native vertical slices for WP-3 through WP-5 are implemented; the remaining application conversions are in progress.
 Owner: ckUtilities and ckVision maintainers  
 Created: 2026-08-29  
 Target branch: `master`  
@@ -33,6 +33,12 @@ Historical application baseline: `legacy_tv`
   event-diagnostics windows are the next launcher slice. The native calendar
   window already reuses ckVision's CalendarView rather than retaining a suite
   copy of that widget.
+- WP-5: `ck-find-ckvision` is an initial native search-specification slice.
+  It keeps the specification and command-plan generation in the framework-
+  independent search core, exposes command-registry actions for a validated
+  search dialog and command preview, and renders under a headless terminal.
+  Saved specifications, the remaining typed filters, and injected command
+  execution are the next slices.
 
 ## 1. Mandate
 

@@ -9,6 +9,20 @@ if(TARGET tvision)
   target_include_directories(tvision PRIVATE ${CURSES_INCLUDE_DIRS})
 endif()
 
+add_library(ck_find_core STATIC
+  src/search_backend.cpp
+  src/search_model.cpp
+  src/guided_search.cpp
+)
+
+target_include_directories(ck_find_core
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+target_compile_features(ck_find_core PUBLIC cxx_std_20)
+target_link_libraries(ck_find_core PUBLIC ck_options nlohmann_json::nlohmann_json)
+
 add_ck_tool(ckfind
   OUTPUT_NAME "ck-find"
   SOURCES
