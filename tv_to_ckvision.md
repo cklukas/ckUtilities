@@ -50,6 +50,11 @@ Historical application baseline: `legacy_tv`
   The initial executable performs its scan in the composition root before
   constructing the UI; injected asynchronous scan services, cancellation,
   file lists, and cloud actions remain the next slices.
+- WP-7: `ck-config-ckvision` accepts an injected option registry and exposes
+  a native provider-backed table with typed edit/reset commands keyed by the
+  option's stable string name. Persistence remains a composition-root policy.
+  Runtime keymap capture, normalized chords, conflict analysis, and cross-app
+  reload remain contingent on a ckVision-native keymap design.
 
 ## 1. Mandate
 
