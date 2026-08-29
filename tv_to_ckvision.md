@@ -45,10 +45,11 @@ Historical application baseline: `legacy_tv`
   services. The production execution adapter uses a joinable worker and the
   search core's explicit traversal-boundary cancellation probe; its callbacks
   are marshalled back to the UI thread through `Application::post()` behind a
-  teardown lifetime gate. Interactive execution is intentionally
-  non-destructive and bounds rendered matches to 200, while preserving the
-  full match count. Confirmation workflows for destructive action mutations
-  remain the next slice.
+  teardown lifetime gate. Interactive execution bounds rendered matches to 200
+  while preserving the full match count. Confirmed deletion now runs only in
+  the injected worker and only removes matching regular files or symbolic
+  links; it never removes directories. Custom commands remain preview-only
+  until a separately sandboxed execution policy is designed.
 - WP-6: `ck-du-ckvision` maps application-owned directory snapshots into a
   native TreeView plus selected-directory Table. Its production composition
   root now starts immediately and delegates scanning to an injected joinable
