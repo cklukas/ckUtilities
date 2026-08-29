@@ -1,0 +1,48 @@
+#include "launcher_app.hpp"
+
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+#include <cvision/core/clock.hpp>
+#include <cvision/term/headless_terminal.hpp>
+#include <cvision/ui/application.hpp>
+
+namespace
+{
+
+void require(bool condition, const char *message)
+{
+    if (condition)
+        return;
+    std::cerr << message << '\n';
+    std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
+int main()
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+    ckv::ui::Application application(terminal, clock);
+    std::string launched_id;
+    ck::vision::UtilitiesLauncherApp launcher(application, [&launched_id](const ck::appinfo::ToolInfo &tool) {
+        launched_id = tool.id;
+    });
+
+    require(launcher.launcher_window_count() == 1, "The launcher must open one initial window.");
+    require(launcher.selected_tool() != nullptr, "The launcher must select an installed tool.");
+    const std::string expected_tool = std::string(launcher.selected_tool()->id);
+    require(application.execute_command(launcher.new_launcher_command()),
+            "The native New Launcher command must be available.");
+    require(launcher.launcher_window_count() == 2, "The native launcher must support multiple windows.");
+    require(application.execute_command(launcher.launch_command()),
+            "The native Launch command must dispatch through the registry.");
+    require(launched_id == expected_tool, "The launch request must carry the active tool identity.");
+    require(application.quit_requested(), "Launching a child tool must close the terminal session first.");
+
+    application.step(0);
+    require(application.current_frame().size() == ckv::Size{100, 30},
+            "The native launcher must compose a full headless frame.");
+}

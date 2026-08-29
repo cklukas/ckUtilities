@@ -26,6 +26,11 @@ Historical application baseline: `legacy_tv`
   documented, unit-tested `TreeView::reveal_and_select` API. It remains an
   integration candidate until it is landed on ckVision trunk; its provider-
   backed large-tree follow-up remains open.
+- WP-4: `ck-utilities-ckvision` now provides a native multi-window tool
+  browser. It uses registry commands and publishes a selected launch request
+  to the POSIX composition root, which closes the terminal UI before running
+  the child process. The built-in calendar, ASCII, calculator, color, and
+  event-diagnostics windows are the next launcher slice.
 
 ## 1. Mandate
 

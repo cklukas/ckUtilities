@@ -15,8 +15,8 @@ namespace ck::appinfo
                 "ck-utilities",
                 "ck-utilities",
                 "CK Utilities",
-                "Launch CK tools from a unified Turbo Vision shell.",
-                "Launch CK tools from a unified Turbo Vision shell.",
+                "Launch CK tools from a unified terminal shell.",
+                "Launch CK tools from a unified terminal shell.",
                 "CK Utilities is the landing pad for the suite. It presents every installed tool with rich descriptions, a consistent launch workflow, and shortcuts for discovery. Use it as a starting point in new terminals to remind yourself of capabilities and jump straight into the utility you need."},
             ToolInfo{
                 "ck-edit",
@@ -24,7 +24,7 @@ namespace ck::appinfo
                 "Edit",
                 "Edit text and Markdown documents with live structural hints.",
                 "Edit text and Markdown documents with live structural hints.",
-                "Edit keeps Markdown editing fast inside the terminal. It pairs a Turbo Vision interface with helpers for headings, lists, and formatting so you stay in flow. Use it for quick note taking, documentation tweaks, or reviewing rendered structure without leaving your shell."},
+                "Edit keeps Markdown editing fast inside the terminal. It pairs an interactive interface with helpers for headings, lists, and formatting so you stay in flow. Use it for quick note taking, documentation tweaks, or reviewing rendered structure without leaving your shell."},
             ToolInfo{
                 "ck-du",
                 "ck-du",
