@@ -10,6 +10,8 @@
 #include <cvision/widgets/text_layout.hpp>
 #include <cvision/widgets/text_view.hpp>
 
+#include "ck/vision/keymap.hpp"
+
 namespace ck::vision
 {
 namespace
@@ -84,30 +86,14 @@ DiskUsageApp::~DiskUsageApp()
 
 void DiskUsageApp::declare_commands()
 {
-    rescan_command_ = application_.commands().declare({
-        .key = "ck.du.rescan", .title = "&Rescan", .category = "Disk usage", .chord = "F5",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { start_scan(); }});
-    cancel_scan_command_ = application_.commands().declare({
-        .key = "ck.du.cancel_scan", .title = "&Cancel scan", .category = "Disk usage", .chord = "Ctrl+C",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { cancel_scan(); }});
-    view_files_command_ = application_.commands().declare({
-        .key = "ck.du.view_files", .title = "&View files", .category = "Disk usage", .chord = "Enter",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { view_selected_files(); }});
-    download_cloud_command_ = application_.commands().declare({
-        .key = "ck.du.cloud.download", .title = "&Download selected", .category = "Cloud storage", .chord = "Ctrl+D",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { request_cloud_action(DiskUsageCloudAction::Download); }});
-    evict_cloud_command_ = application_.commands().declare({
-        .key = "ck.du.cloud.evict", .title = "&Free local copies", .category = "Cloud storage", .chord = "Ctrl+E",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { request_cloud_action(DiskUsageCloudAction::EvictLocalCopies); }});
-    cancel_cloud_command_ = application_.commands().declare({
-        .key = "ck.du.cloud.cancel", .title = "Cancel &cloud operation", .category = "Cloud storage", .chord = "Ctrl+Shift+C",
-        .visibility = ckv::ui::CommandVisibility::Palette,
-        .handler = [this] { cancel_scan(); }});
+    rescan_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.rescan", [this] { start_scan(); });
+    cancel_scan_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cancel_scan", [this] { cancel_scan(); });
+    view_files_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.view_files", [this] { view_selected_files(); });
+    download_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.download",
+                                                    [this] { request_cloud_action(DiskUsageCloudAction::Download); });
+    evict_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.evict",
+                                                 [this] { request_cloud_action(DiskUsageCloudAction::EvictLocalCopies); });
+    cancel_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.cancel", [this] { cancel_scan(); });
 }
 
 SuiteShellOptions DiskUsageApp::make_shell_options() const

@@ -175,8 +175,8 @@ int main()
                 *saved_editor->second == ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl | ckv::Modifier::Shift, "s"},
             "A suite-owned application binding must persist under its target executable rather than the config host.");
     ckv::ui::CommandRegistry editor_registry;
-    const ckv::ui::CommandId editor_save = editor_registry.declare(
-        {.key = "ck.edit.save", .title = "Save", .category = "Editor", .chord = "Ctrl+S"});
+    const ckv::ui::CommandId editor_save = ck::vision::declare_suite_command(
+        editor_registry, "ck-edit", "ck.edit.save", [] {});
     ck::vision::KeymapController reloaded_editor("ck-edit", editor_registry, keymap_persistence);
     require(reloaded_editor.load() &&
                 editor_registry.command_for_key(ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl | ckv::Modifier::Shift, "s"}) == editor_save,

@@ -17,8 +17,6 @@ namespace ck::vision
 namespace
 {
 
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
@@ -210,27 +208,18 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
 
 void ConfigApp::declare_commands()
 {
-    edit_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.edit_selected", .title = "&Edit selected option", .category = "Configuration",
-        .chord = "Enter", .visibility = CommandVisibility::Palette, .handler = [this] { edit_selected(); }});
-    reset_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.reset_selected", .title = "&Reset selected option", .category = "Configuration",
-        .visibility = CommandVisibility::Palette, .handler = [this] { reset_selected(); }});
-    save_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.save", .title = "&Save configuration", .category = "Configuration", .chord = "Ctrl+S",
-        .visibility = CommandVisibility::Palette, .handler = [this] { save(); }});
-    reload_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.reload", .title = "&Reload saved configuration", .category = "Configuration", .chord = "Ctrl+R",
-        .visibility = CommandVisibility::Palette, .handler = [this] { reload(); }});
-    import_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.import", .title = "&Import configuration...", .category = "Configuration",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_import_dialog(); }});
-    export_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.export", .title = "&Export configuration...", .category = "Configuration",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_export_dialog(); }});
-    keymap_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.config.shortcuts", .title = "Configure &keyboard shortcuts...", .category = "Configuration",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_keymap_window(); }});
+    edit_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.edit_selected",
+                                          [this] { edit_selected(); });
+    reset_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.reset_selected",
+                                           [this] { reset_selected(); });
+    save_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.save", [this] { save(); });
+    reload_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.reload", [this] { reload(); });
+    import_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.import",
+                                            [this] { show_import_dialog(); });
+    export_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.export",
+                                            [this] { show_export_dialog(); });
+    keymap_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.shortcuts",
+                                            [this] { show_keymap_window(); });
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const

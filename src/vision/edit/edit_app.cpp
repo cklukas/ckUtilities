@@ -1,5 +1,6 @@
 #include "edit_app.hpp"
 
+#include "ck/vision/keymap.hpp"
 #include "markdown_normalization.hpp"
 
 #include <utility>
@@ -11,8 +12,6 @@ namespace ck::vision
 {
 namespace
 {
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
@@ -31,18 +30,11 @@ EditApp::EditApp(ckv::ui::Application &application, ckv::FileSystem &files)
 
 void EditApp::declare_commands()
 {
-    open_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.edit.open", .title = "&Open document...", .category = "Editor", .chord = "Ctrl+O",
-        .visibility = CommandVisibility::Palette, .handler = [this] { open_file_dialog(); }});
-    save_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.edit.save", .title = "&Save", .category = "Editor", .chord = "Ctrl+S",
-        .visibility = CommandVisibility::Palette, .handler = [this] { save(); }});
-    save_as_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.edit.save_as", .title = "Save &As...", .category = "Editor",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_save_as_dialog(); }});
-    normalise_markdown_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.edit.normalise_markdown", .title = "&Normalize Markdown whitespace", .category = "Editor",
-        .visibility = CommandVisibility::Palette, .handler = [this] { normalise_markdown(); }});
+    open_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.open", [this] { open_file_dialog(); });
+    save_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.save", [this] { save(); });
+    save_as_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); });
+    normalise_markdown_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.normalise_markdown",
+                                                        [this] { normalise_markdown(); });
 }
 
 SuiteShellOptions EditApp::make_shell_options() const

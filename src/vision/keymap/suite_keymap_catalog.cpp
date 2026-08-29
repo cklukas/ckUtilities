@@ -10,13 +10,7 @@ namespace ck::vision
 namespace
 {
 
-struct CommandDefinition
-{
-    std::string_view key;
-    std::string_view title;
-    std::string_view category;
-    std::string_view chord;
-};
+using CommandDefinition = SuiteCommandMetadata;
 
 template <std::size_t Count>
 void declare_commands(ckv::ui::CommandRegistry &registry, const std::array<CommandDefinition, Count> &definitions)
@@ -26,7 +20,7 @@ void declare_commands(ckv::ui::CommandRegistry &registry, const std::array<Comma
         registry.declare({.key = std::string(definition.key),
                           .title = std::string(definition.title),
                           .category = std::string(definition.category),
-                          .chord = std::string(definition.chord),
+                          .chord = std::string(definition.default_chord),
                           .visibility = ckv::ui::CommandVisibility::Palette});
     }
 }
@@ -104,7 +98,58 @@ const std::array kChatCommands{
     CommandDefinition{"ck.chat.delete_active_model", "&Delete active model", "Chat", ""},
 };
 
+const std::array kConfigCommands{
+    CommandDefinition{"ck.config.edit_selected", "&Edit selected option", "Configuration", "Enter"},
+    CommandDefinition{"ck.config.reset_selected", "&Reset selected option", "Configuration", ""},
+    CommandDefinition{"ck.config.save", "&Save configuration", "Configuration", "Ctrl+S"},
+    CommandDefinition{"ck.config.reload", "&Reload saved configuration", "Configuration", "Ctrl+R"},
+    CommandDefinition{"ck.config.import", "&Import configuration...", "Configuration", ""},
+    CommandDefinition{"ck.config.export", "&Export configuration...", "Configuration", ""},
+    CommandDefinition{"ck.config.shortcuts", "Configure &keyboard shortcuts...", "Configuration", ""},
+};
+
+template <std::size_t Count>
+const SuiteCommandMetadata *find_in(const std::array<CommandDefinition, Count> &definitions,
+                                    std::string_view command_key) noexcept
+{
+    for (const CommandDefinition &definition : definitions)
+    {
+        if (definition.key == command_key)
+            return &definition;
+    }
+    return nullptr;
+}
+
 } // namespace
+
+const SuiteCommandMetadata *find_suite_command(std::string_view application_id,
+                                                std::string_view command_key) noexcept
+{
+    if (application_id == "ck-json-view") return find_in(kJsonViewCommands, command_key);
+    if (application_id == "ck-utilities") return find_in(kLauncherCommands, command_key);
+    if (application_id == "ck-find") return find_in(kFindCommands, command_key);
+    if (application_id == "ck-du") return find_in(kDiskUsageCommands, command_key);
+    if (application_id == "ck-config") return find_in(kConfigCommands, command_key);
+    if (application_id == "ck-edit") return find_in(kEditCommands, command_key);
+    if (application_id == "ck-chat") return find_in(kChatCommands, command_key);
+    return nullptr;
+}
+
+ckv::ui::CommandId declare_suite_command(ckv::ui::CommandRegistry &registry,
+                                         std::string_view application_id,
+                                         std::string_view command_key,
+                                         std::function<void()> handler)
+{
+    const SuiteCommandMetadata *const metadata = find_suite_command(application_id, command_key);
+    if (metadata == nullptr)
+        return ckv::ui::kInvalidCommand;
+    return registry.declare({.key = std::string(metadata->key),
+                             .title = std::string(metadata->title),
+                             .category = std::string(metadata->category),
+                             .chord = std::string(metadata->default_chord),
+                             .visibility = ckv::ui::CommandVisibility::Palette,
+                             .handler = std::move(handler)});
+}
 
 struct SuiteKeymapCatalog::Entry
 {

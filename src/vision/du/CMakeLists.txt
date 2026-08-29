@@ -7,7 +7,7 @@ target_include_directories(ck_vision_du
   PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include
 )
 target_compile_features(ck_vision_du PUBLIC cxx_std_20)
-target_link_libraries(ck_vision_du PUBLIC ck_vision_shell ck_du_core)
+target_link_libraries(ck_vision_du PUBLIC ck_vision_shell ck_vision_keymap ck_du_core)
 
 if(APPLE)
   find_library(CK_VISION_FOUNDATION_FRAMEWORK Foundation REQUIRED)

@@ -8,6 +8,7 @@
 #include <cvision/widgets/menu.hpp>
 #include <cvision/widgets/text_layout.hpp>
 
+#include "ck/vision/keymap.hpp"
 #include "ck/find/cli_buffer_utils.hpp"
 #include "ck/find/guided_search.hpp"
 #include "ck/find/search_backend.hpp"
@@ -16,8 +17,6 @@ namespace ck::vision
 {
 namespace
 {
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
@@ -48,24 +47,18 @@ FindApp::~FindApp()
 
 void FindApp::declare_commands()
 {
-    new_search_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.new_search", .title = "&New search...", .category = "Find", .chord = "Ctrl+N",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_guided_search_dialog(); }});
-    preview_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.preview_command", .title = "&Preview command", .category = "Find", .chord = "F5",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_preview(); }});
-    save_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.save_search", .title = "&Save search...", .category = "Find", .chord = "Ctrl+S",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_save_dialog(); }});
-    load_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.load_search", .title = "&Load saved search...", .category = "Find", .chord = "Ctrl+O",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_load_dialog(); }});
-    execute_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.execute_search", .title = "&Run search", .category = "Find", .chord = "F9",
-        .visibility = CommandVisibility::Palette, .handler = [this] { request_execution(); }});
-    cancel_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.find.cancel_search", .title = "&Cancel search", .category = "Find", .chord = "Ctrl+C",
-        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_execution(); }});
+    new_search_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.new_search",
+                                                [this] { show_guided_search_dialog(); });
+    preview_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.preview_command",
+                                             [this] { show_preview(); });
+    save_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.save_search",
+                                          [this] { show_save_dialog(); });
+    load_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.load_search",
+                                          [this] { show_load_dialog(); });
+    execute_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.execute_search",
+                                             [this] { request_execution(); });
+    cancel_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.cancel_search",
+                                            [this] { cancel_execution(); });
 }
 
 SuiteShellOptions FindApp::make_shell_options() const

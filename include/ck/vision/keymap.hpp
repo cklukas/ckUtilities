@@ -136,4 +136,22 @@ private:
     std::vector<std::unique_ptr<Entry>> entries_;
 };
 
+// Command metadata is declared once for the native suite. Executables use
+// this helper when registering their handlers; Config uses the same metadata
+// to edit a command that belongs to a process which is not currently running.
+struct SuiteCommandMetadata
+{
+    std::string_view key;
+    std::string_view title;
+    std::string_view category;
+    std::string_view default_chord;
+};
+
+const SuiteCommandMetadata *find_suite_command(std::string_view application_id,
+                                                std::string_view command_key) noexcept;
+ckv::ui::CommandId declare_suite_command(ckv::ui::CommandRegistry &registry,
+                                         std::string_view application_id,
+                                         std::string_view command_key,
+                                         std::function<void()> handler);
+
 } // namespace ck::vision

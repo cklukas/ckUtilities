@@ -77,8 +77,10 @@ Historical application baseline: `legacy_tv`
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
   overrides by command key. It now includes a suite-wide catalog of every
-  native executable's application-specific command metadata, so a binding is
-  stored under its target executable without importing or running that UI.
+  native executable's application-specific command metadata; that catalog is
+  also the source from which the executables declare their title, category,
+  and default chord. A binding is therefore stored under its target executable
+  without importing or running that UI.
   Every native executable reloads shared `ckv.*` and its own application
   bindings at startup. Selectable schemes and import rollback remain before
   acceptance.

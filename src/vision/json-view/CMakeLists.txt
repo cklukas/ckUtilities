@@ -14,6 +14,7 @@ target_compile_features(ck_vision_json_view PUBLIC cxx_std_20)
 target_link_libraries(ck_vision_json_view
   PUBLIC
     ck_vision_shell
+    ck_vision_keymap
     ck_json_view_core
 )
 

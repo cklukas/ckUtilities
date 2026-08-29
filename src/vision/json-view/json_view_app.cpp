@@ -10,13 +10,13 @@
 #include <cvision/widgets/command_presentation.hpp>
 #include <cvision/widgets/menu.hpp>
 
+#include "ck/vision/keymap.hpp"
+
 namespace ck::vision
 {
 namespace
 {
 
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
@@ -40,39 +40,23 @@ JsonViewApp::JsonViewApp(ckv::ui::Application &application, ckv::FileSystem &fil
 
 JsonViewApp::CommandIds JsonViewApp::declare_commands()
 {
-    auto declare = [this](std::string key, std::string title, std::string category,
-                          std::string chord, std::function<void()> handler) {
-        return application_.commands().declare(CommandDescriptor{
-            .key = std::move(key),
-            .title = std::move(title),
-            .category = std::move(category),
-            .chord = std::move(chord),
-            .visibility = CommandVisibility::Palette,
-            .handler = std::move(handler),
-        });
+    auto declare = [this](std::string_view key, std::function<void()> handler) {
+        return declare_suite_command(application_.commands(), "ck-json-view", key, std::move(handler));
     };
 
     CommandIds ids;
-    ids.open = declare("ck.json_view.open", "&Open JSON...", "JSON View", "Ctrl+O",
-                       [this] { open_file_dialog(); });
-    ids.close = declare("ck.json_view.close", "&Close JSON", "JSON View", "Ctrl+W",
-                        [this] { close_file(); });
-    ids.copy = declare("ck.json_view.copy", "&Copy selected JSON", "JSON View", "Ctrl+C",
-                       [this] { copy_selection(); });
-    ids.find = declare("ck.json_view.find", "&Find...", "JSON View", "Ctrl+F",
-                       [this] { show_find_dialog(); });
-    ids.find_next = declare("ck.json_view.find_next", "Find &Next", "JSON View", "F3",
-                            [this] { find_next(); });
-    ids.find_previous = declare("ck.json_view.find_previous", "Find &Previous", "JSON View", "Shift+F3",
-                                [this] { find_previous(); });
-    ids.end_search = declare("ck.json_view.end_search", "&End search", "JSON View", "Esc",
-                             [this] { end_search(); });
+    ids.open = declare("ck.json_view.open", [this] { open_file_dialog(); });
+    ids.close = declare("ck.json_view.close", [this] { close_file(); });
+    ids.copy = declare("ck.json_view.copy", [this] { copy_selection(); });
+    ids.find = declare("ck.json_view.find", [this] { show_find_dialog(); });
+    ids.find_next = declare("ck.json_view.find_next", [this] { find_next(); });
+    ids.find_previous = declare("ck.json_view.find_previous", [this] { find_previous(); });
+    ids.end_search = declare("ck.json_view.end_search", [this] { end_search(); });
 
     for (int level = 0; level <= 9; ++level)
     {
         ids.levels[static_cast<std::size_t>(level)] = declare(
             "ck.json_view.expand_level." + std::to_string(level),
-            "Expand to level &" + std::to_string(level), "JSON View", "",
             [this, level] { set_expansion_level(level); });
     }
     return ids;

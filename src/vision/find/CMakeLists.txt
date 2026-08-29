@@ -7,7 +7,7 @@ target_include_directories(ck_vision_find
   PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src/tools/ck-find/include
 )
 target_compile_features(ck_vision_find PUBLIC cxx_std_20)
-target_link_libraries(ck_vision_find PUBLIC ck_vision_shell ck_find_core)
+target_link_libraries(ck_vision_find PUBLIC ck_vision_shell ck_vision_keymap ck_find_core)
 
 if(UNIX)
   add_executable(ckfind_ckvision main.cpp)

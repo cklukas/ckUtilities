@@ -18,6 +18,8 @@
 #include <cvision/widgets/input_line.hpp>
 #include <cvision/widgets/menu.hpp>
 #include <cvision/widgets/splitter.hpp>
+
+#include "ck/vision/keymap.hpp"
 #include <cvision/widgets/table.hpp>
 #include <cvision/widgets/text_layout.hpp>
 
@@ -26,8 +28,6 @@ namespace ck::vision
 namespace
 {
 
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
@@ -213,57 +213,20 @@ UtilitiesLauncherApp::UtilitiesLauncherApp(ckv::ui::Application &application, La
 
 void UtilitiesLauncherApp::declare_commands()
 {
-    launch_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.launch_tool",
-        .title = "&Launch selected tool",
-        .category = "CK Utilities",
-        .chord = "Enter",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { launch_active_tool(); },
-    });
-    new_launcher_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.new_launcher",
-        .title = "&New launcher window",
-        .category = "CK Utilities",
-        .chord = "Ctrl+N",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_launcher_window(); },
-    });
-    calendar_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.show_calendar",
-        .title = "Show &Calendar",
-        .category = "CK Utilities",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_calendar_window(); },
-    });
-    ascii_table_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.show_ascii_table",
-        .title = "Show &ASCII table",
-        .category = "CK Utilities",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_ascii_table_window(); },
-    });
-    calculator_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.show_calculator",
-        .title = "Show &Calculator",
-        .category = "CK Utilities",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_calculator_window(); },
-    });
-    diagnostics_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.show_diagnostics",
-        .title = "Show &Diagnostics",
-        .category = "CK Utilities",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_diagnostics_window(); },
-    });
-    color_selector_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.utilities.show_color_selector",
-        .title = "Show color &selector",
-        .category = "CK Utilities",
-        .visibility = CommandVisibility::Palette,
-        .handler = [this] { open_color_selector(); },
-    });
+    launch_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.launch_tool",
+                                            [this] { launch_active_tool(); });
+    new_launcher_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.new_launcher",
+                                                  [this] { open_launcher_window(); });
+    calendar_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_calendar",
+                                              [this] { open_calendar_window(); });
+    ascii_table_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_ascii_table",
+                                                 [this] { open_ascii_table_window(); });
+    calculator_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_calculator",
+                                                [this] { open_calculator_window(); });
+    diagnostics_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_diagnostics",
+                                                 [this] { open_diagnostics_window(); });
+    color_selector_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_color_selector",
+                                                    [this] { open_color_selector(); });
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const

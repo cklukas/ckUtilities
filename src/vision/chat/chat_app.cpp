@@ -6,12 +6,12 @@
 #include <cvision/widgets/command_presentation.hpp>
 #include <cvision/widgets/menu.hpp>
 
+#include "ck/vision/keymap.hpp"
+
 namespace ck::vision
 {
 namespace
 {
-using ckv::ui::CommandDescriptor;
-using ckv::ui::CommandVisibility;
 using ckv::widgets::CommandPresentation;
 using ckv::widgets::FlowBlock;
 using ckv::widgets::FlowDocument;
@@ -43,51 +43,31 @@ ChatApp::~ChatApp()
 
 void ChatApp::declare_commands()
 {
-    new_chat_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.new_chat", .title = "&New conversation", .category = "Chat", .chord = "Ctrl+N",
-        .visibility = CommandVisibility::Palette, .handler = [this] { new_chat(); }});
-    send_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.send_prompt", .title = "&Send prompt...", .category = "Chat", .chord = "Ctrl+Enter",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_prompt_dialog(); }});
-    cancel_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.cancel_response", .title = "&Cancel response", .category = "Chat", .chord = "Ctrl+C",
-        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_response(); }});
-    copy_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.copy_transcript", .title = "&Copy transcript", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { copy_transcript(); }});
-    export_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.export_transcript", .title = "&Export transcript...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_export_dialog(); }});
-    select_prompt_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.select_prompt", .title = "Select system &prompt...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_select_prompt_dialog(); }});
-    add_prompt_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.add_prompt", .title = "&Add system prompt...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_add_prompt_dialog(); }});
-    edit_active_prompt_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.edit_active_prompt", .title = "&Edit active prompt...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_edit_active_prompt_dialog(); }});
-    restore_active_prompt_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.restore_active_prompt", .title = "&Restore active default prompt", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { restore_active_prompt(); }});
-    delete_active_prompt_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.delete_active_prompt", .title = "&Delete active prompt", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { request_delete_active_prompt(); }});
-    select_model_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.select_model", .title = "Select active &model...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_select_model_dialog(); }});
-    download_model_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.download_model", .title = "&Download model...", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { show_download_model_dialog(); }});
-    cancel_model_download_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.cancel_model_download", .title = "Cancel model &download", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_model_download(); }});
-    deactivate_model_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.deactivate_model", .title = "&Deactivate active model", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { deactivate_active_model(); }});
-    delete_active_model_command_ = application_.commands().declare(CommandDescriptor{
-        .key = "ck.chat.delete_active_model", .title = "&Delete active model", .category = "Chat",
-        .visibility = CommandVisibility::Palette, .handler = [this] { request_delete_active_model(); }});
+    new_chat_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.new_chat", [this] { new_chat(); });
+    send_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.send_prompt", [this] { show_prompt_dialog(); });
+    cancel_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.cancel_response", [this] { cancel_response(); });
+    copy_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.copy_transcript", [this] { copy_transcript(); });
+    export_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.export_transcript", [this] { show_export_dialog(); });
+    select_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.select_prompt",
+                                                    [this] { show_select_prompt_dialog(); });
+    add_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.add_prompt",
+                                                 [this] { show_add_prompt_dialog(); });
+    edit_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.edit_active_prompt",
+                                                         [this] { show_edit_active_prompt_dialog(); });
+    restore_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.restore_active_prompt",
+                                                            [this] { restore_active_prompt(); });
+    delete_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.delete_active_prompt",
+                                                           [this] { request_delete_active_prompt(); });
+    select_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.select_model",
+                                                   [this] { show_select_model_dialog(); });
+    download_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.download_model",
+                                                     [this] { show_download_model_dialog(); });
+    cancel_model_download_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.cancel_model_download",
+                                                            [this] { cancel_model_download(); });
+    deactivate_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.deactivate_model",
+                                                       [this] { deactivate_active_model(); });
+    delete_active_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.delete_active_model",
+                                                          [this] { request_delete_active_model(); });
 }
 
 SuiteShellOptions ChatApp::make_shell_options() const
