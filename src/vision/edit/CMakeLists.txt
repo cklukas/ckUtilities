@@ -6,7 +6,7 @@ target_link_libraries(ck_vision_edit PUBLIC ck_vision_shell ck_markdown_core)
 if(UNIX)
   add_executable(ckedit_ckvision main.cpp)
   target_compile_features(ckedit_ckvision PRIVATE cxx_std_20)
-  target_link_libraries(ckedit_ckvision PRIVATE ck_vision_edit)
+  target_link_libraries(ckedit_ckvision PRIVATE ck_vision_edit ck_vision_keymap)
   set_target_properties(ckedit_ckvision PROPERTIES
     OUTPUT_NAME "ck-edit-ckvision"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"

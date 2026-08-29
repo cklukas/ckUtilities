@@ -3,6 +3,7 @@
 #include <cvision/term/posix_clock.hpp>
 #include <cvision/term/posix_terminal.hpp>
 
+#include "ck/vision/keymap.hpp"
 #include "config_app.hpp"
 #include "disk_usage_options.hpp"
 
@@ -15,7 +16,10 @@ int main()
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
-    ck::vision::ConfigApp config(application, registry, persistence);
+    ck::vision::DefaultKeymapPersistence keymap_persistence;
+    ck::vision::KeymapController keymap("ck-config", application.commands(), keymap_persistence);
+    ck::vision::ConfigApp config(application, registry, persistence, &keymap);
+    keymap.load();
     application.run();
     return 0;
 }

@@ -13,7 +13,7 @@ if(UNIX)
   add_executable(ckdu_ckvision main.cpp)
   target_compile_features(ckdu_ckvision PRIVATE cxx_std_20)
   target_include_directories(ckdu_ckvision PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
-  target_link_libraries(ckdu_ckvision PRIVATE ck_vision_du)
+  target_link_libraries(ckdu_ckvision PRIVATE ck_vision_du ck_vision_keymap)
   set_target_properties(ckdu_ckvision PROPERTIES
     OUTPUT_NAME "ck-du-ckvision"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"

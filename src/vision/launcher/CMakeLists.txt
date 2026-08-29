@@ -25,7 +25,7 @@ if(UNIX)
   target_include_directories(ckutilities_ckvision PRIVATE
     ${PROJECT_SOURCE_DIR}/src/tools/ck-utilities/include
   )
-  target_link_libraries(ckutilities_ckvision PRIVATE ck_vision_launcher)
+  target_link_libraries(ckutilities_ckvision PRIVATE ck_vision_launcher ck_vision_keymap)
   set_target_properties(ckutilities_ckvision PROPERTIES
     OUTPUT_NAME "ck-utilities-ckvision"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"

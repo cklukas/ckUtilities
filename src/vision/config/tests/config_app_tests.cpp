@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <map>
 
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -58,6 +59,31 @@ public:
     std::string exported_path;
     bool exported_enabled = false;
 };
+
+class MemoryKeymapPersistence final : public ck::vision::KeymapPersistence
+{
+public:
+    bool load(std::string_view application_id,
+              ck::vision::KeymapOverrides &global_overrides,
+              ck::vision::KeymapOverrides &application_overrides) override
+    {
+        global_overrides = global;
+        application_overrides = applications[std::string(application_id)];
+        return true;
+    }
+
+    bool save(std::string_view application_id,
+              const ck::vision::KeymapOverrides &global_overrides,
+              const ck::vision::KeymapOverrides &application_overrides) override
+    {
+        global = global_overrides;
+        applications[std::string(application_id)] = application_overrides;
+        return true;
+    }
+
+    ck::vision::KeymapOverrides global;
+    std::map<std::string, ck::vision::KeymapOverrides> applications;
+};
 }
 
 int main()
@@ -99,4 +125,35 @@ int main()
     require(application.execute_command(config.edit_command()), "Edit must dispatch through the command registry.");
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30}, "The native config view must render headlessly.");
+
+    ckv::ManualClock keymap_clock;
+    ckv::term::HeadlessTerminal keymap_terminal(ckv::Size{100, 30});
+    ckv::ui::Application keymap_application(keymap_terminal, keymap_clock);
+    ck::config::OptionRegistry keymap_registry("keymap-test");
+    keymap_registry.registerOption({"enabled", ck::config::OptionKind::Boolean, ck::config::OptionValue(false), "Enabled", "Test option."});
+    MemoryPersistence keymap_config_persistence;
+    MemoryKeymapPersistence keymap_persistence;
+    ck::vision::KeymapController keymap("ck-config", keymap_application.commands(), keymap_persistence);
+    ck::vision::ConfigApp keymap_config(keymap_application, keymap_registry, keymap_config_persistence, &keymap);
+    require(keymap.load(), "The native config app's injected keymap must load after its commands are declared.");
+    require(keymap_config.keymap_command_count() != 0,
+            "The native config app must expose the active registry's stable command identities.");
+    require(keymap_application.execute_command(keymap_config.keymap_command()),
+            "Keyboard shortcut configuration must be a command-registry action.");
+    keymap_application.step(0);
+    require(keymap_application.current_frame().size() == ckv::Size{100, 30},
+            "The native keyboard shortcut table must render headlessly.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}),
+            "The shortcut table must lead by keyboard to the native shortcut editor.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "q"}}),
+            "Shortcut capture must consume the requested command chord rather than dispatch it.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}),
+            "The captured shortcut must be applicable through keyboard-only interaction.");
+    const auto saved_quit = keymap_persistence.global.find("ckv.app.quit");
+    require(saved_quit != keymap_persistence.global.end() && saved_quit->second &&
+                *saved_quit->second == ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "q"},
+            "Applying a shared shortcut must persist its normalized typed chord.");
 }

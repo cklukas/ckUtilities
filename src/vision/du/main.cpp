@@ -7,6 +7,7 @@
 #include <cvision/term/posix_terminal.hpp>
 #include <cvision/ui/application.hpp>
 
+#include "ck/vision/keymap.hpp"
 #include "disk_usage_app.hpp"
 #include "disk_usage_core.hpp"
 
@@ -24,9 +25,12 @@ int main(int argc, char **argv)
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
+    ck::vision::DefaultKeymapPersistence keymap_persistence;
+    ck::vision::KeymapController keymap("ck-du", application.commands(), keymap_persistence);
     ck::vision::ThreadedDiskUsageScanService scan_service;
     ck::vision::ThreadedDiskUsageFileListService file_list_service;
     ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, path, std::move(options));
+    keymap.load();
     application.run();
     return 0;
 }

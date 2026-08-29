@@ -20,6 +20,7 @@
 
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
+#include "ck/vision/keymap.hpp"
 
 extern char **environ;
 
@@ -71,9 +72,12 @@ std::optional<LaunchRequest> show_launcher()
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
+    ck::vision::DefaultKeymapPersistence keymap_persistence;
+    ck::vision::KeymapController keymap("ck-utilities", application.commands(), keymap_persistence);
     ck::vision::UtilitiesLauncherApp launcher(application, [&request](const ck::appinfo::ToolInfo &tool) {
         request = LaunchRequest{&tool, {}};
     });
+    keymap.load();
     application.run();
     return request;
 }
