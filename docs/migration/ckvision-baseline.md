@@ -11,8 +11,8 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `91d2776a180d0773ad035bfcfff316a912d81265` (detached clean-worktree integration candidate) |
-| Current migration change | `TreeView::reveal_and_select`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, and checked `FlowView::replace_block` for clients that update one semantic rich-content block |
+| Current migration commit | `bf4c1c6404d58f33693d84e7654789cf60413839` (detached clean-worktree integration candidate) |
+| Current migration change | `TreeView::reveal_and_select`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, and checked `FlowView::replace_block` with incremental realized-tail reflow for clients that update one semantic rich-content block |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
@@ -23,7 +23,8 @@ migration commits were created in that same clean worktree after the JSON pilot
 identified a reusable TreeView result-navigation gap, chat prompt editing
 identified a reusable declarative-dialog multiline-field gap, shortcut
 configuration identified a reusable command-safe key-capture gap, and
-streaming rich content identified a reusable checked block-replacement gap.
+streaming rich content identified reusable checked block-replacement and
+realized-tail reflow gaps.
 All changes have unit coverage, rendering evidence where applicable, and public
 documentation in ckVision. The ordinary ckVision checkout contained
 unrelated staged, unstaged, and untracked work at the time of selection and is

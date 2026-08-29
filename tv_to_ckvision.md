@@ -125,10 +125,10 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `91d2776a180d0773ad035bfcfff316a912d81265` now provides
-  a checked `FlowView::replace_block` API, which the active response uses to
-  avoid rebuilding prior rich-content blocks. Incremental FlowView layout and
-  real-model runtime evidence remain before acceptance.
+  ckVision candidate `bf4c1c6404d58f33693d84e7654789cf60413839` now provides
+  a checked `FlowView::replace_block` API with incremental realized-tail
+  reflow, which the active response uses to avoid rebuilding prior
+  rich-content blocks. Real-model runtime evidence remains before acceptance.
 - All seven native executables build together against the installed ckVision
   candidate SDK. Their headless suite, JSON-domain, and architecture tests
   pass as one 19-test checkpoint. A separate installed-product gate builds the
@@ -708,14 +708,14 @@ Deliverables:
 
 Expected ckVision stress points:
 
-- FlowView currently supports replacing a document and appending complete
-  blocks. Real token streaming may need efficient mutation of the active
-  block, viewport anchoring/stick-to-bottom, stable link identity, text
-  selection/copy, and bounded relayout for long transcripts.
-- If measurements confirm those needs, enhance FlowView with a generic
-  incremental document/update contract and performance tests. Do not implement
-  a ck-chat-only transcript widget that duplicates wrapping, scrolling, links,
-  selection, or rich-text rendering.
+- FlowView supports checked block replacement and incrementally reflows a
+  realized final block, which covers the active streaming response without
+  reparsing or reflowing prior rich-content blocks. Viewport anchoring,
+  stable link identity across broader edits, and text selection/copy remain
+  separate generic capabilities to specify only when independently needed.
+- Do not implement a ck-chat-only transcript widget that duplicates wrapping,
+  scrolling, links, selection, or rich-text rendering. Any future FlowView
+  work needs a generic contract and performance tests before adoption.
 - Generic progress-dialog cancellation/lifetime behavior may also deserve a
   ckVision composition if it recurs across chat, editor, and disk usage.
 
@@ -826,7 +826,7 @@ These are investigation targets, not pre-approved APIs:
 | Candidate | Driven by | Evidence to collect |
 |---|---|---|
 | Provider-backed TreeView with stable node IDs | JSON and disk trees | memory, refresh cost, selection/expansion stability, async lazy-load semantics |
-| Incremental/virtualized FlowView updates and viewport anchoring | chat transcript | per-token relayout cost, long-session memory, copy/selection and link behavior |
+| FlowView viewport anchoring, selection/copy, and virtualized history | chat transcript | long-session memory, copy/selection and link behavior |
 | Generic color-selection control/dialog | launcher and theme tools | reusable color model, truecolor/degraded palette behavior, keyboard/mouse UX |
 | Safe event diagnostics observer | launcher event viewer and troubleshooting | no dispatch interference/re-entrancy, bounded recording, deterministic replay text |
 | Complete keymap capture/introspection/serialization | config editor and every app | normalized chords, conflicts, unknown commands, scheme switching, portability |
