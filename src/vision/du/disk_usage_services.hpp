@@ -60,6 +60,97 @@ struct DiskUsageFileListResult
     bool cancelled = false;
 };
 
+// Cloud storage is an application capability, not a widget concern.  These
+// operations deliberately act on one user-selected path: recursive traversal
+// and each platform's storage semantics stay in the platform adapter rather
+// than becoming implicit UI behavior.
+enum class DiskUsageCloudAction
+{
+    Download,
+    EvictLocalCopies,
+};
+
+struct DiskUsageCloudCapability
+{
+    bool available = false;
+    std::string reason;
+};
+
+struct DiskUsageCloudProgress
+{
+    std::string message;
+    std::size_t completed_items = 0;
+    std::size_t total_items = 0;
+};
+
+struct DiskUsageCloudOperationResult
+{
+    bool success = false;
+    bool cancelled = false;
+    std::size_t processed_items = 0;
+    std::string message;
+};
+
+class DiskUsageCloudService
+{
+public:
+    using ProgressHandler = std::function<void(DiskUsageCloudProgress)>;
+    using CompletionHandler = std::function<void(DiskUsageCloudOperationResult)>;
+
+    virtual ~DiskUsageCloudService() = default;
+
+    virtual DiskUsageCloudCapability capability(DiskUsageCloudAction action,
+                                                 const std::filesystem::path &target) const = 0;
+    virtual void start(DiskUsageCloudAction action,
+                       std::filesystem::path target,
+                       ProgressHandler on_progress,
+                       CompletionHandler on_complete) = 0;
+    virtual void cancel() noexcept = 0;
+    virtual bool running() const noexcept = 0;
+};
+
+// The fallback preserves the complete native workflow on platforms without a
+// supported cloud provider while making the unsupported state explicit.  It
+// never silently claims that a local filesystem operation changed cloud data.
+class UnsupportedDiskUsageCloudService final : public DiskUsageCloudService
+{
+public:
+    DiskUsageCloudCapability capability(DiskUsageCloudAction action,
+                                         const std::filesystem::path &target) const override;
+    void start(DiskUsageCloudAction action,
+               std::filesystem::path target,
+               ProgressHandler on_progress,
+               CompletionHandler on_complete) override;
+    void cancel() noexcept override {}
+    bool running() const noexcept override { return false; }
+};
+
+#if defined(__APPLE__)
+// A Foundation-backed composition-root adapter.  It invokes macOS iCloud
+// download/evict requests on a worker and reports immutable progress/results;
+// no Foundation API or worker lifetime reaches the presentation layer.
+class MacDiskUsageCloudService final : public DiskUsageCloudService
+{
+public:
+    ~MacDiskUsageCloudService() override;
+
+    DiskUsageCloudCapability capability(DiskUsageCloudAction action,
+                                         const std::filesystem::path &target) const override;
+    void start(DiskUsageCloudAction action,
+               std::filesystem::path target,
+               ProgressHandler on_progress,
+               CompletionHandler on_complete) override;
+    void cancel() noexcept override;
+    bool running() const noexcept override;
+
+private:
+    mutable std::mutex mutex_;
+    std::jthread worker_;
+    std::shared_ptr<std::atomic_bool> cancellation_;
+    std::atomic_bool running_{false};
+};
+#endif
+
 // Separate capability because file enumeration is a different user operation
 // from aggregation.  Keeping the two operations explicit prevents a table
 // request from silently sharing or taking over the active tree scan.

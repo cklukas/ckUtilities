@@ -58,7 +58,15 @@ Historical application baseline: `legacy_tv`
   propagated into the existing scan-core cancellation probe. Selected-directory
   file inspection now uses a separate injected, cancellable file-list service
   and native Table window, so aggregation and enumeration never compete for
-  one implicit worker. Cloud actions remain the next slice.
+  one implicit worker.
+  A selected directory can now request a macOS iCloud download or an explicit
+  confirmation-gated request to free local copies through a separate injected
+  cloud service. The Foundation adapter only reports that macOS accepted the
+  request (the provider may continue synchronizing); it runs off the UI thread,
+  posts immutable progress/results through the existing lifetime gate, and
+  exposes cancellation. Unsupported platforms report that fact rather than
+  simulating a cloud change. Recursive cloud policy and other providers remain
+  acceptance work.
 - WP-7: `ck-config-ckvision` accepts an injected option registry and exposes
   a native provider-backed table with typed edit/reset commands keyed by the
   option's stable string name. Save and reload are now registry commands
@@ -560,7 +568,10 @@ Deliverables:
 - Route worker results only through `Application::post()`; closing a window or
   quitting cancels and joins/finishes safely without callbacks into dead views.
 - Preserve units, sorting, ignores, thresholds, link/filesystem options,
-  copy-path, recursive views, and platform-specific cloud behavior.
+  copy-path, recursive views, and platform-specific cloud behavior. The
+  initial native macOS slice provides selected-directory iCloud download and
+  confirmation-gated local-copy eviction as cancellable injected requests;
+  provider completion is not conflated with request acceptance.
 - Test permission failures, disappearing files, symlink/hard-link policy,
   one-filesystem policy, cancellation races, huge directories, Unicode paths,
   and cloud-operation failure/retry.

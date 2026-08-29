@@ -8,7 +8,11 @@ include(CheckUiBoundaries)
 set(CKTOOLS_VERSION "0.1.0" CACHE STRING "ck-utilities version" FORCE)
 message(STATUS "ck-utilities version: ${CKTOOLS_VERSION}")
 
-project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX)
+if(APPLE)
+  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX OBJCXX)
+else()
+  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

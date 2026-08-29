@@ -110,10 +110,63 @@ private:
     CompletionHandler on_complete_;
 };
 
+class ManualCloudService final : public ck::vision::DiskUsageCloudService
+{
+public:
+    ck::vision::DiskUsageCloudCapability capability(ck::vision::DiskUsageCloudAction,
+                                                     const std::filesystem::path &) const override
+    {
+        return {.available = true, .reason = {}};
+    }
+
+    void start(ck::vision::DiskUsageCloudAction action,
+               std::filesystem::path target,
+               ProgressHandler,
+               CompletionHandler on_complete) override
+    {
+        running_ = true;
+        action_ = action;
+        target_ = std::move(target);
+        on_complete_ = std::move(on_complete);
+    }
+
+    void cancel() noexcept override { cancelled_ = true; }
+    bool running() const noexcept override { return running_; }
+
+    void complete(ck::vision::DiskUsageCloudOperationResult result)
+    {
+        running_ = false;
+        on_complete_(std::move(result));
+    }
+
+    bool cancelled() const noexcept { return cancelled_; }
+    ck::vision::DiskUsageCloudAction action() const noexcept { return action_; }
+    const std::filesystem::path &target() const noexcept { return target_; }
+
+private:
+    bool running_ = false;
+    bool cancelled_ = false;
+    ck::vision::DiskUsageCloudAction action_ = ck::vision::DiskUsageCloudAction::Download;
+    std::filesystem::path target_;
+    CompletionHandler on_complete_;
+};
+
 } // namespace
 
 int main()
 {
+    {
+        ck::vision::UnsupportedDiskUsageCloudService unsupported_cloud;
+        const auto capability = unsupported_cloud.capability(ck::vision::DiskUsageCloudAction::Download, "/workspace");
+        require(!capability.available && !capability.reason.empty(),
+                "Unsupported cloud platforms must report a concrete unavailable state.");
+        std::optional<ck::vision::DiskUsageCloudOperationResult> result;
+        unsupported_cloud.start(ck::vision::DiskUsageCloudAction::Download, "/workspace", {},
+                                [&](ck::vision::DiskUsageCloudOperationResult completed) { result = std::move(completed); });
+        require(result.has_value() && !result->success && !result->cancelled && !result->message.empty(),
+                "Unsupported cloud operations must fail explicitly instead of pretending to change storage.");
+    }
+
     {
         ckv::ManualClock clock;
         ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
@@ -135,7 +188,8 @@ int main()
     ckv::ui::Application application(terminal, clock);
     ManualScanService scan_service;
     ManualFileListService file_list_service;
-    ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, "/workspace");
+    ManualCloudService cloud_service;
+    ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, cloud_service, "/workspace");
 
     require(disk_usage.scan_running(), "A native disk-usage scan must be delegated to the injected service.");
     require(application.execute_command(disk_usage.cancel_scan_command()), "Cancellation must be a registry command.");
@@ -159,6 +213,35 @@ int main()
             "A completed file list must open a native Table window.");
     require(application.current_frame().size() == ckv::Size{100, 30},
             "The completed disk-usage scan must render headlessly.");
+
+    require(application.execute_command(disk_usage.download_cloud_command()),
+            "Downloading cloud content must be a native command.");
+    require(disk_usage.cloud_operation_running() && cloud_service.action() == ck::vision::DiskUsageCloudAction::Download &&
+                cloud_service.target() == "/workspace",
+            "The selected directory must be submitted to the injected cloud service.");
+    cloud_service.complete({.success = true,
+                            .cancelled = false,
+                            .processed_items = 1,
+                            .message = "Download request accepted."});
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The cloud-operation result must be presented as a dismissible native message.");
+    application.step(0);
+
+    require(application.execute_command(disk_usage.evict_cloud_command()),
+            "Freeing local cloud copies must be a native command.");
+    require(!disk_usage.cloud_operation_running(),
+            "Freeing local copies must wait for explicit confirmation before reaching the cloud service.");
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The destructive cloud action must require an explicit Yes confirmation.");
+    application.step(0);
+    require(disk_usage.cloud_operation_running() && cloud_service.action() == ck::vision::DiskUsageCloudAction::EvictLocalCopies,
+            "A confirmed free-local-copies action must reach the injected cloud service.");
+    require(application.execute_command(disk_usage.cancel_cloud_command()),
+            "Cloud cancellation must be a native command.");
+    require(cloud_service.cancelled(), "Cloud cancellation must be delegated to the injected service.");
+    cloud_service.complete({.success = false, .cancelled = true, .processed_items = 0, .message = "Cloud operation cancelled."});
+    application.step(0);
 
     namespace fs = std::filesystem;
     const fs::path directory = fs::temp_directory_path() / "ck-vision-du-scan-service-test";

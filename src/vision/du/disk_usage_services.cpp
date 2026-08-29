@@ -5,6 +5,26 @@
 namespace ck::vision
 {
 
+DiskUsageCloudCapability UnsupportedDiskUsageCloudService::capability(DiskUsageCloudAction,
+                                                                       const std::filesystem::path &) const
+{
+    return {.available = false, .reason = "Cloud operations are not supported on this platform."};
+}
+
+void UnsupportedDiskUsageCloudService::start(DiskUsageCloudAction,
+                                             std::filesystem::path,
+                                             ProgressHandler,
+                                             CompletionHandler on_complete)
+{
+    if (on_complete)
+    {
+        on_complete({.success = false,
+                     .cancelled = false,
+                     .processed_items = 0,
+                     .message = "Cloud operations are not supported on this platform."});
+    }
+}
+
 ThreadedDiskUsageScanService::~ThreadedDiskUsageScanService()
 {
     cancel();

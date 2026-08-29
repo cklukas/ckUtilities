@@ -52,6 +52,25 @@ DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
     start_scan();
 }
 
+DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
+                           DiskUsageScanService &scan_service,
+                           DiskUsageFileListService &file_list_service,
+                           DiskUsageCloudService &cloud_service,
+                           std::filesystem::path root,
+                           ck::du::BuildDirectoryTreeOptions options)
+    : application_(application),
+      scan_service_(&scan_service),
+      file_list_service_(&file_list_service),
+      cloud_service_(&cloud_service),
+      scan_root_(std::move(root)),
+      scan_options_(std::move(options))
+{
+    declare_commands();
+    shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
+    create_window("Disk usage: scanning");
+    start_scan();
+}
+
 DiskUsageApp::~DiskUsageApp()
 {
     lifetime_.reset();
@@ -59,6 +78,8 @@ DiskUsageApp::~DiskUsageApp()
         scan_service_->cancel();
     if (file_list_service_ != nullptr)
         file_list_service_->cancel();
+    if (cloud_service_ != nullptr)
+        cloud_service_->cancel();
 }
 
 void DiskUsageApp::declare_commands()
@@ -75,6 +96,18 @@ void DiskUsageApp::declare_commands()
         .key = "ck.du.view_files", .title = "&View files", .category = "Disk usage", .chord = "Enter",
         .visibility = ckv::ui::CommandVisibility::Palette,
         .handler = [this] { view_selected_files(); }});
+    download_cloud_command_ = application_.commands().declare({
+        .key = "ck.du.cloud.download", .title = "&Download selected", .category = "Cloud storage", .chord = "Ctrl+D",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { request_cloud_action(DiskUsageCloudAction::Download); }});
+    evict_cloud_command_ = application_.commands().declare({
+        .key = "ck.du.cloud.evict", .title = "&Free local copies", .category = "Cloud storage", .chord = "Ctrl+E",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { request_cloud_action(DiskUsageCloudAction::EvictLocalCopies); }});
+    cancel_cloud_command_ = application_.commands().declare({
+        .key = "ck.du.cloud.cancel", .title = "Cancel &cloud operation", .category = "Cloud storage", .chord = "Ctrl+Shift+C",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { cancel_scan(); }});
 }
 
 SuiteShellOptions DiskUsageApp::make_shell_options() const
@@ -86,11 +119,17 @@ SuiteShellOptions DiskUsageApp::make_shell_options() const
             ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}),
             ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel scan"}),
             ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{view_files_command_, "&View files"}),
+        }}, ckv::widgets::MenuBarItem{"&Cloud", {
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{download_cloud_command_, "&Download selected"}),
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{evict_cloud_command_, "&Free local copies"}),
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{cancel_cloud_command_, "Cancel &cloud operation"}),
         }}},
         .application_status_items = {
             ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}, 30},
             ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel"}, 30},
             ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{view_files_command_, "&Files"}, 25},
+            ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{download_cloud_command_, "&Download"}, 30},
+            ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{evict_cloud_command_, "&Free local"}, 30},
         },
     };
 }
@@ -173,6 +212,13 @@ void DiskUsageApp::cancel_scan()
         file_list_service_->cancel();
         if (window_ != nullptr)
             window_->set_footer("Cancellation requested for the file list.");
+        return;
+    }
+    if (cloud_service_ != nullptr && cloud_service_->running())
+    {
+        cloud_service_->cancel();
+        if (window_ != nullptr)
+            window_->set_footer("Cancellation requested for the cloud operation.");
         return;
     }
     if (window_ != nullptr)
@@ -260,6 +306,117 @@ void DiskUsageApp::complete_file_list(DiskUsageFileListResult result, std::files
     shell_->desktop().add_window(std::move(window));
 }
 
+void DiskUsageApp::request_cloud_action(DiskUsageCloudAction action)
+{
+    const ck::du::DirectoryNode *selected = selected_directory();
+    if (selected == nullptr)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage", "Select a directory before starting a cloud operation.");
+        return;
+    }
+    if (cloud_service_ == nullptr)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
+                     "No cloud storage service was provided for this disk-usage view.");
+        return;
+    }
+    if (cloud_service_->running())
+    {
+        show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
+                     "A cloud operation is already running. Cancel it before starting another.");
+        return;
+    }
+
+    const std::filesystem::path target = selected->path;
+    const DiskUsageCloudCapability capability = cloud_service_->capability(action, target);
+    if (!capability.available)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
+                     capability.reason.empty() ? "The selected directory does not support this cloud operation." : capability.reason);
+        return;
+    }
+
+    if (action == DiskUsageCloudAction::Download)
+    {
+        start_cloud_action(action, target);
+        return;
+    }
+
+    cloud_confirmation_.reset();
+    cloud_confirmation_.emplace(ckv::widgets::present_message_box(
+        application_, shell_->desktop(), shell_->roles(),
+        {ckv::widgets::MessageBoxKind::Warning,
+         "Free local copies",
+         "Remove local copies of cloud content at '" + target.string() +
+             "'? The cloud provider keeps the remote copy, but unavailable local files may need downloading before use.",
+         ckv::widgets::MessageBoxButtons::YesNo}));
+    cloud_confirmation_->set_completion_handler([this, target](ckv::widgets::MessageBoxResult result) {
+        if (result == ckv::widgets::MessageBoxResult::Yes)
+            start_cloud_action(DiskUsageCloudAction::EvictLocalCopies, target);
+    });
+}
+
+void DiskUsageApp::start_cloud_action(DiskUsageCloudAction action, std::filesystem::path target)
+{
+    if (cloud_service_ == nullptr)
+        return;
+
+    if (window_ != nullptr)
+    {
+        const std::string verb = action == DiskUsageCloudAction::Download ? "Requesting download for " : "Freeing local copies at ";
+        window_->set_footer(verb + target.string());
+    }
+    const std::weak_ptr<void> lifetime = lifetime_;
+    cloud_service_->start(
+        action, target,
+        [this, lifetime](DiskUsageCloudProgress progress) mutable {
+            application_.post([this, lifetime, progress = std::move(progress)] {
+                if (lifetime.expired() || window_ == nullptr)
+                    return;
+                window_->set_footer(progress.message);
+            });
+        },
+        [this, lifetime, target](DiskUsageCloudOperationResult result) mutable {
+            auto delivered = std::make_shared<DiskUsageCloudOperationResult>(std::move(result));
+            application_.post([this, lifetime, target, delivered] {
+                if (lifetime.expired())
+                    return;
+                complete_cloud_action(std::move(*delivered), target);
+            });
+        });
+}
+
+void DiskUsageApp::complete_cloud_action(DiskUsageCloudOperationResult result, std::filesystem::path target)
+{
+    if (result.cancelled)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Cloud operation cancelled for " + target.string());
+        return;
+    }
+
+    if (!result.success)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Error, "Cloud storage",
+                     result.message.empty() ? "The cloud operation failed. You can retry after resolving the reported issue."
+                                            : result.message);
+        return;
+    }
+
+    if (window_ != nullptr)
+        window_->set_footer("Cloud operation completed for " + target.string() + ". Rescan to refresh usage data.");
+    show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
+                 result.message.empty() ? "The cloud operation completed. Rescan to refresh usage data." : result.message);
+}
+
+void DiskUsageApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)
+{
+    message_box_.reset();
+    message_box_.emplace(ckv::widgets::present_message_box(
+        application_, shell_->desktop(), shell_->roles(), {kind, std::move(title), std::move(message), ckv::widgets::MessageBoxButtons::Ok}));
+    message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
+}
+
 void DiskUsageApp::rebuild_snapshot_view()
 {
     if (window_ == nullptr || snapshot_.root == nullptr)
@@ -298,6 +455,11 @@ void DiskUsageApp::rebuild_snapshot_view()
 bool DiskUsageApp::scan_running() const noexcept
 {
     return scan_service_ != nullptr && scan_service_->running();
+}
+
+bool DiskUsageApp::cloud_operation_running() const noexcept
+{
+    return cloud_service_ != nullptr && cloud_service_->running();
 }
 
 ckv::widgets::TreeNode DiskUsageApp::make_tree_node(ck::du::DirectoryNode &node)

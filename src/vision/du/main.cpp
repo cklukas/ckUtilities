@@ -29,7 +29,12 @@ int main(int argc, char **argv)
     ck::vision::KeymapController keymap("ck-du", application.commands(), keymap_persistence);
     ck::vision::ThreadedDiskUsageScanService scan_service;
     ck::vision::ThreadedDiskUsageFileListService file_list_service;
-    ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, path, std::move(options));
+#if defined(__APPLE__)
+    ck::vision::MacDiskUsageCloudService cloud_service;
+#else
+    ck::vision::UnsupportedDiskUsageCloudService cloud_service;
+#endif
+    ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, cloud_service, path, std::move(options));
     keymap.load();
     application.run();
     return 0;
