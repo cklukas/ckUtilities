@@ -167,9 +167,29 @@ class MemoryModelService final : public ck::vision::ChatModelService
 {
 public:
     MemoryModelService()
-        : models_{{"local", "Local assistant", "A locally available assistant.", "CPU", 512, true, true},
-                  {"writer", "Technical writer", "A local writing model.", "CPU", 768, true, false},
-                  {"download", "Downloadable assistant", "A model ready to download.", "CPU", 1024, false, false}}
+        : models_{{.id = "local",
+                   .name = "Local assistant",
+                   .description = "A locally available assistant.",
+                   .hardware_requirements = "CPU",
+                   .size_bytes = 512,
+                   .local_path = "model",
+                   .is_downloaded = true,
+                   .is_active = true},
+                  {.id = "writer",
+                   .name = "Technical writer",
+                   .description = "A local writing model.",
+                   .hardware_requirements = "CPU",
+                   .size_bytes = 768,
+                   .local_path = "writer-model",
+                   .is_downloaded = true,
+                   .is_active = false},
+                  {.id = "download",
+                   .name = "Downloadable assistant",
+                   .description = "A model ready to download.",
+                   .hardware_requirements = "CPU",
+                   .size_bytes = 1024,
+                   .is_downloaded = false,
+                   .is_active = false}}
     {
     }
 
@@ -383,4 +403,27 @@ int main()
                 "The threaded response adapter must complete an injected responder.");
     }
     require(worker_response == "Worker: System / Hello", "The threaded response adapter must deliver response chunks.");
+
+    ck::vision::LlmChatResponseService runtime_responses(models);
+    std::mutex runtime_mutex;
+    std::condition_variable runtime_ready;
+    std::string runtime_response;
+    bool runtime_completed = false;
+    runtime_responses.start({"Hello runtime", "Runtime system", "local"},
+                            [&](std::string chunk) { runtime_response += chunk; },
+                            [&](bool cancelled) {
+                                {
+                                    std::scoped_lock lock(runtime_mutex);
+                                    runtime_completed = !cancelled;
+                                }
+                                runtime_ready.notify_one();
+                            });
+    {
+        std::unique_lock lock(runtime_mutex);
+        require(runtime_ready.wait_for(lock, std::chrono::seconds(2), [&] { return runtime_completed; }),
+                "The native LLM response service must load the selected active model on a worker.");
+    }
+    require(runtime_response.find("Runtime system") != std::string::npos &&
+                runtime_response.find("Hello runtime") != std::string::npos,
+            "The native LLM response service must stream ckai_core output with the selected system prompt.");
 }

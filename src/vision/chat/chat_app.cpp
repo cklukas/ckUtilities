@@ -144,6 +144,12 @@ bool ChatApp::submit_prompt(std::string prompt)
         return false;
     const std::optional<ChatSystemPrompt> active_prompt = prompt_service_.active_prompt();
     const std::optional<ChatModel> active_model = model_service_.active_model();
+    if (!active_model)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Activate a downloaded local model before sending a prompt.");
+        return false;
+    }
     messages_.push_back({ChatMessage::Role::User, std::move(prompt)});
     messages_.push_back({ChatMessage::Role::Assistant, {}});
     response_pending_ = true;
@@ -260,10 +266,12 @@ std::optional<ChatModel> ChatApp::active_model() const
 
 bool ChatApp::activate_model(std::string_view id)
 {
-    if (id.empty() || !model_service_.activate(id))
+    if (response_running() || id.empty() || !model_service_.activate(id))
     {
         if (window_ != nullptr)
-            window_->set_footer(model_service_.download_running()
+            window_->set_footer(response_running()
+                                    ? "Models cannot change while a response is running."
+                                    : model_service_.download_running()
                                     ? "Models cannot change while a download is in progress."
                                     : "Could not activate the selected downloaded model.");
         return false;
@@ -274,10 +282,12 @@ bool ChatApp::activate_model(std::string_view id)
 
 bool ChatApp::deactivate_model(std::string_view id)
 {
-    if (id.empty() || !model_service_.deactivate(id))
+    if (response_running() || id.empty() || !model_service_.deactivate(id))
     {
         if (window_ != nullptr)
-            window_->set_footer(model_service_.download_running()
+            window_->set_footer(response_running()
+                                    ? "Models cannot change while a response is running."
+                                    : model_service_.download_running()
                                     ? "Models cannot change while a download is in progress."
                                     : "Could not deactivate the selected model.");
         return false;
@@ -288,10 +298,12 @@ bool ChatApp::deactivate_model(std::string_view id)
 
 bool ChatApp::remove_model(std::string_view id)
 {
-    if (id.empty() || !model_service_.remove(id))
+    if (response_running() || id.empty() || !model_service_.remove(id))
     {
         if (window_ != nullptr)
-            window_->set_footer(model_service_.download_running()
+            window_->set_footer(response_running()
+                                    ? "Models cannot change while a response is running."
+                                    : model_service_.download_running()
                                     ? "Models cannot change while a download is in progress."
                                     : "Could not delete that local model.");
         return false;
@@ -302,10 +314,11 @@ bool ChatApp::remove_model(std::string_view id)
 
 bool ChatApp::start_model_download(std::string_view id)
 {
-    if (id.empty() || model_service_.download_running())
+    if (response_running() || id.empty() || model_service_.download_running())
     {
         if (window_ != nullptr)
-            window_->set_footer("A model download is already in progress.");
+            window_->set_footer(response_running() ? "Wait for the active response before downloading a model."
+                                                   : "A model download is already in progress.");
         return false;
     }
 

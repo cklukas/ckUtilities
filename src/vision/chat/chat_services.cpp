@@ -5,6 +5,7 @@
 #include <fstream>
 #include <utility>
 
+#include "ck/ai/llm.hpp"
 #include "ck/ai/model_manager.hpp"
 #include "ck/ai/system_prompt_manager.hpp"
 
@@ -37,6 +38,10 @@ ChatModel as_chat_model(const ck::ai::ModelInfo &model)
             .description = model.description,
             .hardware_requirements = model.hardware_requirements,
             .size_bytes = model.size_bytes,
+            .local_path = model.local_path,
+            .context_window_tokens = model.default_context_window_tokens,
+            .max_output_tokens = model.default_max_output_tokens,
+            .stop_sequences = model.default_stop_sequences,
             .is_downloaded = model.is_downloaded,
             .is_active = model.is_active};
 }
@@ -327,6 +332,101 @@ void ThreadedChatResponseService::cancel() noexcept
 bool ThreadedChatResponseService::running() const noexcept
 {
     return running_.load(std::memory_order_acquire);
+}
+
+LlmChatResponseService::LlmChatResponseService(ChatModelService &model_service)
+    : model_service_(model_service)
+{
+}
+
+LlmChatResponseService::~LlmChatResponseService()
+{
+    cancel();
+    std::scoped_lock lock(mutex_);
+    if (worker_.joinable())
+        worker_.join();
+}
+
+void LlmChatResponseService::start(ChatResponseRequest request, ChunkHandler on_chunk, CompletionHandler on_complete)
+{
+    cancel();
+
+    std::jthread previous;
+    {
+        std::scoped_lock lock(mutex_);
+        previous = std::move(worker_);
+    }
+    if (previous.joinable())
+        previous.join();
+
+    const std::optional<ChatModel> model = model_service_.active_model();
+    if (!model || model->id != request.model_id || model->local_path.empty())
+    {
+        if (on_chunk)
+            on_chunk("[Activate a downloaded local model before sending a prompt.]");
+        if (on_complete)
+            on_complete(false);
+        return;
+    }
+
+    auto cancellation = std::make_shared<std::atomic_bool>(false);
+    running_.store(true, std::memory_order_release);
+    std::jthread worker([this, model = *model, cancellation, request = std::move(request),
+                         on_chunk = std::move(on_chunk), on_complete = std::move(on_complete)]() mutable {
+        load_model(model);
+        if (!cancellation->load(std::memory_order_acquire))
+        {
+            llm_->set_system_prompt(request.system_prompt);
+            ck::ai::GenerationConfig config;
+            config.max_tokens = model.max_output_tokens == 0 ? 512 : static_cast<int>(model.max_output_tokens);
+            config.stop = model.stop_sequences;
+            llm_->generate_cancellable(request.prompt, config, [cancellation, &on_chunk](ck::ai::Chunk chunk) {
+                const bool keep_generating = !cancellation->load(std::memory_order_acquire);
+                if (keep_generating && on_chunk && !chunk.text.empty())
+                    on_chunk(std::move(chunk.text));
+                return keep_generating;
+            });
+        }
+        const bool cancelled = cancellation->load(std::memory_order_acquire);
+        running_.store(false, std::memory_order_release);
+        if (on_complete)
+            on_complete(cancelled);
+    });
+
+    {
+        std::scoped_lock lock(mutex_);
+        cancellation_ = std::move(cancellation);
+        worker_ = std::move(worker);
+    }
+}
+
+void LlmChatResponseService::cancel() noexcept
+{
+    std::shared_ptr<std::atomic_bool> cancellation;
+    {
+        std::scoped_lock lock(mutex_);
+        cancellation = cancellation_;
+    }
+    if (cancellation)
+        cancellation->store(true, std::memory_order_release);
+}
+
+bool LlmChatResponseService::running() const noexcept
+{
+    return running_.load(std::memory_order_acquire);
+}
+
+void LlmChatResponseService::load_model(const ChatModel &model)
+{
+    if (llm_ && loaded_model_id_ == model.id)
+        return;
+
+    ck::ai::RuntimeConfig runtime;
+    runtime.model_path = model.local_path.string();
+    runtime.context_window_tokens = model.context_window_tokens == 0 ? 4096 : model.context_window_tokens;
+    runtime.max_output_tokens = model.max_output_tokens == 0 ? 512 : model.max_output_tokens;
+    llm_ = ck::ai::Llm::open(runtime.model_path, runtime);
+    loaded_model_id_ = model.id;
 }
 
 bool FileChatTranscriptStore::write(const std::filesystem::path &path, const std::string &transcript)

@@ -14,6 +14,7 @@
 
 namespace ck::ai
 {
+class Llm;
 class ModelManager;
 class SystemPromptManager;
 }
@@ -70,6 +71,10 @@ struct ChatModel
     std::string description;
     std::string hardware_requirements;
     std::size_t size_bytes = 0;
+    std::filesystem::path local_path;
+    std::size_t context_window_tokens = 0;
+    std::size_t max_output_tokens = 0;
+    std::vector<std::string> stop_sequences;
     bool is_downloaded = false;
     bool is_active = false;
 };
@@ -184,6 +189,31 @@ private:
     mutable std::mutex mutex_;
     std::jthread worker_;
     std::shared_ptr<std::atomic_bool> cancellation_;
+    std::atomic_bool running_{false};
+};
+
+// Loads the selected local model only on its worker, then streams ckai_core
+// chunks through the response service boundary. Cancellation stops generation
+// at the next emitted chunk and never calls into a ckVision view directly.
+class LlmChatResponseService final : public ChatResponseService
+{
+public:
+    explicit LlmChatResponseService(ChatModelService &model_service);
+    ~LlmChatResponseService() override;
+
+    void start(ChatResponseRequest request, ChunkHandler on_chunk, CompletionHandler on_complete) override;
+    void cancel() noexcept override;
+    bool running() const noexcept override;
+
+private:
+    void load_model(const ChatModel &model);
+
+    ChatModelService &model_service_;
+    mutable std::mutex mutex_;
+    std::jthread worker_;
+    std::shared_ptr<std::atomic_bool> cancellation_;
+    std::unique_ptr<ck::ai::Llm> llm_;
+    std::string loaded_model_id_;
     std::atomic_bool running_{false};
 };
 
