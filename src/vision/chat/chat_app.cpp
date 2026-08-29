@@ -163,22 +163,28 @@ bool ChatApp::submit_prompt(std::string prompt)
     render_first_response_chunk_ = true;
     const std::uint64_t request = ++active_request_;
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     response_service_.start({.prompt = messages_[messages_.size() - 2].content,
                              .system_prompt = active_prompt ? active_prompt->message : std::string{},
                              .model_id = active_model ? active_model->id : std::string{},
                              .history = std::move(history)},
-                            [this, lifetime, request](std::string chunk) mutable {
-                                application_.post([this, lifetime, request, chunk = std::move(chunk)]() mutable {
+                            [application, lifetime, self, request](std::string chunk) mutable {
+                                if (lifetime.expired())
+                                    return;
+                                application->post([self, lifetime, request, chunk = std::move(chunk)]() mutable {
                                     if (lifetime.expired())
                                         return;
-                                    append_response_chunk(request, std::move(chunk));
+                                    self->append_response_chunk(request, std::move(chunk));
                                 });
                             },
-                            [this, lifetime, request](bool cancelled) {
-                                application_.post([this, lifetime, request, cancelled] {
+                            [application, lifetime, self, request](bool cancelled) {
+                                if (lifetime.expired())
+                                    return;
+                                application->post([self, lifetime, request, cancelled] {
                                     if (lifetime.expired())
                                         return;
-                                    complete_response(request, cancelled);
+                                    self->complete_response(request, cancelled);
                                 });
                             });
     refresh_transcript();
@@ -332,20 +338,26 @@ bool ChatApp::start_model_download(std::string_view id)
     }
 
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     if (!model_service_.start_download(
             id,
-            [this, lifetime](ChatModelDownloadProgress progress) mutable {
-                application_.post([this, lifetime, progress = std::move(progress)]() mutable {
+            [application, lifetime, self](ChatModelDownloadProgress progress) mutable {
+                if (lifetime.expired())
+                    return;
+                application->post([self, lifetime, progress = std::move(progress)]() mutable {
                     if (lifetime.expired())
                         return;
-                    update_model_download_progress(std::move(progress));
+                    self->update_model_download_progress(std::move(progress));
                 });
             },
-            [this, lifetime](ChatModelDownloadResult result) mutable {
-                application_.post([this, lifetime, result = std::move(result)]() mutable {
+            [application, lifetime, self](ChatModelDownloadResult result) mutable {
+                if (lifetime.expired())
+                    return;
+                application->post([self, lifetime, result = std::move(result)]() mutable {
                     if (lifetime.expired())
                         return;
-                    complete_model_download(std::move(result));
+                    self->complete_model_download(std::move(result));
                 });
             }))
     {

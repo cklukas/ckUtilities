@@ -56,9 +56,10 @@ Historical application baseline: `legacy_tv`
   loads, runs, and cancels searches through injected storage and execution
   services. The production execution adapter uses a joinable worker and the
   search core's explicit traversal-boundary cancellation probe; its callbacks
-  are marshalled back to the UI thread through `Application::post()` behind a
-  teardown lifetime gate. Interactive execution bounds rendered matches to 200
-  while preserving the full match count. Confirmed deletion now runs only in
+  first check the teardown lifetime gate without touching the presentation,
+  then marshal to the UI thread through `Application::post()`. Interactive
+  execution bounds rendered matches to 200 while preserving the full match
+  count. Confirmed deletion now runs only in
   the injected worker and only removes matching regular files or symbolic
   links; it never removes directories. Custom commands remain preview-only
   until a separately sandboxed execution policy is designed.
@@ -133,7 +134,8 @@ Historical application baseline: `legacy_tv`
   and completed prior turns are carried in every response request. The adapter now owns cancellable
   background downloads behind a cached catalog, so rate-limited typed progress
   and completion reach the UI without racing `ModelManager` or retaining view
-  pointers. The production response adapter now opens the activated local
+  pointers; late response and download callbacks are dropped before accessing
+  a destroyed presentation. The production response adapter now opens the activated local
   `ckai_core` model on its own worker, streams cancellable generation back
   through the existing lifetime gate, and prevents model lifecycle changes
   while a response is active. The live rich transcript now renders at most the

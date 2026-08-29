@@ -62,10 +62,31 @@ private:
     bool delete_matched_files_ = false;
     CompletionHandler on_complete_;
 };
+
+void verify_late_execution_delivery_is_lifetime_safe()
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+    ckv::ui::Application application(terminal, clock);
+    MemoryStore specifications;
+    ManualExecution execution;
+    {
+        ck::vision::FindApp find(application, specifications, execution);
+        require(application.execute_command(find.execute_command()) && find.execution_running(),
+                "The test requires an active native find execution.");
+    }
+    require(execution.cancelled(), "Destroying Find must request execution cancellation.");
+    execution.finish({.exitCode = 0, .cancelled = false, .matchCount = 1});
+    application.step(0);
+    require(application.current_frame().size() == ckv::Size{100, 30},
+            "Late Find execution delivery after destruction must be safely ignored.");
+}
 }
 
 int main()
 {
+    verify_late_execution_delivery_is_lifetime_safe();
+
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);

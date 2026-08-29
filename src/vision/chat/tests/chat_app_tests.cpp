@@ -307,10 +307,57 @@ private:
     DownloadProgressHandler on_progress_;
     DownloadCompletionHandler on_complete_;
 };
+
+void verify_late_chat_delivery_is_lifetime_safe()
+{
+    {
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+        ckv::ui::Application application(terminal, clock);
+        ManualResponseService responses;
+        MemoryTranscriptStore transcripts;
+        MemoryPromptService prompts;
+        MemoryModelService models;
+        {
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+            require(chat.submit_prompt("Late response"),
+                    "The test requires an active native chat response.");
+        }
+        require(responses.cancelled(), "Destroying chat must request response cancellation.");
+        responses.emit("Late response chunk.");
+        responses.complete();
+        application.step(0);
+        require(application.current_frame().size() == ckv::Size{100, 30},
+                "Late chat response delivery after destruction must be safely ignored.");
+    }
+
+    {
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+        ckv::ui::Application application(terminal, clock);
+        ManualResponseService responses;
+        MemoryTranscriptStore transcripts;
+        MemoryPromptService prompts;
+        MemoryModelService models;
+        {
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+            require(chat.start_model_download("download") && chat.model_download_running(),
+                    "The test requires an active native model download.");
+        }
+        require(models.download_cancelled(), "Destroying chat must request model-download cancellation.");
+        models.emit_download_progress(1024, 1024);
+        models.complete_download(true);
+        application.step(0);
+        require(application.current_frame().size() == ckv::Size{100, 30},
+                "Late model-download delivery after destruction must be safely ignored.");
+    }
+}
 }
 
 int main()
 {
+    verify_late_chat_delivery_is_lifetime_safe();
+
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);

@@ -328,12 +328,16 @@ void FindApp::start_execution(bool delete_matched_files)
 
     last_execution_result_.reset();
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     execution_service_.start(specification_, delete_matched_files,
-                             [this, lifetime](ck::find::SearchExecutionResult result) mutable {
-        application_.post([this, lifetime, result = std::move(result)]() mutable {
-            if (lifetime.expired())
+                             [application, lifetime, self](ck::find::SearchExecutionResult result) mutable {
+        if (lifetime.expired())
             return;
-            complete_execution(std::move(result));
+        application->post([self, lifetime, result = std::move(result)]() mutable {
+            if (lifetime.expired())
+                return;
+            self->complete_execution(std::move(result));
         });
     });
     present_text_window("Find execution", delete_matched_files
