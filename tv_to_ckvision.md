@@ -22,8 +22,8 @@ Historical application baseline: `legacy_tv`
   scenario covers filesystem load, result reveal/selection, copy, expansion,
   full-frame rendering, UTF-8 search in a 64-level document, malformed reload
   preservation, explicit close-state cleanup, narrow-terminal recomposition,
-  and keyboard tree navigation. Large-input measurement and mouse acceptance
-  remain open.
+  and keyboard and mouse tree navigation. Large-input measurement remains
+  open.
 - The JSON search slice found and exercised a reusable TreeView gap.
   ckVision candidate `d54f65f0b190b836e04f4ffbc38fcbe08c4368cb` adds the
   documented, unit-tested `TreeView::reveal_and_select` API. It remains an

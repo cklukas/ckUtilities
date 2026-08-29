@@ -93,6 +93,18 @@ int main()
     if (!expect(json_view.selected_json_node() != nullptr && json_view.selected_json_node()->key != "needle",
                 "the narrowed JSON tree did not retain keyboard navigation"))
         return 1;
+    const std::string keyboard_selected_key = json_view.selected_json_node()->key;
+    const ckv::Rect tree_bounds = json_view.tree()->absolute_bounds();
+    terminal.inject_event(ckv::MouseEvent{
+        .action = ckv::MouseAction::Down,
+        .button = ckv::MouseButton::Left,
+        .cell = ckv::Point{tree_bounds.x + 3, tree_bounds.y},
+    });
+    application.step(0);
+    if (!expect(json_view.selected_json_node() != nullptr &&
+                    json_view.selected_json_node()->key != keyboard_selected_key,
+                "the narrowed JSON tree did not retain mouse selection"))
+        return 1;
     terminal.resize(ckv::Size{100, 30});
     application.step(0);
     if (!expect(!json_view.load_document("malformed.json", "{\"unterminated\":"),
