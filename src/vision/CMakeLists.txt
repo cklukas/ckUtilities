@@ -16,6 +16,7 @@ add_subdirectory(launcher)
 add_subdirectory(find)
 add_subdirectory(du)
 add_subdirectory(config)
+add_subdirectory(edit)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_shell_tests

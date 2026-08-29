@@ -55,6 +55,11 @@ Historical application baseline: `legacy_tv`
   option's stable string name. Persistence remains a composition-root policy.
   Runtime keymap capture, normalized chords, conflict analysis, and cross-app
   reload remain contingent on a ckVision-native keymap design.
+- WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
+  injected file service for native open/save/save-as workflows. The Markdown
+  analyzer now builds as a framework-independent `ck_markdown_core` target.
+  Markdown transformations, profiles, and conflict/close workflows remain
+  the next slices.
 
 ## 1. Mandate
 

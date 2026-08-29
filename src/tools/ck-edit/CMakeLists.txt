@@ -7,8 +7,24 @@ if(TARGET tvision)
   target_include_directories(tvision PRIVATE ${CURSES_INCLUDE_DIRS})
 endif()
 
-add_library(ck_edit_core STATIC
+add_library(ck_markdown_core STATIC
   src/markdown_parser.cpp
+)
+
+target_include_directories(ck_markdown_core
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+target_compile_features(ck_markdown_core PUBLIC cxx_std_20)
+
+install(TARGETS ck_markdown_core
+  ARCHIVE DESTINATION lib
+)
+
+add_library(ck_edit_core STATIC
   src/markdown_editor.cpp
   src/markdown_file_editor.cpp
 )
@@ -24,6 +40,7 @@ target_compile_features(ck_edit_core PUBLIC cxx_std_20)
 
 target_link_libraries(ck_edit_core
   PUBLIC
+    ck_markdown_core
     ck_app_info
     ck_ui
     tvision::tvision
