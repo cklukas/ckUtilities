@@ -84,7 +84,10 @@ Historical application baseline: `legacy_tv`
   to an injected storage service. Native prompt selection, add/edit, default
   restoration, and confirmed custom-prompt deletion now use an injected
   `SystemPromptManager` adapter; the active prompt is carried in every response
-  request. Model management and richer progress remain the next slices.
+  request. Downloaded-model selection, deactivation, and confirmed local
+  deletion now use an injected `ModelManager` adapter, and the active model ID
+  is carried in every response request. Model download/loading and richer
+  progress remain the next slices.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <utility>
 
+#include "ck/ai/model_manager.hpp"
 #include "ck/ai/system_prompt_manager.hpp"
 
 namespace ck::vision
@@ -25,6 +26,16 @@ ck::ai::SystemPrompt as_system_prompt(ChatSystemPrompt prompt)
             .message = std::move(prompt.message),
             .is_default = prompt.is_default,
             .is_active = prompt.is_active};
+}
+
+ChatModel as_chat_model(const ck::ai::ModelInfo &model)
+{
+    return {.id = model.id,
+            .name = model.name,
+            .description = model.description,
+            .hardware_requirements = model.hardware_requirements,
+            .size_bytes = model.size_bytes,
+            .is_active = model.is_active};
 }
 } // namespace
 
@@ -70,6 +81,40 @@ bool SystemPromptManagerService::restore_default(std::string_view id)
 bool SystemPromptManagerService::is_default_modified(std::string_view id) const
 {
     return manager_.is_default_prompt_modified(std::string(id));
+}
+
+ModelManagerService::ModelManagerService(ck::ai::ModelManager &manager) noexcept
+    : manager_(manager)
+{
+}
+
+std::vector<ChatModel> ModelManagerService::downloaded_models() const
+{
+    std::vector<ChatModel> models;
+    for (const ck::ai::ModelInfo &model : manager_.get_downloaded_models())
+        models.push_back(as_chat_model(model));
+    return models;
+}
+
+std::optional<ChatModel> ModelManagerService::active_model() const
+{
+    const std::optional<ck::ai::ModelInfo> model = manager_.get_active_model();
+    return model ? std::optional<ChatModel>{as_chat_model(*model)} : std::nullopt;
+}
+
+bool ModelManagerService::activate(std::string_view id)
+{
+    return manager_.activate_model(std::string(id));
+}
+
+bool ModelManagerService::deactivate(std::string_view id)
+{
+    return manager_.deactivate_model(std::string(id));
+}
+
+bool ModelManagerService::remove(std::string_view id)
+{
+    return manager_.delete_model(std::string(id));
 }
 
 ThreadedChatResponseService::ThreadedChatResponseService(ChatResponder responder)

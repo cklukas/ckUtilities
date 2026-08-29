@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -13,6 +14,7 @@
 
 namespace ck::ai
 {
+class ModelManager;
 class SystemPromptManager;
 }
 
@@ -61,10 +63,51 @@ private:
     ck::ai::SystemPromptManager &manager_;
 };
 
+struct ChatModel
+{
+    std::string id;
+    std::string name;
+    std::string description;
+    std::string hardware_requirements;
+    std::size_t size_bytes = 0;
+    bool is_active = false;
+};
+
+// Model selection and local deletion are application workflows. Download and
+// runtime loading remain separate asynchronous concerns rather than making a
+// dialog reach into the model runtime or filesystem itself.
+class ChatModelService
+{
+public:
+    virtual ~ChatModelService() = default;
+
+    virtual std::vector<ChatModel> downloaded_models() const = 0;
+    virtual std::optional<ChatModel> active_model() const = 0;
+    virtual bool activate(std::string_view id) = 0;
+    virtual bool deactivate(std::string_view id) = 0;
+    virtual bool remove(std::string_view id) = 0;
+};
+
+class ModelManagerService final : public ChatModelService
+{
+public:
+    explicit ModelManagerService(ck::ai::ModelManager &manager) noexcept;
+
+    std::vector<ChatModel> downloaded_models() const override;
+    std::optional<ChatModel> active_model() const override;
+    bool activate(std::string_view id) override;
+    bool deactivate(std::string_view id) override;
+    bool remove(std::string_view id) override;
+
+private:
+    ck::ai::ModelManager &manager_;
+};
+
 struct ChatResponseRequest
 {
     std::string prompt;
     std::string system_prompt;
+    std::string model_id;
 };
 
 // The chat presentation depends on streaming callbacks, not a model runtime.

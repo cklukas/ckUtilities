@@ -24,9 +24,10 @@ using ckv::widgets::StatusLineItem;
 ChatApp::ChatApp(ckv::ui::Application &application,
                  ChatResponseService &response_service,
                  ChatTranscriptStore &transcript_store,
-                 ChatPromptService &prompt_service)
+                 ChatPromptService &prompt_service,
+                 ChatModelService &model_service)
     : application_(application), response_service_(response_service), transcript_store_(transcript_store),
-      prompt_service_(prompt_service)
+      prompt_service_(prompt_service), model_service_(model_service)
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -71,6 +72,15 @@ void ChatApp::declare_commands()
     delete_active_prompt_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.delete_active_prompt", .title = "&Delete active prompt", .category = "Chat",
         .visibility = CommandVisibility::Palette, .handler = [this] { request_delete_active_prompt(); }});
+    select_model_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.select_model", .title = "Select active &model...", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_select_model_dialog(); }});
+    deactivate_model_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.deactivate_model", .title = "&Deactivate active model", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { deactivate_active_model(); }});
+    delete_active_model_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.delete_active_model", .title = "&Delete active model", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { request_delete_active_model(); }});
 }
 
 SuiteShellOptions ChatApp::make_shell_options() const
@@ -90,6 +100,11 @@ SuiteShellOptions ChatApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{edit_active_prompt_command_, "&Edit active prompt..."}),
                 MenuItem::command(CommandPresentation{restore_active_prompt_command_, "&Restore active default prompt"}),
                 MenuItem::command(CommandPresentation{delete_active_prompt_command_, "&Delete active prompt"}),
+            }},
+            MenuBarItem{"&Models", {
+                MenuItem::command(CommandPresentation{select_model_command_, "Select active &model..."}),
+                MenuItem::command(CommandPresentation{deactivate_model_command_, "&Deactivate active model"}),
+                MenuItem::command(CommandPresentation{delete_active_model_command_, "&Delete active model"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{send_command_, "&Send"}, 20},
@@ -119,13 +134,15 @@ bool ChatApp::submit_prompt(std::string prompt)
     if (prompt.empty() || response_pending_)
         return false;
     const std::optional<ChatSystemPrompt> active_prompt = prompt_service_.active_prompt();
+    const std::optional<ChatModel> active_model = model_service_.active_model();
     messages_.push_back({ChatMessage::Role::User, std::move(prompt)});
     messages_.push_back({ChatMessage::Role::Assistant, {}});
     response_pending_ = true;
     const std::uint64_t request = ++active_request_;
     const std::weak_ptr<void> lifetime = lifetime_;
     response_service_.start({.prompt = messages_[messages_.size() - 2].content,
-                             .system_prompt = active_prompt ? active_prompt->message : std::string{}},
+                             .system_prompt = active_prompt ? active_prompt->message : std::string{},
+                             .model_id = active_model ? active_model->id : std::string{}},
                             [this, lifetime, request](std::string chunk) mutable {
                                 application_.post([this, lifetime, request, chunk = std::move(chunk)]() mutable {
                                     if (lifetime.expired())
@@ -211,6 +228,52 @@ bool ChatApp::restore_default_prompt(std::string_view id)
     {
         if (window_ != nullptr)
             window_->set_footer("Could not restore that system prompt.");
+        return false;
+    }
+    refresh_transcript();
+    return true;
+}
+
+std::vector<ChatModel> ChatApp::downloaded_models() const
+{
+    return model_service_.downloaded_models();
+}
+
+std::optional<ChatModel> ChatApp::active_model() const
+{
+    return model_service_.active_model();
+}
+
+bool ChatApp::activate_model(std::string_view id)
+{
+    if (id.empty() || !model_service_.activate(id))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Could not activate the selected downloaded model.");
+        return false;
+    }
+    refresh_transcript();
+    return true;
+}
+
+bool ChatApp::deactivate_model(std::string_view id)
+{
+    if (id.empty() || !model_service_.deactivate(id))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Could not deactivate the selected model.");
+        return false;
+    }
+    refresh_transcript();
+    return true;
+}
+
+bool ChatApp::remove_model(std::string_view id)
+{
+    if (id.empty() || !model_service_.remove(id))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Could not delete that local model.");
         return false;
     }
     refresh_transcript();
@@ -353,6 +416,81 @@ void ChatApp::request_delete_active_prompt()
     });
 }
 
+void ChatApp::show_select_model_dialog()
+{
+    const std::vector<ChatModel> available = downloaded_models();
+    if (available.empty())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("No downloaded models are available. Download support is the next chat workflow slice.");
+        return;
+    }
+
+    std::vector<std::string> labels;
+    std::vector<std::string> ids;
+    labels.reserve(available.size());
+    ids.reserve(available.size());
+    int selected = 0;
+    for (std::size_t index = 0; index < available.size(); ++index)
+    {
+        const ChatModel &model = available[index];
+        labels.push_back(model.name + (model.is_active ? " [active]" : ""));
+        ids.push_back(model.id);
+        if (model.is_active)
+            selected = static_cast<int>(index);
+    }
+
+    model_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Select active model";
+    dialog.fields.push_back({"&Downloaded model:", "", nullptr, false, '*', ckv::widgets::FieldKind::Combo,
+                             false, std::move(labels), selected});
+    dialog.buttons.push_back({"&Activate", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    model_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    model_dialog_->set_completion_handler([this, ids = std::move(ids)](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0 ||
+            static_cast<std::size_t>(result.selected[0]) >= ids.size())
+            return;
+        activate_model(ids[static_cast<std::size_t>(result.selected[0])]);
+    });
+}
+
+void ChatApp::deactivate_active_model()
+{
+    const std::optional<ChatModel> current = active_model();
+    if (!current)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("There is no active model to deactivate.");
+        return;
+    }
+    deactivate_model(current->id);
+}
+
+void ChatApp::request_delete_active_model()
+{
+    const std::optional<ChatModel> current = active_model();
+    if (!current)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("There is no active local model to delete.");
+        return;
+    }
+
+    delete_model_confirmation_.reset();
+    delete_model_confirmation_.emplace(ckv::widgets::present_message_box(
+        application_, shell_->desktop(), shell_->roles(),
+        {ckv::widgets::MessageBoxKind::Warning,
+         "Delete local model",
+         "Delete the active local model '" + current->name + "'?",
+         ckv::widgets::MessageBoxButtons::YesNoCancel}));
+    delete_model_confirmation_->set_completion_handler([this, id = current->id](ckv::widgets::MessageBoxResult result) {
+        if (result == ckv::widgets::MessageBoxResult::Yes)
+            remove_model(id);
+    });
+}
+
 void ChatApp::new_chat()
 {
     response_service_.cancel();
@@ -401,6 +539,12 @@ std::string ChatApp::prompt_status() const
     if (current->is_default && prompt_service_.is_default_modified(current->id))
         status += " (modified default)";
     return status;
+}
+
+std::string ChatApp::model_status() const
+{
+    const std::optional<ChatModel> current = active_model();
+    return current ? "model: " + current->name : "no active model";
 }
 
 bool ChatApp::export_transcript(const std::string &path)
@@ -479,7 +623,8 @@ void ChatApp::refresh_transcript()
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)
         window_->set_footer(std::to_string(messages_.size()) +
-                            (response_pending_ ? " messages; generating; " : " messages; ") + prompt_status());
+                            (response_pending_ ? " messages; generating; " : " messages; ") + prompt_status() + "; " +
+                            model_status());
 }
 
 } // namespace ck::vision

@@ -12,7 +12,7 @@ dependencies; it does not mix ckVision with Turbo Vision in the same process.
 | Disk usage | `ck-du-ckvision` | background cancellable snapshot scan, tree, selected-directory and file-list tables | cloud actions, parity acceptance |
 | Config | `ck-config-ckvision` | injected option registry inspect/edit/reset/save/reload/import/export | keymap capture/conflicts, cross-app reload |
 | Edit | `ck-edit-ckvision` | native document open/save/save-as, dirty Save/Discard/Cancel close, Markdown syntax profile | Markdown transactions, richer conflict resolution |
-| Chat | `ck-chat-ckvision` | FlowView transcript, Markdown adaptation, streaming/cancel/copy/export, injected worker response and transcript services, plus native prompt select/create/edit/restore/confirmed-delete backed by `ckai_core` | models, richer progress |
+| Chat | `ck-chat-ckvision` | FlowView transcript, Markdown adaptation, streaming/cancel/copy/export, injected worker response and transcript services, plus native prompt and downloaded-model selection/lifecycle backed by `ckai_core` | model download/loading, richer progress |
 
 The exact package and integration-candidate state are recorded in
 [the baseline record](ckvision-baseline.md) and

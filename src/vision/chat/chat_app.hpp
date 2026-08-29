@@ -38,7 +38,8 @@ public:
     ChatApp(ckv::ui::Application &application,
             ChatResponseService &response_service,
             ChatTranscriptStore &transcript_store,
-            ChatPromptService &prompt_service);
+            ChatPromptService &prompt_service,
+            ChatModelService &model_service);
     ~ChatApp();
 
     bool submit_prompt(std::string prompt);
@@ -49,6 +50,11 @@ public:
     bool add_or_update_prompt(ChatSystemPrompt prompt);
     bool remove_prompt(std::string_view id);
     bool restore_default_prompt(std::string_view id);
+    std::vector<ChatModel> downloaded_models() const;
+    std::optional<ChatModel> active_model() const;
+    bool activate_model(std::string_view id);
+    bool deactivate_model(std::string_view id);
+    bool remove_model(std::string_view id);
     const std::vector<ChatMessage> &messages() const noexcept { return messages_; }
     bool response_running() const noexcept;
     ckv::widgets::FlowView *transcript() const noexcept { return transcript_; }
@@ -62,6 +68,9 @@ public:
     ckv::ui::CommandId edit_active_prompt_command() const noexcept { return edit_active_prompt_command_; }
     ckv::ui::CommandId restore_active_prompt_command() const noexcept { return restore_active_prompt_command_; }
     ckv::ui::CommandId delete_active_prompt_command() const noexcept { return delete_active_prompt_command_; }
+    ckv::ui::CommandId select_model_command() const noexcept { return select_model_command_; }
+    ckv::ui::CommandId deactivate_model_command() const noexcept { return deactivate_model_command_; }
+    ckv::ui::CommandId delete_active_model_command() const noexcept { return delete_active_model_command_; }
 
 private:
     void declare_commands();
@@ -73,12 +82,16 @@ private:
     void show_edit_active_prompt_dialog();
     void restore_active_prompt();
     void request_delete_active_prompt();
+    void show_select_model_dialog();
+    void deactivate_active_model();
+    void request_delete_active_model();
     void new_chat();
     void cancel_response();
     void copy_transcript();
     void show_export_dialog();
     std::string transcript_text() const;
     std::string prompt_status() const;
+    std::string model_status() const;
     void append_response_chunk(std::uint64_t request, std::string chunk);
     void complete_response(std::uint64_t request, bool cancelled);
     void refresh_transcript();
@@ -87,6 +100,7 @@ private:
     ChatResponseService &response_service_;
     ChatTranscriptStore &transcript_store_;
     ChatPromptService &prompt_service_;
+    ChatModelService &model_service_;
     std::vector<ChatMessage> messages_;
     std::unique_ptr<SuiteShell> shell_;
     ckv::widgets::Window *window_ = nullptr;
@@ -101,10 +115,15 @@ private:
     ckv::ui::CommandId edit_active_prompt_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId restore_active_prompt_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_active_prompt_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId select_model_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId deactivate_model_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId delete_active_model_command_ = ckv::ui::kInvalidCommand;
     std::optional<ckv::widgets::DescriptorDialogPresentation> send_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> prompt_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> model_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> export_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> delete_prompt_confirmation_;
+    std::optional<ckv::widgets::MessageBoxPresentation> delete_model_confirmation_;
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::uint64_t active_request_ = 0;
     bool response_pending_ = false;

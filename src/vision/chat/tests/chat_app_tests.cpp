@@ -162,6 +162,63 @@ public:
 private:
     std::vector<ck::vision::ChatSystemPrompt> prompts_;
 };
+
+class MemoryModelService final : public ck::vision::ChatModelService
+{
+public:
+    MemoryModelService()
+        : models_{{"local", "Local assistant", "A locally available assistant.", "CPU", 512, true},
+                  {"writer", "Technical writer", "A local writing model.", "CPU", 768, false}}
+    {
+    }
+
+    std::vector<ck::vision::ChatModel> downloaded_models() const override { return models_; }
+
+    std::optional<ck::vision::ChatModel> active_model() const override
+    {
+        for (const auto &model : models_)
+            if (model.is_active)
+                return model;
+        return std::nullopt;
+    }
+
+    bool activate(std::string_view id) override
+    {
+        const auto found = std::find_if(models_.begin(), models_.end(), [id](const auto &model) {
+            return model.id == id;
+        });
+        if (found == models_.end())
+            return false;
+        for (auto &model : models_)
+            model.is_active = model.id == id;
+        return true;
+    }
+
+    bool deactivate(std::string_view id) override
+    {
+        for (auto &model : models_)
+            if (model.id == id && model.is_active)
+            {
+                model.is_active = false;
+                return true;
+            }
+        return false;
+    }
+
+    bool remove(std::string_view id) override
+    {
+        const auto found = std::find_if(models_.begin(), models_.end(), [id](const auto &model) {
+            return model.id == id;
+        });
+        if (found == models_.end())
+            return false;
+        models_.erase(found);
+        return true;
+    }
+
+private:
+    std::vector<ck::vision::ChatModel> models_;
+};
 }
 
 int main()
@@ -172,10 +229,12 @@ int main()
     ManualResponseService responses;
     MemoryTranscriptStore transcripts;
     MemoryPromptService prompts;
-    ck::vision::ChatApp chat(application, responses, transcripts, prompts);
+    MemoryModelService models;
+    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.request().prompt == "Hello" &&
-                responses.request().system_prompt == "Keep responses clear." && chat.response_running(),
+                responses.request().system_prompt == "Keep responses clear." && responses.request().model_id == "local" &&
+                chat.response_running(),
             "The native chat app must delegate prompts to the injected streaming service.");
     responses.emit("**Echo** ");
     responses.emit("[Hello](https://example.com)");
@@ -211,9 +270,20 @@ int main()
             "Default-prompt restoration must dispatch through the command registry.");
     require(application.execute_command(chat.delete_active_prompt_command()),
             "Active-prompt deletion must dispatch through the command registry.");
+    require(chat.activate_model("writer"), "The chat app must activate a selected downloaded model through the service.");
+    require(chat.active_model() && chat.active_model()->id == "writer",
+            "The selected downloaded model must become the active model.");
+    require(application.execute_command(chat.select_model_command()), "Model selection must dispatch through the command registry.");
+    require(application.execute_command(chat.deactivate_model_command()), "Model deactivation must dispatch through the command registry.");
+    require(chat.activate_model("writer"), "A deactivated model must be activatable again.");
+    require(application.execute_command(chat.delete_active_model_command()),
+            "Active-model deletion must dispatch through the command registry.");
+    require(chat.activate_model("local"), "The remaining local model must remain selectable.");
+    require(chat.remove_model("writer"), "The chat app must remove a downloaded model through the service.");
     require(application.execute_command(chat.new_chat_command()), "New conversation must dispatch through the command registry.");
     require(chat.messages().empty(), "New conversation must clear the application-owned conversation state.");
     require(chat.submit_prompt("Cancel me"), "A new prompt must start after completion.");
+    require(responses.request().model_id == "local", "The active model identifier must travel with every response request.");
     require(application.execute_command(chat.cancel_command()), "Cancellation must dispatch through the command registry.");
     require(responses.cancelled(), "Cancellation must be delegated to the response service.");
     responses.complete(true);
@@ -231,7 +301,7 @@ int main()
     std::condition_variable completion_ready;
     std::string worker_response;
     bool completed = false;
-    threaded_responses.start({"Hello", "System"}, [&](std::string chunk) { worker_response += chunk; }, [&](bool cancelled) {
+    threaded_responses.start({"Hello", "System", "model"}, [&](std::string chunk) { worker_response += chunk; }, [&](bool cancelled) {
         {
             std::scoped_lock lock(completion_mutex);
             completed = !cancelled;
