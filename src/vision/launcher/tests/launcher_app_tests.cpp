@@ -6,6 +6,7 @@
 #include <string>
 
 #include <cvision/core/clock.hpp>
+#include <cvision/core/event.hpp>
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/ui/application.hpp>
 
@@ -58,6 +59,26 @@ int main()
     }
     require(launcher.launcher_window_count() == 5,
             "Repeated New Launcher commands must retain each native launcher window.");
+    const std::string initially_selected_id = std::string(launcher.selected_tool()->id);
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(launcher.selected_tool() != nullptr && launcher.selected_tool()->id != initially_selected_id,
+            "The native tool list must accept keyboard selection.");
+    const std::string keyboard_selected_id = std::string(launcher.selected_tool()->id);
+    terminal.inject_event(ckv::MouseEvent{
+        .action = ckv::MouseAction::Down,
+        .button = ckv::MouseButton::Left,
+        .cell = ckv::Point{6, 2},
+    });
+    application.step(0);
+    require(launcher.selected_tool() != nullptr && launcher.selected_tool()->id != keyboard_selected_id,
+            "The native tool list must accept mouse selection.");
+    terminal.resize(ckv::Size{70, 20});
+    application.step(0);
+    require(application.current_frame().size() == ckv::Size{70, 20},
+            "The native launcher must recompose after terminal resize.");
+    terminal.resize(ckv::Size{100, 30});
+    application.step(0);
     require(application.execute_command(launcher.calendar_command()),
             "The native Calendar command must dispatch through the registry.");
     require(launcher.desktop_window_count() == 6,

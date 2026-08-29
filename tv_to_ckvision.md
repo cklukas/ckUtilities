@@ -43,7 +43,8 @@ Historical application baseline: `legacy_tv`
   a suite-specific widget. The initial launcher conversion is complete; its
   workflow-depth, resizing, and input coverage will grow with release gates.
   Its headless scenario now exercises repeated native launcher windows, the
-  standard close lifecycle, and a full standard-quit window sweep.
+  standard close lifecycle, a full standard-quit window sweep, list selection
+  through keyboard and mouse input, and terminal resize recomposition.
   The disposable installed-product verifier now temporarily removes a staged
   child executable and confirms that `ck-utilities --launch ck-json-view`
   fails with a clear diagnostic before it can start a child process.
