@@ -34,8 +34,10 @@ Historical application baseline: `legacy_tv`
   and directly tested. The calendar reuses ckVision's CalendarView rather
   than retaining a suite copy. A bounded, read-only application-diagnostics
   window uses ckVision's injected diagnostics sink rather than creating a
-  raw-event interception path. Color selection remains the next launcher
-  slice.
+  raw-event interception path. The color selector uses ckVision's declarative,
+  validated radio-form dialog and presents the selected palette values without
+  a suite-specific widget. The initial launcher conversion is complete; its
+  workflow-depth, resizing, and input coverage will grow with release gates.
 - WP-5: `ck-find-ckvision` is an initial native search-specification slice.
   It keeps the specification and command-plan generation in the framework-
   independent search core, exposes command-registry actions for a validated

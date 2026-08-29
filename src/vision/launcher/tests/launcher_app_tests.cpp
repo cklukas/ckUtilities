@@ -61,6 +61,10 @@ int main()
             "The native diagnostics command must dispatch through the registry.");
     require(launcher.desktop_window_count() == 6,
             "The diagnostics snapshot must be presented as a regular Desktop window.");
+    require(application.execute_command(launcher.color_selector_command()),
+            "The native color selector must dispatch through the registry.");
+    require(launcher.desktop_window_count() == 7,
+            "The native color selector must be presented modally on the Desktop.");
     require(application.execute_command(launcher.launch_command()),
             "The native Launch command must dispatch through the registry.");
     require(launched_id == expected_tool,

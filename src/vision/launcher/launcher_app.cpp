@@ -67,6 +67,24 @@ std::vector<std::vector<std::string>> ascii_rows()
     return rows;
 }
 
+const std::vector<std::string> &palette_names()
+{
+    static const std::vector<std::string> names = {
+        "Black", "Blue", "Green", "Cyan", "Red", "Magenta", "Brown", "Light gray",
+        "Dark gray", "Light blue", "Light green", "Light cyan", "Light red", "Light magenta",
+        "Yellow", "White",
+    };
+    return names;
+}
+
+std::string_view palette_name(int index)
+{
+    const auto &names = palette_names();
+    if (index < 0 || index >= static_cast<int>(names.size()))
+        return "Unknown";
+    return names[static_cast<std::size_t>(index)];
+}
+
 struct CalculatorWindowState
 {
     ckv::widgets::InputLine *input = nullptr;
@@ -239,6 +257,13 @@ void UtilitiesLauncherApp::declare_commands()
         .visibility = CommandVisibility::Palette,
         .handler = [this] { open_diagnostics_window(); },
     });
+    color_selector_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.utilities.show_color_selector",
+        .title = "Show color &selector",
+        .category = "CK Utilities",
+        .visibility = CommandVisibility::Palette,
+        .handler = [this] { open_color_selector(); },
+    });
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
@@ -253,6 +278,7 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{ascii_table_command_, "Show &ASCII table"}),
                 MenuItem::command(CommandPresentation{calculator_command_, "Show &Calculator"}),
                 MenuItem::command(CommandPresentation{diagnostics_command_, "Show &Diagnostics"}),
+                MenuItem::command(CommandPresentation{color_selector_command_, "Show color &selector"}),
             }},
             MenuBarItem{"&Window", {MenuItem::command(CommandPresentation{new_launcher_command_, "&New launcher window"})}},
         },
@@ -262,6 +288,7 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
             StatusLineItem{CommandPresentation{ascii_table_command_, "&ASCII"}, 20},
             StatusLineItem{CommandPresentation{calculator_command_, "&Calculator"}, 20},
             StatusLineItem{CommandPresentation{diagnostics_command_, "&Diagnostics"}, 20},
+            StatusLineItem{CommandPresentation{color_selector_command_, "&Colors"}, 20},
             StatusLineItem{CommandPresentation{new_launcher_command_, "&New"}, 20},
         },
     };
@@ -423,6 +450,54 @@ void UtilitiesLauncherApp::open_diagnostics_window()
     auto text = std::make_unique<ckv::widgets::TextView>();
     text->set_wrap_mode(ckv::widgets::WrapMode::Word);
     text->set_text(diagnostics_->snapshot());
+    window->set_content(std::move(text));
+    shell_->desktop().add_window(std::move(window));
+}
+
+void UtilitiesLauncherApp::open_color_selector()
+{
+    log_diagnostic(ckv::LogLevel::Info, "Opened color selector");
+    color_dialog_.reset();
+
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Color selector";
+    dialog.minimum_window_size = ckv::Size{48, 16};
+    dialog.resizable = true;
+    dialog.fields.push_back({
+        .label = "&Background",
+        .kind = ckv::widgets::FieldKind::Radio,
+        .options = palette_names(),
+        .initial_selection = background_color_,
+    });
+    dialog.fields.push_back({
+        .label = "&Foreground",
+        .kind = ckv::widgets::FieldKind::Radio,
+        .options = palette_names(),
+        .initial_selection = foreground_color_,
+    });
+    dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    color_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    color_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.selected.size() != 2 || result.selected[0] < 0 || result.selected[1] < 0)
+            return;
+        background_color_ = result.selected[0];
+        foreground_color_ = result.selected[1];
+        log_diagnostic(ckv::LogLevel::Info, "Applied color selection");
+        show_color_selection();
+    });
+}
+
+void UtilitiesLauncherApp::show_color_selection()
+{
+    auto window = std::make_unique<ckv::widgets::Window>("Selected colors");
+    window->set_min_size(ckv::Size{40, 10});
+    window->set_footer("The color choices are preserved for the current launcher session.");
+    auto text = std::make_unique<ckv::widgets::TextView>();
+    text->set_text("Background: " + std::string(palette_name(background_color_)) + " (" +
+                   std::to_string(background_color_) + ")\n\nForeground: " +
+                   std::string(palette_name(foreground_color_)) + " (" + std::to_string(foreground_color_) + ")");
     window->set_content(std::move(text));
     shell_->desktop().add_window(std::move(window));
 }

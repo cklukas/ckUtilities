@@ -8,6 +8,7 @@
 
 #include <cvision/ui/application.hpp>
 #include <cvision/ui/command.hpp>
+#include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/list_view.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <cvision/widgets/window.hpp>
@@ -39,6 +40,7 @@ public:
     ckv::ui::CommandId ascii_table_command() const noexcept { return ascii_table_command_; }
     ckv::ui::CommandId calculator_command() const noexcept { return calculator_command_; }
     ckv::ui::CommandId diagnostics_command() const noexcept { return diagnostics_command_; }
+    ckv::ui::CommandId color_selector_command() const noexcept { return color_selector_command_; }
     std::size_t desktop_window_count() const noexcept { return shell_->desktop().windows().size(); }
     std::size_t diagnostics_entry_count() const noexcept;
 
@@ -59,6 +61,8 @@ private:
     void open_ascii_table_window();
     void open_calculator_window();
     void open_diagnostics_window();
+    void open_color_selector();
+    void show_color_selection();
     void log_diagnostic(ckv::LogLevel level, std::string_view message) noexcept;
     void close_launcher_window(LauncherWindow *window);
     LauncherWindow *active_launcher_window() const noexcept;
@@ -73,7 +77,11 @@ private:
     ckv::ui::CommandId ascii_table_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId calculator_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId diagnostics_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId color_selector_command_ = ckv::ui::kInvalidCommand;
     std::shared_ptr<BoundedDiagnostics> diagnostics_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> color_dialog_;
+    int background_color_ = 0;
+    int foreground_color_ = 15;
     std::unique_ptr<SuiteShell> shell_;
 };
 
