@@ -1,6 +1,6 @@
 # Work Package: ckUtilities migration to ckVision
 
-Status: Active — WP-0/WP-1, the initial WP-2 shell, and native vertical slices for WP-3 through WP-5 are implemented; the remaining application conversions are in progress.
+Status: Active — WP-0/WP-1, the initial WP-2 shell, and a native vertical slice for every application WP through WP-9 are implemented. Workflow-depth completion and WP-10 legacy removal remain in progress.
 Owner: ckUtilities and ckVision maintainers  
 Created: 2026-08-29  
 Target branch: `master`  
@@ -65,6 +65,11 @@ Historical application baseline: `legacy_tv`
   responder so the presentation tree does not own a model worker or transport
   lifetime. Streaming, cancellation, Markdown adaptation, models, prompts,
   and progress management remain the next slices.
+- All seven native executables build together against the installed ckVision
+  candidate SDK and their headless suite, JSON-domain, and architecture tests
+  pass as one 14-test checkpoint. The legacy executables remain deliberately
+  separate while the outstanding workflow entries in the traceability ledger
+  are completed.
 
 ## 1. Mandate
 

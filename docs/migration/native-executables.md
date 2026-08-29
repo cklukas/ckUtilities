@@ -1,0 +1,21 @@
+# Native ckVision executables
+
+This is the current dual-stack cutover map. Each native executable links only
+the ckVision presentation stack and its framework-independent application
+dependencies; it does not mix ckVision with Turbo Vision in the same process.
+
+| Product | Native executable | Current native scope | Remaining scope before cutover |
+|---|---|---|---|
+| Utilities launcher | `ck-utilities-ckvision` | launcher, calendar, ASCII table, calculator, color selector, bounded diagnostics | failure/repeat-window interaction coverage and release acceptance |
+| JSON view | `ck-json-view-ckvision` | open, tree navigation, find, copy, expansion | large/provider-backed tree measurement and final cutover |
+| Find | `ck-find-ckvision` | guided specification form and command preview | saved specs, process execution, cancellation, parity acceptance |
+| Disk usage | `ck-du-ckvision` | application-owned scan snapshot, tree, selected-directory table | injected asynchronous scans, cancellation, files, cloud actions |
+| Config | `ck-config-ckvision` | injected option registry inspect/edit/reset | persistence, keymap capture/conflicts, import/export, reload |
+| Edit | `ck-edit-ckvision` | native document open/save/save-as | Markdown transactions/profiles, conflict and close decisions |
+| Chat | `ck-chat-ckvision` | FlowView transcript, prompt, copy, injected responder | streaming, cancellation, Markdown, models/prompts, progress |
+
+The exact package and integration-candidate state are recorded in
+[the baseline record](ckvision-baseline.md) and
+[the traceability ledger](traceability.md). This document does not authorize
+removing the legacy runtime: that occurs only when each remaining journey has
+accepted evidence under WP-10.
