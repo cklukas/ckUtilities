@@ -121,8 +121,12 @@ Historical application baseline: `legacy_tv`
   pointers. The production response adapter now opens the activated local
   `ckai_core` model on its own worker, streams cancellable generation back
   through the existing lifetime gate, and prevents model lifecycle changes
-  while a response is active. Long-session/runtime performance evidence remains
-  before acceptance.
+  while a response is active. The live rich transcript now renders at most the
+  latest 160 messages (with an explicit retention notice) while export and
+  model context retain the full conversation. The first response chunk renders
+  promptly; subsequent small chunks are coalesced until 96 bytes or completion.
+  Generic FlowView active-block/incremental-layout capability and real-model
+  runtime evidence remain before acceptance.
 - All seven native executables build together against the installed ckVision
   candidate SDK. Their headless suite, JSON-domain, and architecture tests
   pass as one 19-test checkpoint. A separate installed-product gate builds the

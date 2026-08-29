@@ -8,6 +8,7 @@
 #include <mutex>
 #include <optional>
 #include <utility>
+#include <variant>
 
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -20,6 +21,15 @@ void require(bool value, const char *message)
         return;
     std::cerr << message << '\n';
     std::exit(EXIT_FAILURE);
+}
+
+std::string block_text(const ckv::widgets::FlowBlock &block)
+{
+    std::string text;
+    for (const auto &inline_content : block.content)
+        if (const auto *flow_text = std::get_if<ckv::widgets::FlowText>(&inline_content))
+            text += flow_text->text;
+    return text;
 }
 
 class ManualResponseService final : public ck::vision::ChatResponseService
@@ -321,11 +331,11 @@ int main()
     application.step(0);
     require(chat.messages()[1].content == "**Echo** [Hello](https://example.com)",
             "Streaming chunks must be marshalled into the assistant transcript.");
-    require(chat.transcript()->link_count() == 1,
-            "Markdown links in assistant output must be exposed through FlowView navigation.");
     responses.complete();
     application.step(0);
     require(!chat.response_running(), "Completion must clear the active response state.");
+    require(chat.transcript()->link_count() == 1,
+            "Completion must flush Markdown links in batched assistant output into FlowView navigation.");
     require(chat.submit_prompt("Follow up"), "A completed conversation must accept a follow-up prompt.");
     require(responses.request().history.size() == 2 &&
                 responses.request().history[0].role == ck::vision::ChatResponseRequest::PriorMessage::Role::User &&
@@ -401,6 +411,37 @@ int main()
     require(application.execute_command(chat.send_command()), "Send must dispatch through the command registry.");
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30}, "The native chat app must render headlessly.");
+
+    require(application.execute_command(chat.new_chat_command()) && chat.submit_prompt("Batch render"),
+            "A fresh chat must start a response for transcript batching coverage.");
+    responses.emit("first");
+    application.step(0);
+    require(block_text(chat.transcript()->document().blocks.back()).find("first") != std::string::npos,
+            "The first streamed response chunk must remain promptly visible.");
+    responses.emit(" deferred");
+    application.step(0);
+    require(block_text(chat.transcript()->document().blocks.back()).find("deferred") == std::string::npos,
+            "Small subsequent chunks must not rebuild the rich transcript individually.");
+    responses.complete();
+    application.step(0);
+    require(block_text(chat.transcript()->document().blocks.back()).find("deferred") != std::string::npos,
+            "Response completion must flush every deferred transcript chunk.");
+
+    for (int index = 0; index < 81; ++index)
+    {
+        require(chat.submit_prompt("Long session prompt " + std::to_string(index)),
+                "A completed long-session turn must start the next deterministic response.");
+        responses.emit("Reply");
+        application.step(0);
+        responses.complete();
+        application.step(0);
+    }
+    require(chat.messages().size() == 164 && chat.transcript()->document().blocks.size() == 161,
+            "The live transcript must bound rich rendering to its newest 160 messages plus one retention notice.");
+    require(chat.export_transcript("/exports/long-session.txt") &&
+                transcripts.transcript().find("Batch render") != std::string::npos &&
+                transcripts.transcript().find("Long session prompt 80") != std::string::npos,
+            "Transcript export must retain messages outside the bounded live rendering window.");
 
     ck::vision::ThreadedChatResponseService threaded_responses([](const ck::vision::ChatResponseRequest &request) {
         return "Worker: " + request.system_prompt + " / " + request.prompt;

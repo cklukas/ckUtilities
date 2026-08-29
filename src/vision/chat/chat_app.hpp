@@ -137,6 +137,8 @@ private:
     std::optional<ckv::widgets::MessageBoxPresentation> delete_model_confirmation_;
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::uint64_t active_request_ = 0;
+    std::size_t unrendered_response_bytes_ = 0;
+    bool render_first_response_chunk_ = false;
     bool response_pending_ = false;
     std::string model_download_status_;
 };

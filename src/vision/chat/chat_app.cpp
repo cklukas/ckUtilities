@@ -19,6 +19,9 @@ using ckv::widgets::FlowText;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
+
+constexpr std::size_t kRenderedMessageLimit = 160;
+constexpr std::size_t kResponseRefreshBatchBytes = 96;
 }
 
 ChatApp::ChatApp(ckv::ui::Application &application,
@@ -147,6 +150,8 @@ bool ChatApp::submit_prompt(std::string prompt)
                            message.content});
     }
     response_pending_ = true;
+    unrendered_response_bytes_ = 0;
+    render_first_response_chunk_ = true;
     const std::uint64_t request = ++active_request_;
     const std::weak_ptr<void> lifetime = lifetime_;
     response_service_.start({.prompt = messages_[messages_.size() - 2].content,
@@ -622,6 +627,8 @@ void ChatApp::new_chat()
     response_service_.cancel();
     ++active_request_;
     response_pending_ = false;
+    unrendered_response_bytes_ = 0;
+    render_first_response_chunk_ = false;
     messages_.clear();
     refresh_transcript();
 }
@@ -710,7 +717,13 @@ void ChatApp::append_response_chunk(std::uint64_t request, std::string chunk)
     if (message.role != ChatMessage::Role::Assistant)
         return;
     message.content += chunk;
-    refresh_transcript();
+    unrendered_response_bytes_ += chunk.size();
+    if (render_first_response_chunk_ || unrendered_response_bytes_ >= kResponseRefreshBatchBytes)
+    {
+        unrendered_response_bytes_ = 0;
+        render_first_response_chunk_ = false;
+        refresh_transcript();
+    }
 }
 
 void ChatApp::complete_response(std::uint64_t request, bool cancelled)
@@ -718,6 +731,8 @@ void ChatApp::complete_response(std::uint64_t request, bool cancelled)
     if (!response_pending_ || request != active_request_ || messages_.empty())
         return;
     response_pending_ = false;
+    unrendered_response_bytes_ = 0;
+    render_first_response_chunk_ = false;
     ChatMessage &message = messages_.back();
     if (cancelled && message.role == ChatMessage::Role::Assistant && message.content.empty())
         message.content = "[Response cancelled.]";
@@ -755,11 +770,20 @@ void ChatApp::refresh_transcript()
     if (transcript_ == nullptr)
         return;
     FlowDocument document;
-    document.blocks.reserve(messages_.size() + 1);
+    const std::size_t first_rendered_message = messages_.size() > kRenderedMessageLimit
+                                                   ? messages_.size() - kRenderedMessageLimit
+                                                   : 0;
+    document.blocks.reserve(messages_.size() - first_rendered_message + 1);
     if (messages_.empty())
         document.blocks.push_back({{FlowText{"Send a prompt to begin a new conversation."}}});
-    for (const ChatMessage &message : messages_)
+    else if (first_rendered_message != 0)
     {
+        document.blocks.push_back({{FlowText{"Earlier " + std::to_string(first_rendered_message) +
+                                                " messages are retained for export and model context."}}});
+    }
+    for (std::size_t index = first_rendered_message; index < messages_.size(); ++index)
+    {
+        const ChatMessage &message = messages_[index];
         const std::string prefix = message.role == ChatMessage::Role::User ? "You: " : "Assistant: ";
         FlowBlock block;
         block.content.emplace_back(FlowText{prefix, ckv::Attr::Bold});
@@ -768,9 +792,13 @@ void ChatApp::refresh_transcript()
     }
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)
-        window_->set_footer(std::to_string(messages_.size()) +
-                            (response_pending_ ? " messages; generating; " : " messages; ") + prompt_status() + "; " +
-                            model_status());
+    {
+        std::string status = std::to_string(messages_.size()) +
+                             (response_pending_ ? " messages; generating; " : " messages; ");
+        if (first_rendered_message != 0)
+            status += "viewing latest " + std::to_string(kRenderedMessageLimit) + "; ";
+        window_->set_footer(std::move(status) + prompt_status() + "; " + model_status());
+    }
 }
 
 } // namespace ck::vision
