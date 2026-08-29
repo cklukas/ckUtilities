@@ -10,9 +10,10 @@ int main()
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
-    ck::vision::ChatApp chat(application, [](const std::string &prompt) {
+    ck::vision::ThreadedChatResponseService responses([](const std::string &prompt) {
         return "No model service is configured yet. Received: " + prompt;
     });
+    ck::vision::ChatApp chat(application, responses);
     application.run();
     return 0;
 }

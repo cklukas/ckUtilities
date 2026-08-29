@@ -20,12 +20,18 @@ using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
 }
 
-ChatApp::ChatApp(ckv::ui::Application &application, ChatResponder responder)
-    : application_(application), responder_(std::move(responder))
+ChatApp::ChatApp(ckv::ui::Application &application, ChatResponseService &response_service)
+    : application_(application), response_service_(response_service)
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     create_window();
+}
+
+ChatApp::~ChatApp()
+{
+    lifetime_.reset();
+    response_service_.cancel();
 }
 
 void ChatApp::declare_commands()
@@ -36,6 +42,9 @@ void ChatApp::declare_commands()
     send_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.send_prompt", .title = "&Send prompt...", .category = "Chat", .chord = "Ctrl+Enter",
         .visibility = CommandVisibility::Palette, .handler = [this] { show_prompt_dialog(); }});
+    cancel_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.cancel_response", .title = "&Cancel response", .category = "Chat", .chord = "Ctrl+C",
+        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_response(); }});
     copy_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.copy_transcript", .title = "&Copy transcript", .category = "Chat",
         .visibility = CommandVisibility::Palette, .handler = [this] { copy_transcript(); }});
@@ -44,14 +53,16 @@ void ChatApp::declare_commands()
 SuiteShellOptions ChatApp::make_shell_options() const
 {
     return {.application_name = "ck Chat",
-            .about_text = "A native ckVision chat transcript and prompt surface with an injected response service.",
+            .about_text = "A native ckVision chat transcript and prompt surface with injected streaming and cancellation.",
             .application_menus = {MenuBarItem{"&Chat", {
                 MenuItem::command(CommandPresentation{new_chat_command_, "&New conversation"}),
                 MenuItem::command(CommandPresentation{send_command_, "&Send prompt..."}),
+                MenuItem::command(CommandPresentation{cancel_command_, "&Cancel response"}),
                 MenuItem::command(CommandPresentation{copy_command_, "&Copy transcript"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{send_command_, "&Send"}, 20},
+                StatusLineItem{CommandPresentation{cancel_command_, "&Cancel"}, 20},
                 StatusLineItem{CommandPresentation{copy_command_, "&Copy"}, 20},
             }};
 }
@@ -73,11 +84,28 @@ void ChatApp::create_window()
 
 bool ChatApp::submit_prompt(std::string prompt)
 {
-    if (prompt.empty())
+    if (prompt.empty() || response_pending_)
         return false;
     messages_.push_back({ChatMessage::Role::User, std::move(prompt)});
-    if (responder_)
-        messages_.push_back({ChatMessage::Role::Assistant, responder_(messages_.back().content)});
+    messages_.push_back({ChatMessage::Role::Assistant, {}});
+    response_pending_ = true;
+    const std::uint64_t request = ++active_request_;
+    const std::weak_ptr<void> lifetime = lifetime_;
+    response_service_.start(messages_[messages_.size() - 2].content,
+                            [this, lifetime, request](std::string chunk) mutable {
+                                application_.post([this, lifetime, request, chunk = std::move(chunk)]() mutable {
+                                    if (lifetime.expired())
+                                        return;
+                                    append_response_chunk(request, std::move(chunk));
+                                });
+                            },
+                            [this, lifetime, request](bool cancelled) {
+                                application_.post([this, lifetime, request, cancelled] {
+                                    if (lifetime.expired())
+                                        return;
+                                    complete_response(request, cancelled);
+                                });
+                            });
     refresh_transcript();
     return true;
 }
@@ -99,8 +127,24 @@ void ChatApp::show_prompt_dialog()
 
 void ChatApp::new_chat()
 {
+    response_service_.cancel();
+    ++active_request_;
+    response_pending_ = false;
     messages_.clear();
     refresh_transcript();
+}
+
+void ChatApp::cancel_response()
+{
+    if (!response_pending_)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("There is no active response to cancel.");
+        return;
+    }
+    response_service_.cancel();
+    if (window_ != nullptr)
+        window_->set_footer("Cancellation requested for the active response.");
 }
 
 void ChatApp::copy_transcript()
@@ -113,6 +157,35 @@ void ChatApp::copy_transcript()
         text += "\n\n";
     }
     application_.set_clipboard_text(std::move(text));
+}
+
+void ChatApp::append_response_chunk(std::uint64_t request, std::string chunk)
+{
+    if (!response_pending_ || request != active_request_ || messages_.empty())
+        return;
+    ChatMessage &message = messages_.back();
+    if (message.role != ChatMessage::Role::Assistant)
+        return;
+    message.content += chunk;
+    refresh_transcript();
+}
+
+void ChatApp::complete_response(std::uint64_t request, bool cancelled)
+{
+    if (!response_pending_ || request != active_request_ || messages_.empty())
+        return;
+    response_pending_ = false;
+    ChatMessage &message = messages_.back();
+    if (cancelled && message.role == ChatMessage::Role::Assistant && message.content.empty())
+        message.content = "[Response cancelled.]";
+    refresh_transcript();
+    if (window_ != nullptr && cancelled)
+        window_->set_footer("Response cancelled; " + std::to_string(messages_.size()) + " messages");
+}
+
+bool ChatApp::response_running() const noexcept
+{
+    return response_pending_ || response_service_.running();
 }
 
 void ChatApp::refresh_transcript()
@@ -130,7 +203,7 @@ void ChatApp::refresh_transcript()
     }
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)
-        window_->set_footer(std::to_string(messages_.size()) + " messages");
+        window_->set_footer(std::to_string(messages_.size()) + (response_pending_ ? " messages; generating..." : " messages"));
 }
 
 } // namespace ck::vision

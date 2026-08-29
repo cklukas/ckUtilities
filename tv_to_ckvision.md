@@ -70,10 +70,12 @@ Historical application baseline: `legacy_tv`
   Markdown transformations, profiles, and conflict/close workflows remain
   the next slices.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
-  workflow with registry commands for new/send/copy. It consumes an injected
-  responder so the presentation tree does not own a model worker or transport
-  lifetime. Streaming, cancellation, Markdown adaptation, models, prompts,
-  and progress management remain the next slices.
+  workflow with registry commands for new/send/cancel/copy. It consumes an
+  injected streaming response service; chunks and completion are marshalled to
+  the UI thread behind a request-generation and teardown lifetime gate, while
+  the production default adapter keeps a responder on a joinable worker.
+  Markdown adaptation, model/prompt management, and richer progress remain
+  the next slices.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately
