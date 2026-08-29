@@ -29,7 +29,7 @@ public:
 private:
     void declare_commands();
     SuiteShellOptions make_shell_options() const;
-    void show_search_dialog();
+    void show_guided_search_dialog();
     void show_preview();
     void present_text_window(std::string title, std::string content);
 
