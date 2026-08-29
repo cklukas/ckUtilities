@@ -4,6 +4,7 @@
 #include <string>
 
 #include <cvision/core/clock.hpp>
+#include <cvision/core/event.hpp>
 #include <cvision/core/filesystem.hpp>
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/ui/application.hpp>
@@ -64,6 +65,8 @@ int main()
         return 1;
     if (!expect(application.clipboard_text() == "\"ckUtilities\"", "copy command did not export selected JSON"))
         return 1;
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
+    application.step(0);
 
     // The native view must accept UTF-8 content and retain its document while
     // reporting a malformed replacement.  A moderately deep document is an
@@ -80,6 +83,18 @@ int main()
     if (!expect(json_view.selected_json_node() != nullptr && json_view.selected_json_node()->key == "needle",
                 "UTF-8 search did not reveal the deep matching node"))
         return 1;
+    terminal.resize(ckv::Size{42, 12});
+    application.step(0);
+    if (!expect(application.current_frame().size() == ckv::Size{42, 12},
+                "the JSON viewer did not recompose at a narrow terminal size"))
+        return 1;
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Up, ckv::Modifier::None, ""}});
+    application.step(0);
+    if (!expect(json_view.selected_json_node() != nullptr && json_view.selected_json_node()->key != "needle",
+                "the narrowed JSON tree did not retain keyboard navigation"))
+        return 1;
+    terminal.resize(ckv::Size{100, 30});
+    application.step(0);
     if (!expect(!json_view.load_document("malformed.json", "{\"unterminated\":"),
                 "the JSON viewer accepted malformed JSON"))
         return 1;
