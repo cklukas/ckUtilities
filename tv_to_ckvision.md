@@ -135,7 +135,7 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `b3b754f` provides
+  ckVision candidate `b3b754fdc2231bf02284505ec12066d0f89b1d47` provides
   a checked `FlowView::replace_block` API with incremental realized-tail
   reflow, which the active response uses to avoid rebuilding prior
   rich-content blocks. The same candidate retains materialized `TreeView`

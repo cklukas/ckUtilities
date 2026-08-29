@@ -11,7 +11,7 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `b3b754f` (detached clean-worktree integration candidate) |
+| Current migration commit | `b3b754fdc2231bf02284505ec12066d0f89b1d47` (detached clean-worktree integration candidate) |
 | Current migration change | `TreeView::reveal_and_select`, a retained materialized visible-row cache, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, and checked `FlowView::replace_block` with incremental realized-tail reflow for clients that update one semantic rich-content block |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
@@ -75,7 +75,7 @@ requirements of `ckvision::cvision`; an installed static library therefore
 brings a client into the same instrumentation domain. A release SDK combined
 with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
-leak detection. The clean `b3b754f` integration candidate passed ckVision's
+leak detection. The clean `b3b754fdc2231bf02284505ec12066d0f89b1d47` integration candidate passed ckVision's
 full 169-test sanitizer suite and ckUtilities' 74-test cutover suite with this
 procedure on 2026-08-30.
 
