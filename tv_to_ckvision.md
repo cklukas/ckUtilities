@@ -76,10 +76,12 @@ Historical application baseline: `legacy_tv`
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
-  overrides by command key. Every native executable reloads shared `ckv.*`
-  framework bindings at startup. A suite-wide catalog for editing the
-  application-specific bindings of another executable, selectable schemes,
-  and import rollback remain before acceptance.
+  overrides by command key. It now includes a suite-wide catalog of every
+  native executable's application-specific command metadata, so a binding is
+  stored under its target executable without importing or running that UI.
+  Every native executable reloads shared `ckv.*` and its own application
+  bindings at startup. Selectable schemes and import rollback remain before
+  acceptance.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
   injected file service for native open/save/save-as workflows. Dirty-window
   close now presents an explicit Save/Discard/Cancel decision and invokes the
@@ -622,9 +624,9 @@ Gap checkpoints:
 
 Exit criteria:
 
-- A shared framework binding changed in `ck-config` is observed by every
-  migrated application after the defined restart boundary; application-specific
-  bindings must gain the same suite-wide editor catalog before this WP closes.
+- Shared framework and application-specific bindings changed in `ck-config`
+  are observed by their target migrated executable after the defined restart
+  boundary.
 - Persistence is deterministic, forward-tolerant, and collision-safe.
 - All app configuration behavior is testable without a terminal or real home
   directory.

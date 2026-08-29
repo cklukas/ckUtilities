@@ -136,9 +136,9 @@ private:
 class KeymapTableModel final : public ckv::widgets::TableModel
 {
 public:
-    explicit KeymapTableModel(KeymapController &keymap) : keymap_(keymap) { refresh(); }
+    explicit KeymapTableModel(SuiteKeymapCatalog &catalog) : catalog_(catalog) { refresh(); }
 
-    void refresh() { commands_ = keymap_.commands(); }
+    void refresh() { commands_ = catalog_.commands(); }
     std::size_t row_count() const override { return commands_.size(); }
     ckv::widgets::TableRowId row_id_at(std::size_t index) const override
     {
@@ -154,15 +154,16 @@ public:
     ckv::widgets::TableCell cell(ckv::widgets::TableCellRef reference) const override
     {
         const auto index = index_of(reference.row);
-        if (!index || reference.column >= 4)
+        if (!index || reference.column >= 5)
             return {};
         const KeymapCommand &command = commands_[*index];
         switch (reference.column)
         {
-        case 0: return {command.title, command.title, std::nullopt, false};
-        case 1: return {command.key, command.key, std::nullopt, false};
-        case 2: return {command.category, command.category, std::nullopt, false};
-        case 3:
+        case 0: return {command.application_id, command.application_id, std::nullopt, false};
+        case 1: return {command.title, command.title, std::nullopt, false};
+        case 2: return {command.key, command.key, std::nullopt, false};
+        case 3: return {command.category, command.category, std::nullopt, false};
+        case 4:
         {
             const std::string chord = command.active_chord ? ckv::format(*command.active_chord) : "Unbound";
             return {chord, chord, std::nullopt, false};
@@ -175,10 +176,11 @@ public:
         const auto index = index_of(id);
         return index ? &commands_[*index] : nullptr;
     }
-    std::optional<ckv::widgets::TableRowId> id_for_key(std::string_view key) const
+    std::optional<ckv::widgets::TableRowId> id_for_command(std::string_view application_id,
+                                                           std::string_view key) const
     {
-        const auto found = std::find_if(commands_.begin(), commands_.end(), [key](const KeymapCommand &command) {
-            return command.key == key;
+        const auto found = std::find_if(commands_.begin(), commands_.end(), [application_id, key](const KeymapCommand &command) {
+            return command.application_id == application_id && command.key == key;
         });
         if (found == commands_.end())
             return std::nullopt;
@@ -186,7 +188,7 @@ public:
     }
 
 private:
-    KeymapController &keymap_;
+    SuiteKeymapCatalog &catalog_;
     std::vector<KeymapCommand> commands_;
 };
 
@@ -200,6 +202,8 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
       model_(std::make_unique<OptionTableModel>(registry_))
 {
     declare_commands();
+    if (keymap_ != nullptr)
+        keymap_catalog_ = std::make_unique<SuiteKeymapCatalog>(*keymap_);
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     create_window();
 }
@@ -394,7 +398,7 @@ void ConfigApp::save()
 void ConfigApp::reload()
 {
     const bool configuration_loaded = persistence_.load(registry_);
-    const bool keymap_loaded = keymap_ == nullptr || keymap_->load();
+    const bool keymap_loaded = keymap_catalog_ == nullptr || keymap_catalog_->load();
     if (!configuration_loaded || !keymap_loaded)
     {
         set_status("No saved configuration and shortcuts could be loaded for " + registry_.appId() + ".");
@@ -438,7 +442,7 @@ void ConfigApp::show_export_dialog()
 
 void ConfigApp::show_keymap_window()
 {
-    if (keymap_ == nullptr)
+    if (keymap_catalog_ == nullptr)
     {
         set_status("Keyboard shortcut storage is not available in this host.");
         return;
@@ -449,18 +453,27 @@ void ConfigApp::show_keymap_window()
         return;
     }
 
-    keymap_model_ = std::make_unique<KeymapTableModel>(*keymap_);
-    auto window = std::make_unique<ckv::widgets::Window>("Keyboard shortcuts: " + keymap_->application_id());
-    window->set_min_size(ckv::Size{76, 18});
+    if (!keymap_catalog_->load())
+    {
+        set_status("Could not load saved keyboard shortcuts.");
+        return;
+    }
+    keymap_model_ = std::make_unique<KeymapTableModel>(*keymap_catalog_);
+    auto window = std::make_unique<ckv::widgets::Window>("Keyboard shortcuts: ckUtilities suite");
+    window->set_min_size(ckv::Size{88, 18});
     auto content = std::make_unique<ckv::ui::Column>();
     content->set_spacing(1);
     auto table = std::make_unique<ckv::widgets::Table>();
     keymap_table_ = table.get();
-    keymap_table_->set_columns({{"Command", 25, 12}, {"Key", 29, 12}, {"Category", 16, 8}, {"Shortcut", 18, 9}});
+    keymap_table_->set_columns({{"Application", 16, 9}, {"Command", 24, 12}, {"Key", 28, 12},
+                                {"Category", 16, 8}, {"Shortcut", 18, 9}});
     keymap_table_->set_model(*keymap_model_);
     keymap_table_->on_selection_changed = [this](ckv::widgets::TableCellRef reference) {
         if (const KeymapCommand *command = keymap_model_->command(reference.row))
+        {
+            selected_command_application_id_ = command->application_id;
             selected_command_key_ = command->key;
+        }
     };
     content->add_item(std::move(table), {ckv::ui::SizePolicy::Expanding});
 
@@ -490,6 +503,7 @@ void ConfigApp::show_keymap_window()
             keymap_window_ = nullptr;
             keymap_table_ = nullptr;
             keymap_model_.reset();
+            selected_command_application_id_.clear();
             selected_command_key_.clear();
         }
         ckv::widgets::schedule_self_detach(*raw_window, application_);
@@ -502,11 +516,12 @@ void ConfigApp::show_keymap_window()
 
 void ConfigApp::edit_selected_shortcut()
 {
-    if (keymap_ == nullptr || keymap_model_ == nullptr || selected_command_key_.empty() || shortcut_window_ != nullptr)
+    KeymapController *const controller = selected_keymap_controller();
+    if (controller == nullptr || keymap_model_ == nullptr || selected_command_key_.empty() || shortcut_window_ != nullptr)
         return;
-    const std::vector<KeymapCommand> commands = keymap_->commands();
+    const std::vector<KeymapCommand> commands = controller->commands();
     const auto selected = std::find_if(commands.begin(), commands.end(), [this](const KeymapCommand &command) {
-        return command.key == selected_command_key_;
+        return command.application_id == selected_command_application_id_ && command.key == selected_command_key_;
     });
     if (selected == commands.end())
         return;
@@ -525,12 +540,12 @@ void ConfigApp::edit_selected_shortcut()
     actions->set_spacing(2);
     const std::string command_key = selected->key;
     auto apply = std::make_unique<ckv::widgets::Button>("&Apply");
-    apply->on_press = [this, command_key, capture_view] {
+    apply->on_press = [this, controller, command_key, capture_view] {
         const std::optional<ckv::KeyChord> requested = capture_view->chord();
-        const KeymapUpdate update = keymap_->update(command_key, requested);
+        const KeymapUpdate update = controller->update(command_key, requested);
         if (update.status == KeymapUpdateStatus::Applied)
         {
-            save_keymap();
+            save_keymap(*controller);
             refresh_keymap();
             if (shortcut_window_ != nullptr)
                 shortcut_window_->close();
@@ -547,12 +562,12 @@ void ConfigApp::edit_selected_shortcut()
             {ckv::widgets::MessageBoxKind::Confirm, "Replace shortcut?",
              ckv::format(*requested) + " is assigned to " + occupied + ". Replace it?",
              ckv::widgets::MessageBoxButtons::YesNo});
-        keymap_conflict_->set_completion_handler([this, command_key, requested](ckv::widgets::MessageBoxResult result) {
+        keymap_conflict_->set_completion_handler([this, controller, command_key, requested](ckv::widgets::MessageBoxResult result) {
             if (result != ckv::widgets::MessageBoxResult::Yes)
                 return;
-            if (keymap_->update(command_key, requested, true).status == KeymapUpdateStatus::Applied)
+            if (controller->update(command_key, requested, true).status == KeymapUpdateStatus::Applied)
             {
-                save_keymap();
+                save_keymap(*controller);
                 refresh_keymap();
                 if (shortcut_window_ != nullptr)
                     shortcut_window_->close();
@@ -580,15 +595,16 @@ void ConfigApp::edit_selected_shortcut()
 
 void ConfigApp::reset_selected_shortcut()
 {
-    if (keymap_ == nullptr || selected_command_key_.empty() || !keymap_->reset(selected_command_key_))
+    KeymapController *const controller = selected_keymap_controller();
+    if (controller == nullptr || selected_command_key_.empty() || !controller->reset(selected_command_key_))
         return;
-    save_keymap();
+    save_keymap(*controller);
     refresh_keymap();
 }
 
 void ConfigApp::reload_keymap()
 {
-    if (keymap_ != nullptr && keymap_->load())
+    if (keymap_catalog_ != nullptr && keymap_catalog_->load())
     {
         refresh_keymap();
         set_keymap_status("Reloaded saved keyboard shortcuts.");
@@ -604,15 +620,19 @@ void ConfigApp::refresh_keymap()
     keymap_model_->refresh();
     keymap_table_->model_changed();
     if (selected_command_key_.empty() && keymap_model_->row_count() != 0)
-        selected_command_key_ = keymap_model_->command(1)->key;
-    if (const auto id = keymap_model_->id_for_key(selected_command_key_))
+    {
+        const KeymapCommand *const first = keymap_model_->command(1);
+        selected_command_application_id_ = first->application_id;
+        selected_command_key_ = first->key;
+    }
+    if (const auto id = keymap_model_->id_for_command(selected_command_application_id_, selected_command_key_))
         keymap_table_->set_selected_cell({*id, 0});
-    set_keymap_status(std::to_string(keymap_model_->row_count()) + " commands; Enter/Space captures a shortcut.");
+    set_keymap_status(std::to_string(keymap_model_->row_count()) + " suite commands; Enter/Space captures a shortcut.");
 }
 
-void ConfigApp::save_keymap()
+void ConfigApp::save_keymap(KeymapController &controller)
 {
-    if (keymap_ != nullptr && keymap_->save())
+    if (controller.save())
         set_keymap_status("Saved keyboard shortcuts.");
     else
         set_keymap_status("Could not save keyboard shortcuts.");
@@ -637,7 +657,28 @@ std::size_t ConfigApp::option_count() const noexcept
 
 std::size_t ConfigApp::keymap_command_count() const noexcept
 {
-    return keymap_ == nullptr ? 0 : keymap_->commands().size();
+    return keymap_catalog_ == nullptr ? 0 : keymap_catalog_->commands().size();
+}
+
+bool ConfigApp::select_keymap_command(std::string_view application_id, std::string_view command_key)
+{
+    if (keymap_model_ == nullptr || keymap_table_ == nullptr)
+        return false;
+    const auto id = keymap_model_->id_for_command(application_id, command_key);
+    if (!id)
+        return false;
+    selected_command_application_id_ = application_id;
+    selected_command_key_ = command_key;
+    keymap_table_->set_selected_cell({*id, 0});
+    application_.set_focus(keymap_table_);
+    return true;
+}
+
+KeymapController *ConfigApp::selected_keymap_controller() const noexcept
+{
+    if (keymap_catalog_ == nullptr || selected_command_application_id_.empty())
+        return nullptr;
+    return keymap_catalog_->controller_for(selected_command_application_id_);
 }
 
 } // namespace ck::vision

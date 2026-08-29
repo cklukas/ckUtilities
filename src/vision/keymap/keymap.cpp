@@ -139,7 +139,7 @@ std::vector<KeymapCommand> KeymapController::commands() const
 {
     std::vector<KeymapCommand> result;
     for (const ckv::ui::CommandInfo &command : commands_.all())
-        result.push_back({command.key, command.title, command.category, command.default_chord,
+        result.push_back({application_id_, command.key, command.title, command.category, command.default_chord,
                           commands_.chord_for_command(command.id)});
     return result;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -45,6 +46,7 @@ public:
 
 struct KeymapCommand
 {
+    std::string application_id;
     std::string key;
     std::string title;
     std::string category;
@@ -92,6 +94,7 @@ public:
                         std::optional<ckv::KeyChord> chord,
                         bool replace_conflict = false);
     bool reset(std::string_view command_key);
+    KeymapPersistence &persistence() noexcept { return persistence_; }
 
 private:
     static bool shared_command(std::string_view command_key) noexcept;
@@ -106,6 +109,31 @@ private:
     KeymapPersistence &persistence_;
     KeymapOverrides global_overrides_;
     KeymapOverrides application_overrides_;
+};
+
+// A suite-wide command catalog used only by the configuration application.
+// It materializes command registries for executables that are not running, so
+// their stable application bindings can be edited without importing a tool UI
+// or invoking its services. Shared `ckv.*` bindings appear once through the
+// active controller.
+class SuiteKeymapCatalog
+{
+public:
+    explicit SuiteKeymapCatalog(KeymapController &active_controller);
+    ~SuiteKeymapCatalog();
+
+    SuiteKeymapCatalog(const SuiteKeymapCatalog &) = delete;
+    SuiteKeymapCatalog &operator=(const SuiteKeymapCatalog &) = delete;
+
+    std::vector<KeymapCommand> commands() const;
+    KeymapController *controller_for(std::string_view application_id) noexcept;
+    bool load();
+
+private:
+    struct Entry;
+
+    KeymapController *active_controller_;
+    std::vector<std::unique_ptr<Entry>> entries_;
 };
 
 } // namespace ck::vision

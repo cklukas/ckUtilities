@@ -1,0 +1,173 @@
+#include "ck/vision/keymap.hpp"
+
+#include <array>
+#include <memory>
+#include <string_view>
+#include <utility>
+
+namespace ck::vision
+{
+namespace
+{
+
+struct CommandDefinition
+{
+    std::string_view key;
+    std::string_view title;
+    std::string_view category;
+    std::string_view chord;
+};
+
+template <std::size_t Count>
+void declare_commands(ckv::ui::CommandRegistry &registry, const std::array<CommandDefinition, Count> &definitions)
+{
+    for (const CommandDefinition &definition : definitions)
+    {
+        registry.declare({.key = std::string(definition.key),
+                          .title = std::string(definition.title),
+                          .category = std::string(definition.category),
+                          .chord = std::string(definition.chord),
+                          .visibility = ckv::ui::CommandVisibility::Palette});
+    }
+}
+
+const std::array kJsonViewCommands{
+    CommandDefinition{"ck.json_view.open", "&Open JSON...", "JSON View", "Ctrl+O"},
+    CommandDefinition{"ck.json_view.close", "&Close JSON", "JSON View", "Ctrl+W"},
+    CommandDefinition{"ck.json_view.copy", "&Copy selected JSON", "JSON View", "Ctrl+C"},
+    CommandDefinition{"ck.json_view.find", "&Find...", "JSON View", "Ctrl+F"},
+    CommandDefinition{"ck.json_view.find_next", "Find &Next", "JSON View", "F3"},
+    CommandDefinition{"ck.json_view.find_previous", "Find &Previous", "JSON View", "Shift+F3"},
+    CommandDefinition{"ck.json_view.end_search", "&End search", "JSON View", "Esc"},
+    CommandDefinition{"ck.json_view.expand_level.0", "Expand to level &0", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.1", "Expand to level &1", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.2", "Expand to level &2", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.3", "Expand to level &3", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.4", "Expand to level &4", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.5", "Expand to level &5", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.6", "Expand to level &6", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.7", "Expand to level &7", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.8", "Expand to level &8", "JSON View", ""},
+    CommandDefinition{"ck.json_view.expand_level.9", "Expand to level &9", "JSON View", ""},
+};
+
+const std::array kLauncherCommands{
+    CommandDefinition{"ck.utilities.launch_tool", "&Launch selected tool", "CK Utilities", "Enter"},
+    CommandDefinition{"ck.utilities.new_launcher", "&New launcher window", "CK Utilities", "Ctrl+N"},
+    CommandDefinition{"ck.utilities.show_calendar", "Show &Calendar", "CK Utilities", ""},
+    CommandDefinition{"ck.utilities.show_ascii_table", "Show &ASCII table", "CK Utilities", ""},
+    CommandDefinition{"ck.utilities.show_calculator", "Show &Calculator", "CK Utilities", ""},
+    CommandDefinition{"ck.utilities.show_diagnostics", "Show &Diagnostics", "CK Utilities", ""},
+    CommandDefinition{"ck.utilities.show_color_selector", "Show color &selector", "CK Utilities", ""},
+};
+
+const std::array kFindCommands{
+    CommandDefinition{"ck.find.new_search", "&New search...", "Find", "Ctrl+N"},
+    CommandDefinition{"ck.find.preview_command", "&Preview command", "Find", "F5"},
+    CommandDefinition{"ck.find.save_search", "&Save search...", "Find", "Ctrl+S"},
+    CommandDefinition{"ck.find.load_search", "&Load saved search...", "Find", "Ctrl+O"},
+    CommandDefinition{"ck.find.execute_search", "&Run search", "Find", "F9"},
+    CommandDefinition{"ck.find.cancel_search", "&Cancel search", "Find", "Ctrl+C"},
+};
+
+const std::array kDiskUsageCommands{
+    CommandDefinition{"ck.du.rescan", "&Rescan", "Disk usage", "F5"},
+    CommandDefinition{"ck.du.cancel_scan", "&Cancel scan", "Disk usage", "Ctrl+C"},
+    CommandDefinition{"ck.du.view_files", "&View files", "Disk usage", "Enter"},
+    CommandDefinition{"ck.du.cloud.download", "&Download selected", "Cloud storage", "Ctrl+D"},
+    CommandDefinition{"ck.du.cloud.evict", "&Free local copies", "Cloud storage", "Ctrl+E"},
+    CommandDefinition{"ck.du.cloud.cancel", "Cancel &cloud operation", "Cloud storage", "Ctrl+Shift+C"},
+};
+
+const std::array kEditCommands{
+    CommandDefinition{"ck.edit.open", "&Open document...", "Editor", "Ctrl+O"},
+    CommandDefinition{"ck.edit.save", "&Save", "Editor", "Ctrl+S"},
+    CommandDefinition{"ck.edit.save_as", "Save &As...", "Editor", ""},
+    CommandDefinition{"ck.edit.normalise_markdown", "&Normalize Markdown whitespace", "Editor", ""},
+};
+
+const std::array kChatCommands{
+    CommandDefinition{"ck.chat.new_chat", "&New conversation", "Chat", "Ctrl+N"},
+    CommandDefinition{"ck.chat.send_prompt", "&Send prompt...", "Chat", "Ctrl+Enter"},
+    CommandDefinition{"ck.chat.cancel_response", "&Cancel response", "Chat", "Ctrl+C"},
+    CommandDefinition{"ck.chat.copy_transcript", "&Copy transcript", "Chat", ""},
+    CommandDefinition{"ck.chat.export_transcript", "&Export transcript...", "Chat", ""},
+    CommandDefinition{"ck.chat.select_prompt", "Select system &prompt...", "Chat", ""},
+    CommandDefinition{"ck.chat.add_prompt", "&Add system prompt...", "Chat", ""},
+    CommandDefinition{"ck.chat.edit_active_prompt", "&Edit active prompt...", "Chat", ""},
+    CommandDefinition{"ck.chat.restore_active_prompt", "&Restore active default prompt", "Chat", ""},
+    CommandDefinition{"ck.chat.delete_active_prompt", "&Delete active prompt", "Chat", ""},
+    CommandDefinition{"ck.chat.select_model", "Select active &model...", "Chat", ""},
+    CommandDefinition{"ck.chat.download_model", "&Download model...", "Chat", ""},
+    CommandDefinition{"ck.chat.cancel_model_download", "Cancel model &download", "Chat", ""},
+    CommandDefinition{"ck.chat.deactivate_model", "&Deactivate active model", "Chat", ""},
+    CommandDefinition{"ck.chat.delete_active_model", "&Delete active model", "Chat", ""},
+};
+
+} // namespace
+
+struct SuiteKeymapCatalog::Entry
+{
+    std::string application_id;
+    std::unique_ptr<ckv::ui::CommandRegistry> registry;
+    std::unique_ptr<KeymapController> controller;
+};
+
+SuiteKeymapCatalog::SuiteKeymapCatalog(KeymapController &active_controller)
+    : active_controller_(&active_controller)
+{
+    const auto add = [this, &active_controller](std::string_view application_id, const auto &definitions) {
+        auto entry = std::make_unique<Entry>();
+        entry->application_id = application_id;
+        entry->registry = std::make_unique<ckv::ui::CommandRegistry>();
+        declare_commands(*entry->registry, definitions);
+        entry->controller = std::make_unique<KeymapController>(entry->application_id, *entry->registry,
+                                                                active_controller.persistence());
+        entries_.push_back(std::move(entry));
+    };
+
+    add("ck-json-view", kJsonViewCommands);
+    add("ck-utilities", kLauncherCommands);
+    add("ck-find", kFindCommands);
+    add("ck-du", kDiskUsageCommands);
+    add("ck-edit", kEditCommands);
+    add("ck-chat", kChatCommands);
+}
+
+SuiteKeymapCatalog::~SuiteKeymapCatalog() = default;
+
+std::vector<KeymapCommand> SuiteKeymapCatalog::commands() const
+{
+    std::vector<KeymapCommand> result = active_controller_->commands();
+    for (const auto &entry : entries_)
+    {
+        for (KeymapCommand command : entry->controller->commands())
+        {
+            if (!command.key.starts_with("ckv."))
+                result.push_back(std::move(command));
+        }
+    }
+    return result;
+}
+
+KeymapController *SuiteKeymapCatalog::controller_for(std::string_view application_id) noexcept
+{
+    if (active_controller_->application_id() == application_id)
+        return active_controller_;
+    for (const auto &entry : entries_)
+    {
+        if (entry->application_id == application_id)
+            return entry->controller.get();
+    }
+    return nullptr;
+}
+
+bool SuiteKeymapCatalog::load()
+{
+    bool loaded = active_controller_->load();
+    for (const auto &entry : entries_)
+        loaded = entry->controller->load() && loaded;
+    return loaded;
+}
+
+} // namespace ck::vision

@@ -136,8 +136,8 @@ int main()
     ck::vision::KeymapController keymap("ck-config", keymap_application.commands(), keymap_persistence);
     ck::vision::ConfigApp keymap_config(keymap_application, keymap_registry, keymap_config_persistence, &keymap);
     require(keymap.load(), "The native config app's injected keymap must load after its commands are declared.");
-    require(keymap_config.keymap_command_count() != 0,
-            "The native config app must expose the active registry's stable command identities.");
+    require(keymap_config.keymap_command_count() > keymap.commands().size(),
+            "The native config app must expose a catalog of stable command identities beyond its own executable.");
     require(keymap_application.execute_command(keymap_config.keymap_command()),
             "Keyboard shortcut configuration must be a command-registry action.");
     keymap_application.step(0);
@@ -156,4 +156,29 @@ int main()
     require(saved_quit != keymap_persistence.global.end() && saved_quit->second &&
                 *saved_quit->second == ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl, "q"},
             "Applying a shared shortcut must persist its normalized typed chord.");
+    keymap_application.step(0);
+    require(keymap_config.select_keymap_command("ck-edit", "ck.edit.save"),
+            "The suite shortcut catalog must select an application-specific command from another native executable.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}),
+            "A selected suite command must open through the same keyboard-only shortcut editor.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char,
+                                                                          ckv::Modifier::Ctrl | ckv::Modifier::Shift,
+                                                                          "s"}}),
+            "Cross-application capture must consume the requested typed chord.");
+    require(keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, {}}}) &&
+                keymap_application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, {}}}),
+            "A cross-application shortcut must apply through the ordinary capture workflow.");
+    const auto saved_editor = keymap_persistence.applications["ck-edit"].find("ck.edit.save");
+    require(saved_editor != keymap_persistence.applications["ck-edit"].end() && saved_editor->second &&
+                *saved_editor->second == ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl | ckv::Modifier::Shift, "s"},
+            "A suite-owned application binding must persist under its target executable rather than the config host.");
+    ckv::ui::CommandRegistry editor_registry;
+    const ckv::ui::CommandId editor_save = editor_registry.declare(
+        {.key = "ck.edit.save", .title = "Save", .category = "Editor", .chord = "Ctrl+S"});
+    ck::vision::KeymapController reloaded_editor("ck-edit", editor_registry, keymap_persistence);
+    require(reloaded_editor.load() &&
+                editor_registry.command_for_key(ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl | ckv::Modifier::Shift, "s"}) == editor_save,
+            "A configured application binding must reload when its target executable creates its own native registry.");
 }

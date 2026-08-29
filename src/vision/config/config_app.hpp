@@ -47,6 +47,7 @@ public:
     ckv::ui::CommandId export_command() const noexcept { return export_command_; }
     ckv::ui::CommandId keymap_command() const noexcept { return keymap_command_; }
     std::size_t keymap_command_count() const noexcept;
+    bool select_keymap_command(std::string_view application_id, std::string_view command_key);
 
 private:
     void declare_commands();
@@ -64,15 +65,17 @@ private:
     void reset_selected_shortcut();
     void reload_keymap();
     void refresh_keymap();
-    void save_keymap();
+    void save_keymap(KeymapController &controller);
     void set_status(std::string text);
     void set_keymap_status(std::string text);
     const ck::config::OptionDefinition *selected_definition() const;
+    KeymapController *selected_keymap_controller() const noexcept;
 
     ckv::ui::Application &application_;
     ck::config::OptionRegistry &registry_;
     ConfigPersistence &persistence_;
     KeymapController *keymap_ = nullptr;
+    std::unique_ptr<SuiteKeymapCatalog> keymap_catalog_;
     std::unique_ptr<OptionTableModel> model_;
     std::unique_ptr<class KeymapTableModel> keymap_model_;
     std::unique_ptr<SuiteShell> shell_;
@@ -89,6 +92,7 @@ private:
     ckv::ui::CommandId export_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId keymap_command_ = ckv::ui::kInvalidCommand;
     std::string selected_key_;
+    std::string selected_command_application_id_;
     std::string selected_command_key_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> edit_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> transfer_dialog_;

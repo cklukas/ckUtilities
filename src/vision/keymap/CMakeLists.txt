@@ -1,4 +1,4 @@
-add_library(ck_vision_keymap STATIC keymap.cpp)
+add_library(ck_vision_keymap STATIC keymap.cpp suite_keymap_catalog.cpp)
 target_include_directories(ck_vision_keymap
   PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
