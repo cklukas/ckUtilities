@@ -46,5 +46,3 @@ add_ck_tool(ckjsonview
   DEFINITIONS
     JSON_VIEW_VERSION="${PROJECT_VERSION}"
 )
-
-target_link_libraries(ck_json_view_core PRIVATE ${CURSES_LIBRARIES})

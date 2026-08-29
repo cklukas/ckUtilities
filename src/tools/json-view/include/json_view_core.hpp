@@ -1,10 +1,11 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-#include <map>
 
 using json = nlohmann::json;
 
@@ -17,6 +18,7 @@ struct Node
     bool expanded = false;
     bool isDummyRoot = false;
     bool isLastChild = false;
+    std::optional<std::size_t> sourceSize;
 };
 
 struct SearchState
@@ -27,8 +29,6 @@ struct SearchState
     std::vector<const Node *> matches;
     int currentIndex = 0;
 };
-
-extern std::map<std::string, size_t> fileSizes;
 
 int getDisplayWidth(const std::string &str);
 std::unique_ptr<Node> buildTree(const json *j, const std::string &key, Node *parent, bool dummy);
@@ -50,4 +50,3 @@ json reconstructJson(const Node *node);
 std::string formatFileSize(size_t size);
 void printFormattedJson(const json &j, int indent = 0);
 json parseJsonWithSpecialNumbers(const std::string &contents);
-

@@ -9,7 +9,6 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <memory>
 #include <deque>
 #include <cmath>
@@ -18,8 +17,6 @@
 #include <vector>
 #include <unistd.h>
 #include <wchar.h>
-
-std::map<std::string, size_t> fileSizes;
 
 // Calculate the display width of a UTF-8 string (handles Unicode properly)
 int getDisplayWidth(const std::string &str)
@@ -239,13 +236,8 @@ std::string getContentLabel(const Node *node, int maxWidth)
         else
             type = "📄 value";
 
-        // Add file size information from stored file sizes
-        auto it = fileSizes.find(node->key);
-        if (it != fileSizes.end())
-        {
-            std::string fileSizeStr = formatFileSize(it->second);
-            type += ", " + fileSizeStr;
-        }
+        if (node->sourceSize)
+            type += ", " + formatFileSize(*node->sourceSize);
 
         // Shorten the filename for display
         std::string shortKey = shortenPath(node->key, maxWidth - getDisplayWidth(type) - 4); // -4 for " ()"

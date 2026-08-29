@@ -1,10 +1,31 @@
 # Work Package: ckUtilities migration to ckVision
 
-Status: Proposed  
+Status: Active — WP-0/WP-1 and the initial WP-2 shell are implemented; WP-3 is in progress.
 Owner: ckUtilities and ckVision maintainers  
 Created: 2026-08-29  
 Target branch: `master`  
 Historical application baseline: `legacy_tv`
+
+## Implementation record (2026-08-29)
+
+- WP-0/WP-1: a clean installed ckVision SDK workflow, independent package
+  consumer, UI-boundary scanner, baseline record, and traceability ledger are
+  implemented on `master`.
+- WP-2: `ck_vision_shell` provides a native Desktop, semantic themes,
+  stable About/launcher commands, native help, menus, and status composition;
+  its headless smoke test passes.
+- WP-3: `ck-json-view-ckvision` is a separate native executable. It owns the
+  parsed JSON document for the complete view lifetime, maps the domain tree
+  into ckVision TreeNodes, uses injected filesystem/file-dialog services and
+  the application clipboard, and implements open, close, copy,
+  find/next/previous/end-search, and expand-to-level commands. Its headless
+  scenario covers filesystem load, result reveal/selection, copy, expansion,
+  and full-frame rendering.
+- The JSON search slice found and exercised a reusable TreeView gap.
+  ckVision candidate `d54f65f0b190b836e04f4ffbc38fcbe08c4368cb` adds the
+  documented, unit-tested `TreeView::reveal_and_select` API. It remains an
+  integration candidate until it is landed on ckVision trunk; its provider-
+  backed large-tree follow-up remains open.
 
 ## 1. Mandate
 
@@ -827,4 +848,3 @@ The conversion program is complete only when all of the following are true:
    mechanism.
 5. Implement WP-1's independent package consumer and architecture checks.
 6. Build the WP-2 shell and begin the `ck-json-view` pilot.
-

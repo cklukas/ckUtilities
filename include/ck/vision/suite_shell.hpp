@@ -3,11 +3,14 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <cvision/ui/application.hpp>
 #include <cvision/ui/command.hpp>
 #include <cvision/ui/standard_roles.hpp>
 #include <cvision/widgets/application_shell.hpp>
+#include <cvision/widgets/menu.hpp>
+#include <cvision/widgets/status_line.hpp>
 
 namespace ck::vision
 {
@@ -30,6 +33,8 @@ struct SuiteShellOptions
     std::string about_text;
     ThemeScheme theme = ThemeScheme::Classic;
     std::function<void()> on_return_to_launcher;
+    std::vector<ckv::widgets::MenuBarItem> application_menus;
+    std::vector<ckv::widgets::StatusLineItem> application_status_items;
 };
 
 class SuiteShell
@@ -38,6 +43,7 @@ public:
     SuiteShell(ckv::ui::Application &application, SuiteShellOptions options);
 
     ckv::widgets::Desktop &desktop() noexcept;
+    const ckv::ui::StandardRoles &roles() const noexcept { return roles_; }
 
     ckv::ui::CommandId about_command() const noexcept { return about_command_; }
     ckv::ui::CommandId return_to_launcher_command() const noexcept

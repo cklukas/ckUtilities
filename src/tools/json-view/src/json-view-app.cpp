@@ -437,9 +437,8 @@ bool JsonViewApp::loadFile(const std::string &name)
     std::ostringstream ss;
     ss << in.rdbuf();
     json j = parseJsonWithSpecialNumbers(ss.str());
-    fileSizes.clear();
-    fileSizes[name] = ss.str().size();
     root = buildTree(&j, name, nullptr, true);
+    root->sourceSize = ss.str().size();
     search = SearchState();
     rebuildOutline();
     updateStatusBar();

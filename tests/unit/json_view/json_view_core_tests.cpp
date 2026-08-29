@@ -61,6 +61,15 @@ TEST(JsonViewCore, FormatsFileSizes)
     EXPECT_EQ(formatFileSize(5ull * 1024ull * 1024ull), "5.0 MB");
 }
 
+TEST(JsonViewCore, RootLabelUsesDocumentOwnedSourceSize)
+{
+    json data = makeSampleJson();
+    auto root = buildTree(&data, "fixture.json", nullptr, true);
+    root->sourceSize = 1536;
+
+    EXPECT_NE(getContentLabel(root.get()).find("1.5 KB"), std::string::npos);
+}
+
 TEST(JsonViewCore, ParsesSpecialFloatingPointLiterals)
 {
     const std::string input = R"({"value": NaN, "inf": Infinity, "neg": -Infinity, "arr": [NaN]})";

@@ -10,15 +10,20 @@ never a neighbouring source tree.
 | Field | Value |
 |---|---|
 | Repository | ckVision |
-| Commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Branch at selection | `main` |
+| Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
+| Current migration commit | `d54f65f0b190b836e04f4ffbc38fcbe08c4368cb` |
+| Current migration change | `TreeView::reveal_and_select`, needed to reveal and focus JSON search results |
+| Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
 | Client language level | C++20 |
 
-The commit was selected from a detached clean worktree. The ordinary ckVision
-checkout contained unrelated staged, unstaged, and untracked work at the time
-of selection and is not a valid dependency input.
+The foundation commit was selected from a detached clean worktree. The current
+migration commit was created in that same clean worktree after the JSON pilot
+identified a reusable TreeView result-navigation gap. It has unit coverage and
+public documentation in ckVision. The ordinary ckVision checkout contained
+unrelated staged, unstaged, and untracked work at the time of selection and is
+not a valid dependency input.
 
 ## Local SDK workflow
 
@@ -48,6 +53,9 @@ suite or an application migration slice.
 
 Raise this baseline only after the requested ckVision change is complete in
 ckVision: its specification, tests, documentation, examples, benchmarks, and
-provenance gates must be accepted there first. Update this table, run the
-independent consumer verification, and record the affected migration/gap IDs
-in the ckUtilities commit.
+provenance gates must be accepted there first. The current migration commit is
+an integration candidate until it is landed on ckVision's trunk; do not treat
+the dirty ordinary checkout as an alternative source of truth. After trunk
+integration, update this table with the landed commit, run the independent
+consumer verification, and record the affected migration/gap IDs in the
+ckUtilities commit.

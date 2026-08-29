@@ -88,7 +88,14 @@ ckv::widgets::ApplicationShellOptions SuiteShell::make_shell_options() const
     file_items.push_back(MenuItem::command(
         CommandPresentation{application_.commands().standard().quit, "E&xit"}));
 
-    std::vector<StatusLineItem> status_items;
+    std::vector<MenuBarItem> menus;
+    menus.emplace_back(MenuBarItem{"&File", std::move(file_items)});
+    for (const auto &menu : options_.application_menus)
+        menus.push_back(menu);
+    menus.emplace_back(MenuBarItem{
+        "&Help", {MenuItem::command(CommandPresentation{about_command_, "&About..."})}});
+
+    std::vector<StatusLineItem> status_items = options_.application_status_items;
     if (return_to_launcher_command_ != ckv::ui::kInvalidCommand)
         status_items.emplace_back(CommandPresentation{return_to_launcher_command_, "&Launcher"}, 20);
 
@@ -98,10 +105,7 @@ ckv::widgets::ApplicationShellOptions SuiteShell::make_shell_options() const
 
     return {
         .theme = make_theme(application_.roles(), roles_, options_.theme),
-        .menus = {
-            MenuBarItem{"&File", std::move(file_items)},
-            MenuBarItem{"&Help", {MenuItem::command(CommandPresentation{about_command_, "&About..."})}},
-        },
+        .menus = std::move(menus),
         .status_items = std::move(status_items),
     };
 }

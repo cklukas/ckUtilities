@@ -5,9 +5,9 @@ include_guard(GLOBAL)
 # find an installed package through CMAKE_PREFIX_PATH or the normal CMake
 # package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "e40c9beee7b0be8450fd417aa0d55480418807bb"
+    "d54f65f0b190b836e04f4ffbc38fcbe08c4368cb"
     CACHE STRING
-    "ckVision commit accepted as the current ckUtilities migration baseline")
+    "ckVision commit required by the current ckUtilities migration targets")
 
 set(CKTOOLS_CKVISION_PREFIX "" CACHE PATH
     "Installation prefix of a clean ckVision SDK used by the package-consumer verification")

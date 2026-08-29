@@ -8,8 +8,8 @@ what users must be able to do, not how Turbo Vision implemented it.
 
 | ID | Product area | Core acceptance journeys | Owner WP | Status |
 |---|---|---|---|---|
-| CKU-SHELL | shared shell | command invocation, focus, menu/status/help, theme, resize, quit | WP-2 | inventory captured |
-| CKU-JSON | `ck-json-view` | open/close, navigate, expand level, find, copy | WP-3 | inventory captured |
+| CKU-SHELL | shared shell | command invocation, focus, menu/status/help, theme, resize, quit | WP-2 | initial native shell implemented; headless smoke test passing |
+| CKU-JSON | `ck-json-view` | open/close, navigate, expand level, find, copy | WP-3 | native pilot implemented; headless scenario passing |
 | CKU-LAUNCH | `ck-utilities` | launch tool, multi-window utilities, calculator, ASCII, color, event diagnostics | WP-4 | inventory captured |
 | CKU-FIND | `ck-find` | compose, validate, persist, preview, and execute a search specification | WP-5 | inventory captured |
 | CKU-DU | `ck-du` | scan, navigate, sort, inspect, cancel, and execute cloud actions | WP-6 | inventory captured |
@@ -26,7 +26,7 @@ close.
 
 | Gap ID | Neutral requirement | First validating slice | State |
 |---|---|---|---|
-| CV-GAP-001 | A large changing hierarchy may need stable node identities, lazy publication, and selection/expansion preservation without materializing the entire tree. | CKU-JSON, CKU-DU | investigate in WP-3 |
+| CV-GAP-001 | A result controller needs to reveal and select a stable node in a materialized hierarchy without synthesizing input. Large changing hierarchies may additionally need provider-backed incremental refresh. | CKU-JSON, CKU-DU | `TreeView::reveal_and_select` implemented in ckVision candidate `d54f65f`; provider-backed scale work remains open |
 | CV-GAP-002 | A long streaming rich-text document may need active-block updates, bottom anchoring, selection/copy, and bounded relayout. | CKU-CHAT | investigate in WP-9 |
 | CV-GAP-003 | Runtime keymap editing may need normalized chord capture, conflict diagnostics, and persistence based on stable command names. | CKU-CONFIG | investigate in WP-2/WP-7 |
 | CV-GAP-004 | Reusable color selection and bounded event diagnostics may be useful generic controls. | CKU-LAUNCH | investigate in WP-4 |
