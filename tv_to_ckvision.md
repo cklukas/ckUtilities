@@ -86,8 +86,10 @@ Historical application baseline: `legacy_tv`
   `SystemPromptManager` adapter; the active prompt is carried in every response
   request. Downloaded-model selection, deactivation, and confirmed local
   deletion now use an injected `ModelManager` adapter, and the active model ID
-  is carried in every response request. Model download/loading and richer
-  progress remain the next slices.
+  is carried in every response request. The adapter now owns cancellable
+  background downloads behind a cached catalog, so the UI posts typed progress
+  and completion without racing `ModelManager` or retaining view pointers.
+  Model runtime loading and richer progress coalescing remain the next slices.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately

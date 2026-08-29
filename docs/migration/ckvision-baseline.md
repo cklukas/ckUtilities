@@ -11,17 +11,18 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `d54f65f0b190b836e04f4ffbc38fcbe08c4368cb` |
-| Current migration change | `TreeView::reveal_and_select`, needed to reveal and focus JSON search results |
+| Current migration commit | `351592db6219ff7a2f744fdbb4249562020755a7` (detached clean-worktree integration candidate) |
+| Current migration change | `TreeView::reveal_and_select` plus validated multiline `Memo` fields in declarative dialogs, needed for JSON result navigation and system-prompt editing |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
 | Client language level | C++20 |
 
 The foundation commit was selected from a detached clean worktree. The current
-migration commit was created in that same clean worktree after the JSON pilot
-identified a reusable TreeView result-navigation gap. It has unit coverage and
-public documentation in ckVision. The ordinary ckVision checkout contained
+migration commits were created in that same clean worktree after the JSON pilot
+identified a reusable TreeView result-navigation gap and chat prompt editing
+identified a reusable declarative-dialog multiline-field gap. Both changes have
+unit coverage and public documentation in ckVision. The ordinary ckVision checkout contained
 unrelated staged, unstaged, and untracked work at the time of selection and is
 not a valid dependency input.
 
