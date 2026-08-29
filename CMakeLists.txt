@@ -14,6 +14,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(CKTOOLS_ENABLE_CKVISION_MIGRATION
+       "Build the ckVision-native migration targets"
+       OFF)
+
+if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
+  cktools_require_ckvision()
+endif()
+
 # Add llama.cpp integration
 option(CKAI_BACKEND_LLAMA "Enable llama.cpp backend" ON)
 if(CKAI_BACKEND_LLAMA)
@@ -33,6 +41,10 @@ cktools_add_ckvision_package_verification()
 
 add_subdirectory(src/tools)
 add_subdirectory(src/common)
+
+if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
+  add_subdirectory(src/vision)
+endif()
 
 if(BUILD_TESTING)
   add_subdirectory(tests)
