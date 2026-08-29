@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
@@ -55,6 +56,21 @@ TEST(OptionRegistry, NormalizesValuesToDefinitionTypes)
 
     EXPECT_EQ(registry.getInteger("threshold"), 42);
     EXPECT_TRUE(registry.getBool("ignored"));
+}
+
+TEST(OptionRegistry, RestoresOverrideSnapshots)
+{
+    ck::config::OptionRegistry registry("test-app");
+    registry.registerOption({"featureEnabled", ck::config::OptionKind::Boolean, ck::config::OptionValue(false),
+                             "Feature Enabled", "Enables a feature for testing."});
+
+    registry.set("featureEnabled", ck::config::OptionValue(true));
+    auto before_change = registry.snapshot();
+    registry.reset("featureEnabled");
+    EXPECT_FALSE(registry.getBool("featureEnabled"));
+
+    registry.restore(std::move(before_change));
+    EXPECT_TRUE(registry.getBool("featureEnabled"));
 }
 
 TEST(OptionRegistry, PersistsValuesToDisk)

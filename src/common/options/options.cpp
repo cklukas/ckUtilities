@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <utility>
 #include <nlohmann/json.hpp>
 
 namespace ck::config
@@ -300,6 +301,18 @@ void OptionRegistry::resetToDefaults()
     overrides.clear();
 }
 
+OptionRegistry::Snapshot OptionRegistry::snapshot() const
+{
+    Snapshot snapshot;
+    snapshot.overrides_ = overrides;
+    return snapshot;
+}
+
+void OptionRegistry::restore(Snapshot snapshot)
+{
+    overrides = std::move(snapshot.overrides_);
+}
+
 bool OptionRegistry::loadFromFile(const std::filesystem::path &filePath)
 {
     std::ifstream in(filePath);
@@ -470,4 +483,3 @@ OptionValue OptionRegistry::normalizeValue(const OptionDefinition &definition, c
 }
 
 } // namespace ck::config
-

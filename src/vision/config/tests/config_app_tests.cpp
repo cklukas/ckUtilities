@@ -39,7 +39,7 @@ public:
         ++import_count;
         imported_path = path;
         registry.set("enabled", ck::config::OptionValue(true));
-        return true;
+        return !fail_import_after_mutation;
     }
 
     bool export_to(const ck::config::OptionRegistry &registry, const std::string &path) override
@@ -58,6 +58,7 @@ public:
     std::string imported_path;
     std::string exported_path;
     bool exported_enabled = false;
+    bool fail_import_after_mutation = false;
 };
 
 class MemoryKeymapPersistence final : public ck::vision::KeymapPersistence
@@ -120,6 +121,10 @@ int main()
             "Import must delegate registry updates to the injected persistence policy.");
     require(persistence.import_count == 1 && persistence.imported_path == "/imports/test.json" && registry.getBool("enabled"),
             "Import must refresh the registry through the injected persistence policy.");
+    registry.set("enabled", ck::config::OptionValue(false));
+    persistence.fail_import_after_mutation = true;
+    require(!config.import_configuration("/imports/broken.json") && !registry.getBool("enabled"),
+            "A failed import must roll back mutations made by its persistence policy.");
     require(application.execute_command(config.import_command()) && application.execute_command(config.export_command()),
             "Import and export must be registry commands.");
     require(application.execute_command(config.edit_command()), "Edit must dispatch through the command registry.");

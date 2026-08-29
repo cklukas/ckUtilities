@@ -292,8 +292,16 @@ bool ConfigApp::select_option(std::string_view key)
 
 bool ConfigApp::import_configuration(const std::string &path)
 {
-    if (path.empty() || !persistence_.import_from(registry_, path))
+    if (path.empty())
     {
+        set_status("Could not import configuration from " + path + ".");
+        return false;
+    }
+
+    ck::config::OptionRegistry::Snapshot before_import = registry_.snapshot();
+    if (!persistence_.import_from(registry_, path))
+    {
+        registry_.restore(std::move(before_import));
         set_status("Could not import configuration from " + path + ".");
         return false;
     }

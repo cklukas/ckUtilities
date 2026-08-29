@@ -66,6 +66,15 @@ struct OptionDefinition
 class OptionRegistry
 {
 public:
+    // Captures the effective override layer without exposing storage details.
+    // Hosts use this to make multi-step configuration operations transactional.
+    class Snapshot
+    {
+        friend class OptionRegistry;
+
+        std::unordered_map<std::string, OptionValue> overrides_;
+    };
+
     explicit OptionRegistry(std::string appId);
 
     const std::string &appId() const noexcept { return id; }
@@ -84,6 +93,9 @@ public:
 
     void clearValues() noexcept;
     void resetToDefaults();
+
+    Snapshot snapshot() const;
+    void restore(Snapshot snapshot);
 
     bool loadFromFile(const std::filesystem::path &filePath);
     bool saveToFile(const std::filesystem::path &filePath) const;
@@ -110,4 +122,3 @@ private:
 };
 
 } // namespace ck::config
-
