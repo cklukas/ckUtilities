@@ -156,6 +156,11 @@ Historical application baseline: `legacy_tv`
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
+  A macOS ASan/UBSan cutover build against a package built with
+  `CKVISION_SANITIZE=address,undefined` also passes all 74 tests. The
+  sanitizer package propagates its required compile and link flags to CMake
+  consumers; validation must use that supported ckVision option rather than a
+  release SDK built with ad-hoc sanitizer flags.
 
 ## 1. Mandate
 
@@ -884,6 +889,9 @@ These are investigation targets, not pre-approved APIs:
 - Unit, scenario, golden, and integration tests green.
 - ASan and UBSan green; TSan or equivalent concurrency evidence for code with
   worker threads.
+- Sanitizer clients link the matching sanitizer-enabled ckVision package
+  (`CKVISION_SANITIZE`), so instrumentation is consistent across the static
+  library boundary.
 - No leaked thread, terminal mode, file descriptor, process, callback, or view.
 - No UI access from a background thread.
 - No wall-clock, environment, filesystem, or locale access below the injected

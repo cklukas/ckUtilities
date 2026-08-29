@@ -54,6 +54,28 @@ The verifier configures, builds, and runs a separate CMake project under
 package is consumable; it does not substitute for ckVision's own acceptance
 suite or an application migration slice.
 
+### Sanitizer SDKs
+
+For an ASan/UBSan client build, create the SDK with ckVision's supported
+package-aware option, not only with raw compiler flags:
+
+```sh
+cmake -S /path/to/clean/ckvision -B /path/to/ckvision-sanitize \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCKVISION_SANITIZE=address,undefined
+cmake --build /path/to/ckvision-sanitize --parallel
+cmake --install /path/to/ckvision-sanitize --prefix /path/to/ckvision-sanitize-sdk
+```
+
+`CKVISION_SANITIZE` makes sanitizer compile and link options public usage
+requirements of `ckvision::cvision`; an installed static library therefore
+brings a client into the same instrumentation domain. A release SDK combined
+with an independently sanitized client is not a valid sanitizer result. On
+macOS, run ASan with `detect_leaks=0`, because that runtime does not support
+leak detection. The clean integration candidate passed ckVision's full
+169-test sanitizer suite and ckUtilities' 74-test cutover suite with this
+procedure on 2026-08-30.
+
 To verify the staged native product as well, enable the installed-product
 gate and run it from the configured build tree:
 
