@@ -30,7 +30,9 @@ Historical application baseline: `legacy_tv`
   browser. It uses registry commands and publishes a selected launch request
   to the POSIX composition root, which closes the terminal UI before running
   the child process. The built-in calendar, ASCII, calculator, color, and
-  event-diagnostics windows are the next launcher slice.
+  event-diagnostics windows are the next launcher slice. The native calendar
+  window already reuses ckVision's CalendarView rather than retaining a suite
+  copy of that widget.
 
 ## 1. Mandate
 

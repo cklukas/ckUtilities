@@ -32,6 +32,8 @@ public:
 
     ckv::ui::CommandId launch_command() const noexcept { return launch_command_; }
     ckv::ui::CommandId new_launcher_command() const noexcept { return new_launcher_command_; }
+    ckv::ui::CommandId calendar_command() const noexcept { return calendar_command_; }
+    std::size_t desktop_window_count() const noexcept { return shell_->desktop().windows().size(); }
 
 private:
     struct LauncherWindow
@@ -46,6 +48,7 @@ private:
     void open_launcher_window();
     void update_detail(LauncherWindow &window, std::size_t tool_index);
     void launch_active_tool();
+    void open_calendar_window();
     void close_launcher_window(LauncherWindow *window);
     LauncherWindow *active_launcher_window() const noexcept;
 
@@ -55,6 +58,7 @@ private:
     std::vector<std::unique_ptr<LauncherWindow>> windows_;
     ckv::ui::CommandId launch_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId new_launcher_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId calendar_command_ = ckv::ui::kInvalidCommand;
     std::unique_ptr<SuiteShell> shell_;
 };
 

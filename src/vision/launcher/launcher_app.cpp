@@ -1,8 +1,10 @@
 #include "launcher_app.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
+#include <cvision/widgets/common_components.hpp>
 #include <cvision/widgets/command_presentation.hpp>
 #include <cvision/widgets/menu.hpp>
 #include <cvision/widgets/splitter.hpp>
@@ -57,6 +59,13 @@ void UtilitiesLauncherApp::declare_commands()
         .visibility = CommandVisibility::Palette,
         .handler = [this] { open_launcher_window(); },
     });
+    calendar_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.utilities.show_calendar",
+        .title = "Show &Calendar",
+        .category = "CK Utilities",
+        .visibility = CommandVisibility::Palette,
+        .handler = [this] { open_calendar_window(); },
+    });
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
@@ -65,11 +74,15 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
         .application_name = "CK Utilities",
         .about_text = "The native ckVision suite launcher. Browse installed CK tools, inspect their descriptions, and launch the selected tool in a fresh terminal session.",
         .application_menus = {
-            MenuBarItem{"&Tools", {MenuItem::command(CommandPresentation{launch_command_, "&Launch selected tool"})}},
+            MenuBarItem{"&Tools", {
+                MenuItem::command(CommandPresentation{launch_command_, "&Launch selected tool"}),
+                MenuItem::command(CommandPresentation{calendar_command_, "Show &Calendar"}),
+            }},
             MenuBarItem{"&Window", {MenuItem::command(CommandPresentation{new_launcher_command_, "&New launcher window"})}},
         },
         .application_status_items = {
             StatusLineItem{CommandPresentation{launch_command_, "&Launch"}, 30},
+            StatusLineItem{CommandPresentation{calendar_command_, "&Calendar"}, 25},
             StatusLineItem{CommandPresentation{new_launcher_command_, "&New"}, 20},
         },
     };
@@ -138,6 +151,23 @@ void UtilitiesLauncherApp::launch_active_tool()
     application_.request_quit();
 }
 
+void UtilitiesLauncherApp::open_calendar_window()
+{
+    const auto today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+    const std::chrono::year_month_day date{today};
+    const ckv::widgets::DateValue selected{
+        static_cast<int>(date.year()), static_cast<int>(static_cast<unsigned>(date.month())),
+        static_cast<int>(static_cast<unsigned>(date.day()))};
+
+    auto window = std::make_unique<ckv::widgets::Window>("Calendar");
+    window->set_min_size(ckv::Size{32, 12});
+    auto calendar = std::make_unique<ckv::widgets::CalendarView>();
+    calendar->set_selected(selected);
+    calendar->set_today(selected);
+    window->set_content(std::move(calendar));
+    shell_->desktop().add_window(std::move(window));
+}
+
 void UtilitiesLauncherApp::close_launcher_window(LauncherWindow *window)
 {
     const auto found = std::find_if(windows_.begin(), windows_.end(), [window](const auto &candidate) {
@@ -160,7 +190,14 @@ UtilitiesLauncherApp::LauncherWindow *UtilitiesLauncherApp::active_launcher_wind
     const auto found = std::find_if(windows_.begin(), windows_.end(), [active](const auto &candidate) {
         return candidate->window == active;
     });
-    return found != windows_.end() ? found->get() : nullptr;
+    if (found != windows_.end())
+        return found->get();
+
+    // A utility window may temporarily be active while a menu command still
+    // refers to the selected launcher tool. Retain the most recently opened
+    // launcher as that command's stable context rather than making Launch a
+    // silent no-op solely because the reader checked the calendar first.
+    return windows_.empty() ? nullptr : windows_.back().get();
 }
 
 const ck::appinfo::ToolInfo *UtilitiesLauncherApp::selected_tool() const noexcept

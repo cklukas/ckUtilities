@@ -37,9 +37,14 @@ int main()
     require(application.execute_command(launcher.new_launcher_command()),
             "The native New Launcher command must be available.");
     require(launcher.launcher_window_count() == 2, "The native launcher must support multiple windows.");
+    require(application.execute_command(launcher.calendar_command()),
+            "The native Calendar command must dispatch through the registry.");
+    require(launcher.desktop_window_count() == 3,
+            "The native calendar must be presented as a regular Desktop window.");
     require(application.execute_command(launcher.launch_command()),
             "The native Launch command must dispatch through the registry.");
-    require(launched_id == expected_tool, "The launch request must carry the active tool identity.");
+    require(launched_id == expected_tool,
+            "The launch request must retain the selected launcher tool behind a utility window.");
     require(application.quit_requested(), "Launching a child tool must close the terminal session first.");
 
     application.step(0);
