@@ -48,3 +48,18 @@ TEST(LlmTests, TokenCountSplitsOnWhitespace)
     EXPECT_EQ(llm->token_count("one"), 1u);
     EXPECT_EQ(llm->token_count("one two\tthree"), 3u);
 }
+
+TEST(LlmTests, CancellableGenerationStopsAfterTheCallbackDeclinesMoreOutput)
+{
+    ck::ai::RuntimeConfig runtime;
+    auto llm = ck::ai::Llm::open("model", runtime);
+    ASSERT_NE(llm, nullptr);
+
+    std::size_t callbacks = 0;
+    llm->generate_cancellable("hello", {}, [&](ck::ai::Chunk) {
+        ++callbacks;
+        return false;
+    });
+
+    EXPECT_EQ(callbacks, 1u);
+}

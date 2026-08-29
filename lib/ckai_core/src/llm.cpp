@@ -145,7 +145,17 @@ void Llm::set_system_prompt(std::string system_prompt) {
 }
 
 void Llm::generate(const std::string &prompt, const GenerationConfig &config,
-                   const std::function<void(Chunk)> &on_token) {
+                   const ChunkCallback &on_token) {
+  generate_cancellable(prompt, config, [&on_token](Chunk chunk) {
+    if (on_token)
+      on_token(std::move(chunk));
+    return true;
+  });
+}
+
+void Llm::generate_cancellable(const std::string &prompt,
+                               const GenerationConfig &config,
+                               const CancellableChunkCallback &on_token) {
   if (!on_token)
     return;
 
@@ -155,7 +165,7 @@ void Llm::generate(const std::string &prompt, const GenerationConfig &config,
     Chunk chunk;
     chunk.text = build_stub_response(prompt, system_prompt_);
     chunk.is_last = true;
-    on_token(chunk);
+    on_token(std::move(chunk));
     return;
   }
 
@@ -245,7 +255,8 @@ void Llm::generate(const std::string &prompt, const GenerationConfig &config,
       Chunk chunk;
       chunk.text = buffer.substr(lastSent);
       chunk.is_last = false;
-      on_token(chunk);
+      if (!on_token(std::move(chunk)))
+        return;
       lastSent = buffer.size();
     }
 
@@ -260,12 +271,12 @@ void Llm::generate(const std::string &prompt, const GenerationConfig &config,
     Chunk chunk;
     chunk.text = buffer.substr(lastSent);
     chunk.is_last = true;
-    on_token(chunk);
+    on_token(std::move(chunk));
     lastSent = buffer.size();
   } else {
     Chunk chunk;
     chunk.is_last = true;
-    on_token(chunk);
+    on_token(std::move(chunk));
   }
 }
 

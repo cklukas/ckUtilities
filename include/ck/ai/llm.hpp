@@ -27,6 +27,9 @@ struct Chunk {
   bool is_last = false;
 };
 
+using ChunkCallback = std::function<void(Chunk)>;
+using CancellableChunkCallback = std::function<bool(Chunk)>;
+
 class Llm {
 public:
   static std::unique_ptr<Llm> open(const std::string &model_path,
@@ -34,7 +37,10 @@ public:
 
   void set_system_prompt(std::string system_prompt);
   void generate(const std::string &prompt, const GenerationConfig &config,
-                const std::function<void(Chunk)> &on_token);
+                const ChunkCallback &on_token);
+  void generate_cancellable(const std::string &prompt,
+                            const GenerationConfig &config,
+                            const CancellableChunkCallback &on_token);
   std::string embed(const std::string &text) const;
   std::size_t token_count(const std::string &text) const;
 
