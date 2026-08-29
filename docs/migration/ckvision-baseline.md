@@ -52,6 +52,20 @@ The verifier configures, builds, and runs a separate CMake project under
 package is consumable; it does not substitute for ckVision's own acceptance
 suite or an application migration slice.
 
+To verify the staged native product as well, enable the installed-product
+gate and run it from the configured build tree:
+
+```sh
+cmake --preset dev \
+  -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
+cmake --build build/dev --target verify_ckvision_install
+```
+
+This gate rebuilds the complete suite, installs it to a disposable prefix,
+and starts each ckVision-native executable with `--help`. It verifies the
+release artifact's executable layout and its relative runtime-library lookup;
+it does not replace the full workflow or platform acceptance suites.
+
 ## Pin update rule
 
 Raise this baseline only after the requested ckVision change is complete in

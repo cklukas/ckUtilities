@@ -18,6 +18,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Installed executables must locate the shared llama backend from the same
+# prefix. The relative location is valid for both an installed binary and a
+# dependency loaded from lib/, and keeps the release artifact self-contained.
+if(APPLE)
+  set(CMAKE_INSTALL_RPATH "@loader_path/../lib")
+elseif(UNIX)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+endif()
+
 option(CKTOOLS_ENABLE_CKVISION_MIGRATION
        "Build the ckVision-native migration targets"
        OFF)
@@ -42,6 +51,7 @@ endif()
 
 cktools_add_ui_boundary_check()
 cktools_add_ckvision_package_verification()
+cktools_add_ckvision_install_verification()
 
 add_subdirectory(src/tools)
 add_subdirectory(src/common)

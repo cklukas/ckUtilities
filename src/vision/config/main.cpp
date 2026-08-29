@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <string_view>
 
 #include <cvision/term/posix_clock.hpp>
 #include <cvision/term/posix_terminal.hpp>
@@ -7,8 +8,13 @@
 #include "config_app.hpp"
 #include "disk_usage_options.hpp"
 
-int main()
+int main(int argc, char **argv)
 {
+    if (argc > 1 && (std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h"))
+    {
+        std::printf("Usage: %s\n", argc > 0 ? argv[0] : "ck-config-ckvision");
+        return 0;
+    }
     ck::config::OptionRegistry registry("ck-du");
     ck::du::registerDiskUsageOptions(registry);
     ck::vision::DefaultConfigPersistence persistence;

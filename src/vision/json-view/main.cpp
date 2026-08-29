@@ -1,4 +1,6 @@
+#include <cstdio>
 #include <string>
+#include <string_view>
 
 #include <cvision/term/posix_clock.hpp>
 #include <cvision/term/posix_filesystem.hpp>
@@ -11,6 +13,11 @@
 
 int main(int argc, char **argv)
 {
+    if (argc > 1 && (std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h"))
+    {
+        std::printf("Usage: %s [JSON_FILE ...]\n", argc > 0 ? argv[0] : "ck-json-view-ckvision");
+        return 0;
+    }
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::term::TerminalClipboardWriter clipboard(terminal);

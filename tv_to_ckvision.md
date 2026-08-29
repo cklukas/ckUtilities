@@ -119,10 +119,13 @@ Historical application baseline: `legacy_tv`
   while a response is active. Long-session/runtime performance evidence remains
   before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK and their headless suite, JSON-domain, and architecture tests
-  pass as one 14-test checkpoint. The legacy executables remain deliberately
-  separate while the outstanding workflow entries in the traceability ledger
-  are completed.
+  candidate SDK. Their headless suite, JSON-domain, and architecture tests
+  pass as one 19-test checkpoint. A separate installed-product gate builds the
+  complete suite, stages it to a disposable prefix, and verifies that each
+  native executable completes `--help`; the gate also protects the chat
+  runtime's relative shared-library lookup. The legacy executables remain
+  deliberately separate while the outstanding workflow entries in the
+  traceability ledger are completed.
 
 ## 1. Mandate
 
