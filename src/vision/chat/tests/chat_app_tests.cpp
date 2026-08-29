@@ -63,16 +63,18 @@ int main()
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.prompt() == "Hello" && chat.response_running(),
             "The native chat app must delegate prompts to the injected streaming service.");
-    responses.emit("Echo: ");
-    responses.emit("Hello");
+    responses.emit("**Echo** ");
+    responses.emit("[Hello](https://example.com)");
     application.step(0);
-    require(chat.messages()[1].content == "Echo: Hello",
+    require(chat.messages()[1].content == "**Echo** [Hello](https://example.com)",
             "Streaming chunks must be marshalled into the assistant transcript.");
+    require(chat.transcript()->link_count() == 1,
+            "Markdown links in assistant output must be exposed through FlowView navigation.");
     responses.complete();
     application.step(0);
     require(!chat.response_running(), "Completion must clear the active response state.");
     require(application.execute_command(chat.copy_command()), "Copy must dispatch through the command registry.");
-    require(application.clipboard_text().find("Echo: Hello") != std::string::npos,
+    require(application.clipboard_text().find("**Echo** [Hello](https://example.com)") != std::string::npos,
             "Copy must export the native transcript through the application clipboard.");
     require(application.execute_command(chat.new_chat_command()), "New conversation must dispatch through the command registry.");
     require(chat.messages().empty(), "New conversation must clear the application-owned conversation state.");

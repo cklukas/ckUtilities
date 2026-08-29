@@ -1,4 +1,5 @@
 #include "chat_app.hpp"
+#include "chat_markdown.hpp"
 
 #include <utility>
 
@@ -199,7 +200,10 @@ void ChatApp::refresh_transcript()
     for (const ChatMessage &message : messages_)
     {
         const std::string prefix = message.role == ChatMessage::Role::User ? "You: " : "Assistant: ";
-        document.blocks.push_back({{FlowText{prefix}, FlowText{message.content}}});
+        FlowBlock block;
+        block.content.emplace_back(FlowText{prefix, ckv::Attr::Bold});
+        append_markdown_flow(block, message.content);
+        document.blocks.push_back(std::move(block));
     }
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)

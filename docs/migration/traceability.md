@@ -15,7 +15,7 @@ what users must be able to do, not how Turbo Vision implemented it.
 | CKU-DU | `ck-du` | scan, navigate, sort, inspect, cancel, and execute cloud actions | WP-6 | native TreeView/table, injected joinable directory scanning, progress, UI-thread snapshot delivery, and cancellation implemented; file lists and cloud actions remain |
 | CKU-CONFIG | `ck-config` | inspect/edit/reset/import/export configuration and key bindings | WP-7 | native injected-registry inspector/editor with typed edit/reset and injected JSON-default save/reload/import/export implemented; keymap capture/conflicts and cross-app reload remain |
 | CKU-EDIT | `ck-edit` | edit, format, search, save, resolve conflict, and close Markdown documents | WP-8 | native injected-file editor with open/save/save-as and explicit dirty Save/Discard/Cancel close implemented; Markdown transformations, profiles, and richer external-conflict resolution remain |
-| CKU-CHAT | `ck-chat` | edit/send/cancel prompts, stream/copy responses, manage models/prompts | WP-9 | native FlowView transcript, prompt dialog, injected streaming response service, cancellation, worker adapter, and UI-thread lifetime guard implemented; Markdown, models, prompts, and richer progress remain |
+| CKU-CHAT | `ck-chat` | edit/send/cancel prompts, stream/copy responses, manage models/prompts | WP-9 | native FlowView transcript, prompt dialog, injected streaming response service, cancellation, worker adapter, UI-thread lifetime guard, and shared Markdown-to-FlowView adaptation implemented; models, prompts, and richer progress remain |
 | CKU-RELEASE | packaging | build, test, install, package, and run every executable | WP-10 | inventory captured |
 
 Every row will gain links to domain tests, deterministic headless scenarios,
