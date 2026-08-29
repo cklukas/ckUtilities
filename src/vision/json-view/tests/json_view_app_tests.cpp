@@ -32,6 +32,20 @@ std::string deeply_nested_document(int depth)
     return document;
 }
 
+std::string wide_document(std::size_t entries)
+{
+    std::string document = "{";
+    for (std::size_t index = 0; index < entries; ++index)
+    {
+        if (index != 0)
+            document += ',';
+        document += "\"entry" + std::to_string(index) + "\":{\"label\":\"record-" +
+                    std::to_string(index) + "\"}";
+    }
+    document += '}';
+    return document;
+}
+
 } // namespace
 
 int main()
@@ -112,6 +126,22 @@ int main()
         return 1;
     if (!expect(json_view.tree() != nullptr && json_view.find(unicode_leaf, false, true),
                 "a malformed reload discarded the previously open document"))
+        return 1;
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
+    application.step(0);
+    if (!expect(json_view.load_document("wide.json", wide_document(2048)),
+                "the JSON viewer did not load a 2,048-entry document"))
+        return 1;
+    if (!expect(json_view.find("record-2047", false, true) &&
+                    json_view.selected_json_node() != nullptr &&
+                    json_view.selected_json_node()->key == "label",
+                "large-document search did not reveal the final record"))
+        return 1;
+    application.step(0);
+    const auto terminal_cells = static_cast<std::size_t>(terminal.size().width) *
+                                static_cast<std::size_t>(terminal.size().height);
+    if (!expect(application.last_compose_cells_touched() <= terminal_cells,
+                "large-document navigation exceeded the visible-frame composition budget"))
         return 1;
     if (!expect(application.execute_command(json_view.close_command()), "close command was unavailable"))
         return 1;
