@@ -1,5 +1,6 @@
 #include "chat_services.hpp"
 
+#include <fstream>
 #include <utility>
 
 namespace ck::vision
@@ -66,6 +67,24 @@ void ThreadedChatResponseService::cancel() noexcept
 bool ThreadedChatResponseService::running() const noexcept
 {
     return running_.load(std::memory_order_acquire);
+}
+
+bool FileChatTranscriptStore::write(const std::filesystem::path &path, const std::string &transcript)
+{
+    if (path.empty())
+        return false;
+    std::error_code error;
+    if (!path.parent_path().empty())
+    {
+        std::filesystem::create_directories(path.parent_path(), error);
+        if (error)
+            return false;
+    }
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+        return false;
+    output << transcript;
+    return static_cast<bool>(output);
 }
 
 } // namespace ck::vision

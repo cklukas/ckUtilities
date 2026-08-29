@@ -79,8 +79,9 @@ Historical application baseline: `legacy_tv`
   the UI thread behind a request-generation and teardown lifetime gate, while
   the production default adapter keeps a responder on a joinable worker.
   Assistant Markdown is adapted by the shared framework-independent analyzer
-  into styled FlowView content and link targets. Model/prompt management and
-  richer progress remain the next slices.
+  into styled FlowView content and link targets. Transcript export is delegated
+  to an injected storage service. Model/prompt management and richer progress
+  remain the next slices.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately

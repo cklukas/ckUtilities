@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -44,6 +45,22 @@ private:
     std::jthread worker_;
     std::shared_ptr<std::atomic_bool> cancellation_;
     std::atomic_bool running_{false};
+};
+
+// Persistence policy for an exported conversation.  The presentation supplies
+// a chosen path and plain transcript value; it never opens files itself.
+class ChatTranscriptStore
+{
+public:
+    virtual ~ChatTranscriptStore() = default;
+
+    virtual bool write(const std::filesystem::path &path, const std::string &transcript) = 0;
+};
+
+class FileChatTranscriptStore final : public ChatTranscriptStore
+{
+public:
+    bool write(const std::filesystem::path &path, const std::string &transcript) override;
 };
 
 } // namespace ck::vision

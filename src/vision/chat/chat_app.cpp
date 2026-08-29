@@ -21,8 +21,10 @@ using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
 }
 
-ChatApp::ChatApp(ckv::ui::Application &application, ChatResponseService &response_service)
-    : application_(application), response_service_(response_service)
+ChatApp::ChatApp(ckv::ui::Application &application,
+                 ChatResponseService &response_service,
+                 ChatTranscriptStore &transcript_store)
+    : application_(application), response_service_(response_service), transcript_store_(transcript_store)
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -49,6 +51,9 @@ void ChatApp::declare_commands()
     copy_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.chat.copy_transcript", .title = "&Copy transcript", .category = "Chat",
         .visibility = CommandVisibility::Palette, .handler = [this] { copy_transcript(); }});
+    export_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.chat.export_transcript", .title = "&Export transcript...", .category = "Chat",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_export_dialog(); }});
 }
 
 SuiteShellOptions ChatApp::make_shell_options() const
@@ -60,11 +65,13 @@ SuiteShellOptions ChatApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{send_command_, "&Send prompt..."}),
                 MenuItem::command(CommandPresentation{cancel_command_, "&Cancel response"}),
                 MenuItem::command(CommandPresentation{copy_command_, "&Copy transcript"}),
+                MenuItem::command(CommandPresentation{export_command_, "&Export transcript..."}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{send_command_, "&Send"}, 20},
                 StatusLineItem{CommandPresentation{cancel_command_, "&Cancel"}, 20},
                 StatusLineItem{CommandPresentation{copy_command_, "&Copy"}, 20},
+                StatusLineItem{CommandPresentation{export_command_, "&Export"}, 20},
             }};
 }
 
@@ -150,6 +157,11 @@ void ChatApp::cancel_response()
 
 void ChatApp::copy_transcript()
 {
+    application_.set_clipboard_text(transcript_text());
+}
+
+std::string ChatApp::transcript_text() const
+{
     std::string text;
     for (const ChatMessage &message : messages_)
     {
@@ -157,7 +169,35 @@ void ChatApp::copy_transcript()
         text += message.content;
         text += "\n\n";
     }
-    application_.set_clipboard_text(std::move(text));
+    return text;
+}
+
+bool ChatApp::export_transcript(const std::string &path)
+{
+    if (path.empty() || !transcript_store_.write(path, transcript_text()))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Could not export transcript to " + path + ".");
+        return false;
+    }
+    if (window_ != nullptr)
+        window_->set_footer("Exported transcript to " + path + ".");
+    return true;
+}
+
+void ChatApp::show_export_dialog()
+{
+    export_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Export transcript";
+    dialog.fields.push_back({"&Path:", "conversation.txt", [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Export", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    export_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    export_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (result.accepted && result.values.size() == 1)
+            export_transcript(result.values.front());
+    });
 }
 
 void ChatApp::append_response_chunk(std::uint64_t request, std::string chunk)

@@ -51,6 +51,24 @@ private:
     ChunkHandler on_chunk_;
     CompletionHandler on_complete_;
 };
+
+class MemoryTranscriptStore final : public ck::vision::ChatTranscriptStore
+{
+public:
+    bool write(const std::filesystem::path &path, const std::string &transcript) override
+    {
+        path_ = path;
+        transcript_ = transcript;
+        return true;
+    }
+
+    const std::filesystem::path &path() const noexcept { return path_; }
+    const std::string &transcript() const noexcept { return transcript_; }
+
+private:
+    std::filesystem::path path_;
+    std::string transcript_;
+};
 }
 
 int main()
@@ -59,7 +77,8 @@ int main()
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
     ManualResponseService responses;
-    ck::vision::ChatApp chat(application, responses);
+    MemoryTranscriptStore transcripts;
+    ck::vision::ChatApp chat(application, responses, transcripts);
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.prompt() == "Hello" && chat.response_running(),
             "The native chat app must delegate prompts to the injected streaming service.");
@@ -76,6 +95,12 @@ int main()
     require(application.execute_command(chat.copy_command()), "Copy must dispatch through the command registry.");
     require(application.clipboard_text().find("**Echo** [Hello](https://example.com)") != std::string::npos,
             "Copy must export the native transcript through the application clipboard.");
+    require(chat.export_transcript("/exports/conversation.txt"),
+            "Transcript export must delegate to the injected storage policy.");
+    require(transcripts.path() == "/exports/conversation.txt" &&
+                transcripts.transcript().find("Assistant: **Echo**") != std::string::npos,
+            "Transcript export must preserve the selected path and native conversation content.");
+    require(application.execute_command(chat.export_command()), "Export must dispatch through the command registry.");
     require(application.execute_command(chat.new_chat_command()), "New conversation must dispatch through the command registry.");
     require(chat.messages().empty(), "New conversation must clear the application-owned conversation state.");
     require(chat.submit_prompt("Cancel me"), "A new prompt must start after completion.");

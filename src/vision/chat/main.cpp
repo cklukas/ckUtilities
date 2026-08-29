@@ -13,7 +13,8 @@ int main()
     ck::vision::ThreadedChatResponseService responses([](const std::string &prompt) {
         return "No model service is configured yet. Received: " + prompt;
     });
-    ck::vision::ChatApp chat(application, responses);
+    ck::vision::FileChatTranscriptStore transcripts;
+    ck::vision::ChatApp chat(application, responses, transcripts);
     application.run();
     return 0;
 }

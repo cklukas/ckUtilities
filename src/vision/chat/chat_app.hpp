@@ -33,10 +33,13 @@ struct ChatMessage
 class ChatApp
 {
 public:
-    ChatApp(ckv::ui::Application &application, ChatResponseService &response_service);
+    ChatApp(ckv::ui::Application &application,
+            ChatResponseService &response_service,
+            ChatTranscriptStore &transcript_store);
     ~ChatApp();
 
     bool submit_prompt(std::string prompt);
+    bool export_transcript(const std::string &path);
     const std::vector<ChatMessage> &messages() const noexcept { return messages_; }
     bool response_running() const noexcept;
     ckv::widgets::FlowView *transcript() const noexcept { return transcript_; }
@@ -44,6 +47,7 @@ public:
     ckv::ui::CommandId send_command() const noexcept { return send_command_; }
     ckv::ui::CommandId cancel_command() const noexcept { return cancel_command_; }
     ckv::ui::CommandId copy_command() const noexcept { return copy_command_; }
+    ckv::ui::CommandId export_command() const noexcept { return export_command_; }
 
 private:
     void declare_commands();
@@ -53,12 +57,15 @@ private:
     void new_chat();
     void cancel_response();
     void copy_transcript();
+    void show_export_dialog();
+    std::string transcript_text() const;
     void append_response_chunk(std::uint64_t request, std::string chunk);
     void complete_response(std::uint64_t request, bool cancelled);
     void refresh_transcript();
 
     ckv::ui::Application &application_;
     ChatResponseService &response_service_;
+    ChatTranscriptStore &transcript_store_;
     std::vector<ChatMessage> messages_;
     std::unique_ptr<SuiteShell> shell_;
     ckv::widgets::Window *window_ = nullptr;
@@ -67,7 +74,9 @@ private:
     ckv::ui::CommandId send_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId cancel_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId copy_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId export_command_ = ckv::ui::kInvalidCommand;
     std::optional<ckv::widgets::DescriptorDialogPresentation> prompt_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> export_dialog_;
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::uint64_t active_request_ = 0;
     bool response_pending_ = false;
