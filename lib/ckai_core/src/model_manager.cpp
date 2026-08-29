@@ -190,7 +190,7 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
 int ProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
                      curl_off_t ultotal, curl_off_t ulnow) {
   auto *callback_data =
-      static_cast<std::pair<std::function<void(const ModelDownloadProgress &)>,
+      static_cast<std::pair<CancellableModelDownloadProgressCallback,
                             std::string> *>(clientp);
   if (callback_data && callback_data->first) {
     ModelDownloadProgress progress;
@@ -201,7 +201,7 @@ int ProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
     progress.progress_percentage =
         (dltotal > 0) ? (static_cast<double>(dlnow) / dltotal) * 100.0 : 0.0;
     progress.error_message.clear();
-    callback_data->first(progress);
+    return callback_data->first(progress) ? 0 : 1;
   }
   return 0;
 }
@@ -260,7 +260,22 @@ std::optional<ModelInfo> ModelManager::get_active_model() const {
 
 bool ModelManager::download_model(
     const std::string &model_id,
-    std::function<void(const ModelDownloadProgress &)> progress_callback,
+    ModelDownloadProgressCallback progress_callback,
+    std::string *error_message) {
+  return download_model_cancellable(
+      model_id,
+      [progress_callback = std::move(progress_callback)](
+          const ModelDownloadProgress &progress) {
+        if (progress_callback)
+          progress_callback(progress);
+        return true;
+      },
+      error_message);
+}
+
+bool ModelManager::download_model_cancellable(
+    const std::string &model_id,
+    CancellableModelDownloadProgressCallback progress_callback,
     std::string *error_message) {
   auto model_opt = get_model_by_id(model_id);
   if (!model_opt)
@@ -518,7 +533,7 @@ void ModelManager::load_configuration() {
 
 bool ModelManager::download_file(
     const std::string &url, const std::filesystem::path &destination,
-    std::function<void(const ModelDownloadProgress &)> progress_callback,
+    CancellableModelDownloadProgressCallback progress_callback,
     const std::string &model_id, std::string *error_message) {
   CURL *curl = curl_easy_init();
   if (!curl) {
@@ -566,7 +581,9 @@ bool ModelManager::download_file(
   bool success = (res == CURLE_OK && response_code == 200);
 
   if (!success && error_message) {
-    if (res != CURLE_OK) {
+    if (res == CURLE_ABORTED_BY_CALLBACK) {
+      *error_message = "Download cancelled";
+    } else if (res != CURLE_OK) {
       const char *curl_error = curl_easy_strerror(res);
       *error_message =
           curl_error ? std::string(curl_error) : "unknown curl error";

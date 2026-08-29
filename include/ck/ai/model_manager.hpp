@@ -36,6 +36,11 @@ struct ModelDownloadProgress {
   double progress_percentage;
 };
 
+using ModelDownloadProgressCallback =
+    std::function<void(const ModelDownloadProgress &)>;
+using CancellableModelDownloadProgressCallback =
+    std::function<bool(const ModelDownloadProgress &)>;
+
 class ModelManager {
 public:
   ModelManager();
@@ -50,9 +55,12 @@ public:
 
   // Model management
   bool download_model(const std::string &model_id,
-                      std::function<void(const ModelDownloadProgress &)>
-                          progress_callback = nullptr,
+                      ModelDownloadProgressCallback progress_callback = nullptr,
                       std::string *error_message = nullptr);
+  bool download_model_cancellable(
+      const std::string &model_id,
+      CancellableModelDownloadProgressCallback progress_callback = nullptr,
+      std::string *error_message = nullptr);
   bool activate_model(const std::string &model_id);
   bool deactivate_model(const std::string &model_id);
   bool delete_model(const std::string &model_id);
@@ -80,7 +88,7 @@ private:
   void load_configuration();
   bool download_file(
       const std::string &url, const std::filesystem::path &destination,
-      std::function<void(const ModelDownloadProgress &)> progress_callback,
+      CancellableModelDownloadProgressCallback progress_callback,
       const std::string &model_id = "", std::string *error_message = nullptr);
   std::string generate_model_id(const std::string &name) const;
 };
