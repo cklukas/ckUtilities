@@ -28,6 +28,7 @@ public:
     void start(ck::vision::ChatResponseRequest request, ChunkHandler on_chunk, CompletionHandler on_complete) override
     {
         running_ = true;
+        cancelled_ = false;
         request_ = std::move(request);
         on_chunk_ = std::move(on_chunk);
         on_complete_ = std::move(on_complete);
@@ -371,6 +372,14 @@ int main()
     require(chat.remove_model("writer"), "The chat app must remove a downloaded model through the service.");
     require(application.execute_command(chat.new_chat_command()), "New conversation must dispatch through the command registry.");
     require(chat.messages().empty(), "New conversation must clear the application-owned conversation state.");
+    require(chat.submit_prompt("Retire me"), "A prompt must start before a new conversation can cancel it.");
+    require(application.execute_command(chat.new_chat_command()),
+            "Starting a new conversation must cancel the active response through the command registry.");
+    require(responses.cancelled(), "Starting a new conversation must delegate cancellation to the response service.");
+    require(!chat.submit_prompt("Too early"),
+            "The chat app must wait for a cancelled worker to finish before starting another response.");
+    responses.complete(true);
+    application.step(0);
     require(chat.submit_prompt("Cancel me"), "A new prompt must start after completion.");
     require(responses.request().model_id == "local", "The active model identifier must travel with every response request.");
     require(application.execute_command(chat.cancel_command()), "Cancellation must dispatch through the command registry.");

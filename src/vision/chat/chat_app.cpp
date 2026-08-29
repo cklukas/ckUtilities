@@ -140,8 +140,12 @@ void ChatApp::create_window()
 
 bool ChatApp::submit_prompt(std::string prompt)
 {
-    if (prompt.empty() || response_pending_)
+    if (prompt.empty() || response_pending_ || response_service_.running())
+    {
+        if (response_service_.running() && window_ != nullptr)
+            window_->set_footer("Wait for the active response to finish cancelling before sending another prompt.");
         return false;
+    }
     const std::optional<ChatSystemPrompt> active_prompt = prompt_service_.active_prompt();
     const std::optional<ChatModel> active_model = model_service_.active_model();
     if (!active_model)
