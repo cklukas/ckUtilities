@@ -61,15 +61,33 @@ void EditApp::create_editor_window()
     window->set_grow_policy(ckv::widgets::DesktopGrowPolicy::KeepFilling);
     window->editor().set_show_line_numbers(true);
     window->close_request = [this] {
+        if (closing_after_explicit_choice_)
+            return true;
         if (window_ == nullptr || !window_->controller().modified())
             return true;
-        show_message(ckv::widgets::MessageBoxKind::Warning, "Unsaved document",
-                     "Save or discard changes before closing the editor.");
+        show_close_confirmation();
         return false;
     };
     window->on_closed = [this] { close_editor_window(); };
     window_ = static_cast<ckv::widgets::EditorWindow *>(shell_->desktop().add_window(std::move(window)));
     application_.set_focus(&window_->editor());
+}
+
+bool EditApp::request_close(ckv::widgets::EditorCloseChoice choice)
+{
+    if (window_ == nullptr)
+        return true;
+    const auto result = window_->request_close(choice);
+    if (result != ckv::widgets::EditorFileStatus::Ok)
+    {
+        if (choice != ckv::widgets::EditorCloseChoice::Cancel)
+            show_message(ckv::widgets::MessageBoxKind::Error, "Close document", status_message(result));
+        return false;
+    }
+    closing_after_explicit_choice_ = true;
+    const bool closed = window_->close();
+    closing_after_explicit_choice_ = false;
+    return closed;
 }
 
 void EditApp::close_editor_window()
@@ -80,6 +98,33 @@ void EditApp::close_editor_window()
     window_ = nullptr;
     shell_->desktop().remove_window(closing);
     application_.request_quit();
+}
+
+void EditApp::show_close_confirmation()
+{
+    if (window_ == nullptr || !window_->controller().modified())
+        return;
+    close_confirmation_.reset();
+    close_confirmation_.emplace(ckv::widgets::present_message_box(
+        application_, shell_->desktop(), shell_->roles(),
+        {ckv::widgets::MessageBoxKind::Warning,
+         "Unsaved document",
+         "Save changes before closing? Choose No to discard the unsaved changes.",
+         ckv::widgets::MessageBoxButtons::YesNoCancel}));
+    close_confirmation_->set_completion_handler([this](ckv::widgets::MessageBoxResult result) {
+        switch (result)
+        {
+        case ckv::widgets::MessageBoxResult::Yes:
+            request_close(ckv::widgets::EditorCloseChoice::Save);
+            break;
+        case ckv::widgets::MessageBoxResult::No:
+            request_close(ckv::widgets::EditorCloseChoice::Discard);
+            break;
+        case ckv::widgets::MessageBoxResult::Ok:
+        case ckv::widgets::MessageBoxResult::Cancel:
+            break;
+        }
+    });
 }
 
 bool EditApp::open_file(const std::string &path)
@@ -131,6 +176,11 @@ void EditApp::show_save_as_dialog()
         if (status != ckv::widgets::EditorFileStatus::Ok)
             show_message(ckv::widgets::MessageBoxKind::Error, "Save document", status_message(status));
     });
+}
+
+ckv::widgets::EditorDocument &EditApp::document() noexcept
+{
+    return *document_;
 }
 
 const ckv::widgets::EditorDocument &EditApp::document() const noexcept

@@ -65,10 +65,12 @@ Historical application baseline: `legacy_tv`
   analysis, import/export, and cross-app reload remain contingent on a
   ckVision-native keymap design.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
-  injected file service for native open/save/save-as workflows. The Markdown
-  analyzer now builds as a framework-independent `ck_markdown_core` target.
-  Markdown transformations, profiles, and conflict/close workflows remain
-  the next slices.
+  injected file service for native open/save/save-as workflows. Dirty-window
+  close now presents an explicit Save/Discard/Cancel decision and invokes the
+  file controller's typed close contract before allowing teardown. The
+  Markdown analyzer now builds as a framework-independent `ck_markdown_core`
+  target. Markdown transformations, profiles, and richer external-conflict
+  resolution remain the next slices.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to

@@ -23,6 +23,8 @@ public:
     EditApp(ckv::ui::Application &application, ckv::FileSystem &files);
 
     bool open_file(const std::string &path);
+    bool request_close(ckv::widgets::EditorCloseChoice choice);
+    ckv::widgets::EditorDocument &document() noexcept;
     const ckv::widgets::EditorDocument &document() const noexcept;
     std::string path() const;
     ckv::ui::CommandId open_command() const noexcept { return open_command_; }
@@ -34,6 +36,7 @@ private:
     SuiteShellOptions make_shell_options() const;
     void create_editor_window();
     void close_editor_window();
+    void show_close_confirmation();
     void open_file_dialog();
     void save();
     void show_save_as_dialog();
@@ -51,6 +54,8 @@ private:
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
+    std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
+    bool closing_after_explicit_choice_ = false;
 };
 
 } // namespace ck::vision

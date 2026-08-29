@@ -11,7 +11,7 @@ dependencies; it does not mix ckVision with Turbo Vision in the same process.
 | Find | `ck-find-ckvision` | guided specification form, command preview, save/load, background non-destructive execution, and cancellation | destructive action confirmation and parity acceptance |
 | Disk usage | `ck-du-ckvision` | background cancellable snapshot scan, tree, selected-directory table | file lists, cloud actions, parity acceptance |
 | Config | `ck-config-ckvision` | injected option registry inspect/edit/reset/save/reload | keymap capture/conflicts, import/export, cross-app reload |
-| Edit | `ck-edit-ckvision` | native document open/save/save-as | Markdown transactions/profiles, conflict and close decisions |
+| Edit | `ck-edit-ckvision` | native document open/save/save-as and dirty Save/Discard/Cancel close | Markdown transactions/profiles, richer conflict resolution |
 | Chat | `ck-chat-ckvision` | FlowView transcript, prompt, streaming/cancel/copy, injected worker response service | Markdown, models/prompts, richer progress |
 
 The exact package and integration-candidate state are recorded in
