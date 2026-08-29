@@ -89,7 +89,11 @@ Historical application baseline: `legacy_tv`
   is carried in every response request. The adapter now owns cancellable
   background downloads behind a cached catalog, so rate-limited typed progress
   and completion reach the UI without racing `ModelManager` or retaining view
-  pointers. Model runtime loading remains the next slice.
+  pointers. The production response adapter now opens the activated local
+  `ckai_core` model on its own worker, streams cancellable generation back
+  through the existing lifetime gate, and prevents model lifecycle changes
+  while a response is active. Long-session/runtime performance evidence remains
+  before acceptance.
 - All seven native executables build together against the installed ckVision
   candidate SDK and their headless suite, JSON-domain, and architecture tests
   pass as one 14-test checkpoint. The legacy executables remain deliberately
