@@ -25,7 +25,8 @@ int main(int argc, char **argv)
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
     ck::vision::ThreadedDiskUsageScanService scan_service;
-    ck::vision::DiskUsageApp disk_usage(application, scan_service, path, std::move(options));
+    ck::vision::ThreadedDiskUsageFileListService file_list_service;
+    ck::vision::DiskUsageApp disk_usage(application, scan_service, file_list_service, path, std::move(options));
     application.run();
     return 0;
 }

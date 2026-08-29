@@ -73,4 +73,67 @@ bool ThreadedDiskUsageScanService::running() const noexcept
     return running_.load(std::memory_order_acquire);
 }
 
+ThreadedDiskUsageFileListService::~ThreadedDiskUsageFileListService()
+{
+    cancel();
+    std::scoped_lock lock(mutex_);
+    if (worker_.joinable())
+        worker_.join();
+}
+
+void ThreadedDiskUsageFileListService::start(std::filesystem::path directory,
+                                             bool recursive,
+                                             ck::du::BuildDirectoryTreeOptions options,
+                                             CompletionHandler on_complete)
+{
+    cancel();
+
+    std::jthread previous;
+    {
+        std::scoped_lock lock(mutex_);
+        previous = std::move(worker_);
+    }
+    if (previous.joinable())
+        previous.join();
+
+    auto cancellation = std::make_shared<std::atomic_bool>(false);
+    const auto original_cancellation = std::move(options.cancelRequested);
+    options.cancelRequested = [cancellation, original_cancellation] {
+        return cancellation->load(std::memory_order_acquire) ||
+               (original_cancellation && original_cancellation());
+    };
+    running_.store(true, std::memory_order_release);
+    std::jthread worker([this, cancellation, directory = std::move(directory), recursive, options = std::move(options),
+                         on_complete = std::move(on_complete)]() mutable {
+        DiskUsageFileListResult result;
+        result.files = ck::du::listFiles(directory, recursive, options);
+        result.cancelled = cancellation->load(std::memory_order_acquire);
+        running_.store(false, std::memory_order_release);
+        if (on_complete)
+            on_complete(std::move(result));
+    });
+
+    {
+        std::scoped_lock lock(mutex_);
+        cancellation_ = std::move(cancellation);
+        worker_ = std::move(worker);
+    }
+}
+
+void ThreadedDiskUsageFileListService::cancel() noexcept
+{
+    std::shared_ptr<std::atomic_bool> cancellation;
+    {
+        std::scoped_lock lock(mutex_);
+        cancellation = cancellation_;
+    }
+    if (cancellation)
+        cancellation->store(true, std::memory_order_release);
+}
+
+bool ThreadedDiskUsageFileListService::running() const noexcept
+{
+    return running_.load(std::memory_order_acquire);
+}
+
 } // namespace ck::vision

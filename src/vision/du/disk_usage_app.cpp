@@ -37,9 +37,14 @@ DiskUsageApp::DiskUsageApp(ckv::ui::Application &application, ck::du::BuildDirec
 
 DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
                            DiskUsageScanService &scan_service,
+                           DiskUsageFileListService &file_list_service,
                            std::filesystem::path root,
                            ck::du::BuildDirectoryTreeOptions options)
-    : application_(application), scan_service_(&scan_service), scan_root_(std::move(root)), scan_options_(std::move(options))
+    : application_(application),
+      scan_service_(&scan_service),
+      file_list_service_(&file_list_service),
+      scan_root_(std::move(root)),
+      scan_options_(std::move(options))
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -52,6 +57,8 @@ DiskUsageApp::~DiskUsageApp()
     lifetime_.reset();
     if (scan_service_ != nullptr)
         scan_service_->cancel();
+    if (file_list_service_ != nullptr)
+        file_list_service_->cancel();
 }
 
 void DiskUsageApp::declare_commands()
@@ -64,6 +71,10 @@ void DiskUsageApp::declare_commands()
         .key = "ck.du.cancel_scan", .title = "&Cancel scan", .category = "Disk usage", .chord = "Ctrl+C",
         .visibility = ckv::ui::CommandVisibility::Palette,
         .handler = [this] { cancel_scan(); }});
+    view_files_command_ = application_.commands().declare({
+        .key = "ck.du.view_files", .title = "&View files", .category = "Disk usage", .chord = "Enter",
+        .visibility = ckv::ui::CommandVisibility::Palette,
+        .handler = [this] { view_selected_files(); }});
 }
 
 SuiteShellOptions DiskUsageApp::make_shell_options() const
@@ -74,10 +85,12 @@ SuiteShellOptions DiskUsageApp::make_shell_options() const
         .application_menus = {ckv::widgets::MenuBarItem{"&Scan", {
             ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}),
             ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel scan"}),
+            ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{view_files_command_, "&View files"}),
         }}},
         .application_status_items = {
             ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{rescan_command_, "&Rescan"}, 30},
             ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_scan_command_, "&Cancel"}, 30},
+            ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{view_files_command_, "&Files"}, 25},
         },
     };
 }
@@ -149,14 +162,21 @@ void DiskUsageApp::cancel_scan()
             window_->set_footer("No scan service was provided for this supplied snapshot.");
         return;
     }
-    if (!scan_service_->running())
+    if (scan_service_->running())
     {
-        if (window_ != nullptr)
-            window_->set_footer("There is no running disk-usage scan to cancel.");
+        scan_service_->cancel();
+        show_scan_state("Cancellation requested. The scan will stop at its next filesystem boundary.");
         return;
     }
-    scan_service_->cancel();
-    show_scan_state("Cancellation requested. The scan will stop at its next filesystem boundary.");
+    if (file_list_service_ != nullptr && file_list_service_->running())
+    {
+        file_list_service_->cancel();
+        if (window_ != nullptr)
+            window_->set_footer("Cancellation requested for the file list.");
+        return;
+    }
+    if (window_ != nullptr)
+        window_->set_footer("There is no running disk-usage operation to cancel.");
 }
 
 void DiskUsageApp::complete_scan(ck::du::BuildDirectoryTreeResult snapshot)
@@ -176,6 +196,70 @@ void DiskUsageApp::complete_scan(ck::du::BuildDirectoryTreeResult snapshot)
     rebuild_snapshot_view();
 }
 
+void DiskUsageApp::view_selected_files()
+{
+    const ck::du::DirectoryNode *selected = selected_directory();
+    if (selected == nullptr)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Select a directory before viewing its files.");
+        return;
+    }
+    if (file_list_service_ == nullptr)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("No file-list service was provided for this snapshot.");
+        return;
+    }
+    if (file_list_service_->running())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("A file list is already being built.");
+        return;
+    }
+
+    const std::filesystem::path directory = selected->path;
+    if (window_ != nullptr)
+        window_->set_footer("Listing files in " + directory.string());
+    const std::weak_ptr<void> lifetime = lifetime_;
+    file_list_service_->start(directory, false, scan_options_,
+                              [this, lifetime, directory](DiskUsageFileListResult result) mutable {
+                                  auto delivered = std::make_shared<DiskUsageFileListResult>(std::move(result));
+                                  application_.post([this, lifetime, directory, delivered] {
+                                      if (lifetime.expired())
+                                          return;
+                                      complete_file_list(std::move(*delivered), directory);
+                                  });
+                              });
+}
+
+void DiskUsageApp::complete_file_list(DiskUsageFileListResult result, std::filesystem::path directory)
+{
+    if (result.cancelled)
+    {
+        if (window_ != nullptr)
+            window_->set_footer("File list cancelled for " + directory.string());
+        return;
+    }
+
+    auto window = std::make_unique<ckv::widgets::Window>("Files: " + directory.string());
+    window->set_bounds(shell_->desktop().content_area());
+    window->set_min_size(ckv::Size{68, 16});
+    auto table = std::make_unique<ckv::widgets::Table>();
+    table->set_columns({{"Path", 42, 12}, {"Size", 14, 8}, {"Modified", 18, 10}, {"Cloud", 16, 8}});
+    std::vector<std::vector<std::string>> rows;
+    rows.reserve(result.files.size());
+    for (const auto &file : result.files)
+    {
+        rows.push_back({file.displayPath, ck::du::formatSize(file.size), file.modified,
+                        file.iCloudStatus.empty() ? "Local" : file.iCloudStatus});
+    }
+    table->set_rows(std::move(rows));
+    window->set_content(std::move(table));
+    window->set_footer(std::to_string(result.files.size()) + " files");
+    shell_->desktop().add_window(std::move(window));
+}
+
 void DiskUsageApp::rebuild_snapshot_view()
 {
     if (window_ == nullptr || snapshot_.root == nullptr)
@@ -192,7 +276,9 @@ void DiskUsageApp::rebuild_snapshot_view()
     };
     std::vector<ckv::widgets::TreeNode> roots;
     roots.push_back(make_tree_node(*snapshot_.root));
+    const std::uint64_t root_id = roots.front().id;
     tree_->set_roots(std::move(roots));
+    tree_->reveal_and_select(root_id);
 
     auto table = std::make_unique<ckv::widgets::Table>();
     table_ = table.get();

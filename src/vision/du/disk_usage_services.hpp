@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "disk_usage_core.hpp"
 
@@ -42,6 +43,49 @@ public:
     void start(std::filesystem::path root,
                ck::du::BuildDirectoryTreeOptions options,
                ProgressHandler on_progress,
+               CompletionHandler on_complete) override;
+    void cancel() noexcept override;
+    bool running() const noexcept override;
+
+private:
+    mutable std::mutex mutex_;
+    std::jthread worker_;
+    std::shared_ptr<std::atomic_bool> cancellation_;
+    std::atomic_bool running_{false};
+};
+
+struct DiskUsageFileListResult
+{
+    std::vector<ck::du::FileEntry> files;
+    bool cancelled = false;
+};
+
+// Separate capability because file enumeration is a different user operation
+// from aggregation.  Keeping the two operations explicit prevents a table
+// request from silently sharing or taking over the active tree scan.
+class DiskUsageFileListService
+{
+public:
+    using CompletionHandler = std::function<void(DiskUsageFileListResult)>;
+
+    virtual ~DiskUsageFileListService() = default;
+
+    virtual void start(std::filesystem::path directory,
+                       bool recursive,
+                       ck::du::BuildDirectoryTreeOptions options,
+                       CompletionHandler on_complete) = 0;
+    virtual void cancel() noexcept = 0;
+    virtual bool running() const noexcept = 0;
+};
+
+class ThreadedDiskUsageFileListService final : public DiskUsageFileListService
+{
+public:
+    ~ThreadedDiskUsageFileListService() override;
+
+    void start(std::filesystem::path directory,
+               bool recursive,
+               ck::du::BuildDirectoryTreeOptions options,
                CompletionHandler on_complete) override;
     void cancel() noexcept override;
     bool running() const noexcept override;

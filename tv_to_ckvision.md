@@ -54,8 +54,10 @@ Historical application baseline: `legacy_tv`
   root now starts immediately and delegates scanning to an injected joinable
   service; progress and completion cross back to the UI through
   `Application::post()` behind a teardown lifetime gate, and cancellation is
-  propagated into the existing scan-core cancellation probe. File lists and
-  cloud actions remain the next slices.
+  propagated into the existing scan-core cancellation probe. Selected-directory
+  file inspection now uses a separate injected, cancellable file-list service
+  and native Table window, so aggregation and enumeration never compete for
+  one implicit worker. Cloud actions remain the next slice.
 - WP-7: `ck-config-ckvision` accepts an injected option registry and exposes
   a native provider-backed table with typed edit/reset commands keyed by the
   option's stable string name. Save and reload are now registry commands
