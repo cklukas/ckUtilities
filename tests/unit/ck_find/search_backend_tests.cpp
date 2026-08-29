@@ -70,6 +70,7 @@ TEST(SearchBackend, ExecutesSpecificationWithoutExternalFind)
 
     auto result = ck::find::executeSpecification(spec, options, nullptr, nullptr);
     EXPECT_EQ(result.exitCode, 0);
+    EXPECT_EQ(result.matchCount, 1u);
     ASSERT_EQ(result.matches.size(), 1u);
     EXPECT_EQ(result.matches.front(), textFile);
 
@@ -101,6 +102,7 @@ TEST(SearchBackend, ReportsCancellationAtTraversalBoundaries)
     auto result = ck::find::executeSpecification(spec, options, nullptr, nullptr);
     EXPECT_TRUE(result.cancelled);
     EXPECT_EQ(result.exitCode, 130);
+    EXPECT_EQ(result.matchCount, 1u);
     EXPECT_LE(result.matches.size(), 1u);
 
     fs::remove_all(tempDir);

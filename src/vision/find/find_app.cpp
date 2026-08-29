@@ -24,12 +24,26 @@ using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
 }
 
-FindApp::FindApp(ckv::ui::Application &application)
-    : application_(application), specification_(ck::find::makeDefaultSpecification())
+FindApp::FindApp(ckv::ui::Application &application,
+                 FindSpecificationStore &specification_store,
+                 FindExecutionService &execution_service)
+    : application_(application),
+      specification_store_(specification_store),
+      execution_service_(execution_service),
+      specification_(ck::find::makeDefaultSpecification())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     show_preview();
+}
+
+FindApp::~FindApp()
+{
+    // Completion callbacks are posted from a worker.  Expire their gate
+    // before requesting cancellation so an already queued callback cannot
+    // access a presentation tree being torn down.
+    lifetime_.reset();
+    execution_service_.cancel();
 }
 
 void FindApp::declare_commands()
@@ -40,19 +54,39 @@ void FindApp::declare_commands()
     preview_command_ = application_.commands().declare(CommandDescriptor{
         .key = "ck.find.preview_command", .title = "&Preview command", .category = "Find", .chord = "F5",
         .visibility = CommandVisibility::Palette, .handler = [this] { show_preview(); }});
+    save_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.find.save_search", .title = "&Save search...", .category = "Find", .chord = "Ctrl+S",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_save_dialog(); }});
+    load_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.find.load_search", .title = "&Load saved search...", .category = "Find", .chord = "Ctrl+O",
+        .visibility = CommandVisibility::Palette, .handler = [this] { show_load_dialog(); }});
+    execute_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.find.execute_search", .title = "&Run search", .category = "Find", .chord = "F9",
+        .visibility = CommandVisibility::Palette, .handler = [this] { start_execution(); }});
+    cancel_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.find.cancel_search", .title = "&Cancel search", .category = "Find", .chord = "Ctrl+C",
+        .visibility = CommandVisibility::Palette, .handler = [this] { cancel_execution(); }});
 }
 
 SuiteShellOptions FindApp::make_shell_options() const
 {
     return {.application_name = "ck Find",
-            .about_text = "A native ckVision front end for building and previewing reusable file-search specifications.",
+            .about_text = "A native ckVision front end for saving, previewing, and safely running reusable file-search specifications.",
             .application_menus = {MenuBarItem{"&Search", {
                 MenuItem::command(CommandPresentation{new_search_command_, "&New search..."}),
+                MenuItem::command(CommandPresentation{save_command_, "&Save search..."}),
+                MenuItem::command(CommandPresentation{load_command_, "&Load saved search..."}),
                 MenuItem::command(CommandPresentation{preview_command_, "&Preview command"}),
+                MenuItem::command(CommandPresentation{execute_command_, "&Run search"}),
+                MenuItem::command(CommandPresentation{cancel_command_, "&Cancel search"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{new_search_command_, "&New"}, 30},
+                StatusLineItem{CommandPresentation{save_command_, "&Save"}, 30},
+                StatusLineItem{CommandPresentation{load_command_, "&Load"}, 30},
                 StatusLineItem{CommandPresentation{preview_command_, "&Preview"}, 25},
+                StatusLineItem{CommandPresentation{execute_command_, "&Run"}, 25},
+                StatusLineItem{CommandPresentation{cancel_command_, "&Cancel"}, 30},
             }};
 }
 
@@ -165,6 +199,78 @@ void FindApp::show_guided_search_dialog()
     });
 }
 
+void FindApp::show_save_dialog()
+{
+    search_dialog_.reset();
+    const std::string current_name = ck::find::normaliseSpecificationName(ck::find::bufferToString(specification_.specName));
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Save search";
+    dialog.fields.push_back({"&Name:", current_name.empty() ? "Unnamed" : current_name,
+                             [](const std::string &value) {
+                                 return !ck::find::normaliseSpecificationName(value).empty();
+                             }});
+    dialog.buttons.push_back({"&Save", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    search_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 1)
+            return;
+        const std::string name = ck::find::normaliseSpecificationName(result.values.front());
+        if (name.empty())
+            return;
+
+        ck::find::SearchSpecification saved = specification_;
+        ck::find::copyToArray(saved.specName, name.c_str());
+        if (!specification_store_.save(saved, name))
+        {
+            present_text_window("Save search", "The saved-search store could not save '" + name + "'.");
+            return;
+        }
+        specification_ = std::move(saved);
+        present_text_window("Save search", "Saved search specification '" + name + "'.");
+    });
+}
+
+void FindApp::show_load_dialog()
+{
+    const auto saved = specification_store_.list();
+    if (saved.empty())
+    {
+        present_text_window("Load saved search", "No saved search specifications are available.");
+        return;
+    }
+
+    std::ostringstream choices;
+    choices << "Available saved searches:\n";
+    for (const auto &item : saved)
+        choices << "  " << item.name << '\n';
+    present_text_window("Saved searches", choices.str());
+
+    search_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Load saved search";
+    dialog.fields.push_back({"&Name:", saved.front().name,
+                             [](const std::string &value) {
+                                 return !ck::find::normaliseSpecificationName(value).empty();
+                             }});
+    dialog.buttons.push_back({"&Load", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    search_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 1)
+            return;
+        const std::string name = ck::find::normaliseSpecificationName(result.values.front());
+        if (const auto loaded = specification_store_.load(name))
+        {
+            specification_ = *loaded;
+            show_preview();
+            present_text_window("Load saved search", "Loaded search specification '" + name + "'.");
+            return;
+        }
+        present_text_window("Load saved search", "No saved search specification named '" + name + "' was found.");
+    });
+}
+
 std::string FindApp::command_preview() const
 {
     const auto command = ck::find::buildFindCommand(specification_, true);
@@ -181,6 +287,61 @@ std::string FindApp::command_preview() const
 void FindApp::show_preview()
 {
     present_text_window("Find command preview", command_preview());
+}
+
+void FindApp::start_execution()
+{
+    if (execution_service_.running())
+    {
+        present_text_window("Find execution", "A search is already running. Use Cancel search before starting another.");
+        return;
+    }
+
+    last_execution_result_.reset();
+    const std::weak_ptr<void> lifetime = lifetime_;
+    execution_service_.start(specification_, [this, lifetime](ck::find::SearchExecutionResult result) mutable {
+        application_.post([this, lifetime, result = std::move(result)]() mutable {
+            if (lifetime.expired())
+                return;
+            complete_execution(std::move(result));
+        });
+    });
+    present_text_window("Find execution", "Search is running. The search stays non-destructive; action mutations require their own confirmation workflow.");
+}
+
+void FindApp::cancel_execution()
+{
+    if (!execution_service_.running())
+    {
+        present_text_window("Find execution", "There is no running search to cancel.");
+        return;
+    }
+    execution_service_.cancel();
+    present_text_window("Find execution", "Cancellation requested. The search will stop at its next traversal boundary.");
+}
+
+void FindApp::complete_execution(ck::find::SearchExecutionResult result)
+{
+    std::ostringstream output;
+    if (result.cancelled)
+        output << "Search cancelled after " << result.matchCount << " match(es).\n";
+    else if (result.exitCode == 0)
+        output << "Search completed with " << result.matchCount << " match(es).\n";
+    else
+        output << "Search completed with exit code " << result.exitCode << " after " << result.matchCount << " match(es).\n";
+
+    for (const auto &match : result.matches)
+        output << match.string() << '\n';
+    if (result.matchCount > result.matches.size())
+        output << "Only the first " << result.matches.size() << " match(es) are displayed.\n";
+
+    last_execution_result_ = result;
+    present_text_window("Find results", output.str());
+}
+
+bool FindApp::execution_running() const noexcept
+{
+    return execution_service_.running();
 }
 
 void FindApp::present_text_window(std::string title, std::string content)

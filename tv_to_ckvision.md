@@ -38,13 +38,17 @@ Historical application baseline: `legacy_tv`
   validated radio-form dialog and presents the selected palette values without
   a suite-specific widget. The initial launcher conversion is complete; its
   workflow-depth, resizing, and input coverage will grow with release gates.
-- WP-5: `ck-find-ckvision` is an initial native search-specification slice.
-  It keeps the specification and command-plan generation in the framework-
-  independent search core, exposes command-registry actions for a validated,
-  scrolling guided form and command preview, and renders under a headless
-  terminal. The form round-trips the guided location, text, pattern,
-  traversal, type, date, size, permission, and action state. Saved
-  specifications and injected command execution are the next slices.
+- WP-5: `ck-find-ckvision` keeps the specification and command-plan generation
+  in the framework-independent search core, exposes command-registry actions
+  for a validated scrolling guided form and command preview, and now saves,
+  loads, runs, and cancels searches through injected storage and execution
+  services. The production execution adapter uses a joinable worker and the
+  search core's explicit traversal-boundary cancellation probe; its callbacks
+  are marshalled back to the UI thread through `Application::post()` behind a
+  teardown lifetime gate. Interactive execution is intentionally
+  non-destructive and bounds rendered matches to 200, while preserving the
+  full match count. Confirmation workflows for destructive action mutations
+  remain the next slice.
 - WP-6: `ck-du-ckvision` now accepts an application-owned directory-scan
   snapshot and maps it into a native TreeView plus selected-directory Table.
   The initial executable performs its scan in the composition root before

@@ -2552,7 +2552,9 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
         (*forwardStderr) << "ck-find: owner/group permission filters are not yet supported in the builtin engine.\n";
 
     auto recordMatch = [&](const std::filesystem::path &path) {
-        if (options.captureMatches)
+        ++result.matchCount;
+        if (options.captureMatches &&
+            (options.maxCapturedMatches == 0 || result.matches.size() < options.maxCapturedMatches))
             result.matches.push_back(path);
         if (options.on_match)
             options.on_match(path);

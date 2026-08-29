@@ -8,7 +8,7 @@ dependencies; it does not mix ckVision with Turbo Vision in the same process.
 |---|---|---|---|
 | Utilities launcher | `ck-utilities-ckvision` | launcher, calendar, ASCII table, calculator, color selector, bounded diagnostics | failure/repeat-window interaction coverage and release acceptance |
 | JSON view | `ck-json-view-ckvision` | open, tree navigation, find, copy, expansion | large/provider-backed tree measurement and final cutover |
-| Find | `ck-find-ckvision` | guided specification form and command preview | saved specs, process execution, cancellation, parity acceptance |
+| Find | `ck-find-ckvision` | guided specification form, command preview, save/load, background non-destructive execution, and cancellation | destructive action confirmation and parity acceptance |
 | Disk usage | `ck-du-ckvision` | application-owned scan snapshot, tree, selected-directory table | injected asynchronous scans, cancellation, files, cloud actions |
 | Config | `ck-config-ckvision` | injected option registry inspect/edit/reset | persistence, keymap capture/conflicts, import/export, reload |
 | Edit | `ck-edit-ckvision` | native document open/save/save-as | Markdown transactions/profiles, conflict and close decisions |

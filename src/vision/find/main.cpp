@@ -9,6 +9,9 @@ int main()
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
-    ck::vision::FindApp find(application);
+    ck::vision::CoreFindSpecificationStore specifications;
+    ck::vision::ThreadedFindExecutionService execution;
+    ck::vision::FindApp find(application, specifications, execution);
     application.run();
+    return 0;
 }

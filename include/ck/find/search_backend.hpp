@@ -2,6 +2,7 @@
 
 #include "ck/find/search_model.hpp"
 
+#include <cstddef>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -24,6 +25,10 @@ struct SearchExecutionOptions
     bool includeActions = true;
     bool captureMatches = false;
     bool filterContent = true;
+    // Zero keeps the historical unbounded capture behavior.  Interactive
+    // callers should set a finite value and use SearchExecutionResult::matchCount
+    // for the complete count.
+    std::size_t maxCapturedMatches = 0;
 
     // The search core deliberately owns no worker or UI lifetime.  A caller
     // can provide this inexpensive polling probe to stop a long traversal at
@@ -39,6 +44,7 @@ struct SearchExecutionResult
 {
     int exitCode = 0;
     bool cancelled = false;
+    std::size_t matchCount = 0;
     std::vector<std::filesystem::path> matches;
     std::vector<std::string> command;
 };
