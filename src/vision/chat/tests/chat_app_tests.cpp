@@ -314,6 +314,8 @@ int main()
                 responses.request().system_prompt == "Keep responses clear." && responses.request().model_id == "local" &&
                 chat.response_running(),
             "The native chat app must delegate prompts to the injected streaming service.");
+    require(!chat.activate_model("writer"),
+            "Model lifecycle changes must be rejected while a response is running on the active model.");
     responses.emit("**Echo** ");
     responses.emit("[Hello](https://example.com)");
     application.step(0);
