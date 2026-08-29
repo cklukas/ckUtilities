@@ -72,8 +72,11 @@ Historical application baseline: `legacy_tv`
   file controller's typed close contract before allowing teardown. The
   Markdown analyzer now builds as a framework-independent `ck_markdown_core`
   target and supplies an application-owned Markdown syntax profile through
-  ckVision's documented profile registry. Markdown transformations and richer
-  external-conflict resolution remain the next slices.
+  ckVision's documented profile registry. A conservative Markdown-whitespace
+  normalization command now commits one revision-bound document transaction,
+  preserving two-space hard breaks while removing accidental whitespace.
+  Broader Markdown transformations and richer external-conflict resolution
+  remain the next slices.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
