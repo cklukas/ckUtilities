@@ -20,8 +20,12 @@ if(UNIX)
   target_compile_features(ckdu_ckvision PRIVATE cxx_std_20)
   target_include_directories(ckdu_ckvision PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
   target_link_libraries(ckdu_ckvision PRIVATE ck_vision_du ck_vision_keymap)
+  set(_ckvision_du_output "ck-du-ckvision")
+  if(CKTOOLS_CKVISION_CUTOVER)
+    set(_ckvision_du_output "ck-du")
+  endif()
   set_target_properties(ckdu_ckvision PROPERTIES
-    OUTPUT_NAME "ck-du-ckvision"
+    OUTPUT_NAME "${_ckvision_du_output}"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckdu_ckvision RUNTIME DESTINATION bin)

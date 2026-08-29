@@ -60,6 +60,7 @@ function(cktools_add_ckvision_install_verification)
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_BINARY_DIR=${PROJECT_BINARY_DIR}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
+      "-DCKTOOLS_CKVISION_CUTOVER=${CKTOOLS_CKVISION_CUTOVER}"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionInstall.cmake"
     USES_TERMINAL
     COMMENT "Install and smoke-test every native ckVision executable")

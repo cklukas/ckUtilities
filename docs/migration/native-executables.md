@@ -19,3 +19,9 @@ The exact package and integration-candidate state are recorded in
 [the traceability ledger](traceability.md). This document does not authorize
 removing the legacy runtime: that occurs only when each remaining journey has
 accepted evidence under WP-10.
+
+`CKTOOLS_CKVISION_CUTOVER=ON` is the release-layout rehearsal: it composes
+only these native products and framework-neutral cores, publishes the standard
+product names, and excludes the legacy UI runtime from configuration and
+installation. It remains opt-in while the selected ckVision candidate awaits
+trunk acceptance and a CI-consumable installed package.

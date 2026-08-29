@@ -68,6 +68,25 @@ and starts each ckVision-native executable with `--help`. It verifies the
 release artifact's executable layout and its relative runtime-library lookup;
 it does not replace the full workflow or platform acceptance suites.
 
+## Cutover rehearsal
+
+`CKTOOLS_CKVISION_CUTOVER=ON` builds only the framework-neutral cores and
+ckVision-native executables. In that configuration the seven product binaries
+use their production names (`ck-utilities`, `ck-json-view`, `ck-find`,
+`ck-du`, `ck-config`, `ck-edit`, and `ck-chat`), and the build neither
+configures nor installs the legacy UI runtime. It remains an explicit rehearsal
+switch until this candidate is accepted on ckVision trunk and can be supplied
+to CI as an installed package.
+
+```sh
+cmake -S . -B build/cutover \
+  -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
+cmake --build build/cutover
+ctest --test-dir build/cutover --output-on-failure
+```
+
 ## Pin update rule
 
 Raise this baseline only after the requested ckVision change is complete in

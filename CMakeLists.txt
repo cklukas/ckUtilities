@@ -31,6 +31,15 @@ option(CKTOOLS_ENABLE_CKVISION_MIGRATION
        "Build the ckVision-native migration targets"
        OFF)
 
+option(CKTOOLS_CKVISION_CUTOVER
+       "Build only the ckVision-native product layout under production names"
+       OFF)
+
+if(CKTOOLS_CKVISION_CUTOVER)
+  set(CKTOOLS_ENABLE_CKVISION_MIGRATION ON CACHE BOOL
+      "Build the ckVision-native migration targets" FORCE)
+endif()
+
 if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
   cktools_require_ckvision()
 endif()
@@ -53,11 +62,19 @@ cktools_add_ui_boundary_check()
 cktools_add_ckvision_package_verification()
 cktools_add_ckvision_install_verification()
 
-add_subdirectory(src/tools)
-add_subdirectory(src/common)
-
-if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
+if(CKTOOLS_CKVISION_CUTOVER)
+  include(AddCkTool)
+  add_subdirectory(src/common)
+  add_subdirectory(src/native-core)
   add_subdirectory(src/vision)
+  add_subdirectory(src/tools/ck-win-installer)
+else()
+  add_subdirectory(src/tools)
+  add_subdirectory(src/common)
+
+  if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
+    add_subdirectory(src/vision)
+  endif()
 endif()
 
 if(BUILD_TESTING)

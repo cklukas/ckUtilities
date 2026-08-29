@@ -6,14 +6,25 @@ foreach(_cktools_required CKTOOLS_BINARY_DIR CKTOOLS_INSTALL_PREFIX)
   endif()
 endforeach()
 
-set(_cktools_native_executables
-    ck-utilities-ckvision
-    ck-json-view-ckvision
-    ck-find-ckvision
-    ck-du-ckvision
-    ck-config-ckvision
-    ck-edit-ckvision
-    ck-chat-ckvision)
+if(CKTOOLS_CKVISION_CUTOVER)
+  set(_cktools_native_executables
+      ck-utilities
+      ck-json-view
+      ck-find
+      ck-du
+      ck-config
+      ck-edit
+      ck-chat)
+else()
+  set(_cktools_native_executables
+      ck-utilities-ckvision
+      ck-json-view-ckvision
+      ck-find-ckvision
+      ck-du-ckvision
+      ck-config-ckvision
+      ck-edit-ckvision
+      ck-chat-ckvision)
+endif()
 
 file(REMOVE_RECURSE "${CKTOOLS_INSTALL_PREFIX}")
 

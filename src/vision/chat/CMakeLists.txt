@@ -7,8 +7,12 @@ if(UNIX)
   add_executable(ckchat_ckvision main.cpp)
   target_compile_features(ckchat_ckvision PRIVATE cxx_std_20)
   target_link_libraries(ckchat_ckvision PRIVATE ck_vision_chat ck_vision_keymap)
+  set(_ckvision_chat_output "ck-chat-ckvision")
+  if(CKTOOLS_CKVISION_CUTOVER)
+    set(_ckvision_chat_output "ck-chat")
+  endif()
   set_target_properties(ckchat_ckvision PROPERTIES
-    OUTPUT_NAME "ck-chat-ckvision"
+    OUTPUT_NAME "${_ckvision_chat_output}"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckchat_ckvision RUNTIME DESTINATION bin)

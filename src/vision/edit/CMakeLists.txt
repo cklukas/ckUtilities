@@ -7,8 +7,12 @@ if(UNIX)
   add_executable(ckedit_ckvision main.cpp)
   target_compile_features(ckedit_ckvision PRIVATE cxx_std_20)
   target_link_libraries(ckedit_ckvision PRIVATE ck_vision_edit ck_vision_keymap)
+  set(_ckvision_edit_output "ck-edit-ckvision")
+  if(CKTOOLS_CKVISION_CUTOVER)
+    set(_ckvision_edit_output "ck-edit")
+  endif()
   set_target_properties(ckedit_ckvision PROPERTIES
-    OUTPUT_NAME "ck-edit-ckvision"
+    OUTPUT_NAME "${_ckvision_edit_output}"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckedit_ckvision RUNTIME DESTINATION bin)

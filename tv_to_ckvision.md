@@ -137,6 +137,13 @@ Historical application baseline: `legacy_tv`
   runtime's relative shared-library lookup. The legacy executables remain
   deliberately separate while the outstanding workflow entries in the
   traceability ledger are completed.
+- `CKTOOLS_CKVISION_CUTOVER=ON` rehearses the release composition against the
+  installed candidate: only the framework-neutral cores and seven native
+  executables are configured, and the product binaries use their production
+  names without configuring or installing the legacy UI runtime. The complete
+  74-test cutover configuration, independent package consumer, and staged
+  installed-product smoke gate pass. It remains opt-in until the candidate is
+  accepted upstream and can be installed reproducibly in CI.
 
 ## 1. Mandate
 
@@ -729,6 +736,11 @@ Exit criteria:
   services before real model integration tests run.
 
 ### WP-10 — Legacy removal, packaging, and release acceptance
+
+Implementation state: a ckVision-only cutover configuration now exists and is
+verified against the installed integration candidate. It intentionally remains
+opt-in while that candidate awaits ckVision trunk acceptance; this avoids
+making a dirty checkout or an unlanded commit a production dependency.
 
 Deliverables:
 

@@ -27,8 +27,12 @@ if(UNIX)
     ${PROJECT_SOURCE_DIR}/src/tools/ck-utilities/include
   )
   target_link_libraries(ckutilities_ckvision PRIVATE ck_vision_launcher ck_vision_keymap)
+  set(_ckvision_launcher_output "ck-utilities-ckvision")
+  if(CKTOOLS_CKVISION_CUTOVER)
+    set(_ckvision_launcher_output "ck-utilities")
+  endif()
   set_target_properties(ckutilities_ckvision PROPERTIES
-    OUTPUT_NAME "ck-utilities-ckvision"
+    OUTPUT_NAME "${_ckvision_launcher_output}"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckutilities_ckvision RUNTIME DESTINATION bin)

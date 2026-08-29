@@ -13,8 +13,12 @@ if(UNIX)
   add_executable(ckfind_ckvision main.cpp)
   target_compile_features(ckfind_ckvision PRIVATE cxx_std_20)
   target_link_libraries(ckfind_ckvision PRIVATE ck_vision_find ck_vision_keymap)
+  set(_ckvision_find_output "ck-find-ckvision")
+  if(CKTOOLS_CKVISION_CUTOVER)
+    set(_ckvision_find_output "ck-find")
+  endif()
   set_target_properties(ckfind_ckvision PROPERTIES
-    OUTPUT_NAME "ck-find-ckvision"
+    OUTPUT_NAME "${_ckvision_find_output}"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckfind_ckvision RUNTIME DESTINATION bin)
