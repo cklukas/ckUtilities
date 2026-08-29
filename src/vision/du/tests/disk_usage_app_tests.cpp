@@ -52,10 +52,11 @@ class ManualScanService final : public ck::vision::DiskUsageScanService
 public:
     void start(std::filesystem::path,
                ck::du::BuildDirectoryTreeOptions,
-               ProgressHandler,
+               ProgressHandler on_progress,
                CompletionHandler on_complete) override
     {
         running_ = true;
+        on_progress_ = std::move(on_progress);
         on_complete_ = std::move(on_complete);
     }
 
@@ -68,11 +69,17 @@ public:
         on_complete_(std::move(snapshot));
     }
 
+    void report_progress(std::filesystem::path path)
+    {
+        on_progress_(path);
+    }
+
     bool cancelled() const noexcept { return cancelled_; }
 
 private:
     bool running_ = false;
     bool cancelled_ = false;
+    ProgressHandler on_progress_;
     CompletionHandler on_complete_;
 };
 
@@ -101,6 +108,7 @@ public:
 
     const std::filesystem::path &directory() const noexcept { return directory_; }
     bool recursive() const noexcept { return recursive_; }
+    bool cancelled() const noexcept { return cancelled_; }
 
 private:
     bool running_ = false;
@@ -121,12 +129,13 @@ public:
 
     void start(ck::vision::DiskUsageCloudAction action,
                std::filesystem::path target,
-               ProgressHandler,
+               ProgressHandler on_progress,
                CompletionHandler on_complete) override
     {
         running_ = true;
         action_ = action;
         target_ = std::move(target);
+        on_progress_ = std::move(on_progress);
         on_complete_ = std::move(on_complete);
     }
 
@@ -139,6 +148,11 @@ public:
         on_complete_(std::move(result));
     }
 
+    void report_progress(ck::vision::DiskUsageCloudProgress progress)
+    {
+        on_progress_(std::move(progress));
+    }
+
     bool cancelled() const noexcept { return cancelled_; }
     ck::vision::DiskUsageCloudAction action() const noexcept { return action_; }
     const std::filesystem::path &target() const noexcept { return target_; }
@@ -148,13 +162,93 @@ private:
     bool cancelled_ = false;
     ck::vision::DiskUsageCloudAction action_ = ck::vision::DiskUsageCloudAction::Download;
     std::filesystem::path target_;
+    ProgressHandler on_progress_;
     CompletionHandler on_complete_;
 };
+
+void verify_late_service_delivery_is_lifetime_safe()
+{
+    {
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+        ckv::ui::Application application(terminal, clock);
+        ManualScanService scan_service;
+        ManualFileListService file_list_service;
+        ManualCloudService cloud_service;
+        {
+            ck::vision::DiskUsageApp disk_usage(
+                application, scan_service, file_list_service, cloud_service, "/workspace");
+            require(disk_usage.scan_running(),
+                    "The test requires an active native disk-usage scan.");
+        }
+        require(scan_service.cancelled() && file_list_service.cancelled() &&
+                    cloud_service.cancelled(),
+                "Destroying disk usage must request cancellation from every supplied service.");
+        scan_service.report_progress("/workspace/late-scan");
+        scan_service.complete(make_snapshot());
+        application.step(0);
+        require(application.current_frame().size() == ckv::Size{100, 30},
+                "Late scan delivery after destruction must be safely ignored.");
+    }
+
+    {
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+        ckv::ui::Application application(terminal, clock);
+        ManualScanService scan_service;
+        ManualFileListService file_list_service;
+        ManualCloudService cloud_service;
+        {
+            ck::vision::DiskUsageApp disk_usage(
+                application, scan_service, file_list_service, cloud_service, "/workspace");
+            scan_service.complete(make_snapshot());
+            application.step(0);
+            require(application.execute_command(disk_usage.view_files_command()) &&
+                        file_list_service.running(),
+                    "The test requires an active native file-list request.");
+        }
+        require(file_list_service.cancelled(),
+                "Destroying disk usage must cancel an active file-list request.");
+        file_list_service.complete({{}, false});
+        application.step(0);
+        require(application.current_frame().size() == ckv::Size{100, 30},
+                "Late file-list delivery after destruction must be safely ignored.");
+    }
+
+    {
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+        ckv::ui::Application application(terminal, clock);
+        ManualScanService scan_service;
+        ManualFileListService file_list_service;
+        ManualCloudService cloud_service;
+        {
+            ck::vision::DiskUsageApp disk_usage(
+                application, scan_service, file_list_service, cloud_service, "/workspace");
+            scan_service.complete(make_snapshot());
+            application.step(0);
+            require(application.execute_command(disk_usage.download_cloud_command()) &&
+                        cloud_service.running(),
+                    "The test requires an active native cloud request.");
+        }
+        require(cloud_service.cancelled(),
+                "Destroying disk usage must cancel an active cloud request.");
+        cloud_service.report_progress(
+            {.message = "Late cloud progress.", .completed_items = 1, .total_items = 1});
+        cloud_service.complete({.success = true, .cancelled = false, .processed_items = 1,
+                                .message = "Late cloud completion."});
+        application.step(0);
+        require(application.current_frame().size() == ckv::Size{100, 30},
+                "Late cloud delivery after destruction must be safely ignored.");
+    }
+}
 
 } // namespace
 
 int main()
 {
+    verify_late_service_delivery_is_lifetime_safe();
+
     {
         ck::vision::UnsupportedDiskUsageCloudService unsupported_cloud;
         const auto capability = unsupported_cloud.capability(ck::vision::DiskUsageCloudAction::Download, "/workspace");

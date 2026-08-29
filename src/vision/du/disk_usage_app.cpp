@@ -160,21 +160,31 @@ void DiskUsageApp::start_scan()
 
     snapshot_ = {};
     show_scan_state("Scanning disk usage in the background. The current directory is shown in the window footer.");
+    // Services may report after this presentation is gone. The outer callback
+    // must not dereference `this`; the posted UI work checks the same token.
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     scan_service_->start(scan_root_, scan_options_,
-                         [this, lifetime](const std::filesystem::path &path) {
-                             application_.post([this, lifetime, path] {
-                                 if (lifetime.expired() || window_ == nullptr)
+                         [application, lifetime, self](const std::filesystem::path &path) {
+                             if (lifetime.expired())
+                                 return;
+                             application->post([self, lifetime, path] {
+                                 if (lifetime.expired() || self->window_ == nullptr)
                                      return;
-                                 window_->set_footer("Scanning " + path.string());
+                                 self->window_->set_footer("Scanning " + path.string());
                              });
                          },
-                         [this, lifetime](ck::du::BuildDirectoryTreeResult result) mutable {
-                             auto delivered = std::make_shared<ck::du::BuildDirectoryTreeResult>(std::move(result));
-                             application_.post([this, lifetime, delivered] {
+                         [application, lifetime, self](
+                             ck::du::BuildDirectoryTreeResult result) mutable {
+                             if (lifetime.expired())
+                                 return;
+                             auto delivered =
+                                 std::make_shared<ck::du::BuildDirectoryTreeResult>(std::move(result));
+                             application->post([self, lifetime, delivered] {
                                  if (lifetime.expired())
                                      return;
-                                 complete_scan(std::move(*delivered));
+                                 self->complete_scan(std::move(*delivered));
                              });
                          });
 }
@@ -254,13 +264,19 @@ void DiskUsageApp::view_selected_files()
     if (window_ != nullptr)
         window_->set_footer("Listing files in " + directory.string());
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     file_list_service_->start(directory, false, scan_options_,
-                              [this, lifetime, directory](DiskUsageFileListResult result) mutable {
-                                  auto delivered = std::make_shared<DiskUsageFileListResult>(std::move(result));
-                                  application_.post([this, lifetime, directory, delivered] {
+                              [application, lifetime, self, directory](
+                                  DiskUsageFileListResult result) mutable {
+                                  if (lifetime.expired())
+                                      return;
+                                  auto delivered =
+                                      std::make_shared<DiskUsageFileListResult>(std::move(result));
+                                  application->post([self, lifetime, directory, delivered] {
                                       if (lifetime.expired())
                                           return;
-                                      complete_file_list(std::move(*delivered), directory);
+                                      self->complete_file_list(std::move(*delivered), directory);
                                   });
                               });
 }
@@ -353,21 +369,27 @@ void DiskUsageApp::start_cloud_action(DiskUsageCloudAction action, std::filesyst
         window_->set_footer(verb + target.string());
     }
     const std::weak_ptr<void> lifetime = lifetime_;
+    auto *const application = &application_;
+    auto *const self = this;
     cloud_service_->start(
         action, target,
-        [this, lifetime](DiskUsageCloudProgress progress) mutable {
-            application_.post([this, lifetime, progress = std::move(progress)] {
-                if (lifetime.expired() || window_ == nullptr)
+        [application, lifetime, self](DiskUsageCloudProgress progress) mutable {
+            if (lifetime.expired())
+                return;
+            application->post([self, lifetime, progress = std::move(progress)] {
+                if (lifetime.expired() || self->window_ == nullptr)
                     return;
-                window_->set_footer(progress.message);
+                self->window_->set_footer(progress.message);
             });
         },
-        [this, lifetime, target](DiskUsageCloudOperationResult result) mutable {
+        [application, lifetime, self, target](DiskUsageCloudOperationResult result) mutable {
+            if (lifetime.expired())
+                return;
             auto delivered = std::make_shared<DiskUsageCloudOperationResult>(std::move(result));
-            application_.post([this, lifetime, target, delivered] {
+            application->post([self, lifetime, target, delivered] {
                 if (lifetime.expired())
                     return;
-                complete_cloud_action(std::move(*delivered), target);
+                self->complete_cloud_action(std::move(*delivered), target);
             });
         });
 }

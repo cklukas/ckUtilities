@@ -70,7 +70,10 @@ Historical application baseline: `legacy_tv`
   propagated into the existing scan-core cancellation probe. Selected-directory
   file inspection now uses a separate injected, cancellable file-list service
   and native Table window, so aggregation and enumeration never compete for
-  one implicit worker.
+  one implicit worker. Deterministic manual-service acceptance verifies that
+  scan progress/completion, file-list completion, and cloud progress/completion
+  arriving after presentation teardown are ignored before dereferencing the
+  destroyed application view.
   A selected directory can now request a macOS iCloud download or an explicit
   confirmation-gated request to free local copies through a separate injected
   cloud service. The Foundation adapter only reports that macOS accepted the
