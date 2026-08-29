@@ -163,6 +163,11 @@ void EditApp::save()
     if (window_ == nullptr)
         return;
     const auto result = window_->save();
+    if (result == ckv::widgets::EditorFileStatus::Conflict)
+    {
+        show_save_conflict_resolution();
+        return;
+    }
     if (result != ckv::widgets::EditorFileStatus::Ok)
         show_message(ckv::widgets::MessageBoxKind::Error, "Save document", status_message(result));
 }
@@ -185,6 +190,48 @@ void EditApp::show_save_as_dialog()
         if (status != ckv::widgets::EditorFileStatus::Ok)
             show_message(ckv::widgets::MessageBoxKind::Error, "Save document", status_message(status));
     });
+}
+
+void EditApp::show_save_conflict_resolution()
+{
+    if (window_ == nullptr)
+        return;
+    save_conflict_confirmation_.reset();
+    save_conflict_confirmation_.emplace(ckv::widgets::present_message_box(
+        application_, shell_->desktop(), shell_->roles(),
+        {ckv::widgets::MessageBoxKind::Warning,
+         "Document changed on disk",
+         "The document was changed outside ck Edit, so it was not overwritten. Choose Yes to save your edits to a separate path, "
+         "No to reload the on-disk version and discard your in-memory edits, or Cancel to keep editing.",
+         ckv::widgets::MessageBoxButtons::YesNoCancel}));
+    save_conflict_confirmation_->set_completion_handler([this](ckv::widgets::MessageBoxResult result) {
+        switch (result)
+        {
+        case ckv::widgets::MessageBoxResult::Yes:
+            show_save_as_dialog();
+            break;
+        case ckv::widgets::MessageBoxResult::No:
+            reload_after_save_conflict();
+            break;
+        case ckv::widgets::MessageBoxResult::Ok:
+        case ckv::widgets::MessageBoxResult::Cancel:
+            break;
+        }
+    });
+}
+
+void EditApp::reload_after_save_conflict()
+{
+    if (window_ == nullptr)
+        return;
+    const std::string current_path = window_->controller().path();
+    const auto status = window_->open(current_path, {.modified_document = ckv::widgets::EditorOpenModifiedPolicy::Discard});
+    if (status != ckv::widgets::EditorFileStatus::Ok)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Error, "Reload document", status_message(status));
+        return;
+    }
+    window_->set_footer("Reloaded the externally changed document; in-memory edits were discarded by your choice.");
 }
 
 ckv::widgets::EditorDocument &EditApp::document() noexcept

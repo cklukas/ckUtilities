@@ -45,6 +45,8 @@ private:
     void open_file_dialog();
     void save();
     void show_save_as_dialog();
+    void show_save_conflict_resolution();
+    void reload_after_save_conflict();
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
     static std::string status_message(ckv::widgets::EditorFileStatus status);
 
@@ -62,6 +64,7 @@ private:
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
+    std::optional<ckv::widgets::MessageBoxPresentation> save_conflict_confirmation_;
     bool closing_after_explicit_choice_ = false;
 };
 

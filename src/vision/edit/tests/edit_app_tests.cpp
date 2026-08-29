@@ -54,9 +54,24 @@ int main()
             "Markdown normalization must preserve hard breaks while removing accidental whitespace in one transaction.");
     require(editor.document().modified(), "Markdown normalization must remain an undoable document edit.");
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
+    require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");
     application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}}),
+            "The test Save As presentation must remain dismissible without changing the current document.");
+    application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30}, "The native editor must render headlessly.");
+
+    editor.document().set_text("Local edits that must not overwrite the external version.\n");
+    files.add_file("/notes.md", "# External version\n");
+    require(application.execute_command(editor.save_command()), "A conflicting save must dispatch through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The external-change resolution must require an explicit choice before discarding in-memory edits.");
+    application.step(0);
+    require(editor.document().text() == "# External version\n" && !editor.document().modified(),
+            "Choosing Reload after an external save conflict must preserve the external file and replace local edits only by explicit choice.");
 
     editor.document().set_text("Unsaved replacement");
     require(!editor.request_close(ckv::widgets::EditorCloseChoice::Cancel),

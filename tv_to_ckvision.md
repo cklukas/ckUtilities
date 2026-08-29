@@ -89,8 +89,9 @@ Historical application baseline: `legacy_tv`
   ckVision's documented profile registry. A conservative Markdown-whitespace
   normalization command now commits one revision-bound document transaction,
   preserving two-space hard breaks while removing accidental whitespace.
-  Broader Markdown transformations and richer external-conflict resolution
-  remain the next slices.
+  A save conflict now preserves the externally changed file and gives the user
+  an explicit Save As, reload/discard, or continue-editing choice. Broader
+  Markdown transformations remain the next slice.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
