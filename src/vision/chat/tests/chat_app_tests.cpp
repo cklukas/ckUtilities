@@ -326,6 +326,14 @@ int main()
     responses.complete();
     application.step(0);
     require(!chat.response_running(), "Completion must clear the active response state.");
+    require(chat.submit_prompt("Follow up"), "A completed conversation must accept a follow-up prompt.");
+    require(responses.request().history.size() == 2 &&
+                responses.request().history[0].role == ck::vision::ChatResponseRequest::PriorMessage::Role::User &&
+                responses.request().history[0].content == "Hello" &&
+                responses.request().history[1].role == ck::vision::ChatResponseRequest::PriorMessage::Role::Assistant,
+            "Follow-up requests must retain completed conversation turns at the service boundary.");
+    responses.complete();
+    application.step(0);
     require(application.execute_command(chat.copy_command()), "Copy must dispatch through the command registry.");
     require(application.clipboard_text().find("**Echo** [Hello](https://example.com)") != std::string::npos,
             "Copy must export the native transcript through the application clipboard.");
@@ -420,7 +428,10 @@ int main()
     std::condition_variable runtime_ready;
     std::string runtime_response;
     bool runtime_completed = false;
-    runtime_responses.start({"Hello runtime", "Runtime system", "local"},
+    runtime_responses.start({.prompt = "Hello runtime",
+                             .system_prompt = "Runtime system",
+                             .model_id = "local",
+                             .history = {{ck::vision::ChatResponseRequest::PriorMessage::Role::User, "Earlier turn"}}},
                             [&](std::string chunk) { runtime_response += chunk; },
                             [&](bool cancelled) {
                                 {
@@ -435,6 +446,7 @@ int main()
                 "The native LLM response service must load the selected active model on a worker.");
     }
     require(runtime_response.find("Runtime system") != std::string::npos &&
+                runtime_response.find("Earlier turn") != std::string::npos &&
                 runtime_response.find("Hello runtime") != std::string::npos,
-            "The native LLM response service must stream ckai_core output with the selected system prompt.");
+            "The native LLM response service must stream ckai_core output with the selected system prompt and prior turns.");
 }

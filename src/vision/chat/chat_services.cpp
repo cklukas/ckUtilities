@@ -45,6 +45,24 @@ ChatModel as_chat_model(const ck::ai::ModelInfo &model)
             .is_downloaded = model.is_downloaded,
             .is_active = model.is_active};
 }
+
+std::string format_conversation_prompt(const ChatResponseRequest &request)
+{
+    if (request.history.empty())
+        return request.prompt;
+
+    std::string prompt;
+    for (const ChatResponseRequest::PriorMessage &message : request.history)
+    {
+        prompt += message.role == ChatResponseRequest::PriorMessage::Role::User ? "User: " : "Assistant: ";
+        prompt += message.content;
+        prompt += '\n';
+    }
+    prompt += "User: ";
+    prompt += request.prompt;
+    prompt += "\nAssistant:";
+    return prompt;
+}
 } // namespace
 
 SystemPromptManagerService::SystemPromptManagerService(ck::ai::SystemPromptManager &manager) noexcept
@@ -380,7 +398,8 @@ void LlmChatResponseService::start(ChatResponseRequest request, ChunkHandler on_
             ck::ai::GenerationConfig config;
             config.max_tokens = model.max_output_tokens == 0 ? 512 : static_cast<int>(model.max_output_tokens);
             config.stop = model.stop_sequences;
-            llm_->generate_cancellable(request.prompt, config, [cancellation, &on_chunk](ck::ai::Chunk chunk) {
+            llm_->generate_cancellable(format_conversation_prompt(request), config,
+                                       [cancellation, &on_chunk](ck::ai::Chunk chunk) {
                 const bool keep_generating = !cancellation->load(std::memory_order_acquire);
                 if (keep_generating && on_chunk && !chunk.text.empty())
                     on_chunk(std::move(chunk.text));

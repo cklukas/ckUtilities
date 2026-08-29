@@ -154,6 +154,18 @@ struct ChatResponseRequest
     std::string prompt;
     std::string system_prompt;
     std::string model_id;
+    struct PriorMessage
+    {
+        enum class Role
+        {
+            User,
+            Assistant,
+        };
+
+        Role role = Role::User;
+        std::string content;
+    };
+    std::vector<PriorMessage> history;
 };
 
 // The chat presentation depends on streaming callbacks, not a model runtime.

@@ -156,12 +156,23 @@ bool ChatApp::submit_prompt(std::string prompt)
     }
     messages_.push_back({ChatMessage::Role::User, std::move(prompt)});
     messages_.push_back({ChatMessage::Role::Assistant, {}});
+    std::vector<ChatResponseRequest::PriorMessage> history;
+    history.reserve(messages_.size() - 2);
+    for (std::size_t index = 0; index + 2 < messages_.size(); ++index)
+    {
+        const ChatMessage &message = messages_[index];
+        history.push_back({message.role == ChatMessage::Role::User
+                               ? ChatResponseRequest::PriorMessage::Role::User
+                               : ChatResponseRequest::PriorMessage::Role::Assistant,
+                           message.content});
+    }
     response_pending_ = true;
     const std::uint64_t request = ++active_request_;
     const std::weak_ptr<void> lifetime = lifetime_;
     response_service_.start({.prompt = messages_[messages_.size() - 2].content,
                              .system_prompt = active_prompt ? active_prompt->message : std::string{},
-                             .model_id = active_model ? active_model->id : std::string{}},
+                             .model_id = active_model ? active_model->id : std::string{},
+                             .history = std::move(history)},
                             [this, lifetime, request](std::string chunk) mutable {
                                 application_.post([this, lifetime, request, chunk = std::move(chunk)]() mutable {
                                     if (lifetime.expired())
