@@ -40,6 +40,9 @@ Historical application baseline: `legacy_tv`
   validated radio-form dialog and presents the selected palette values without
   a suite-specific widget. The initial launcher conversion is complete; its
   workflow-depth, resizing, and input coverage will grow with release gates.
+  The disposable installed-product verifier now temporarily removes a staged
+  child executable and confirms that `ck-utilities --launch ck-json-view`
+  fails with a clear diagnostic before it can start a child process.
 - WP-5: `ck-find-ckvision` keeps the specification and command-plan generation
   in the framework-independent search core, exposes command-registry actions
   for a validated scrolling guided form and command preview, and now saves,
