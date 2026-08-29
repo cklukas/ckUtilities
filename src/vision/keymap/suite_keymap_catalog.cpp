@@ -106,6 +106,7 @@ const std::array kConfigCommands{
     CommandDefinition{"ck.config.import", "&Import configuration...", "Configuration", ""},
     CommandDefinition{"ck.config.export", "&Export configuration...", "Configuration", ""},
     CommandDefinition{"ck.config.shortcuts", "Configure &keyboard shortcuts...", "Configuration", ""},
+    CommandDefinition{"ck.config.shortcuts.scheme", "Select shortcut &scheme...", "Configuration", ""},
 };
 
 template <std::size_t Count>

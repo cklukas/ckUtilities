@@ -1,8 +1,12 @@
 #include "ck/vision/keymap.hpp"
 
+#include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <string>
 
 namespace
 {
@@ -88,4 +92,52 @@ int main()
     require(second_registry.command_for_key(chord("Ctrl+Q")) == second_registry.standard().quit &&
                 !second_registry.command_for_key(chord("Alt+X")),
             "A shared framework keymap update must reload in another native application.");
+
+    const std::filesystem::path scheme_root = std::filesystem::temp_directory_path() /
+                                              ("ckvision_keymap_scheme_" +
+                                               std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::error_code error;
+    std::filesystem::create_directories(scheme_root, error);
+    require(!error, "The persistent-scheme test must create an isolated configuration root.");
+    require(setenv("XDG_CONFIG_HOME", scheme_root.c_str(), 1) == 0,
+            "The persistent-scheme test must direct keymap storage to its isolated root.");
+
+    ck::vision::DefaultKeymapPersistence persisted_schemes;
+    require(persisted_schemes.active_keymap_scheme() == "default",
+            "A new installed keymap store must select built-in defaults.");
+    ckv::ui::CommandRegistry scheme_registry;
+    const ckv::ui::CommandId scheme_open = scheme_registry.declare(
+        {.key = "ck.scheme.open", .title = "Open", .category = "Test", .chord = "Ctrl+O"});
+    ck::vision::KeymapController scheme_controller("ck-scheme-test", scheme_registry, persisted_schemes);
+    require(scheme_controller.load(), "The default shortcut scheme must load without a stored override document.");
+    require(scheme_controller.update("ck.scheme.open", chord("Ctrl+Shift+O")).status == ck::vision::KeymapUpdateStatus::Applied &&
+                scheme_controller.save() && persisted_schemes.active_keymap_scheme() == "personal",
+            "The first binding edit must preserve defaults and switch to the personal scheme.");
+    require(persisted_schemes.select_keymap_scheme("default") && scheme_controller.load() &&
+                scheme_registry.command_for_key(chord("Ctrl+O")) == scheme_open &&
+                !scheme_registry.command_for_key(chord("Ctrl+Shift+O")),
+            "Selecting built-in defaults must leave the personal binding intact but inactive.");
+    require(persisted_schemes.select_keymap_scheme("personal") && scheme_controller.load() &&
+                scheme_registry.command_for_key(chord("Ctrl+Shift+O")) == scheme_open,
+            "Re-selecting the personal scheme must restore its stable-key override.");
+    const std::filesystem::path scheme_file = scheme_root / "ck-utilities" / "keymap.json";
+    {
+        std::ofstream legacy(scheme_file, std::ios::trunc);
+        legacy << R"({"format_version":1,"global":{},"applications":{"ck-scheme-test":{"ck.scheme.open":"Ctrl+Shift+O"}}})";
+    }
+    require(persisted_schemes.active_keymap_scheme() == "personal" && scheme_controller.load() &&
+                scheme_registry.command_for_key(chord("Ctrl+Shift+O")) == scheme_open && scheme_controller.save(),
+            "A format-1 keymap must load as personal bindings and upgrade on its next write.");
+    std::ifstream upgraded(scheme_file);
+    const std::string upgraded_document{std::istreambuf_iterator<char>(upgraded), std::istreambuf_iterator<char>()};
+    require(upgraded_document.find("\"format_version\": 2") != std::string::npos,
+            "Saving a migrated keymap must write the versioned scheme document.");
+    {
+        std::ofstream corrupt(scheme_file, std::ios::trunc);
+        corrupt << R"({"format_version":2,"active_scheme":17})";
+    }
+    require(!scheme_controller.load() && scheme_registry.command_for_key(chord("Ctrl+Shift+O")) == scheme_open,
+            "A corrupt shortcut-scheme document must fail safely without changing bindings.");
+    std::filesystem::remove_all(scheme_root, error);
+    require(!error, "The persistent-scheme test must remove only its isolated configuration root.");
 }

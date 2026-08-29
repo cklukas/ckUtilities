@@ -17,6 +17,12 @@ namespace ck::vision
 // a null chord deliberately removes a command's default binding.
 using KeymapOverrides = std::map<std::string, std::optional<ckv::KeyChord>>;
 
+struct KeymapScheme
+{
+    std::string id;
+    std::string title;
+};
+
 class KeymapPersistence
 {
 public:
@@ -30,10 +36,22 @@ public:
                       const KeymapOverrides &application_overrides) = 0;
 };
 
+// Selection is a suite persistence policy: ckVision commands remain unaware
+// of which named override layer a product host has selected.
+class KeymapSchemePersistence
+{
+public:
+    virtual ~KeymapSchemePersistence() = default;
+
+    virtual std::vector<KeymapScheme> keymap_schemes() const = 0;
+    virtual std::string active_keymap_scheme() const = 0;
+    virtual bool select_keymap_scheme(std::string_view scheme_id) = 0;
+};
+
 // The suite-owned JSON policy. The controller remains independent of paths,
 // file I/O, and serialization so tests and alternate hosts can inject their
 // own policy.
-class DefaultKeymapPersistence final : public KeymapPersistence
+class DefaultKeymapPersistence final : public KeymapPersistence, public KeymapSchemePersistence
 {
 public:
     bool load(std::string_view application_id,
@@ -42,6 +60,9 @@ public:
     bool save(std::string_view application_id,
               const KeymapOverrides &global_overrides,
               const KeymapOverrides &application_overrides) override;
+    std::vector<KeymapScheme> keymap_schemes() const override;
+    std::string active_keymap_scheme() const override;
+    bool select_keymap_scheme(std::string_view scheme_id) override;
 };
 
 struct KeymapCommand

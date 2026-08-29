@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <vector>
 
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -61,7 +62,7 @@ public:
     bool fail_import_after_mutation = false;
 };
 
-class MemoryKeymapPersistence final : public ck::vision::KeymapPersistence
+class MemoryKeymapPersistence final : public ck::vision::KeymapPersistence, public ck::vision::KeymapSchemePersistence
 {
 public:
     bool load(std::string_view application_id,
@@ -82,8 +83,24 @@ public:
         return true;
     }
 
+    std::vector<ck::vision::KeymapScheme> keymap_schemes() const override
+    {
+        return {{"default", "Built-in defaults"}, {"personal", "Personal bindings"}};
+    }
+
+    std::string active_keymap_scheme() const override { return active_scheme; }
+
+    bool select_keymap_scheme(std::string_view scheme_id) override
+    {
+        if (scheme_id != "default" && scheme_id != "personal")
+            return false;
+        active_scheme = std::string(scheme_id);
+        return true;
+    }
+
     ck::vision::KeymapOverrides global;
     std::map<std::string, ck::vision::KeymapOverrides> applications;
+    std::string active_scheme = "default";
 };
 }
 
@@ -143,6 +160,9 @@ int main()
     require(keymap.load(), "The native config app's injected keymap must load after its commands are declared.");
     require(keymap_config.keymap_command_count() > keymap.commands().size(),
             "The native config app must expose a catalog of stable command identities beyond its own executable.");
+    require(keymap_config.select_keymap_scheme("personal") && keymap_persistence.active_keymap_scheme() == "personal" &&
+                !keymap_config.select_keymap_scheme("unknown"),
+            "The native config app must select only persistence-provided stable shortcut schemes.");
     require(keymap_application.execute_command(keymap_config.keymap_command()),
             "Keyboard shortcut configuration must be a command-registry action.");
     keymap_application.step(0);

@@ -14,7 +14,10 @@ namespace ck::vision
 namespace
 {
 
-constexpr int kKeymapFormatVersion = 1;
+constexpr int kLegacyKeymapFormatVersion = 1;
+constexpr int kKeymapFormatVersion = 2;
+constexpr std::string_view kDefaultSchemeId = "default";
+constexpr std::string_view kPersonalSchemeId = "personal";
 
 std::filesystem::path keymap_path()
 {
@@ -65,7 +68,10 @@ bool read_document(nlohmann::json &document)
     try
     {
         input >> document;
-        return document.is_object() && document.value("format_version", 0) == kKeymapFormatVersion;
+        if (!document.is_object())
+            return false;
+        const int version = document.value("format_version", 0);
+        return version == kLegacyKeymapFormatVersion || version == kKeymapFormatVersion;
     }
     catch (const nlohmann::json::exception &)
     {
@@ -73,42 +79,47 @@ bool read_document(nlohmann::json &document)
     }
 }
 
-} // namespace
-
-bool DefaultKeymapPersistence::load(std::string_view application_id,
-                                    KeymapOverrides &global_overrides,
-                                    KeymapOverrides &application_overrides)
+nlohmann::json make_scheme_document()
 {
-    global_overrides.clear();
-    application_overrides.clear();
-    nlohmann::json document = nlohmann::json::object();
-    if (!read_document(document))
-        return false;
-    if (document.empty())
-        return true;
-
-    const nlohmann::json global = document.value("global", nlohmann::json::object());
-    const nlohmann::json applications = document.value("applications", nlohmann::json::object());
-    if (!read_overrides(global, global_overrides) || !applications.is_object())
-        return false;
-    const auto application = applications.find(std::string(application_id));
-    return application == applications.end() || read_overrides(*application, application_overrides);
+    return {{"format_version", kKeymapFormatVersion},
+            {"active_scheme", std::string(kDefaultSchemeId)},
+            {"personal", {{"global", nlohmann::json::object()}, {"applications", nlohmann::json::object()}}}};
 }
 
-bool DefaultKeymapPersistence::save(std::string_view application_id,
-                                    const KeymapOverrides &global_overrides,
-                                    const KeymapOverrides &application_overrides)
+bool upgrade_document(nlohmann::json &document)
 {
-    nlohmann::json document = nlohmann::json::object();
-    if (!read_document(document))
-        return false;
     if (document.empty())
-        document["format_version"] = kKeymapFormatVersion;
-    document["global"] = write_overrides(global_overrides);
-    if (!document.contains("applications") || !document["applications"].is_object())
-        document["applications"] = nlohmann::json::object();
-    document["applications"][std::string(application_id)] = write_overrides(application_overrides);
+    {
+        document = make_scheme_document();
+        return true;
+    }
+    const int version = document.value("format_version", 0);
+    if (version == kLegacyKeymapFormatVersion)
+    {
+        const nlohmann::json global = document.value("global", nlohmann::json::object());
+        const nlohmann::json applications = document.value("applications", nlohmann::json::object());
+        if (!global.is_object() || !applications.is_object())
+            return false;
+        document = make_scheme_document();
+        document["active_scheme"] = std::string(kPersonalSchemeId);
+        document["personal"]["global"] = global;
+        document["personal"]["applications"] = applications;
+        return true;
+    }
+    if (version != kKeymapFormatVersion)
+        return false;
+    if (document.contains("active_scheme") && !document["active_scheme"].is_string())
+        return false;
+    const std::string active_scheme = document.value("active_scheme", std::string(kDefaultSchemeId));
+    if (active_scheme != kDefaultSchemeId && active_scheme != kPersonalSchemeId)
+        return false;
+    if (!document.contains("personal"))
+        document["personal"] = {{"global", nlohmann::json::object()}, {"applications", nlohmann::json::object()}};
+    return document["personal"].is_object();
+}
 
+bool write_document(const nlohmann::json &document)
+{
     const std::filesystem::path path = keymap_path();
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
@@ -126,6 +137,73 @@ bool DefaultKeymapPersistence::save(std::string_view application_id,
     }
     std::filesystem::rename(temporary, path, error);
     return !error;
+}
+
+} // namespace
+
+bool DefaultKeymapPersistence::load(std::string_view application_id,
+                                    KeymapOverrides &global_overrides,
+                                    KeymapOverrides &application_overrides)
+{
+    global_overrides.clear();
+    application_overrides.clear();
+    nlohmann::json document = nlohmann::json::object();
+    if (!read_document(document) || !upgrade_document(document))
+        return false;
+    if (document.value("active_scheme", std::string(kDefaultSchemeId)) == kDefaultSchemeId)
+        return true;
+    const nlohmann::json &overrides = document["personal"];
+    const nlohmann::json global = overrides.value("global", nlohmann::json::object());
+    const nlohmann::json applications = overrides.value("applications", nlohmann::json::object());
+    if (!read_overrides(global, global_overrides) || !applications.is_object())
+        return false;
+    const auto application = applications.find(std::string(application_id));
+    return application == applications.end() || read_overrides(*application, application_overrides);
+}
+
+bool DefaultKeymapPersistence::save(std::string_view application_id,
+                                    const KeymapOverrides &global_overrides,
+                                    const KeymapOverrides &application_overrides)
+{
+    nlohmann::json document = nlohmann::json::object();
+    if (!read_document(document) || !upgrade_document(document))
+        return false;
+    document["active_scheme"] = std::string(kPersonalSchemeId);
+    document["personal"]["global"] = write_overrides(global_overrides);
+    if (!document["personal"].contains("applications") || !document["personal"]["applications"].is_object())
+        document["personal"]["applications"] = nlohmann::json::object();
+    document["personal"]["applications"][std::string(application_id)] = write_overrides(application_overrides);
+    return write_document(document);
+}
+
+std::vector<KeymapScheme> DefaultKeymapPersistence::keymap_schemes() const
+{
+    return {{std::string(kDefaultSchemeId), "Built-in defaults"},
+            {std::string(kPersonalSchemeId), "Personal bindings"}};
+}
+
+std::string DefaultKeymapPersistence::active_keymap_scheme() const
+{
+    nlohmann::json document = nlohmann::json::object();
+    if (!read_document(document) || document.empty())
+        return std::string(kDefaultSchemeId);
+    if (document.value("format_version", 0) == kLegacyKeymapFormatVersion)
+        return std::string(kPersonalSchemeId);
+    if (document.contains("active_scheme") && !document["active_scheme"].is_string())
+        return std::string(kDefaultSchemeId);
+    const std::string active_scheme = document.value("active_scheme", std::string(kDefaultSchemeId));
+    return active_scheme == kPersonalSchemeId ? active_scheme : std::string(kDefaultSchemeId);
+}
+
+bool DefaultKeymapPersistence::select_keymap_scheme(std::string_view scheme_id)
+{
+    if (scheme_id != kDefaultSchemeId && scheme_id != kPersonalSchemeId)
+        return false;
+    nlohmann::json document = nlohmann::json::object();
+    if (!read_document(document) || !upgrade_document(document))
+        return false;
+    document["active_scheme"] = std::string(scheme_id);
+    return write_document(document);
 }
 
 KeymapController::KeymapController(std::string application_id,

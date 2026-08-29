@@ -201,7 +201,10 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
 {
     declare_commands();
     if (keymap_ != nullptr)
+    {
         keymap_catalog_ = std::make_unique<SuiteKeymapCatalog>(*keymap_);
+        keymap_scheme_persistence_ = dynamic_cast<KeymapSchemePersistence *>(&keymap_->persistence());
+    }
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
     create_window();
 }
@@ -220,6 +223,8 @@ void ConfigApp::declare_commands()
                                             [this] { show_export_dialog(); });
     keymap_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.shortcuts",
                                             [this] { show_keymap_window(); });
+    keymap_scheme_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.shortcuts.scheme",
+                                                   [this] { show_keymap_scheme_dialog(); });
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const
@@ -234,6 +239,7 @@ SuiteShellOptions ConfigApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{import_command_, "&Import configuration..."}),
                 MenuItem::command(CommandPresentation{export_command_, "&Export configuration..."}),
                 MenuItem::command(CommandPresentation{keymap_command_, "Configure &keyboard shortcuts..."}),
+                MenuItem::command(CommandPresentation{keymap_scheme_command_, "Select shortcut &scheme..."}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{edit_command_, "&Edit"}, 20},
@@ -243,6 +249,7 @@ SuiteShellOptions ConfigApp::make_shell_options() const
                 StatusLineItem{CommandPresentation{import_command_, "&Import"}, 20},
                 StatusLineItem{CommandPresentation{export_command_, "&Export"}, 20},
                 StatusLineItem{CommandPresentation{keymap_command_, "&Shortcuts"}, 24},
+                StatusLineItem{CommandPresentation{keymap_scheme_command_, "&Scheme"}, 20},
             }};
 }
 
@@ -482,6 +489,12 @@ void ConfigApp::show_keymap_window()
     auto reset = std::make_unique<ckv::widgets::Button>("&Reset selected");
     reset->on_press = [this] { reset_selected_shortcut(); };
     actions->add_item(std::move(reset));
+    if (keymap_scheme_persistence_ != nullptr)
+    {
+        auto scheme = std::make_unique<ckv::widgets::Button>("&Scheme...");
+        scheme->on_press = [this] { show_keymap_scheme_dialog(); };
+        actions->add_item(std::move(scheme));
+    }
     auto reload = std::make_unique<ckv::widgets::Button>("&Reload saved");
     reload->on_press = [this] { reload_keymap(); };
     actions->add_item(std::move(reload));
@@ -509,6 +522,46 @@ void ConfigApp::show_keymap_window()
     refresh_keymap();
     if (keymap_table_ != nullptr)
         application_.set_focus(keymap_table_);
+}
+
+void ConfigApp::show_keymap_scheme_dialog()
+{
+    if (keymap_scheme_persistence_ == nullptr)
+    {
+        set_keymap_status("Shortcut schemes are not available in this host.");
+        return;
+    }
+    const std::vector<KeymapScheme> schemes = keymap_scheme_persistence_->keymap_schemes();
+    if (schemes.empty())
+    {
+        set_keymap_status("No shortcut schemes are available.");
+        return;
+    }
+    std::vector<std::string> titles;
+    titles.reserve(schemes.size());
+    std::size_t selected = 0;
+    const std::string active = keymap_scheme_persistence_->active_keymap_scheme();
+    for (std::size_t index = 0; index < schemes.size(); ++index)
+    {
+        titles.push_back(schemes[index].title);
+        if (schemes[index].id == active)
+            selected = index;
+    }
+
+    keymap_scheme_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Select shortcut scheme";
+    dialog.fields.push_back({"&Scheme", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             std::move(titles), static_cast<int>(selected)});
+    dialog.buttons.push_back({"&Use scheme", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    keymap_scheme_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    keymap_scheme_dialog_->set_completion_handler([this, schemes](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.selected.empty() || result.selected.front() >= schemes.size())
+            return;
+        select_keymap_scheme(schemes[result.selected.front()].id);
+    });
 }
 
 void ConfigApp::edit_selected_shortcut()
@@ -624,7 +677,10 @@ void ConfigApp::refresh_keymap()
     }
     if (const auto id = keymap_model_->id_for_command(selected_command_application_id_, selected_command_key_))
         keymap_table_->set_selected_cell({*id, 0});
-    set_keymap_status(std::to_string(keymap_model_->row_count()) + " suite commands; Enter/Space captures a shortcut.");
+    std::string status = std::to_string(keymap_model_->row_count()) + " suite commands; Enter/Space captures a shortcut.";
+    if (keymap_scheme_persistence_ != nullptr)
+        status += " Active scheme: " + keymap_scheme_persistence_->active_keymap_scheme() + ".";
+    set_keymap_status(std::move(status));
 }
 
 void ConfigApp::save_keymap(KeymapController &controller)
@@ -668,6 +724,18 @@ bool ConfigApp::select_keymap_command(std::string_view application_id, std::stri
     selected_command_key_ = command_key;
     keymap_table_->set_selected_cell({*id, 0});
     application_.set_focus(keymap_table_);
+    return true;
+}
+
+bool ConfigApp::select_keymap_scheme(std::string_view scheme_id)
+{
+    if (keymap_scheme_persistence_ == nullptr || keymap_catalog_ == nullptr ||
+        !keymap_scheme_persistence_->select_keymap_scheme(scheme_id) || !keymap_catalog_->load())
+    {
+        set_keymap_status("Could not select shortcut scheme.");
+        return false;
+    }
+    refresh_keymap();
     return true;
 }
 
