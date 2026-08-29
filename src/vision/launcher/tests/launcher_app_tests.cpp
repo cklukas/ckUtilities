@@ -47,23 +47,34 @@ int main()
     require(application.execute_command(launcher.new_launcher_command()),
             "The native New Launcher command must be available.");
     require(launcher.launcher_window_count() == 2, "The native launcher must support multiple windows.");
+    require(application.execute_command(application.commands().standard().close),
+            "The standard close command must close the active native launcher window.");
+    require(launcher.launcher_window_count() == 1 && launcher.desktop_window_count() == 1,
+            "Closing a launcher window must retain the remaining launcher window.");
+    for (int index = 0; index < 4; ++index)
+    {
+        require(application.execute_command(launcher.new_launcher_command()),
+                "The native launcher must support repeated window creation.");
+    }
+    require(launcher.launcher_window_count() == 5,
+            "Repeated New Launcher commands must retain each native launcher window.");
     require(application.execute_command(launcher.calendar_command()),
             "The native Calendar command must dispatch through the registry.");
-    require(launcher.desktop_window_count() == 3,
+    require(launcher.desktop_window_count() == 6,
             "The native calendar must be presented as a regular Desktop window.");
     require(application.execute_command(launcher.ascii_table_command()),
             "The native ASCII table command must dispatch through the registry.");
     require(application.execute_command(launcher.calculator_command()),
             "The native calculator command must dispatch through the registry.");
-    require(launcher.desktop_window_count() == 5,
+    require(launcher.desktop_window_count() == 8,
             "The native launcher must present each built-in tool as a regular Desktop window.");
     require(application.execute_command(launcher.diagnostics_command()),
             "The native diagnostics command must dispatch through the registry.");
-    require(launcher.desktop_window_count() == 6,
+    require(launcher.desktop_window_count() == 9,
             "The diagnostics snapshot must be presented as a regular Desktop window.");
     require(application.execute_command(launcher.color_selector_command()),
             "The native color selector must dispatch through the registry.");
-    require(launcher.desktop_window_count() == 7,
+    require(launcher.desktop_window_count() == 10,
             "The native color selector must be presented modally on the Desktop.");
     require(application.execute_command(launcher.launch_command()),
             "The native Launch command must dispatch through the registry.");
@@ -74,4 +85,17 @@ int main()
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30},
             "The native launcher must compose a full headless frame.");
+
+    ckv::ManualClock quit_clock;
+    ckv::term::HeadlessTerminal quit_terminal(ckv::Size{80, 24});
+    ckv::ui::Application quit_application(quit_terminal, quit_clock);
+    ck::vision::UtilitiesLauncherApp quit_launcher(quit_application, {});
+    require(quit_application.execute_command(quit_launcher.new_launcher_command()) &&
+                quit_application.execute_command(quit_launcher.new_launcher_command()),
+            "The quit scenario must start with several native launcher windows.");
+    require(quit_application.execute_command(quit_application.commands().standard().quit),
+            "The standard quit command must dispatch through the native Desktop.");
+    require(quit_application.quit_requested() && quit_launcher.launcher_window_count() == 0 &&
+                quit_launcher.desktop_window_count() == 0,
+            "Quitting must close every native launcher window through the standard close lifecycle.");
 }
