@@ -3,6 +3,7 @@
 #include "ck/find/search_model.hpp"
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -23,11 +24,21 @@ struct SearchExecutionOptions
     bool includeActions = true;
     bool captureMatches = false;
     bool filterContent = true;
+
+    // The search core deliberately owns no worker or UI lifetime.  A caller
+    // can provide this inexpensive polling probe to stop a long traversal at
+    // deterministic traversal boundaries.
+    std::function<bool()> cancellation_requested;
+
+    // Called for every accepted path on the executing thread.  UI adapters
+    // must marshal this callback before updating a view.
+    std::function<void(const std::filesystem::path &)> on_match;
 };
 
 struct SearchExecutionResult
 {
     int exitCode = 0;
+    bool cancelled = false;
     std::vector<std::filesystem::path> matches;
     std::vector<std::string> command;
 };

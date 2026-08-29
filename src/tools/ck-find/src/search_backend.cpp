@@ -2542,6 +2542,10 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
     result.command = buildFindCommand(execSpec, options.includeActions);
     result.exitCode = 0;
 
+    const auto cancellationRequested = [&options] {
+        return options.cancellation_requested && options.cancellation_requested();
+    };
+
     PreparedSpecification prepared = prepareSpecification(execSpec);
 
     if (prepared.hasUnsupportedPermissionFilters && forwardStderr)
@@ -2550,6 +2554,8 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
     auto recordMatch = [&](const std::filesystem::path &path) {
         if (options.captureMatches)
             result.matches.push_back(path);
+        if (options.on_match)
+            options.on_match(path);
         if (forwardStdout)
             (*forwardStdout) << path.string() << '\n';
     };
@@ -2558,48 +2564,51 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                              const std::filesystem::path &root,
                              int depth,
                              bool isRoot) {
+        if (cancellationRequested())
+            return false;
         if (!prepared.includeHidden && !isRoot && isHiddenPath(entry.path()))
-            return;
+            return true;
 
         std::string name = entry.path().filename().string();
         if (name.empty())
             name = entry.path().string();
         if (!matchesIncludeExclude(prepared, name))
-            return;
+            return true;
 
         std::string relative = relativePathString(root, entry.path());
 
         if (!matchesNameFilters(prepared, entry.path(), name, relative))
-            return;
+            return true;
 
         if (!withinDepthLimits(prepared, depth))
-            return;
+            return true;
 
         if (!matchesTextInName(prepared, name))
-            return;
+            return true;
 
         if (!matchesTypeFilters(prepared, entry))
-            return;
+            return true;
 
         if (!matchesSizeFilters(prepared, entry))
-            return;
+            return true;
 
         if (!matchesPermissionFilters(prepared, entry))
-            return;
+            return true;
 
         if (!matchesTimeFilters(prepared, entry))
-            return;
+            return true;
 
         if (prepared.textSearchEnabled && prepared.textSearchContents && options.filterContent)
         {
             std::error_code ec;
             if (!entry.is_regular_file(ec) || ec)
-                return;
+                return true;
             if (!fileMatchesContent(entry.path(), prepared.textOptions, prepared.textTerms, prepared.rawSearchText))
-                return;
+                return true;
         }
 
         recordMatch(entry.path());
+        return !cancellationRequested();
     };
 
     bool hadError = false;
@@ -2622,11 +2631,13 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             if (ec)
             {
                 handleError(dirEntry.path(), ec);
-                return;
+                return true;
             }
             std::filesystem::recursive_directory_iterator end;
             for (; it != end; ++it)
             {
+                if (cancellationRequested())
+                    return false;
                 const auto &entry = *it;
                 int depth = it.depth() + 1;
                 std::string name = entry.path().filename().string();
@@ -2653,7 +2664,8 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                     continue;
                 }
 
-                evaluateEntry(entry, root, depth, false);
+                if (!evaluateEntry(entry, root, depth, false))
+                    return false;
             }
         }
         else
@@ -2663,11 +2675,13 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             if (ec)
             {
                 handleError(dirEntry.path(), ec);
-                return;
+                return true;
             }
             std::filesystem::directory_iterator end;
             for (; it != end; ++it)
             {
+                if (cancellationRequested())
+                    return false;
                 const auto &entry = *it;
                 std::string name = entry.path().filename().string();
                 std::string relative = relativePathString(root, entry.path());
@@ -2678,13 +2692,21 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                 if (!prepared.includeHidden && isHiddenPath(entry.path()))
                     continue;
 
-                evaluateEntry(entry, root, 1, false);
+                if (!evaluateEntry(entry, root, 1, false))
+                    return false;
             }
         }
+
+        return !cancellationRequested();
     };
 
     for (const auto &start : prepared.roots)
     {
+        if (cancellationRequested())
+        {
+            result.cancelled = true;
+            break;
+        }
         std::error_code ec;
         std::filesystem::directory_entry entry(start, ec);
         if (ec)
@@ -2693,17 +2715,29 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             continue;
         }
 
-        evaluateEntry(entry, entry.path(), 0, true);
+        if (!evaluateEntry(entry, entry.path(), 0, true))
+        {
+            result.cancelled = true;
+            break;
+        }
 
         ec.clear();
-        if (entry.is_directory(ec) && !ec)
-            traverseDirectory(entry, entry.path());
+        if (entry.is_directory(ec) && !ec && !traverseDirectory(entry, entry.path()))
+        {
+            result.cancelled = true;
+            break;
+        }
     }
 
     if (forwardStdout)
         forwardStdout->flush();
 
-    if (hadError)
+    if (result.cancelled || cancellationRequested())
+    {
+        result.cancelled = true;
+        result.exitCode = 130;
+    }
+    else if (hadError)
         result.exitCode = 1;
 
     return result;

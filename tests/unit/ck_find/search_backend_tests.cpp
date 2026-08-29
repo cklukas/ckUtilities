@@ -77,3 +77,31 @@ TEST(SearchBackend, ExecutesSpecificationWithoutExternalFind)
     fs::remove(textFile);
     fs::remove_all(tempDir);
 }
+
+TEST(SearchBackend, ReportsCancellationAtTraversalBoundaries)
+{
+    namespace fs = std::filesystem;
+    fs::path tempDir = fs::temp_directory_path() /
+                       fs::path("ck-find-cancel-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(tempDir);
+    for (int index = 0; index < 8; ++index)
+    {
+        std::ofstream stream(tempDir / ("item-" + std::to_string(index) + ".txt"));
+        stream << "match" << std::endl;
+    }
+
+    auto spec = ck::find::makeDefaultSpecification();
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.c_str());
+    bool cancel = false;
+    ck::find::SearchExecutionOptions options;
+    options.captureMatches = true;
+    options.cancellation_requested = [&cancel] { return cancel; };
+    options.on_match = [&cancel](const fs::path &) { cancel = true; };
+
+    auto result = ck::find::executeSpecification(spec, options, nullptr, nullptr);
+    EXPECT_TRUE(result.cancelled);
+    EXPECT_EQ(result.exitCode, 130);
+    EXPECT_LE(result.matches.size(), 1u);
+
+    fs::remove_all(tempDir);
+}
