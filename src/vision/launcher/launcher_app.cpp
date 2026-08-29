@@ -1,13 +1,23 @@
 #include "launcher_app.hpp"
 
+#include "calculator_model.hpp"
+
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <iomanip>
+#include <memory>
+#include <sstream>
 #include <utility>
 
+#include <cvision/ui/grid.hpp>
+#include <cvision/widgets/button.hpp>
 #include <cvision/widgets/common_components.hpp>
 #include <cvision/widgets/command_presentation.hpp>
+#include <cvision/widgets/input_line.hpp>
 #include <cvision/widgets/menu.hpp>
 #include <cvision/widgets/splitter.hpp>
+#include <cvision/widgets/table.hpp>
 #include <cvision/widgets/text_layout.hpp>
 
 namespace ck::vision
@@ -21,6 +31,74 @@ using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
+
+std::string ascii_character(unsigned char value)
+{
+    if (value == 0)
+        return "NUL";
+    if (value == 9)
+        return "TAB";
+    if (value == 10)
+        return "LF";
+    if (value == 13)
+        return "CR";
+    if (value == 27)
+        return "ESC";
+    if (value == 32)
+        return "SPACE";
+    if (value >= 33 && value < 127)
+        return std::string(1, static_cast<char>(value));
+    if (value == 127)
+        return "DEL";
+    return "non-printing";
+}
+
+std::vector<std::vector<std::string>> ascii_rows()
+{
+    std::vector<std::vector<std::string>> rows;
+    rows.reserve(256);
+    for (unsigned int value = 0; value < 256; ++value)
+    {
+        std::ostringstream hex;
+        hex << "0x" << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << value;
+        rows.push_back({std::to_string(value), hex.str(), ascii_character(static_cast<unsigned char>(value))});
+    }
+    return rows;
+}
+
+struct CalculatorWindowState
+{
+    ckv::widgets::InputLine *input = nullptr;
+
+    void append(std::string_view text) const
+    {
+        if (input != nullptr)
+            input->set_text(input->text() + std::string(text));
+    }
+
+    void erase_last() const
+    {
+        if (input == nullptr)
+            return;
+        std::string text = input->text();
+        if (!text.empty())
+            text.pop_back();
+        input->set_text(std::move(text));
+    }
+
+    void clear() const
+    {
+        if (input != nullptr)
+            input->set_text({});
+    }
+
+    void evaluate() const
+    {
+        if (input == nullptr)
+            return;
+        input->set_text(CalculatorModel::evaluate(input->text()).text);
+    }
+};
 
 } // namespace
 
@@ -66,6 +144,20 @@ void UtilitiesLauncherApp::declare_commands()
         .visibility = CommandVisibility::Palette,
         .handler = [this] { open_calendar_window(); },
     });
+    ascii_table_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.utilities.show_ascii_table",
+        .title = "Show &ASCII table",
+        .category = "CK Utilities",
+        .visibility = CommandVisibility::Palette,
+        .handler = [this] { open_ascii_table_window(); },
+    });
+    calculator_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.utilities.show_calculator",
+        .title = "Show &Calculator",
+        .category = "CK Utilities",
+        .visibility = CommandVisibility::Palette,
+        .handler = [this] { open_calculator_window(); },
+    });
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
@@ -77,12 +169,16 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
             MenuBarItem{"&Tools", {
                 MenuItem::command(CommandPresentation{launch_command_, "&Launch selected tool"}),
                 MenuItem::command(CommandPresentation{calendar_command_, "Show &Calendar"}),
+                MenuItem::command(CommandPresentation{ascii_table_command_, "Show &ASCII table"}),
+                MenuItem::command(CommandPresentation{calculator_command_, "Show &Calculator"}),
             }},
             MenuBarItem{"&Window", {MenuItem::command(CommandPresentation{new_launcher_command_, "&New launcher window"})}},
         },
         .application_status_items = {
             StatusLineItem{CommandPresentation{launch_command_, "&Launch"}, 30},
             StatusLineItem{CommandPresentation{calendar_command_, "&Calendar"}, 25},
+            StatusLineItem{CommandPresentation{ascii_table_command_, "&ASCII"}, 20},
+            StatusLineItem{CommandPresentation{calculator_command_, "&Calculator"}, 20},
             StatusLineItem{CommandPresentation{new_launcher_command_, "&New"}, 20},
         },
     };
@@ -165,6 +261,68 @@ void UtilitiesLauncherApp::open_calendar_window()
     calendar->set_selected(selected);
     calendar->set_today(selected);
     window->set_content(std::move(calendar));
+    shell_->desktop().add_window(std::move(window));
+}
+
+void UtilitiesLauncherApp::open_ascii_table_window()
+{
+    auto window = std::make_unique<ckv::widgets::Window>("ASCII table");
+    window->set_min_size(ckv::Size{42, 14});
+    window->set_footer("Navigate cells with arrows; values are decimal, hexadecimal, and printable names.");
+
+    auto table = std::make_unique<ckv::widgets::Table>();
+    table->set_columns({
+        {"Decimal", 9, 3},
+        {"Hex", 8, 3},
+        {"Character", 18, 5},
+    });
+    table->set_rows(ascii_rows());
+    window->set_content(std::move(table));
+    shell_->desktop().add_window(std::move(window));
+}
+
+void UtilitiesLauncherApp::open_calculator_window()
+{
+    auto window = std::make_unique<ckv::widgets::Window>("Calculator");
+    window->set_min_size(ckv::Size{32, 15});
+    window->set_footer("Enter evaluates; expressions support +, -, *, /, parentheses, and %. ");
+
+    auto grid = std::make_unique<ckv::ui::Grid>(ckv::Rect{0, 0, 30, 13}, 6, 4);
+    auto state = std::make_shared<CalculatorWindowState>();
+    auto input = std::make_unique<ckv::widgets::InputLine>();
+    state->input = static_cast<ckv::widgets::InputLine *>(
+        grid->add_item(std::move(input), ckv::ui::GridSpec{.row = 0, .column = 0, .column_span = 4}));
+    state->input->on_accept = [state] { state->evaluate(); };
+
+    static constexpr std::array<std::string_view, 20> keys = {
+        "C", "<", "%", "/",
+        "7", "8", "9", "*",
+        "4", "5", "6", "-",
+        "1", "2", "3", "+",
+        "0", ".", "(", "=",
+    };
+    for (std::size_t index = 0; index < keys.size(); ++index)
+    {
+        const std::string_view key = keys[index];
+        auto button = std::make_unique<ckv::widgets::Button>(std::string(key));
+        button->set_flat(true);
+        button->on_press = [state, key] {
+            if (key == "C")
+                state->clear();
+            else if (key == "<")
+                state->erase_last();
+            else if (key == "=")
+                state->evaluate();
+            else
+                state->append(key);
+        };
+        grid->add_item(std::move(button), ckv::ui::GridSpec{
+            .row = static_cast<int>(index / 4) + 1,
+            .column = static_cast<int>(index % 4),
+        });
+    }
+
+    window->set_content(std::move(grid));
     shell_->desktop().add_window(std::move(window));
 }
 

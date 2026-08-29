@@ -1,4 +1,5 @@
 #include "launcher_app.hpp"
+#include "calculator_model.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -23,6 +24,13 @@ void require(bool condition, const char *message)
 
 int main()
 {
+    require(ck::vision::CalculatorModel::evaluate("2 + 3 * 4").text == "14",
+            "The calculator must respect arithmetic precedence.");
+    require(ck::vision::CalculatorModel::evaluate("(12 + 8) / 4").text == "5",
+            "The calculator must support grouped arithmetic.");
+    require(!ck::vision::CalculatorModel::evaluate("1 / 0").accepted,
+            "The calculator must reject division by zero.");
+
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
@@ -41,6 +49,12 @@ int main()
             "The native Calendar command must dispatch through the registry.");
     require(launcher.desktop_window_count() == 3,
             "The native calendar must be presented as a regular Desktop window.");
+    require(application.execute_command(launcher.ascii_table_command()),
+            "The native ASCII table command must dispatch through the registry.");
+    require(application.execute_command(launcher.calculator_command()),
+            "The native calculator command must dispatch through the registry.");
+    require(launcher.desktop_window_count() == 5,
+            "The native launcher must present each built-in tool as a regular Desktop window.");
     require(application.execute_command(launcher.launch_command()),
             "The native Launch command must dispatch through the registry.");
     require(launched_id == expected_tool,

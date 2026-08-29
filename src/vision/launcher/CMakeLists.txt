@@ -1,4 +1,5 @@
 add_library(ck_vision_launcher STATIC
+  calculator_model.cpp
   launcher_app.cpp
 )
 

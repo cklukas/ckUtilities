@@ -29,10 +29,11 @@ Historical application baseline: `legacy_tv`
 - WP-4: `ck-utilities-ckvision` now provides a native multi-window tool
   browser. It uses registry commands and publishes a selected launch request
   to the POSIX composition root, which closes the terminal UI before running
-  the child process. The built-in calendar, ASCII, calculator, color, and
-  event-diagnostics windows are the next launcher slice. The native calendar
-  window already reuses ckVision's CalendarView rather than retaining a suite
-  copy of that widget.
+  the child process. The built-in calendar, ASCII table, and calculator are
+  native Desktop windows; the calculator's expression model is UI-independent
+  and directly tested. The calendar reuses ckVision's CalendarView rather
+  than retaining a suite copy. Color selection and bounded event diagnostics
+  remain the next launcher slice.
 - WP-5: `ck-find-ckvision` is an initial native search-specification slice.
   It keeps the specification and command-plan generation in the framework-
   independent search core, exposes command-registry actions for a validated
