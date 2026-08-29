@@ -5,11 +5,67 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <vector>
+
+namespace ck::ai
+{
+class SystemPromptManager;
+}
 
 namespace ck::vision
 {
+
+struct ChatSystemPrompt
+{
+    std::string id;
+    std::string name;
+    std::string message;
+    bool is_default = false;
+    bool is_active = false;
+};
+
+// Prompt state belongs to the chat domain. The UI gets this narrow service,
+// while the production adapter can delegate to ckai_core's persistent manager.
+class ChatPromptService
+{
+public:
+    virtual ~ChatPromptService() = default;
+
+    virtual std::vector<ChatSystemPrompt> prompts() const = 0;
+    virtual std::optional<ChatSystemPrompt> active_prompt() const = 0;
+    virtual bool add_or_update(ChatSystemPrompt prompt) = 0;
+    virtual bool remove(std::string_view id) = 0;
+    virtual bool activate(std::string_view id) = 0;
+    virtual bool restore_default(std::string_view id) = 0;
+    virtual bool is_default_modified(std::string_view id) const = 0;
+};
+
+class SystemPromptManagerService final : public ChatPromptService
+{
+public:
+    explicit SystemPromptManagerService(ck::ai::SystemPromptManager &manager) noexcept;
+
+    std::vector<ChatSystemPrompt> prompts() const override;
+    std::optional<ChatSystemPrompt> active_prompt() const override;
+    bool add_or_update(ChatSystemPrompt prompt) override;
+    bool remove(std::string_view id) override;
+    bool activate(std::string_view id) override;
+    bool restore_default(std::string_view id) override;
+    bool is_default_modified(std::string_view id) const override;
+
+private:
+    ck::ai::SystemPromptManager &manager_;
+};
+
+struct ChatResponseRequest
+{
+    std::string prompt;
+    std::string system_prompt;
+};
 
 // The chat presentation depends on streaming callbacks, not a model runtime.
 // A real model adapter may emit many chunks; the default adapter below turns a
@@ -22,12 +78,12 @@ public:
 
     virtual ~ChatResponseService() = default;
 
-    virtual void start(std::string prompt, ChunkHandler on_chunk, CompletionHandler on_complete) = 0;
+    virtual void start(ChatResponseRequest request, ChunkHandler on_chunk, CompletionHandler on_complete) = 0;
     virtual void cancel() noexcept = 0;
     virtual bool running() const noexcept = 0;
 };
 
-using ChatResponder = std::function<std::string(const std::string &prompt)>;
+using ChatResponder = std::function<std::string(const ChatResponseRequest &request)>;
 
 class ThreadedChatResponseService final : public ChatResponseService
 {
@@ -35,7 +91,7 @@ public:
     explicit ThreadedChatResponseService(ChatResponder responder);
     ~ThreadedChatResponseService() override;
 
-    void start(std::string prompt, ChunkHandler on_chunk, CompletionHandler on_complete) override;
+    void start(ChatResponseRequest request, ChunkHandler on_chunk, CompletionHandler on_complete) override;
     void cancel() noexcept override;
     bool running() const noexcept override;
 

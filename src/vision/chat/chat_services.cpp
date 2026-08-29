@@ -3,8 +3,74 @@
 #include <fstream>
 #include <utility>
 
+#include "ck/ai/system_prompt_manager.hpp"
+
 namespace ck::vision
 {
+namespace
+{
+ChatSystemPrompt as_chat_prompt(const ck::ai::SystemPrompt &prompt)
+{
+    return {.id = prompt.id,
+            .name = prompt.name,
+            .message = prompt.message,
+            .is_default = prompt.is_default,
+            .is_active = prompt.is_active};
+}
+
+ck::ai::SystemPrompt as_system_prompt(ChatSystemPrompt prompt)
+{
+    return {.id = std::move(prompt.id),
+            .name = std::move(prompt.name),
+            .message = std::move(prompt.message),
+            .is_default = prompt.is_default,
+            .is_active = prompt.is_active};
+}
+} // namespace
+
+SystemPromptManagerService::SystemPromptManagerService(ck::ai::SystemPromptManager &manager) noexcept
+    : manager_(manager)
+{
+}
+
+std::vector<ChatSystemPrompt> SystemPromptManagerService::prompts() const
+{
+    std::vector<ChatSystemPrompt> prompts;
+    for (const ck::ai::SystemPrompt &prompt : manager_.get_prompts())
+        prompts.push_back(as_chat_prompt(prompt));
+    return prompts;
+}
+
+std::optional<ChatSystemPrompt> SystemPromptManagerService::active_prompt() const
+{
+    const std::optional<ck::ai::SystemPrompt> prompt = manager_.get_active_prompt();
+    return prompt ? std::optional<ChatSystemPrompt>{as_chat_prompt(*prompt)} : std::nullopt;
+}
+
+bool SystemPromptManagerService::add_or_update(ChatSystemPrompt prompt)
+{
+    return manager_.add_or_update_prompt(as_system_prompt(std::move(prompt)));
+}
+
+bool SystemPromptManagerService::remove(std::string_view id)
+{
+    return manager_.delete_prompt(std::string(id));
+}
+
+bool SystemPromptManagerService::activate(std::string_view id)
+{
+    return manager_.set_active_prompt(std::string(id));
+}
+
+bool SystemPromptManagerService::restore_default(std::string_view id)
+{
+    return manager_.restore_default_prompt(std::string(id));
+}
+
+bool SystemPromptManagerService::is_default_modified(std::string_view id) const
+{
+    return manager_.is_default_prompt_modified(std::string(id));
+}
 
 ThreadedChatResponseService::ThreadedChatResponseService(ChatResponder responder)
     : responder_(std::move(responder))
@@ -19,7 +85,8 @@ ThreadedChatResponseService::~ThreadedChatResponseService()
         worker_.join();
 }
 
-void ThreadedChatResponseService::start(std::string prompt, ChunkHandler on_chunk, CompletionHandler on_complete)
+void ThreadedChatResponseService::start(ChatResponseRequest request, ChunkHandler on_chunk,
+                                        CompletionHandler on_complete)
 {
     cancel();
 
@@ -33,11 +100,11 @@ void ThreadedChatResponseService::start(std::string prompt, ChunkHandler on_chun
 
     auto cancellation = std::make_shared<std::atomic_bool>(false);
     running_.store(true, std::memory_order_release);
-    std::jthread worker([this, cancellation, prompt = std::move(prompt), on_chunk = std::move(on_chunk),
+    std::jthread worker([this, cancellation, request = std::move(request), on_chunk = std::move(on_chunk),
                          on_complete = std::move(on_complete)]() mutable {
         std::string response;
         if (responder_)
-            response = responder_(prompt);
+            response = responder_(request);
         const bool cancelled = cancellation->load(std::memory_order_acquire);
         if (!cancelled && on_chunk)
             on_chunk(std::move(response));
