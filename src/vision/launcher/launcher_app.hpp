@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <cvision/ui/application.hpp>
@@ -16,6 +17,8 @@
 
 namespace ck::vision
 {
+
+class BoundedDiagnostics;
 
 // Native ckVision launcher presentation. It publishes the selected tool to
 // the composition root, which owns the platform-specific child-process
@@ -35,7 +38,9 @@ public:
     ckv::ui::CommandId calendar_command() const noexcept { return calendar_command_; }
     ckv::ui::CommandId ascii_table_command() const noexcept { return ascii_table_command_; }
     ckv::ui::CommandId calculator_command() const noexcept { return calculator_command_; }
+    ckv::ui::CommandId diagnostics_command() const noexcept { return diagnostics_command_; }
     std::size_t desktop_window_count() const noexcept { return shell_->desktop().windows().size(); }
+    std::size_t diagnostics_entry_count() const noexcept;
 
 private:
     struct LauncherWindow
@@ -53,6 +58,8 @@ private:
     void open_calendar_window();
     void open_ascii_table_window();
     void open_calculator_window();
+    void open_diagnostics_window();
+    void log_diagnostic(ckv::LogLevel level, std::string_view message) noexcept;
     void close_launcher_window(LauncherWindow *window);
     LauncherWindow *active_launcher_window() const noexcept;
 
@@ -65,6 +72,8 @@ private:
     ckv::ui::CommandId calendar_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId ascii_table_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId calculator_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId diagnostics_command_ = ckv::ui::kInvalidCommand;
+    std::shared_ptr<BoundedDiagnostics> diagnostics_;
     std::unique_ptr<SuiteShell> shell_;
 };
 

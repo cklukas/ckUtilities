@@ -39,6 +39,8 @@ int main()
         launched_id = tool.id;
     });
 
+    require(launcher.diagnostics_entry_count() > 0,
+            "The launcher must retain an application-owned bounded diagnostics snapshot.");
     require(launcher.launcher_window_count() == 1, "The launcher must open one initial window.");
     require(launcher.selected_tool() != nullptr, "The launcher must select an installed tool.");
     const std::string expected_tool = std::string(launcher.selected_tool()->id);
@@ -55,6 +57,10 @@ int main()
             "The native calculator command must dispatch through the registry.");
     require(launcher.desktop_window_count() == 5,
             "The native launcher must present each built-in tool as a regular Desktop window.");
+    require(application.execute_command(launcher.diagnostics_command()),
+            "The native diagnostics command must dispatch through the registry.");
+    require(launcher.desktop_window_count() == 6,
+            "The diagnostics snapshot must be presented as a regular Desktop window.");
     require(application.execute_command(launcher.launch_command()),
             "The native Launch command must dispatch through the registry.");
     require(launched_id == expected_tool,

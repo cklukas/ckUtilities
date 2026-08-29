@@ -32,8 +32,10 @@ Historical application baseline: `legacy_tv`
   the child process. The built-in calendar, ASCII table, and calculator are
   native Desktop windows; the calculator's expression model is UI-independent
   and directly tested. The calendar reuses ckVision's CalendarView rather
-  than retaining a suite copy. Color selection and bounded event diagnostics
-  remain the next launcher slice.
+  than retaining a suite copy. A bounded, read-only application-diagnostics
+  window uses ckVision's injected diagnostics sink rather than creating a
+  raw-event interception path. Color selection remains the next launcher
+  slice.
 - WP-5: `ck-find-ckvision` is an initial native search-specification slice.
   It keeps the specification and command-plan generation in the framework-
   independent search core, exposes command-registry actions for a validated

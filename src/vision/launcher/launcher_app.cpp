@@ -10,6 +10,7 @@
 #include <sstream>
 #include <utility>
 
+#include <cvision/core/diagnostics.hpp>
 #include <cvision/ui/grid.hpp>
 #include <cvision/widgets/button.hpp>
 #include <cvision/widgets/common_components.hpp>
@@ -100,11 +101,84 @@ struct CalculatorWindowState
     }
 };
 
+class LauncherDiagnosticsSink final : public ckv::DiagnosticsSink
+{
+public:
+    explicit LauncherDiagnosticsSink(std::shared_ptr<BoundedDiagnostics> log) : log_(std::move(log)) {}
+
+    void log(ckv::LogLevel level, std::string_view message) noexcept override;
+
+private:
+    std::shared_ptr<BoundedDiagnostics> log_;
+};
+
 } // namespace
+
+class BoundedDiagnostics
+{
+public:
+    static constexpr std::size_t kMaximumEntries = 200;
+
+    void append(ckv::LogLevel level, std::string_view message) noexcept
+    {
+        try
+        {
+            if (entries_.size() == kMaximumEntries)
+                entries_.erase(entries_.begin());
+            entries_.push_back({level, std::string(message)});
+        }
+        catch (...)
+        {
+            // Diagnostics are best effort: an allocation failure may discard
+            // an observation but must never disturb the application itself.
+        }
+    }
+
+    std::size_t size() const noexcept { return entries_.size(); }
+
+    std::string snapshot() const
+    {
+        std::ostringstream output;
+        for (const Entry &entry : entries_)
+            output << level_name(entry.level) << ": " << entry.message << '\n';
+        return output.str();
+    }
+
+private:
+    struct Entry
+    {
+        ckv::LogLevel level;
+        std::string message;
+    };
+
+    static std::string_view level_name(ckv::LogLevel level) noexcept
+    {
+        switch (level)
+        {
+        case ckv::LogLevel::Trace: return "trace";
+        case ckv::LogLevel::Debug: return "debug";
+        case ckv::LogLevel::Info: return "info";
+        case ckv::LogLevel::Warning: return "warning";
+        case ckv::LogLevel::Error: return "error";
+        }
+        return "unknown";
+    }
+
+    std::vector<Entry> entries_;
+};
+
+void LauncherDiagnosticsSink::log(ckv::LogLevel level, std::string_view message) noexcept
+{
+    if (log_ != nullptr)
+        log_->append(level, message);
+}
 
 UtilitiesLauncherApp::UtilitiesLauncherApp(ckv::ui::Application &application, LaunchHandler on_launch)
     : application_(application), on_launch_(std::move(on_launch))
 {
+    diagnostics_ = std::make_shared<BoundedDiagnostics>();
+    application_.set_diagnostics_sink(std::make_unique<LauncherDiagnosticsSink>(diagnostics_));
+    log_diagnostic(ckv::LogLevel::Info, "CK Utilities native launcher started");
     for (const ck::appinfo::ToolInfo &tool : ck::appinfo::tools())
     {
         if (tool.id != "ck-utilities")
@@ -158,6 +232,13 @@ void UtilitiesLauncherApp::declare_commands()
         .visibility = CommandVisibility::Palette,
         .handler = [this] { open_calculator_window(); },
     });
+    diagnostics_command_ = application_.commands().declare(CommandDescriptor{
+        .key = "ck.utilities.show_diagnostics",
+        .title = "Show &Diagnostics",
+        .category = "CK Utilities",
+        .visibility = CommandVisibility::Palette,
+        .handler = [this] { open_diagnostics_window(); },
+    });
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
@@ -171,6 +252,7 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{calendar_command_, "Show &Calendar"}),
                 MenuItem::command(CommandPresentation{ascii_table_command_, "Show &ASCII table"}),
                 MenuItem::command(CommandPresentation{calculator_command_, "Show &Calculator"}),
+                MenuItem::command(CommandPresentation{diagnostics_command_, "Show &Diagnostics"}),
             }},
             MenuBarItem{"&Window", {MenuItem::command(CommandPresentation{new_launcher_command_, "&New launcher window"})}},
         },
@@ -179,6 +261,7 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
             StatusLineItem{CommandPresentation{calendar_command_, "&Calendar"}, 25},
             StatusLineItem{CommandPresentation{ascii_table_command_, "&ASCII"}, 20},
             StatusLineItem{CommandPresentation{calculator_command_, "&Calculator"}, 20},
+            StatusLineItem{CommandPresentation{diagnostics_command_, "&Diagnostics"}, 20},
             StatusLineItem{CommandPresentation{new_launcher_command_, "&New"}, 20},
         },
     };
@@ -186,6 +269,7 @@ SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const
 
 void UtilitiesLauncherApp::open_launcher_window()
 {
+    log_diagnostic(ckv::LogLevel::Info, "Opened launcher window");
     auto state = std::make_unique<LauncherWindow>();
     LauncherWindow *const raw_state = state.get();
 
@@ -242,6 +326,7 @@ void UtilitiesLauncherApp::launch_active_tool()
     const ck::appinfo::ToolInfo *tool = selected_tool();
     if (tool == nullptr)
         return;
+    log_diagnostic(ckv::LogLevel::Info, std::string("Launching ") + std::string(tool->id));
     if (on_launch_)
         on_launch_(*tool);
     application_.request_quit();
@@ -249,6 +334,7 @@ void UtilitiesLauncherApp::launch_active_tool()
 
 void UtilitiesLauncherApp::open_calendar_window()
 {
+    log_diagnostic(ckv::LogLevel::Info, "Opened calendar");
     const auto today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
     const std::chrono::year_month_day date{today};
     const ckv::widgets::DateValue selected{
@@ -266,6 +352,7 @@ void UtilitiesLauncherApp::open_calendar_window()
 
 void UtilitiesLauncherApp::open_ascii_table_window()
 {
+    log_diagnostic(ckv::LogLevel::Info, "Opened ASCII table");
     auto window = std::make_unique<ckv::widgets::Window>("ASCII table");
     window->set_min_size(ckv::Size{42, 14});
     window->set_footer("Navigate cells with arrows; values are decimal, hexadecimal, and printable names.");
@@ -283,6 +370,7 @@ void UtilitiesLauncherApp::open_ascii_table_window()
 
 void UtilitiesLauncherApp::open_calculator_window()
 {
+    log_diagnostic(ckv::LogLevel::Info, "Opened calculator");
     auto window = std::make_unique<ckv::widgets::Window>("Calculator");
     window->set_min_size(ckv::Size{32, 15});
     window->set_footer("Enter evaluates; expressions support +, -, *, /, parentheses, and %. ");
@@ -324,6 +412,29 @@ void UtilitiesLauncherApp::open_calculator_window()
 
     window->set_content(std::move(grid));
     shell_->desktop().add_window(std::move(window));
+}
+
+void UtilitiesLauncherApp::open_diagnostics_window()
+{
+    log_diagnostic(ckv::LogLevel::Info, "Opened diagnostics window");
+    auto window = std::make_unique<ckv::widgets::Window>("Application diagnostics");
+    window->set_min_size(ckv::Size{52, 14});
+    window->set_footer("Bounded application diagnostics captured through ckVision's injected diagnostics sink.");
+    auto text = std::make_unique<ckv::widgets::TextView>();
+    text->set_wrap_mode(ckv::widgets::WrapMode::Word);
+    text->set_text(diagnostics_->snapshot());
+    window->set_content(std::move(text));
+    shell_->desktop().add_window(std::move(window));
+}
+
+void UtilitiesLauncherApp::log_diagnostic(ckv::LogLevel level, std::string_view message) noexcept
+{
+    application_.diagnostics().log(level, message);
+}
+
+std::size_t UtilitiesLauncherApp::diagnostics_entry_count() const noexcept
+{
+    return diagnostics_ == nullptr ? 0 : diagnostics_->size();
 }
 
 void UtilitiesLauncherApp::close_launcher_window(LauncherWindow *window)
