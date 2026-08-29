@@ -22,6 +22,15 @@ using ckv::widgets::StatusLineItem;
 
 constexpr std::size_t kRenderedMessageLimit = 160;
 constexpr std::size_t kResponseRefreshBatchBytes = 96;
+
+FlowBlock message_block(const ChatMessage &message)
+{
+    const std::string prefix = message.role == ChatMessage::Role::User ? "You: " : "Assistant: ";
+    FlowBlock block;
+    block.content.emplace_back(FlowText{prefix, ckv::Attr::Bold});
+    append_markdown_flow(block, message.content);
+    return block;
+}
 }
 
 ChatApp::ChatApp(ckv::ui::Application &application,
@@ -722,7 +731,7 @@ void ChatApp::append_response_chunk(std::uint64_t request, std::string chunk)
     {
         unrendered_response_bytes_ = 0;
         render_first_response_chunk_ = false;
-        refresh_transcript();
+        refresh_active_response();
     }
 }
 
@@ -765,6 +774,19 @@ bool ChatApp::response_running() const noexcept
     return response_pending_ || response_service_.running();
 }
 
+void ChatApp::refresh_active_response()
+{
+    if (transcript_ == nullptr || messages_.empty() || messages_.back().role != ChatMessage::Role::Assistant ||
+        transcript_->document().blocks.empty())
+    {
+        refresh_transcript();
+        return;
+    }
+    const std::size_t active_block = transcript_->document().blocks.size() - 1;
+    if (!transcript_->replace_block(active_block, message_block(messages_.back())))
+        refresh_transcript();
+}
+
 void ChatApp::refresh_transcript()
 {
     if (transcript_ == nullptr)
@@ -782,14 +804,7 @@ void ChatApp::refresh_transcript()
                                                 " messages are retained for export and model context."}}});
     }
     for (std::size_t index = first_rendered_message; index < messages_.size(); ++index)
-    {
-        const ChatMessage &message = messages_[index];
-        const std::string prefix = message.role == ChatMessage::Role::User ? "You: " : "Assistant: ";
-        FlowBlock block;
-        block.content.emplace_back(FlowText{prefix, ckv::Attr::Bold});
-        append_markdown_flow(block, message.content);
-        document.blocks.push_back(std::move(block));
-    }
+        document.blocks.push_back(message_block(messages_[index]));
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)
     {

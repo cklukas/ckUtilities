@@ -125,8 +125,10 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  Generic FlowView active-block/incremental-layout capability and real-model
-  runtime evidence remain before acceptance.
+  ckVision candidate `91d2776a180d0773ad035bfcfff316a912d81265` now provides
+  a checked `FlowView::replace_block` API, which the active response uses to
+  avoid rebuilding prior rich-content blocks. Incremental FlowView layout and
+  real-model runtime evidence remain before acceptance.
 - All seven native executables build together against the installed ckVision
   candidate SDK. Their headless suite, JSON-domain, and architecture tests
   pass as one 19-test checkpoint. A separate installed-product gate builds the

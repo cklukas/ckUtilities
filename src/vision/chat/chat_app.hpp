@@ -103,6 +103,7 @@ private:
     void complete_response(std::uint64_t request, bool cancelled);
     void update_model_download_progress(ChatModelDownloadProgress progress);
     void complete_model_download(ChatModelDownloadResult result);
+    void refresh_active_response();
     void refresh_transcript();
 
     ckv::ui::Application &application_;
