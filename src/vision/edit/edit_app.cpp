@@ -18,6 +18,11 @@ using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
+
+std::string match_count_message(std::size_t count)
+{
+    return count == 1U ? "1 match" : std::to_string(count) + " matches";
+}
 }
 
 EditApp::EditApp(ckv::ui::Application &application, ckv::FileSystem &files)
@@ -61,6 +66,14 @@ void EditApp::declare_commands()
         }));
     toggle_link_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_link", [this] { toggle_link_markdown(); }));
+    find_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.find", [this] { show_search_dialog(SearchAction::Find); }));
+    find_next_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.find_next", [this] { find_next(); }));
+    replace_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.replace", [this] { show_search_dialog(SearchAction::ReplaceCurrent); }));
+    replace_all_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.replace_all", [this] { show_search_dialog(SearchAction::ReplaceAll); }));
     toggle_task_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_task", [this] { toggle_task_markdown(); }));
     toggle_quote_command_ = command_scope_.own(
@@ -90,6 +103,11 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{save_command_, "&Save"}),
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
                 MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
+            }}, MenuBarItem{"&Search", {
+                MenuItem::command(CommandPresentation{find_command_, "&Find..."}),
+                MenuItem::command(CommandPresentation{find_next_command_, "Find &next"}),
+                MenuItem::command(CommandPresentation{replace_command_, "&Replace..."}),
+                MenuItem::command(CommandPresentation{replace_all_command_, "Replace &all..."}),
             }}, MenuBarItem{"&Format", {
                 MenuItem::command(CommandPresentation{reflow_markdown_command_, "&Reflow Markdown paragraph"}),
                 MenuItem::command(CommandPresentation{bold_command_, "&Bold selection"}),
@@ -517,6 +535,113 @@ void EditApp::show_link_destination_dialog()
         if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown link."))
             window_->set_footer("Could not insert a Markdown link with that destination.");
     });
+}
+
+void EditApp::show_search_dialog(SearchAction action)
+{
+    if (window_ == nullptr)
+        return;
+
+    const auto &current_query = window_->editor().search_query();
+    search_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = action == SearchAction::Find ? "Find" : "Replace";
+    dialog.fields.push_back({"&Find:", current_query.text, [](const std::string &value) { return !value.empty(); }});
+    if (action != SearchAction::Find)
+        dialog.fields.push_back({"&Replace with:", "", nullptr});
+
+    ckv::widgets::FieldDescriptor case_sensitive;
+    case_sensitive.label = "&Case sensitive";
+    case_sensitive.kind = ckv::widgets::FieldKind::Check;
+    case_sensitive.initial_checked = current_query.case_sensitive;
+    dialog.fields.push_back(std::move(case_sensitive));
+
+    ckv::widgets::FieldDescriptor whole_word;
+    whole_word.label = "&Whole word";
+    whole_word.kind = ckv::widgets::FieldKind::Check;
+    whole_word.initial_checked = current_query.whole_word;
+    dialog.fields.push_back(std::move(whole_word));
+
+    const char *const action_label = action == SearchAction::Find
+                                         ? "&Find"
+                                         : action == SearchAction::ReplaceCurrent ? "&Replace" : "Replace &all";
+    dialog.buttons.push_back({action_label, ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    search_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_->set_completion_handler([this, action](ckv::widgets::DialogResult result) {
+        const std::size_t expected_field_count = action == SearchAction::Find ? 3U : 4U;
+        if (!result.accepted || window_ == nullptr || result.values.size() != expected_field_count ||
+            result.checked.size() != expected_field_count)
+            return;
+
+        const std::size_t case_sensitive_index = action == SearchAction::Find ? 1U : 2U;
+        const std::size_t whole_word_index = case_sensitive_index + 1U;
+        ckv::widgets::EditorSearchQuery query;
+        query.text = result.values[0];
+        query.case_sensitive = result.checked[case_sensitive_index];
+        query.whole_word = result.checked[whole_word_index];
+
+        auto &editor = window_->editor();
+        const ckv::widgets::EditorSearchQuery previous_query = editor.search_query();
+        const bool reusing_current_query = previous_query.text == query.text &&
+                                           previous_query.case_sensitive == query.case_sensitive &&
+                                           previous_query.whole_word == query.whole_word;
+        editor.set_search_query(std::move(query));
+        const std::size_t matches = editor.search_match_count();
+        if (matches == 0U)
+        {
+            window_->set_footer("No matches found.");
+            return;
+        }
+
+        if (action == SearchAction::Find)
+        {
+            editor.find_next();
+            window_->set_footer("Found " + match_count_message(matches) + ".");
+            return;
+        }
+
+        const std::string replacement = result.values[1];
+        if (action == SearchAction::ReplaceCurrent)
+        {
+            bool replaced = reusing_current_query && editor.replace_current_search_match(replacement);
+            if (!replaced && editor.find_next())
+                replaced = editor.replace_current_search_match(replacement);
+            if (!replaced)
+            {
+                window_->set_footer("Could not replace the selected match.");
+                return;
+            }
+            window_->set_footer("Replaced one match.");
+            return;
+        }
+
+        if (!editor.replace_all_search_matches(replacement))
+        {
+            window_->set_footer("Could not replace all matches.");
+            return;
+        }
+        window_->set_footer("Replaced " + match_count_message(matches) + ".");
+    });
+}
+
+void EditApp::find_next()
+{
+    if (window_ == nullptr)
+        return;
+    const auto &query = window_->editor().search_query();
+    if (query.text.empty())
+    {
+        show_search_dialog(SearchAction::Find);
+        return;
+    }
+    if (!window_->editor().find_next())
+    {
+        window_->set_footer("No matches found.");
+        return;
+    }
+    window_->set_footer("Found " + match_count_message(window_->editor().search_match_count()) + ".");
 }
 
 bool EditApp::commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,

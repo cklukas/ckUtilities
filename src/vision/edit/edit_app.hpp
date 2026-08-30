@@ -53,8 +53,19 @@ public:
     ckv::ui::CommandId toggle_bullet_list_command() const noexcept { return toggle_bullet_list_command_; }
     ckv::ui::CommandId toggle_ordered_list_command() const noexcept { return toggle_ordered_list_command_; }
     ckv::ui::CommandId toggle_link_command() const noexcept { return toggle_link_command_; }
+    ckv::ui::CommandId find_command() const noexcept { return find_command_; }
+    ckv::ui::CommandId find_next_command() const noexcept { return find_next_command_; }
+    ckv::ui::CommandId replace_command() const noexcept { return replace_command_; }
+    ckv::ui::CommandId replace_all_command() const noexcept { return replace_all_command_; }
 
 private:
+    enum class SearchAction
+    {
+        Find,
+        ReplaceCurrent,
+        ReplaceAll,
+    };
+
     void declare_commands();
     SuiteShellOptions make_shell_options() const;
     void create_editor_window();
@@ -74,6 +85,8 @@ private:
     void toggle_list_markdown(ck::edit::MarkdownListStyle style, std::string_view label);
     void toggle_link_markdown();
     void show_link_destination_dialog();
+    void show_search_dialog(SearchAction action);
+    void find_next();
     bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
                                    std::string_view success_message);
     bool markdown_document() const noexcept;
@@ -99,10 +112,15 @@ private:
     ckv::ui::CommandId toggle_bullet_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_ordered_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_link_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId find_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId find_next_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId replace_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId replace_all_command_ = ckv::ui::kInvalidCommand;
     std::array<ckv::ui::CommandId, 6> heading_commands_{};
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_destination_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> search_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
     std::optional<ckv::widgets::MessageBoxPresentation> save_conflict_confirmation_;

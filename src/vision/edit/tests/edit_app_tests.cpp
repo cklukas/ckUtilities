@@ -156,6 +156,66 @@ int main()
                 editor.document().text() == "Alpha beta gamma delta epsilon zeta\n",
             "The native reflow command must join and wrap an ordinary Markdown paragraph through one transaction.");
 
+    editor.document().set_text("alpha beta alpha\n");
+    const auto search_position = editor.document().position_at_byte(0);
+    require(search_position.has_value() && editor.editor_view()->set_selection({*search_position, *search_position}),
+            "The native editor must position a zero-width selection before starting a search.");
+    require(application.execute_command(editor.find_command()),
+            "Find must dispatch through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "alpha"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native Find dialog must accept a literal query from the keyboard.");
+    application.step(0);
+    require(editor.editor_view()->search_match_count() == 2U && editor.editor_view()->selection().has_value() &&
+                editor.document().text(*editor.editor_view()->selection()) == "alpha",
+            "Find must select the first literal match while retaining all search matches in the view.");
+    require(application.execute_command(editor.find_next_command()) && editor.editor_view()->selection().has_value() &&
+                editor.editor_view()->selection()->begin.byte == 11U,
+            "Find next must move to the next search match through the command registry.");
+
+    require(application.execute_command(editor.replace_command()),
+            "Replace must dispatch through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "omega"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native Replace dialog must accept a replacement from the keyboard.");
+    application.step(0);
+    require(editor.document().text() == "alpha beta omega\n",
+            "Replace must mutate the current selected match in one editor transaction.");
+
+    require(application.execute_command(editor.replace_all_command()),
+            "Replace all must dispatch through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "omega"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native Replace all dialog must accept a replacement from the keyboard.");
+    application.step(0);
+    require(editor.document().text() == "omega beta omega\n",
+            "Replace all must update every literal match through the editor's atomic search operation.");
+    require(editor.document().undo() && editor.document().text() == "alpha beta omega\n",
+            "Replace all must be undoable as one editor transaction.");
+
+    editor.document().set_text("Alpha alpha alphabet\n");
+    const auto option_search_position = editor.document().position_at_byte(0);
+    require(option_search_position.has_value() &&
+                editor.editor_view()->set_selection({*option_search_position, *option_search_position}) &&
+                application.execute_command(editor.find_command()),
+            "Find must reopen with the current query so its matching options can be adjusted.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, " "}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Tab, ckv::Modifier::None, ""}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, " "}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The Find dialog must expose keyboard-accessible case and whole-word options.");
+    application.step(0);
+    require(!editor.editor_view()->search_query().case_sensitive && editor.editor_view()->search_query().whole_word &&
+                editor.editor_view()->search_match_count() == 2U,
+            "Find must apply case-insensitive whole-word matching without including a longer word.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");

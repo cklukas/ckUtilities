@@ -135,9 +135,11 @@ Historical application baseline: `legacy_tv`
   sequentially, preserve task markers while changing list styles, and remove
   task markers when converting a task list to plain text. Link commands use a
   native destination dialog to insert a link or remove a selected complete
-  link or label; parentheses in destinations are supported. Broader
-  transformations include deeper list structure, smart-list, and find/replace
-  workflows. The native reflow command wraps each selected ordinary paragraph
+  link or label; parentheses in destinations are supported. Native literal
+  find, find-next, replace, and atomic replace-all dialogs retain case and
+  whole-word choices; a replacement reuses the selected search match when the
+  query is unchanged. Broader transformations include deeper list structure
+  and smart-list workflows. The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
