@@ -16,6 +16,11 @@ option(CKTOOLS_VERIFY_CKVISION_PACKAGE
        "Enable the independent ckVision package-consumer verification target"
        OFF)
 
+set(CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE "Release" CACHE STRING
+    "Build type used by the independent ckVision package consumer")
+set_property(CACHE CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE PROPERTY STRINGS
+             Debug Release RelWithDebInfo MinSizeRel)
+
 option(CKTOOLS_VERIFY_CKVISION_INSTALL
        "Enable the installed native-executable verification target"
        OFF)
@@ -46,6 +51,7 @@ function(cktools_add_ckvision_package_verification)
       "-DCKTOOLS_CKVISION_PREFIX=${CKTOOLS_CKVISION_PREFIX}"
       "-DCKTOOLS_CKVISION_CONSUMER_SOURCE_DIR=${PROJECT_SOURCE_DIR}/tests/integration/ckvision_consumer"
       "-DCKTOOLS_CKVISION_CONSUMER_BINARY_DIR=${PROJECT_BINARY_DIR}/ckvision-package-consumer"
+      "-DCKTOOLS_CKVISION_CONSUMER_BUILD_TYPE=${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionConsumer.cmake"
     USES_TERMINAL
     COMMENT "Configure, build, and run an independent ckVision package consumer")

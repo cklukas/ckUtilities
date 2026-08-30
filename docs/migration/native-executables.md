@@ -31,6 +31,12 @@ product names, and excludes the legacy UI runtime from configuration and
 installation. It remains opt-in while the selected ckVision candidate awaits
 trunk acceptance and a CI-consumable installed package.
 
+A clean macOS Debug cutover against that installed candidate passes the
+92-test suite, an independent Debug package consumer, staged executable smoke
+tests, launcher-child discovery, and the legacy-negative install gate. This is
+local configuration evidence only; the cross-platform release matrix and the
+remaining product journeys are still required before cutover.
+
 With `CKTOOLS_VERIFY_CKVISION_INSTALL=ON`, the
 `verify_ckvision_cutover` target also rejects legacy runtime linkage, installed
 legacy artifacts, and legacy references in the product's public headers.

@@ -64,9 +64,20 @@ cmake --build build/dev --target verify_ckvision_package
 ```
 
 The verifier configures, builds, and runs a separate CMake project under
-`tests/integration/ckvision_consumer`. Passing it proves the public installed
-package is consumable; it does not substitute for ckVision's own acceptance
-suite or an application migration slice.
+`tests/integration/ckvision_consumer`. It defaults to Release; select the
+consumer configuration explicitly when validating another build mode:
+
+```sh
+cmake --preset dev \
+  -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCKTOOLS_CKVISION_CONSUMER_BUILD_TYPE=Debug
+cmake --build build/dev --target verify_ckvision_package
+```
+
+Passing it proves the public installed package is consumable in the selected
+configuration; it does not substitute for ckVision's own acceptance suite or
+an application migration slice.
 
 ### Sanitizer SDKs
 
@@ -88,7 +99,7 @@ with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
 leak detection. The clean `c25a324aa1db9c24851085a6ff84f5ae47e9014b`
 integration candidate passed ckVision's full 169-test sanitizer suite and
-ckUtilities' 88-test cutover configuration in both normal and ASan/UBSan
+ckUtilities' 92-test cutover configuration in both normal and ASan/UBSan
 builds with this procedure on 2026-08-30.
 
 To verify the staged native product as well, enable the installed-product
