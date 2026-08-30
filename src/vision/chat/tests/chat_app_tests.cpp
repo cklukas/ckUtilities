@@ -493,6 +493,9 @@ int main()
     require(chat.add_or_update_prompt({"release", "Release notes", "Write concise release notes.", false, false}),
             "The chat app must persist a named custom system prompt through the service.");
     require(chat.remove_prompt("release"), "The chat app must remove a custom system prompt through the service.");
+    require(chat.remove_prompt("review") && chat.active_prompt() && chat.active_prompt()->id == "default" &&
+                selections.active_prompt_id() == "default",
+            "Removing the active system prompt must persist the service-selected fallback for the next startup.");
     require(!chat.remove_prompt("default"), "The chat app must leave a default system prompt intact.");
     require(application.execute_command(chat.select_prompt_command()), "Prompt selection must dispatch through the command registry.");
     require(application.execute_command(chat.add_prompt_command()), "Prompt creation must dispatch through the command registry.");
@@ -533,8 +536,9 @@ int main()
     require(chat.activate_model("writer"), "A deactivated model must be activatable again.");
     require(application.execute_command(chat.delete_active_model_command()),
             "Active-model deletion must dispatch through the command registry.");
+    require(chat.remove_model("writer") && !chat.active_model() && selections.active_model_id().empty(),
+            "Removing the active model must clear its persisted startup selection.");
     require(chat.activate_model("local"), "The remaining local model must remain selectable.");
-    require(chat.remove_model("writer"), "The chat app must remove a downloaded model through the service.");
     require(application.execute_command(chat.new_chat_command()), "New conversation must dispatch through the command registry.");
     require(chat.messages().empty(), "New conversation must clear the application-owned conversation state.");
     require(chat.submit_prompt("Retire me"), "A prompt must start before a new conversation can cancel it.");

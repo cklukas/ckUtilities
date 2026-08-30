@@ -253,6 +253,7 @@ bool ChatApp::add_or_update_prompt(ChatSystemPrompt prompt)
 
 bool ChatApp::remove_prompt(std::string_view id)
 {
+    const std::optional<ChatSystemPrompt> previous_active = active_prompt();
     if (id.empty() || !prompt_service_.remove(id))
     {
         if (window_ != nullptr)
@@ -260,6 +261,13 @@ bool ChatApp::remove_prompt(std::string_view id)
         return false;
     }
     refresh_transcript();
+    const std::optional<ChatSystemPrompt> current_active = active_prompt();
+    if (previous_active && (!current_active || current_active->id != previous_active->id) &&
+        !selection_persistence_.save_active_prompt(current_active ? current_active->id : std::string_view{}))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Active system prompt changed, but the Chat profile could not be saved.");
+    }
     return true;
 }
 
@@ -328,6 +336,7 @@ bool ChatApp::deactivate_model(std::string_view id)
 
 bool ChatApp::remove_model(std::string_view id)
 {
+    const std::optional<ChatModel> previous_active = active_model();
     if (response_running() || id.empty() || !model_service_.remove(id))
     {
         if (window_ != nullptr)
@@ -339,6 +348,13 @@ bool ChatApp::remove_model(std::string_view id)
         return false;
     }
     refresh_transcript();
+    const std::optional<ChatModel> current_active = active_model();
+    if (previous_active && (!current_active || current_active->id != previous_active->id) &&
+        !selection_persistence_.save_active_model(current_active ? current_active->id : std::string_view{}))
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Active model changed, but the Chat profile could not be saved.");
+    }
     return true;
 }
 
