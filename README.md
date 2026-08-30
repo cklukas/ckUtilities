@@ -14,16 +14,27 @@ The historical implementation remains deliberately separate and is not
 modified by the rehearsal.
 
 Current local acceptance evidence covers a clean macOS Debug/Release cutover,
-the configured release-and-sanitizer test suite, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
-checks, a verified release archive, and real-PTY terminal lifecycle smoke across three
-profiles (also under ASan/UBSan). Linux and Windows remain release acceptance
-work. See [the migration roadmap](tv_to_ckvision.md) for the complete status
-and constraints.
+the configured release-and-sanitizer test suite, ASan/UBSan, an installed-SDK
+consumer, staged executable and launcher checks, a verified release archive,
+and real-PTY terminal lifecycle smoke across three profiles (also under
+ASan/UBSan). Linux and Windows remain release acceptance work. See
+[the migration roadmap](tv_to_ckvision.md) for the complete status and
+constraints.
 
 Target platforms: macOS and Linux terminal hosts; Windows is not advertised
 until its ckVision backend has passed the required gates.
 
 Tech stack: C++20 and an installed `ckvision::cvision` CMake package.
+
+## Native tool guides
+
+- [CK Utilities launcher](docs/tools/ck-utilities.md)
+- [JSON View](docs/tools/json-view.md)
+- [Find](docs/tools/ck-find.md)
+- [Disk Usage](docs/tools/ck-du.md)
+- [Config](docs/tools/ck-config.md)
+- [Edit](docs/tools/ck-edit.md)
+- [Chat](docs/tools/ck-chat.md)
 
 ---
 
@@ -124,18 +135,13 @@ configuration root, delivers a PTY resize and the standard Alt+X quit command,
 then verifies clean exit and restoration of persistent terminal mode. It does
 not replace interactive workflow or cross-platform acceptance.
 
-### Hotkey Schemes
+### Keyboard shortcuts
 
-All CK Utilities applications draw their shortcuts from a shared hotkey registry. Use the `--hotkeys <scheme>` flag (available on every tool) to override the scheme for a single launch. The built-in schemes are `linux`, `mac`, `windows`, and a user editable `custom` profile.
-
-To change the default scheme globally, set the `CK_HOTKEY_SCHEME` environment variable before launching any tool:
-
-```bash
-export CK_HOTKEY_SCHEME=mac
-./build/cutover/bin/ck-utilities
-```
-
-Any customisations saved through `ck-config` are stored alongside the rest of the user configuration data.
+Native applications load shared built-in shortcuts and any saved personal
+bindings. Use `ck-config` to select the built-in-default or personal scheme and
+to add, reset, or resolve conflicting bindings. The native executables do not
+accept the historical `--hotkeys` flag or `CK_HOTKEY_SCHEME` environment
+override.
 
 #### Install (to staging directory):
 
