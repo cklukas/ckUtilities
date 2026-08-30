@@ -310,6 +310,102 @@ std::string transform_task_line(std::string_view line, bool &changed)
     return transformed;
 }
 
+std::size_t quote_indent(std::string_view line) noexcept
+{
+    std::size_t indent = 0;
+    while (indent < line.size() && indent < 3U && line[indent] == ' ')
+        ++indent;
+    return indent;
+}
+
+std::optional<std::size_t> quote_content_start(std::string_view line) noexcept
+{
+    const std::size_t indent = quote_indent(line);
+    if (indent == line.size() || line[indent] != '>')
+        return std::nullopt;
+    std::size_t content = indent + 1U;
+    if (content < line.size() && (line[content] == ' ' || line[content] == '\t'))
+        ++content;
+    return content;
+}
+
+bool quote_transformable(std::string_view line) noexcept
+{
+    const std::string_view content = !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1U) : line;
+    return !indented_code(content);
+}
+
+std::string transform_quote_line(std::string_view line, bool remove, bool &changed)
+{
+    if (!quote_transformable(line))
+        return std::string(line);
+
+    const bool has_carriage_return = !line.empty() && line.back() == '\r';
+    const std::string_view content = has_carriage_return ? line.substr(0, line.size() - 1U) : line;
+    if (remove)
+    {
+        const auto quoted = quote_content_start(content);
+        if (!quoted)
+            return std::string(line);
+        std::string transformed(content.substr(0, quote_indent(content)));
+        transformed += content.substr(*quoted);
+        if (has_carriage_return)
+            transformed.push_back('\r');
+        changed = true;
+        return transformed;
+    }
+
+    std::string transformed(content.substr(0, quote_indent(content)));
+    transformed += content.empty() ? ">" : "> ";
+    transformed += content.substr(quote_indent(content));
+    if (has_carriage_return)
+        transformed.push_back('\r');
+    changed = true;
+    return transformed;
+}
+
+bool selection_has_only_quoted_ordinary_lines(std::string_view source,
+                                              std::size_t first_line,
+                                              std::size_t last_line_end)
+{
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    bool saw_nonblank = false;
+    bool all_quoted = true;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+
+        if (active_fence)
+        {
+            if (fence_closes(line, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(line))
+        {
+            active_fence = opening;
+        }
+        else if (quote_transformable(line))
+        {
+            const std::string_view content = !line.empty() && line.back() == '\r'
+                                                 ? line.substr(0, line.size() - 1U)
+                                                 : line;
+            if (!content.empty())
+            {
+                saw_nonblank = true;
+                all_quoted = all_quoted && quote_content_start(content).has_value();
+            }
+        }
+
+        if (current_end == last_line_end)
+            break;
+        begin = current_end + 1U;
+    }
+    return saw_nonblank && all_quoted;
+}
+
 std::optional<MarkdownTransformEdit> remove_code_wrapper(std::string_view source,
                                                           MarkdownByteRange selection)
 {
@@ -528,6 +624,66 @@ std::optional<MarkdownTransformEdit> toggle_markdown_task(
         else
         {
             replacement += transform_task_line(line, changed);
+        }
+
+        if (current_end == last_line_end)
+            break;
+        replacement.push_back('\n');
+        begin = current_end + 1U;
+    }
+
+    if (!changed)
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = {first_line, last_line_end},
+        .replacement = std::move(replacement),
+        .selection = {first_line, first_line + replacement.size()},
+    };
+}
+
+std::optional<MarkdownTransformEdit> toggle_markdown_quote(
+    std::string_view source,
+    MarkdownByteRange selection)
+{
+    if (!valid_range(source, selection))
+        return std::nullopt;
+
+    const std::size_t first_line = line_start(source, selection.begin);
+    std::size_t last_position = selection.begin;
+    if (selection.end > selection.begin)
+    {
+        last_position = selection.end - 1U;
+        if (source[last_position] == '\n' && last_position > 0U)
+            --last_position;
+    }
+    const std::size_t last_line_end = line_end(source, last_position);
+    const bool remove = selection_has_only_quoted_ordinary_lines(source, first_line, last_line_end);
+
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    std::string replacement;
+    replacement.reserve(last_line_end - first_line);
+    bool changed = false;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+
+        if (active_fence)
+        {
+            replacement.append(line);
+            if (fence_closes(line, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(line))
+        {
+            replacement.append(line);
+            active_fence = opening;
+        }
+        else
+        {
+            replacement += transform_quote_line(line, remove, changed);
         }
 
         if (current_end == last_line_end)

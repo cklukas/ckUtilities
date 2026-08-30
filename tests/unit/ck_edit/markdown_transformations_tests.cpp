@@ -9,6 +9,7 @@ using ck::edit::MarkdownByteRange;
 using ck::edit::MarkdownInlineStyle;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
+using ck::edit::toggle_markdown_quote;
 using ck::edit::toggle_markdown_task;
 
 TEST(MarkdownTransformations, TogglesInlineStylesAndRestoresTheContentSelection)
@@ -95,6 +96,23 @@ TEST(MarkdownTransformations, TogglesTasksWithoutChangingProtectedBlockSyntax)
     const auto zero_width = toggle_markdown_task("Note\n", {0, 0});
     ASSERT_TRUE(zero_width.has_value());
     EXPECT_EQ(zero_width->replacement, "- [ ] Note");
+}
+
+TEST(MarkdownTransformations, TogglesQuoteLevelsWithoutRewritingCode)
+{
+    constexpr std::string_view source = "Intro\n\n- item\n```cpp\ncode\n```\n    indented\n> Existing\n";
+    const auto quoted = toggle_markdown_quote(source, {0, source.size()});
+    ASSERT_TRUE(quoted.has_value());
+    EXPECT_EQ(quoted->replacement, "> Intro\n>\n> - item\n```cpp\ncode\n```\n    indented\n> > Existing");
+
+    constexpr std::string_view once = "> Intro\n>\n> - item\n```cpp\ncode\n```\n    indented\n> > Existing\n";
+    const auto restored = toggle_markdown_quote(once, {0, once.size()});
+    ASSERT_TRUE(restored.has_value());
+    EXPECT_EQ(restored->replacement, "Intro\n\n- item\n```cpp\ncode\n```\n    indented\n> Existing");
+
+    const auto zero_width = toggle_markdown_quote("Note\n", {0, 0});
+    ASSERT_TRUE(zero_width.has_value());
+    EXPECT_EQ(zero_width->replacement, "> Note");
 }
 
 TEST(MarkdownTransformations, RejectsEmptyAndInvalidRanges)

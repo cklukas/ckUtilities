@@ -64,4 +64,12 @@ std::optional<MarkdownTransformEdit> toggle_markdown_task(
     std::string_view source,
     MarkdownByteRange selection);
 
+// Adds one block-quote level to a mixed selection or removes one when every
+// ordinary selected line is already quoted. Blank lines preserve quote
+// continuity. Fenced and indented code remain untouched. A zero-width
+// selection targets its current line.
+std::optional<MarkdownTransformEdit> toggle_markdown_quote(
+    std::string_view source,
+    MarkdownByteRange selection);
+
 } // namespace ck::edit

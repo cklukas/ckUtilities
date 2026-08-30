@@ -98,6 +98,17 @@ int main()
                 editor.document().text() == "- [x] Plan\n```cpp\n- [ ] code\n```\n",
             "Repeating a task command must toggle its checked state through the command registry.");
 
+    editor.document().set_text("Note\n```cpp\ncode\n```\n");
+    const auto quote_position = editor.document().position_at_byte(0);
+    require(quote_position.has_value() && editor.editor_view()->set_selection({*quote_position, *quote_position}),
+            "The native editor must position a zero-width quote transform at the current line.");
+    require(application.execute_command(editor.toggle_quote_command()) &&
+                editor.document().text() == "> Note\n```cpp\ncode\n```\n",
+            "Quote transforms must add a quote level without rewriting fenced code.");
+    require(application.execute_command(editor.toggle_quote_command()) &&
+                editor.document().text() == "Note\n```cpp\ncode\n```\n",
+            "Repeating a quote command must remove its added quote level through the command registry.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");
