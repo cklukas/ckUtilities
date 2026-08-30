@@ -1,6 +1,45 @@
-# CkTools — Build & Testing Guide (`compile.md`)
+# CkTools — Build, test, and release guide
 
-> **Status:** early-spec for developers. This document defines the repo layout, build tooling, test strategy, docs generation, and packaging flow for **CkTools** (Turbo Vision TUIs for Linux, in **C++20+**). It enables **fast per-tool iteration** *and* an **all-tools build** with man/Texinfo docs and distro packages.
+> **Status:** the ckVision-native cutover is an opt-in rehearsal. It consumes
+> the installed candidate recorded in
+> [the baseline](docs/migration/ckvision-baseline.md); it does not use an
+> adjacent source checkout or claim final platform acceptance.
+
+## Current ckVision workflow
+
+Configure a cutover build with the selected installed SDK:
+
+```bash
+cmake -S . -B build/cutover \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
+cmake --build build/cutover
+ctest --test-dir build/cutover --output-on-failure
+```
+
+The cutover composes only framework-neutral cores and the seven native
+executables under their production names. For release evidence, additionally
+enable `CKTOOLS_VERIFY_CKVISION_INSTALL=ON` and
+`CKTOOLS_VERIFY_CKVISION_ARCHIVE=ON`, then run
+`verify_ckvision_cutover` and `verify_ckvision_archive`. The latter exercises
+the generated TGZ after extraction and rejects legacy or build-only test
+payload. The independent installed-SDK consumer is enabled with
+`CKTOOLS_VERIFY_CKVISION_PACKAGE=ON`; set
+`CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE` to `Debug`, `Release`,
+`RelWithDebInfo`, or `MinSizeRel` as needed.
+
+Current local evidence is macOS Debug/Release plus ASan/UBSan. Linux and
+Windows remain release gates; actual support must match the migration ledger,
+not this historical planning note.
+
+## Historical planning material
+
+The remaining sections describe pre-migration ideas and legacy build layout.
+They are retained for provenance only and are not instructions for the native
+ckVision product. Use the workflow above and the migration documents for all
+new development and release work.
 
 ---
 

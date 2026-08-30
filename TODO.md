@@ -1,5 +1,8 @@
 # ck-find Notebook UI Redesign – Implementation Plan
 
+> Historical legacy backlog. Do not use its Turbo Vision-specific tasks for
+> new work; the active, framework-neutral plan is [tv_to_ckvision.md](tv_to_ckvision.md).
+
 This plan replaces the “scrollable drawers” concept with a tabbed experience built around `TNotebook`. Each tab keeps the surface area manageable while still exposing every advanced filter.
 
 ---

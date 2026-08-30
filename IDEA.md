@@ -1,5 +1,8 @@
 # CK Utilities: A modern TUI suite for Linux
 
+> Historical ideation note. Its Turbo Vision references describe the former
+> baseline, not the current architecture; see [the ckVision roadmap](tv_to_ckvision.md).
+
 **Pitch:** CkTools reimagines classic DOS-era utility suites and wraps the best GNU power tools behind clean, discoverable **Turbo Vision** text UIs (menus, dialogs, mouse support, keyboard-first). Think *PC Tools / Norton Utilities* vibes—reborn for today’s terminal: safer defaults, searchable help, and one-keystroke actions for everyday power tasks. Built on the actively maintained open-source Turbo Vision port (Unicode, cross-platform). ([GitHub][1])
 
 ---

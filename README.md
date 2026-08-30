@@ -1,22 +1,28 @@
 # CK Utilities
 
-**Status:** concept / exploration
+**Status:** active ckVision migration and release rehearsal
 
 ![ck-chat conversation interface](images/Screenshot%202025-10-25%20at%2023.34.31.png)
 ![ck-chat model loading](images/Screenshot%202025-10-25%20at%2023.34.40.png)
 ![ck-chat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
 
-**Status:** concept / exploration.
+CK Utilities is converting its seven terminal products to native ckVision
+applications: `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
+`ck-config`, `ck-edit`, and `ck-chat`. The conversion is currently an opt-in
+release rehearsal while the selected ckVision candidate is accepted upstream.
+The historical implementation remains deliberately separate and is not
+modified by the rehearsal.
 
-Current prototypes:
+Current local acceptance evidence covers a clean macOS Debug/Release cutover,
+92 tests, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
+checks, and a verified release archive. Linux and Windows remain release
+acceptance work. See [the migration roadmap](tv_to_ckvision.md) for the
+complete status and constraints.
 
-* `ck-chat` — chat interface backed by the ck-ai runtime stubs.
-* `ck-json-view` — JSON tree viewer built with Turbo Vision.
-* `ck-du` — disk usage explorer with tree views, file listings, unit and sort controls.
-* `ck-find` — staged search-specification builder with simple and advanced filters.
-CK Utilities aims to bring a set of everyday power utilities to a **Turbo Vision** text UI, so they’re easier to discover and safer to use—while staying fast and script-friendly.
-Target platform: **Linux text-mode terminals**.
-Tech stack: **C++20 (or newer)** + **Turbo Vision**.
+Target platforms: macOS and Linux terminal hosts; Windows is not advertised
+until its ckVision backend has passed the required gates.
+
+Tech stack: C++20 and an installed `ckvision::cvision` CMake package.
 
 ---
 
@@ -32,7 +38,9 @@ Why not?
 
 - **Compiler:** GCC ≥ 12 or Clang ≥ 15 (C++20 or newer)
 - **Build tools:** CMake ≥ 3.25, Ninja (recommended)
-- **Dependencies:** Turbo Vision (fetched automatically), GoogleTest (fetched automatically)
+- **Framework:** an installed ckVision SDK matching
+  [the recorded candidate](docs/migration/ckvision-baseline.md)
+- **Test dependency:** GoogleTest (fetched only for test builds)
 
 ### Quick Start
 
@@ -43,41 +51,68 @@ git clone https://github.com/cklukas/ckUtilities.git
 cd ckUtilities
 ```
 
-#### Configure the build (choose a preset):
+#### Configure a native ckVision cutover rehearsal:
 
 ```bash
-cmake --preset dev         # Debug build (recommended for development)
-cmake --preset release     # Optimized build
+cmake -S . -B build/cutover \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
 ```
 
-If you're configuring CMake by hand (rather than using the convenience wrappers in `scripts/`, such as `ci-mac-local.sh`, `ci-linux-local.sh`, or `build_ck_chat.sh`), run the patch helper once per build tree to keep third-party dependencies in sync with our macOS ncurses fixes:
-
-```bash
-scripts/apply_patches.sh   # Safe to re-run; scans build/* for Turbo Vision sources
-```
+The cutover build consumes only the installed SDK; it does not use a
+neighbouring ckVision source tree or the legacy patch helper.
 
 #### Build all tools:
 
 ```bash
-cmake --build build/dev
+cmake --build build/cutover
 ```
 
 #### Build and run a single tool (example: ck-find):
 
 ```bash
-cmake --build build/dev -t ckfind
-./build/dev/bin/ck-find --help
+cmake --build build/cutover -t ckfind_ckvision
+./build/cutover/bin/ck-find --help
 ```
 
 #### Run tests:
 
 ```bash
-ctest --test-dir build/dev --output-on-failure
+ctest --test-dir build/cutover --output-on-failure
 ```
 
-Unit tests exercise the shared libraries and each tool's core logic (JSON tree building, Markdown analysis, disk-usage math, configuration registries, and the ck-ai runtime stubs). The suite uses GoogleTest and is enabled automatically when `BUILD_TESTING` is on, so running `ctest` after a build executes the new checks.
+The suite exercises each native presentation and the framework-neutral cores.
+GoogleTest is build-only and is not included in the verified product archive.
 
-For the ck-ai tooling, copy `configs/ckai.example.toml` to `~/.config/cktools/ckai.toml` and adjust the model path once you have a local GGUF file.
+For chat, copy `configs/ckai.example.toml` to `~/.config/cktools/ckai.toml`
+and set a local GGUF model path. A missing or unusable real model is reported
+to the chat transcript; it is never silently replaced by the deterministic
+test stub.
+
+### Release rehearsal
+
+The staged-product and archive gates must use the same installed ckVision SDK:
+
+```bash
+cmake -S . -B build/cutover-release \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
+  -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON \
+  -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
+cmake --build build/cutover-release
+ctest --test-dir build/cutover-release --output-on-failure
+cmake --build build/cutover-release --target verify_ckvision_cutover
+cmake --build build/cutover-release --target verify_ckvision_archive
+```
+
+The archive gate runs CPack, extracts the delivered TGZ, verifies every
+product executable and launcher path, rejects legacy runtime artifacts, and
+rejects build-only GTest/GMock payload. It does not replace remaining
+cross-platform or real-model acceptance.
 
 ### Hotkey Schemes
 
@@ -87,7 +122,7 @@ To change the default scheme globally, set the `CK_HOTKEY_SCHEME` environment va
 
 ```bash
 export CK_HOTKEY_SCHEME=mac
-./build/dev/bin/ck-utilities
+./build/cutover/bin/ck-utilities
 ```
 
 Any customisations saved through `ck-config` are stored alongside the rest of the user configuration data.
@@ -95,7 +130,7 @@ Any customisations saved through `ck-config` are stored alongside the rest of th
 #### Install (to staging directory):
 
 ```bash
-cmake --build build/release -t install
+cmake --install build/cutover-release --prefix /path/to/staging
 ```
 
 For more details, see `COMPILE.md`.

@@ -1,3 +1,7 @@
+> Historical engineering notes. They may describe the legacy UI baseline;
+> follow [the ckVision roadmap](tv_to_ckvision.md) for active architecture and
+> acceptance requirements.
+
 To avoid event handling issues:
 
 * Event ownership: Handle app-level commands in LauncherApp::handleEvent first; clear and return. Do not let them propagate to views.
