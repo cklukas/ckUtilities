@@ -103,8 +103,11 @@ Historical application baseline: `legacy_tv`
   a native provider-backed table with typed edit/reset commands keyed by the
   option's stable string name. Save and reload are now registry commands
   delegated to an injected persistence policy; the production composition
-  root retains the established JSON defaults format without giving the UI a
-  filesystem dependency. Import and export use that same injected boundary.
+  root uses a flat, version-marked JSON defaults format without giving the UI
+  a filesystem dependency. Existing unmarked profiles remain readable, known
+  values are validated before any mutation, and unknown future values survive
+  a load/edit/save round trip. Import and export use that same injected
+  boundary.
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
@@ -205,7 +208,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 88-test cutover suite passes in normal and
+  candidate SDK. The full 90-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -216,7 +219,7 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  88-test cutover configuration, independent package consumer, and staged
+  90-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. That staged gate launches every converted
   child through `ck-utilities --launch <child> --help` and separately proves
   the missing-child diagnostic path. The `verify_ckvision_cutover` gate also
@@ -224,12 +227,12 @@ Historical application baseline: `legacy_tv`
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 88 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 90 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 88-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 90-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

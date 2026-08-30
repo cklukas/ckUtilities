@@ -11,7 +11,10 @@ namespace ck::config
 {
 namespace
 {
-bool parseBool(const std::string &value, bool fallback)
+constexpr char kOptionsFormatVersionKey[] = "_ck_options_format";
+constexpr std::int64_t kOptionsFormatVersion = 1;
+
+std::optional<bool> parseBool(const std::string &value)
 {
     std::string lower;
     lower.reserve(value.size());
@@ -21,10 +24,10 @@ bool parseBool(const std::string &value, bool fallback)
         return true;
     if (lower == "false" || lower == "0" || lower == "no" || lower == "off")
         return false;
-    return fallback;
+    return std::nullopt;
 }
 
-std::int64_t parseInteger(const std::string &value, std::int64_t fallback)
+std::optional<std::int64_t> parseInteger(const std::string &value)
 {
     try
     {
@@ -36,7 +39,7 @@ std::int64_t parseInteger(const std::string &value, std::int64_t fallback)
     catch (...)
     {
     }
-    return fallback;
+    return std::nullopt;
 }
 
 nlohmann::json toJson(const OptionValue &value)
@@ -57,7 +60,7 @@ nlohmann::json toJson(const OptionValue &value)
     }
 }
 
-OptionValue fromJson(const OptionDefinition &definition, const nlohmann::json &jsonValue)
+std::optional<OptionValue> fromJson(const OptionDefinition &definition, const nlohmann::json &jsonValue)
 {
     switch (definition.kind)
     {
@@ -67,7 +70,10 @@ OptionValue fromJson(const OptionDefinition &definition, const nlohmann::json &j
         if (jsonValue.is_number_integer())
             return OptionValue(jsonValue.get<std::int64_t>() != 0);
         if (jsonValue.is_string())
-            return OptionValue(parseBool(jsonValue.get<std::string>(), definition.defaultValue.toBool()));
+        {
+            if (const auto value = parseBool(jsonValue.get<std::string>()))
+                return OptionValue(*value);
+        }
         break;
     case OptionKind::Integer:
         if (jsonValue.is_number_integer())
@@ -75,7 +81,10 @@ OptionValue fromJson(const OptionDefinition &definition, const nlohmann::json &j
         if (jsonValue.is_boolean())
             return OptionValue(jsonValue.get<bool>() ? std::int64_t{1} : std::int64_t{0});
         if (jsonValue.is_string())
-            return OptionValue(parseInteger(jsonValue.get<std::string>(), definition.defaultValue.toInteger()));
+        {
+            if (const auto value = parseInteger(jsonValue.get<std::string>()))
+                return OptionValue(*value);
+        }
         break;
     case OptionKind::String:
         if (jsonValue.is_string())
@@ -91,8 +100,9 @@ OptionValue fromJson(const OptionDefinition &definition, const nlohmann::json &j
             std::vector<std::string> result;
             for (const auto &item : jsonValue)
             {
-                if (item.is_string())
-                    result.push_back(item.get<std::string>());
+                if (!item.is_string())
+                    return std::nullopt;
+                result.push_back(item.get<std::string>());
             }
             return OptionValue(result);
         }
@@ -100,7 +110,7 @@ OptionValue fromJson(const OptionDefinition &definition, const nlohmann::json &j
             return OptionValue(std::vector<std::string>{jsonValue.get<std::string>()});
         break;
     }
-    return definition.defaultValue;
+    return std::nullopt;
 }
 
 std::filesystem::path detectConfigRoot()
@@ -171,7 +181,10 @@ bool OptionValue::toBool(bool fallback) const noexcept
     if (auto *iptr = std::get_if<std::int64_t>(&value))
         return *iptr != 0;
     if (auto *sptr = std::get_if<std::string>(&value))
-        return parseBool(*sptr, fallback);
+    {
+        if (const auto parsed = parseBool(*sptr))
+            return *parsed;
+    }
     return fallback;
 }
 
@@ -182,7 +195,10 @@ std::int64_t OptionValue::toInteger(std::int64_t fallback) const noexcept
     if (auto *bptr = std::get_if<bool>(&value))
         return *bptr ? 1 : 0;
     if (auto *sptr = std::get_if<std::string>(&value))
-        return parseInteger(*sptr, fallback);
+    {
+        if (const auto parsed = parseInteger(*sptr))
+            return *parsed;
+    }
     return fallback;
 }
 
@@ -240,6 +256,22 @@ void OptionRegistry::registerOption(const OptionDefinition &definition)
     auto it = overrides.find(definition.key);
     if (it != overrides.end())
         overrides[definition.key] = normalizeValue(definition, it->second);
+    auto unknown = unknown_values.find(definition.key);
+    if (unknown != unknown_values.end())
+    {
+        try
+        {
+            const auto parsed = fromJson(definition, nlohmann::json::parse(unknown->second));
+            if (parsed)
+            {
+                overrides[definition.key] = normalizeValue(definition, *parsed);
+                unknown_values.erase(unknown);
+            }
+        }
+        catch (...)
+        {
+        }
+    }
 }
 
 bool OptionRegistry::hasOption(const std::string &key) const noexcept
@@ -305,12 +337,14 @@ OptionRegistry::Snapshot OptionRegistry::snapshot() const
 {
     Snapshot snapshot;
     snapshot.overrides_ = overrides;
+    snapshot.unknown_values_ = unknown_values;
     return snapshot;
 }
 
 void OptionRegistry::restore(Snapshot snapshot)
 {
     overrides = std::move(snapshot.overrides_);
+    unknown_values = std::move(snapshot.unknown_values_);
 }
 
 bool OptionRegistry::loadFromFile(const std::filesystem::path &filePath)
@@ -332,22 +366,57 @@ bool OptionRegistry::loadFromFile(const std::filesystem::path &filePath)
     if (!data.is_object())
         return false;
 
+    const auto version = data.find(kOptionsFormatVersionKey);
+    if (version != data.end() &&
+        (!version->is_number_integer() || version->get<std::int64_t>() < kOptionsFormatVersion))
+        return false;
+
+    std::vector<std::pair<std::string, OptionValue>> parsed_values;
+    std::unordered_map<std::string, std::string> parsed_unknown_values;
     for (auto it = data.begin(); it != data.end(); ++it)
     {
         const std::string key = it.key();
+        if (key == kOptionsFormatVersionKey)
+            continue;
         const OptionDefinition *definition = findDefinition(key);
         if (!definition)
+        {
+            parsed_unknown_values.emplace(key, it.value().dump());
             continue;
-        OptionValue parsed = fromJson(*definition, it.value());
-        overrides[key] = normalizeValue(*definition, parsed);
+        }
+        const auto parsed = fromJson(*definition, it.value());
+        if (!parsed)
+            return false;
+        parsed_values.emplace_back(key, normalizeValue(*definition, *parsed));
     }
 
+    for (const auto &[key, value] : parsed_values)
+    {
+        overrides[key] = value;
+        unknown_values.erase(key);
+    }
+    for (auto &[key, value] : parsed_unknown_values)
+        unknown_values[key] = std::move(value);
     return true;
 }
 
 bool OptionRegistry::saveToFile(const std::filesystem::path &filePath) const
 {
     nlohmann::json data = nlohmann::json::object();
+    data[kOptionsFormatVersionKey] = kOptionsFormatVersion;
+    for (const auto &[key, serialized] : unknown_values)
+    {
+        try
+        {
+            data[key] = nlohmann::json::parse(serialized);
+        }
+        catch (...)
+        {
+            // Unknown data is only retained after a successful JSON parse.
+            // Ignore an impossible stale cache entry rather than emitting a
+            // malformed profile for the known options.
+        }
+    }
     for (const auto &[key, definition] : definitions)
     {
         OptionValue current = get(key);

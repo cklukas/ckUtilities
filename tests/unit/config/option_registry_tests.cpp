@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <random>
 #include <string>
 #include <utility>
@@ -96,4 +97,65 @@ TEST(OptionRegistry, PersistsValuesToDisk)
 
     std::error_code ec;
     std::filesystem::remove(filePath, ec);
+}
+
+TEST(OptionRegistry, WritesVersionedProfilesWithoutBreakingFlatValueReads)
+{
+    ck::config::OptionRegistry registry("test-app");
+    registry.registerOption({"threshold", ck::config::OptionKind::Integer, ck::config::OptionValue(std::int64_t{1}),
+                             "Threshold", "Integer threshold"});
+    registry.set("threshold", ck::config::OptionValue(std::int64_t{42}));
+
+    const auto filePath = makeTempFilePath();
+    ASSERT_TRUE(registry.saveToFile(filePath));
+
+    std::ifstream saved(filePath);
+    const std::string document((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
+    EXPECT_NE(document.find("\"_ck_options_format\": 1"), std::string::npos);
+    EXPECT_NE(document.find("\"threshold\": 42"), std::string::npos);
+
+    ck::config::OptionRegistry loaded("test-app");
+    loaded.registerOption({"threshold", ck::config::OptionKind::Integer, ck::config::OptionValue(std::int64_t{1}),
+                           "Threshold", "Integer threshold"});
+    ASSERT_TRUE(loaded.loadFromFile(filePath));
+    EXPECT_EQ(loaded.getInteger("threshold"), 42);
+
+    std::error_code ec;
+    std::filesystem::remove(filePath, ec);
+}
+
+TEST(OptionRegistry, RejectsCorruptProfilesWithoutMutatingKnownOrFutureValues)
+{
+    ck::config::OptionRegistry registry("test-app");
+    registry.registerOption({"enabled", ck::config::OptionKind::Boolean, ck::config::OptionValue(false),
+                             "Enabled", "Boolean flag"});
+    registry.set("enabled", ck::config::OptionValue(true));
+
+    const auto corruptPath = makeTempFilePath();
+    {
+        std::ofstream corrupt(corruptPath);
+        corrupt << R"({"_ck_options_format":1,"enabled":{"not":"a boolean"},"future-option":"keep"})";
+    }
+    EXPECT_FALSE(registry.loadFromFile(corruptPath));
+    EXPECT_TRUE(registry.getBool("enabled"));
+
+    const auto futurePath = makeTempFilePath();
+    {
+        std::ofstream future(futurePath);
+        future << R"({"_ck_options_format":9,"enabled":false,"future-option":{"nested":true}})";
+    }
+    ASSERT_TRUE(registry.loadFromFile(futurePath));
+    EXPECT_FALSE(registry.getBool("enabled"));
+
+    const auto roundTripPath = makeTempFilePath();
+    ASSERT_TRUE(registry.saveToFile(roundTripPath));
+    std::ifstream roundTrip(roundTripPath);
+    const std::string saved((std::istreambuf_iterator<char>(roundTrip)), std::istreambuf_iterator<char>());
+    EXPECT_NE(saved.find("\"future-option\""), std::string::npos);
+    EXPECT_NE(saved.find("\"nested\": true"), std::string::npos);
+
+    std::error_code ec;
+    std::filesystem::remove(corruptPath, ec);
+    std::filesystem::remove(futurePath, ec);
+    std::filesystem::remove(roundTripPath, ec);
 }

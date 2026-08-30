@@ -73,6 +73,9 @@ public:
         friend class OptionRegistry;
 
         std::unordered_map<std::string, OptionValue> overrides_;
+        // Serialized JSON values for options the current binary does not
+        // know yet. Keeping them makes load/edit/save forward-tolerant.
+        std::unordered_map<std::string, std::string> unknown_values_;
     };
 
     explicit OptionRegistry(std::string appId);
@@ -119,6 +122,7 @@ private:
     std::string id;
     std::unordered_map<std::string, OptionDefinition> definitions;
     std::unordered_map<std::string, OptionValue> overrides;
+    std::unordered_map<std::string, std::string> unknown_values;
 };
 
 } // namespace ck::config
