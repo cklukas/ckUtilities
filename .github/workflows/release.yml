@@ -2,7 +2,9 @@ name: Release Packages
 
 on:
   push:
-    branches: [ main ]
+    # Retain the existing remote default and cover the active ckVision
+    # development branch. Release assets still require a published release.
+    branches: [ main, master ]
   release:
     types: [published]
 

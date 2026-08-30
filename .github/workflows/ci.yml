@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    # `main` remains the remote default while the migration branch is being
+    # promoted. Run the same checks for the active ckVision development line.
+    branches: [ main, master ]
   pull_request:
   workflow_dispatch:
 
