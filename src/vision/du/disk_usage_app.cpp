@@ -36,26 +36,28 @@ public:
                        const std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> &node_ids,
                        const std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> &nodes_by_id,
                        const std::unordered_map<const ck::du::DirectoryNode *, std::size_t> &sibling_indexes)
-        : root_(root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
+        : root_(&root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
     {
     }
+
+    void set_root(ck::du::DirectoryNode &root) noexcept { root_ = &root; }
 
     std::size_t root_count() const override { return 1; }
 
     ckv::widgets::TreeItemId root_id_at(std::size_t index) const override
     {
-        return index == 0 ? id_for(&root_) : ckv::widgets::kInvalidTreeItemId;
+        return index == 0 ? id_for(root_) : ckv::widgets::kInvalidTreeItemId;
     }
 
     std::optional<std::size_t> root_index_of(ckv::widgets::TreeItemId id) const override
     {
-        return id == id_for(&root_) ? std::optional<std::size_t>(0) : std::nullopt;
+        return id == id_for(root_) ? std::optional<std::size_t>(0) : std::nullopt;
     }
 
     std::optional<ckv::widgets::TreeItemId> parent_id_of(ckv::widgets::TreeItemId id) const override
     {
         const ck::du::DirectoryNode *node = node_for(id);
-        if (node == nullptr || node == &root_)
+        if (node == nullptr || node == root_)
             return std::nullopt;
         return id_for(node->parent);
     }
@@ -106,7 +108,7 @@ private:
         return found == nodes_by_id_.end() ? nullptr : found->second;
     }
 
-    ck::du::DirectoryNode &root_;
+    ck::du::DirectoryNode *root_;
     const std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> &node_ids_;
     const std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> &nodes_by_id_;
     const std::unordered_map<const ck::du::DirectoryNode *, std::size_t> &sibling_indexes_;
@@ -252,12 +254,17 @@ void DiskUsageApp::start_scan()
     }
     if (scan_service_->running())
     {
-        show_scan_state("A disk-usage scan is already running. Use Cancel scan before starting another.");
+        if (snapshot_.root != nullptr && tree_ != nullptr)
+            window_->set_footer("A disk-usage scan is already running. Use Cancel scan before starting another.");
+        else
+            show_scan_state("A disk-usage scan is already running. Use Cancel scan before starting another.");
         return;
     }
 
-    snapshot_ = {};
-    show_scan_state("Scanning disk usage in the background. The current directory is shown in the window footer.");
+    if (snapshot_.root != nullptr && tree_ != nullptr)
+        window_->set_footer("Rescanning in the background. The last completed snapshot remains available.");
+    else
+        show_scan_state("Scanning disk usage in the background. The current directory is shown in the window footer.");
     // Services may report after this presentation is gone. The outer callback
     // must not dereference `this`; the posted UI work checks the same token.
     const std::weak_ptr<void> lifetime = lifetime_;
@@ -298,7 +305,10 @@ void DiskUsageApp::cancel_scan()
     if (scan_service_->running())
     {
         scan_service_->cancel();
-        show_scan_state("Cancellation requested. The scan will stop at its next filesystem boundary.");
+        if (snapshot_.root != nullptr && tree_ != nullptr)
+            window_->set_footer("Cancellation requested. The last completed snapshot remains available.");
+        else
+            show_scan_state("Cancellation requested. The scan will stop at its next filesystem boundary.");
         return;
     }
     if (file_list_service_ != nullptr && file_list_service_->running())
@@ -321,19 +331,30 @@ void DiskUsageApp::cancel_scan()
 
 void DiskUsageApp::complete_scan(ck::du::BuildDirectoryTreeResult snapshot)
 {
+    if (snapshot.cancelled)
+    {
+        if (snapshot_.root != nullptr && tree_ != nullptr)
+            window_->set_footer("Disk-usage rescan cancelled. The last completed snapshot remains available.");
+        else
+            show_scan_state("Disk-usage scan cancelled. Run Rescan to build a new snapshot.");
+        return;
+    }
+    if (snapshot.root == nullptr)
+    {
+        if (snapshot_.root != nullptr && tree_ != nullptr)
+            window_->set_footer("Disk-usage rescan did not produce a snapshot. The last completed snapshot remains available.");
+        else
+            show_scan_state("Disk-usage scan did not produce a directory snapshot.");
+        return;
+    }
+
+    const bool can_refresh_view = tree_ != nullptr && tree_model_ != nullptr && snapshot_.root != nullptr;
     snapshot_ = std::move(snapshot);
-    if (snapshot_.cancelled)
-    {
-        show_scan_state("Disk-usage scan cancelled. Run Rescan to build a new snapshot.");
-        return;
-    }
-    if (snapshot_.root == nullptr)
-    {
-        show_scan_state("Disk-usage scan did not produce a directory snapshot.");
-        return;
-    }
     window_->set_title("Disk usage: " + snapshot_.root->path.string());
-    rebuild_snapshot_view();
+    if (can_refresh_view)
+        refresh_snapshot_view();
+    else
+        rebuild_snapshot_view();
 }
 
 void DiskUsageApp::view_selected_files()
@@ -528,11 +549,7 @@ void DiskUsageApp::rebuild_snapshot_view()
     if (window_ == nullptr || snapshot_.root == nullptr)
         return;
 
-    node_ids_.clear();
-    nodes_by_id_.clear();
-    sibling_indexes_.clear();
-    next_node_id_ = 1;
-    index_tree_nodes(*snapshot_.root, 0);
+    refresh_tree_indexes();
     auto model = std::make_unique<DiskUsageTreeModel>(*snapshot_.root, node_ids_, nodes_by_id_, sibling_indexes_);
     auto tree = std::make_unique<ckv::widgets::TreeView>();
     tree_ = tree.get();
@@ -578,22 +595,56 @@ bool DiskUsageApp::cloud_operation_running() const noexcept
     return cloud_service_ != nullptr && cloud_service_->running();
 }
 
-void DiskUsageApp::index_tree_nodes(ck::du::DirectoryNode &node, std::size_t sibling_index)
+void DiskUsageApp::refresh_snapshot_view()
 {
-    const std::uint64_t id = next_node_id_++;
+    if (tree_ == nullptr || tree_model_ == nullptr || snapshot_.root == nullptr)
+    {
+        rebuild_snapshot_view();
+        return;
+    }
+
+    refresh_tree_indexes();
+    static_cast<DiskUsageTreeModel *>(tree_model_.get())->set_root(*snapshot_.root);
+    tree_->model_changed();
+    if (const ck::du::DirectoryNode *selected = selected_directory())
+        show_directory(*selected);
+    else
+        show_directory(*snapshot_.root);
+    application_.set_focus(tree_);
+}
+
+void DiskUsageApp::refresh_tree_indexes()
+{
+    const auto previous_ids = std::move(stable_node_ids_by_path_);
+    node_ids_ = {};
+    nodes_by_id_ = {};
+    sibling_indexes_ = {};
+    stable_node_ids_by_path_ = {};
+    index_tree_nodes(*snapshot_.root, 0, previous_ids, stable_node_ids_by_path_);
+}
+
+void DiskUsageApp::index_tree_nodes(
+    ck::du::DirectoryNode &node, std::size_t sibling_index,
+    const std::unordered_map<std::string, std::uint64_t> &previous_ids,
+    std::unordered_map<std::string, std::uint64_t> &next_ids)
+{
+    const std::string path = node.path.lexically_normal().generic_string();
+    const auto previous = previous_ids.find(path);
+    const std::uint64_t id = previous == previous_ids.end() ? next_node_id_++ : previous->second;
+    next_ids.emplace(path, id);
     node_ids_.emplace(&node, id);
     nodes_by_id_.emplace(id, &node);
     sibling_indexes_.emplace(&node, sibling_index);
     for (std::size_t index = 0; index < node.children.size(); ++index)
-        index_tree_nodes(*node.children[index], index);
+        index_tree_nodes(*node.children[index], index, previous_ids, next_ids);
 }
 
-void DiskUsageApp::show_directory(ck::du::DirectoryNode &node)
+void DiskUsageApp::show_directory(const ck::du::DirectoryNode &node)
 {
     if (table_ == nullptr || window_ == nullptr)
         return;
 
-    std::vector<ck::du::DirectoryNode *> children;
+    std::vector<const ck::du::DirectoryNode *> children;
     children.reserve(node.children.size());
     for (const auto &child : node.children)
         children.push_back(child.get());

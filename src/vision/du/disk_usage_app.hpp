@@ -58,6 +58,8 @@ public:
     bool cloud_operation_running() const noexcept;
     ckv::widgets::TreeView *tree() const noexcept { return tree_; }
     ckv::widgets::Table *table() const noexcept { return table_; }
+    // Snapshot-local provider count used by headless refresh acceptance.
+    std::size_t provider_node_count() const noexcept { return node_ids_.size(); }
 
 private:
     void declare_commands();
@@ -74,8 +76,12 @@ private:
     void complete_cloud_action(DiskUsageCloudOperationResult result, std::filesystem::path target);
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
     void rebuild_snapshot_view();
-    void index_tree_nodes(ck::du::DirectoryNode &node, std::size_t sibling_index);
-    void show_directory(ck::du::DirectoryNode &node);
+    void refresh_snapshot_view();
+    void refresh_tree_indexes();
+    void index_tree_nodes(ck::du::DirectoryNode &node, std::size_t sibling_index,
+                          const std::unordered_map<std::string, std::uint64_t> &previous_ids,
+                          std::unordered_map<std::string, std::uint64_t> &next_ids);
+    void show_directory(const ck::du::DirectoryNode &node);
     std::string directory_label(const ck::du::DirectoryNode &node) const;
 
     ckv::ui::Application &application_;
@@ -88,6 +94,9 @@ private:
     std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> node_ids_;
     std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> nodes_by_id_;
     std::unordered_map<const ck::du::DirectoryNode *, std::size_t> sibling_indexes_;
+    // Stable only for the current snapshot. A refresh preserves identities
+    // for paths that survive while releasing identifiers for removed paths.
+    std::unordered_map<std::string, std::uint64_t> stable_node_ids_by_path_;
     std::uint64_t next_node_id_ = 1;
     // TreeView borrows this provider and its domain-node indices. They must
     // therefore outlive the shell that owns the TreeView.

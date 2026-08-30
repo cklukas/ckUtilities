@@ -91,7 +91,11 @@ Historical application baseline: `legacy_tv`
   posts immutable progress/results through the existing lifetime gate, and
   exposes cancellation. Unsupported platforms report that fact rather than
   simulating a cloud change. Recursive cloud policy and other providers remain
-  acceptance work.
+  acceptance work. Rescan now keeps the last valid snapshot visible until a
+  replacement succeeds; a surviving directory path retains selection and
+  expansion, while cancelled/invalid replacements preserve the prior view. A
+  2,048-entry snapshot refreshes back to four indexed nodes under the
+  visible-frame composition cap, releasing stale provider indexes.
 - WP-7: `ck-config-ckvision` accepts an injected option registry and exposes
   a native provider-backed table with typed edit/reset commands keyed by the
   option's stable string name. Save and reload are now registry commands
@@ -687,10 +691,12 @@ Deliverables:
 
 Current ckVision stress point:
 
-- Disk usage now consumes the provider-backed `TreeView` with stable IDs. Its
-  remaining acceptance must include lazy asynchronous child publication, model
-  refresh, selection/expansion preservation, bounded visible-row work, and
-  deterministic headless tests over realistic scan snapshots.
+- Disk usage now consumes the provider-backed `TreeView` with stable IDs.
+  Native rescan keeps the last valid snapshot live until a valid replacement
+  arrives, preserving selection and expansion for surviving paths while
+  releasing stale indexes after a 2,048-entry-to-four-node refresh under a
+  visible-frame cap. Lazy asynchronous child publication remains a separate
+  acceptance target requiring an independently specified scan producer.
 
 Do not add a thread pool or disk-scanning abstraction to ckVision merely to
 solve this application. ckVision owns safe UI-thread ingress and scalable
@@ -919,7 +925,7 @@ These are investigation targets, not pre-approved APIs:
 
 | Candidate | Driven by | Evidence to collect |
 |---|---|---|
-| Provider-backed TreeView with stable node IDs | JSON and disk trees | implemented in candidate `9f097ec`; collect application-scale memory, refresh-cost, selection/expansion, and async lazy-load evidence |
+| Provider-backed TreeView with stable node IDs | JSON and disk trees | implemented in candidate `9f097ec`; JSON and disk now provide application-scale refresh, stale-index, selection/expansion, and visible-frame evidence; collect async lazy-load evidence when a scan producer can publish it |
 | FlowView viewport anchoring, selection/copy, and virtualized history | chat transcript | long-session memory, copy/selection and link behavior |
 | Generic color-selection control/dialog | launcher and theme tools | reusable color model, truecolor/degraded palette behavior, keyboard/mouse UX |
 | Safe event diagnostics observer | launcher event viewer and troubleshooting | no dispatch interference/re-entrancy, bounded recording, deterministic replay text |

@@ -36,7 +36,12 @@ ck::du::BuildDirectoryTreeResult make_snapshot()
     auto source = std::make_unique<ck::du::DirectoryNode>();
     source->path = "/workspace/src";
     source->parent = snapshot.root.get();
-    source->stats = {.totalSize = 3072, .fileCount = 2, .directoryCount = 0};
+    source->stats = {.totalSize = 3072, .fileCount = 2, .directoryCount = 1};
+    auto generated = std::make_unique<ck::du::DirectoryNode>();
+    generated->path = "/workspace/src/generated";
+    generated->parent = source.get();
+    generated->stats = {.totalSize = 1024, .fileCount = 1, .directoryCount = 0};
+    source->children.push_back(std::move(generated));
     snapshot.root->children.push_back(std::move(source));
 
     auto docs = std::make_unique<ck::du::DirectoryNode>();
@@ -44,6 +49,50 @@ ck::du::BuildDirectoryTreeResult make_snapshot()
     docs->parent = snapshot.root.get();
     docs->stats = {.totalSize = 1024, .fileCount = 1, .directoryCount = 0};
     snapshot.root->children.push_back(std::move(docs));
+    return snapshot;
+}
+
+ck::du::BuildDirectoryTreeResult make_refreshed_snapshot()
+{
+    ck::du::BuildDirectoryTreeResult snapshot;
+    snapshot.root = std::make_unique<ck::du::DirectoryNode>();
+    snapshot.root->path = "/workspace";
+    snapshot.root->stats = {.totalSize = 8192, .fileCount = 6, .directoryCount = 2};
+
+    auto source = std::make_unique<ck::du::DirectoryNode>();
+    source->path = "/workspace/src";
+    source->parent = snapshot.root.get();
+    source->stats = {.totalSize = 7168, .fileCount = 5, .directoryCount = 1};
+    auto generated = std::make_unique<ck::du::DirectoryNode>();
+    generated->path = "/workspace/src/generated";
+    generated->parent = source.get();
+    generated->stats = {.totalSize = 2048, .fileCount = 2, .directoryCount = 0};
+    source->children.push_back(std::move(generated));
+    snapshot.root->children.push_back(std::move(source));
+
+    auto tests = std::make_unique<ck::du::DirectoryNode>();
+    tests->path = "/workspace/tests";
+    tests->parent = snapshot.root.get();
+    tests->stats = {.totalSize = 1024, .fileCount = 1, .directoryCount = 0};
+    snapshot.root->children.push_back(std::move(tests));
+    return snapshot;
+}
+
+ck::du::BuildDirectoryTreeResult make_wide_snapshot(std::size_t entries)
+{
+    ck::du::BuildDirectoryTreeResult snapshot;
+    snapshot.root = std::make_unique<ck::du::DirectoryNode>();
+    snapshot.root->path = "/workspace";
+    snapshot.root->stats = {.totalSize = entries, .fileCount = entries, .directoryCount = entries};
+    snapshot.root->children.reserve(entries);
+    for (std::size_t index = 0; index < entries; ++index)
+    {
+        auto child = std::make_unique<ck::du::DirectoryNode>();
+        child->path = "/workspace/entry-" + std::to_string(index);
+        child->parent = snapshot.root.get();
+        child->stats = {.totalSize = index + 1, .fileCount = 1, .directoryCount = 0};
+        snapshot.root->children.push_back(std::move(child));
+    }
     return snapshot;
 }
 
@@ -295,6 +344,45 @@ int main()
             "A completed scan snapshot must be mapped into provider-backed tree and table views.");
     require(disk_usage.selected_directory() == disk_usage.root_directory(),
             "A completed scan must establish a stable root selection.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(disk_usage.selected_directory() != nullptr && disk_usage.selected_directory()->path == "/workspace/src",
+            "The disk-usage tree must navigate to a child before its refresh scenario.");
+    const auto retained_selection_id = disk_usage.tree()->selected_id();
+    auto *const retained_model = disk_usage.tree()->model();
+    require(retained_selection_id.has_value() && retained_model != nullptr,
+            "The disk-usage refresh fixture must expose a stable provider selection.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Right, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(disk_usage.tree()->item_expanded(*retained_selection_id),
+            "The disk-usage refresh fixture must expand its selected directory.");
+    require(application.execute_command(disk_usage.rescan_command()) && disk_usage.scan_running() &&
+                disk_usage.tree()->model() == retained_model &&
+                disk_usage.selected_directory()->path == "/workspace/src",
+            "A rescan must retain the last valid disk-usage snapshot until replacement succeeds.");
+    scan_service.complete(make_refreshed_snapshot());
+    application.step(0);
+    require(disk_usage.tree()->model() == retained_model &&
+                disk_usage.tree()->selected_id() == retained_selection_id &&
+                disk_usage.tree()->item_expanded(*retained_selection_id) &&
+                disk_usage.selected_directory() != nullptr &&
+                disk_usage.selected_directory()->path == "/workspace/src" &&
+                disk_usage.selected_directory()->stats.totalSize == 7168,
+            "A refreshed disk snapshot must retain its provider and surviving directory selection.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Up, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(disk_usage.selected_directory() == disk_usage.root_directory(),
+            "Disk-usage navigation must return to the root after refresh acceptance.");
+    const ck::du::DirectoryNode *const last_completed_root = disk_usage.root_directory();
+    require(application.execute_command(disk_usage.rescan_command()),
+            "A cancelled disk-usage refresh must start through the native rescan command.");
+    auto cancelled_snapshot = make_snapshot();
+    cancelled_snapshot.cancelled = true;
+    scan_service.complete(std::move(cancelled_snapshot));
+    application.step(0);
+    require(disk_usage.root_directory() == last_completed_root &&
+                disk_usage.tree()->model() == retained_model,
+            "A cancelled disk-usage refresh must retain the last completed provider snapshot.");
     require(application.execute_command(disk_usage.view_files_command()), "File listing must be a registry command.");
     require(file_list_service.running() && file_list_service.directory() == "/workspace" && !file_list_service.recursive(),
             "The selected directory must be listed through the injected file-list service.");
@@ -337,6 +425,24 @@ int main()
     require(cloud_service.cancelled(), "Cloud cancellation must be delegated to the injected service.");
     cloud_service.complete({.success = false, .cancelled = true, .processed_items = 0, .message = "Cloud operation cancelled."});
     application.step(0);
+
+    constexpr std::size_t scale_entries = 2048;
+    require(application.execute_command(disk_usage.rescan_command()),
+            "The application-scale disk snapshot must start through the native rescan command.");
+    scan_service.complete(make_wide_snapshot(scale_entries));
+    application.step(0);
+    const auto terminal_cells = static_cast<std::size_t>(terminal.size().width) *
+                                static_cast<std::size_t>(terminal.size().height);
+    require(disk_usage.provider_node_count() == scale_entries + 1 &&
+                application.last_compose_cells_touched() <= terminal_cells,
+            "The application-scale disk snapshot exceeded its visible-frame provider budget.");
+    require(application.execute_command(disk_usage.rescan_command()),
+            "The small disk snapshot must start through the native rescan command.");
+    scan_service.complete(make_snapshot());
+    application.step(0);
+    require(disk_usage.provider_node_count() == 4 &&
+                application.last_compose_cells_touched() <= terminal_cells,
+            "A small disk refresh retained indexes from the obsolete large snapshot.");
 
     namespace fs = std::filesystem;
     const fs::path directory = fs::temp_directory_path() / "ck-vision-du-scan-service-test";
