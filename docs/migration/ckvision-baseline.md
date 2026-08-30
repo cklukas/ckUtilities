@@ -79,6 +79,23 @@ Passing it proves the public installed package is consumable in the selected
 configuration; it does not substitute for ckVision's own acceptance suite or
 an application migration slice.
 
+### Opt-in local-model chat evidence
+
+The native chat scenario includes an opt-in real-model path. It reads only the
+`CKTOOLS_REAL_MODEL` environment variable, requires it to name an existing
+regular GGUF file, and then exercises worker-owned load, streaming, structured
+completion, and teardown through `LlmChatResponseService`. It is inert in
+ordinary CI when the variable is absent, and fails clearly rather than
+substituting a deterministic stub when the supplied path is missing or invalid:
+
+```sh
+CKTOOLS_REAL_MODEL=/absolute/path/to/model.gguf \
+  ctest --test-dir build/cutover -R '^ck_vision_chat_tests$' --output-on-failure
+```
+
+This provides a reproducible local acceptance hook but is not evidence until a
+recorded model, platform, and result are available.
+
 ### Sanitizer SDKs
 
 For an ASan/UBSan client build, create the SDK with ckVision's supported

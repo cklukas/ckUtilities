@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <condition_variable>
+#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <optional>
@@ -384,6 +385,19 @@ public:
 
     bool download_cancelled() const noexcept { return cancelled_; }
 
+    void configure_active_real_model(const std::filesystem::path &path)
+    {
+        for (auto &model : models_)
+            model.is_active = model.id == "local";
+        auto local = std::find_if(models_.begin(), models_.end(), [](const auto &model) {
+            return model.id == "local";
+        });
+        require(local != models_.end(), "The real-model fixture requires the local chat model.");
+        local->local_path = path;
+        local->context_window_tokens = 512;
+        local->max_output_tokens = 8;
+    }
+
 private:
     std::vector<ck::vision::ChatModel> models_;
     bool running_ = false;
@@ -437,6 +451,54 @@ void verify_late_chat_delivery_is_lifetime_safe()
         application.step(0);
         require(application.current_frame().size() == ckv::Size{100, 30},
                 "Late model-download delivery after destruction must be safely ignored.");
+    }
+}
+
+void verify_opt_in_real_model_response()
+{
+    const char *const configured_path = std::getenv("CKTOOLS_REAL_MODEL");
+    if (configured_path == nullptr || *configured_path == '\0')
+        return;
+
+    const std::filesystem::path model_path(configured_path);
+    if (!std::filesystem::is_regular_file(model_path))
+    {
+        std::cerr << "CKTOOLS_REAL_MODEL does not name a regular GGUF file: " << model_path << '\n';
+        std::exit(EXIT_FAILURE);
+    }
+
+    ScopedStubMode real_runtime(false);
+    MemoryModelService models;
+    models.configure_active_real_model(model_path);
+    ck::vision::LlmChatResponseService responses(models);
+
+    std::mutex completion_mutex;
+    std::condition_variable completion_ready;
+    std::string response;
+    ck::vision::ChatResponseResult completion;
+    bool completed = false;
+    responses.start({.prompt = "Reply with hello.",
+                     .system_prompt = "Respond concisely.",
+                     .model_id = "local"},
+                    [&](std::string chunk) {
+                        std::scoped_lock lock(completion_mutex);
+                        response += std::move(chunk);
+                    },
+                    [&](ck::vision::ChatResponseResult result) {
+                        {
+                            std::scoped_lock lock(completion_mutex);
+                            completion = std::move(result);
+                            completed = true;
+                        }
+                        completion_ready.notify_one();
+                    });
+    {
+        std::unique_lock lock(completion_mutex);
+        require(completion_ready.wait_for(lock, std::chrono::seconds(60), [&] { return completed; }),
+                "The opt-in real-model chat scenario did not complete within one minute.");
+        require(!completion.cancelled && completion.error_message.empty(),
+                "The opt-in real-model chat scenario returned a structured failure.");
+        require(!response.empty(), "The opt-in real-model chat scenario did not stream a response chunk.");
     }
 }
 }
@@ -745,4 +807,5 @@ int main()
     require(!invalid_model_result.cancelled &&
                 invalid_model_result.error_message == "Activate a downloaded local model before sending a prompt.",
             "The LLM response boundary must return a structured failure when its active model changes before inference.");
+    verify_opt_in_real_model_response();
 }

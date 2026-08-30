@@ -227,7 +227,9 @@ Historical application baseline: `legacy_tv`
   rich-content blocks. Its `TreeView` also retains materialized visible rows
   until roots or expansion state changes and now exposes a provider-backed,
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
-  remains before acceptance.
+  remains before acceptance, but an opt-in `CKTOOLS_REAL_MODEL` chat scenario
+  now provides the worker-load, stream, structured-completion, and teardown
+  path for a recorded local GGUF without making CI depend on a model artifact.
 - All seven native executables build together against the installed ckVision
   candidate SDK. The full 92-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
