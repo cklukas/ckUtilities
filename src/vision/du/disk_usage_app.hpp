@@ -1,11 +1,13 @@
 #pragma once
 
 #include <any>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 #include <cvision/ui/application.hpp>
 #include <cvision/widgets/message_box.hpp>
@@ -21,8 +23,10 @@ namespace ck::vision
 {
 
 // A native ckVision presentation for application-owned disk-usage snapshots.
-// It can render a supplied snapshot or request one from an injected service;
-// view code never traverses the filesystem or owns a worker thread.
+// It exposes their stable node identities through a borrowed TreeModel rather
+// than duplicating the snapshot into a presentation tree. It can render a
+// supplied snapshot or request one from an injected service; view code never
+// traverses the filesystem or owns a worker thread.
 class DiskUsageApp
 {
 public:
@@ -70,7 +74,7 @@ private:
     void complete_cloud_action(DiskUsageCloudOperationResult result, std::filesystem::path target);
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
     void rebuild_snapshot_view();
-    ckv::widgets::TreeNode make_tree_node(ck::du::DirectoryNode &node);
+    void index_tree_nodes(ck::du::DirectoryNode &node, std::size_t sibling_index);
     void show_directory(ck::du::DirectoryNode &node);
     std::string directory_label(const ck::du::DirectoryNode &node) const;
 
@@ -81,6 +85,14 @@ private:
     DiskUsageCloudService *cloud_service_ = nullptr;
     std::filesystem::path scan_root_;
     ck::du::BuildDirectoryTreeOptions scan_options_;
+    std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> node_ids_;
+    std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> nodes_by_id_;
+    std::unordered_map<const ck::du::DirectoryNode *, std::size_t> sibling_indexes_;
+    std::uint64_t next_node_id_ = 1;
+    // TreeView borrows this provider and its domain-node indices. They must
+    // therefore outlive the shell that owns the TreeView.
+    std::unique_ptr<ckv::widgets::TreeModel> tree_model_;
+
     std::unique_ptr<SuiteShell> shell_;
     ckv::ui::CommandId rescan_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId cancel_scan_command_ = ckv::ui::kInvalidCommand;
@@ -91,7 +103,6 @@ private:
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::optional<ckv::widgets::MessageBoxPresentation> cloud_confirmation_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
-    std::uint64_t next_node_id_ = 1;
     ckv::widgets::Window *window_ = nullptr;
     ckv::widgets::TreeView *tree_ = nullptr;
     ckv::widgets::Table *table_ = nullptr;

@@ -41,6 +41,7 @@ class SuiteShell
 {
 public:
     SuiteShell(ckv::ui::Application &application, SuiteShellOptions options);
+    ~SuiteShell();
 
     ckv::widgets::Desktop &desktop() noexcept;
     const ckv::ui::StandardRoles &roles() const noexcept { return roles_; }

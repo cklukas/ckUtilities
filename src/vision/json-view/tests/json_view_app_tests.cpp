@@ -46,10 +46,35 @@ std::string wide_document(std::size_t entries)
     return document;
 }
 
+bool provider_view_teardown_is_lifetime_safe()
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
+    ckv::ui::Application application(terminal, clock);
+    ckv::MemoryFileSystem files;
+    files.add_file("/teardown.json", R"({"nested":{"name":"ckVision"}})");
+
+    {
+        ck::vision::JsonViewApp json_view(application, files);
+        if (!expect(json_view.load_file("/teardown.json") && json_view.tree() != nullptr &&
+                        json_view.tree()->model() != nullptr,
+                    "the teardown fixture did not bind its JSON provider"))
+            return false;
+        application.step(0);
+    }
+
+    application.step(0);
+    return expect(application.current_frame().size() == ckv::Size{100, 30},
+                  "destroying a JSON provider view left stale ckVision chrome behind");
+}
+
 } // namespace
 
 int main()
 {
+    if (!provider_view_teardown_is_lifetime_safe())
+        return 1;
+
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
@@ -61,7 +86,8 @@ int main()
     if (!expect(json_view.load_file("/fixture.json"),
                 "JSON document did not load"))
         return 1;
-    if (!expect(json_view.tree() != nullptr, "JSON tree was not materialized"))
+    if (!expect(json_view.tree() != nullptr && json_view.tree()->model() != nullptr,
+                "JSON tree was not bound to its application-owned provider"))
         return 1;
     if (!expect(json_view.find("ckutilities", false, true), "value search did not find a result"))
         return 1;
@@ -71,7 +97,8 @@ int main()
         return 1;
     if (!expect(application.execute_command(json_view.level_command(0)), "level command was unavailable"))
         return 1;
-    if (!expect(json_view.tree() != nullptr, "tree was lost after an expansion-level change"))
+    if (!expect(json_view.tree() != nullptr && json_view.tree()->model() != nullptr,
+                "tree provider was lost after an expansion-level change"))
         return 1;
     if (!expect(json_view.find("ckutilities", false, true), "search did not recover after an expansion-level change"))
         return 1;

@@ -17,21 +17,20 @@ Historical application baseline: `legacy_tv`
   degradation, wide/80x24/narrow composition, below-floor handling, and
   recovery after resize.
 - WP-3: `ck-json-view-ckvision` is a separate native executable. It owns the
-  parsed JSON document for the complete view lifetime, maps the domain tree
-  into ckVision TreeNodes, uses injected filesystem/file-dialog services and
+  parsed JSON document for the complete view lifetime and exposes the domain
+  tree through a borrowed stable-ID ckVision `TreeModel`, uses injected filesystem/file-dialog services and
   the application clipboard, and implements open, close, copy,
   find/next/previous/end-search, and expand-to-level commands. Its headless
   scenario covers filesystem load, result reveal/selection, copy, expansion,
   full-frame rendering, UTF-8 search in a 64-level document, malformed reload
   preservation, explicit close-state cleanup, narrow-terminal recomposition,
   keyboard and mouse tree navigation, and a 2,048-entry search smoke with a
-  visible-frame composition cap. Provider-backed large-tree measurement and
-  the resulting performance decision remain open.
-- The JSON search slice found and exercised a reusable TreeView gap.
-  ckVision candidate `d54f65f0b190b836e04f4ffbc38fcbe08c4368cb` adds the
-  documented, unit-tested `TreeView::reveal_and_select` API. It remains an
-  integration candidate until it is landed on ckVision trunk; its provider-
-  backed large-tree follow-up remains open.
+  visible-frame composition cap. ckVision candidate
+  `ba97203bbccc257b9e77dee9e0c9c002e2a0301a` also provides the documented,
+  unit-tested stable-ID `TreeModel` and `TreeView::reveal_and_select` APIs.
+  TreeView owns expansion and cursor state while querying only visible paths;
+  its one-million-root test queries just the five painted items. Application-
+  realistic refresh and memory budgets remain acceptance work.
 - WP-4: `ck-utilities-ckvision` now provides a native multi-window tool
   browser. It uses registry commands and publishes a selected launch request
   to the POSIX composition root, which closes the terminal UI before running
@@ -63,8 +62,8 @@ Historical application baseline: `legacy_tv`
   the injected worker and only removes matching regular files or symbolic
   links; it never removes directories. Custom commands remain preview-only
   until a separately sandboxed execution policy is designed.
-- WP-6: `ck-du-ckvision` maps application-owned directory snapshots into a
-  native TreeView plus selected-directory Table. Its production composition
+- WP-6: `ck-du-ckvision` maps application-owned directory snapshots through a
+  stable-ID native `TreeModel` plus selected-directory Table. Its production composition
   root now starts immediately and delegates scanning to an injected joinable
   service; progress and completion cross back to the UI through
   `Application::post()` behind a teardown lifetime gate, and cancellation is
@@ -142,16 +141,16 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `b3b754fdc2231bf02284505ec12066d0f89b1d47` provides
+  ckVision candidate `ba97203bbccc257b9e77dee9e0c9c002e2a0301a` provides
   a checked `FlowView::replace_block` API with incremental realized-tail
   reflow, which the active response uses to avoid rebuilding prior
-  rich-content blocks. The same candidate retains materialized `TreeView`
-  visible rows until roots or expansion state changes, so an unchanged tree is
-  not re-flattened on every redraw. Real-model runtime evidence remains before
-  acceptance.
+  rich-content blocks. Its `TreeView` also retains materialized visible rows
+  until roots or expansion state changes and now exposes a provider-backed,
+  stable-ID model for JSON and directory snapshots. Real-model runtime evidence
+  remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. Their headless suite, JSON-domain, and architecture tests
-  pass as one 19-test checkpoint. A separate installed-product gate builds the
+  candidate SDK. The full 74-test cutover suite passes in normal and
+  ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
   runtime's relative shared-library lookup. The legacy executables remain
@@ -238,7 +237,8 @@ documents in this order:
 ckVision is currently a pre-release library. Its existing surface is already
 substantial: retained views, Desktop/Window management, menus, commands and
 runtime keymaps, modal dialogs, layouts, themes, headless and POSIX terminals,
-provider-backed lists and tables, a materialized/lazy-expansion TreeView,
+provider-backed lists and tables, a materialized/lazy-expansion and stable-ID
+provider-backed TreeView,
 FlowView, a text-editor core, file dialogs, calendar/clock controls, and a
 large widget catalog. Its own status documents say that not every milestone
 or platform gate is acceptance-complete. The migration therefore pins proven
@@ -531,13 +531,14 @@ Deliverables:
 
 Likely ckVision gap to validate:
 
-- TreeView's current 0.1 model is materialized, with lazy expansion but no
-  provider-backed stable-identity tree model. The current candidate avoids
-  re-flattening unchanged visible rows through a retained materialized cache;
-  large JSON and later disk trees may still require a generic provider-backed
-  tree with stable node IDs, incremental refresh, and selection/expansion
-  preservation. If the measured scenarios need it, this becomes a ckVision
-  work package rather than a ckUtilities shadow tree widget.
+- The candidate now supplies a provider-backed `TreeModel` with stable IDs,
+  parent/child indexing, view-owned expansion and selection state, and explicit
+  refresh. JSON and disk usage consume it directly rather than materializing
+  duplicate `TreeNode` forests. A one-million-root ckVision test proves drawing
+  five visible rows queries five items. Acceptance remains for application-
+  realistic asynchronous child publication and refresh/memory budgets; any
+  generic shortfall remains a ckVision work package rather than a ckUtilities
+  shadow tree widget.
 
 Exit criteria:
 
@@ -633,12 +634,12 @@ Deliverables:
   one-filesystem policy, cancellation races, huge directories, Unicode paths,
   and cloud-operation failure/retry.
 
-Expected ckVision stress point:
+Current ckVision stress point:
 
-- Provider-backed TreeView with stable IDs is likely required here even if the
-  JSON pilot can tolerate materialization. Its acceptance must include lazy
-  asynchronous child publication, model refresh, selection/expansion
-  preservation, bounded visible-row work, and deterministic headless tests.
+- Disk usage now consumes the provider-backed `TreeView` with stable IDs. Its
+  remaining acceptance must include lazy asynchronous child publication, model
+  refresh, selection/expansion preservation, bounded visible-row work, and
+  deterministic headless tests over realistic scan snapshots.
 
 Do not add a thread pool or disk-scanning abstraction to ckVision merely to
 solve this application. ckVision owns safe UI-thread ingress and scalable
@@ -867,7 +868,7 @@ These are investigation targets, not pre-approved APIs:
 
 | Candidate | Driven by | Evidence to collect |
 |---|---|---|
-| Provider-backed TreeView with stable node IDs | JSON and disk trees | memory, refresh cost, selection/expansion stability, async lazy-load semantics |
+| Provider-backed TreeView with stable node IDs | JSON and disk trees | implemented in candidate `ba97203`; collect application-scale memory, refresh-cost, selection/expansion, and async lazy-load evidence |
 | FlowView viewport anchoring, selection/copy, and virtualized history | chat transcript | long-session memory, copy/selection and link behavior |
 | Generic color-selection control/dialog | launcher and theme tools | reusable color model, truecolor/degraded palette behavior, keyboard/mouse UX |
 | Safe event diagnostics observer | launcher event viewer and troubleshooting | no dispatch interference/re-entrancy, bounded recording, deterministic replay text |
@@ -962,7 +963,7 @@ decision, not an undocumented threshold increase.
 | Dirty local ckVision checkout | irreproducible builds and false capability assumptions | stage only clean SDK/package artifacts; record commit identity |
 | Legacy UI/domain entanglement | ckVision-shaped monoliths and unsafe lifetimes | extract framework-neutral controllers/models before each UI slice |
 | Compatibility-layer temptation | permanent duplicated architecture | ban legacy API mirrors and mixed-framework executables; review include direction |
-| Large materialized trees/transcripts | latency and memory regressions | early JSON pilot, provider-backed tree investigation, streaming benchmarks |
+| Large trees/transcripts | latency and memory regressions | provider-backed TreeModel adoption, application-scale JSON/disk refresh and memory measurement, streaming benchmarks |
 | Background worker/view coupling | use-after-free, hangs, shutdown races | typed result queues, `Application::post()`, cancellation ownership, race tests/sanitizers |
 | Scope creep in ckVision | application framework/domain leakage | enforce promotion test and ckVision authority chain |
 | Cross-platform readiness mismatch | unsupported release claims | explicit staged support policy and platform-specific exit gates |

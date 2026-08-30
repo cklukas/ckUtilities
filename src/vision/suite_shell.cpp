@@ -49,6 +49,14 @@ SuiteShell::SuiteShell(ckv::ui::Application &application, SuiteShellOptions opti
                                      options_.about_text);
 }
 
+SuiteShell::~SuiteShell()
+{
+    application_.commands().withdraw(about_command_);
+    if (return_to_launcher_command_ != ckv::ui::kInvalidCommand)
+        application_.commands().withdraw(return_to_launcher_command_);
+    shell_.detach_desktop();
+}
+
 ckv::widgets::Desktop &SuiteShell::desktop() noexcept
 {
     return shell_.desktop();

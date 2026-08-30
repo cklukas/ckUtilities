@@ -268,8 +268,8 @@ int main()
         ck::vision::DiskUsageApp disk_usage(application, make_snapshot());
 
         require(disk_usage.root_directory() != nullptr, "The native disk-usage app must retain the scan snapshot.");
-        require(disk_usage.tree() != nullptr && disk_usage.table() != nullptr,
-                "The native disk-usage app must compose a tree and selected-directory table.");
+        require(disk_usage.tree() != nullptr && disk_usage.tree()->model() != nullptr && disk_usage.table() != nullptr,
+                "The native disk-usage app must compose a provider-backed tree and selected-directory table.");
         require(disk_usage.table()->row_count() == 2,
                 "The selected root directory must populate its child-directory table.");
         application.step(0);
@@ -290,8 +290,9 @@ int main()
     require(scan_service.cancelled(), "Cancellation must be delegated to the scan service.");
     scan_service.complete(make_snapshot());
     application.step(0);
-    require(disk_usage.root_directory() != nullptr && disk_usage.table() != nullptr,
-            "A completed scan snapshot must be mapped into native tree and table views.");
+    require(disk_usage.root_directory() != nullptr && disk_usage.tree() != nullptr &&
+                disk_usage.tree()->model() != nullptr && disk_usage.table() != nullptr,
+            "A completed scan snapshot must be mapped into provider-backed tree and table views.");
     require(disk_usage.selected_directory() == disk_usage.root_directory(),
             "A completed scan must establish a stable root selection.");
     require(application.execute_command(disk_usage.view_files_command()), "File listing must be a registry command.");

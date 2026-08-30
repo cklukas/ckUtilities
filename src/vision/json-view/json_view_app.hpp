@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -24,8 +25,8 @@ namespace ck::vision
 {
 
 // A native ckVision presentation for the existing JSON-domain model. The
-// document and Node tree are application-owned so every TreeNode payload
-// remains valid for the complete lifetime of the rendered view.
+// document and Node tree are application-owned; the borrowed TreeModel exposes
+// their stable identities directly instead of duplicating a presentation tree.
 class JsonViewApp
 {
 public:
@@ -78,7 +79,7 @@ private:
 
     void create_document_window();
     void rebuild_tree();
-    ckv::widgets::TreeNode make_tree_node(Node &node);
+    void index_tree_nodes(Node &node, std::size_t sibling_index);
     bool reveal_current_match();
     void update_footer();
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
@@ -87,14 +88,20 @@ private:
     ckv::ui::Application &application_;
     ckv::FileSystem &files_;
     CommandIds commands_;
-    std::unique_ptr<SuiteShell> shell_;
 
     std::unique_ptr<json> document_;
     std::unique_ptr<Node> root_;
     std::string document_path_;
     SearchState search_;
     std::unordered_map<const Node *, std::uint64_t> node_ids_;
+    std::unordered_map<std::uint64_t, Node *> nodes_by_id_;
+    std::unordered_map<const Node *, std::size_t> sibling_indexes_;
     std::uint64_t next_node_id_ = 1;
+    // TreeView borrows this provider and its domain-node indices. They must
+    // therefore outlive the shell that owns the TreeView.
+    std::unique_ptr<ckv::widgets::TreeModel> tree_model_;
+
+    std::unique_ptr<SuiteShell> shell_;
 
     ckv::widgets::Window *window_ = nullptr;
     ckv::widgets::TreeView *tree_ = nullptr;
