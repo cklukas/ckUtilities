@@ -86,6 +86,10 @@ legacy-negative checks, and extracted TGZ verification. It is an opt-in
 convenience target; the individual gates remain available for focused failure
 diagnosis.
 
+On 2026-08-30, a fresh macOS Release rehearsal against the selected installed
+SDK passed the independent package consumer, staged-product and legacy-negative
+cutover checks, extracted-TGZ verification, and all 92 CTest cases.
+
 On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
 `verify_ckvision_terminal` gate. It gives every staged executable a real PTY,
 uses a disposable empty configuration root, delivers a PTY resize and the

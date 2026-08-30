@@ -260,6 +260,10 @@ Historical application baseline: `legacy_tv`
   `verify_ckvision_rehearsal` composes CTest, the independent installed-SDK
   consumer, staged-product/cutover checks, and the archive check without
   making any of them implicit for normal development builds.
+  On 2026-08-30, a fresh macOS Release rehearsal against the selected installed
+  SDK passed that complete composition: independent consumer, staged-product
+  and legacy-negative cutover checks, extracted TGZ verification, and all 92
+  CTest cases.
   The separate Unix-only `verify_ckvision_terminal` gate uses a disposable
   configuration root and a real PTY to start every staged executable under
   `xterm-256color`, `xterm`, and `vt100`, deliver a resize and the standard
