@@ -9,6 +9,7 @@ using ck::edit::MarkdownByteRange;
 using ck::edit::MarkdownInlineStyle;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
+using ck::edit::toggle_markdown_task;
 
 TEST(MarkdownTransformations, TogglesInlineStylesAndRestoresTheContentSelection)
 {
@@ -73,6 +74,27 @@ TEST(MarkdownTransformations, ASelectionEndingAtANewlineDoesNotTouchTheFollowing
     ASSERT_TRUE(edit.has_value());
     EXPECT_EQ(edit->replaced, (MarkdownByteRange{0, 3}));
     EXPECT_EQ(edit->replacement, "# One");
+}
+
+TEST(MarkdownTransformations, TogglesTasksWithoutChangingProtectedBlockSyntax)
+{
+    constexpr std::string_view source =
+        "Plan\n  - [ ] Draft\n1. [X] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |\n";
+    const auto task = toggle_markdown_task(source, {0, source.size()});
+    ASSERT_TRUE(task.has_value());
+    EXPECT_EQ(task->replacement,
+              "- [ ] Plan\n  - [x] Draft\n1. [ ] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |");
+
+    constexpr std::string_view once =
+        "- [ ] Plan\n  - [x] Draft\n1. [ ] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |\n";
+    const auto toggled_again = toggle_markdown_task(once, {0, once.size()});
+    ASSERT_TRUE(toggled_again.has_value());
+    EXPECT_EQ(toggled_again->replacement,
+              "- [x] Plan\n  - [ ] Draft\n1. [x] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |");
+
+    const auto zero_width = toggle_markdown_task("Note\n", {0, 0});
+    ASSERT_TRUE(zero_width.has_value());
+    EXPECT_EQ(zero_width->replacement, "- [ ] Note");
 }
 
 TEST(MarkdownTransformations, RejectsEmptyAndInvalidRanges)

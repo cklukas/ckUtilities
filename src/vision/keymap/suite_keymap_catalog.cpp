@@ -82,6 +82,7 @@ const std::array kEditCommands{
     CommandDefinition{"ck.edit.italic", "&Italic selection", "Markdown format", "Ctrl+I"},
     CommandDefinition{"ck.edit.strikethrough", "&Strikethrough selection", "Markdown format", ""},
     CommandDefinition{"ck.edit.inline_code", "Inline &code selection", "Markdown format", ""},
+    CommandDefinition{"ck.edit.toggle_task", "Toggle &task", "Markdown format", ""},
     CommandDefinition{"ck.edit.heading.1", "Heading &1", "Markdown format", ""},
     CommandDefinition{"ck.edit.heading.2", "Heading &2", "Markdown format", ""},
     CommandDefinition{"ck.edit.heading.3", "Heading &3", "Markdown format", ""},

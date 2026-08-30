@@ -229,6 +229,87 @@ std::string transform_heading_line(std::string_view line, int level, bool &chang
     return transformed;
 }
 
+std::optional<std::size_t> task_list_content_start(std::string_view line, std::size_t indent) noexcept
+{
+    if (indent >= line.size())
+        return std::nullopt;
+
+    std::size_t marker_end = indent;
+    if (line[marker_end] == '-' || line[marker_end] == '*' || line[marker_end] == '+')
+    {
+        ++marker_end;
+    }
+    else
+    {
+        const std::size_t digits_begin = marker_end;
+        while (marker_end < line.size() && line[marker_end] >= '0' && line[marker_end] <= '9')
+            ++marker_end;
+        if (marker_end == digits_begin || marker_end == line.size() ||
+            (line[marker_end] != '.' && line[marker_end] != ')'))
+            return std::nullopt;
+        ++marker_end;
+    }
+
+    if (marker_end == line.size() || (line[marker_end] != ' ' && line[marker_end] != '\t'))
+        return std::nullopt;
+    while (marker_end < line.size() && (line[marker_end] == ' ' || line[marker_end] == '\t'))
+        ++marker_end;
+    return marker_end;
+}
+
+std::optional<bool> task_checked_at(std::string_view line, std::size_t offset) noexcept
+{
+    if (offset + 3U > line.size() || line[offset] != '[' || line[offset + 2U] != ']')
+        return std::nullopt;
+    if (line[offset + 1U] != ' ' && line[offset + 1U] != 'x' && line[offset + 1U] != 'X')
+        return std::nullopt;
+    if (offset + 3U < line.size() && line[offset + 3U] != ' ' && line[offset + 3U] != '\t')
+        return std::nullopt;
+    return line[offset + 1U] == 'x' || line[offset + 1U] == 'X';
+}
+
+std::string transform_task_line(std::string_view line, bool &changed)
+{
+    const bool has_carriage_return = !line.empty() && line.back() == '\r';
+    const std::string_view content = has_carriage_return ? line.substr(0, line.size() - 1U) : line;
+    if (content.empty() || indented_code(content))
+        return std::string(line);
+
+    const std::size_t indent = heading_indent(content);
+    if (heading_at(content, indent) || content.substr(indent).starts_with('>') || content.find('|') != std::string_view::npos)
+        return std::string(line);
+
+    if (const auto list_content = task_list_content_start(content, indent))
+    {
+        if (const auto checked = task_checked_at(content, *list_content))
+        {
+            std::string transformed(line);
+            transformed[*list_content + 1U] = *checked ? ' ' : 'x';
+            changed = true;
+            return transformed;
+        }
+
+        std::string transformed(content.substr(0, *list_content));
+        transformed += "[ ] ";
+        transformed += content.substr(*list_content);
+        if (has_carriage_return)
+            transformed.push_back('\r');
+        changed = true;
+        return transformed;
+    }
+
+    if (indent >= 4U || !has_non_whitespace(content.substr(indent)))
+        return std::string(line);
+
+    std::string transformed(content.substr(0, indent));
+    transformed += "- [ ] ";
+    transformed += content.substr(indent);
+    if (has_carriage_return)
+        transformed.push_back('\r');
+    changed = true;
+    return transformed;
+}
+
 std::optional<MarkdownTransformEdit> remove_code_wrapper(std::string_view source,
                                                           MarkdownByteRange selection)
 {
@@ -388,6 +469,65 @@ std::optional<MarkdownTransformEdit> toggle_markdown_heading(
         else
         {
             replacement += transform_heading_line(line, level, changed);
+        }
+
+        if (current_end == last_line_end)
+            break;
+        replacement.push_back('\n');
+        begin = current_end + 1U;
+    }
+
+    if (!changed)
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = {first_line, last_line_end},
+        .replacement = std::move(replacement),
+        .selection = {first_line, first_line + replacement.size()},
+    };
+}
+
+std::optional<MarkdownTransformEdit> toggle_markdown_task(
+    std::string_view source,
+    MarkdownByteRange selection)
+{
+    if (!valid_range(source, selection))
+        return std::nullopt;
+
+    const std::size_t first_line = line_start(source, selection.begin);
+    std::size_t last_position = selection.begin;
+    if (selection.end > selection.begin)
+    {
+        last_position = selection.end - 1U;
+        if (source[last_position] == '\n' && last_position > 0U)
+            --last_position;
+    }
+    const std::size_t last_line_end = line_end(source, last_position);
+
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    std::string replacement;
+    replacement.reserve(last_line_end - first_line);
+    bool changed = false;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+
+        if (active_fence)
+        {
+            replacement.append(line);
+            if (fence_closes(line, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(line))
+        {
+            replacement.append(line);
+            active_fence = opening;
+        }
+        else
+        {
+            replacement += transform_task_line(line, changed);
         }
 
         if (current_end == last_line_end)

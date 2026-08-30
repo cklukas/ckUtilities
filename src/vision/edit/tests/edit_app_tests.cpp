@@ -87,6 +87,17 @@ int main()
                 editor.document().text() == "caf\xC3\xA9\nHeading\n```cpp\n# code\n```\n",
             "Applying the current heading level again must remove its ATX marker.");
 
+    editor.document().set_text("Plan\n```cpp\n- [ ] code\n```\n");
+    const auto task_position = editor.document().position_at_byte(0);
+    require(task_position.has_value() && editor.editor_view()->set_selection({*task_position, *task_position}),
+            "The native editor must position a zero-width task transform at the current line.");
+    require(application.execute_command(editor.toggle_task_command()) &&
+                editor.document().text() == "- [ ] Plan\n```cpp\n- [ ] code\n```\n",
+            "Task transforms must promote ordinary text while leaving fenced code unchanged.");
+    require(application.execute_command(editor.toggle_task_command()) &&
+                editor.document().text() == "- [x] Plan\n```cpp\n- [ ] code\n```\n",
+            "Repeating a task command must toggle its checked state through the command registry.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");

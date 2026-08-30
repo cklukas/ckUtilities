@@ -46,6 +46,7 @@ public:
     ckv::ui::CommandId strikethrough_command() const noexcept { return strikethrough_command_; }
     ckv::ui::CommandId inline_code_command() const noexcept { return inline_code_command_; }
     ckv::ui::CommandId heading_command(int level) const noexcept;
+    ckv::ui::CommandId toggle_task_command() const noexcept { return toggle_task_command_; }
 
 private:
     void declare_commands();
@@ -61,6 +62,7 @@ private:
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
     void toggle_inline_markdown(ck::edit::MarkdownInlineStyle style, std::string_view label);
     void toggle_heading_markdown(int level);
+    void toggle_task_markdown();
     bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
                                    std::string_view success_message);
     bool markdown_document() const noexcept;
@@ -80,6 +82,7 @@ private:
     ckv::ui::CommandId italic_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId strikethrough_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId inline_code_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId toggle_task_command_ = ckv::ui::kInvalidCommand;
     std::array<ckv::ui::CommandId, 6> heading_commands_{};
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;

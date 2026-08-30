@@ -55,4 +55,13 @@ std::optional<MarkdownTransformEdit> toggle_markdown_heading(
     MarkdownByteRange selection,
     int level);
 
+// Toggles checked state for task-list items on ordinary selected lines. A
+// non-task list item gains an unchecked task marker; a non-list ordinary line
+// becomes a bullet task. Fenced and indented code, headings, block quotes, and
+// table-looking lines remain untouched. A zero-width selection targets its
+// current line.
+std::optional<MarkdownTransformEdit> toggle_markdown_task(
+    std::string_view source,
+    MarkdownByteRange selection);
+
 } // namespace ck::edit
