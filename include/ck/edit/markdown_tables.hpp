@@ -18,8 +18,9 @@ enum class MarkdownTableInsertPosition
 // Inserts a Markdown table at a zero-width cursor outside code or an existing
 // table. The generated table has a header, a separator, and `body_rows` empty
 // rows. It establishes valid block-newline boundaries without discarding the
-// surrounding text. Dimensions are deliberately bounded so a malformed dialog
-// input cannot create an impractically large single document transaction.
+// surrounding text, including a separator after an adjoining pipe table.
+// Dimensions are deliberately bounded so a malformed dialog input cannot
+// create an impractically large single document transaction.
 std::optional<MarkdownTransformEdit> insert_markdown_table(
     std::string_view source,
     MarkdownByteRange cursor,

@@ -63,6 +63,12 @@ int main()
     require(at_crlf_eof.has_value() && apply(terminated_crlf_prose, *at_crlf_eof) ==
                                           "Before\r\n| Header 1 |\r\n| --- |\r\n",
             "Table insertion must accept end-of-file after a terminating CRLF as the final empty line.");
+    const std::string terminated_table = "| A |\n| --- |\n";
+    const auto after_table = ck::edit::insert_markdown_table(
+        terminated_table, {terminated_table.size(), terminated_table.size()}, 1, 0);
+    require(after_table.has_value() && apply(terminated_table, *after_table) ==
+                                        "| A |\n| --- |\n\n| Header 1 |\n| --- |\n",
+            "Table insertion after a terminated table must add a blank separator rather than merge table blocks.");
 
     const std::string table = "| Name | Count |\n| :--- | ---: |\n| one\\|two | 2 |\n";
     const auto add_row = ck::edit::insert_markdown_table_row(

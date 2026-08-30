@@ -346,8 +346,10 @@ std::optional<TableInsertionContext> table_insertion_context(std::string_view so
     // preserved as an empty separator after the inserted table.
     const bool reuses_following_newline = source_line.terminated && cursor.begin == source_line.content_end &&
                                            source_line.content_end > source_line.begin;
+    const bool follows_table = cursor.begin > 0U && source[cursor.begin - 1U] == '\n' &&
+                               locate_table(source, {cursor.begin - 1U, cursor.begin - 1U}).has_value();
     return TableInsertionContext{source_newline(source),
-                                 cursor.begin > 0U && source[cursor.begin - 1U] != '\n',
+                                 (cursor.begin > 0U && source[cursor.begin - 1U] != '\n') || follows_table,
                                  !reuses_following_newline};
 }
 
