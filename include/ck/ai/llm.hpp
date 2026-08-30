@@ -45,6 +45,8 @@ public:
   std::size_t token_count(const std::string &text) const;
 
   const RuntimeConfig &runtime_config() const noexcept { return runtime_; }
+  bool ready() const noexcept { return stub_mode_ || (model_ != nullptr && context_ != nullptr); }
+  const std::string &load_error() const noexcept { return load_error_; }
 
   ~Llm();
 
@@ -54,11 +56,13 @@ private:
   std::string model_path_;
   RuntimeConfig runtime_;
   std::string system_prompt_;
+  std::string load_error_;
 
   // llama.cpp objects
   llama_model *model_;
   llama_context *context_;
   mutable std::mutex mutex_;
   bool stub_mode_ = false;
+  bool backend_initialized_ = false;
 };
 } // namespace ck::ai

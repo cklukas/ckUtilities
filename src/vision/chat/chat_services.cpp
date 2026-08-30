@@ -469,7 +469,12 @@ void LlmChatResponseService::load_model(const ChatModel &model)
     runtime.model_path = model.local_path.string();
     runtime.context_window_tokens = model.context_window_tokens == 0 ? 4096 : model.context_window_tokens;
     runtime.max_output_tokens = model.max_output_tokens == 0 ? 512 : model.max_output_tokens;
-    llm_ = ck::ai::Llm::open(runtime.model_path, runtime);
+    std::unique_ptr<ck::ai::Llm> loaded = ck::ai::Llm::open(runtime.model_path, runtime);
+    if (!loaded || !loaded->ready())
+        throw std::runtime_error(loaded && !loaded->load_error().empty()
+                                     ? loaded->load_error()
+                                     : "Could not initialize the selected local model.");
+    llm_ = std::move(loaded);
     loaded_model_id_ = model.id;
 }
 

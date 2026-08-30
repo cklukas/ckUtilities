@@ -216,7 +216,8 @@ Historical application baseline: `legacy_tv`
   through the existing lifetime gate, prevents model lifecycle changes while a
   response is active, and reports validation, loading, generation, or injected
   responder failures as structured completion outcomes rather than escaping a
-  worker thread. The live rich transcript now renders at most the
+  worker thread. A missing real-model file now fails before backend startup
+  rather than falling back to the deterministic test stub. The live rich transcript now renders at most the
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
@@ -228,7 +229,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 91-test cutover suite passes in normal and
+  candidate SDK. The full 92-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -239,7 +240,7 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  91-test cutover configuration, independent package consumer, and staged
+  92-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. That staged gate launches every converted
   child through `ck-utilities --launch <child> --help` and separately proves
   the missing-child diagnostic path. The `verify_ckvision_cutover` gate also
@@ -247,12 +248,12 @@ Historical application baseline: `legacy_tv`
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 91 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 92 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 91-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 92-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

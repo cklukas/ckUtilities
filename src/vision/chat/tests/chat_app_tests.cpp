@@ -49,6 +49,31 @@ std::size_t block_link_count(const ckv::widgets::FlowBlock &block)
     return count;
 }
 
+class ScopedStubMode final
+{
+public:
+    explicit ScopedStubMode(bool enabled)
+    {
+        if (const char *existing = std::getenv("CK_AI_FORCE_STUB"))
+            previous_ = existing;
+        if (enabled)
+            setenv("CK_AI_FORCE_STUB", "1", 1);
+        else
+            unsetenv("CK_AI_FORCE_STUB");
+    }
+
+    ~ScopedStubMode()
+    {
+        if (previous_)
+            setenv("CK_AI_FORCE_STUB", previous_->c_str(), 1);
+        else
+            unsetenv("CK_AI_FORCE_STUB");
+    }
+
+private:
+    std::optional<std::string> previous_;
+};
+
 class ManualResponseService final : public ck::vision::ChatResponseService
 {
 public:
@@ -244,6 +269,14 @@ public:
                    .hardware_requirements = "CPU",
                    .size_bytes = 768,
                    .local_path = "writer-model",
+                   .is_downloaded = true,
+                   .is_active = false},
+                  {.id = "broken",
+                   .name = "Unavailable model",
+                   .description = "A selected model whose local file is unavailable.",
+                   .hardware_requirements = "CPU",
+                   .size_bytes = 1024,
+                   .local_path = "/tmp/ck-utilities-missing-model.gguf",
                    .is_downloaded = true,
                    .is_active = false},
                   {.id = "download",
@@ -650,6 +683,7 @@ int main()
     require(!failure_result.cancelled && failure_result.error_message == "injected responder failure",
             "The response boundary must report worker failures structurally.");
 
+    ScopedStubMode stub_mode(true);
     ck::vision::LlmChatResponseService runtime_responses(models);
     std::mutex runtime_mutex;
     std::condition_variable runtime_ready;
@@ -676,6 +710,32 @@ int main()
                 runtime_response.find("Earlier turn") != std::string::npos &&
                 runtime_response.find("Hello runtime") != std::string::npos,
             "The native LLM response service must stream ckai_core output with the selected system prompt and prior turns.");
+    require(models.activate("broken"), "The runtime-failure test requires selecting an unavailable local model.");
+    {
+        ScopedStubMode real_runtime(false);
+        std::mutex broken_mutex;
+        std::condition_variable broken_ready;
+        ck::vision::ChatResponseResult broken_result;
+        bool broken_completed = false;
+        runtime_responses.start({.prompt = "Broken runtime", .model_id = "broken"}, {},
+                                [&](ck::vision::ChatResponseResult result) {
+                                    {
+                                        std::scoped_lock lock(broken_mutex);
+                                        broken_result = std::move(result);
+                                        broken_completed = true;
+                                    }
+                                    broken_ready.notify_one();
+                                });
+        {
+            std::unique_lock lock(broken_mutex);
+            require(broken_ready.wait_for(lock, std::chrono::seconds(2), [&] { return broken_completed; }),
+                    "An unavailable local model must report a completion instead of terminating its worker.");
+        }
+        require(!broken_result.cancelled &&
+                    broken_result.error_message.find("Local model file is unavailable") != std::string::npos,
+                "The LLM response boundary must report an actual model-load failure structurally.");
+    }
+    require(models.activate("local"), "The real-model failure path must not prevent selecting a prior working model.");
     ck::vision::ChatResponseResult invalid_model_result;
     runtime_responses.start({.prompt = "Invalid runtime",
                              .system_prompt = "Runtime system",

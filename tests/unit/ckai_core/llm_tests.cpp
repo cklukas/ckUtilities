@@ -2,10 +2,50 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <filesystem>
+#include <optional>
 #include <string>
+
+namespace
+{
+class ScopedStubMode final
+{
+public:
+    explicit ScopedStubMode(bool enabled)
+    {
+        if (const char *existing = std::getenv("CK_AI_FORCE_STUB"))
+            previous_ = existing;
+#ifdef _WIN32
+        _putenv_s("CK_AI_FORCE_STUB", enabled ? "1" : "");
+#else
+        if (enabled)
+            setenv("CK_AI_FORCE_STUB", "1", 1);
+        else
+            unsetenv("CK_AI_FORCE_STUB");
+#endif
+    }
+
+    ~ScopedStubMode()
+    {
+#ifdef _WIN32
+        _putenv_s("CK_AI_FORCE_STUB", previous_ ? previous_->c_str() : "");
+#else
+        if (previous_)
+            setenv("CK_AI_FORCE_STUB", previous_->c_str(), 1);
+        else
+            unsetenv("CK_AI_FORCE_STUB");
+#endif
+    }
+
+private:
+    std::optional<std::string> previous_;
+};
+} // namespace
 
 TEST(LlmTests, GeneratesDeterministicStub)
 {
+    ScopedStubMode stub_mode(true);
     ck::ai::RuntimeConfig runtime;
     runtime.model_path = "model.gguf";
     auto llm = ck::ai::Llm::open(runtime.model_path, runtime);
@@ -24,8 +64,27 @@ TEST(LlmTests, GeneratesDeterministicStub)
     EXPECT_NE(collected.find("hello"), std::string::npos);
 }
 
+TEST(LlmTests, ReportsUnavailableRealModel)
+{
+    ScopedStubMode stub_mode(false);
+    ck::ai::RuntimeConfig runtime;
+    const std::filesystem::path missing = std::filesystem::temp_directory_path() / "ck-utilities-missing-model.gguf";
+    auto llm = ck::ai::Llm::open(missing.string(), runtime);
+
+    ASSERT_NE(llm, nullptr);
+    EXPECT_FALSE(llm->ready());
+    EXPECT_FALSE(llm->load_error().empty());
+    bool emitted = false;
+    llm->generate_cancellable("hello", {}, [&emitted](ck::ai::Chunk) {
+        emitted = true;
+        return true;
+    });
+    EXPECT_FALSE(emitted);
+}
+
 TEST(LlmTests, EmbedReturnsModelSpecificHash)
 {
+    ScopedStubMode stub_mode(true);
     ck::ai::RuntimeConfig runtime;
     runtime.model_path = "model.gguf";
     auto llm = ck::ai::Llm::open(runtime.model_path, runtime);
@@ -42,6 +101,7 @@ TEST(LlmTests, EmbedReturnsModelSpecificHash)
 
 TEST(LlmTests, TokenCountSplitsOnWhitespace)
 {
+    ScopedStubMode stub_mode(true);
     ck::ai::RuntimeConfig runtime;
     auto llm = ck::ai::Llm::open("model", runtime);
     EXPECT_EQ(llm->token_count(""), 0u);
@@ -51,6 +111,7 @@ TEST(LlmTests, TokenCountSplitsOnWhitespace)
 
 TEST(LlmTests, CancellableGenerationStopsAfterTheCallbackDeclinesMoreOutput)
 {
+    ScopedStubMode stub_mode(true);
     ck::ai::RuntimeConfig runtime;
     auto llm = ck::ai::Llm::open("model", runtime);
     ASSERT_NE(llm, nullptr);

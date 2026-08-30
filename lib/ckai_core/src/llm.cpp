@@ -11,6 +11,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <algorithm>
 #include <utility>
@@ -28,24 +29,12 @@ std::string build_stub_response(const std::string &prompt,
   return stream.str();
 }
 
-bool should_use_stub_model(const std::string &model_path) {
+bool should_use_stub_model() {
   if (const char *force_stub = std::getenv("CK_AI_FORCE_STUB")) {
-    if (*force_stub)
+    if (*force_stub && std::string_view(force_stub) != "0")
       return true;
   }
-
-  if (model_path.empty())
-    return true;
-
-  std::filesystem::path path(model_path);
-  std::string name = path.filename().string();
-  std::string lower;
-  lower.reserve(name.size());
-  for (unsigned char ch : name)
-    lower.push_back(static_cast<char>(std::tolower(ch)));
-
-  return lower == "model" || lower == "model.gguf" ||
-         lower == "stub-model.gguf";
+  return false;
 }
 
 std::size_t stub_token_count(const std::string &text) {
@@ -71,13 +60,20 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
     : model_path_(std::move(model_path)), runtime_(std::move(runtime)),
       model_(nullptr), context_(nullptr) {
 
-  if (should_use_stub_model(model_path_)) {
+  if (should_use_stub_model()) {
     stub_mode_ = true;
+    return;
+  }
+
+  std::error_code filesystem_error;
+  if (!std::filesystem::is_regular_file(model_path_, filesystem_error)) {
+    load_error_ = "Local model file is unavailable: " + model_path_;
     return;
   }
 
   // Initialize llama backend
   llama_backend_init();
+  backend_initialized_ = true;
 
   // Load model
   auto model_params = llama_model_default_params();
@@ -96,7 +92,8 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
 
   if (!model_) {
     llama_backend_free();
-    stub_mode_ = true;
+    backend_initialized_ = false;
+    load_error_ = "Could not load local model: " + model_path_;
     return;
   }
 
@@ -116,7 +113,8 @@ Llm::Llm(std::string model_path, RuntimeConfig runtime)
     llama_model_free(model_);
     model_ = nullptr;
     llama_backend_free();
-    stub_mode_ = true;
+    backend_initialized_ = false;
+    load_error_ = "Could not create a runtime context for local model: " + model_path_;
     return;
   }
 }
@@ -131,7 +129,8 @@ Llm::~Llm() {
   if (model_) {
     llama_model_free(model_);
   }
-  llama_backend_free();
+  if (backend_initialized_)
+    llama_backend_free();
 }
 
 std::unique_ptr<Llm> Llm::open(const std::string &model_path,
