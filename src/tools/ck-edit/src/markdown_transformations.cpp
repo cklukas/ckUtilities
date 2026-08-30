@@ -618,6 +618,16 @@ std::optional<MarkdownLink> markdown_link_at(std::string_view source, std::size_
     return std::nullopt;
 }
 
+std::optional<MarkdownLink> markdown_image_at(std::string_view source, std::size_t begin) noexcept
+{
+    if (begin + 1U >= source.size() || source[begin] != '!' || source[begin + 1U] != '[')
+        return std::nullopt;
+    const auto link = markdown_link_at(source, begin + 1U);
+    if (!link)
+        return std::nullopt;
+    return MarkdownLink{{begin, link->range.end}, link->label};
+}
+
 bool valid_link_destination(std::string_view destination) noexcept
 {
     return !destination.empty() && std::none_of(destination.begin(), destination.end(), [](char character) {
@@ -634,6 +644,18 @@ std::optional<MarkdownTransformEdit> remove_markdown_link(std::string_view sourc
         .replaced = link.range,
         .replacement = label,
         .selection = {link.range.begin, link.range.begin + label.size()},
+    };
+}
+
+std::optional<MarkdownTransformEdit> remove_markdown_image(std::string_view source, MarkdownLink image)
+{
+    const std::string label(source.substr(image.label.begin, image.label.end - image.label.begin));
+    if (label.empty())
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = image.range,
+        .replacement = label,
+        .selection = {image.range.begin, image.range.begin + label.size()},
     };
 }
 
@@ -1408,6 +1430,35 @@ std::optional<MarkdownTransformEdit> toggle_markdown_link(
         .replaced = selection,
         .replacement = "[" + std::string(label) + "](" + std::string(destination) + ")",
         .selection = {selection.begin + 1U, selection.end + 1U},
+    };
+}
+
+std::optional<MarkdownTransformEdit> toggle_markdown_image(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view destination)
+{
+    if (!valid_range(source, selection) || selection.begin == selection.end)
+        return std::nullopt;
+
+    if (const auto image = markdown_image_at(source, selection.begin);
+        image && image->range.end == selection.end)
+        return remove_markdown_image(source, *image);
+
+    if (selection.begin >= 2U)
+    {
+        if (const auto image = markdown_image_at(source, selection.begin - 2U);
+            image && image->label == selection)
+            return remove_markdown_image(source, *image);
+    }
+
+    const std::string_view label = source.substr(selection.begin, selection.end - selection.begin);
+    if (!has_non_whitespace(label) || !valid_link_destination(destination))
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = selection,
+        .replacement = "![" + std::string(label) + "](" + std::string(destination) + ")",
+        .selection = {selection.begin + 2U, selection.end + 2U},
     };
 }
 

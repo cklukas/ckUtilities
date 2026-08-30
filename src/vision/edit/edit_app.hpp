@@ -58,6 +58,7 @@ public:
     ckv::ui::CommandId indent_list_command() const noexcept { return indent_list_command_; }
     ckv::ui::CommandId outdent_list_command() const noexcept { return outdent_list_command_; }
     ckv::ui::CommandId toggle_link_command() const noexcept { return toggle_link_command_; }
+    ckv::ui::CommandId toggle_image_command() const noexcept { return toggle_image_command_; }
     ckv::ui::CommandId find_command() const noexcept { return find_command_; }
     ckv::ui::CommandId find_next_command() const noexcept { return find_next_command_; }
     ckv::ui::CommandId replace_command() const noexcept { return replace_command_; }
@@ -94,6 +95,8 @@ private:
     void adjust_list_indentation(bool indent);
     void toggle_link_markdown();
     void show_link_destination_dialog();
+    void toggle_image_markdown();
+    void show_image_destination_dialog();
     bool continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor);
     void show_search_dialog(SearchAction action);
     void find_next();
@@ -127,6 +130,7 @@ private:
     ckv::ui::CommandId indent_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId outdent_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_link_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId toggle_image_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_next_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId replace_command_ = ckv::ui::kInvalidCommand;
@@ -135,6 +139,7 @@ private:
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_destination_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> image_destination_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> search_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;

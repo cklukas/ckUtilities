@@ -125,6 +125,17 @@ std::optional<MarkdownTransformEdit> toggle_markdown_link(
     MarkdownByteRange selection,
     std::string_view destination);
 
+// Wraps a nonempty selection as `![alt text](destination)`, restoring the
+// selection to the alt text. If the selection is a complete image or its alt
+// text, removes the image instead and ignores `destination`. A destination
+// must be nonempty and contain no whitespace; parentheses are supported. This
+// operation is local to the selected inline span and has no document or UI
+// dependency.
+std::optional<MarkdownTransformEdit> toggle_markdown_image(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view destination);
+
 // Reflows each ordinary paragraph touched by the selection to `width` UTF-8
 // code points (default 80). A zero-width selection targets its current
 // paragraph. Fenced/indented code, headings, quotes, lists, tables,

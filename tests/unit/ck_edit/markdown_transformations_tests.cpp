@@ -12,6 +12,7 @@ using ck::edit::continue_markdown_list;
 using ck::edit::indent_markdown_list;
 using ck::edit::outdent_markdown_list;
 using ck::edit::toggle_markdown_heading;
+using ck::edit::toggle_markdown_image;
 using ck::edit::toggle_markdown_inline_style;
 using ck::edit::toggle_markdown_link;
 using ck::edit::toggle_markdown_list;
@@ -247,6 +248,29 @@ TEST(MarkdownTransformations, TogglesLinksAndKeepsTheLabelSelected)
 
     EXPECT_FALSE(toggle_markdown_link("Read this", {5, 9}, "not a destination"));
     EXPECT_FALSE(toggle_markdown_link("Read this", {5, 5}, "https://example.test"));
+}
+
+TEST(MarkdownTransformations, TogglesImagesAndKeepsAltTextSelected)
+{
+    constexpr std::string_view source = "See logo";
+    const auto inserted = toggle_markdown_image(source, {4, 8}, "https://example.test/a_(b).png");
+    ASSERT_TRUE(inserted.has_value());
+    EXPECT_EQ(inserted->replacement, "![logo](https://example.test/a_(b).png)");
+    EXPECT_EQ(inserted->selection, (MarkdownByteRange{6, 10}));
+
+    constexpr std::string_view image = "See ![logo](https://example.test/a_(b).png)";
+    const auto alt_unwrapped = toggle_markdown_image(image, {6, 10}, "");
+    ASSERT_TRUE(alt_unwrapped.has_value());
+    EXPECT_EQ(alt_unwrapped->replaced, (MarkdownByteRange{4, image.size()}));
+    EXPECT_EQ(alt_unwrapped->replacement, "logo");
+    EXPECT_EQ(alt_unwrapped->selection, (MarkdownByteRange{4, 8}));
+
+    const auto complete_unwrapped = toggle_markdown_image(image, {4, image.size()}, "ignored");
+    ASSERT_TRUE(complete_unwrapped.has_value());
+    EXPECT_EQ(complete_unwrapped->replacement, "logo");
+
+    EXPECT_FALSE(toggle_markdown_image("See logo", {4, 8}, "not a destination"));
+    EXPECT_FALSE(toggle_markdown_image("See logo", {4, 4}, "https://example.test/logo.png"));
 }
 
 TEST(MarkdownTransformations, ReflowsOrdinaryParagraphsWithoutChangingProtectedSyntax)

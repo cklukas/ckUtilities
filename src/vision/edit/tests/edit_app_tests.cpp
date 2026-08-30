@@ -202,6 +202,24 @@ int main()
     require(application.execute_command(editor.toggle_link_command()) && editor.document().text() == "Read docs\n",
             "The native link command must remove a link when its label remains selected.");
 
+    editor.document().set_text("See logo\n");
+    const auto image_begin = editor.document().position_at_byte(4);
+    const auto image_end = editor.document().position_at_byte(8);
+    require(image_begin.has_value() && image_end.has_value() && editor.editor_view()->set_selection({*image_begin, *image_end}),
+            "The native editor must select Markdown image alt text before prompting for its destination.");
+    require(application.execute_command(editor.toggle_image_command()),
+            "The Markdown image command must open its destination dialog through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{
+                    ckv::Key::Char, ckv::Modifier::None, "https://example.test/logo.png"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native image destination dialog must accept typed destinations from the keyboard.");
+    application.step(0);
+    require(editor.document().text() == "See ![logo](https://example.test/logo.png)\n",
+            "The native image command must insert a Markdown image in one document transaction.");
+    require(application.execute_command(editor.toggle_image_command()) && editor.document().text() == "See logo\n",
+            "The native image command must remove an image when its alt text remains selected.");
+
     editor.document().set_text("Alpha beta\ngamma delta epsilon\nzeta\n");
     const auto reflow_position = editor.document().position_at_byte(7);
     require(reflow_position.has_value() && editor.editor_view()->set_selection({*reflow_position, *reflow_position}),

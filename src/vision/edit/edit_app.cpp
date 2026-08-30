@@ -72,6 +72,8 @@ void EditApp::declare_commands()
         }));
     toggle_link_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_link", [this] { toggle_link_markdown(); }));
+    toggle_image_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_image", [this] { toggle_image_markdown(); }));
     find_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.find", [this] { show_search_dialog(SearchAction::Find); }));
     find_next_command_ = command_scope_.own(
@@ -134,6 +136,7 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{strikethrough_command_, "&Strikethrough selection"}),
                 MenuItem::command(CommandPresentation{inline_code_command_, "Inline &code selection"}),
                 MenuItem::command(CommandPresentation{toggle_link_command_, "Insert or remove &link..."}),
+                MenuItem::command(CommandPresentation{toggle_image_command_, "Insert or remove &image..."}),
                 MenuItem::command(CommandPresentation{toggle_task_command_, "Toggle &task"}),
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
                 MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
@@ -609,6 +612,59 @@ void EditApp::show_link_destination_dialog()
             document_->text(), {selected->begin.byte, selected->end.byte}, result.values.front());
         if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown link."))
             window_->set_footer("Could not insert a Markdown link with that destination.");
+    });
+}
+
+void EditApp::toggle_image_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown images are available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    if (!selected)
+    {
+        window_->set_footer("Select alt text before inserting or removing a Markdown image.");
+        return;
+    }
+
+    const ck::edit::MarkdownByteRange range{selected->begin.byte, selected->end.byte};
+    if (const auto transform = ck::edit::toggle_markdown_image(document_->text(), range, ""))
+    {
+        if (!commit_markdown_transform(*transform, "Removed Markdown image."))
+            window_->set_footer("Could not remove the Markdown image at this selection.");
+        return;
+    }
+    show_image_destination_dialog();
+}
+
+void EditApp::show_image_destination_dialog()
+{
+    if (!markdown_document())
+        return;
+
+    image_destination_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Insert Markdown image";
+    dialog.fields.push_back({"&Destination:", "", [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    image_destination_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    image_destination_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 1U || !markdown_document())
+            return;
+
+        const auto selected = window_->editor().selection();
+        if (!selected)
+            return;
+        const auto transform = ck::edit::toggle_markdown_image(
+            document_->text(), {selected->begin.byte, selected->end.byte}, result.values.front());
+        if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown image."))
+            window_->set_footer("Could not insert a Markdown image with that destination.");
     });
 }
 
