@@ -29,6 +29,10 @@ option(CKTOOLS_VERIFY_CKVISION_ARCHIVE
        "Enable verification of the packaged ckVision-native release archive"
        OFF)
 
+option(CKTOOLS_VERIFY_CKVISION_TERMINAL
+       "Enable real-PTY terminal-profile verification for the staged native product"
+       OFF)
+
 function(cktools_require_ckvision)
   find_package(ckvision CONFIG REQUIRED)
 
@@ -111,6 +115,27 @@ function(cktools_add_ckvision_archive_verification)
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
     USES_TERMINAL
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
+endfunction()
+
+function(cktools_add_ckvision_terminal_verification)
+  if(NOT CKTOOLS_CKVISION_CUTOVER OR
+     NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
+     NOT CKTOOLS_VERIFY_CKVISION_TERMINAL OR
+     NOT UNIX)
+    return()
+  endif()
+
+  find_program(CKTOOLS_SCRIPT_EXECUTABLE NAMES script REQUIRED)
+
+  add_custom_target(verify_ckvision_terminal
+    COMMAND "${CMAKE_COMMAND}"
+      "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
+      "-DCKTOOLS_TERMINAL_CONFIG_ROOT=${PROJECT_BINARY_DIR}/ckvision-terminal-config"
+      "-DCKTOOLS_SCRIPT_EXECUTABLE=${CKTOOLS_SCRIPT_EXECUTABLE}"
+      -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionTerminal.cmake"
+    DEPENDS verify_ckvision_install
+    USES_TERMINAL
+    COMMENT "Smoke-test staged ckVision executables in real terminal profiles")
 endfunction()
 
 # Keep the complete local cutover rehearsal discoverable as one target without

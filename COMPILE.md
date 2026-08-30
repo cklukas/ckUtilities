@@ -32,6 +32,12 @@ after extraction and rejects legacy or build-only test payload. Set
 `CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE` to `Debug`, `Release`,
 `RelWithDebInfo`, or `MinSizeRel` as needed.
 
+For Unix terminal-profile evidence, additionally enable
+`CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` and run
+`verify_ckvision_terminal`. It starts every staged product in a real PTY under
+`xterm-256color`, `xterm`, and `vt100`, then exercises the standard Alt+X quit
+command with a disposable empty configuration root.
+
 Current local evidence is macOS Debug/Release plus ASan/UBSan. Linux and
 Windows remain release gates; actual support must match the migration ledger,
 not this historical planning note.

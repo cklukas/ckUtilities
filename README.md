@@ -116,6 +116,12 @@ rejects build-only GTest/GMock payload. The focused verification targets remain
 available for diagnosis. This does not replace remaining cross-platform or
 real-model acceptance.
 
+On macOS or Linux, add `-DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON` and run
+`verify_ckvision_terminal` to smoke-test every staged executable in a real PTY
+under `xterm-256color`, `xterm`, and `vt100`. The gate uses an empty disposable
+configuration root and sends the standard Alt+X quit command after startup; it
+does not replace interactive workflow or cross-platform acceptance.
+
 ### Hotkey Schemes
 
 All CK Utilities applications draw their shortcuts from a shared hotkey registry. Use the `--hotkeys <scheme>` flag (available on every tool) to override the scheme for a single launch. The built-in schemes are `linux`, `mac`, `windows`, and a user editable `custom` profile.

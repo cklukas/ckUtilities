@@ -260,6 +260,11 @@ Historical application baseline: `legacy_tv`
   `verify_ckvision_rehearsal` composes CTest, the independent installed-SDK
   consumer, staged-product/cutover checks, and the archive check without
   making any of them implicit for normal development builds.
+  The separate Unix-only `verify_ckvision_terminal` gate uses a disposable
+  configuration root and a real PTY to start and cleanly quit every staged
+  executable under `xterm-256color`, `xterm`, and `vt100`; it covers terminal
+  startup/input smoke only, not interactive journey or cross-platform
+  acceptance.
   A macOS ASan/UBSan cutover build against a package built with
   `CKVISION_SANITIZE=address,undefined` also passes all 92 tests. The
   sanitizer package propagates its required compile and link flags to CMake

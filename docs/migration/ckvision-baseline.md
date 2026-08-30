@@ -86,6 +86,13 @@ legacy-negative checks, and extracted TGZ verification. It is an opt-in
 convenience target; the individual gates remain available for focused failure
 diagnosis.
 
+On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
+`verify_ckvision_terminal` gate. It gives every staged executable a real PTY,
+uses a disposable empty configuration root, and verifies startup plus the
+standard Alt+X quit command under `xterm-256color`, `xterm`, and `vt100`.
+It is terminal-profile smoke evidence, not interactive-journey or
+cross-platform acceptance.
+
 ### Opt-in local-model chat evidence
 
 The native chat scenario includes an opt-in real-model path. It reads only the
