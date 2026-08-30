@@ -238,6 +238,16 @@ struct ListItem
     std::size_t content = 0;
 };
 
+constexpr std::size_t kMarkdownListIndent = 2U;
+
+std::size_t list_indent(std::string_view line) noexcept
+{
+    std::size_t indent = 0;
+    while (indent < line.size() && line[indent] == ' ')
+        ++indent;
+    return indent;
+}
+
 std::optional<ListItem> list_item_at(std::string_view line, std::size_t indent) noexcept
 {
     if (indent >= line.size())
@@ -266,6 +276,43 @@ std::optional<ListItem> list_item_at(std::string_view line, std::size_t indent) 
     while (marker_end < line.size() && (line[marker_end] == ' ' || line[marker_end] == '\t'))
         ++marker_end;
     return ListItem{style, indent, marker_end};
+}
+
+bool nested_list_context(std::string_view source, std::size_t line_begin, std::size_t indent)
+{
+    if (indent < 4U)
+        return true;
+
+    std::size_t cursor = line_begin;
+    while (cursor > 0U)
+    {
+        const std::size_t previous_end = cursor - 1U;
+        const std::size_t separator = source.rfind('\n', previous_end == 0U ? 0U : previous_end - 1U);
+        const std::size_t previous_begin = separator == std::string_view::npos ? 0U : separator + 1U;
+        std::string_view line = source.substr(previous_begin, previous_end - previous_begin);
+        if (!line.empty() && line.back() == '\r')
+            line.remove_suffix(1U);
+        if (!has_non_whitespace(line) || fence_at(line))
+            return false;
+
+        const auto preceding = list_item_at(line, list_indent(line));
+        if (!preceding)
+            return false;
+        if (preceding->indent < indent)
+            return true;
+        cursor = previous_begin;
+    }
+    return false;
+}
+
+std::optional<ListItem> markdown_list_item_at(std::string_view source,
+                                              std::size_t line_begin,
+                                              std::string_view line)
+{
+    const auto item = list_item_at(line, list_indent(line));
+    if (!item || !nested_list_context(source, line_begin, item->indent))
+        return std::nullopt;
+    return item;
 }
 
 std::optional<std::string> continued_list_marker(std::string_view line, ListItem item)
@@ -460,6 +507,55 @@ bool selection_has_only_list_style(std::string_view source,
         begin = current_end + 1U;
     }
     return saw_transformable && all_matching;
+}
+
+bool selection_has_only_markdown_list_items(std::string_view source,
+                                            std::size_t first_line,
+                                            std::size_t last_line_end)
+{
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    bool saw_item = false;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+        const std::string_view content = !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1U) : line;
+
+        if (active_fence)
+        {
+            return false;
+        }
+        if (fence_at(content))
+            return false;
+        if (has_non_whitespace(content))
+        {
+            if (!markdown_list_item_at(source, begin, content))
+                return false;
+            saw_item = true;
+        }
+
+        if (current_end == last_line_end)
+            break;
+        begin = current_end + 1U;
+    }
+    return saw_item;
+}
+
+std::string adjust_list_indent_line(std::string_view line, ListItem item, bool indent, bool &changed)
+{
+    if (indent)
+    {
+        changed = true;
+        return std::string(kMarkdownListIndent, ' ') + std::string(line);
+    }
+
+    const std::size_t removed = std::min(kMarkdownListIndent, item.indent);
+    if (removed == 0U)
+        return std::string(line);
+    changed = true;
+    return std::string(line.substr(removed));
 }
 
 struct MarkdownLink
@@ -1168,6 +1264,74 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
     };
 }
 
+namespace
+{
+
+std::optional<MarkdownTransformEdit> adjust_markdown_list_indentation(std::string_view source,
+                                                                        MarkdownByteRange selection,
+                                                                        bool indent)
+{
+    if (!valid_range(source, selection))
+        return std::nullopt;
+
+    const std::size_t first_line = line_start(source, selection.begin);
+    std::size_t last_position = selection.begin;
+    if (selection.end > selection.begin)
+    {
+        last_position = selection.end - 1U;
+        if (source[last_position] == '\n' && last_position > 0U)
+            --last_position;
+    }
+    const std::size_t last_line_end = line_end(source, last_position);
+    if (!selection_has_only_markdown_list_items(source, first_line, last_line_end))
+        return std::nullopt;
+
+    std::string replacement;
+    replacement.reserve(last_line_end - first_line + (indent ? kMarkdownListIndent : 0U));
+    bool changed = false;
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+        const std::string_view content = !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1U) : line;
+        if (const auto item = markdown_list_item_at(source, begin, content))
+            replacement += adjust_list_indent_line(line, *item, indent, changed);
+        else
+            replacement += line;
+
+        if (current_end == last_line_end)
+            break;
+        replacement.push_back('\n');
+        begin = current_end + 1U;
+    }
+
+    if (!changed)
+        return std::nullopt;
+    const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
+    return MarkdownTransformEdit{
+        .replaced = {first_line, last_line_end},
+        .replacement = std::move(replacement),
+        .selection = restored_selection,
+    };
+}
+
+} // namespace
+
+std::optional<MarkdownTransformEdit> indent_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection)
+{
+    return adjust_markdown_list_indentation(source, selection, true);
+}
+
+std::optional<MarkdownTransformEdit> outdent_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection)
+{
+    return adjust_markdown_list_indentation(source, selection, false);
+}
+
 std::optional<MarkdownTransformEdit> continue_markdown_list(
     std::string_view source,
     MarkdownByteRange selection)
@@ -1183,7 +1347,7 @@ std::optional<MarkdownTransformEdit> continue_markdown_list(
     if (selection.begin != begin + line.size() || fence_before(source, begin))
         return std::nullopt;
 
-    const auto item = list_item_at(line, heading_indent(line));
+    const auto item = markdown_list_item_at(source, begin, line);
     if (!item)
         return std::nullopt;
 

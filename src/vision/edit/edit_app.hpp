@@ -52,6 +52,8 @@ public:
     ckv::ui::CommandId toggle_quote_command() const noexcept { return toggle_quote_command_; }
     ckv::ui::CommandId toggle_bullet_list_command() const noexcept { return toggle_bullet_list_command_; }
     ckv::ui::CommandId toggle_ordered_list_command() const noexcept { return toggle_ordered_list_command_; }
+    ckv::ui::CommandId indent_list_command() const noexcept { return indent_list_command_; }
+    ckv::ui::CommandId outdent_list_command() const noexcept { return outdent_list_command_; }
     ckv::ui::CommandId toggle_link_command() const noexcept { return toggle_link_command_; }
     ckv::ui::CommandId find_command() const noexcept { return find_command_; }
     ckv::ui::CommandId find_next_command() const noexcept { return find_next_command_; }
@@ -83,6 +85,7 @@ private:
     void toggle_task_markdown();
     void toggle_quote_markdown();
     void toggle_list_markdown(ck::edit::MarkdownListStyle style, std::string_view label);
+    void adjust_list_indentation(bool indent);
     void toggle_link_markdown();
     void show_link_destination_dialog();
     bool continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor);
@@ -112,6 +115,8 @@ private:
     ckv::ui::CommandId toggle_quote_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_bullet_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_ordered_list_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId indent_list_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId outdent_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_link_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_next_command_ = ckv::ui::kInvalidCommand;

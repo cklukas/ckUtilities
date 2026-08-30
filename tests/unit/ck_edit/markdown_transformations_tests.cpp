@@ -9,6 +9,8 @@ using ck::edit::MarkdownByteRange;
 using ck::edit::MarkdownInlineStyle;
 using ck::edit::MarkdownListStyle;
 using ck::edit::continue_markdown_list;
+using ck::edit::indent_markdown_list;
+using ck::edit::outdent_markdown_list;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
 using ck::edit::toggle_markdown_link;
@@ -190,6 +192,35 @@ TEST(MarkdownTransformations, ContinuesOrdinaryMarkdownListItemsAtTheEndOfTheCur
     EXPECT_FALSE(continue_markdown_list("ordinary", {8, 8}));
     EXPECT_FALSE(continue_markdown_list("```md\n- code", {12, 12}));
     EXPECT_FALSE(continue_markdown_list("- Draft", {3, 3}));
+}
+
+TEST(MarkdownTransformations, IndentsAndOutdentsNestedListItemsWithoutTouchingCode)
+{
+    constexpr std::string_view source = "- Parent\n  - [x] Child\n- Sibling\n";
+    const auto indented = indent_markdown_list(source, {0, source.size()});
+    ASSERT_TRUE(indented.has_value());
+    EXPECT_EQ(indented->replacement, "  - Parent\n    - [x] Child\n  - Sibling");
+    EXPECT_EQ(indented->selection, (MarkdownByteRange{0, indented->replacement.size()}));
+
+    constexpr std::string_view nested = "  - Parent\n    - [x] Child\n  - Sibling\n";
+    const auto outdented = outdent_markdown_list(nested, {0, nested.size()});
+    ASSERT_TRUE(outdented.has_value());
+    EXPECT_EQ(outdented->replacement, "- Parent\n  - [x] Child\n- Sibling");
+
+    constexpr std::string_view deep_task = "- Parent\n    - [x] Child";
+    const auto continued = continue_markdown_list(deep_task, {deep_task.size(), deep_task.size()});
+    ASSERT_TRUE(continued.has_value());
+    EXPECT_EQ(continued->replacement, "\n    - [ ] ");
+
+    constexpr std::string_view crlf = "  - One\r\n  - Two\r\n";
+    const auto crlf_indented = indent_markdown_list(crlf, {0, crlf.size()});
+    ASSERT_TRUE(crlf_indented.has_value());
+    EXPECT_EQ(crlf_indented->replacement, "    - One\r\n    - Two\r");
+
+    constexpr std::string_view indented_code = "paragraph\n    - indented code";
+    EXPECT_FALSE(indent_markdown_list(indented_code, {10, indented_code.size()}));
+    EXPECT_FALSE(continue_markdown_list("    - indented code", {19, 19}));
+    EXPECT_FALSE(outdent_markdown_list("- Root", {0, 0}));
 }
 
 TEST(MarkdownTransformations, TogglesLinksAndKeepsTheLabelSelected)

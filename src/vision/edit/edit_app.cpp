@@ -86,6 +86,14 @@ void EditApp::declare_commands()
         application_.commands(), "ck-edit", "ck.edit.toggle_ordered_list", [this] {
             toggle_list_markdown(ck::edit::MarkdownListStyle::Ordered, "ordered list");
         }));
+    indent_list_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.indent_list", [this] {
+            adjust_list_indentation(true);
+        }));
+    outdent_list_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.outdent_list", [this] {
+            adjust_list_indentation(false);
+        }));
     for (int level = 1; level <= 6; ++level)
     {
         heading_commands_[static_cast<std::size_t>(level - 1)] = command_scope_.own(declare_suite_command(
@@ -119,6 +127,8 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
                 MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
                 MenuItem::command(CommandPresentation{toggle_ordered_list_command_, "Toggle &ordered list"}),
+                MenuItem::command(CommandPresentation{indent_list_command_, "&Indent list"}),
+                MenuItem::command(CommandPresentation{outdent_list_command_, "&Outdent list"}),
                 MenuItem::separator(),
                 MenuItem::command(CommandPresentation{heading_commands_[0], "Heading &1"}),
                 MenuItem::command(CommandPresentation{heading_commands_[1], "Heading &2"}),
@@ -484,6 +494,28 @@ void EditApp::toggle_list_markdown(ck::edit::MarkdownListStyle style, std::strin
     const auto transform = ck::edit::toggle_markdown_list(document_->text(), range, style);
     if (!transform || !commit_markdown_transform(*transform, "Toggled Markdown " + std::string(label) + "."))
         window_->set_footer("Could not toggle a Markdown list at this location.");
+}
+
+void EditApp::adjust_list_indentation(bool indent)
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown list indentation is available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+    const ck::edit::MarkdownByteRange range = selected
+                                                  ? ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte}
+                                                  : ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
+    const auto transform = indent ? ck::edit::indent_markdown_list(document_->text(), range)
+                                  : ck::edit::outdent_markdown_list(document_->text(), range);
+    const std::string_view action = indent ? "Indented Markdown list." : "Outdented Markdown list.";
+    if (!transform || !commit_markdown_transform(*transform, action))
+        window_->set_footer(indent ? "Could not indent the selected Markdown list items."
+                                   : "Could not outdent the selected Markdown list items.");
 }
 
 void EditApp::toggle_link_markdown()

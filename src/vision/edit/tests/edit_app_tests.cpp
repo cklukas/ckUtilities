@@ -131,6 +131,19 @@ int main()
     require(application.execute_command(editor.toggle_ordered_list_command()) && editor.document().text() == "First\nSecond\n",
             "Repeating an ordered-list command must restore plain selected lines through the command registry.");
 
+    editor.document().set_text("- Parent\n- Child\n");
+    const auto nested_list_begin = editor.document().position_at_byte(0);
+    const auto nested_list_end = editor.document().position_at_byte(editor.document().text().size());
+    require(nested_list_begin.has_value() && nested_list_end.has_value() &&
+                editor.editor_view()->set_selection({*nested_list_begin, *nested_list_end}),
+            "The native editor must select Markdown list items for nesting commands.");
+    require(application.execute_command(editor.indent_list_command()) &&
+                editor.document().text() == "  - Parent\n  - Child\n",
+            "Indent list must nest selected Markdown list items through one document transaction.");
+    require(application.execute_command(editor.outdent_list_command()) &&
+                editor.document().text() == "- Parent\n- Child\n",
+            "Outdent list must restore selected Markdown list items through the command registry.");
+
     editor.document().set_text("- Draft");
     const auto smart_list_end = editor.document().position_at_byte(editor.document().text().size());
     require(smart_list_end.has_value() && editor.editor_view()->set_selection({*smart_list_end, *smart_list_end}),

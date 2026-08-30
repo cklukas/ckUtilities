@@ -141,8 +141,11 @@ Historical application baseline: `legacy_tv`
   query is unchanged. A list item's Enter preserves its bullet marker and
   indentation, advances ordered markers, starts new task items unchecked, and
   exits empty items without retaining marker whitespace through ckVision's
-  reusable public newline-handler seam. Broader transformations include deeper
-  list structure. The native reflow command wraps each selected ordinary paragraph
+  reusable public newline-handler seam. Conservative native indent/outdent
+  commands move selected list markers by two spaces, preserve blank separators
+  and CRLF, leave root items stationary when outdenting, and recognize deeper
+  markers only when contiguous parent-list context proves they are not code.
+  The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
@@ -177,7 +180,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 85-test cutover suite passes in normal and
+  candidate SDK. The full 86-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -188,18 +191,18 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  85-test cutover configuration, independent package consumer, and staged
+  86-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 85 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 86 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 85-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 86-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

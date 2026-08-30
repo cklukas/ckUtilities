@@ -89,6 +89,22 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
     MarkdownByteRange selection,
     MarkdownListStyle style);
 
+// Moves every selected Markdown list-item marker two spaces deeper. The
+// selection must contain list items (blank separators are preserved), and
+// fenced, indented-code, and ordinary prose lines are rejected rather than
+// partially rewritten. A zero-width selection targets its current item.
+std::optional<MarkdownTransformEdit> indent_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection);
+
+// Moves every selected Markdown list-item marker up to two spaces toward the
+// document root. Root-level items stay in place; the operation returns no edit
+// when none of the selected items can move. The same protected-syntax policy
+// as `indent_markdown_list` applies.
+std::optional<MarkdownTransformEdit> outdent_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection);
+
 // At a zero-width cursor at the end of an ordinary Markdown list item,
 // continues the list on a fresh line. Bullet marker spacing and indentation
 // are preserved, ordered items advance by one, and task items restart
