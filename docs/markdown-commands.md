@@ -51,6 +51,25 @@ bullet markers and indentation are preserved, ordered markers advance, task
 items restart unchecked, and an empty item exits the list without trailing
 whitespace.
 
+## Table commands
+
+Table commands operate only on ordinary pipe tables at the cursor (or on a
+range wholly contained in one table). They never change fenced or indented
+code, malformed tables, or partial table selections. Every successful command
+replaces the complete table in one undoable document transaction and places
+the cursor in the affected cell.
+
+| Command | Behavior |
+| --- | --- |
+| Insert table | Prompts for 1–64 columns and 0–256 body rows, then inserts a header, separator, and requested blank rows. |
+| Add table row | Inserts a blank body row after the current row; from a header or separator, it inserts the first body row. |
+| Delete table row | Removes the current body row. |
+| Add table column | Inserts a blank column after the active column and names its header `Column N`. |
+| Delete table column | Removes the active column, except that a one-column table is left unchanged. |
+
+Existing cell text, escaped pipe characters, separator alignment markers, and
+the document's newline style are retained when a table is structurally edited.
+
 ## File safety
 
 Open, Save, and Save As are native file workflows. If a file changes externally

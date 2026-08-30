@@ -21,7 +21,8 @@ Use `--help` (or `-h`) to show the command-line usage.
   replace all.
 - **Markdown:** normalize whitespace, reflow paragraphs, format selected text,
   manage headings, tasks, quotes, and lists, and insert or remove links,
-  images, and footnotes.
+  images, and footnotes. Create pipe tables and add or delete table rows and
+  columns through one-step, undoable Markdown transactions.
 
 If an open file changes outside the editor while it has local unsaved edits,
 `ck-edit` preserves both versions and requires an explicit Save As,

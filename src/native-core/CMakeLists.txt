@@ -67,7 +67,18 @@ target_include_directories(ck_markdown_core
 )
 target_compile_features(ck_markdown_core PUBLIC cxx_std_20)
 
-install(TARGETS ck_json_view_core ck_du_core ck_chat_options ck_find_core ck_markdown_core ARCHIVE DESTINATION lib)
+add_library(ck_markdown_table_core STATIC
+  markdown_tables.cpp
+)
+target_include_directories(ck_markdown_table_core
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_features(ck_markdown_table_core PUBLIC cxx_std_20)
+target_link_libraries(ck_markdown_table_core PUBLIC ck_markdown_core)
+
+install(TARGETS ck_json_view_core ck_du_core ck_chat_options ck_find_core ck_markdown_core ck_markdown_table_core ARCHIVE DESTINATION lib)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/json-view/include/ DESTINATION include
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include/ DESTINATION include
@@ -77,4 +88,13 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include/ DESTINATION i
 install(FILES
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_parser.hpp
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_transformations.hpp
+  ${PROJECT_SOURCE_DIR}/include/ck/edit/markdown_tables.hpp
   DESTINATION include/ck/edit)
+
+if(BUILD_TESTING)
+  add_executable(ck_markdown_table_core_tests markdown_tables_tests.cpp)
+  target_compile_features(ck_markdown_table_core_tests PRIVATE cxx_std_20)
+  target_link_libraries(ck_markdown_table_core_tests PRIVATE ck_markdown_table_core)
+  add_test(NAME ck_markdown_table_core_tests COMMAND ck_markdown_table_core_tests)
+  set_tests_properties(ck_markdown_table_core_tests PROPERTIES LABELS "ckvision-migration;edit")
+endif()

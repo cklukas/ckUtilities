@@ -5,6 +5,8 @@
 
 #include "ck/edit/markdown_transformations.hpp"
 
+#include <algorithm>
+#include <charconv>
 #include <utility>
 
 #include <cvision/widgets/command_presentation.hpp>
@@ -22,6 +24,24 @@ using ckv::widgets::StatusLineItem;
 std::string match_count_message(std::size_t count)
 {
     return count == 1U ? "1 match" : std::to_string(count) + " matches";
+}
+
+bool is_decimal(std::string_view value)
+{
+    return !value.empty() && std::all_of(value.begin(), value.end(), [](unsigned char character) {
+        return character >= '0' && character <= '9';
+    });
+}
+
+std::optional<std::size_t> parse_table_dimension(std::string_view value)
+{
+    if (!is_decimal(value))
+        return std::nullopt;
+    std::size_t result = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), result);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size())
+        return std::nullopt;
+    return result;
 }
 }
 
@@ -76,6 +96,16 @@ void EditApp::declare_commands()
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_image", [this] { toggle_image_markdown(); }));
     insert_footnote_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.insert_footnote", [this] { insert_footnote_markdown(); }));
+    insert_table_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.insert_table", [this] { insert_table_markdown(); }));
+    insert_table_row_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.insert_table_row", [this] { insert_table_row_markdown(); }));
+    erase_table_row_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.erase_table_row", [this] { erase_table_row_markdown(); }));
+    insert_table_column_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.insert_table_column", [this] { insert_table_column_markdown(); }));
+    erase_table_column_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.erase_table_column", [this] { erase_table_column_markdown(); }));
     find_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.find", [this] { show_search_dialog(SearchAction::Find); }));
     find_next_command_ = command_scope_.own(
@@ -140,6 +170,12 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{toggle_link_command_, "Insert or remove &link..."}),
                 MenuItem::command(CommandPresentation{toggle_image_command_, "Insert or remove &image..."}),
                 MenuItem::command(CommandPresentation{insert_footnote_command_, "Insert &footnote..."}),
+                MenuItem::separator(),
+                MenuItem::command(CommandPresentation{insert_table_command_, "Insert &table..."}),
+                MenuItem::command(CommandPresentation{insert_table_row_command_, "Add table &row"}),
+                MenuItem::command(CommandPresentation{erase_table_row_command_, "Delete table row"}),
+                MenuItem::command(CommandPresentation{insert_table_column_command_, "Add table &column"}),
+                MenuItem::command(CommandPresentation{erase_table_column_command_, "Delete table column"}),
                 MenuItem::command(CommandPresentation{toggle_task_command_, "Toggle &task"}),
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
                 MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
@@ -710,6 +746,105 @@ void EditApp::show_footnote_identifier_dialog()
     });
 }
 
+void EditApp::insert_table_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown tables are available for Markdown documents only.");
+        return;
+    }
+    show_table_dimensions_dialog();
+}
+
+void EditApp::show_table_dimensions_dialog()
+{
+    if (!markdown_document())
+        return;
+
+    table_dimensions_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Insert Markdown table";
+    dialog.fields.push_back({"&Columns:", "2", [](const std::string &value) { return is_decimal(value); }});
+    dialog.fields.push_back({"&Body rows:", "1", [](const std::string &value) { return is_decimal(value); }});
+    dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    table_dimensions_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    table_dimensions_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 2U || !markdown_document())
+            return;
+        const auto columns = parse_table_dimension(result.values[0]);
+        const auto rows = parse_table_dimension(result.values[1]);
+        const auto range = markdown_range_at_selection_or_cursor();
+        if (!columns || !rows || !range)
+            return;
+        const auto transform = ck::edit::insert_markdown_table(document_->text(), *range, *columns, *rows);
+        if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown table."))
+            window_->set_footer("Could not insert that Markdown table; use 1-64 columns and 0-256 body rows outside code.");
+    });
+}
+
+void EditApp::insert_table_row_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown tables are available for Markdown documents only.");
+        return;
+    }
+    const auto range = markdown_range_at_selection_or_cursor();
+    const auto transform = range ? ck::edit::insert_markdown_table_row(
+                                       document_->text(), *range, ck::edit::MarkdownTableInsertPosition::After)
+                                 : std::nullopt;
+    if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown table row."))
+        window_->set_footer("Place the cursor in a valid Markdown table to add a row.");
+}
+
+void EditApp::erase_table_row_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown tables are available for Markdown documents only.");
+        return;
+    }
+    const auto range = markdown_range_at_selection_or_cursor();
+    const auto transform = range ? ck::edit::erase_markdown_table_row(document_->text(), *range) : std::nullopt;
+    if (!transform || !commit_markdown_transform(*transform, "Deleted Markdown table row."))
+        window_->set_footer("Place the cursor in a Markdown table body row to delete it.");
+}
+
+void EditApp::insert_table_column_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown tables are available for Markdown documents only.");
+        return;
+    }
+    const auto range = markdown_range_at_selection_or_cursor();
+    const auto transform = range ? ck::edit::insert_markdown_table_column(
+                                       document_->text(), *range, ck::edit::MarkdownTableInsertPosition::After)
+                                 : std::nullopt;
+    if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown table column."))
+        window_->set_footer("Place the cursor in a valid Markdown table to add a column.");
+}
+
+void EditApp::erase_table_column_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown tables are available for Markdown documents only.");
+        return;
+    }
+    const auto range = markdown_range_at_selection_or_cursor();
+    const auto transform = range ? ck::edit::erase_markdown_table_column(document_->text(), *range) : std::nullopt;
+    if (!transform || !commit_markdown_transform(*transform, "Deleted Markdown table column."))
+        window_->set_footer("Place the cursor in a Markdown table with more than one column to delete it.");
+}
+
 bool EditApp::continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor)
 {
     if (!markdown_document() || window_ == nullptr || &editor != &window_->editor() || editor.selection())
@@ -874,6 +1009,16 @@ bool EditApp::commit_markdown_plan(const ck::edit::MarkdownTransformPlan &plan,
 
     window_->set_footer(std::string(success_message));
     return true;
+}
+
+std::optional<ck::edit::MarkdownByteRange> EditApp::markdown_range_at_selection_or_cursor() const
+{
+    if (window_ == nullptr)
+        return std::nullopt;
+    if (const auto selected = window_->editor().selection())
+        return ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte};
+    const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+    return ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
 }
 
 void EditApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)

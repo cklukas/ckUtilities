@@ -195,6 +195,15 @@ Historical application baseline: `legacy_tv`
   The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.
+  Native table commands now create bounded pipe tables and add or remove rows
+  and columns through a framework-neutral table transformation core. They
+  retain existing cell text, escaped pipes, alignment markers, and source
+  newline style; reject code, malformed tables, and partial selections; and
+  commit each structural edit as one undoable document transaction. Headless
+  acceptance exercises the dimensions dialog plus row/column undo journeys,
+  while core tests cover code rejection, escaped cells, alignment, CRLF, and
+  structural limits. This used ckVision's documented command, dialog, and
+  selection APIs without identifying a reusable ckVision editor API gap.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to

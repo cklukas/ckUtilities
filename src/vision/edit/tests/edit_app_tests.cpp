@@ -236,6 +236,39 @@ int main()
     require(editor.document().undo() && editor.document().text() == "Read this\n",
             "Footnote insertion must undo its reference and definition together as one document transaction.");
 
+    editor.document().set_text("");
+    const auto table_insert_position = editor.document().position_at_byte(0);
+    require(table_insert_position.has_value() && editor.editor_view()->set_selection({*table_insert_position, *table_insert_position}) &&
+                application.execute_command(editor.insert_table_command()),
+            "The native table command must open its dimensions dialog through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native table dimensions dialog must accept its valid default dimensions.");
+    application.step(0);
+    require(editor.document().text() == "| Header 1 | Header 2 |\n| --- | --- |\n|  |  |\n",
+            "Table insertion must create a complete Markdown table in one document transaction.");
+    require(editor.document().undo() && editor.document().text().empty(),
+            "Table insertion must undo as one atomic document revision.");
+
+    editor.document().set_text("| Item | Done |\n| --- | --- |\n| first | yes |\n");
+    const auto table_row_position = editor.document().position_at_byte(editor.document().text().find("yes"));
+    require(table_row_position.has_value() && editor.editor_view()->set_selection({*table_row_position, *table_row_position}) &&
+                application.execute_command(editor.insert_table_row_command()) &&
+                editor.document().text() == "| Item | Done |\n| --- | --- |\n| first | yes |\n|  |  |\n",
+            "Adding a table row must preserve existing cells and append a selected empty row.");
+    require(application.execute_command(editor.insert_table_column_command()) &&
+                editor.document().text() ==
+                    "| Item | Column 2 | Done |\n| --- | --- | --- |\n| first |  | yes |\n|  |  |  |\n",
+            "Adding a table column must update header, separator, and every body row together.");
+    require(application.execute_command(editor.erase_table_column_command()) &&
+                editor.document().text() == "| Item | Done |\n| --- | --- |\n| first | yes |\n|  |  |\n",
+            "Deleting the selected table column must restore the prior table in one transaction.");
+    const auto blank_row_position = editor.document().position_at_byte(editor.document().text().rfind("|  |"));
+    require(blank_row_position.has_value() && editor.editor_view()->set_selection({*blank_row_position, *blank_row_position}) &&
+                application.execute_command(editor.erase_table_row_command()) &&
+                editor.document().text() == "| Item | Done |\n| --- | --- |\n| first | yes |\n",
+            "Deleting a selected table body row must leave a valid Markdown table.");
+
     editor.document().set_text("Alpha beta\ngamma delta epsilon\nzeta\n");
     const auto reflow_position = editor.document().position_at_byte(7);
     require(reflow_position.has_value() && editor.editor_view()->set_selection({*reflow_position, *reflow_position}),

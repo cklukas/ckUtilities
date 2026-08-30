@@ -16,6 +16,7 @@
 #include <cvision/widgets/syntax_profile.hpp>
 
 #include "ck/edit/markdown_transformations.hpp"
+#include "ck/edit/markdown_tables.hpp"
 #include "ck/vision/suite_shell.hpp"
 #include "markdown_profile.hpp"
 
@@ -60,6 +61,11 @@ public:
     ckv::ui::CommandId toggle_link_command() const noexcept { return toggle_link_command_; }
     ckv::ui::CommandId toggle_image_command() const noexcept { return toggle_image_command_; }
     ckv::ui::CommandId insert_footnote_command() const noexcept { return insert_footnote_command_; }
+    ckv::ui::CommandId insert_table_command() const noexcept { return insert_table_command_; }
+    ckv::ui::CommandId insert_table_row_command() const noexcept { return insert_table_row_command_; }
+    ckv::ui::CommandId erase_table_row_command() const noexcept { return erase_table_row_command_; }
+    ckv::ui::CommandId insert_table_column_command() const noexcept { return insert_table_column_command_; }
+    ckv::ui::CommandId erase_table_column_command() const noexcept { return erase_table_column_command_; }
     ckv::ui::CommandId find_command() const noexcept { return find_command_; }
     ckv::ui::CommandId find_next_command() const noexcept { return find_next_command_; }
     ckv::ui::CommandId replace_command() const noexcept { return replace_command_; }
@@ -100,6 +106,12 @@ private:
     void show_image_destination_dialog();
     void insert_footnote_markdown();
     void show_footnote_identifier_dialog();
+    void insert_table_markdown();
+    void show_table_dimensions_dialog();
+    void insert_table_row_markdown();
+    void erase_table_row_markdown();
+    void insert_table_column_markdown();
+    void erase_table_column_markdown();
     bool continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor);
     void show_search_dialog(SearchAction action);
     void find_next();
@@ -107,6 +119,7 @@ private:
                                    std::string_view success_message);
     bool commit_markdown_plan(const ck::edit::MarkdownTransformPlan &plan,
                               std::string_view success_message);
+    std::optional<ck::edit::MarkdownByteRange> markdown_range_at_selection_or_cursor() const;
     bool markdown_document() const noexcept;
     static std::string status_message(ckv::widgets::EditorFileStatus status);
 
@@ -137,6 +150,11 @@ private:
     ckv::ui::CommandId toggle_link_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_image_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId insert_footnote_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId insert_table_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId insert_table_row_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId erase_table_row_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId insert_table_column_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId erase_table_column_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_next_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId replace_command_ = ckv::ui::kInvalidCommand;
@@ -147,6 +165,7 @@ private:
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_destination_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> image_destination_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> footnote_identifier_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> table_dimensions_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> search_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
