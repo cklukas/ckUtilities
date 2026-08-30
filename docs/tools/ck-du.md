@@ -1,28 +1,36 @@
-# ck-du — Disk Utilization Explorer
+# ck-du
 
-`ck-du` visualizes disk usage with Turbo Vision. Launch it with one or more directory paths to open each location in its own window:
+`ck-du` is the native ckVision disk-usage explorer. It scans a directory in the
+background and presents a navigable directory tree and file listings without
+requiring `du` command pipelines.
 
-```bash
-ck-du ~/Downloads /var/log
+## Usage
+
+```text
+ck-du [DIRECTORY]
 ```
 
-## Features
+`DIRECTORY` defaults to the current directory. Use `--help` (or `-h`) to show
+the command-line usage.
 
-- **Directory tree** that mimics `ncdu`: sizes, file counts, and nested directory counts are displayed for each entry.
-- **Multiple windows**: pass paths on the command line or open new directories at runtime.
-- **File listings**: press <kbd>F3</kbd> ("View Files") to list files in the selected directory, or <kbd>Shift</kbd>+<kbd>F3</kbd> for a recursive listing that includes subdirectories. File lists show size, owner, group, creation, and modification times.
-- **Unit control**: choose Auto, Bytes, KB, MB, GB, TB, or Blocks from the Units menu. The active unit is marked and updates every open view immediately.
-- **Sort modes**: switch between Unsorted, Name, Size, or Modified order from the Sort menu. The selection applies to every directory tree and file list window instantly.
+## Native workflow
 
-## Keyboard & menu shortcuts
+- **Scan:** rescan the requested directory, cancel an in-progress scan, or
+  view files for the selected directory.
+- The tree preserves a valid prior result while a rescan is underway; a
+  cancelled or invalid replacement does not discard the visible snapshot.
+- Saved Disk Usage options control the scan policy, including filtering,
+  symlink handling, filesystem boundaries, and related reporting choices.
+  Manage those options through `ck-config`.
 
-| Shortcut | Command | Notes |
-| --- | --- | --- |
-| <kbd>F2</kbd> | Open Directory | Type a path to open in a new window. |
-| <kbd>F3</kbd> | View Files | Lists files directly inside the selected directory. |
-| <kbd>Shift</kbd>+<kbd>F3</kbd> | View Files (Recursive) | Includes files from subdirectories. |
-| <kbd>F1</kbd> | About | Shows version and developer. |
-| <kbd>Alt</kbd>+<kbd>X</kbd> | Quit | Exit the application. |
+## Cloud actions
 
-Use the arrow keys to expand/collapse directories, and open multiple directories to compare usage side-by-side. Adjust units from the **Units** menu to switch between automatic scaling, fixed sizes, or 512-byte blocks. Change the ordering of directories and files from the **Sort** menu without reopening windows.
+The Cloud menu always reports what is available on the current platform. On
+macOS, it can request an iCloud download for an eligible selected path and can
+offer a confirmed request to free local copies. On other platforms, cloud
+actions remain explicitly unavailable rather than claiming to change remote or
+local cloud state.
 
+Cloud requests are cancellable. A completed request is reported separately from
+the provider's eventual storage state, so a successful request is not presented
+as an immediate guarantee that a recursive cloud operation has completed.

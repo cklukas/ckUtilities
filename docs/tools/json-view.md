@@ -1,49 +1,32 @@
-# ck-json-view — Interactive JSON browser
+# ck-json-view
 
-## SYNOPSIS
+`ck-json-view` is the native ckVision JSON browser. It presents parsed JSON as
+a navigable tree, with keyboard-first selection, expandable nodes, type-aware
+previews, incremental search, and clipboard copy when the terminal supports
+it.
 
-```
-ck-json-view [path]
-```
+## Usage
 
-## DESCRIPTION
-
-`ck-json-view` embeds the Turbo Vision frontend from the standalone
-`json-view` project so that CkTools gains an interactive JSON browser on
-Day 1.  The viewer presents parsed JSON data as a tree where each node
-is decorated with friendly icons, Unicode box-drawing characters, and
-previews for common types.  Search results are highlighted inline, and
-clipboard export uses OSC 52 sequences when supported by the terminal.
-
-If a file path is provided on the command line it will be opened on
-startup.  Otherwise `ck-json-view` prompts for a file via the Turbo Vision
-file picker.
-
-## OPTIONS
-
-`ck-json-view` accepts the same flags as the upstream project:
-
-* `--help` – display usage information.
-* `--version` – show the embedded json-view version string.
-
-## EXAMPLES
-
-Open a JSON document from the current directory:
-
-```
-ck-json-view example.json
+```text
+ck-json-view [JSON_FILE ...]
 ```
 
-Launch the viewer and choose a file interactively:
+Pass one or more JSON files to open them at startup. Without a path, choose
+**File → Open JSON** in the native interface. Use `--help` (or `-h`) to show
+the command-line usage.
 
-```
-ck-json-view
-```
+## Native workflow
 
-## EXIT STATUS
+- **File:** open, reload, or close the active JSON document.
+- **Edit:** copy the selected JSON value through the terminal clipboard.
+- **Search:** find text, move to the next or previous result, or end a search.
+- **View:** expand the tree to a chosen level.
 
-`ck-json-view` exits with status 0 on success and non-zero on failure.
+Reload keeps the current valid document visible if the replacement file is
+malformed. Search reveals and selects matching nodes, including Unicode text.
 
-## SEE ALSO
+## Exit status
 
-`jq(1)`, `json_pp(1)`
+The interactive application exits through its standard quit command. Invalid
+or unreadable documents are reported in the native interface without replacing
+the currently valid document.
