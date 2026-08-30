@@ -37,6 +37,21 @@ int main()
                 !ck::edit::insert_markdown_table("```\ncode\n```\n", {5, 5}, 2, 1),
             "Table insertion must reject a text selection and fenced-code cursor.");
 
+    const std::string prose = "Before\nafter";
+    const auto between_prose_lines = ck::edit::insert_markdown_table(prose, {6, 6}, 1, 0);
+    require(between_prose_lines.has_value() && apply(prose, *between_prose_lines) ==
+                                                    "Before\n| Header 1 |\n| --- |\nafter",
+            "Table insertion at the end of an ordinary line must use its existing newline as a block boundary.");
+    const auto inside_prose = ck::edit::insert_markdown_table("before after", {6, 6}, 1, 0);
+    require(inside_prose.has_value() && apply("before after", *inside_prose) ==
+                                            "before\n| Header 1 |\n| --- |\n after",
+            "Table insertion inside ordinary prose must create complete Markdown block boundaries.");
+    const std::string prose_crlf = "Before\r\nafter";
+    const auto between_crlf_lines = ck::edit::insert_markdown_table(prose_crlf, {6, 6}, 1, 0);
+    require(between_crlf_lines.has_value() && apply(prose_crlf, *between_crlf_lines) ==
+                                                  "Before\r\n| Header 1 |\r\n| --- |\r\nafter",
+            "Table insertion must preserve a CRLF block boundary.");
+
     const std::string table = "| Name | Count |\n| :--- | ---: |\n| one\\|two | 2 |\n";
     const auto add_row = ck::edit::insert_markdown_table_row(
         table, {table.find("2"), table.find("2")}, MarkdownTableInsertPosition::After);
@@ -71,7 +86,8 @@ int main()
             "Table operations must retain CRLF source newlines.");
 
     require(!ck::edit::erase_markdown_table_column("| A |\n| --- |\n", {2, 2}) &&
-                !ck::edit::erase_markdown_table_row("plain text\n", {1, 1}),
+                !ck::edit::erase_markdown_table_row("plain text\n", {1, 1}) &&
+                !ck::edit::insert_markdown_table(table, {table.find("Name"), table.find("Name")}, 1, 0),
             "Table operations must reject the final column and non-table text rather than making a partial edit.");
     return EXIT_SUCCESS;
 }

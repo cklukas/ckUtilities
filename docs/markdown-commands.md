@@ -61,7 +61,7 @@ the cursor in the affected cell.
 
 | Command | Behavior |
 | --- | --- |
-| Insert table | Prompts for 1–64 columns and 0–256 body rows, then inserts a header, separator, and requested blank rows. |
+| Insert table | Prompts for 1–64 columns and 0–256 body rows, then inserts a header, separator, and requested blank rows as a separate Markdown block without discarding surrounding text. |
 | Add table row | Inserts a blank body row after the current row; from a header or separator, it inserts the first body row. |
 | Delete table row | Removes the current body row. |
 | Add table column | Inserts a blank column after the active column and names its header `Column N`. |

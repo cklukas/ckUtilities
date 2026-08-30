@@ -41,6 +41,13 @@ struct RenderedTable
     std::vector<std::vector<MarkdownByteRange>> editable_cells;
 };
 
+struct TableInsertionContext
+{
+    std::string newline;
+    bool needs_leading_newline = false;
+    bool needs_trailing_newline = true;
+};
+
 bool is_space(unsigned char value)
 {
     return value == ' ' || value == '\t';
@@ -317,16 +324,31 @@ bool valid_dimensions(std::size_t columns, std::size_t body_rows)
     return columns > 0U && columns <= kMaximumColumns && body_rows <= kMaximumBodyRows;
 }
 
-bool insertion_is_safe(std::string_view source, MarkdownByteRange cursor)
+std::optional<TableInsertionContext> table_insertion_context(std::string_view source, MarkdownByteRange cursor)
 {
     const std::vector<SourceLine> lines = split_lines(source);
-    const auto line = line_at(lines, cursor.begin);
+    const std::optional<std::size_t> line = line_at(lines, cursor.begin);
     if (!line)
-        return false;
+        return std::nullopt;
+    if (cursor.begin > 0U && cursor.begin < source.size() && source[cursor.begin - 1U] == '\r' &&
+        source[cursor.begin] == '\n')
+        return std::nullopt;
     const std::vector<bool> fenced = fence_context(lines, source);
     if (fenced[*line])
-        return false;
-    return !is_indented_code(source.substr(lines[*line].begin, lines[*line].content_end - lines[*line].begin));
+        return std::nullopt;
+    const SourceLine &source_line = lines[*line];
+    if (is_indented_code(source.substr(source_line.begin, source_line.content_end - source_line.begin)) ||
+        locate_table(source, cursor))
+        return std::nullopt;
+
+    // A cursor at the end of an ordinary terminated line can reuse that line
+    // ending as the table's final line break. An empty line is intentionally
+    // preserved as an empty separator after the inserted table.
+    const bool reuses_following_newline = source_line.terminated && cursor.begin == source_line.content_end &&
+                                           source_line.content_end > source_line.begin;
+    return TableInsertionContext{source_newline(source),
+                                 cursor.begin > 0U && source[cursor.begin - 1U] != '\n',
+                                 !reuses_following_newline};
 }
 
 } // namespace
@@ -336,15 +358,17 @@ std::optional<MarkdownTransformEdit> insert_markdown_table(std::string_view sour
                                                             std::size_t columns,
                                                             std::size_t body_rows)
 {
-    if (cursor.begin != cursor.end || cursor.end > source.size() || !valid_dimensions(columns, body_rows) ||
-        !insertion_is_safe(source, cursor))
+    if (cursor.begin != cursor.end || cursor.end > source.size() || !valid_dimensions(columns, body_rows))
+        return std::nullopt;
+    const std::optional<TableInsertionContext> context = table_insertion_context(source, cursor);
+    if (!context)
         return std::nullopt;
 
     ParsedTable table;
     table.begin = cursor.begin;
     table.end = cursor.end;
-    table.newline = source_newline(source);
-    table.trailing_newline = true;
+    table.newline = context->newline;
+    table.trailing_newline = context->needs_trailing_newline;
     table.header.reserve(columns);
     table.separator.assign(columns, "---");
     for (std::size_t column = 0; column < columns; ++column)
@@ -353,7 +377,14 @@ std::optional<MarkdownTransformEdit> insert_markdown_table(std::string_view sour
 
     RenderedTable rendered = render_table(table);
     const MarkdownByteRange selected = header_selection(rendered, 0U);
-    return table_edit(table, std::move(rendered), selected);
+    std::string replacement;
+    if (context->needs_leading_newline)
+        replacement += context->newline;
+    const std::size_t selection_offset = replacement.size();
+    replacement += rendered.text;
+    return MarkdownTransformEdit{{cursor.begin, cursor.end}, std::move(replacement),
+                                 {cursor.begin + selection_offset + selected.begin,
+                                  cursor.begin + selection_offset + selected.end}};
 }
 
 std::optional<MarkdownTransformEdit> insert_markdown_table_row(std::string_view source,
