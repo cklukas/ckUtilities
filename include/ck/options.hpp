@@ -61,6 +61,10 @@ struct OptionDefinition
     OptionValue defaultValue;
     std::string displayName;
     std::string description;
+    // A false value exposes the setting for inspection but prevents a
+    // configuration UI from editing or resetting it. Programmatic loading
+    // remains available so an application can represent derived settings.
+    bool editable = true;
 };
 
 class OptionRegistry

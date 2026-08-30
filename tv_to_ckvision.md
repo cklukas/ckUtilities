@@ -107,7 +107,8 @@ Historical application baseline: `legacy_tv`
   a filesystem dependency. Existing unmarked profiles remain readable, known
   values are validated before any mutation, and unknown future values survive
   a load/edit/save round trip. Import and export use that same injected
-  boundary.
+  boundary. Option metadata now marks derived settings read-only, which keeps
+  their value visible while disabling the native Edit and Reset commands.
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists

@@ -112,6 +112,8 @@ int main()
     ck::config::OptionRegistry registry("test");
     registry.registerOption({"enabled", ck::config::OptionKind::Boolean, ck::config::OptionValue(false), "Enabled", "Enables the test feature."});
     registry.registerOption({"limit", ck::config::OptionKind::Integer, ck::config::OptionValue(std::int64_t{7}), "Limit", "Sets the test limit."});
+    registry.registerOption({"runtime.status", ck::config::OptionKind::String, ck::config::OptionValue(std::string("healthy")),
+                             "Runtime Status", "A derived runtime state.", false});
     registry.set("enabled", ck::config::OptionValue(true));
 
     ckv::ManualClock clock;
@@ -119,11 +121,22 @@ int main()
     ckv::ui::Application application(terminal, clock);
     MemoryPersistence persistence;
     ck::vision::ConfigApp config(application, registry, persistence);
-    require(config.option_count() == 2 && config.table() != nullptr,
+    require(config.option_count() == 3 && config.table() != nullptr,
             "The native config app must present injected registry definitions in a table.");
     require(config.select_option("enabled"), "The native config app must select options by stable string key.");
     require(application.execute_command(config.reset_command()), "Reset must dispatch through the command registry.");
     require(!registry.getBool("enabled"), "Reset must restore the selected option's registered default.");
+    require(config.select_option("runtime.status"), "The native config app must select read-only options by stable string key.");
+    const auto *readonly_model = config.table()->model();
+    const auto readonly_selection = config.table()->selected_cell();
+    require(readonly_model != nullptr && readonly_selection &&
+                !readonly_model->cell({readonly_selection->row, 3}).editable,
+            "The configuration table must expose read-only settings as non-editable value cells.");
+    require(!application.commands().is_enabled(config.edit_command()) && !application.commands().is_enabled(config.reset_command()) &&
+                !application.execute_command(config.edit_command()) && !application.execute_command(config.reset_command()) &&
+                registry.getString("runtime.status") == "healthy",
+            "Read-only settings must disable edit and reset commands without changing their registered values.");
+    require(config.select_option("enabled"), "The native config app must restore an editable option selection.");
     registry.set("enabled", ck::config::OptionValue(true));
     require(application.execute_command(config.save_command()), "Save must dispatch through the command registry.");
     require(persistence.save_count == 1 && persistence.saved_enabled,

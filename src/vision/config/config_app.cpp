@@ -107,7 +107,7 @@ public:
         case 2: return {kind_name(definition.kind), kind_name(definition.kind), std::nullopt, false};
         case 3:
             return {option_value_text(definition, registry_.get(definition.key)),
-                    option_value_text(definition, registry_.get(definition.key)), std::nullopt, false};
+                    option_value_text(definition, registry_.get(definition.key)), std::nullopt, definition.editable};
         }
         return {};
     }
@@ -227,6 +227,12 @@ void ConfigApp::declare_commands()
         application_.commands(), "ck-config", "ck.config.shortcuts", [this] { show_keymap_window(); }));
     keymap_scheme_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-config", "ck.config.shortcuts.scheme", [this] { show_keymap_scheme_dialog(); }));
+    const auto selected_option_is_editable = [this] {
+        const auto *definition = selected_definition();
+        return definition != nullptr && definition->editable;
+    };
+    application_.commands().set_enabled_predicate(edit_command_, selected_option_is_editable);
+    application_.commands().set_enabled_predicate(reset_command_, selected_option_is_editable);
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const
@@ -338,7 +344,7 @@ const ck::config::OptionDefinition *ConfigApp::selected_definition() const
 void ConfigApp::edit_selected()
 {
     const auto *definition = selected_definition();
-    if (definition == nullptr)
+    if (definition == nullptr || !definition->editable)
         return;
     edit_dialog_.reset();
     ckv::widgets::DialogDescriptor dialog;
@@ -384,7 +390,7 @@ void ConfigApp::edit_selected()
 
 void ConfigApp::reset_selected()
 {
-    if (const auto *definition = selected_definition())
+    if (const auto *definition = selected_definition(); definition != nullptr && definition->editable)
     {
         registry_.reset(definition->key);
         refresh();
