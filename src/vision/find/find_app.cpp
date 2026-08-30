@@ -143,18 +143,24 @@ void FindApp::show_guided_search_dialog()
                              state.listMatches});
     dialog.fields.push_back({"&Delete matches", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
                              state.deleteMatches});
-    dialog.fields.push_back({.label = "Custom command actions are unavailable until a separately sandboxed executor is accepted.",
-                             .kind = ckv::widgets::FieldKind::Note});
-    dialog.fields.push_back({.label = "Saved custom-command settings are retained for compatibility but cannot be edited or run here.",
+    const std::string existing_custom_command = ck::find::bufferToString(specification_.actionOptions.execCommand);
+    const int custom_command_template = specification_.enableActionOptions && specification_.actionOptions.execEnabled
+                                            ? existing_custom_command == "ckvision.file-info" ? 1
+                                              : existing_custom_command == "ckvision.sha256" ? 2
+                                                                                               : 0
+                                            : 0;
+    dialog.fields.push_back({"Sandboxed custom &action", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             {"Disabled (retain saved setting)", "File metadata", "SHA-256 digest"}, custom_command_template});
+    dialog.fields.push_back({.label = "Only fixed, read-only ckvision templates can run. They use direct argv in the macOS sandbox; any legacy custom value stays saved but is refused.",
                              .kind = ckv::widgets::FieldKind::Note});
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     search_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
-    search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+    search_dialog_->set_completion_handler([this, existing_custom_command](ckv::widgets::DialogResult result) {
         constexpr std::size_t kFieldCount = 30;
         if (!result.accepted || result.values.size() != kFieldCount || result.checked.size() != kFieldCount ||
             result.selected.size() != kFieldCount || result.selected[9] < 0 || result.selected[10] < 0 ||
-            result.selected[14] < 0 || result.selected[16] < 0 || result.selected[19] < 0)
+            result.selected[14] < 0 || result.selected[16] < 0 || result.selected[19] < 0 || result.selected[28] < 0)
             return;
 
         ck::find::GuidedSearchState applied = ck::find::guidedStateFromSpecification(specification_);
@@ -187,11 +193,24 @@ void FindApp::show_guided_search_dialog()
         applied.includeActionTweaks = result.checked[25];
         applied.listMatches = result.checked[26];
         applied.deleteMatches = result.checked[27];
-        // Fields 28 and 29 are explanatory notes. Preserve any legacy
-        // custom-command settings so a native edit does not discard them,
-        // but never offer them as an executable action before a sandboxed
-        // execution policy has been accepted.
         ck::find::applyGuidedStateToSpecification(applied, specification_);
+        // The form can only write the two fixed native identifiers. Selecting
+        // Disabled preserves an unknown legacy value for storage compatibility
+        // but leaves it non-executable.
+        if (result.selected[28] == 1 || result.selected[28] == 2)
+        {
+            specification_.enableActionOptions = true;
+            specification_.actionOptions.execEnabled = true;
+            specification_.actionOptions.execUsePlus = false;
+            specification_.actionOptions.execVariant = ck::find::ActionOptions::ExecVariant::Exec;
+            specification_.actionOptions.deleteMatches = false;
+            ck::find::copyToArray(specification_.actionOptions.execCommand,
+                                  result.selected[28] == 1 ? "ckvision.file-info" : "ckvision.sha256");
+        }
+        else if (existing_custom_command == "ckvision.file-info" || existing_custom_command == "ckvision.sha256")
+        {
+            specification_.actionOptions.execEnabled = false;
+        }
         show_preview();
     });
 }
@@ -270,13 +289,31 @@ void FindApp::show_load_dialog()
 
 std::string FindApp::command_preview() const
 {
-    const auto command = ck::find::buildFindCommand(specification_, true);
+    const bool custom_command = specification_.enableActionOptions && specification_.actionOptions.execEnabled;
+    // The framework-neutral preview has no knowledge of the native sandbox
+    // template. Omit its legacy exec fragment so the only displayed custom
+    // action is the exact direct argv supplied by the executor below.
+    const auto command = ck::find::buildFindCommand(specification_, !custom_command);
     std::ostringstream output;
     for (std::size_t index = 0; index < command.size(); ++index)
     {
         if (index != 0)
             output << ' ';
         output << command[index];
+    }
+    if (custom_command)
+    {
+        const FindCustomCommandCapability capability = execution_service_.custom_command_capability(specification_);
+        output << "\n\nSandboxed custom-command argv:\n";
+        if (!capability.available)
+        {
+            output << "Unavailable: " << capability.reason;
+        }
+        else
+        {
+            for (const std::string &argument : capability.argv_preview)
+                output << '[' << argument << "] ";
+        }
     }
     return output.str();
 }
@@ -301,8 +338,34 @@ void FindApp::request_execution()
 
     if (specification_.enableActionOptions && specification_.actionOptions.execEnabled)
     {
-        present_text_window("Find execution",
-                            "Custom command actions are unavailable in the native workflow until a separately sandboxed executor is accepted.");
+        if (specification_.actionOptions.deleteMatches)
+        {
+            present_text_window("Find execution",
+                                "Custom commands cannot be combined with deletion. Run one explicitly confirmed action at a time.");
+            return;
+        }
+        const FindCustomCommandCapability capability = execution_service_.custom_command_capability(specification_);
+        if (!capability.available)
+        {
+            present_text_window("Find execution", "Custom command unavailable: " + capability.reason);
+            return;
+        }
+
+        std::ostringstream preview;
+        for (const std::string &argument : capability.argv_preview)
+            preview << '[' << argument << "] ";
+        custom_command_confirmation_.reset();
+        custom_command_confirmation_.emplace(ckv::widgets::present_message_box(
+            application_, shell_->desktop(), shell_->roles(),
+            {ckv::widgets::MessageBoxKind::Warning,
+             "Run sandboxed custom command",
+             "Run the fixed, non-interactive command for matching paths? It has a five-second per-path limit, a 16 KiB output limit, and stops after 64 paths.\n\n"
+                 "Direct argv:\n" + preview.str(),
+             ckv::widgets::MessageBoxButtons::YesNoCancel}));
+        custom_command_confirmation_->set_completion_handler([this](ckv::widgets::MessageBoxResult result) {
+            if (result == ckv::widgets::MessageBoxResult::Yes)
+                start_execution(false);
+        });
         return;
     }
 
@@ -344,9 +407,11 @@ void FindApp::start_execution(bool delete_matched_files)
             self->complete_execution(std::move(result));
         });
     });
+    const bool custom_command = specification_.enableActionOptions && specification_.actionOptions.execEnabled;
     present_text_window("Find execution", delete_matched_files
                                              ? "Confirmed deletion is running. Only matching regular files and symbolic links can be removed."
-                                             : "Search is running without actions.");
+                                             : custom_command ? "Sandboxed custom command execution is running for matching paths."
+                                                              : "Search is running without actions.");
 }
 
 void FindApp::cancel_execution()
@@ -375,6 +440,21 @@ void FindApp::complete_execution(ck::find::SearchExecutionResult result)
         output << "Deleted " << result.deletedCount << " matching file(s) or symbolic link(s).\n";
         if (result.failedDeletionCount != 0)
             output << result.failedDeletionCount << " matching file(s) could not be deleted.\n";
+    }
+
+    if (result.customCommandInvocationCount != 0 || !result.customCommandAudit.empty())
+    {
+        output << result.customCommandInvocationCount << " sandboxed custom command invocation(s).\n";
+        if (result.failedCustomCommandInvocationCount != 0)
+            output << result.failedCustomCommandInvocationCount << " custom command invocation(s) did not complete successfully.\n";
+        if (result.customCommandCancelled)
+            output << "Custom command cancellation was requested.\n";
+        if (result.customCommandTimedOut)
+            output << "At least one custom command exceeded its five-second limit.\n";
+        if (result.customCommandOutputTruncated)
+            output << "At least one custom command exceeded its 16 KiB output limit.\n";
+        if (!result.customCommandAudit.empty())
+            output << "Custom command audit: " << result.customCommandAudit << '\n';
     }
 
     for (const auto &match : result.matches)

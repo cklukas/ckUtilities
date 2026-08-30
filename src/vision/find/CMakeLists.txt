@@ -1,5 +1,6 @@
 add_library(ck_vision_find STATIC
   find_app.cpp
+  find_custom_command.cpp
   find_services.cpp
 )
 target_include_directories(ck_vision_find

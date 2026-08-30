@@ -46,6 +46,16 @@ public:
 
     void cancel() noexcept override { cancelled_ = true; }
     bool running() const noexcept override { return running_; }
+    ck::vision::FindCustomCommandCapability custom_command_capability(const ck::find::SearchSpecification &specification) const override
+    {
+        const ck::vision::FindCustomCommandPlan plan = ck::vision::planFindCustomCommand(specification);
+        if (!plan.allowed)
+            return {.available = false, .reason = plan.reason, .argv_preview = {}};
+        return {.available = true,
+                .reason = {},
+                .argv_preview = {"/usr/bin/sandbox-exec", "-p", "<tested profile>", "--",
+                                 plan.executable_argv[0], plan.executable_argv[1], plan.executable_argv[2], plan.executable_argv[3]}};
+    }
 
     void finish(ck::find::SearchExecutionResult result)
     {
@@ -61,6 +71,48 @@ private:
     bool cancelled_ = false;
     bool delete_matched_files_ = false;
     CompletionHandler on_complete_;
+};
+
+class RecordingCustomCommandExecutor final : public ck::vision::FindCustomCommandExecutor
+{
+public:
+    ck::vision::FindCustomCommandCapability capability(const ck::find::SearchSpecification &specification) const override
+    {
+        const ck::vision::FindCustomCommandPlan plan = ck::vision::planFindCustomCommand(specification);
+        if (!plan.allowed)
+            return {.available = false, .reason = plan.reason, .argv_preview = {}};
+        return {.available = true,
+                .reason = {},
+                .argv_preview = {"/usr/bin/sandbox-exec", "-p", "<tested profile>", "--",
+                                 plan.executable_argv[0], plan.executable_argv[1], plan.executable_argv[2], plan.executable_argv[3]}};
+    }
+
+    ck::vision::FindCustomCommandOutcome execute(const ck::vision::FindCustomCommandPlan &plan,
+                                                  const std::filesystem::path &matched_path,
+                                                  const std::atomic_bool &) override
+    {
+        ++invocations_;
+        plan_ = plan;
+        matched_path_ = matched_path;
+        return outcome_;
+    }
+
+    std::size_t invocations() const noexcept { return invocations_; }
+    const ck::vision::FindCustomCommandPlan &plan() const noexcept { return plan_; }
+    const std::filesystem::path &matched_path() const noexcept { return matched_path_; }
+    void set_outcome(ck::vision::FindCustomCommandOutcome outcome) { outcome_ = std::move(outcome); }
+
+private:
+    std::size_t invocations_ = 0;
+    ck::vision::FindCustomCommandPlan plan_;
+    std::filesystem::path matched_path_;
+    ck::vision::FindCustomCommandOutcome outcome_{.invoked = true,
+                                                  .cancelled = false,
+                                                  .timed_out = false,
+                                                  .output_truncated = false,
+                                                  .exit_code = 0,
+                                                  .output = "read-only metadata",
+                                                  .message = "Custom command completed in the test sandbox."};
 };
 
 void verify_late_execution_delivery_is_lifetime_safe()
@@ -152,6 +204,29 @@ int main()
     require(!execution.running(),
             "An unavailable custom command must take precedence over a requested deletion confirmation.");
 
+    auto safe_custom_command_specification = ck::find::makeDefaultSpecification();
+    ck::find::copyToArray(safe_custom_command_specification.startLocation, directory.string().c_str());
+    safe_custom_command_specification.enableActionOptions = true;
+    safe_custom_command_specification.actionOptions.execEnabled = true;
+    ck::find::copyToArray(safe_custom_command_specification.actionOptions.execCommand, "ckvision.file-info");
+    find.set_specification(safe_custom_command_specification);
+    require(find.command_preview().find("/usr/bin/stat") != std::string::npos,
+            "A permitted custom command must show its direct executable argv in the preview.");
+    require(application.execute_command(find.execute_command()),
+            "A permitted custom command must dispatch through the native command registry.");
+    require(!execution.running(), "A custom command must show its exact sandboxed argv for explicit confirmation first.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(execution.running() && !execution.delete_matched_files(),
+            "A confirmed custom command must not grant the file-deletion capability.");
+    execution.finish({.exitCode = 0,
+                      .matchCount = 1,
+                      .customCommandInvocationCount = 1,
+                      .customCommandAudit = "1 sandboxed custom command invocation(s)."});
+    application.step(0);
+    require(find.last_execution_result()->customCommandInvocationCount == 1,
+            "A sandboxed custom-command audit result must return through the native presentation.");
+
     auto specification = ck::find::makeDefaultSpecification();
     ck::find::copyToArray(specification.startLocation, directory.string().c_str());
     ck::vision::ThreadedFindExecutionService threaded_execution;
@@ -173,6 +248,105 @@ int main()
     require(threaded_result->exitCode == 0 && threaded_result->matchCount >= 1,
             "The threaded execution service must return the search-core result.");
 
+    const fs::path spaced_match = directory / "match with spaces.txt";
+    {
+        std::ofstream file(spaced_match);
+        file << "match";
+    }
+    auto custom_specification = ck::find::makeDefaultSpecification();
+    ck::find::copyToArray(custom_specification.startLocation, directory.string().c_str());
+    custom_specification.enableActionOptions = true;
+    custom_specification.actionOptions.execEnabled = true;
+    ck::find::copyToArray(custom_specification.actionOptions.execCommand, "ckvision.file-info");
+    const ck::vision::FindCustomCommandPlan custom_plan = ck::vision::planFindCustomCommand(custom_specification);
+    require(custom_plan.allowed && custom_plan.working_directory == fs::absolute(directory).lexically_normal() &&
+                custom_plan.executable_argv == std::vector<std::string>{"/usr/bin/stat", "-f", "%N\\t%z\\t%Sp", "<matched-path>"},
+            "The custom-command planner must accept only the fixed direct-argv template and selected search root.");
+    auto unsafe_plan_specification = custom_specification;
+    ck::find::copyToArray(unsafe_plan_specification.actionOptions.execCommand, "echo $(touch unsafe)");
+    require(!ck::vision::planFindCustomCommand(unsafe_plan_specification).allowed,
+            "The custom-command planner must refuse shell syntax and every non-allowlisted saved value.");
+    unsafe_plan_specification = custom_specification;
+    unsafe_plan_specification.actionOptions.execUsePlus = true;
+    require(!ck::vision::planFindCustomCommand(unsafe_plan_specification).allowed,
+            "The custom-command planner must refuse legacy batching variants that could alter argument scope.");
+
+    auto platform_executor = ck::vision::makePlatformFindCustomCommandExecutor();
+    const ck::vision::FindCustomCommandCapability platform_capability = platform_executor->capability(custom_specification);
+    if (platform_capability.available)
+    {
+        require(platform_capability.argv_preview.size() >= 8 && platform_capability.argv_preview[0] == "/usr/bin/sandbox-exec" &&
+                    platform_capability.argv_preview[1] == "-p" &&
+                    platform_capability.argv_preview[2].find("(deny network*)") != std::string::npos &&
+                    platform_capability.argv_preview[2].find("(deny file-write*)") != std::string::npos,
+                "The production custom-command preview must expose the direct macOS sandbox argv and its no-network/no-write profile.");
+        const std::atomic_bool not_cancelled{false};
+        const ck::vision::FindCustomCommandOutcome platform_outcome =
+            platform_executor->execute(custom_plan, spaced_match, not_cancelled);
+        require(platform_outcome.invoked && !platform_outcome.cancelled && !platform_outcome.timed_out &&
+                    !platform_outcome.output_truncated && platform_outcome.exit_code == 0,
+                "An available production custom-command executor must run the allowlisted argv under the macOS sandbox.");
+        const std::atomic_bool already_cancelled{true};
+        const ck::vision::FindCustomCommandOutcome cancelled_outcome =
+            platform_executor->execute(custom_plan, spaced_match, already_cancelled);
+        require(!cancelled_outcome.invoked && cancelled_outcome.cancelled,
+                "The production custom-command executor must honour cancellation before spawning a sandboxed child.");
+    }
+    else
+    {
+        require(!platform_capability.reason.empty(),
+                "An unavailable production custom-command executor must explain why it remains disabled.");
+    }
+
+    auto recording_executor = std::make_unique<RecordingCustomCommandExecutor>();
+    RecordingCustomCommandExecutor *const recording_executor_view = recording_executor.get();
+    ck::vision::ThreadedFindExecutionService sandboxed_execution(std::move(recording_executor));
+    std::optional<ck::find::SearchExecutionResult> custom_result;
+    sandboxed_execution.start(custom_specification, false, [&](ck::find::SearchExecutionResult result) {
+        {
+            std::scoped_lock lock(completion_mutex);
+            custom_result = std::move(result);
+        }
+        completion_ready.notify_one();
+    });
+    {
+        std::unique_lock lock(completion_mutex);
+        require(completion_ready.wait_for(lock, std::chrono::seconds(2), [&] { return custom_result.has_value(); }),
+                "The sandboxed custom-command service must complete its bounded search workflow.");
+    }
+    require(custom_result->exitCode == 0 && custom_result->customCommandInvocationCount >= 1 &&
+                custom_result->failedCustomCommandInvocationCount == 0 && recording_executor_view->invocations() >= 1 &&
+                recording_executor_view->plan().executable_argv.front() == "/usr/bin/stat" &&
+                recording_executor_view->matched_path().parent_path() == directory,
+            "Custom command execution must pass a matched filesystem path as one literal direct argv value.");
+
+    auto bounded_executor = std::make_unique<RecordingCustomCommandExecutor>();
+    bounded_executor->set_outcome({.invoked = true,
+                                   .cancelled = false,
+                                   .timed_out = true,
+                                   .output_truncated = true,
+                                   .exit_code = 137,
+                                   .output = {},
+                                   .message = "Custom command exceeded its configured bounds."});
+    ck::vision::ThreadedFindExecutionService bounded_execution(std::move(bounded_executor));
+    std::optional<ck::find::SearchExecutionResult> bounded_result;
+    bounded_execution.start(custom_specification, false, [&](ck::find::SearchExecutionResult result) {
+        {
+            std::scoped_lock lock(completion_mutex);
+            bounded_result = std::move(result);
+        }
+        completion_ready.notify_one();
+    });
+    {
+        std::unique_lock lock(completion_mutex);
+        require(completion_ready.wait_for(lock, std::chrono::seconds(2), [&] { return bounded_result.has_value(); }),
+                "The execution service must report bounded custom-command outcomes.");
+    }
+    require(bounded_result->exitCode != 0 && bounded_result->failedCustomCommandInvocationCount != 0 &&
+                bounded_result->customCommandTimedOut && bounded_result->customCommandOutputTruncated &&
+                !bounded_result->customCommandAudit.empty(),
+            "Custom-command time and output limits must become a visible audit outcome instead of being silently ignored.");
+
     const fs::path deletable = directory / "delete-me.txt";
     {
         std::ofstream file(deletable);
@@ -191,8 +365,8 @@ int main()
         require(completion_ready.wait_for(lock, std::chrono::seconds(2), [&] { return deletion_result.has_value(); }),
                 "Confirmed deletion must complete through the injected execution service.");
     }
-    require(!fs::exists(deletable) && !fs::exists(directory / "match.txt") && fs::exists(directory) &&
-                deletion_result->deletedCount == 2 && deletion_result->failedDeletionCount == 0,
+    require(!fs::exists(deletable) && !fs::exists(directory / "match.txt") && !fs::exists(spaced_match) && fs::exists(directory) &&
+                deletion_result->deletedCount == 3 && deletion_result->failedDeletionCount == 0,
             "Confirmed deletion must remove matching regular files without deleting the containing directory.");
     fs::remove_all(directory);
 }

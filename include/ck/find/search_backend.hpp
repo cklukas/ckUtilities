@@ -49,6 +49,14 @@ struct SearchExecutionResult
     // report its outcome separately from matching and traversal errors.
     std::size_t deletedCount = 0;
     std::size_t failedDeletionCount = 0;
+    // A sandboxed native custom-command adapter records its bounded outcome
+    // separately. The search core never interprets or launches a command.
+    std::size_t customCommandInvocationCount = 0;
+    std::size_t failedCustomCommandInvocationCount = 0;
+    bool customCommandCancelled = false;
+    bool customCommandTimedOut = false;
+    bool customCommandOutputTruncated = false;
+    std::string customCommandAudit;
     std::vector<std::filesystem::path> matches;
     std::vector<std::string> command;
 };

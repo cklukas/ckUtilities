@@ -76,10 +76,16 @@ Historical application baseline: `legacy_tv`
   count. Confirmed deletion now runs only in
   the injected worker and only removes matching regular files or symbolic
   links; it never removes directories. The guided form preserves legacy
-  custom-command settings for saved-search compatibility but presents them as
-  unavailable, and execution rejects them before a deletion confirmation can
-  appear. A separately sandboxed execution policy is required before custom
-  commands can be edited or run.
+  custom-command settings for saved-search compatibility but permits only the
+  named `ckvision.file-info` and `ckvision.sha256` non-destructive templates.
+  The native executor previews direct argv, requires a second confirmation,
+  passes each match literally, and runs only through a tested macOS
+  `sandbox-exec` profile that denies network and writes while granting the
+  selected root (including its same-root APFS firmlink spelling) and fixed
+  runtime reads. It has bounded output, a per-command timeout, cancellation,
+  a 64-invocation cap, and an auditable result; other custom values and
+  platforms remain explicitly unavailable. It cannot be combined with
+  deletion.
 - WP-6: `ck-du-ckvision` maps application-owned directory snapshots through a
   stable-ID native `TreeModel` plus selected-directory Table. Its production composition
   root now starts immediately and delegates scanning to an injected joinable
