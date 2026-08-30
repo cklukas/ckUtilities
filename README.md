@@ -17,14 +17,17 @@ CK Utilities is provided free of charge, as-is. The maintainer does not offer
 user support, maintenance, updates, guarantees, or warranties. Use it at your
 own discretion; the legal terms are in [LICENSE](LICENSE).
 
-## What it helps with
+## Tools
 
-- Find files and narrow results with `ck-find`.
-- Explore JSON documents with `ck-json-view`.
-- See what occupies disk space with `ck-du`.
-- Edit Markdown with `ck-edit`.
-- Configure the suite and keyboard shortcuts with `ck-config`.
-- Have local-model conversations with `ck-chat`.
+| Tool | Main features |
+| --- | --- |
+| `ck-utilities` | Launch the installed tools; access shared help and application controls. |
+| `ck-json-view` | Browse JSON as an expandable tree; search, reload, and copy values. |
+| `ck-find` | Build guided file searches with filters, previews, cancellation, and deliberate result actions. |
+| `ck-du` | Scan folders in the background and browse directory sizes and file lists. |
+| `ck-config` | Edit Disk Usage and Chat settings; manage keyboard shortcuts. |
+| `ck-edit` | Edit Markdown with search, undo/redo, formatting, links, footnotes, and tables. |
+| `ck-chat` | Chat with local GGUF models; manage prompts and models, cancel responses, and export conversations. |
 
 CK Utilities runs on macOS and Linux. A Windows version is not available yet.
 
