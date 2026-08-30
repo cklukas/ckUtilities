@@ -239,7 +239,7 @@ Historical application baseline: `legacy_tv`
   now provides the worker-load, stream, structured-completion, and teardown
   path for a recorded local GGUF without making CI depend on a model artifact.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 92-test cutover suite passes in normal and
+  candidate SDK. The then-current 92-test cutover suite passed in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -249,8 +249,8 @@ Historical application baseline: `legacy_tv`
 - `CKTOOLS_CKVISION_CUTOVER=ON` rehearses the release composition against the
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
-  names without configuring or installing the legacy UI runtime. The complete
-  92-test cutover configuration, independent package consumer, and staged
+  names without configuring or installing the legacy UI runtime. The
+  then-current 92-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. That staged gate launches every converted
   child through `ck-utilities --launch <child> --help` and separately proves
   the missing-child diagnostic path. The `verify_ckvision_cutover` gate also
@@ -270,8 +270,8 @@ Historical application baseline: `legacy_tv`
   making any of them implicit for normal development builds.
   On 2026-08-30, a fresh macOS Release rehearsal against the selected installed
   SDK passed that complete composition: independent consumer, staged-product
-  and legacy-negative cutover checks, extracted TGZ verification, and all 92
-  CTest cases.
+  and legacy-negative cutover checks, extracted TGZ verification, and the
+  then-current 92 CTest cases.
   The separate Unix-only `verify_ckvision_terminal` gate uses a disposable
   configuration root and a real PTY to start every staged executable under
   `xterm-256color`, `xterm`, and `vt100`, deliver a resize and the standard
@@ -284,7 +284,7 @@ Historical application baseline: `legacy_tv`
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 92-test normal and ASan/UBSan suites. Its real-PTY
+  cutover configuration's then-current 92-test normal and ASan/UBSan suites. Its real-PTY
   terminal-profile gate also passes under ASan/UBSan, on 2026-08-30.
 
 ## 1. Mandate
