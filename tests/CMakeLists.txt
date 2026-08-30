@@ -7,6 +7,10 @@ FetchContent_Declare(
 )
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# Test frameworks are build-only dependencies.  Installing them would add
+# development libraries and headers to every product archive even though no
+# shipped executable links them.
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()

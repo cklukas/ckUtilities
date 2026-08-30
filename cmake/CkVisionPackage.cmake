@@ -25,6 +25,10 @@ option(CKTOOLS_VERIFY_CKVISION_INSTALL
        "Enable the installed native-executable verification target"
        OFF)
 
+option(CKTOOLS_VERIFY_CKVISION_ARCHIVE
+       "Enable verification of the packaged ckVision-native release archive"
+       OFF)
+
 function(cktools_require_ckvision)
   find_package(ckvision CONFIG REQUIRED)
 
@@ -84,4 +88,27 @@ function(cktools_add_ckvision_cutover_verification)
     DEPENDS verify_ckvision_install
     USES_TERMINAL
     COMMENT "Verify that the staged cutover product has no legacy UI artifacts")
+endfunction()
+
+function(cktools_add_ckvision_archive_verification)
+  if(NOT CKTOOLS_CKVISION_CUTOVER OR NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
+    return()
+  endif()
+
+  if(NOT DEFINED CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME OR
+     "${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}" STREQUAL "")
+    message(FATAL_ERROR
+      "CKTOOLS_VERIFY_CKVISION_ARCHIVE requires CPack package metadata before "
+      "the verification target is created.")
+  endif()
+
+  add_custom_target(verify_ckvision_archive
+    COMMAND "${CMAKE_CPACK_COMMAND}" --config "${PROJECT_BINARY_DIR}/CPackConfig.cmake"
+    COMMAND "${CMAKE_COMMAND}"
+      "-DCKTOOLS_PACKAGE_ARCHIVE=${PROJECT_BINARY_DIR}/${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}.tar.gz"
+      "-DCKTOOLS_PACKAGE_EXTRACT_DIR=${PROJECT_BINARY_DIR}/ckvision-package-check"
+      -DCKTOOLS_CKVISION_CUTOVER=ON
+      -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
+    USES_TERMINAL
+    COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
 endfunction()

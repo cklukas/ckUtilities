@@ -43,8 +43,13 @@ set(CPACK_RPM_PACKAGE_GROUP "Applications/Text")
 if(CKTOOLS_CKVISION_CUTOVER)
   set(CPACK_RPM_PACKAGE_REQUIRES "libstdc++")
 else()
-  set(CPACK_RPM_PACKAGE_REQUIRES "ncurses, libstdc++")
+set(CPACK_RPM_PACKAGE_REQUIRES "ncurses, libstdc++")
 endif()
 set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+
+# CPack rewrites CPACK_PACKAGE_FILE_NAME while configuring its source-package
+# metadata. Keep the binary archive identity available to the cutover archive
+# verifier that is added after this file is included.
+set(CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}")
 
 include(CPack)

@@ -40,3 +40,7 @@ remaining product journeys are still required before cutover.
 With `CKTOOLS_VERIFY_CKVISION_INSTALL=ON`, the
 `verify_ckvision_cutover` target also rejects legacy runtime linkage, installed
 legacy artifacts, and legacy references in the product's public headers.
+With `CKTOOLS_VERIFY_CKVISION_ARCHIVE=ON` in the cutover configuration,
+`verify_ckvision_archive` runs CPack, extracts the TGZ, repeats those
+product-tree checks against the delivered archive, and rejects build-only
+GTest/GMock payload.

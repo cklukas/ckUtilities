@@ -252,6 +252,9 @@ Historical application baseline: `legacy_tv`
   smoke checks, and the legacy-negative gate. This is local configuration
   evidence only; it does not replace the remaining cross-platform release
   matrix or unaccepted workflow journeys.
+  The opt-in `verify_ckvision_archive` gate now runs CPack, extracts the
+  delivered TGZ, repeats those product and negative checks, and rejects
+  build-only GTest/GMock payload.
   A macOS ASan/UBSan cutover build against a package built with
   `CKVISION_SANITIZE=address,undefined` also passes all 92 tests. The
   sanitizer package propagates its required compile and link flags to CMake

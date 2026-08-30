@@ -91,3 +91,4 @@ if(APPLE)
 endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/packaging/CPackConfig.cmake")
+cktools_add_ckvision_archive_verification()

@@ -116,6 +116,24 @@ and starts each ckVision-native executable with `--help`. It verifies the
 release artifact's executable layout and its relative runtime-library lookup;
 it does not replace the full workflow or platform acceptance suites.
 
+For the distributable archive itself, enable the opt-in archive gate in a
+cutover configuration:
+
+```sh
+cmake --preset dev \
+  -DCKTOOLS_CKVISION_CUTOVER=ON \
+  -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
+cmake --build build/dev --target verify_ckvision_archive
+```
+
+It runs CPack, extracts the generated TGZ to a disposable directory, checks
+the complete staged product via the same executable and launcher scenarios,
+then applies the legacy-negative gate. It also rejects an archive carrying
+GTest/GMock headers, libraries, or package metadata: those are build-only
+dependencies, not product payload.
+
 ## Cutover rehearsal
 
 `CKTOOLS_CKVISION_CUTOVER=ON` builds only the framework-neutral cores and
