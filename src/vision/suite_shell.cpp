@@ -1,5 +1,8 @@
 #include "ck/vision/suite_shell.hpp"
 
+#include <chrono>
+#include <ctime>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -20,6 +23,18 @@ using ckv::widgets::CommandPresentation;
 using ckv::widgets::MenuBarItem;
 using ckv::widgets::MenuItem;
 using ckv::widgets::StatusLineItem;
+
+ckv::widgets::TimeValue local_time()
+{
+    const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    return {local.tm_hour, local.tm_min, local.tm_sec};
+}
 
 } // namespace
 
@@ -81,10 +96,15 @@ SuiteShell::SuiteShell(ckv::ui::Application &application, SuiteShellOptions opti
 {
     ckv::widgets::install_about_help(application_, desktop(), roles_, options_.application_name,
                                      options_.about_text);
+    auto clock = std::make_unique<ckv::widgets::ClockView>();
+    clock->set_time_provider(options_.clock_time_provider ? options_.clock_time_provider : local_time);
+    clock->set_blinking_separator(true);
+    clock_view_ = shell_.menu_bar()->set_trailing_view(std::move(clock));
 }
 
 SuiteShell::~SuiteShell()
 {
+    clock_view_ = nullptr;
     application_.commands().withdraw(about_command_);
     if (return_to_launcher_command_ != ckv::ui::kInvalidCommand)
         application_.commands().withdraw(return_to_launcher_command_);

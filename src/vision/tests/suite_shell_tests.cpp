@@ -176,6 +176,7 @@ int main()
             .application_name = "ckUtilities shell test",
             .about_text = "A native ckVision shell for the ckUtilities migration.",
             .theme = ck::vision::ThemeScheme::Dark,
+            .clock_time_provider = [] { return ckv::widgets::TimeValue{12, 34, 56}; },
             .on_return_to_launcher = [&returned_to_launcher] { returned_to_launcher = true; },
         });
 
@@ -192,6 +193,8 @@ int main()
     require(!application.terminal_too_small(), "An 80x24 headless terminal must render the shell.");
     require(application.current_frame().size() == ckv::Size{80, 24},
             "The shell must compose a full terminal frame.");
+    require(shell.clock_view() != nullptr && shell.clock_view()->text() == "12:34",
+            "The shell must expose a deterministic native menu-bar clock.");
 
     require(application.execute_command(application.commands().standard().quit),
             "Desktop should supply the standard quit command handler.");

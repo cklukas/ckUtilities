@@ -13,6 +13,8 @@ Historical application baseline: `legacy_tv`
   implemented on `master`.
 - WP-2: `ck_vision_shell` provides a native Desktop, semantic themes,
   stable About/launcher commands, native help, menus, and status composition;
+  every shell now reuses ckVision's trailing `ClockView` with an injected
+  time provider for deterministic headless verification;
   its headless acceptance exercises every suite theme, Mono16 color
   degradation, wide/80x24/narrow composition, below-floor handling, and
   recovery after resize.
