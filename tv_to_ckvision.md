@@ -256,7 +256,10 @@ Historical application baseline: `legacy_tv`
   matrix or unaccepted workflow journeys.
   The opt-in `verify_ckvision_archive` gate now runs CPack, extracts the
   delivered TGZ, repeats those product and negative checks, and rejects
-  build-only GTest/GMock payload.
+  build-only GTest/GMock payload. When every local cutover gate is enabled,
+  `verify_ckvision_rehearsal` composes CTest, the independent installed-SDK
+  consumer, staged-product/cutover checks, and the archive check without
+  making any of them implicit for normal development builds.
   A macOS ASan/UBSan cutover build against a package built with
   `CKVISION_SANITIZE=address,undefined` also passes all 92 tests. The
   sanitizer package propagates its required compile and link flags to CMake

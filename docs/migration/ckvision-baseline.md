@@ -79,6 +79,13 @@ Passing it proves the public installed package is consumable in the selected
 configuration; it does not substitute for ckVision's own acceptance suite or
 an application migration slice.
 
+When the cutover, installed-product, archive, and package-consumer options are
+all enabled, `verify_ckvision_rehearsal` composes the complete local evidence
+set: the ckUtilities CTest suite, installed-SDK consumer, staged product and
+legacy-negative checks, and extracted TGZ verification. It is an opt-in
+convenience target; the individual gates remain available for focused failure
+diagnosis.
+
 ### Opt-in local-model chat evidence
 
 The native chat scenario includes an opt-in real-model path. It reads only the

@@ -93,7 +93,8 @@ test stub.
 
 ### Release rehearsal
 
-The staged-product and archive gates must use the same installed ckVision SDK:
+The staged-product, archive, and independent package-consumer gates must use
+the same installed ckVision SDK:
 
 ```bash
 cmake -S . -B build/cutover-release \
@@ -101,18 +102,19 @@ cmake -S . -B build/cutover-release \
   -DCKTOOLS_CKVISION_CUTOVER=ON \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
+  -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON \
   -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON \
   -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
-cmake --build build/cutover-release
-ctest --test-dir build/cutover-release --output-on-failure
-cmake --build build/cutover-release --target verify_ckvision_cutover
-cmake --build build/cutover-release --target verify_ckvision_archive
+cmake --build build/cutover-release --target verify_ckvision_rehearsal
 ```
 
-The archive gate runs CPack, extracts the delivered TGZ, verifies every
+`verify_ckvision_rehearsal` runs the complete local CTest suite, an independent
+installed-SDK consumer, the staged product/cutover checks, and the archive
+check. The latter runs CPack, extracts the delivered TGZ, verifies every
 product executable and launcher path, rejects legacy runtime artifacts, and
-rejects build-only GTest/GMock payload. It does not replace remaining
-cross-platform or real-model acceptance.
+rejects build-only GTest/GMock payload. The focused verification targets remain
+available for diagnosis. This does not replace remaining cross-platform or
+real-model acceptance.
 
 ### Hotkey Schemes
 

@@ -20,13 +20,15 @@ ctest --test-dir build/cutover --output-on-failure
 ```
 
 The cutover composes only framework-neutral cores and the seven native
-executables under their production names. For release evidence, additionally
-enable `CKTOOLS_VERIFY_CKVISION_INSTALL=ON` and
+executables under their production names. For a complete local rehearsal,
+enable `CKTOOLS_VERIFY_CKVISION_PACKAGE=ON`,
+`CKTOOLS_VERIFY_CKVISION_INSTALL=ON`, and
 `CKTOOLS_VERIFY_CKVISION_ARCHIVE=ON`, then run
-`verify_ckvision_cutover` and `verify_ckvision_archive`. The latter exercises
-the generated TGZ after extraction and rejects legacy or build-only test
-payload. The independent installed-SDK consumer is enabled with
-`CKTOOLS_VERIFY_CKVISION_PACKAGE=ON`; set
+`verify_ckvision_rehearsal`. It composes the full CTest suite, independent
+installed-SDK consumer, installed-product/cutover checks, and delivered-TGZ
+check. The focused `verify_ckvision_cutover` and `verify_ckvision_archive`
+targets remain available for diagnosis; the latter exercises the generated TGZ
+after extraction and rejects legacy or build-only test payload. Set
 `CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE` to `Debug`, `Release`,
 `RelWithDebInfo`, or `MinSizeRel` as needed.
 

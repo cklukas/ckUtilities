@@ -112,3 +112,26 @@ function(cktools_add_ckvision_archive_verification)
     USES_TERMINAL
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
 endfunction()
+
+# Keep the complete local cutover rehearsal discoverable as one target without
+# making any individual gate implicit for normal development builds. It is
+# available only when every opt-in product, package-consumer, and archive gate
+# was requested by the caller. Invoke the gates serially: the install and CPack
+# paths both build from this tree, so parallel prerequisite scheduling would
+# make the composed target needlessly contend with itself.
+function(cktools_add_ckvision_rehearsal_verification)
+  if(NOT CKTOOLS_CKVISION_CUTOVER OR
+     NOT CKTOOLS_VERIFY_CKVISION_PACKAGE OR
+     NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
+     NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
+    return()
+  endif()
+
+  add_custom_target(verify_ckvision_rehearsal
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_package
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_cutover
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_archive
+    COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PROJECT_BINARY_DIR}" --output-on-failure
+    USES_TERMINAL
+    COMMENT "Run the complete local ckVision cutover rehearsal")
+endfunction()
