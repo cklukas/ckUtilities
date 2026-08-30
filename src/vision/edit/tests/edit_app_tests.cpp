@@ -61,6 +61,29 @@ int main()
             "Markdown normalization must preserve hard breaks while removing accidental whitespace in one transaction.");
     require(editor.document().modified(), "Markdown normalization must remain an undoable document edit.");
 
+    editor.document().set_text("A deliberately long editor line that must retain its logical text while wrapping.");
+    const auto undo_redo_end = editor.document().position_at_byte(editor.document().text().size());
+    require(undo_redo_end.has_value() && editor.editor_view()->set_selection({*undo_redo_end, *undo_redo_end}),
+            "The native editor must position the caret before a command-surface undo/redo check.");
+    application.set_focus(editor.editor_view());
+    require(application.dispatch(ckv::TextEvent{"!", false}) &&
+                editor.document().text().ends_with("wrapping.!"),
+            "The native editor must accept text before exposing its undo command.");
+    require(application.execute_command(editor.undo_command()) &&
+                editor.document().text().ends_with("wrapping."),
+            "Undo must dispatch through the native editor command surface.");
+    require(application.execute_command(editor.redo_command()) &&
+                editor.document().text().ends_with("wrapping.!"),
+            "Redo must dispatch through the native editor command surface.");
+    const std::string wrapped_source = editor.document().text();
+    require(application.execute_command(editor.toggle_wrap_command()) &&
+                editor.editor_view()->wrap_mode() == ckv::widgets::WrapMode::Word &&
+                editor.document().text() == wrapped_source,
+            "Word wrap must be a viewport-only native command that preserves document text.");
+    require(application.execute_command(editor.toggle_wrap_command()) &&
+                editor.editor_view()->wrap_mode() == ckv::widgets::WrapMode::None,
+            "Repeating the word-wrap command must restore unwrapped viewport mode.");
+
     editor.document().set_text("caf\xC3\xA9\nHeading\n```cpp\n# code\n```\n");
     const auto inline_begin = editor.document().position_at_byte(0);
     const auto inline_end = editor.document().position_at_byte(5);

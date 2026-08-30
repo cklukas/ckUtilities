@@ -42,6 +42,9 @@ public:
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId save_as_command() const noexcept { return save_as_command_; }
     ckv::ui::CommandId normalise_markdown_command() const noexcept { return normalise_markdown_command_; }
+    ckv::ui::CommandId undo_command() const noexcept { return undo_command_; }
+    ckv::ui::CommandId redo_command() const noexcept { return redo_command_; }
+    ckv::ui::CommandId toggle_wrap_command() const noexcept { return toggle_wrap_command_; }
     ckv::ui::CommandId reflow_markdown_command() const noexcept { return reflow_markdown_command_; }
     ckv::ui::CommandId bold_command() const noexcept { return bold_command_; }
     ckv::ui::CommandId italic_command() const noexcept { return italic_command_; }
@@ -78,6 +81,9 @@ private:
     void show_save_as_dialog();
     void show_save_conflict_resolution();
     void reload_after_save_conflict();
+    void undo();
+    void redo();
+    void toggle_word_wrap();
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
     void toggle_inline_markdown(ck::edit::MarkdownInlineStyle style, std::string_view label);
     void reflow_markdown();
@@ -106,6 +112,9 @@ private:
     ckv::ui::CommandId save_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_as_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId normalise_markdown_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId undo_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId redo_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId toggle_wrap_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId reflow_markdown_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bold_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId italic_command_ = ckv::ui::kInvalidCommand;

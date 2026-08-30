@@ -145,6 +145,9 @@ Historical application baseline: `legacy_tv`
   commands move selected list markers by two spaces, preserve blank separators
   and CRLF, leave root items stationary when outdenting, and recognize deeper
   markers only when contiguous parent-list context proves they are not code.
+  The native Edit menu exposes ckVision's revision-wide undo/redo plus a
+  viewport-only word-wrap toggle that never changes document text or logical
+  positions.
   The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.

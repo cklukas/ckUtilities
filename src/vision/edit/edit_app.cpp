@@ -46,6 +46,12 @@ void EditApp::declare_commands()
         application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); }));
     normalise_markdown_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-edit", "ck.edit.normalise_markdown", [this] { normalise_markdown(); }));
+    undo_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.undo", [this] { undo(); }));
+    redo_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.redo", [this] { redo(); }));
+    toggle_wrap_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_wrap", [this] { toggle_word_wrap(); }));
     reflow_markdown_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-edit", "ck.edit.reflow_markdown", [this] { reflow_markdown(); }));
     bold_command_ = command_scope_.own(
@@ -111,6 +117,11 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{save_command_, "&Save"}),
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
                 MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
+            }}, MenuBarItem{"&Edit", {
+                MenuItem::command(CommandPresentation{undo_command_, "&Undo"}),
+                MenuItem::command(CommandPresentation{redo_command_, "&Redo"}),
+                MenuItem::separator(),
+                MenuItem::command(CommandPresentation{toggle_wrap_command_, "Toggle word &wrap"}),
             }}, MenuBarItem{"&Search", {
                 MenuItem::command(CommandPresentation{find_command_, "&Find..."}),
                 MenuItem::command(CommandPresentation{find_next_command_, "Find &next"}),
@@ -317,6 +328,36 @@ void EditApp::reload_after_save_conflict()
         return;
     }
     window_->set_footer("Reloaded the externally changed document; in-memory edits were discarded by your choice.");
+}
+
+void EditApp::undo()
+{
+    if (window_ == nullptr)
+        return;
+    if (!document_->undo())
+        window_->set_footer("There is no edit to undo.");
+    else
+        window_->set_footer("Undid the latest document edit.");
+}
+
+void EditApp::redo()
+{
+    if (window_ == nullptr)
+        return;
+    if (!document_->redo())
+        window_->set_footer("There is no edit to redo.");
+    else
+        window_->set_footer("Redid the latest document edit.");
+}
+
+void EditApp::toggle_word_wrap()
+{
+    if (window_ == nullptr)
+        return;
+    auto &editor = window_->editor();
+    const bool enable = editor.wrap_mode() == ckv::widgets::WrapMode::None;
+    editor.set_wrap_mode(enable ? ckv::widgets::WrapMode::Word : ckv::widgets::WrapMode::None);
+    window_->set_footer(enable ? "Enabled viewport-only word wrap." : "Disabled word wrap.");
 }
 
 ckv::widgets::EditorDocument &EditApp::document() noexcept
