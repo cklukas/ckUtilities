@@ -194,24 +194,24 @@ Historical application baseline: `legacy_tv`
   the production adapter loads the activated local model and generates on a
   joinable worker.
   Assistant Markdown is adapted by the shared framework-independent analyzer
-  into styled FlowView content and link targets. Transcript export is delegated
-  to an injected storage service. Native prompt selection, add/edit, default
+  into styled FlowView content and profile-controlled link targets. Transcript
+  export is delegated to an injected storage service. Native prompt selection, add/edit, default
   restoration, and confirmed custom-prompt deletion now use an injected
   `SystemPromptManager` adapter; the active prompt is carried in every response
   request. Downloaded-model selection, deactivation, and confirmed local
   deletion now use an injected `ModelManager` adapter, and the active model ID
-  and completed prior turns are carried in every response request. The adapter now owns cancellable
-  `ck-chat` also loads its versioned application profile before its UI starts;
+  and completed prior turns are carried in every response request. The adapter
+  owns cancellable background downloads behind a cached catalog, so
+  rate-limited typed progress and completion reach the UI without racing
+  `ModelManager` or retaining view pointers. `ck-chat` also loads its versioned application profile before its UI starts;
   a valid saved model or system-prompt identifier is applied through those same
   adapters, while a missing or stale identifier leaves the manager-owned
   selection unchanged. Its profile also decides whether Markdown links become
   FlowView navigation targets. Native selection, deactivation, and deletion
   commands write resulting stable IDs back through the injected profile
-  adapter, whose failed save restores its prior registry state.
-  background downloads behind a cached catalog, so rate-limited typed progress
-  and completion reach the UI without racing `ModelManager` or retaining view
-  pointers; late response and download callbacks are dropped before accessing
-  a destroyed presentation. The production response adapter now opens the activated local
+  adapter, whose failed save restores its prior registry state. Late response
+  and download callbacks are dropped before accessing a destroyed presentation.
+  The production response adapter now opens the activated local
   `ckai_core` model on its own worker, streams cancellable generation back
   through the existing lifetime gate, and prevents model lifecycle changes
   while a response is active. The live rich transcript now renders at most the
