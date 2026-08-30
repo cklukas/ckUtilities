@@ -1116,12 +1116,29 @@ The conversion program is complete only when all of the following are true:
 
 ## 13. Immediate next actions
 
-1. Approve this mandate and work-package sequence.
-2. Clean or separately preserve the existing ckVision worktree, then select a
-   clean baseline commit/package without discarding unrelated work.
-3. Execute WP-0's behavior and dependency inventory and create the traceability
-   and gap ledgers.
-4. Decide the first-release platform gate and the ckVision package/pinning
-   mechanism.
-5. Implement WP-1's independent package consumer and architecture checks.
-6. Build the WP-2 shell and begin the `ck-json-view` pilot.
+The native slices and local macOS rehearsal are complete. The next actions are
+release-acceptance handoffs, in this order:
+
+1. Have ckVision accept the clean integration candidate upstream and make an
+   immutable installed package available to CI. Update the baseline pin only
+   after that acceptance, then repeat the independent-consumer and cutover
+   rehearsal against the published package.
+2. Adopt an explicit custom-command policy for `ck-find`: permitted command
+   form and arguments, sandbox/working-directory and filesystem boundaries,
+   environment and output handling, cancellation, audit trail, and failure
+   reporting. The native form must continue to reject this action until the
+   policy and its acceptance tests exist.
+3. Adopt an explicit `ck-du` cloud-action policy covering recursive scope,
+   eligible providers and files, provider completion versus request acceptance,
+   retries, cancellation, and user-visible failure handling. Extend the
+   production adapter only after that policy is accepted.
+4. Provide an authorized local GGUF model and record the opt-in
+   `CKTOOLS_REAL_MODEL` macOS scenario's model identity, platform, and
+   structured result. The ordinary deterministic suite must remain model-free.
+5. Run the full clean installed-SDK, normal, sanitizer, package, and real-PTY
+   matrix on Linux. When ckVision's ConPTY backend is accepted, run the
+   equivalent Windows build, terminal, installer, and package checks before
+   advertising Windows support.
+6. Complete the remaining product journey/parity acceptance, then remove the
+   legacy runtime and make the ckVision cutover the default production build
+   only when every WP-10 exit condition has recorded evidence.
