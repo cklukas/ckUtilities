@@ -1,6 +1,15 @@
 /build/
+/bin/
+/_deps/
 CMakeFiles/
 CMakeCache.txt
+CPackConfig.cmake
+CPackSourceConfig.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+Makefile
+cmake_install.cmake
+/tests/**/*_include.cmake
 *.ninja
 *.o
 *.obj
@@ -12,3 +21,4 @@ compile_commands.json
 third_party/llama.cpp/
 .DS_Store
 debug.log
+__pycache__/
