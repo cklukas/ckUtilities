@@ -62,6 +62,31 @@ endforeach()
 # the complete install tree.
 if(CKTOOLS_CKVISION_CUTOVER)
   set(_cktools_launcher_path "${CKTOOLS_INSTALL_PREFIX}/bin/ck-utilities")
+
+  # Exercise the production composition root's successful fork/exec path for
+  # every native child.  Passing --help keeps the check non-interactive while
+  # still proving that the launcher locates its staged sibling and propagates
+  # the child's exit status.
+  foreach(_cktools_child_executable
+      ck-json-view
+      ck-find
+      ck-du
+      ck-config
+      ck-edit
+      ck-chat)
+    execute_process(
+      COMMAND "${_cktools_launcher_path}" --launch "${_cktools_child_executable}" --help
+      TIMEOUT 20
+      RESULT_VARIABLE _cktools_child_launch_result
+      OUTPUT_VARIABLE _cktools_child_launch_output
+      ERROR_VARIABLE _cktools_child_launch_error)
+    if(NOT _cktools_child_launch_result EQUAL 0)
+      message(FATAL_ERROR
+        "Installed launcher could not start ${_cktools_child_executable}: "
+        "${_cktools_child_launch_output}${_cktools_child_launch_error}")
+    endif()
+  endforeach()
+
   set(_cktools_missing_tool_path "${CKTOOLS_INSTALL_PREFIX}/bin/ck-json-view")
   set(_cktools_hidden_tool_path "${CKTOOLS_INSTALL_PREFIX}/bin/ck-json-view.ckutilities-verify-hidden")
   file(RENAME "${_cktools_missing_tool_path}" "${_cktools_hidden_tool_path}"

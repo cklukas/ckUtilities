@@ -52,7 +52,10 @@ Historical application baseline: `legacy_tv`
   raw-event interception path. The color selector uses ckVision's declarative,
   validated radio-form dialog and presents the selected palette values without
   a suite-specific widget. The initial launcher conversion is complete; its
-  workflow-depth, resizing, and input coverage will grow with release gates.
+  workflow-depth, resizing, and input coverage now extend through the staged
+  product gate. It launches every converted installed child through
+  `ck-utilities --launch <child> --help`, proving sibling discovery and exit
+  status propagation without creating an interactive child session.
   Its headless scenario now exercises repeated native launcher windows, the
   standard close lifecycle, a full standard-quit window sweep, list selection
   through keyboard and mouse input, and terminal resize recomposition.
@@ -214,7 +217,9 @@ Historical application baseline: `legacy_tv`
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
   88-test cutover configuration, independent package consumer, and staged
-  installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
+  installed-product smoke gate pass. That staged gate launches every converted
+  child through `ck-utilities --launch <child> --help` and separately proves
+  the missing-child diagnostic path. The `verify_ckvision_cutover` gate also
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
