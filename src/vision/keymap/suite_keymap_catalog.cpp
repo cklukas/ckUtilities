@@ -92,6 +92,7 @@ const std::array kEditCommands{
     CommandDefinition{"ck.edit.inline_code", "Inline &code selection", "Markdown format", ""},
     CommandDefinition{"ck.edit.toggle_link", "Insert or remove &link...", "Markdown format", ""},
     CommandDefinition{"ck.edit.toggle_image", "Insert or remove &image...", "Markdown format", ""},
+    CommandDefinition{"ck.edit.insert_footnote", "Insert &footnote...", "Markdown format", ""},
     CommandDefinition{"ck.edit.toggle_task", "Toggle &task", "Markdown format", ""},
     CommandDefinition{"ck.edit.toggle_quote", "Toggle &quote", "Markdown format", ""},
     CommandDefinition{"ck.edit.toggle_bullet_list", "Toggle &bullet list", "Markdown format", ""},

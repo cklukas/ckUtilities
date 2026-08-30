@@ -635,6 +635,72 @@ bool valid_link_destination(std::string_view destination) noexcept
     });
 }
 
+bool valid_footnote_identifier(std::string_view identifier) noexcept
+{
+    return !identifier.empty() && std::all_of(identifier.begin(), identifier.end(), [](char character) {
+        return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') ||
+               (character >= '0' && character <= '9') || character == '_' || character == '-';
+    });
+}
+
+std::string_view source_newline(std::string_view source) noexcept
+{
+    for (std::size_t offset = 0; offset < source.size(); ++offset)
+    {
+        if (source[offset] == '\r')
+            return offset + 1U < source.size() && source[offset + 1U] == '\n' ? "\r\n" : "\r";
+        if (source[offset] == '\n')
+            return "\n";
+    }
+    return "\n";
+}
+
+std::size_t trailing_newline_count(std::string_view source) noexcept
+{
+    std::size_t cursor = source.size();
+    std::size_t count = 0;
+    while (cursor > 0U)
+    {
+        if (source[cursor - 1U] == '\n')
+        {
+            --cursor;
+            if (cursor > 0U && source[cursor - 1U] == '\r')
+                --cursor;
+            ++count;
+        }
+        else if (source[cursor - 1U] == '\r')
+        {
+            --cursor;
+            ++count;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return count;
+}
+
+bool footnote_definition_exists(std::string_view source, std::string_view identifier)
+{
+    const std::string marker = "[^" + std::string(identifier) + "]:";
+    for (std::size_t begin = 0;;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        std::string_view line = source.substr(begin, (end == std::string_view::npos ? source.size() : end) - begin);
+        if (!line.empty() && line.back() == '\r')
+            line.remove_suffix(1U);
+        std::size_t indent = 0;
+        while (indent < line.size() && indent < 4U && line[indent] == ' ')
+            ++indent;
+        if (line.substr(indent).starts_with(marker))
+            return true;
+        if (end == std::string_view::npos)
+            return false;
+        begin = end + 1U;
+    }
+}
+
 std::optional<MarkdownTransformEdit> remove_markdown_link(std::string_view source, MarkdownLink link)
 {
     const std::string label(source.substr(link.label.begin, link.label.end - link.label.begin));
@@ -1460,6 +1526,39 @@ std::optional<MarkdownTransformEdit> toggle_markdown_image(
         .replacement = "![" + std::string(label) + "](" + std::string(destination) + ")",
         .selection = {selection.begin + 2U, selection.end + 2U},
     };
+}
+
+std::optional<MarkdownTransformPlan> insert_markdown_footnote(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view identifier)
+{
+    if (!valid_range(source, selection) || source.empty() || !valid_footnote_identifier(identifier) ||
+        footnote_definition_exists(source, identifier))
+        return std::nullopt;
+
+    const std::string reference = "[^" + std::string(identifier) + "]";
+    const std::string definition = "[^" + std::string(identifier) + "]: ";
+    const std::string_view newline = source_newline(source);
+    const std::size_t trailing_newlines = trailing_newline_count(source);
+    std::string definition_prefix;
+    for (std::size_t index = trailing_newlines; index < 2U; ++index)
+        definition_prefix += newline;
+    std::string appended_definition = definition_prefix + definition;
+
+    MarkdownTransformPlan plan;
+    if (selection.end == source.size())
+    {
+        plan.replacements.push_back({{selection.end, selection.end}, reference + appended_definition});
+    }
+    else
+    {
+        plan.replacements.push_back({{selection.end, selection.end}, reference});
+        plan.replacements.push_back({{source.size(), source.size()}, std::move(appended_definition)});
+    }
+    const std::size_t definition_content = source.size() + reference.size() + definition_prefix.size() + definition.size();
+    plan.selection = {definition_content, definition_content};
+    return plan;
 }
 
 std::optional<MarkdownTransformEdit> reflow_markdown_paragraphs(

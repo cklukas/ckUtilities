@@ -74,6 +74,8 @@ void EditApp::declare_commands()
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_link", [this] { toggle_link_markdown(); }));
     toggle_image_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_image", [this] { toggle_image_markdown(); }));
+    insert_footnote_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.insert_footnote", [this] { insert_footnote_markdown(); }));
     find_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.find", [this] { show_search_dialog(SearchAction::Find); }));
     find_next_command_ = command_scope_.own(
@@ -137,6 +139,7 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{inline_code_command_, "Inline &code selection"}),
                 MenuItem::command(CommandPresentation{toggle_link_command_, "Insert or remove &link..."}),
                 MenuItem::command(CommandPresentation{toggle_image_command_, "Insert or remove &image..."}),
+                MenuItem::command(CommandPresentation{insert_footnote_command_, "Insert &footnote..."}),
                 MenuItem::command(CommandPresentation{toggle_task_command_, "Toggle &task"}),
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
                 MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
@@ -668,6 +671,45 @@ void EditApp::show_image_destination_dialog()
     });
 }
 
+void EditApp::insert_footnote_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown footnotes are available for Markdown documents only.");
+        return;
+    }
+    show_footnote_identifier_dialog();
+}
+
+void EditApp::show_footnote_identifier_dialog()
+{
+    if (!markdown_document())
+        return;
+
+    footnote_identifier_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Insert Markdown footnote";
+    dialog.fields.push_back({"&Identifier:", "", [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    footnote_identifier_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    footnote_identifier_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 1U || !markdown_document())
+            return;
+
+        const auto selected = window_->editor().selection();
+        const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+        const ck::edit::MarkdownByteRange range = selected
+                                                      ? ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte}
+                                                      : ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
+        const auto plan = ck::edit::insert_markdown_footnote(document_->text(), range, result.values.front());
+        if (!plan || !commit_markdown_plan(*plan, "Inserted Markdown footnote."))
+            window_->set_footer("Could not insert that Markdown footnote; use a unique letter, number, underscore, or hyphen identifier.");
+    });
+}
+
 bool EditApp::continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor)
 {
     if (!markdown_document() || window_ == nullptr || &editor != &window_->editor() || editor.selection())
@@ -800,6 +842,33 @@ bool EditApp::commit_markdown_transform(const ck::edit::MarkdownTransformEdit &t
 
     const auto selected_begin = document_->position_at_byte(transform.selection.begin);
     const auto selected_end = document_->position_at_byte(transform.selection.end);
+    if (!selected_begin || !selected_end || !window_->editor().set_selection({*selected_begin, *selected_end}))
+        return false;
+
+    window_->set_footer(std::string(success_message));
+    return true;
+}
+
+bool EditApp::commit_markdown_plan(const ck::edit::MarkdownTransformPlan &plan,
+                                   std::string_view success_message)
+{
+    if (window_ == nullptr || plan.replacements.empty())
+        return false;
+
+    auto transaction = document_->transaction();
+    for (const ck::edit::MarkdownReplacement &replacement : plan.replacements)
+    {
+        const auto begin = document_->position_at_byte(replacement.replaced.begin);
+        const auto end = document_->position_at_byte(replacement.replaced.end);
+        if (!begin || !end)
+            return false;
+        transaction.replace({*begin, *end}, replacement.replacement);
+    }
+    if (!document_->commit(std::move(transaction)))
+        return false;
+
+    const auto selected_begin = document_->position_at_byte(plan.selection.begin);
+    const auto selected_end = document_->position_at_byte(plan.selection.end);
     if (!selected_begin || !selected_end || !window_->editor().set_selection({*selected_begin, *selected_end}))
         return false;
 

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ck::edit
 {
@@ -40,6 +41,23 @@ struct MarkdownTransformEdit
 {
     MarkdownByteRange replaced;
     std::string replacement;
+    MarkdownByteRange selection;
+};
+
+// One replacement in a multi-edit Markdown transaction plan. Every range is
+// against the same source revision; the caller commits all replacements
+// together before restoring the plan's selection in the resulting document.
+struct MarkdownReplacement
+{
+    MarkdownByteRange replaced;
+    std::string replacement;
+};
+
+// A transaction-ready set of non-overlapping replacements plus the semantic
+// selection to restore after all replacements are committed atomically.
+struct MarkdownTransformPlan
+{
+    std::vector<MarkdownReplacement> replacements;
     MarkdownByteRange selection;
 };
 
@@ -135,6 +153,17 @@ std::optional<MarkdownTransformEdit> toggle_markdown_image(
     std::string_view source,
     MarkdownByteRange selection,
     std::string_view destination);
+
+// Inserts a `[^identifier]` reference at the selection end and appends a
+// blank-line-separated `[^identifier]: ` definition. The definition content
+// becomes the resulting zero-width selection so typing can continue there.
+// Identifiers use ASCII letters, digits, `_`, or `-` and must not already be
+// defined in the document. The result is one multi-edit transaction plan;
+// source newline style is preserved for the appended definition.
+std::optional<MarkdownTransformPlan> insert_markdown_footnote(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view identifier);
 
 // Reflows each ordinary paragraph touched by the selection to `width` UTF-8
 // code points (default 80). A zero-width selection targets its current

@@ -10,6 +10,7 @@ using ck::edit::MarkdownInlineStyle;
 using ck::edit::MarkdownListStyle;
 using ck::edit::continue_markdown_list;
 using ck::edit::indent_markdown_list;
+using ck::edit::insert_markdown_footnote;
 using ck::edit::outdent_markdown_list;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_image;
@@ -271,6 +272,36 @@ TEST(MarkdownTransformations, TogglesImagesAndKeepsAltTextSelected)
 
     EXPECT_FALSE(toggle_markdown_image("See logo", {4, 8}, "not a destination"));
     EXPECT_FALSE(toggle_markdown_image("See logo", {4, 4}, "https://example.test/logo.png"));
+}
+
+TEST(MarkdownTransformations, InsertsAtomicFootnoteReferenceAndDefinition)
+{
+    constexpr std::string_view source = "Read this\n";
+    const auto plan = insert_markdown_footnote(source, {9, 9}, "note-1");
+    ASSERT_TRUE(plan.has_value());
+    ASSERT_EQ(plan->replacements.size(), 2U);
+    EXPECT_EQ(plan->replacements[0].replaced, (MarkdownByteRange{9, 9}));
+    EXPECT_EQ(plan->replacements[0].replacement, "[^note-1]");
+    EXPECT_EQ(plan->replacements[1].replaced, (MarkdownByteRange{source.size(), source.size()}));
+    EXPECT_EQ(plan->replacements[1].replacement, "\n[^note-1]: ");
+    constexpr std::string_view expected = "Read this[^note-1]\n\n[^note-1]: ";
+    EXPECT_EQ(plan->selection, (MarkdownByteRange{expected.size(), expected.size()}));
+
+    constexpr std::string_view at_end = "Read this";
+    const auto end_plan = insert_markdown_footnote(at_end, {at_end.size(), at_end.size()}, "n");
+    ASSERT_TRUE(end_plan.has_value());
+    ASSERT_EQ(end_plan->replacements.size(), 1U);
+    EXPECT_EQ(end_plan->replacements[0].replacement, "[^n]\n\n[^n]: ");
+
+    constexpr std::string_view crlf_source = "Read\r\n";
+    const auto crlf_plan = insert_markdown_footnote(crlf_source, {4, 4}, "n");
+    ASSERT_TRUE(crlf_plan.has_value());
+    ASSERT_EQ(crlf_plan->replacements.size(), 2U);
+    EXPECT_EQ(crlf_plan->replacements[1].replacement, "\r\n[^n]: ");
+
+    EXPECT_FALSE(insert_markdown_footnote("Read\n\n[^note]: existing\n", {4, 4}, "note"));
+    EXPECT_FALSE(insert_markdown_footnote("Read", {4, 4}, "not a label"));
+    EXPECT_FALSE(insert_markdown_footnote("", {0, 0}, "note"));
 }
 
 TEST(MarkdownTransformations, ReflowsOrdinaryParagraphsWithoutChangingProtectedSyntax)

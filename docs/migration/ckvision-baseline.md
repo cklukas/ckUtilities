@@ -88,7 +88,7 @@ with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
 leak detection. The clean `c25a324aa1db9c24851085a6ff84f5ae47e9014b`
 integration candidate passed ckVision's full 169-test sanitizer suite and
-ckUtilities' 87-test cutover configuration in both normal and ASan/UBSan
+ckUtilities' 88-test cutover configuration in both normal and ASan/UBSan
 builds with this procedure on 2026-08-30.
 
 To verify the staged native product as well, enable the installed-product

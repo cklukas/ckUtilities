@@ -220,6 +220,22 @@ int main()
     require(application.execute_command(editor.toggle_image_command()) && editor.document().text() == "See logo\n",
             "The native image command must remove an image when its alt text remains selected.");
 
+    editor.document().set_text("Read this\n");
+    const auto footnote_position = editor.document().position_at_byte(9);
+    require(footnote_position.has_value() && editor.editor_view()->set_selection({*footnote_position, *footnote_position}) &&
+                application.execute_command(editor.insert_footnote_command()),
+            "The native footnote command must open its identifier dialog through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "note-1"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The native footnote dialog must accept a typed identifier from the keyboard.");
+    application.step(0);
+    require(editor.document().text() == "Read this[^note-1]\n\n[^note-1]: " &&
+                editor.editor_view()->cursor().byte == editor.document().text().size(),
+            "The native footnote command must atomically add a reference and definition, then focus the definition body.");
+    require(editor.document().undo() && editor.document().text() == "Read this\n",
+            "Footnote insertion must undo its reference and definition together as one document transaction.");
+
     editor.document().set_text("Alpha beta\ngamma delta epsilon\nzeta\n");
     const auto reflow_position = editor.document().position_at_byte(7);
     require(reflow_position.has_value() && editor.editor_view()->set_selection({*reflow_position, *reflow_position}),

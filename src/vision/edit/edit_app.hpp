@@ -59,6 +59,7 @@ public:
     ckv::ui::CommandId outdent_list_command() const noexcept { return outdent_list_command_; }
     ckv::ui::CommandId toggle_link_command() const noexcept { return toggle_link_command_; }
     ckv::ui::CommandId toggle_image_command() const noexcept { return toggle_image_command_; }
+    ckv::ui::CommandId insert_footnote_command() const noexcept { return insert_footnote_command_; }
     ckv::ui::CommandId find_command() const noexcept { return find_command_; }
     ckv::ui::CommandId find_next_command() const noexcept { return find_next_command_; }
     ckv::ui::CommandId replace_command() const noexcept { return replace_command_; }
@@ -97,11 +98,15 @@ private:
     void show_link_destination_dialog();
     void toggle_image_markdown();
     void show_image_destination_dialog();
+    void insert_footnote_markdown();
+    void show_footnote_identifier_dialog();
     bool continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor);
     void show_search_dialog(SearchAction action);
     void find_next();
     bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
                                    std::string_view success_message);
+    bool commit_markdown_plan(const ck::edit::MarkdownTransformPlan &plan,
+                              std::string_view success_message);
     bool markdown_document() const noexcept;
     static std::string status_message(ckv::widgets::EditorFileStatus status);
 
@@ -131,6 +136,7 @@ private:
     ckv::ui::CommandId outdent_list_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_link_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_image_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId insert_footnote_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId find_next_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId replace_command_ = ckv::ui::kInvalidCommand;
@@ -140,6 +146,7 @@ private:
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_destination_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> image_destination_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> footnote_identifier_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> search_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
