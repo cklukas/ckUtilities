@@ -25,12 +25,15 @@ the command-line usage.
 
 ## Cloud actions
 
-The Cloud menu always reports what is available on the current platform. On
-macOS, it can request an iCloud download for an eligible selected path and can
-offer a confirmed request to free local copies. On other platforms, cloud
-actions remain explicitly unavailable rather than claiming to change remote or
-local cloud state.
+The Cloud menu has one supported provider: macOS iCloud Drive. It can request
+an iCloud download for one eligible selected directory inside the current scan
+root, and can offer a confirmed request to free local copies only after macOS
+reports the directory uploaded. Symbolic links, non-directories, paths outside
+the scan root, and all other providers are explicitly refused rather than
+claiming to change remote or local cloud state.
 
-Cloud requests are cancellable. A completed request is reported separately from
-the provider's eventual storage state, so a successful request is not presented
-as an immediate guarantee that a recursive cloud operation has completed.
+Cloud requests are cancellable and never retry automatically. A successful
+result means that macOS accepted the one request; it is not an immediate
+guarantee that background synchronization or provider-defined recursion has
+completed. If cancellation arrives after acceptance, the app reports both
+facts so the provider's possible background work is not hidden.

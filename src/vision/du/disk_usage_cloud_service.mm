@@ -24,8 +24,13 @@ std::string error_message(NSError *error, std::string fallback)
     return description == nullptr ? fallback : std::string(description);
 }
 
-DiskUsageCloudCapability cloud_capability(const std::filesystem::path &target)
+DiskUsageCloudCapability cloud_capability(DiskUsageCloudAction action,
+                                          const std::filesystem::path &target,
+                                          const std::filesystem::path &scan_root)
 {
+    if (const DiskUsageCloudCapability scope = validateDiskUsageCloudTarget(scan_root, target); !scope.available)
+        return scope;
+
     @autoreleasepool
     {
         NSURL *url = file_url(target);
@@ -41,21 +46,43 @@ DiskUsageCloudCapability cloud_capability(const std::filesystem::path &target)
         }
         if (ubiquitous == nil || ![ubiquitous boolValue])
             return {.available = false, .reason = "The selected directory is not managed by iCloud Drive."};
+        if (action == DiskUsageCloudAction::EvictLocalCopies)
+        {
+            id uploaded = nil;
+            if (![url getResourceValue:&uploaded forKey:NSURLUbiquitousItemIsUploadedKey error:&error])
+            {
+                return {.available = false,
+                        .reason = "Could not verify iCloud upload state: " + error_message(error, "unknown macOS error")};
+            }
+            if (uploaded == nil || ![uploaded boolValue])
+                return {.available = false, .reason = "iCloud has not confirmed that the selected directory is uploaded; local copies will not be evicted."};
+        }
         return {.available = true, .reason = {}};
     }
 }
 
 DiskUsageCloudOperationResult perform_cloud_action(DiskUsageCloudAction action,
                                                     const std::filesystem::path &target,
+                                                    const std::filesystem::path &scan_root,
                                                     const std::atomic_bool &cancellation,
                                                     const DiskUsageCloudService::ProgressHandler &on_progress)
 {
     if (cancellation.load(std::memory_order_acquire))
-        return {.success = false, .cancelled = true, .processed_items = 0, .message = "Cloud operation cancelled."};
+        return {.success = false,
+                .cancelled = true,
+                .requestAccepted = false,
+                .processed_items = 0,
+                .provider = "macOS iCloud",
+                .message = "Cloud operation cancelled before the provider request."};
 
-    const DiskUsageCloudCapability capability = cloud_capability(target);
+    const DiskUsageCloudCapability capability = cloud_capability(action, target, scan_root);
     if (!capability.available)
-        return {.success = false, .cancelled = false, .processed_items = 0, .message = capability.reason};
+        return {.success = false,
+                .cancelled = false,
+                .requestAccepted = false,
+                .processed_items = 0,
+                .provider = "macOS iCloud",
+                .message = capability.reason};
 
     if (on_progress)
     {
@@ -76,12 +103,19 @@ DiskUsageCloudOperationResult perform_cloud_action(DiskUsageCloudAction action,
         [manager release];
 
         if (cancellation.load(std::memory_order_acquire))
-            return {.success = false, .cancelled = true, .processed_items = 0, .message = "Cloud operation cancelled."};
+            return {.success = false,
+                    .cancelled = true,
+                    .requestAccepted = false,
+                    .processed_items = 0,
+                    .provider = "macOS iCloud",
+                    .message = "Cloud operation cancelled before the provider request."};
         if (!accepted)
         {
             return {.success = false,
                     .cancelled = false,
+                    .requestAccepted = false,
                     .processed_items = 0,
+                    .provider = "macOS iCloud",
                     .message = "macOS did not accept the cloud request: " + error_message(error, "unknown macOS error")};
         }
 
@@ -90,7 +124,21 @@ DiskUsageCloudOperationResult perform_cloud_action(DiskUsageCloudAction action,
                                         : "macOS accepted the request to free local cloud copies. Rescan to refresh usage data.";
         if (on_progress)
             on_progress({.message = message, .completed_items = 1, .total_items = 1});
-        return {.success = true, .cancelled = false, .processed_items = 1, .message = message};
+        if (cancellation.load(std::memory_order_acquire))
+        {
+            return {.success = true,
+                    .cancelled = true,
+                    .requestAccepted = true,
+                    .processed_items = 1,
+                    .provider = "macOS iCloud",
+                    .message = "macOS accepted the cloud request before cancellation. The provider may continue synchronizing in the background."};
+        }
+        return {.success = true,
+                .cancelled = false,
+                .requestAccepted = true,
+                .processed_items = 1,
+                .provider = "macOS iCloud",
+                .message = message};
     }
 }
 
@@ -104,14 +152,16 @@ MacDiskUsageCloudService::~MacDiskUsageCloudService()
         worker_.join();
 }
 
-DiskUsageCloudCapability MacDiskUsageCloudService::capability(DiskUsageCloudAction,
-                                                               const std::filesystem::path &target) const
+DiskUsageCloudCapability MacDiskUsageCloudService::capability(DiskUsageCloudAction action,
+                                                               const std::filesystem::path &target,
+                                                               const std::filesystem::path &scan_root) const
 {
-    return cloud_capability(target);
+    return cloud_capability(action, target, scan_root);
 }
 
 void MacDiskUsageCloudService::start(DiskUsageCloudAction action,
                                      std::filesystem::path target,
+                                     std::filesystem::path scan_root,
                                      ProgressHandler on_progress,
                                      CompletionHandler on_complete)
 {
@@ -130,10 +180,11 @@ void MacDiskUsageCloudService::start(DiskUsageCloudAction action,
     std::jthread worker([this,
                          action,
                          target = std::move(target),
+                         scan_root = std::move(scan_root),
                          cancellation,
                          on_progress = std::move(on_progress),
                          on_complete = std::move(on_complete)]() mutable {
-        DiskUsageCloudOperationResult result = perform_cloud_action(action, target, *cancellation, on_progress);
+        DiskUsageCloudOperationResult result = perform_cloud_action(action, target, scan_root, *cancellation, on_progress);
         running_.store(false, std::memory_order_release);
         if (on_complete)
             on_complete(std::move(result));

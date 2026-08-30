@@ -1,17 +1,79 @@
 #include "disk_usage_services.hpp"
 
+#include <algorithm>
+#include <string_view>
 #include <utility>
 
 namespace ck::vision
 {
 
+namespace
+{
+
+bool is_contained_by(const std::filesystem::path &root, const std::filesystem::path &target)
+{
+    const std::filesystem::path relative = target.lexically_relative(root);
+    if (relative.empty())
+        return target == root;
+    return std::none_of(relative.begin(), relative.end(), [](const std::filesystem::path &component) {
+        return component == "..";
+    });
+}
+
+DiskUsageCloudCapability inspect_directory_without_symlinks(const std::filesystem::path &path,
+                                                            std::string_view label)
+{
+    std::error_code error;
+    const std::filesystem::file_status status = std::filesystem::symlink_status(path, error);
+    if (error)
+        return {.available = false, .reason = "Could not inspect the " + std::string(label) + ": " + error.message()};
+    if (std::filesystem::is_symlink(status))
+        return {.available = false, .reason = "Cloud actions do not accept symbolic-link " + std::string(label) + "s."};
+    if (!std::filesystem::is_directory(status))
+        return {.available = false, .reason = "Cloud actions require a directory " + std::string(label) + "."};
+    return {.available = true, .reason = {}};
+}
+
+} // namespace
+
+DiskUsageCloudCapability validateDiskUsageCloudTarget(const std::filesystem::path &scan_root,
+                                                       const std::filesystem::path &target)
+{
+    std::error_code error;
+    const std::filesystem::path absolute_root = std::filesystem::absolute(scan_root, error).lexically_normal();
+    if (error)
+        return {.available = false, .reason = "Could not resolve the disk-usage scan root: " + error.message()};
+    const std::filesystem::path absolute_target = std::filesystem::absolute(target, error).lexically_normal();
+    if (error)
+        return {.available = false, .reason = "Could not resolve the selected cloud path: " + error.message()};
+    if (!is_contained_by(absolute_root, absolute_target))
+        return {.available = false, .reason = "The selected path is outside the current disk-usage scan root."};
+
+    if (const DiskUsageCloudCapability root = inspect_directory_without_symlinks(absolute_root, "scan root"); !root.available)
+        return root;
+
+    const std::filesystem::path relative = absolute_target.lexically_relative(absolute_root);
+    std::filesystem::path component_path = absolute_root;
+    for (const auto &component : relative)
+    {
+        component_path /= component;
+        if (const DiskUsageCloudCapability component_status = inspect_directory_without_symlinks(component_path, "selected path component");
+            !component_status.available)
+            return component_status;
+    }
+
+    return inspect_directory_without_symlinks(absolute_target, "selected path");
+}
+
 DiskUsageCloudCapability UnsupportedDiskUsageCloudService::capability(DiskUsageCloudAction,
+                                                                       const std::filesystem::path &,
                                                                        const std::filesystem::path &) const
 {
     return {.available = false, .reason = "Cloud operations are not supported on this platform."};
 }
 
 void UnsupportedDiskUsageCloudService::start(DiskUsageCloudAction,
+                                             std::filesystem::path,
                                              std::filesystem::path,
                                              ProgressHandler,
                                              CompletionHandler on_complete)
@@ -20,6 +82,7 @@ void UnsupportedDiskUsageCloudService::start(DiskUsageCloudAction,
     {
         on_complete({.success = false,
                      .cancelled = false,
+                     .requestAccepted = false,
                      .processed_items = 0,
                      .message = "Cloud operations are not supported on this platform."});
     }

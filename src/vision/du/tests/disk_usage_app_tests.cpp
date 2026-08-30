@@ -171,19 +171,22 @@ class ManualCloudService final : public ck::vision::DiskUsageCloudService
 {
 public:
     ck::vision::DiskUsageCloudCapability capability(ck::vision::DiskUsageCloudAction,
+                                                     const std::filesystem::path &,
                                                      const std::filesystem::path &) const override
     {
-        return {.available = true, .reason = {}};
+        return capability_;
     }
 
     void start(ck::vision::DiskUsageCloudAction action,
                std::filesystem::path target,
+               std::filesystem::path scan_root,
                ProgressHandler on_progress,
                CompletionHandler on_complete) override
     {
         running_ = true;
         action_ = action;
         target_ = std::move(target);
+        scan_root_ = std::move(scan_root);
         on_progress_ = std::move(on_progress);
         on_complete_ = std::move(on_complete);
     }
@@ -205,12 +208,16 @@ public:
     bool cancelled() const noexcept { return cancelled_; }
     ck::vision::DiskUsageCloudAction action() const noexcept { return action_; }
     const std::filesystem::path &target() const noexcept { return target_; }
+    const std::filesystem::path &scan_root() const noexcept { return scan_root_; }
+    void set_capability(ck::vision::DiskUsageCloudCapability capability) { capability_ = std::move(capability); }
 
 private:
     bool running_ = false;
     bool cancelled_ = false;
     ck::vision::DiskUsageCloudAction action_ = ck::vision::DiskUsageCloudAction::Download;
     std::filesystem::path target_;
+    std::filesystem::path scan_root_;
+    ck::vision::DiskUsageCloudCapability capability_{.available = true, .reason = {}};
     ProgressHandler on_progress_;
     CompletionHandler on_complete_;
 };
@@ -299,12 +306,41 @@ int main()
     verify_late_service_delivery_is_lifetime_safe();
 
     {
+        namespace fs = std::filesystem;
+        const fs::path root = fs::temp_directory_path() / "ck-vision-du-cloud-scope-test";
+        const fs::path child = root / "child";
+        const fs::path ordinary_file = root / "ordinary-file";
+        const fs::path linked_child = root / "linked-child";
+        fs::remove_all(root);
+        fs::create_directories(child);
+        {
+            std::ofstream file(ordinary_file);
+            file << "not a directory";
+        }
+        std::error_code link_error;
+        fs::create_directory_symlink(child, linked_child, link_error);
+
+        require(ck::vision::validateDiskUsageCloudTarget(root, child).available,
+                "Cloud actions must accept one concrete directory inside the scan root.");
+        require(!ck::vision::validateDiskUsageCloudTarget(root, ordinary_file).available,
+                "Cloud actions must refuse ordinary files and special-file targets.");
+        require(!ck::vision::validateDiskUsageCloudTarget(root, fs::temp_directory_path()).available,
+                "Cloud actions must refuse a selected path outside the scan root.");
+        if (!link_error)
+        {
+            require(!ck::vision::validateDiskUsageCloudTarget(root, linked_child).available,
+                    "Cloud actions must refuse symbolic links rather than following them.");
+        }
+        fs::remove_all(root);
+    }
+
+    {
         ck::vision::UnsupportedDiskUsageCloudService unsupported_cloud;
-        const auto capability = unsupported_cloud.capability(ck::vision::DiskUsageCloudAction::Download, "/workspace");
+        const auto capability = unsupported_cloud.capability(ck::vision::DiskUsageCloudAction::Download, "/workspace", "/workspace");
         require(!capability.available && !capability.reason.empty(),
                 "Unsupported cloud platforms must report a concrete unavailable state.");
         std::optional<ck::vision::DiskUsageCloudOperationResult> result;
-        unsupported_cloud.start(ck::vision::DiskUsageCloudAction::Download, "/workspace", {},
+        unsupported_cloud.start(ck::vision::DiskUsageCloudAction::Download, "/workspace", "/workspace", {},
                                 [&](ck::vision::DiskUsageCloudOperationResult completed) { result = std::move(completed); });
         require(result.has_value() && !result->success && !result->cancelled && !result->message.empty(),
                 "Unsupported cloud operations must fail explicitly instead of pretending to change storage.");
@@ -316,14 +352,14 @@ int main()
         // the real Foundation adapter without requesting a provider mutation.
         ck::vision::MacDiskUsageCloudService mac_cloud;
         const std::filesystem::path non_cloud_path = std::filesystem::temp_directory_path();
-        const auto capability = mac_cloud.capability(ck::vision::DiskUsageCloudAction::Download, non_cloud_path);
+        const auto capability = mac_cloud.capability(ck::vision::DiskUsageCloudAction::Download, non_cloud_path, non_cloud_path);
         require(!capability.available && !capability.reason.empty(),
                 "The macOS cloud adapter must reject a path that is not managed by iCloud Drive.");
 
         std::mutex completion_mutex;
         std::condition_variable completion_ready;
         std::optional<ck::vision::DiskUsageCloudOperationResult> completion;
-        mac_cloud.start(ck::vision::DiskUsageCloudAction::Download, non_cloud_path, {},
+        mac_cloud.start(ck::vision::DiskUsageCloudAction::Download, non_cloud_path, non_cloud_path, {},
                         [&](ck::vision::DiskUsageCloudOperationResult result) {
                             {
                                 std::scoped_lock lock(completion_mutex);
@@ -429,11 +465,13 @@ int main()
     require(application.execute_command(disk_usage.download_cloud_command()),
             "Downloading cloud content must be a native command.");
     require(disk_usage.cloud_operation_running() && cloud_service.action() == ck::vision::DiskUsageCloudAction::Download &&
-                cloud_service.target() == "/workspace",
-            "The selected directory must be submitted to the injected cloud service.");
+                cloud_service.target() == "/workspace" && cloud_service.scan_root() == "/workspace",
+            "The selected directory and current scan root must be submitted to the injected cloud service.");
     cloud_service.complete({.success = true,
                             .cancelled = false,
+                            .requestAccepted = true,
                             .processed_items = 1,
+                            .provider = "macOS iCloud",
                             .message = "Download request accepted."});
     application.step(0);
     require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
@@ -452,7 +490,46 @@ int main()
     require(application.execute_command(disk_usage.cancel_cloud_command()),
             "Cloud cancellation must be a native command.");
     require(cloud_service.cancelled(), "Cloud cancellation must be delegated to the injected service.");
-    cloud_service.complete({.success = false, .cancelled = true, .processed_items = 0, .message = "Cloud operation cancelled."});
+    cloud_service.complete({.success = true,
+                            .cancelled = true,
+                            .requestAccepted = true,
+                            .processed_items = 1,
+                            .provider = "macOS iCloud",
+                            .message = "Cancellation arrived after provider acceptance."});
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "A late-cancel provider acceptance must remain visible as a dismissible audit outcome.");
+    application.step(0);
+
+    cloud_service.set_capability({.available = false, .reason = "The selected path is not eligible for the configured provider."});
+    require(application.execute_command(disk_usage.download_cloud_command()),
+            "A rejected cloud request must still pass through the native command boundary.");
+    require(!disk_usage.cloud_operation_running(),
+            "A provider capability refusal must not begin a cloud operation.");
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "A provider capability refusal must be surfaced to the user.");
+    application.step(0);
+    cloud_service.set_capability({.available = true, .reason = {}});
+    require(application.execute_command(disk_usage.download_cloud_command()) && disk_usage.cloud_operation_running(),
+            "A retry must require a new explicit user command after a refusal.");
+    cloud_service.complete({.success = false,
+                            .cancelled = false,
+                            .requestAccepted = false,
+                            .processed_items = 0,
+                            .provider = "macOS iCloud",
+                            .message = "The provider declined the request."});
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "A provider failure must be visible before any manual retry.");
+    application.step(0);
+    require(application.execute_command(disk_usage.download_cloud_command()) && disk_usage.cloud_operation_running(),
+            "The app must not retry automatically; it may retry only after another explicit command.");
+    cloud_service.complete({.success = false,
+                            .cancelled = true,
+                            .requestAccepted = false,
+                            .processed_items = 0,
+                            .provider = "macOS iCloud",
+                            .message = "Cloud operation cancelled before provider acceptance."});
     application.step(0);
 
     constexpr std::size_t scale_entries = 2048;

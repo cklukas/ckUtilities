@@ -449,7 +449,7 @@ void DiskUsageApp::request_cloud_action(DiskUsageCloudAction action)
     }
 
     const std::filesystem::path target = selected->path;
-    const DiskUsageCloudCapability capability = cloud_service_->capability(action, target);
+    const DiskUsageCloudCapability capability = cloud_service_->capability(action, target, scan_root_);
     if (!capability.available)
     {
         show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
@@ -491,7 +491,7 @@ void DiskUsageApp::start_cloud_action(DiskUsageCloudAction action, std::filesyst
     auto *const application = &application_;
     auto *const self = this;
     cloud_service_->start(
-        action, target,
+        action, target, scan_root_,
         [application, lifetime, self](DiskUsageCloudProgress progress) mutable {
             if (lifetime.expired())
                 return;
@@ -518,22 +518,29 @@ void DiskUsageApp::complete_cloud_action(DiskUsageCloudOperationResult result, s
     if (result.cancelled)
     {
         if (window_ != nullptr)
-            window_->set_footer("Cloud operation cancelled for " + target.string());
+            window_->set_footer(result.requestAccepted ? "Cancellation requested after the cloud provider accepted " + target.string()
+                                                       : "Cloud operation cancelled for " + target.string());
+        if (result.requestAccepted)
+        {
+            show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
+                         result.message.empty() ? "The provider accepted the request before cancellation. Background synchronization may continue."
+                                                : result.message);
+        }
         return;
     }
 
     if (!result.success)
     {
         show_message(ckv::widgets::MessageBoxKind::Error, "Cloud storage",
-                     result.message.empty() ? "The cloud operation failed. You can retry after resolving the reported issue."
+                     result.message.empty() ? "The cloud request was not accepted. You may explicitly retry after resolving the reported issue."
                                             : result.message);
         return;
     }
 
     if (window_ != nullptr)
-        window_->set_footer("Cloud operation completed for " + target.string() + ". Rescan to refresh usage data.");
+        window_->set_footer("Cloud request accepted for " + target.string() + ". The provider may continue synchronizing.");
     show_message(ckv::widgets::MessageBoxKind::Info, "Cloud storage",
-                 result.message.empty() ? "The cloud operation completed. Rescan to refresh usage data." : result.message);
+                 result.message.empty() ? "The cloud provider accepted the request. Rescan to refresh usage data." : result.message);
 }
 
 void DiskUsageApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)

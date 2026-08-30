@@ -85,11 +85,24 @@ struct DiskUsageCloudProgress
 
 struct DiskUsageCloudOperationResult
 {
+    // `success` means the provider accepted this one request. It never means
+    // that a background sync has completed. `requestAccepted` retains that
+    // fact if cancellation was requested after the provider call returned.
     bool success = false;
     bool cancelled = false;
+    bool requestAccepted = false;
     std::size_t processed_items = 0;
+    std::string provider;
     std::string message;
 };
+
+// This is deliberately shared by the presentation and provider boundaries so
+// a stale tree node cannot turn into a cloud action. It accepts one existing,
+// real directory that is contained by the current scan root without any
+// symbolic-link component. Provider-specific eligibility is checked by the
+// corresponding service afterwards.
+DiskUsageCloudCapability validateDiskUsageCloudTarget(const std::filesystem::path &scan_root,
+                                                       const std::filesystem::path &target);
 
 class DiskUsageCloudService
 {
@@ -100,9 +113,11 @@ public:
     virtual ~DiskUsageCloudService() = default;
 
     virtual DiskUsageCloudCapability capability(DiskUsageCloudAction action,
-                                                 const std::filesystem::path &target) const = 0;
+                                                 const std::filesystem::path &target,
+                                                 const std::filesystem::path &scan_root) const = 0;
     virtual void start(DiskUsageCloudAction action,
                        std::filesystem::path target,
+                       std::filesystem::path scan_root,
                        ProgressHandler on_progress,
                        CompletionHandler on_complete) = 0;
     virtual void cancel() noexcept = 0;
@@ -116,9 +131,11 @@ class UnsupportedDiskUsageCloudService final : public DiskUsageCloudService
 {
 public:
     DiskUsageCloudCapability capability(DiskUsageCloudAction action,
-                                         const std::filesystem::path &target) const override;
+                                         const std::filesystem::path &target,
+                                         const std::filesystem::path &scan_root) const override;
     void start(DiskUsageCloudAction action,
                std::filesystem::path target,
+               std::filesystem::path scan_root,
                ProgressHandler on_progress,
                CompletionHandler on_complete) override;
     void cancel() noexcept override {}
@@ -135,9 +152,11 @@ public:
     ~MacDiskUsageCloudService() override;
 
     DiskUsageCloudCapability capability(DiskUsageCloudAction action,
-                                         const std::filesystem::path &target) const override;
+                                         const std::filesystem::path &target,
+                                         const std::filesystem::path &scan_root) const override;
     void start(DiskUsageCloudAction action,
                std::filesystem::path target,
+               std::filesystem::path scan_root,
                ProgressHandler on_progress,
                CompletionHandler on_complete) override;
     void cancel() noexcept override;
