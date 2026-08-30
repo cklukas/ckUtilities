@@ -314,4 +314,50 @@ int main()
     require(editor.document().modified(), "Cancelling a close must preserve the document's modified state.");
     require(editor.request_close(ckv::widgets::EditorCloseChoice::Discard),
             "Discarding a close must use the editor controller's explicit close decision.");
+
+    {
+        ckv::MemoryFileSystem integrity_files;
+        integrity_files.add_file("/mixed.md", "caf\xC3\xA9\r\nSecond\rThird\n");
+        integrity_files.add_file("/malformed.md", std::string{"bad\xC3", 4});
+        ckv::ManualClock integrity_clock;
+        ckv::term::HeadlessTerminal integrity_terminal(ckv::Size{90, 28});
+        ckv::ui::Application integrity_application(integrity_terminal, integrity_clock);
+        ck::vision::EditApp integrity_editor(integrity_application, integrity_files);
+        require(integrity_editor.open_file("/mixed.md"),
+                "The native editor must load valid Unicode text with mixed newline encodings.");
+        require(integrity_editor.document().text() == "caf\xC3\xA9\nSecond\nThird\n" &&
+                    integrity_editor.document().preferred_newline() == ckv::widgets::DocumentNewline::Crlf,
+                "The editor must normalize mixed newlines internally while retaining the first source newline style for save.");
+        const std::string retained_document = integrity_editor.document().text();
+        require(!integrity_editor.open_file("/malformed.md") && integrity_editor.document().text() == retained_document,
+                "The editor must reject malformed UTF-8 without replacing a valid open document.");
+    }
+
+    {
+        std::string large_document;
+        large_document.reserve(128U * 1024U);
+        for (int line = 0; line < 2048; ++line)
+            large_document += "Row " + std::to_string(line) + " carries caf\xC3\xA9 text across a deliberately wide editor line.\n";
+
+        ckv::MemoryFileSystem large_files;
+        large_files.add_file("/large.md", large_document);
+        ckv::ManualClock large_clock;
+        ckv::term::HeadlessTerminal large_terminal(ckv::Size{100, 30});
+        ckv::ui::Application large_application(large_terminal, large_clock);
+        ck::vision::EditApp large_editor(large_application, large_files);
+        require(large_editor.open_file("/large.md"),
+                "The native editor must load a representative large Markdown document through its injected file service.");
+        const auto end = large_editor.document().position_at_byte(large_editor.document().text().size());
+        require(end.has_value() && large_editor.editor_view()->set_selection({*end, *end}) &&
+                    large_application.execute_command(large_editor.toggle_wrap_command()),
+                "The native editor must enable word wrap at a grapheme-safe position in a large document.");
+        const auto before_resize = large_editor.editor_view()->status();
+        large_terminal.resize(ckv::Size{80, 24});
+        large_application.step(0);
+        const auto after_resize = large_editor.editor_view()->status();
+        require(large_application.current_frame().size() == ckv::Size{80, 24} &&
+                    after_resize.line == before_resize.line && after_resize.column == before_resize.column &&
+                    large_editor.document().text() == large_document,
+                "Large-document word wrapping and resize must preserve the logical cursor and source text.");
+    }
 }

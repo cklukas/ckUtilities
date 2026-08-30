@@ -148,7 +148,11 @@ Historical application baseline: `legacy_tv`
   markers only when contiguous parent-list context proves they are not code.
   The native Edit menu exposes ckVision's revision-wide undo/redo plus a
   viewport-only word-wrap toggle that never changes document text or logical
-  positions.
+  positions. Headless acceptance covers Unicode selection, mixed source
+  newlines normalized safely with their first newline style retained for save,
+  malformed UTF-8 rejection without replacing an open document, and a
+  2,048-line Unicode document whose logical cursor and text survive
+  word-wrap and resize.
   The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.
