@@ -57,6 +57,8 @@ void EditApp::declare_commands()
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.inline_code", [this] {
             toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Code, "inline code");
         }));
+    toggle_link_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_link", [this] { toggle_link_markdown(); }));
     toggle_task_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_task", [this] { toggle_task_markdown(); }));
     toggle_quote_command_ = command_scope_.own(
@@ -91,6 +93,7 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{italic_command_, "&Italic selection"}),
                 MenuItem::command(CommandPresentation{strikethrough_command_, "&Strikethrough selection"}),
                 MenuItem::command(CommandPresentation{inline_code_command_, "Inline &code selection"}),
+                MenuItem::command(CommandPresentation{toggle_link_command_, "Insert or remove &link..."}),
                 MenuItem::command(CommandPresentation{toggle_task_command_, "Toggle &task"}),
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
                 MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
@@ -439,6 +442,59 @@ void EditApp::toggle_list_markdown(ck::edit::MarkdownListStyle style, std::strin
     const auto transform = ck::edit::toggle_markdown_list(document_->text(), range, style);
     if (!transform || !commit_markdown_transform(*transform, "Toggled Markdown " + std::string(label) + "."))
         window_->set_footer("Could not toggle a Markdown list at this location.");
+}
+
+void EditApp::toggle_link_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown links are available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    if (!selected)
+    {
+        window_->set_footer("Select link text before inserting or removing a Markdown link.");
+        return;
+    }
+
+    const ck::edit::MarkdownByteRange range{selected->begin.byte, selected->end.byte};
+    if (const auto transform = ck::edit::toggle_markdown_link(document_->text(), range, ""))
+    {
+        if (!commit_markdown_transform(*transform, "Removed Markdown link."))
+            window_->set_footer("Could not remove the Markdown link at this selection.");
+        return;
+    }
+    show_link_destination_dialog();
+}
+
+void EditApp::show_link_destination_dialog()
+{
+    if (!markdown_document())
+        return;
+
+    link_destination_dialog_.reset();
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Insert Markdown link";
+    dialog.fields.push_back({"&Destination:", "", [](const std::string &value) { return !value.empty(); }});
+    dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    link_destination_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    link_destination_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.values.size() != 1U || !markdown_document())
+            return;
+
+        const auto selected = window_->editor().selection();
+        if (!selected)
+            return;
+        const auto transform = ck::edit::toggle_markdown_link(
+            document_->text(), {selected->begin.byte, selected->end.byte}, result.values.front());
+        if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown link."))
+            window_->set_footer("Could not insert a Markdown link with that destination.");
+    });
 }
 
 bool EditApp::commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,

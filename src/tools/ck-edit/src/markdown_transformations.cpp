@@ -439,6 +439,85 @@ bool selection_has_only_list_style(std::string_view source,
     return saw_transformable && all_matching;
 }
 
+struct MarkdownLink
+{
+    MarkdownByteRange range;
+    MarkdownByteRange label;
+};
+
+std::optional<MarkdownLink> markdown_link_at(std::string_view source, std::size_t begin) noexcept
+{
+    if (begin >= source.size() || source[begin] != '[')
+        return std::nullopt;
+
+    bool escaped = false;
+    std::size_t label_end = begin + 1U;
+    for (; label_end + 1U < source.size(); ++label_end)
+    {
+        const char character = source[label_end];
+        if (escaped)
+        {
+            escaped = false;
+            continue;
+        }
+        if (character == '\\')
+        {
+            escaped = true;
+            continue;
+        }
+        if (character == ']' && source[label_end + 1U] == '(')
+            break;
+    }
+    if (label_end + 1U >= source.size())
+        return std::nullopt;
+
+    escaped = false;
+    int depth = 1;
+    std::size_t link_end = label_end + 2U;
+    for (; link_end < source.size(); ++link_end)
+    {
+        const char character = source[link_end];
+        if (escaped)
+        {
+            escaped = false;
+            continue;
+        }
+        if (character == '\\')
+        {
+            escaped = true;
+            continue;
+        }
+        if (character == '(')
+        {
+            ++depth;
+        }
+        else if (character == ')' && --depth == 0)
+        {
+            return MarkdownLink{{begin, link_end + 1U}, {begin + 1U, label_end}};
+        }
+    }
+    return std::nullopt;
+}
+
+bool valid_link_destination(std::string_view destination) noexcept
+{
+    return !destination.empty() && std::none_of(destination.begin(), destination.end(), [](char character) {
+        return character == ' ' || character == '\t' || character == '\r' || character == '\n';
+    });
+}
+
+std::optional<MarkdownTransformEdit> remove_markdown_link(std::string_view source, MarkdownLink link)
+{
+    const std::string label(source.substr(link.label.begin, link.label.end - link.label.begin));
+    if (label.empty())
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = link.range,
+        .replacement = label,
+        .selection = {link.range.begin, link.range.begin + label.size()},
+    };
+}
+
 std::size_t quote_indent(std::string_view line) noexcept
 {
     std::size_t indent = 0;
@@ -896,6 +975,35 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
         .replaced = {first_line, last_line_end},
         .replacement = std::move(replacement),
         .selection = restored_selection,
+    };
+}
+
+std::optional<MarkdownTransformEdit> toggle_markdown_link(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view destination)
+{
+    if (!valid_range(source, selection) || selection.begin == selection.end)
+        return std::nullopt;
+
+    if (const auto link = markdown_link_at(source, selection.begin);
+        link && link->range.end == selection.end)
+        return remove_markdown_link(source, *link);
+
+    if (selection.begin > 0U)
+    {
+        if (const auto link = markdown_link_at(source, selection.begin - 1U);
+            link && link->label == selection)
+            return remove_markdown_link(source, *link);
+    }
+
+    const std::string_view label = source.substr(selection.begin, selection.end - selection.begin);
+    if (!has_non_whitespace(label) || !valid_link_destination(destination))
+        return std::nullopt;
+    return MarkdownTransformEdit{
+        .replaced = selection,
+        .replacement = "[" + std::string(label) + "](" + std::string(destination) + ")",
+        .selection = {selection.begin + 1U, selection.end + 1U},
     };
 }
 

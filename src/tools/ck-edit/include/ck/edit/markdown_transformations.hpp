@@ -89,4 +89,14 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
     MarkdownByteRange selection,
     MarkdownListStyle style);
 
+// Wraps a nonempty selection as `[label](destination)`, restoring selection
+// to the label. If the selection is a complete link or its label, removes the
+// link instead and ignores `destination`. A destination must be nonempty and
+// contain no whitespace; parentheses are supported. This operation is local
+// to the selected inline span and has no document or UI dependency.
+std::optional<MarkdownTransformEdit> toggle_markdown_link(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::string_view destination);
+
 } // namespace ck::edit

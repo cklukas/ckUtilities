@@ -131,6 +131,23 @@ int main()
     require(application.execute_command(editor.toggle_ordered_list_command()) && editor.document().text() == "First\nSecond\n",
             "Repeating an ordered-list command must restore plain selected lines through the command registry.");
 
+    editor.document().set_text("Read docs\n");
+    const auto link_begin = editor.document().position_at_byte(5);
+    const auto link_end = editor.document().position_at_byte(9);
+    require(link_begin.has_value() && link_end.has_value() && editor.editor_view()->set_selection({*link_begin, *link_end}),
+            "The native editor must select a Markdown link label before prompting for its destination.");
+    require(application.execute_command(editor.toggle_link_command()),
+            "The Markdown link command must open its destination dialog through the command registry.");
+    application.step(0);
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Char, ckv::Modifier::None, "https://example.test/docs"}}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}),
+            "The Markdown link destination dialog must accept typed destinations from the keyboard.");
+    application.step(0);
+    require(editor.document().text() == "Read [docs](https://example.test/docs)\n",
+            "The native link command must insert a Markdown link in one document transaction.");
+    require(application.execute_command(editor.toggle_link_command()) && editor.document().text() == "Read docs\n",
+            "The native link command must remove a link when its label remains selected.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");

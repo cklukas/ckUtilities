@@ -10,6 +10,7 @@ using ck::edit::MarkdownInlineStyle;
 using ck::edit::MarkdownListStyle;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
+using ck::edit::toggle_markdown_link;
 using ck::edit::toggle_markdown_list;
 using ck::edit::toggle_markdown_quote;
 using ck::edit::toggle_markdown_task;
@@ -155,6 +156,32 @@ TEST(MarkdownTransformations, TogglesListsWithoutRewritingProtectedBlockSyntax)
     const auto crlf = toggle_markdown_list(crlf_source, {0, crlf_source.size()}, MarkdownListStyle::Ordered);
     ASSERT_TRUE(crlf.has_value());
     EXPECT_EQ(crlf->replacement, "1. One\r\n2. Two\r");
+}
+
+TEST(MarkdownTransformations, TogglesLinksAndKeepsTheLabelSelected)
+{
+    constexpr std::string_view source = "Read caf\xC3\xA9 docs";
+    const auto inserted = toggle_markdown_link(source, {5, 10}, "https://example.test/docs");
+    ASSERT_TRUE(inserted.has_value());
+    EXPECT_EQ(inserted->replacement, "[caf\xC3\xA9](https://example.test/docs)");
+    EXPECT_EQ(inserted->selection, (MarkdownByteRange{6, 11}));
+
+    constexpr std::string_view linked = "Read [caf\xC3\xA9](https://example.test/docs) docs";
+    const auto label_unwrapped = toggle_markdown_link(linked, {6, 11}, "");
+    ASSERT_TRUE(label_unwrapped.has_value());
+    EXPECT_EQ(label_unwrapped->replaced, (MarkdownByteRange{5, 39}));
+    EXPECT_EQ(label_unwrapped->replacement, "caf\xC3\xA9");
+    EXPECT_EQ(label_unwrapped->selection, (MarkdownByteRange{5, 10}));
+
+    constexpr std::string_view nested_destination = "[Guide](https://example.test/a_(b))";
+    const auto complete_unwrapped =
+        toggle_markdown_link(nested_destination, {0, nested_destination.size()}, "ignored");
+    ASSERT_TRUE(complete_unwrapped.has_value());
+    EXPECT_EQ(complete_unwrapped->replacement, "Guide");
+    EXPECT_EQ(complete_unwrapped->selection, (MarkdownByteRange{0, 5}));
+
+    EXPECT_FALSE(toggle_markdown_link("Read this", {5, 9}, "not a destination"));
+    EXPECT_FALSE(toggle_markdown_link("Read this", {5, 5}, "https://example.test"));
 }
 
 TEST(MarkdownTransformations, RejectsEmptyAndInvalidRanges)
