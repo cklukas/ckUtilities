@@ -213,8 +213,10 @@ Historical application baseline: `legacy_tv`
   and download callbacks are dropped before accessing a destroyed presentation.
   The production response adapter now opens the activated local
   `ckai_core` model on its own worker, streams cancellable generation back
-  through the existing lifetime gate, and prevents model lifecycle changes
-  while a response is active. The live rich transcript now renders at most the
+  through the existing lifetime gate, prevents model lifecycle changes while a
+  response is active, and reports validation, loading, generation, or injected
+  responder failures as structured completion outcomes rather than escaping a
+  worker thread. The live rich transcript now renders at most the
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.

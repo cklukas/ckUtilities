@@ -9,6 +9,7 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <variant>
 
@@ -67,7 +68,13 @@ public:
     void complete(bool cancelled = false)
     {
         running_ = false;
-        on_complete_(cancelled);
+        on_complete_({.cancelled = cancelled});
+    }
+
+    void complete_error(std::string error_message)
+    {
+        running_ = false;
+        on_complete_({.error_message = std::move(error_message)});
     }
 
     const ck::vision::ChatResponseRequest &request() const noexcept { return request_; }
@@ -557,6 +564,12 @@ int main()
     application.step(0);
     require(chat.messages().size() == 2 && chat.messages()[1].content == "[Response cancelled.]",
             "A cancelled response must retain an explicit transcript outcome.");
+    require(chat.submit_prompt("Fail me"), "A response-failure scenario must begin a request.");
+    responses.complete_error("model runtime unavailable");
+    application.step(0);
+    require(chat.messages().back().content == "[Response failed: model runtime unavailable]" &&
+                !chat.response_running(),
+            "A response-service failure must leave a visible transcript outcome and clear the active request.");
     require(application.execute_command(chat.send_command()), "Send must dispatch through the command registry.");
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30}, "The native chat app must render headlessly.");
@@ -599,10 +612,11 @@ int main()
     std::condition_variable completion_ready;
     std::string worker_response;
     bool completed = false;
-    threaded_responses.start({"Hello", "System", "model"}, [&](std::string chunk) { worker_response += chunk; }, [&](bool cancelled) {
+    threaded_responses.start({"Hello", "System", "model"}, [&](std::string chunk) { worker_response += chunk; },
+                             [&](ck::vision::ChatResponseResult result) {
         {
             std::scoped_lock lock(completion_mutex);
-            completed = !cancelled;
+            completed = !result.cancelled && result.error_message.empty();
         }
         completion_ready.notify_one();
     });
@@ -612,6 +626,29 @@ int main()
                 "The threaded response adapter must complete an injected responder.");
     }
     require(worker_response == "Worker: System / Hello", "The threaded response adapter must deliver response chunks.");
+
+    ck::vision::ThreadedChatResponseService failing_responses([](const ck::vision::ChatResponseRequest &) -> std::string {
+        throw std::runtime_error("injected responder failure");
+    });
+    std::mutex failure_mutex;
+    std::condition_variable failure_ready;
+    ck::vision::ChatResponseResult failure_result;
+    bool failure_completed = false;
+    failing_responses.start({"Hello", "System", "model"}, {}, [&](ck::vision::ChatResponseResult result) {
+        {
+            std::scoped_lock lock(failure_mutex);
+            failure_result = std::move(result);
+            failure_completed = true;
+        }
+        failure_ready.notify_one();
+    });
+    {
+        std::unique_lock lock(failure_mutex);
+        require(failure_ready.wait_for(lock, std::chrono::seconds(2), [&] { return failure_completed; }),
+                "A failing threaded responder must complete instead of escaping its worker thread.");
+    }
+    require(!failure_result.cancelled && failure_result.error_message == "injected responder failure",
+            "The response boundary must report worker failures structurally.");
 
     ck::vision::LlmChatResponseService runtime_responses(models);
     std::mutex runtime_mutex;
@@ -623,10 +660,10 @@ int main()
                              .model_id = "local",
                              .history = {{ck::vision::ChatResponseRequest::PriorMessage::Role::User, "Earlier turn"}}},
                             [&](std::string chunk) { runtime_response += chunk; },
-                            [&](bool cancelled) {
+                            [&](ck::vision::ChatResponseResult result) {
                                 {
                                     std::scoped_lock lock(runtime_mutex);
-                                    runtime_completed = !cancelled;
+                                    runtime_completed = !result.cancelled && result.error_message.empty();
                                 }
                                 runtime_ready.notify_one();
                             });
@@ -639,4 +676,13 @@ int main()
                 runtime_response.find("Earlier turn") != std::string::npos &&
                 runtime_response.find("Hello runtime") != std::string::npos,
             "The native LLM response service must stream ckai_core output with the selected system prompt and prior turns.");
+    ck::vision::ChatResponseResult invalid_model_result;
+    runtime_responses.start({.prompt = "Invalid runtime",
+                             .system_prompt = "Runtime system",
+                             .model_id = "missing-model"},
+                            {},
+                            [&](ck::vision::ChatResponseResult result) { invalid_model_result = std::move(result); });
+    require(!invalid_model_result.cancelled &&
+                invalid_model_result.error_message == "Activate a downloaded local model before sending a prompt.",
+            "The LLM response boundary must return a structured failure when its active model changes before inference.");
 }

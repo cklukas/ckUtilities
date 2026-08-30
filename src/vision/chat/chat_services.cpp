@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <exception>
 #include <fstream>
 #include <utility>
 
@@ -319,14 +320,26 @@ void ThreadedChatResponseService::start(ChatResponseRequest request, ChunkHandle
     std::jthread worker([this, cancellation, request = std::move(request), on_chunk = std::move(on_chunk),
                          on_complete = std::move(on_complete)]() mutable {
         std::string response;
-        if (responder_)
-            response = responder_(request);
-        const bool cancelled = cancellation->load(std::memory_order_acquire);
-        if (!cancelled && on_chunk)
+        ChatResponseResult result;
+        try
+        {
+            if (responder_)
+                response = responder_(request);
+        }
+        catch (const std::exception &error)
+        {
+            result.error_message = error.what();
+        }
+        catch (...)
+        {
+            result.error_message = "The response service failed unexpectedly.";
+        }
+        result.cancelled = cancellation->load(std::memory_order_acquire);
+        if (!result.cancelled && result.error_message.empty() && on_chunk)
             on_chunk(std::move(response));
         running_.store(false, std::memory_order_release);
         if (on_complete)
-            on_complete(cancelled);
+            on_complete(std::move(result));
     });
 
     {
@@ -380,10 +393,8 @@ void LlmChatResponseService::start(ChatResponseRequest request, ChunkHandler on_
     const std::optional<ChatModel> model = model_service_.active_model();
     if (!model || model->id != request.model_id || model->local_path.empty())
     {
-        if (on_chunk)
-            on_chunk("[Activate a downloaded local model before sending a prompt.]");
         if (on_complete)
-            on_complete(false);
+            on_complete({.error_message = "Activate a downloaded local model before sending a prompt."});
         return;
     }
 
@@ -391,25 +402,39 @@ void LlmChatResponseService::start(ChatResponseRequest request, ChunkHandler on_
     running_.store(true, std::memory_order_release);
     std::jthread worker([this, model = *model, cancellation, request = std::move(request),
                          on_chunk = std::move(on_chunk), on_complete = std::move(on_complete)]() mutable {
-        load_model(model);
-        if (!cancellation->load(std::memory_order_acquire))
+        ChatResponseResult result;
+        try
         {
-            llm_->set_system_prompt(request.system_prompt);
-            ck::ai::GenerationConfig config;
-            config.max_tokens = model.max_output_tokens == 0 ? 512 : static_cast<int>(model.max_output_tokens);
-            config.stop = model.stop_sequences;
-            llm_->generate_cancellable(format_conversation_prompt(request), config,
-                                       [cancellation, &on_chunk](ck::ai::Chunk chunk) {
-                const bool keep_generating = !cancellation->load(std::memory_order_acquire);
-                if (keep_generating && on_chunk && !chunk.text.empty())
-                    on_chunk(std::move(chunk.text));
-                return keep_generating;
-            });
+            load_model(model);
+            if (!cancellation->load(std::memory_order_acquire))
+            {
+                llm_->set_system_prompt(request.system_prompt);
+                ck::ai::GenerationConfig config;
+                config.max_tokens = model.max_output_tokens == 0 ? 512 : static_cast<int>(model.max_output_tokens);
+                config.stop = model.stop_sequences;
+                llm_->generate_cancellable(format_conversation_prompt(request), config,
+                                           [cancellation, &on_chunk](ck::ai::Chunk chunk) {
+                    const bool keep_generating = !cancellation->load(std::memory_order_acquire);
+                    if (keep_generating && on_chunk && !chunk.text.empty())
+                        on_chunk(std::move(chunk.text));
+                    return keep_generating;
+                });
+            }
         }
-        const bool cancelled = cancellation->load(std::memory_order_acquire);
+        catch (const std::exception &error)
+        {
+            result.error_message = error.what();
+        }
+        catch (...)
+        {
+            result.error_message = "The local model runtime failed unexpectedly.";
+        }
+        result.cancelled = cancellation->load(std::memory_order_acquire);
+        if (result.cancelled)
+            result.error_message.clear();
         running_.store(false, std::memory_order_release);
         if (on_complete)
-            on_complete(cancelled);
+            on_complete(std::move(result));
     });
 
     {

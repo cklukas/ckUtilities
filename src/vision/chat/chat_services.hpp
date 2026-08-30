@@ -168,6 +168,12 @@ struct ChatResponseRequest
     std::vector<PriorMessage> history;
 };
 
+struct ChatResponseResult
+{
+    bool cancelled = false;
+    std::string error_message;
+};
+
 // The chat presentation depends on streaming callbacks, not a model runtime.
 // A real model adapter may emit many chunks; the default adapter below turns a
 // simple responder into one asynchronous response without blocking the UI.
@@ -175,7 +181,7 @@ class ChatResponseService
 {
 public:
     using ChunkHandler = std::function<void(std::string)>;
-    using CompletionHandler = std::function<void(bool cancelled)>;
+    using CompletionHandler = std::function<void(ChatResponseResult)>;
 
     virtual ~ChatResponseService() = default;
 

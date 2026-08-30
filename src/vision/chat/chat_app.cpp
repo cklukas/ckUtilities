@@ -187,13 +187,13 @@ bool ChatApp::submit_prompt(std::string prompt)
                                     self->append_response_chunk(request, std::move(chunk));
                                 });
                             },
-                            [application, lifetime, self, request](bool cancelled) {
+                            [application, lifetime, self, request](ChatResponseResult result) mutable {
                                 if (lifetime.expired())
                                     return;
-                                application->post([self, lifetime, request, cancelled] {
+                                application->post([self, lifetime, request, result = std::move(result)]() mutable {
                                     if (lifetime.expired())
                                         return;
-                                    self->complete_response(request, cancelled);
+                                    self->complete_response(request, std::move(result));
                                 });
                             });
     refresh_transcript();
@@ -778,7 +778,7 @@ void ChatApp::append_response_chunk(std::uint64_t request, std::string chunk)
     }
 }
 
-void ChatApp::complete_response(std::uint64_t request, bool cancelled)
+void ChatApp::complete_response(std::uint64_t request, ChatResponseResult result)
 {
     if (!response_pending_ || request != active_request_ || messages_.empty())
         return;
@@ -786,11 +786,19 @@ void ChatApp::complete_response(std::uint64_t request, bool cancelled)
     unrendered_response_bytes_ = 0;
     render_first_response_chunk_ = false;
     ChatMessage &message = messages_.back();
-    if (cancelled && message.role == ChatMessage::Role::Assistant && message.content.empty())
+    if (result.cancelled && message.role == ChatMessage::Role::Assistant && message.content.empty())
         message.content = "[Response cancelled.]";
+    else if (!result.cancelled && !result.error_message.empty() && message.role == ChatMessage::Role::Assistant)
+    {
+        if (!message.content.empty())
+            message.content += '\n';
+        message.content += "[Response failed: " + result.error_message + "]";
+    }
     refresh_transcript();
-    if (window_ != nullptr && cancelled)
+    if (window_ != nullptr && result.cancelled)
         window_->set_footer("Response cancelled; " + std::to_string(messages_.size()) + " messages");
+    else if (window_ != nullptr && !result.error_message.empty())
+        window_->set_footer("Response failed: " + result.error_message);
 }
 
 void ChatApp::update_model_download_progress(ChatModelDownloadProgress progress)

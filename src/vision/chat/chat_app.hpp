@@ -105,7 +105,7 @@ private:
     std::string prompt_status() const;
     std::string model_status() const;
     void append_response_chunk(std::uint64_t request, std::string chunk);
-    void complete_response(std::uint64_t request, bool cancelled);
+    void complete_response(std::uint64_t request, ChatResponseResult result);
     void update_model_download_progress(ChatModelDownloadProgress progress);
     void complete_model_download(ChatModelDownloadResult result);
     void refresh_active_response();
