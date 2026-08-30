@@ -1,60 +1,26 @@
-# ck-find — Search specification designer
+# ck-find
 
-## SYNOPSIS
+`ck-find` is the native ckVision search workflow. It provides one guided,
+scrolling form for a named search, start location, text matching, include and
+exclude patterns, traversal policy, file types, date range, size range,
+permission audit, and safe result actions. The generated command plan is
+available for preview, while the search itself runs through a cancellable
+background service and returns results to the interface.
 
+## Usage
+
+```bash
+ck-find
 ```
-ck-find [--help] [--list-specs] [--search NAME]
-```
 
-## DESCRIPTION
+Use `ck-find --help` for the command-line synopsis. Search creation, loading,
+saving, previewing, running, and cancellation are available from the native
+menus and status line.
 
-`ck-find` is the new search planner for CK Utilities. Launch the tool to
-open a desktop with a **File → New Search…** command that displays a
-multi-stage dialog for composing a search specification and executing it
-with a native `find(1)` backend.
+## Safe actions
 
-The main form keeps the essentials visible—specification name, starting
-location, and optional text to look for—while grouping everything else
-behind purpose-built option buttons. Each button opens a focused dialog
-modelled after the corresponding `find(1)` feature set:
-
-* **Text Options…** toggles match modes (contains, whole word, regular
-  expression) and controls whether case, file contents, filenames, or
-  binary data should be included.
-* **Name & Path Tests…** wires in `-name`, `-path`, regex, and symlink
-  tests plus a configurable `-prune` helper.
-* **Date & Time Filters…** layers presets like “Past 7 days” with direct
-  access to `-mtime`, `-newer`, and related operators.
-* **Size Filters…** captures ranges and exact `-size` expressions along
-  with an `-empty` shortcut.
-* **File Types…** lets you outline `-type`/`-xtype` letters and optional
-  extension or detector hints.
-* **Permissions & Ownership…** aggregates the `-perm`, readability
-  helpers, and `-user`/`-group` family.
-* **Traversal & Filesystem…** exposes symlink policy, depth limits,
-  filesystem pruning, and inode/link filters.
-* **Actions & Output…** collects the printing variants, `-delete`, and
-  the `-exec`/`-ok` family alongside `-fprint*` destinations.
-
-The dialog also includes check boxes for recursive traversal, hidden
-files, symbolic links, and filesystem boundaries plus quick
-include/exclude glob patterns. Saved specifications are stored under the
-CK config directory, and the **File → Save/Search Spec…** commands now
-persist and reload those presets. Choose **Load Search Spec…** to
-rehydrate a preset into the notebook for further editing.
-
-When you accept the form, `ck-find` builds a `find(1)` invocation that
-mirrors the captured options. The current build still shows a textual
-summary inside the UI, but the same specification can be executed from
-the command line with `ck-find --search NAME`, which prints the matched
-paths (after applying any content filters) to standard output.
-
-## STATUS
-
-The CLI runner executes saved specifications and lists them with
-`--list-specs`. Future milestones will integrate richer previews inside
-the Turbo Vision UI and extend detector-based filters.
-
-## SEE ALSO
-
-`find(1)`, `fd(1)`
+Deleting matches requires an explicit confirmation and is limited to matching
+regular files and symbolic links; directories are never removed. Existing
+saved custom-command settings are retained for compatibility, but custom
+commands cannot be edited or executed by the native workflow until a separate
+sandbox policy has been accepted.

@@ -47,6 +47,13 @@ TEST(AppInfo, ChatMetadataDescribesTheProductionRuntime)
     EXPECT_EQ(chat.longDescription.find("placeholder llama"), std::string_view::npos);
 }
 
+TEST(AppInfo, FindMetadataDescribesTheNativeExecutionService)
+{
+    const auto &find = ck::appinfo::requireTool("ck-find");
+    EXPECT_NE(find.longDescription.find("run or cancel"), std::string_view::npos);
+    EXPECT_EQ(find.longDescription.find("when the full execution engine arrives"), std::string_view::npos);
+}
+
 TEST(AppInfo, RequireToolThrowsForUnknownId)
 {
     EXPECT_THROW(ck::appinfo::requireTool("does-not-exist"), std::runtime_error);

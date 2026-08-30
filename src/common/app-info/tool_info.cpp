@@ -38,7 +38,7 @@ namespace ck::appinfo
                 "Find",
                 "Compose reusable search specifications for files and directories.",
                 "Compose reusable search specifications for files and directories.",
-                "Find guides you through building complex file searches without drowning in flags. Define a starting location, choose how to match text, and layer on filters for dates, sizes, and file types with clear, staged dialogs. Save specifications for recurring audits and load them again when the full execution engine arrives."},
+                "Find guides you through building complex file searches without drowning in flags. Define a starting location, choose how to match text, and layer on filters for dates, sizes, and file types in one native guided form. Save and load recurring specifications, preview the generated plan, and run or cancel the search through the native execution service."},
             ToolInfo{
                 "ck-json-view",
                 "ck-json-view",
