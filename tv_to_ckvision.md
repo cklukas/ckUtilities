@@ -138,8 +138,11 @@ Historical application baseline: `legacy_tv`
   link or label; parentheses in destinations are supported. Native literal
   find, find-next, replace, and atomic replace-all dialogs retain case and
   whole-word choices; a replacement reuses the selected search match when the
-  query is unchanged. Broader transformations include deeper list structure
-  and smart-list workflows. The native reflow command wraps each selected ordinary paragraph
+  query is unchanged. A list item's Enter preserves its bullet marker and
+  indentation, advances ordered markers, starts new task items unchecked, and
+  exits empty items without retaining marker whitespace through ckVision's
+  reusable public newline-handler seam. Broader transformations include deeper
+  list structure. The native reflow command wraps each selected ordinary paragraph
   to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
   block syntax, references, and Setext headings unchanged.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
@@ -166,7 +169,7 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `9f097ecde219a35971ccde6f8732b07ef021c35b` provides
+  ckVision candidate `c25a324aa1db9c24851085a6ff84f5ae47e9014b` provides
   a checked `FlowView::replace_block` API with incremental realized-tail
   reflow, which the active response uses to avoid rebuilding prior
   rich-content blocks. Its `TreeView` also retains materialized visible rows
@@ -174,7 +177,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 84-test cutover suite passes in normal and
+  candidate SDK. The full 85-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -185,18 +188,18 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  84-test cutover configuration, independent package consumer, and staged
+  85-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 84 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 85 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 84-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 85-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

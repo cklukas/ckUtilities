@@ -85,6 +85,7 @@ private:
     void toggle_list_markdown(ck::edit::MarkdownListStyle style, std::string_view label);
     void toggle_link_markdown();
     void show_link_destination_dialog();
+    bool continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor);
     void show_search_dialog(SearchAction action);
     void find_next();
     bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,

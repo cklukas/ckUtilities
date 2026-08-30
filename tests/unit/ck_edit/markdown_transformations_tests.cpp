@@ -8,6 +8,7 @@ namespace
 using ck::edit::MarkdownByteRange;
 using ck::edit::MarkdownInlineStyle;
 using ck::edit::MarkdownListStyle;
+using ck::edit::continue_markdown_list;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
 using ck::edit::toggle_markdown_link;
@@ -157,6 +158,38 @@ TEST(MarkdownTransformations, TogglesListsWithoutRewritingProtectedBlockSyntax)
     const auto crlf = toggle_markdown_list(crlf_source, {0, crlf_source.size()}, MarkdownListStyle::Ordered);
     ASSERT_TRUE(crlf.has_value());
     EXPECT_EQ(crlf->replacement, "1. One\r\n2. Two\r");
+}
+
+TEST(MarkdownTransformations, ContinuesOrdinaryMarkdownListItemsAtTheEndOfTheCurrentLine)
+{
+    const auto bullet = continue_markdown_list("- Draft", {7, 7});
+    ASSERT_TRUE(bullet.has_value());
+    EXPECT_EQ(bullet->replacement, "\n- ");
+    EXPECT_EQ(bullet->selection, (MarkdownByteRange{10, 10}));
+
+    constexpr std::string_view ordered_task = "  7) [x] Review";
+    const auto next_task = continue_markdown_list(ordered_task, {ordered_task.size(), ordered_task.size()});
+    ASSERT_TRUE(next_task.has_value());
+    EXPECT_EQ(next_task->replacement, "\n  8) [ ] ");
+    EXPECT_EQ(next_task->selection,
+              (MarkdownByteRange{ordered_task.size() + next_task->replacement.size(),
+                                  ordered_task.size() + next_task->replacement.size()}));
+
+    constexpr std::string_view crlf_source = "* Note\r\nNext";
+    const auto crlf = continue_markdown_list(crlf_source, {6, 6});
+    ASSERT_TRUE(crlf.has_value());
+    EXPECT_EQ(crlf->replacement, "\r\n* ");
+
+    constexpr std::string_view empty_item = "- \nNext";
+    const auto exit_list = continue_markdown_list(empty_item, {2, 2});
+    ASSERT_TRUE(exit_list.has_value());
+    EXPECT_EQ(exit_list->replaced, (MarkdownByteRange{0, 2}));
+    EXPECT_EQ(exit_list->replacement, "");
+    EXPECT_EQ(exit_list->selection, (MarkdownByteRange{0, 0}));
+
+    EXPECT_FALSE(continue_markdown_list("ordinary", {8, 8}));
+    EXPECT_FALSE(continue_markdown_list("```md\n- code", {12, 12}));
+    EXPECT_FALSE(continue_markdown_list("- Draft", {3, 3}));
 }
 
 TEST(MarkdownTransformations, TogglesLinksAndKeepsTheLabelSelected)

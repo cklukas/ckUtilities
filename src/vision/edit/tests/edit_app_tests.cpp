@@ -131,6 +131,24 @@ int main()
     require(application.execute_command(editor.toggle_ordered_list_command()) && editor.document().text() == "First\nSecond\n",
             "Repeating an ordered-list command must restore plain selected lines through the command registry.");
 
+    editor.document().set_text("- Draft");
+    const auto smart_list_end = editor.document().position_at_byte(editor.document().text().size());
+    require(smart_list_end.has_value() && editor.editor_view()->set_selection({*smart_list_end, *smart_list_end}),
+            "The native editor must position the caret at a Markdown list item's end before Enter.");
+    application.set_focus(editor.editor_view());
+    require(application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}) &&
+                editor.document().text() == "- Draft\n- ",
+            "Enter must continue an ordinary Markdown list through ckVision's public newline extension point.");
+    require(editor.document().undo() && editor.document().text() == "- Draft",
+            "Smart-list continuation must be undoable as one Markdown transaction.");
+
+    editor.document().set_text("- ");
+    const auto empty_list_end = editor.document().position_at_byte(editor.document().text().size());
+    require(empty_list_end.has_value() && editor.editor_view()->set_selection({*empty_list_end, *empty_list_end}) &&
+                application.dispatch(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}}) &&
+                editor.document().text().empty(),
+            "Enter on an empty Markdown list item must exit the list without retaining marker whitespace.");
+
     editor.document().set_text("Read docs\n");
     const auto link_begin = editor.document().position_at_byte(5);
     const auto link_end = editor.document().position_at_byte(9);

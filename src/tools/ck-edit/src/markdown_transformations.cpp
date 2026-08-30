@@ -1,6 +1,7 @@
 #include "ck/edit/markdown_transformations.hpp"
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -265,6 +266,27 @@ std::optional<ListItem> list_item_at(std::string_view line, std::size_t indent) 
     while (marker_end < line.size() && (line[marker_end] == ' ' || line[marker_end] == '\t'))
         ++marker_end;
     return ListItem{style, indent, marker_end};
+}
+
+std::optional<std::string> continued_list_marker(std::string_view line, ListItem item)
+{
+    if (item.style == MarkdownListStyle::Bullet)
+        return std::string(line.substr(item.indent, item.content - item.indent));
+
+    std::size_t cursor = item.indent;
+    std::size_t ordinal = 0;
+    while (cursor < line.size() && line[cursor] >= '0' && line[cursor] <= '9')
+    {
+        const std::size_t digit = static_cast<std::size_t>(line[cursor] - '0');
+        if (ordinal > (std::numeric_limits<std::size_t>::max() - digit) / 10U)
+            return std::nullopt;
+        ordinal = ordinal * 10U + digit;
+        ++cursor;
+    }
+    if (cursor == item.indent || cursor >= line.size() || (line[cursor] != '.' && line[cursor] != ')') ||
+        ordinal == std::numeric_limits<std::size_t>::max())
+        return std::nullopt;
+    return std::to_string(ordinal + 1U) + line[cursor] + " ";
 }
 
 std::optional<bool> task_checked_at(std::string_view line, std::size_t offset) noexcept
@@ -1141,6 +1163,56 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
     const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
     return MarkdownTransformEdit{
         .replaced = {first_line, last_line_end},
+        .replacement = std::move(replacement),
+        .selection = restored_selection,
+    };
+}
+
+std::optional<MarkdownTransformEdit> continue_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection)
+{
+    if (!valid_range(source, selection) || selection.begin != selection.end)
+        return std::nullopt;
+
+    const std::size_t begin = line_start(source, selection.begin);
+    const std::size_t end = line_end(source, selection.begin);
+    const std::string_view raw_line = source.substr(begin, end - begin);
+    const bool crlf = !raw_line.empty() && raw_line.back() == '\r';
+    const std::string_view line = crlf ? raw_line.substr(0, raw_line.size() - 1U) : raw_line;
+    if (selection.begin != begin + line.size() || fence_before(source, begin))
+        return std::nullopt;
+
+    const auto item = list_item_at(line, heading_indent(line));
+    if (!item)
+        return std::nullopt;
+
+    const std::size_t text_begin = task_content_start(line, item->content);
+    if (!has_non_whitespace(line.substr(text_begin)))
+    {
+        return MarkdownTransformEdit{
+            .replaced = {begin, selection.begin},
+            .replacement = "",
+            .selection = {begin, begin},
+        };
+    }
+
+    const auto marker = continued_list_marker(line, *item);
+    if (!marker)
+        return std::nullopt;
+    const bool task = task_checked_at(line, item->content).has_value();
+    const std::string_view newline = crlf ? "\r\n" : "\n";
+    std::string replacement;
+    replacement.reserve(newline.size() + item->indent + marker->size() + (task ? 4U : 0U));
+    replacement += newline;
+    replacement += line.substr(0, item->indent);
+    replacement += *marker;
+    if (task)
+        replacement += "[ ] ";
+    const MarkdownByteRange restored_selection{selection.begin + replacement.size(),
+                                                selection.begin + replacement.size()};
+    return MarkdownTransformEdit{
+        .replaced = selection,
         .replacement = std::move(replacement),
         .selection = restored_selection,
     };

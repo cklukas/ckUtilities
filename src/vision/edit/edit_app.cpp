@@ -152,6 +152,8 @@ void EditApp::create_editor_window()
     };
     window->on_closed = [this] { close_editor_window(); };
     window_ = static_cast<ckv::widgets::EditorWindow *>(shell_->desktop().add_window(std::move(window)));
+    window_->editor().set_newline_handler(
+        [this](ckv::widgets::TextEditor &editor) { return continue_markdown_list_on_enter(editor); });
     application_.set_focus(&window_->editor());
 }
 
@@ -535,6 +537,16 @@ void EditApp::show_link_destination_dialog()
         if (!transform || !commit_markdown_transform(*transform, "Inserted Markdown link."))
             window_->set_footer("Could not insert a Markdown link with that destination.");
     });
+}
+
+bool EditApp::continue_markdown_list_on_enter(ckv::widgets::TextEditor &editor)
+{
+    if (!markdown_document() || window_ == nullptr || &editor != &window_->editor() || editor.selection())
+        return false;
+
+    const ckv::widgets::DocumentPosition cursor = editor.cursor();
+    const auto transform = ck::edit::continue_markdown_list(document_->text(), {cursor.byte, cursor.byte});
+    return transform && commit_markdown_transform(*transform, "Continued Markdown list.");
 }
 
 void EditApp::show_search_dialog(SearchAction action)

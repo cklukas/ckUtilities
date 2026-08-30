@@ -11,8 +11,8 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `9f097ecde219a35971ccde6f8732b07ef021c35b` (detached clean-worktree integration candidate) |
-| Current migration change | `TreeView::reveal_and_select`, retained materialized visible rows, stable-ID provider-backed `TreeModel`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, checked `FlowView::replace_block` with incremental realized-tail reflow, explicit `ApplicationShell::detach_desktop` lifecycle cleanup with liveness-guarded standard Help, and transactional `TextEditor::set_selection` for a current validated document range |
+| Current migration commit | `c25a324aa1db9c24851085a6ff84f5ae47e9014b` (detached clean-worktree integration candidate) |
+| Current migration change | `TreeView::reveal_and_select`, retained materialized visible rows, stable-ID provider-backed `TreeModel`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, checked `FlowView::replace_block` with incremental realized-tail reflow, explicit `ApplicationShell::detach_desktop` lifecycle cleanup with liveness-guarded standard Help, transactional `TextEditor::set_selection` for a current validated document range, and an opt-in `TextEditor` newline handler for application-owned semantic edits |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
@@ -34,6 +34,11 @@ selection in the view. A controller teardown scenario also justified explicit
 controller transaction needs then justified a public `TextEditor::set_selection`
 operation: it refuses stale, invalid, or non-grapheme-aligned current-document
 ranges before moving the selection and repainting the editor.
+Markdown smart-list continuation then identified the distinct need to intercept
+an Enter key before ordinary newline insertion without making Markdown a
+library concern. The candidate's opt-in `TextEditor::set_newline_handler()`
+lets an application return to the standard newline or commit its own current,
+revision-safe semantic edit through the documented document/selection APIs.
 All changes have unit coverage, rendering evidence where applicable, and public
 documentation in ckVision. The ordinary ckVision checkout contained
 unrelated staged, unstaged, and untracked work at the time of selection and is
@@ -81,9 +86,9 @@ requirements of `ckvision::cvision`; an installed static library therefore
 brings a client into the same instrumentation domain. A release SDK combined
 with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
-leak detection. The clean `9f097ecde219a35971ccde6f8732b07ef021c35b`
+leak detection. The clean `c25a324aa1db9c24851085a6ff84f5ae47e9014b`
 integration candidate passed ckVision's full 169-test sanitizer suite and
-ckUtilities' 84-test cutover configuration in both normal and ASan/UBSan
+ckUtilities' 85-test cutover configuration in both normal and ASan/UBSan
 builds with this procedure on 2026-08-30.
 
 To verify the staged native product as well, enable the installed-product

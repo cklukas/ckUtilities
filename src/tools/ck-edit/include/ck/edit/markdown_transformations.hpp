@@ -89,6 +89,16 @@ std::optional<MarkdownTransformEdit> toggle_markdown_list(
     MarkdownByteRange selection,
     MarkdownListStyle style);
 
+// At a zero-width cursor at the end of an ordinary Markdown list item,
+// continues the list on a fresh line. Bullet marker spacing and indentation
+// are preserved, ordered items advance by one, and task items restart
+// unchecked. An empty list item exits the list by removing its marker. Code
+// fences and non-list lines return no edit so the caller can perform a normal
+// newline insertion instead.
+std::optional<MarkdownTransformEdit> continue_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection);
+
 // Wraps a nonempty selection as `[label](destination)`, restoring selection
 // to the label. If the selection is a complete link or its label, removes the
 // link instead and ignores `destination`. A destination must be nonempty and
