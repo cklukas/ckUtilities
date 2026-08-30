@@ -197,7 +197,7 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
                      ConfigPersistence &persistence,
                      KeymapController *keymap)
     : application_(application), registry_(registry), persistence_(persistence), keymap_(keymap),
-      model_(std::make_unique<OptionTableModel>(registry_))
+      model_(std::make_unique<OptionTableModel>(registry_)), command_scope_(application.commands())
 {
     declare_commands();
     if (keymap_ != nullptr)
@@ -211,20 +211,22 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
 
 void ConfigApp::declare_commands()
 {
-    edit_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.edit_selected",
-                                          [this] { edit_selected(); });
-    reset_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.reset_selected",
-                                           [this] { reset_selected(); });
-    save_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.save", [this] { save(); });
-    reload_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.reload", [this] { reload(); });
-    import_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.import",
-                                            [this] { show_import_dialog(); });
-    export_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.export",
-                                            [this] { show_export_dialog(); });
-    keymap_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.shortcuts",
-                                            [this] { show_keymap_window(); });
-    keymap_scheme_command_ = declare_suite_command(application_.commands(), "ck-config", "ck.config.shortcuts.scheme",
-                                                   [this] { show_keymap_scheme_dialog(); });
+    edit_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.edit_selected", [this] { edit_selected(); }));
+    reset_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.reset_selected", [this] { reset_selected(); }));
+    save_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-config", "ck.config.save", [this] { save(); }));
+    reload_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-config", "ck.config.reload", [this] { reload(); }));
+    import_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.import", [this] { show_import_dialog(); }));
+    export_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.export", [this] { show_export_dialog(); }));
+    keymap_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.shortcuts", [this] { show_keymap_window(); }));
+    keymap_scheme_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.shortcuts.scheme", [this] { show_keymap_scheme_dialog(); }));
 }
 
 SuiteShellOptions ConfigApp::make_shell_options() const

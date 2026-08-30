@@ -106,6 +106,7 @@ private:
     ckv::widgets::Window *window_ = nullptr;
     ckv::widgets::TreeView *tree_ = nullptr;
     ckv::widgets::Table *table_ = nullptr;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

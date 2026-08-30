@@ -70,12 +70,16 @@ void verify_late_execution_delivery_is_lifetime_safe()
     ckv::ui::Application application(terminal, clock);
     MemoryStore specifications;
     ManualExecution execution;
+    ckv::ui::CommandId execute_command = ckv::ui::kInvalidCommand;
     {
         ck::vision::FindApp find(application, specifications, execution);
-        require(application.execute_command(find.execute_command()) && find.execution_running(),
+        execute_command = find.execute_command();
+        require(application.execute_command(execute_command) && find.execution_running(),
                 "The test requires an active native find execution.");
     }
     require(execution.cancelled(), "Destroying Find must request execution cancellation.");
+    require(!application.execute_command(execute_command),
+            "Destroying Find must withdraw command callbacks that captured the controller.");
     execution.finish({.exitCode = 0, .cancelled = false, .matchCount = 1});
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30},

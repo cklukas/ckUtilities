@@ -115,15 +115,17 @@ private:
 } // namespace
 
 JsonViewApp::JsonViewApp(ckv::ui::Application &application, ckv::FileSystem &files)
-    : application_(application), files_(files), commands_(declare_commands()),
-      shell_(std::make_unique<SuiteShell>(application_, make_shell_options()))
+    : application_(application), files_(files), command_scope_(application.commands())
 {
+    commands_ = declare_commands();
+    shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
 }
 
 JsonViewApp::CommandIds JsonViewApp::declare_commands()
 {
     auto declare = [this](std::string_view key, std::function<void()> handler) {
-        return declare_suite_command(application_.commands(), "ck-json-view", key, std::move(handler));
+        return command_scope_.own(
+            declare_suite_command(application_.commands(), "ck-json-view", key, std::move(handler)));
     };
 
     CommandIds ids;

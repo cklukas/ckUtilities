@@ -108,6 +108,7 @@ private:
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> find_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

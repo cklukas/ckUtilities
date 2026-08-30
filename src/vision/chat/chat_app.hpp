@@ -142,6 +142,7 @@ private:
     bool render_first_response_chunk_ = false;
     bool response_pending_ = false;
     std::string model_download_status_;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

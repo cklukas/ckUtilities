@@ -83,6 +83,7 @@ private:
     int background_color_ = 0;
     int foreground_color_ = 15;
     std::unique_ptr<SuiteShell> shell_;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

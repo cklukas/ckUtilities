@@ -16,6 +16,10 @@ Historical application baseline: `legacy_tv`
   its headless acceptance exercises every suite theme, Mono16 color
   degradation, wide/80x24/narrow composition, below-floor handling, and
   recovery after resize.
+  Every native controller now owns its application-specific registrations
+  through `SuiteCommandScope`; teardown withdraws handlers that capture the
+  controller before its shell, views, and models are destroyed. The scope and
+  an after-destruction Find command dispatch are covered by headless tests.
 - WP-3: `ck-json-view-ckvision` is a separate native executable. It owns the
   parsed JSON document for the complete view lifetime and exposes the domain
   tree through a borrowed stable-ID ckVision `TreeModel`, uses injected filesystem/file-dialog services and

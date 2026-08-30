@@ -37,6 +37,28 @@ struct SuiteShellOptions
     std::vector<ckv::widgets::StatusLineItem> application_status_items;
 };
 
+// Owns command registrations whose handlers close over a native controller.
+// The application outlives controllers, so leaving a registration behind
+// would leave the command registry with a callable dangling `this` pointer.
+// Keep this scope as the final member of a controller so it withdraws those
+// handlers before the controller's shell and presentation state are torn down.
+class SuiteCommandScope
+{
+public:
+    explicit SuiteCommandScope(ckv::ui::CommandRegistry &registry) noexcept;
+    ~SuiteCommandScope();
+
+    SuiteCommandScope(const SuiteCommandScope &) = delete;
+    SuiteCommandScope &operator=(const SuiteCommandScope &) = delete;
+
+    ckv::ui::CommandId own(ckv::ui::CommandId id);
+    void reset() noexcept;
+
+private:
+    ckv::ui::CommandRegistry *registry_ = nullptr;
+    std::vector<ckv::ui::CommandId> commands_;
+};
+
 class SuiteShell
 {
 public:

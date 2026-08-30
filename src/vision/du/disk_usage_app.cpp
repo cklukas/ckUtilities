@@ -115,7 +115,7 @@ private:
 } // namespace
 
 DiskUsageApp::DiskUsageApp(ckv::ui::Application &application, ck::du::BuildDirectoryTreeResult snapshot)
-    : application_(application), snapshot_(std::move(snapshot))
+    : application_(application), snapshot_(std::move(snapshot)), command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -135,7 +135,8 @@ DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
       scan_service_(&scan_service),
       file_list_service_(&file_list_service),
       scan_root_(std::move(root)),
-      scan_options_(std::move(options))
+      scan_options_(std::move(options)),
+      command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -154,7 +155,8 @@ DiskUsageApp::DiskUsageApp(ckv::ui::Application &application,
       file_list_service_(&file_list_service),
       cloud_service_(&cloud_service),
       scan_root_(std::move(root)),
-      scan_options_(std::move(options))
+      scan_options_(std::move(options)),
+      command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -175,14 +177,20 @@ DiskUsageApp::~DiskUsageApp()
 
 void DiskUsageApp::declare_commands()
 {
-    rescan_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.rescan", [this] { start_scan(); });
-    cancel_scan_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cancel_scan", [this] { cancel_scan(); });
-    view_files_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.view_files", [this] { view_selected_files(); });
-    download_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.download",
-                                                    [this] { request_cloud_action(DiskUsageCloudAction::Download); });
-    evict_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.evict",
-                                                 [this] { request_cloud_action(DiskUsageCloudAction::EvictLocalCopies); });
-    cancel_cloud_command_ = declare_suite_command(application_.commands(), "ck-du", "ck.du.cloud.cancel", [this] { cancel_scan(); });
+    rescan_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-du", "ck.du.rescan", [this] { start_scan(); }));
+    cancel_scan_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-du", "ck.du.cancel_scan", [this] { cancel_scan(); }));
+    view_files_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-du", "ck.du.view_files", [this] { view_selected_files(); }));
+    download_cloud_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-du", "ck.du.cloud.download",
+        [this] { request_cloud_action(DiskUsageCloudAction::Download); }));
+    evict_cloud_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-du", "ck.du.cloud.evict",
+        [this] { request_cloud_action(DiskUsageCloudAction::EvictLocalCopies); }));
+    cancel_cloud_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-du", "ck.du.cloud.cancel", [this] { cancel_scan(); }));
 }
 
 SuiteShellOptions DiskUsageApp::make_shell_options() const

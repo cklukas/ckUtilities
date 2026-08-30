@@ -192,7 +192,7 @@ void LauncherDiagnosticsSink::log(ckv::LogLevel level, std::string_view message)
 }
 
 UtilitiesLauncherApp::UtilitiesLauncherApp(ckv::ui::Application &application, LaunchHandler on_launch)
-    : application_(application), on_launch_(std::move(on_launch))
+    : application_(application), on_launch_(std::move(on_launch)), command_scope_(application.commands())
 {
     diagnostics_ = std::make_shared<BoundedDiagnostics>();
     application_.set_diagnostics_sink(std::make_unique<LauncherDiagnosticsSink>(diagnostics_));
@@ -213,20 +213,20 @@ UtilitiesLauncherApp::UtilitiesLauncherApp(ckv::ui::Application &application, La
 
 void UtilitiesLauncherApp::declare_commands()
 {
-    launch_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.launch_tool",
-                                            [this] { launch_active_tool(); });
-    new_launcher_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.new_launcher",
-                                                  [this] { open_launcher_window(); });
-    calendar_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_calendar",
-                                              [this] { open_calendar_window(); });
-    ascii_table_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_ascii_table",
-                                                 [this] { open_ascii_table_window(); });
-    calculator_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_calculator",
-                                                [this] { open_calculator_window(); });
-    diagnostics_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_diagnostics",
-                                                 [this] { open_diagnostics_window(); });
-    color_selector_command_ = declare_suite_command(application_.commands(), "ck-utilities", "ck.utilities.show_color_selector",
-                                                    [this] { open_color_selector(); });
+    launch_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.launch_tool", [this] { launch_active_tool(); }));
+    new_launcher_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.new_launcher", [this] { open_launcher_window(); }));
+    calendar_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.show_calendar", [this] { open_calendar_window(); }));
+    ascii_table_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.show_ascii_table", [this] { open_ascii_table_window(); }));
+    calculator_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.show_calculator", [this] { open_calculator_window(); }));
+    diagnostics_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.show_diagnostics", [this] { open_diagnostics_window(); }));
+    color_selector_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-utilities", "ck.utilities.show_color_selector", [this] { open_color_selector(); }));
 }
 
 SuiteShellOptions UtilitiesLauncherApp::make_shell_options() const

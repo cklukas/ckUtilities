@@ -69,6 +69,7 @@ private:
     std::optional<ckv::widgets::MessageBoxPresentation> destructive_confirmation_;
     std::shared_ptr<void> lifetime_ = std::make_shared<int>(0);
     std::optional<ck::find::SearchExecutionResult> last_execution_result_;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

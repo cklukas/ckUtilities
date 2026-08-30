@@ -132,12 +132,38 @@ void verify_resize_and_recovery_fixture()
             "The recovered shell must present a normal frame.");
 }
 
+void verify_controller_command_scope_withdraws_handlers()
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{80, 24});
+    ckv::ui::Application application(terminal, clock);
+    bool invoked = false;
+    ckv::ui::CommandId command = ckv::ui::kInvalidCommand;
+    {
+        ck::vision::SuiteCommandScope scope(application.commands());
+        command = scope.own(application.commands().declare({
+            .key = "ck.vision.test.controller_command",
+            .title = "Controller command",
+            .handler = [&invoked] { invoked = true; },
+        }));
+        require(application.execute_command(command),
+                "An owned suite command must remain dispatchable while its controller is alive.");
+        require(invoked, "The owned suite command handler must run before its scope is destroyed.");
+    }
+
+    require(!application.execute_command(command),
+            "Destroying a controller command scope must withdraw its callback from the application registry.");
+    require(application.commands().key_for(command).empty(),
+            "A withdrawn controller command must no longer expose a live command key.");
+}
+
 } // namespace
 
 int main()
 {
     verify_theme_and_degraded_color_fixtures();
     verify_resize_and_recovery_fixture();
+    verify_controller_command_scope_withdraws_handlers();
 
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{80, 24});

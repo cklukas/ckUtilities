@@ -103,6 +103,7 @@ private:
     std::optional<ckv::widgets::DescriptorDialogPresentation> transfer_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> keymap_scheme_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> keymap_conflict_;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

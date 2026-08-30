@@ -19,7 +19,8 @@ using ckv::widgets::StatusLineItem;
 }
 
 EditApp::EditApp(ckv::ui::Application &application, ckv::FileSystem &files)
-    : application_(application), files_(files), document_(std::make_shared<ckv::widgets::EditorDocument>())
+    : application_(application), files_(files), document_(std::make_shared<ckv::widgets::EditorDocument>()),
+      command_scope_(application.commands())
 {
     ckv::widgets::register_standard_syntax_profiles(profiles_);
     register_markdown_syntax_profile(profiles_);
@@ -30,11 +31,14 @@ EditApp::EditApp(ckv::ui::Application &application, ckv::FileSystem &files)
 
 void EditApp::declare_commands()
 {
-    open_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.open", [this] { open_file_dialog(); });
-    save_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.save", [this] { save(); });
-    save_as_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); });
-    normalise_markdown_command_ = declare_suite_command(application_.commands(), "ck-edit", "ck.edit.normalise_markdown",
-                                                        [this] { normalise_markdown(); });
+    open_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.open", [this] { open_file_dialog(); }));
+    save_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.save", [this] { save(); }));
+    save_as_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); }));
+    normalise_markdown_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.normalise_markdown", [this] { normalise_markdown(); }));
 }
 
 SuiteShellOptions EditApp::make_shell_options() const

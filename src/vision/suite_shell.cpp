@@ -23,6 +23,40 @@ using ckv::widgets::StatusLineItem;
 
 } // namespace
 
+SuiteCommandScope::SuiteCommandScope(ckv::ui::CommandRegistry &registry) noexcept : registry_(&registry) {}
+
+SuiteCommandScope::~SuiteCommandScope()
+{
+    reset();
+}
+
+ckv::ui::CommandId SuiteCommandScope::own(ckv::ui::CommandId id)
+{
+    if (id == ckv::ui::kInvalidCommand)
+        return id;
+
+    try
+    {
+        commands_.push_back(id);
+    }
+    catch (...)
+    {
+        registry_->withdraw(id);
+        throw;
+    }
+    return id;
+}
+
+void SuiteCommandScope::reset() noexcept
+{
+    if (registry_ == nullptr)
+        return;
+
+    for (const ckv::ui::CommandId id : commands_)
+        registry_->withdraw(id);
+    commands_.clear();
+}
+
 SuiteShell::SuiteShell(ckv::ui::Application &application, SuiteShellOptions options)
     : application_(application),
       options_(std::move(options)),

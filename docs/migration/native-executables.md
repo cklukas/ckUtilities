@@ -20,6 +20,11 @@ The exact package and integration-candidate state are recorded in
 removing the legacy runtime: that occurs only when each remaining journey has
 accepted evidence under WP-10.
 
+Every native controller places its application command registrations in a
+`SuiteCommandScope`. This withdraws controller-capturing callbacks before the
+controller's dialogs, shell, and borrowed view models are destroyed, so the
+longer-lived application registry cannot dispatch into a stale controller.
+
 `CKTOOLS_CKVISION_CUTOVER=ON` is the release-layout rehearsal: it composes
 only these native products and framework-neutral cores, publishes the standard
 product names, and excludes the legacy UI runtime from configuration and

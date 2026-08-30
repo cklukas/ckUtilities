@@ -29,7 +29,8 @@ FindApp::FindApp(ckv::ui::Application &application,
     : application_(application),
       specification_store_(specification_store),
       execution_service_(execution_service),
-      specification_(ck::find::makeDefaultSpecification())
+      specification_(ck::find::makeDefaultSpecification()),
+      command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -47,18 +48,18 @@ FindApp::~FindApp()
 
 void FindApp::declare_commands()
 {
-    new_search_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.new_search",
-                                                [this] { show_guided_search_dialog(); });
-    preview_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.preview_command",
-                                             [this] { show_preview(); });
-    save_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.save_search",
-                                          [this] { show_save_dialog(); });
-    load_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.load_search",
-                                          [this] { show_load_dialog(); });
-    execute_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.execute_search",
-                                             [this] { request_execution(); });
-    cancel_command_ = declare_suite_command(application_.commands(), "ck-find", "ck.find.cancel_search",
-                                            [this] { cancel_execution(); });
+    new_search_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.new_search", [this] { show_guided_search_dialog(); }));
+    preview_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.preview_command", [this] { show_preview(); }));
+    save_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.save_search", [this] { show_save_dialog(); }));
+    load_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.load_search", [this] { show_load_dialog(); }));
+    execute_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.execute_search", [this] { request_execution(); }));
+    cancel_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-find", "ck.find.cancel_search", [this] { cancel_execution(); }));
 }
 
 SuiteShellOptions FindApp::make_shell_options() const

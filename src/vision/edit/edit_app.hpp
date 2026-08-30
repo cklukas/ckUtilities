@@ -66,6 +66,7 @@ private:
     std::optional<ckv::widgets::MessageBoxPresentation> close_confirmation_;
     std::optional<ckv::widgets::MessageBoxPresentation> save_conflict_confirmation_;
     bool closing_after_explicit_choice_ = false;
+    SuiteCommandScope command_scope_;
 };
 
 } // namespace ck::vision

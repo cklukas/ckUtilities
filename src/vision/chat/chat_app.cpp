@@ -39,7 +39,7 @@ ChatApp::ChatApp(ckv::ui::Application &application,
                  ChatPromptService &prompt_service,
                  ChatModelService &model_service)
     : application_(application), response_service_(response_service), transcript_store_(transcript_store),
-      prompt_service_(prompt_service), model_service_(model_service)
+      prompt_service_(prompt_service), model_service_(model_service), command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -55,31 +55,36 @@ ChatApp::~ChatApp()
 
 void ChatApp::declare_commands()
 {
-    new_chat_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.new_chat", [this] { new_chat(); });
-    send_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.send_prompt", [this] { show_prompt_dialog(); });
-    cancel_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.cancel_response", [this] { cancel_response(); });
-    copy_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.copy_transcript", [this] { copy_transcript(); });
-    export_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.export_transcript", [this] { show_export_dialog(); });
-    select_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.select_prompt",
-                                                    [this] { show_select_prompt_dialog(); });
-    add_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.add_prompt",
-                                                 [this] { show_add_prompt_dialog(); });
-    edit_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.edit_active_prompt",
-                                                         [this] { show_edit_active_prompt_dialog(); });
-    restore_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.restore_active_prompt",
-                                                            [this] { restore_active_prompt(); });
-    delete_active_prompt_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.delete_active_prompt",
-                                                           [this] { request_delete_active_prompt(); });
-    select_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.select_model",
-                                                   [this] { show_select_model_dialog(); });
-    download_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.download_model",
-                                                     [this] { show_download_model_dialog(); });
-    cancel_model_download_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.cancel_model_download",
-                                                            [this] { cancel_model_download(); });
-    deactivate_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.deactivate_model",
-                                                       [this] { deactivate_active_model(); });
-    delete_active_model_command_ = declare_suite_command(application_.commands(), "ck-chat", "ck.chat.delete_active_model",
-                                                          [this] { request_delete_active_model(); });
+    new_chat_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-chat", "ck.chat.new_chat", [this] { new_chat(); }));
+    send_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.send_prompt", [this] { show_prompt_dialog(); }));
+    cancel_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.cancel_response", [this] { cancel_response(); }));
+    copy_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.copy_transcript", [this] { copy_transcript(); }));
+    export_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.export_transcript", [this] { show_export_dialog(); }));
+    select_prompt_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.select_prompt", [this] { show_select_prompt_dialog(); }));
+    add_prompt_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.add_prompt", [this] { show_add_prompt_dialog(); }));
+    edit_active_prompt_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.edit_active_prompt", [this] { show_edit_active_prompt_dialog(); }));
+    restore_active_prompt_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.restore_active_prompt", [this] { restore_active_prompt(); }));
+    delete_active_prompt_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.delete_active_prompt", [this] { request_delete_active_prompt(); }));
+    select_model_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.select_model", [this] { show_select_model_dialog(); }));
+    download_model_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.download_model", [this] { show_download_model_dialog(); }));
+    cancel_model_download_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.cancel_model_download", [this] { cancel_model_download(); }));
+    deactivate_model_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.deactivate_model", [this] { deactivate_active_model(); }));
+    delete_active_model_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-chat", "ck.chat.delete_active_model", [this] { request_delete_active_model(); }));
 }
 
 SuiteShellOptions ChatApp::make_shell_options() const
