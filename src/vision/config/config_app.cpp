@@ -1,6 +1,7 @@
 #include "config_app.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -79,9 +80,14 @@ std::vector<std::string> split_list(std::string_view value)
 class OptionTableModel final : public ckv::widgets::TableModel
 {
 public:
-    explicit OptionTableModel(ck::config::OptionRegistry &registry) : registry_(registry) { refresh(); }
+    explicit OptionTableModel(ck::config::OptionRegistry &registry) : registry_(&registry) { refresh(); }
 
-    void refresh() { definitions_ = registry_.listRegisteredOptions(); }
+    void set_registry(ck::config::OptionRegistry &registry)
+    {
+        registry_ = &registry;
+        refresh();
+    }
+    void refresh() { definitions_ = registry_->listRegisteredOptions(); }
     std::size_t row_count() const override { return definitions_.size(); }
     ckv::widgets::TableRowId row_id_at(std::size_t index) const override
     {
@@ -106,8 +112,8 @@ public:
         case 1: return {definition.key, definition.key, std::nullopt, false};
         case 2: return {kind_name(definition.kind), kind_name(definition.kind), std::nullopt, false};
         case 3:
-            return {option_value_text(definition, registry_.get(definition.key)),
-                    option_value_text(definition, registry_.get(definition.key)), std::nullopt, definition.editable};
+            return {option_value_text(definition, registry_->get(definition.key)),
+                    option_value_text(definition, registry_->get(definition.key)), std::nullopt, definition.editable};
         }
         return {};
     }
@@ -127,7 +133,7 @@ public:
     }
 
 private:
-    ck::config::OptionRegistry &registry_;
+    ck::config::OptionRegistry *registry_ = nullptr;
     std::vector<ck::config::OptionDefinition> definitions_;
 };
 
@@ -196,9 +202,30 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
                      ck::config::OptionRegistry &registry,
                      ConfigPersistence &persistence,
                      KeymapController *keymap)
-    : application_(application), registry_(registry), persistence_(persistence), keymap_(keymap),
-      model_(std::make_unique<OptionTableModel>(registry_)), command_scope_(application.commands())
+    : ConfigApp(application,
+                {ConfigApplication{registry.appId(), registry.appId(), &registry, &persistence}},
+                keymap)
 {
+}
+
+ConfigApp::ConfigApp(ckv::ui::Application &application,
+                     std::vector<ConfigApplication> applications,
+                     KeymapController *keymap)
+    : application_(application), applications_(std::move(applications)), keymap_(keymap), command_scope_(application.commands())
+{
+    applications_.erase(std::remove_if(applications_.begin(), applications_.end(), [](const ConfigApplication &entry) {
+        return entry.registry == nullptr || entry.persistence == nullptr;
+    }), applications_.end());
+    if (applications_.empty())
+        throw std::invalid_argument("ConfigApp requires at least one registry and persistence policy");
+    for (ConfigApplication &entry : applications_)
+    {
+        if (entry.id.empty())
+            entry.id = entry.registry->appId();
+        if (entry.display_name.empty())
+            entry.display_name = entry.id;
+    }
+    model_ = std::make_unique<OptionTableModel>(active_registry());
     declare_commands();
     if (keymap_ != nullptr)
     {
@@ -211,6 +238,8 @@ ConfigApp::ConfigApp(ckv::ui::Application &application,
 
 void ConfigApp::declare_commands()
 {
+    select_application_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-config", "ck.config.select_application", [this] { show_application_dialog(); }));
     edit_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-config", "ck.config.edit_selected", [this] { edit_selected(); }));
     reset_command_ = command_scope_.own(declare_suite_command(
@@ -240,6 +269,7 @@ SuiteShellOptions ConfigApp::make_shell_options() const
     return {.application_name = "ck Config",
             .about_text = "A native ckVision editor for an injected option registry and persistence policy.",
             .application_menus = {MenuBarItem{"&Options", {
+                MenuItem::command(CommandPresentation{select_application_command_, "Select &application..."}),
                 MenuItem::command(CommandPresentation{edit_command_, "&Edit selected option"}),
                 MenuItem::command(CommandPresentation{reset_command_, "&Reset selected option"}),
                 MenuItem::command(CommandPresentation{save_command_, "&Save configuration"}),
@@ -250,6 +280,7 @@ SuiteShellOptions ConfigApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{keymap_scheme_command_, "Select shortcut &scheme..."}),
             }}},
             .application_status_items = {
+                StatusLineItem{CommandPresentation{select_application_command_, "&Application"}, 24},
                 StatusLineItem{CommandPresentation{edit_command_, "&Edit"}, 20},
                 StatusLineItem{CommandPresentation{reset_command_, "&Reset"}, 20},
                 StatusLineItem{CommandPresentation{save_command_, "&Save"}, 20},
@@ -263,7 +294,7 @@ SuiteShellOptions ConfigApp::make_shell_options() const
 
 void ConfigApp::create_window()
 {
-    auto window = std::make_unique<ckv::widgets::Window>("Configuration: " + registry_.appId());
+    auto window = std::make_unique<ckv::widgets::Window>("Configuration: " + selected_application().display_name);
     window->set_bounds(shell_->desktop().content_area());
     window->set_min_size(ckv::Size{70, 16});
     window->set_grow_policy(ckv::widgets::DesktopGrowPolicy::KeepFilling);
@@ -292,7 +323,9 @@ void ConfigApp::refresh()
         selected_key_ = model_->definition(1)->key;
     if (const auto id = model_->id_for_key(selected_key_))
         table_->set_selected_cell({*id, 0});
-    set_status(std::to_string(option_count()) + " registered options.");
+    if (window_ != nullptr)
+        window_->set_title("Configuration: " + selected_application().display_name);
+    set_status(std::to_string(option_count()) + " registered options for " + selected_application().display_name + ".");
 }
 
 bool ConfigApp::select_option(std::string_view key)
@@ -305,6 +338,21 @@ bool ConfigApp::select_option(std::string_view key)
     return true;
 }
 
+bool ConfigApp::select_application(std::string_view id)
+{
+    const auto found = std::find_if(applications_.begin(), applications_.end(), [id](const ConfigApplication &entry) {
+        return entry.id == id;
+    });
+    if (found == applications_.end())
+        return false;
+    selected_application_index_ = static_cast<std::size_t>(std::distance(applications_.begin(), found));
+    selected_key_.clear();
+    model_->set_registry(active_registry());
+    refresh();
+    application_.set_focus(table_);
+    return true;
+}
+
 bool ConfigApp::import_configuration(const std::string &path)
 {
     if (path.empty())
@@ -313,10 +361,11 @@ bool ConfigApp::import_configuration(const std::string &path)
         return false;
     }
 
-    ck::config::OptionRegistry::Snapshot before_import = registry_.snapshot();
-    if (!persistence_.import_from(registry_, path))
+    ck::config::OptionRegistry &registry = active_registry();
+    ck::config::OptionRegistry::Snapshot before_import = registry.snapshot();
+    if (!active_persistence().import_from(registry, path))
     {
-        registry_.restore(std::move(before_import));
+        registry.restore(std::move(before_import));
         set_status("Could not import configuration from " + path + ".");
         return false;
     }
@@ -327,7 +376,7 @@ bool ConfigApp::import_configuration(const std::string &path)
 
 bool ConfigApp::export_configuration(const std::string &path)
 {
-    if (path.empty() || !persistence_.export_to(registry_, path))
+    if (path.empty() || !active_persistence().export_to(active_registry(), path))
     {
         set_status("Could not export configuration to " + path + ".");
         return false;
@@ -338,7 +387,7 @@ bool ConfigApp::export_configuration(const std::string &path)
 
 const ck::config::OptionDefinition *ConfigApp::selected_definition() const
 {
-    return selected_key_.empty() ? nullptr : registry_.definition(selected_key_);
+    return selected_key_.empty() ? nullptr : active_registry().definition(selected_key_);
 }
 
 void ConfigApp::edit_selected()
@@ -346,6 +395,7 @@ void ConfigApp::edit_selected()
     const auto *definition = selected_definition();
     if (definition == nullptr || !definition->editable)
         return;
+    ck::config::OptionRegistry &registry = active_registry();
     edit_dialog_.reset();
     ckv::widgets::DialogDescriptor dialog;
     dialog.title = "Edit " + definition->displayName;
@@ -354,17 +404,17 @@ void ConfigApp::edit_selected()
     {
     case ck::config::OptionKind::Boolean:
         dialog.fields.push_back({"&Value", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
-                                 {"false", "true"}, registry_.get(definition->key).toBool() ? 1 : 0});
+                                 {"false", "true"}, registry.get(definition->key).toBool() ? 1 : 0});
         break;
     case ck::config::OptionKind::Integer:
-        dialog.fields.push_back({"&Value", registry_.get(definition->key).toString(), nullptr, false, '*',
+        dialog.fields.push_back({"&Value", registry.get(definition->key).toString(), nullptr, false, '*',
                                  ckv::widgets::FieldKind::Number});
         break;
     case ck::config::OptionKind::String:
-        dialog.fields.push_back({"&Value", registry_.get(definition->key).toString(), nullptr});
+        dialog.fields.push_back({"&Value", registry.get(definition->key).toString(), nullptr});
         break;
     case ck::config::OptionKind::StringList:
-        dialog.fields.push_back({"Comma-separated &values", option_value_text(*definition, registry_.get(definition->key)), nullptr});
+        dialog.fields.push_back({"Comma-separated &values", option_value_text(*definition, registry.get(definition->key)), nullptr});
         break;
     }
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
@@ -372,19 +422,21 @@ void ConfigApp::edit_selected()
     const std::string key = definition->key;
     const ck::config::OptionKind kind = definition->kind;
     edit_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
-    edit_dialog_->set_completion_handler([this, key, kind](ckv::widgets::DialogResult result) {
+    ck::config::OptionRegistry *const edited_registry = &registry;
+    edit_dialog_->set_completion_handler([this, edited_registry, key, kind](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() < 2 || result.selected.size() < 2 || result.numbers.size() < 2)
             return;
         switch (kind)
         {
-        case ck::config::OptionKind::Boolean: registry_.set(key, ck::config::OptionValue(result.selected[1] == 1)); break;
+        case ck::config::OptionKind::Boolean: edited_registry->set(key, ck::config::OptionValue(result.selected[1] == 1)); break;
         case ck::config::OptionKind::Integer:
-            if (result.numbers[1]) registry_.set(key, ck::config::OptionValue(static_cast<std::int64_t>(*result.numbers[1])));
+            if (result.numbers[1]) edited_registry->set(key, ck::config::OptionValue(static_cast<std::int64_t>(*result.numbers[1])));
             break;
-        case ck::config::OptionKind::String: registry_.set(key, ck::config::OptionValue(result.values[1])); break;
-        case ck::config::OptionKind::StringList: registry_.set(key, ck::config::OptionValue(split_list(result.values[1]))); break;
+        case ck::config::OptionKind::String: edited_registry->set(key, ck::config::OptionValue(result.values[1])); break;
+        case ck::config::OptionKind::StringList: edited_registry->set(key, ck::config::OptionValue(split_list(result.values[1]))); break;
         }
-        refresh();
+        if (edited_registry == &active_registry())
+            refresh();
     });
 }
 
@@ -392,33 +444,55 @@ void ConfigApp::reset_selected()
 {
     if (const auto *definition = selected_definition(); definition != nullptr && definition->editable)
     {
-        registry_.reset(definition->key);
+        active_registry().reset(definition->key);
         refresh();
     }
 }
 
 void ConfigApp::save()
 {
-    const bool configuration_saved = persistence_.save(registry_);
+    const bool configuration_saved = active_persistence().save(active_registry());
     const bool keymap_saved = keymap_ == nullptr || keymap_->save();
     if (configuration_saved && keymap_saved)
-        set_status("Saved configuration for " + registry_.appId() + ".");
+        set_status("Saved configuration for " + selected_application().display_name + ".");
     else
-        set_status("Could not save all configuration for " + registry_.appId() + ".");
+        set_status("Could not save all configuration for " + selected_application().display_name + ".");
 }
 
 void ConfigApp::reload()
 {
-    const bool configuration_loaded = persistence_.load(registry_);
+    const bool configuration_loaded = active_persistence().load(active_registry());
     const bool keymap_loaded = keymap_catalog_ == nullptr || keymap_catalog_->load();
     if (!configuration_loaded || !keymap_loaded)
     {
-        set_status("No saved configuration and shortcuts could be loaded for " + registry_.appId() + ".");
+        set_status("No saved configuration and shortcuts could be loaded for " + selected_application().display_name + ".");
         return;
     }
     refresh();
     refresh_keymap();
-    set_status("Reloaded saved configuration for " + registry_.appId() + ".");
+    set_status("Reloaded saved configuration for " + selected_application().display_name + ".");
+}
+
+void ConfigApp::show_application_dialog()
+{
+    application_dialog_.reset();
+    std::vector<std::string> titles;
+    titles.reserve(applications_.size());
+    for (const ConfigApplication &entry : applications_)
+        titles.push_back(entry.display_name);
+    ckv::widgets::DialogDescriptor dialog;
+    dialog.title = "Select application";
+    dialog.fields.push_back({"&Application", "", nullptr, false, '*', ckv::widgets::FieldKind::Radio, false,
+                             std::move(titles), static_cast<int>(selected_application_index_)});
+    dialog.buttons.push_back({"&Select", ckv::widgets::ButtonRole::Accept, nullptr});
+    dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
+    application_dialog_.emplace(
+        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    application_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
+        if (!result.accepted || result.selected.empty() || result.selected.front() >= applications_.size())
+            return;
+        select_application(applications_[result.selected.front()].id);
+    });
 }
 
 void ConfigApp::show_import_dialog()
@@ -441,7 +515,7 @@ void ConfigApp::show_export_dialog()
     transfer_dialog_.reset();
     ckv::widgets::DialogDescriptor dialog;
     dialog.title = "Export configuration";
-    dialog.fields.push_back({"&Path:", registry_.defaultOptionsPath().string() + ".export.json",
+    dialog.fields.push_back({"&Path:", active_registry().defaultOptionsPath().string() + ".export.json",
                              [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Export", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
@@ -714,6 +788,36 @@ void ConfigApp::set_keymap_status(std::string text)
 std::size_t ConfigApp::option_count() const noexcept
 {
     return model_ == nullptr ? 0 : model_->row_count();
+}
+
+std::string ConfigApp::selected_application_id() const
+{
+    return selected_application().id;
+}
+
+ConfigApplication &ConfigApp::selected_application() noexcept
+{
+    return applications_[selected_application_index_];
+}
+
+const ConfigApplication &ConfigApp::selected_application() const noexcept
+{
+    return applications_[selected_application_index_];
+}
+
+ck::config::OptionRegistry &ConfigApp::active_registry() noexcept
+{
+    return *selected_application().registry;
+}
+
+const ck::config::OptionRegistry &ConfigApp::active_registry() const noexcept
+{
+    return *selected_application().registry;
+}
+
+ConfigPersistence &ConfigApp::active_persistence() noexcept
+{
+    return *selected_application().persistence;
 }
 
 std::size_t ConfigApp::keymap_command_count() const noexcept

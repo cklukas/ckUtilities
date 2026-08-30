@@ -127,6 +127,7 @@ const std::array kChatCommands{
 };
 
 const std::array kConfigCommands{
+    CommandDefinition{"ck.config.select_application", "Select &application...", "Configuration", ""},
     CommandDefinition{"ck.config.edit_selected", "&Edit selected option", "Configuration", "Enter"},
     CommandDefinition{"ck.config.reset_selected", "&Reset selected option", "Configuration", ""},
     CommandDefinition{"ck.config.save", "&Save configuration", "Configuration", "Ctrl+S"},

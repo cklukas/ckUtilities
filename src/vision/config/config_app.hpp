@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <cvision/ui/application.hpp>
 #include <cvision/ui/command.hpp>
@@ -22,6 +23,17 @@ namespace ck::vision
 
 class OptionTableModel;
 
+// Product composition supplies the registries it owns. The native editor
+// stays generic: it selects a target, then delegates persistence through that
+// target's injected policy.
+struct ConfigApplication
+{
+    std::string id;
+    std::string display_name;
+    ck::config::OptionRegistry *registry = nullptr;
+    ConfigPersistence *persistence = nullptr;
+};
+
 // Native registry inspector/editor. Persistence remains an injected
 // composition-root policy rather than a view filesystem responsibility.
 class ConfigApp
@@ -31,14 +43,21 @@ public:
               ck::config::OptionRegistry &registry,
               ConfigPersistence &persistence,
               KeymapController *keymap = nullptr);
+    ConfigApp(ckv::ui::Application &application,
+              std::vector<ConfigApplication> applications,
+              KeymapController *keymap = nullptr);
     ~ConfigApp();
 
     bool select_option(std::string_view key);
+    bool select_application(std::string_view id);
     bool import_configuration(const std::string &path);
     bool export_configuration(const std::string &path);
     std::string selected_key() const { return selected_key_; }
+    std::string selected_application_id() const;
+    std::size_t application_count() const noexcept { return applications_.size(); }
     std::size_t option_count() const noexcept;
     ckv::widgets::Table *table() const noexcept { return table_; }
+    ckv::ui::CommandId select_application_command() const noexcept { return select_application_command_; }
     ckv::ui::CommandId edit_command() const noexcept { return edit_command_; }
     ckv::ui::CommandId reset_command() const noexcept { return reset_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
@@ -60,6 +79,7 @@ private:
     void reset_selected();
     void save();
     void reload();
+    void show_application_dialog();
     void show_import_dialog();
     void show_export_dialog();
     void show_keymap_window();
@@ -72,11 +92,16 @@ private:
     void set_status(std::string text);
     void set_keymap_status(std::string text);
     const ck::config::OptionDefinition *selected_definition() const;
+    ConfigApplication &selected_application() noexcept;
+    const ConfigApplication &selected_application() const noexcept;
+    ck::config::OptionRegistry &active_registry() noexcept;
+    const ck::config::OptionRegistry &active_registry() const noexcept;
+    ConfigPersistence &active_persistence() noexcept;
     KeymapController *selected_keymap_controller() const noexcept;
 
     ckv::ui::Application &application_;
-    ck::config::OptionRegistry &registry_;
-    ConfigPersistence &persistence_;
+    std::vector<ConfigApplication> applications_;
+    std::size_t selected_application_index_ = 0;
     KeymapController *keymap_ = nullptr;
     KeymapSchemePersistence *keymap_scheme_persistence_ = nullptr;
     std::unique_ptr<SuiteKeymapCatalog> keymap_catalog_;
@@ -92,6 +117,7 @@ private:
     ckv::ui::CommandId reset_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId reload_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId select_application_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId import_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId export_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId keymap_command_ = ckv::ui::kInvalidCommand;
@@ -101,6 +127,7 @@ private:
     std::string selected_command_key_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> edit_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> transfer_dialog_;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> application_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> keymap_scheme_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> keymap_conflict_;
     SuiteCommandScope command_scope_;

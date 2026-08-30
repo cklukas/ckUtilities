@@ -120,7 +120,13 @@ int main()
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
     MemoryPersistence persistence;
-    ck::vision::ConfigApp config(application, registry, persistence);
+    ck::config::OptionRegistry secondary_registry("secondary");
+    secondary_registry.registerOption({"label", ck::config::OptionKind::String, ck::config::OptionValue(std::string("secondary")),
+                                       "Label", "A setting owned by the secondary application."});
+    MemoryPersistence secondary_persistence;
+    ck::vision::ConfigApp config(application,
+                                 {{"test", "Primary test application", &registry, &persistence},
+                                  {"secondary", "Secondary test application", &secondary_registry, &secondary_persistence}});
     require(config.option_count() == 3 && config.table() != nullptr,
             "The native config app must present injected registry definitions in a table.");
     require(config.select_option("enabled"), "The native config app must select options by stable string key.");
@@ -158,8 +164,17 @@ int main()
     persistence.fail_import_after_mutation = true;
     require(!config.import_configuration("/imports/broken.json") && !registry.getBool("enabled"),
             "A failed import must roll back mutations made by its persistence policy.");
+    require(config.application_count() == 2 && config.select_application("secondary") &&
+                config.selected_application_id() == "secondary" && config.option_count() == 1 &&
+                config.select_option("label") && application.execute_command(config.save_command()) &&
+                secondary_persistence.save_count == 1 && !config.select_application("missing"),
+            "The native config app must switch its table and persistence actions between injected application registries.");
+    require(config.select_application("test") && config.selected_application_id() == "test" && config.option_count() == 3,
+            "Switching back must restore the primary application's registry-backed table.");
     require(application.execute_command(config.import_command()) && application.execute_command(config.export_command()),
             "Import and export must be registry commands.");
+    require(application.execute_command(config.select_application_command()),
+            "Application selection must be available through the command registry.");
     require(application.execute_command(config.edit_command()), "Edit must dispatch through the command registry.");
     application.step(0);
     require(application.current_frame().size() == ckv::Size{100, 30}, "The native config view must render headlessly.");
