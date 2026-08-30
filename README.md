@@ -14,7 +14,7 @@ The historical implementation remains deliberately separate and is not
 modified by the rehearsal.
 
 Current local acceptance evidence covers a clean macOS Debug/Release cutover,
-92 tests, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
+the configured release-and-sanitizer test suite, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
 checks, a verified release archive, and real-PTY terminal lifecycle smoke across three
 profiles (also under ASan/UBSan). Linux and Windows remain release acceptance
 work. See [the migration roadmap](tv_to_ckvision.md) for the complete status

@@ -32,7 +32,7 @@ installation. It remains opt-in while the selected ckVision candidate awaits
 trunk acceptance and a CI-consumable installed package.
 
 Clean macOS Debug and Release cutovers against that installed candidate pass
-the 92-test suite, an independent Debug package consumer, staged executable
+the then-current 92-test suite, an independent Debug package consumer, staged executable
 smoke tests, launcher-child discovery, and the legacy-negative install gate.
 Their real-PTY terminal-profile gate also starts every staged executable under
 `xterm-256color`, `xterm`, and `vt100` with an empty configuration root,

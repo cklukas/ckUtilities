@@ -257,7 +257,7 @@ Historical application baseline: `legacy_tv`
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
-  A clean macOS Debug cutover also passes all 92 tests, an independent Debug
+  A clean macOS Debug cutover also passes the then-current 92-test suite, an independent Debug
   consumer of that installed package, the staged executable and launcher
   smoke checks, and the legacy-negative gate. This is local configuration
   evidence only; it does not replace the remaining cross-platform release
@@ -279,7 +279,7 @@ Historical application baseline: `legacy_tv`
   It covers terminal lifecycle smoke only, not interactive journey or
   cross-platform acceptance.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 92 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes the then-current 92-test suite. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
