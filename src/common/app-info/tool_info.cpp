@@ -50,9 +50,9 @@ namespace ck::appinfo
                 "ck-chat",
                 "ck-chat",
                 "Chat",
-                "Chat with the ck-ai runtime stubs.",
-                "Chat with the ck-ai runtime stubs.",
-                "Chat demonstrates the streaming interfaces for the ck-ai runtime. It loads the local configuration, opens the placeholder llama backend, and streams deterministic responses so we can exercise the TUI plumbing and testing harness."},
+                "Chat with configured local GGUF models.",
+                "Chat with configured local GGUF models.",
+                "Chat provides a native terminal conversation workflow backed by the configured local GGUF model. Manage prompts and models, stream and cancel responses, and export conversations without leaving the shell. An unavailable model is reported clearly; the product never silently substitutes a deterministic test response."},
             ToolInfo{
                 "ck-config",
                 "ck-config",

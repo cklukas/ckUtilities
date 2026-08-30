@@ -39,6 +39,14 @@ TEST(AppInfo, RequireToolReturnsMatchingExecutable)
     EXPECT_EQ(byExecutable.id, "ck-json-view");
 }
 
+TEST(AppInfo, ChatMetadataDescribesTheProductionRuntime)
+{
+    const auto &chat = ck::appinfo::requireTool("ck-chat");
+    EXPECT_NE(chat.shortDescription.find("GGUF"), std::string_view::npos);
+    EXPECT_EQ(chat.longDescription.find("runtime stubs"), std::string_view::npos);
+    EXPECT_EQ(chat.longDescription.find("placeholder llama"), std::string_view::npos);
+}
+
 TEST(AppInfo, RequireToolThrowsForUnknownId)
 {
     EXPECT_THROW(ck::appinfo::requireTool("does-not-exist"), std::runtime_error);
