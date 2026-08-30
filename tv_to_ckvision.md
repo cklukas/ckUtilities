@@ -93,7 +93,10 @@ Historical application baseline: `legacy_tv`
   request (the provider may continue synchronizing); it runs off the UI thread,
   posts immutable progress/results through the existing lifetime gate, and
   exposes cancellation. Unsupported platforms report that fact rather than
-  simulating a cloud change. Recursive cloud policy and other providers remain
+  simulating a cloud change. A macOS-only acceptance case uses the real
+  Foundation adapter on a normal temporary directory and proves it rejects the
+  non-iCloud path before issuing a provider request. Recursive cloud policy and
+  other providers remain
   acceptance work. Rescan now keeps the last valid snapshot visible until a
   replacement succeeds; a surviving directory path retains selection and
   expansion, while cancelled/invalid replacements preserve the prior view. A

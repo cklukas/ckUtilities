@@ -310,6 +310,35 @@ int main()
                 "Unsupported cloud operations must fail explicitly instead of pretending to change storage.");
     }
 
+#if defined(__APPLE__)
+    {
+        // A normal temporary directory is not an iCloud item. This exercises
+        // the real Foundation adapter without requesting a provider mutation.
+        ck::vision::MacDiskUsageCloudService mac_cloud;
+        const std::filesystem::path non_cloud_path = std::filesystem::temp_directory_path();
+        const auto capability = mac_cloud.capability(ck::vision::DiskUsageCloudAction::Download, non_cloud_path);
+        require(!capability.available && !capability.reason.empty(),
+                "The macOS cloud adapter must reject a path that is not managed by iCloud Drive.");
+
+        std::mutex completion_mutex;
+        std::condition_variable completion_ready;
+        std::optional<ck::vision::DiskUsageCloudOperationResult> completion;
+        mac_cloud.start(ck::vision::DiskUsageCloudAction::Download, non_cloud_path, {},
+                        [&](ck::vision::DiskUsageCloudOperationResult result) {
+                            {
+                                std::scoped_lock lock(completion_mutex);
+                                completion = std::move(result);
+                            }
+                            completion_ready.notify_one();
+                        });
+        std::unique_lock lock(completion_mutex);
+        require(completion_ready.wait_for(lock, std::chrono::seconds(5), [&] { return completion.has_value(); }),
+                "The macOS cloud adapter must complete a rejected non-cloud request.");
+        require(!completion->success && !completion->cancelled && !completion->message.empty() && !mac_cloud.running(),
+                "The macOS cloud adapter must fail a non-cloud request without claiming a provider change.");
+    }
+#endif
+
     {
         ckv::ManualClock clock;
         ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
