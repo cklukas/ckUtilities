@@ -156,6 +156,37 @@ int main()
         return 1;
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
     application.step(0);
+    files.add_file("/refresh.json", R"({"settings":{"version":"before"},"obsolete":true})");
+    if (!expect(json_view.load_file("/refresh.json") && json_view.find("before", false, true),
+                "the JSON reload fixture did not select its original value"))
+        return 1;
+    const auto retained_selection_id = json_view.tree()->selected_id();
+    auto *const retained_model = json_view.tree()->model();
+    if (!expect(retained_selection_id.has_value() && retained_model != nullptr,
+                "the JSON reload fixture did not expose a stable provider selection"))
+        return 1;
+    files.add_file("/refresh.json", R"({"settings":{"version":"after"},"introduced":true})");
+    if (!expect(application.execute_command(json_view.reload_command()),
+                "reload command was unavailable"))
+        return 1;
+    if (!expect(json_view.tree()->model() == retained_model &&
+                    json_view.tree()->selected_id() == retained_selection_id &&
+                    json_view.selected_json_node() != nullptr &&
+                    reconstructJson(json_view.selected_json_node()) == json("after"),
+                "JSON reload did not retain a surviving provider selection"))
+        return 1;
+    files.add_file("/refresh.json", "{\"settings\":");
+    if (!expect(application.execute_command(json_view.reload_command()),
+                "malformed reload command was unavailable"))
+        return 1;
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
+    application.step(0);
+    if (!expect(json_view.tree()->selected_id() == retained_selection_id &&
+                    json_view.find("after", false, true),
+                "a malformed refresh discarded the previous JSON snapshot"))
+        return 1;
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
+    application.step(0);
     if (!expect(json_view.load_document("wide.json", wide_document(2048)),
                 "the JSON viewer did not load a 2,048-entry document"))
         return 1;
@@ -169,6 +200,29 @@ int main()
                                 static_cast<std::size_t>(terminal.size().height);
     if (!expect(application.last_compose_cells_touched() <= terminal_cells,
                 "large-document navigation exceeded the visible-frame composition budget"))
+        return 1;
+    constexpr std::size_t scale_entries = 12000;
+    files.add_file("/scale.json", wide_document(scale_entries));
+    if (!expect(json_view.load_file("/scale.json") &&
+                    json_view.provider_node_count() == 1 + (scale_entries * 2) &&
+                    json_view.find("record-11999", false, true),
+                "the JSON viewer did not materialize an application-scale provider snapshot"))
+        return 1;
+    application.step(0);
+    if (!expect(application.last_compose_cells_touched() <= terminal_cells,
+                "application-scale JSON search exceeded the visible-frame composition budget"))
+        return 1;
+    files.add_file("/scale.json", R"({"status":"refreshed"})");
+    if (!expect(application.execute_command(json_view.reload_command()) &&
+                    json_view.provider_node_count() == 2 &&
+                    json_view.find("refreshed", false, true) &&
+                    json_view.selected_json_node() != nullptr &&
+                    json_view.selected_json_node()->key == "status",
+                "JSON refresh retained indexes from an obsolete large snapshot"))
+        return 1;
+    application.step(0);
+    if (!expect(application.last_compose_cells_touched() <= terminal_cells,
+                "small JSON refresh exceeded the visible-frame composition budget"))
         return 1;
     if (!expect(application.execute_command(json_view.close_command()), "close command was unavailable"))
         return 1;

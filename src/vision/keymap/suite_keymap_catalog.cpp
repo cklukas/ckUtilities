@@ -27,6 +27,7 @@ void declare_commands(ckv::ui::CommandRegistry &registry, const std::array<Comma
 
 const std::array kJsonViewCommands{
     CommandDefinition{"ck.json_view.open", "&Open JSON...", "JSON View", "Ctrl+O"},
+    CommandDefinition{"ck.json_view.reload", "&Reload JSON", "JSON View", "Ctrl+R"},
     CommandDefinition{"ck.json_view.close", "&Close JSON", "JSON View", "Ctrl+W"},
     CommandDefinition{"ck.json_view.copy", "&Copy selected JSON", "JSON View", "Ctrl+C"},
     CommandDefinition{"ck.json_view.find", "&Find...", "JSON View", "Ctrl+F"},

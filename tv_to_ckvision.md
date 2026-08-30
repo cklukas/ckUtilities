@@ -23,19 +23,24 @@ Historical application baseline: `legacy_tv`
 - WP-3: `ck-json-view-ckvision` is a separate native executable. It owns the
   parsed JSON document for the complete view lifetime and exposes the domain
   tree through a borrowed stable-ID ckVision `TreeModel`, uses injected filesystem/file-dialog services and
-  the application clipboard, and implements open, close, copy,
+  the application clipboard, and implements open, reload, close, copy,
   find/next/previous/end-search, and expand-to-level commands. Its headless
   scenario covers filesystem load, result reveal/selection, copy, expansion,
   full-frame rendering, UTF-8 search in a 64-level document, malformed reload
   preservation, explicit close-state cleanup, narrow-terminal recomposition,
   keyboard and mouse tree navigation, and a 2,048-entry search smoke with a
-  visible-frame composition cap. ckVision candidate
+  visible-frame composition cap. Reload retains the provider instance and a
+  surviving selection, rejects a malformed source transactionally, and
+  reduces a 12,000-entry snapshot to two current provider indexes under the
+  same composition cap. ckVision candidate
   `9f097ecde219a35971ccde6f8732b07ef021c35b` also provides the documented,
   unit-tested stable-ID `TreeModel` and `TreeView::reveal_and_select` APIs,
   together with transactional `TextEditor::set_selection` restoration.
   TreeView owns expansion and cursor state while querying only visible paths;
-  its one-million-root test queries just the five painted items. Application-
-  realistic refresh and memory budgets remain acceptance work.
+  its one-million-root test queries just the five painted items. The native
+  reload acceptance closes the application-scale refresh and stale-index
+  memory budget for this pilot; another product must provide evidence before
+  extending the generic API further.
 - WP-4: `ck-utilities-ckvision` now provides a native multi-window tool
   browser. It uses registry commands and publishes a selected launch request
   to the POSIX composition root, which closes the terminal UI before running
@@ -563,7 +568,7 @@ Deliverables:
 
 - Map `ck_json_view_core::Node` through an explicit presentation model into a
   ckVision TreeView; do not put ckVision state in the JSON domain tree.
-- Implement open/close, copy, find/next/previous/end-search, and expand-to-level
+- Implement open/reload/close, copy, find/next/previous/end-search, and expand-to-level
   commands through the registry.
 - Use injected filesystem/file-dialog services and the application clipboard.
 - Preserve stable selection through expand/collapse and search updates.
@@ -577,10 +582,12 @@ Likely ckVision gap to validate:
   parent/child indexing, view-owned expansion and selection state, and explicit
   refresh. JSON and disk usage consume it directly rather than materializing
   duplicate `TreeNode` forests. A one-million-root ckVision test proves drawing
-  five visible rows queries five items. Acceptance remains for application-
-  realistic asynchronous child publication and refresh/memory budgets; any
-  generic shortfall remains a ckVision work package rather than a ckUtilities
-  shadow tree widget.
+  five visible rows queries five items. JSON’s native reload preserves a
+  surviving selection and provider while a 12,000-entry snapshot is replaced
+  by two current indexes, so this pilot has refresh and stale-index memory
+  evidence. Asynchronous child publication needs an independently specified
+  adopter before it becomes a generic extension rather than a ckUtilities
+  shadow-tree feature.
 
 Exit criteria:
 

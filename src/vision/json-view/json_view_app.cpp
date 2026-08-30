@@ -36,26 +36,28 @@ public:
     JsonTreeModel(Node &root, const std::unordered_map<const Node *, std::uint64_t> &node_ids,
                   const std::unordered_map<std::uint64_t, Node *> &nodes_by_id,
                   const std::unordered_map<const Node *, std::size_t> &sibling_indexes)
-        : root_(root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
+        : root_(&root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
     {
     }
+
+    void set_root(Node &root) noexcept { root_ = &root; }
 
     std::size_t root_count() const override { return 1; }
 
     ckv::widgets::TreeItemId root_id_at(std::size_t index) const override
     {
-        return index == 0 ? id_for(&root_) : ckv::widgets::kInvalidTreeItemId;
+        return index == 0 ? id_for(root_) : ckv::widgets::kInvalidTreeItemId;
     }
 
     std::optional<std::size_t> root_index_of(ckv::widgets::TreeItemId id) const override
     {
-        return id == id_for(&root_) ? std::optional<std::size_t>(0) : std::nullopt;
+        return id == id_for(root_) ? std::optional<std::size_t>(0) : std::nullopt;
     }
 
     std::optional<ckv::widgets::TreeItemId> parent_id_of(ckv::widgets::TreeItemId id) const override
     {
         const Node *node = node_for(id);
-        if (node == nullptr || node == &root_)
+        if (node == nullptr || node == root_)
             return std::nullopt;
         return id_for(node->parent);
     }
@@ -106,7 +108,7 @@ private:
         return found == nodes_by_id_.end() ? nullptr : found->second;
     }
 
-    Node &root_;
+    Node *root_;
     const std::unordered_map<const Node *, std::uint64_t> &node_ids_;
     const std::unordered_map<std::uint64_t, Node *> &nodes_by_id_;
     const std::unordered_map<const Node *, std::size_t> &sibling_indexes_;
@@ -130,6 +132,7 @@ JsonViewApp::CommandIds JsonViewApp::declare_commands()
 
     CommandIds ids;
     ids.open = declare("ck.json_view.open", [this] { open_file_dialog(); });
+    ids.reload = declare("ck.json_view.reload", [this] { reload_file(); });
     ids.close = declare("ck.json_view.close", [this] { close_file(); });
     ids.copy = declare("ck.json_view.copy", [this] { copy_selection(); });
     ids.find = declare("ck.json_view.find", [this] { show_find_dialog(); });
@@ -168,6 +171,9 @@ SuiteShellOptions JsonViewApp::make_shell_options() const
         .application_name = "ck JSON View",
         .about_text = "A native ckVision JSON browser. Open a document, navigate its tree, search keys or values, and copy a selected JSON value.",
         .application_menus = {
+            MenuBarItem{"&File", {MenuItem::command(CommandPresentation{commands_.open, "&Open JSON..."}),
+                                   MenuItem::command(CommandPresentation{commands_.reload, "&Reload JSON"}),
+                                   MenuItem::command(CommandPresentation{commands_.close, "&Close JSON"})}},
             MenuBarItem{"&Edit", {MenuItem::command(CommandPresentation{commands_.copy, "&Copy selected JSON"})}},
             MenuBarItem{"&Search", std::move(search_items)},
             MenuBarItem{"&View", std::move(view_items)},
@@ -194,6 +200,32 @@ bool JsonViewApp::load_file(const std::string &path)
 
 bool JsonViewApp::load_document(std::string source_name, const std::string &contents)
 {
+    return install_document(std::move(source_name), contents, false);
+}
+
+bool JsonViewApp::reload_file()
+{
+    if (document_path_.empty())
+    {
+        show_message(ckv::widgets::MessageBoxKind::Info, "Reload JSON",
+                     "Open a JSON document before reloading.");
+        return false;
+    }
+
+    const std::string path = document_path_;
+    const auto contents = files_.read_file(path);
+    if (!contents)
+    {
+        show_message(ckv::widgets::MessageBoxKind::Error, "Reload JSON",
+                     "Could not read '" + path + "'.");
+        return false;
+    }
+    return install_document(path, contents->contents, true);
+}
+
+bool JsonViewApp::install_document(std::string source_name, const std::string &contents,
+                                   bool retain_existing_view)
+{
     std::unique_ptr<json> parsed;
     std::unique_ptr<Node> parsed_root;
     try
@@ -208,13 +240,26 @@ bool JsonViewApp::load_document(std::string source_name, const std::string &cont
         return false;
     }
 
-    close_file();
+    const bool can_refresh_view = retain_existing_view && window_ != nullptr && tree_ != nullptr &&
+                                  tree_model_ != nullptr;
+    if (!can_refresh_view)
+        close_file();
     document_ = std::move(parsed);
     root_ = std::move(parsed_root);
     document_path_ = std::move(source_name);
     root_->sourceSize = contents.size();
     search_ = SearchState{};
-    create_document_window();
+    if (!can_refresh_view)
+    {
+        create_document_window();
+        return true;
+    }
+
+    refresh_tree_indexes();
+    static_cast<JsonTreeModel *>(tree_model_.get())->set_root(*root_);
+    tree_->model_changed();
+    application_.set_focus(tree_);
+    update_footer();
     return true;
 }
 
@@ -231,6 +276,7 @@ void JsonViewApp::close_file()
     node_ids_.clear();
     nodes_by_id_.clear();
     sibling_indexes_.clear();
+    stable_node_ids_by_path_.clear();
     search_ = SearchState{};
 }
 
@@ -383,11 +429,7 @@ void JsonViewApp::rebuild_tree()
     if (window_ == nullptr || !root_)
         return;
 
-    node_ids_.clear();
-    nodes_by_id_.clear();
-    sibling_indexes_.clear();
-    next_node_id_ = 1;
-    index_tree_nodes(*root_, 0);
+    refresh_tree_indexes();
 
     auto model = std::make_unique<JsonTreeModel>(*root_, node_ids_, nodes_by_id_, sibling_indexes_);
     auto tree = std::make_unique<ckv::widgets::TreeView>();
@@ -409,14 +451,48 @@ void JsonViewApp::rebuild_tree()
     update_footer();
 }
 
-void JsonViewApp::index_tree_nodes(Node &node, std::size_t sibling_index)
+void JsonViewApp::refresh_tree_indexes()
 {
-    const std::uint64_t id = next_node_id_++;
+    const auto previous_ids = std::move(stable_node_ids_by_path_);
+    node_ids_ = {};
+    nodes_by_id_ = {};
+    sibling_indexes_ = {};
+    stable_node_ids_by_path_ = {};
+    index_tree_nodes(*root_, 0, {}, previous_ids, stable_node_ids_by_path_);
+}
+
+void JsonViewApp::index_tree_nodes(
+    Node &node, std::size_t sibling_index, std::string path,
+    const std::unordered_map<std::string, std::uint64_t> &previous_ids,
+    std::unordered_map<std::string, std::uint64_t> &next_ids)
+{
+    const std::string parent_path = path;
+    const auto previous = previous_ids.find(path);
+    const std::uint64_t id = previous == previous_ids.end() ? next_node_id_++ : previous->second;
+    next_ids.emplace(std::move(path), id);
     node_ids_.emplace(&node, id);
     nodes_by_id_.emplace(id, &node);
     sibling_indexes_.emplace(&node, sibling_index);
     for (std::size_t index = 0; index < node.children.size(); ++index)
-        index_tree_nodes(*node.children[index], index);
+    {
+        const Node &child = *node.children[index];
+        std::string segment = node.value->is_array() ? std::to_string(index) : child.key;
+        std::string escaped_segment;
+        escaped_segment.reserve(segment.size());
+        for (const char character : segment)
+        {
+            if (character == '~')
+                escaped_segment += "~0";
+            else if (character == '/')
+                escaped_segment += "~1";
+            else
+                escaped_segment += character;
+        }
+        const std::string child_path = parent_path +
+                                       (node.value->is_array() ? "/a:" : "/o:") +
+                                       escaped_segment;
+        index_tree_nodes(*node.children[index], index, child_path, previous_ids, next_ids);
+    }
 }
 
 bool JsonViewApp::reveal_current_match()
