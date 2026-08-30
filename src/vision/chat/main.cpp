@@ -35,8 +35,9 @@ int main(int argc, char **argv)
     ck::ai::ModelManager model_manager;
     ck::vision::ModelManagerService models(model_manager);
     ck::vision::applyChatStartupSelection(startupSelection, prompts, models);
+    ck::vision::RegistryChatSelectionPersistence selection_persistence(optionsRegistry);
     ck::vision::LlmChatResponseService responses(models);
-    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selection_persistence);
     keymap.load();
     application.run();
     return 0;

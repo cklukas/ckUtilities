@@ -22,4 +22,29 @@ void applyChatStartupSelection(const ChatStartupSelection &selection,
         model_service.activate(selection.active_model_id);
 }
 
+RegistryChatSelectionPersistence::RegistryChatSelectionPersistence(ck::config::OptionRegistry &registry) noexcept
+    : registry_(registry)
+{
+}
+
+bool RegistryChatSelectionPersistence::save_active_model(std::string_view id)
+{
+    return save(ck::chat::kOptionActiveModelId, id);
+}
+
+bool RegistryChatSelectionPersistence::save_active_prompt(std::string_view id)
+{
+    return save(ck::chat::kOptionActivePromptId, id);
+}
+
+bool RegistryChatSelectionPersistence::save(std::string_view key, std::string_view value)
+{
+    const ck::config::OptionRegistry::Snapshot snapshot = registry_.snapshot();
+    registry_.set(std::string(key), ck::config::OptionValue(std::string(value)));
+    if (registry_.saveDefaults())
+        return true;
+    registry_.restore(snapshot);
+    return false;
+}
+
 } // namespace ck::vision

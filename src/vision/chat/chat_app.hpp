@@ -20,6 +20,8 @@
 namespace ck::vision
 {
 
+class ChatSelectionPersistence;
+
 struct ChatMessage
 {
     enum class Role
@@ -39,7 +41,8 @@ public:
             ChatResponseService &response_service,
             ChatTranscriptStore &transcript_store,
             ChatPromptService &prompt_service,
-            ChatModelService &model_service);
+            ChatModelService &model_service,
+            ChatSelectionPersistence &selection_persistence);
     ~ChatApp();
 
     bool submit_prompt(std::string prompt);
@@ -111,6 +114,7 @@ private:
     ChatTranscriptStore &transcript_store_;
     ChatPromptService &prompt_service_;
     ChatModelService &model_service_;
+    ChatSelectionPersistence &selection_persistence_;
     std::vector<ChatMessage> messages_;
     std::unique_ptr<SuiteShell> shell_;
     ckv::widgets::Window *window_ = nullptr;

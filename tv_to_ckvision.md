@@ -115,7 +115,9 @@ Historical application baseline: `legacy_tv`
   its saved profile into the framework-neutral scan policy at startup,
   including symlink handling, filters, and error-reporting behavior. `ck-chat`
   likewise applies a saved active model and system-prompt selection through
-  its service boundary before the UI starts.
+  its service boundary before the UI starts, and selection commands write the
+  resulting stable IDs back through an injected profile policy. A failed save
+  restores the registry's prior in-memory values rather than leaving it stale.
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
@@ -201,7 +203,9 @@ Historical application baseline: `legacy_tv`
   `ck-chat` also loads its versioned application profile before its UI starts;
   a valid saved model or system-prompt identifier is applied through those same
   adapters, while a missing or stale identifier leaves the manager-owned
-  selection unchanged.
+  selection unchanged. Native selection commands write their stable IDs back
+  through the injected profile adapter, whose failed save restores its prior
+  registry state.
   background downloads behind a cached catalog, so rate-limited typed progress
   and completion reach the UI without racing `ModelManager` or retaining view
   pointers; late response and download callbacks are dropped before accessing

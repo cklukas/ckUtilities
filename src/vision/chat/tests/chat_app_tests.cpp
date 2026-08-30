@@ -86,6 +86,35 @@ private:
     std::string transcript_;
 };
 
+class MemoryChatSelectionPersistence final : public ck::vision::ChatSelectionPersistence
+{
+public:
+    bool save_active_model(std::string_view id) override
+    {
+        if (!save_succeeds_)
+            return false;
+        active_model_id_ = std::string(id);
+        return true;
+    }
+
+    bool save_active_prompt(std::string_view id) override
+    {
+        if (!save_succeeds_)
+            return false;
+        active_prompt_id_ = std::string(id);
+        return true;
+    }
+
+    const std::string &active_model_id() const noexcept { return active_model_id_; }
+    const std::string &active_prompt_id() const noexcept { return active_prompt_id_; }
+    void set_save_succeeds(bool value) noexcept { save_succeeds_ = value; }
+
+private:
+    std::string active_model_id_;
+    std::string active_prompt_id_;
+    bool save_succeeds_ = true;
+};
+
 class MemoryPromptService final : public ck::vision::ChatPromptService
 {
 public:
@@ -321,8 +350,9 @@ void verify_late_chat_delivery_is_lifetime_safe()
         MemoryTranscriptStore transcripts;
         MemoryPromptService prompts;
         MemoryModelService models;
+        MemoryChatSelectionPersistence selections;
         {
-            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
             require(chat.submit_prompt("Late response"),
                     "The test requires an active native chat response.");
         }
@@ -342,8 +372,9 @@ void verify_late_chat_delivery_is_lifetime_safe()
         MemoryTranscriptStore transcripts;
         MemoryPromptService prompts;
         MemoryModelService models;
+        MemoryChatSelectionPersistence selections;
         {
-            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
             require(chat.start_model_download("download") && chat.model_download_running(),
                     "The test requires an active native model download.");
         }
@@ -377,6 +408,7 @@ int main()
     MemoryTranscriptStore transcripts;
     MemoryPromptService prompts;
     MemoryModelService models;
+    MemoryChatSelectionPersistence selections;
     ck::vision::applyChatStartupSelection(startupSelection, prompts, models);
     require(prompts.active_prompt() && prompts.active_prompt()->id == "review" &&
                 models.active_model() && models.active_model()->id == "writer",
@@ -387,7 +419,7 @@ int main()
     require(prompts.active_prompt() && prompts.active_prompt()->id == "default" &&
                 models.active_model() && models.active_model()->id == "local",
             "Unavailable profile selections must leave the service-owned chat state unchanged.");
-    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
+    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.request().prompt == "Hello" &&
                 responses.request().system_prompt == "Keep responses clear." && responses.request().model_id == "local" &&
@@ -425,6 +457,8 @@ int main()
     require(chat.activate_prompt("review"), "The chat app must activate a chosen system prompt through the service.");
     require(chat.active_prompt() && chat.active_prompt()->id == "review",
             "The selected system prompt must become the active prompt.");
+    require(selections.active_prompt_id() == "review",
+            "Selecting a system prompt in Chat must persist its stable ID for the next startup.");
     require(chat.add_or_update_prompt({"release", "Release notes", "Write concise release notes.", false, false}),
             "The chat app must persist a named custom system prompt through the service.");
     require(chat.remove_prompt("release"), "The chat app must remove a custom system prompt through the service.");
@@ -440,6 +474,15 @@ int main()
     require(chat.activate_model("writer"), "The chat app must activate a selected downloaded model through the service.");
     require(chat.active_model() && chat.active_model()->id == "writer",
             "The selected downloaded model must become the active model.");
+    require(selections.active_model_id() == "writer",
+            "Selecting a model in Chat must persist its stable ID for the next startup.");
+    selections.set_save_succeeds(false);
+    require(chat.activate_model("local") && chat.active_model() && chat.active_model()->id == "local" &&
+                selections.active_model_id() == "writer",
+            "A profile-save failure must leave the last persisted model selection intact while preserving the active service state.");
+    selections.set_save_succeeds(true);
+    require(chat.activate_model("writer"),
+            "A model must remain selectable after a transient profile-save failure.");
     require(application.execute_command(chat.select_model_command()), "Model selection must dispatch through the command registry.");
     require(application.execute_command(chat.download_model_command()), "Model download must dispatch through the command registry.");
     require(chat.start_model_download("download"), "The chat app must start a requested model download through the service.");
@@ -454,6 +497,8 @@ int main()
     require(application.execute_command(chat.cancel_model_download_command()),
             "Model download cancellation must dispatch through the command registry.");
     require(application.execute_command(chat.deactivate_model_command()), "Model deactivation must dispatch through the command registry.");
+    require(selections.active_model_id().empty(),
+            "Deactivating a model in Chat must clear its persisted startup selection.");
     require(chat.activate_model("writer"), "A deactivated model must be activatable again.");
     require(application.execute_command(chat.delete_active_model_command()),
             "Active-model deletion must dispatch through the command registry.");

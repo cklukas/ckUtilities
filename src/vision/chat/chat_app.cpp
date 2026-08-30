@@ -1,5 +1,6 @@
 #include "chat_app.hpp"
 #include "chat_markdown.hpp"
+#include "chat_startup_options.hpp"
 
 #include <utility>
 
@@ -37,9 +38,11 @@ ChatApp::ChatApp(ckv::ui::Application &application,
                  ChatResponseService &response_service,
                  ChatTranscriptStore &transcript_store,
                  ChatPromptService &prompt_service,
-                 ChatModelService &model_service)
+                 ChatModelService &model_service,
+                 ChatSelectionPersistence &selection_persistence)
     : application_(application), response_service_(response_service), transcript_store_(transcript_store),
-      prompt_service_(prompt_service), model_service_(model_service), command_scope_(application.commands())
+      prompt_service_(prompt_service), model_service_(model_service), selection_persistence_(selection_persistence),
+      command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -230,6 +233,8 @@ bool ChatApp::activate_prompt(std::string_view id)
         return false;
     }
     refresh_transcript();
+    if (!selection_persistence_.save_active_prompt(id) && window_ != nullptr)
+        window_->set_footer("Active system prompt changed, but the Chat profile could not be saved.");
     return true;
 }
 
@@ -297,6 +302,8 @@ bool ChatApp::activate_model(std::string_view id)
         return false;
     }
     refresh_transcript();
+    if (!selection_persistence_.save_active_model(id) && window_ != nullptr)
+        window_->set_footer("Active model changed, but the Chat profile could not be saved.");
     return true;
 }
 
@@ -313,6 +320,8 @@ bool ChatApp::deactivate_model(std::string_view id)
         return false;
     }
     refresh_transcript();
+    if (!selection_persistence_.save_active_model({}) && window_ != nullptr)
+        window_->set_footer("Active model was cleared, but the Chat profile could not be saved.");
     return true;
 }
 
