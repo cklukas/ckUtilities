@@ -7,8 +7,10 @@ namespace
 
 using ck::edit::MarkdownByteRange;
 using ck::edit::MarkdownInlineStyle;
+using ck::edit::MarkdownListStyle;
 using ck::edit::toggle_markdown_heading;
 using ck::edit::toggle_markdown_inline_style;
+using ck::edit::toggle_markdown_list;
 using ck::edit::toggle_markdown_quote;
 using ck::edit::toggle_markdown_task;
 
@@ -57,6 +59,7 @@ TEST(MarkdownTransformations, TogglesTouchedOrdinaryLinesWithoutChangingCode)
     const auto heading = toggle_markdown_heading(source, {0, source.size()}, 2);
     ASSERT_TRUE(heading.has_value());
     EXPECT_EQ(heading->replacement, "## Intro\n```cpp\n# not a heading\n```\n## Heading");
+    EXPECT_EQ(heading->selection, (MarkdownByteRange{0, heading->replacement.size()}));
 
     const std::string once = "## Intro\n```cpp\n# not a heading\n```\n## Heading\n";
     const auto restored = toggle_markdown_heading(once, {0, once.size()}, 2);
@@ -85,6 +88,7 @@ TEST(MarkdownTransformations, TogglesTasksWithoutChangingProtectedBlockSyntax)
     ASSERT_TRUE(task.has_value());
     EXPECT_EQ(task->replacement,
               "- [ ] Plan\n  - [x] Draft\n1. [ ] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |");
+    EXPECT_EQ(task->selection, (MarkdownByteRange{0, task->replacement.size()}));
 
     constexpr std::string_view once =
         "- [ ] Plan\n  - [x] Draft\n1. [ ] Review\n```cpp\n- [ ] code\n```\n# Heading\n> Quote\n| Cell |\n";
@@ -104,6 +108,7 @@ TEST(MarkdownTransformations, TogglesQuoteLevelsWithoutRewritingCode)
     const auto quoted = toggle_markdown_quote(source, {0, source.size()});
     ASSERT_TRUE(quoted.has_value());
     EXPECT_EQ(quoted->replacement, "> Intro\n>\n> - item\n```cpp\ncode\n```\n    indented\n> > Existing");
+    EXPECT_EQ(quoted->selection, (MarkdownByteRange{0, quoted->replacement.size()}));
 
     constexpr std::string_view once = "> Intro\n>\n> - item\n```cpp\ncode\n```\n    indented\n> > Existing\n";
     const auto restored = toggle_markdown_quote(once, {0, once.size()});
@@ -113,6 +118,43 @@ TEST(MarkdownTransformations, TogglesQuoteLevelsWithoutRewritingCode)
     const auto zero_width = toggle_markdown_quote("Note\n", {0, 0});
     ASSERT_TRUE(zero_width.has_value());
     EXPECT_EQ(zero_width->replacement, "> Note");
+}
+
+TEST(MarkdownTransformations, TogglesListsWithoutRewritingProtectedBlockSyntax)
+{
+    constexpr std::string_view source =
+        "Draft\n  * [ ] Review\n3. Done\n---\n```cpp\n- code\n```\n# Heading\n> Quote\n| Cell |\n";
+    const auto bullets = toggle_markdown_list(source, {0, source.size()}, MarkdownListStyle::Bullet);
+    ASSERT_TRUE(bullets.has_value());
+    EXPECT_EQ(bullets->replacement,
+              "- Draft\n  - [ ] Review\n- Done\n---\n```cpp\n- code\n```\n# Heading\n> Quote\n| Cell |");
+    EXPECT_EQ(bullets->selection, (MarkdownByteRange{0, bullets->replacement.size()}));
+
+    constexpr std::string_view bullet_list =
+        "- Draft\n  - [ ] Review\n- Done\n---\n```cpp\n- code\n```\n# Heading\n> Quote\n| Cell |\n";
+    const auto plain = toggle_markdown_list(bullet_list, {0, bullet_list.size()}, MarkdownListStyle::Bullet);
+    ASSERT_TRUE(plain.has_value());
+    EXPECT_EQ(plain->replacement,
+              "Draft\n  Review\nDone\n---\n```cpp\n- code\n```\n# Heading\n> Quote\n| Cell |");
+
+    constexpr std::string_view mixed = "First\n- Second\n9. Third\n";
+    const auto ordered = toggle_markdown_list(mixed, {0, mixed.size()}, MarkdownListStyle::Ordered);
+    ASSERT_TRUE(ordered.has_value());
+    EXPECT_EQ(ordered->replacement, "1. First\n2. Second\n3. Third");
+
+    constexpr std::string_view ordered_list = "1. First\n2. Second\n3. Third\n";
+    const auto restored = toggle_markdown_list(ordered_list, {0, ordered_list.size()}, MarkdownListStyle::Ordered);
+    ASSERT_TRUE(restored.has_value());
+    EXPECT_EQ(restored->replacement, "First\nSecond\nThird");
+
+    const auto zero_width = toggle_markdown_list("Note\n", {0, 0}, MarkdownListStyle::Ordered);
+    ASSERT_TRUE(zero_width.has_value());
+    EXPECT_EQ(zero_width->replacement, "1. Note");
+
+    constexpr std::string_view crlf_source = "One\r\nTwo\r\n";
+    const auto crlf = toggle_markdown_list(crlf_source, {0, crlf_source.size()}, MarkdownListStyle::Ordered);
+    ASSERT_TRUE(crlf.has_value());
+    EXPECT_EQ(crlf->replacement, "1. One\r\n2. Two\r");
 }
 
 TEST(MarkdownTransformations, RejectsEmptyAndInvalidRanges)

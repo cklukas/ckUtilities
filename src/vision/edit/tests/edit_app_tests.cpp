@@ -109,6 +109,28 @@ int main()
                 editor.document().text() == "Note\n```cpp\ncode\n```\n",
             "Repeating a quote command must remove its added quote level through the command registry.");
 
+    editor.document().set_text("Note\n```cpp\ncode\n```\n");
+    const auto bullet_position = editor.document().position_at_byte(0);
+    require(bullet_position.has_value() && editor.editor_view()->set_selection({*bullet_position, *bullet_position}),
+            "The native editor must position a zero-width list transform at the current line.");
+    require(application.execute_command(editor.toggle_bullet_list_command()) &&
+                editor.document().text() == "- Note\n```cpp\ncode\n```\n",
+            "Bullet-list transforms must add a list marker without rewriting fenced code.");
+    require(application.execute_command(editor.toggle_bullet_list_command()) &&
+                editor.document().text() == "Note\n```cpp\ncode\n```\n",
+            "Repeating a bullet-list command must remove its marker through the command registry.");
+
+    editor.document().set_text("First\nSecond\n");
+    const auto list_begin = editor.document().position_at_byte(0);
+    const auto list_end = editor.document().position_at_byte(editor.document().text().size());
+    require(list_begin.has_value() && list_end.has_value() && editor.editor_view()->set_selection({*list_begin, *list_end}),
+            "The native editor must select multiple lines for an ordered-list transform.");
+    require(application.execute_command(editor.toggle_ordered_list_command()) &&
+                editor.document().text() == "1. First\n2. Second\n",
+            "Ordered-list transforms must number selected ordinary lines sequentially.");
+    require(application.execute_command(editor.toggle_ordered_list_command()) && editor.document().text() == "First\nSecond\n",
+            "Repeating an ordered-list command must restore plain selected lines through the command registry.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");

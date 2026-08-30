@@ -61,6 +61,14 @@ void EditApp::declare_commands()
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_task", [this] { toggle_task_markdown(); }));
     toggle_quote_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.toggle_quote", [this] { toggle_quote_markdown(); }));
+    toggle_bullet_list_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.toggle_bullet_list", [this] {
+            toggle_list_markdown(ck::edit::MarkdownListStyle::Bullet, "bullet list");
+        }));
+    toggle_ordered_list_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.toggle_ordered_list", [this] {
+            toggle_list_markdown(ck::edit::MarkdownListStyle::Ordered, "ordered list");
+        }));
     for (int level = 1; level <= 6; ++level)
     {
         heading_commands_[static_cast<std::size_t>(level - 1)] = command_scope_.own(declare_suite_command(
@@ -85,6 +93,8 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{inline_code_command_, "Inline &code selection"}),
                 MenuItem::command(CommandPresentation{toggle_task_command_, "Toggle &task"}),
                 MenuItem::command(CommandPresentation{toggle_quote_command_, "Toggle &quote"}),
+                MenuItem::command(CommandPresentation{toggle_bullet_list_command_, "Toggle &bullet list"}),
+                MenuItem::command(CommandPresentation{toggle_ordered_list_command_, "Toggle &ordered list"}),
                 MenuItem::separator(),
                 MenuItem::command(CommandPresentation{heading_commands_[0], "Heading &1"}),
                 MenuItem::command(CommandPresentation{heading_commands_[1], "Heading &2"}),
@@ -410,6 +420,25 @@ void EditApp::toggle_quote_markdown()
     const auto transform = ck::edit::toggle_markdown_quote(document_->text(), range);
     if (!transform || !commit_markdown_transform(*transform, "Toggled Markdown quote level."))
         window_->set_footer("Could not toggle a Markdown quote at this location.");
+}
+
+void EditApp::toggle_list_markdown(ck::edit::MarkdownListStyle style, std::string_view label)
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown lists are available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+    const ck::edit::MarkdownByteRange range = selected
+                                                  ? ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte}
+                                                  : ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
+    const auto transform = ck::edit::toggle_markdown_list(document_->text(), range, style);
+    if (!transform || !commit_markdown_transform(*transform, "Toggled Markdown " + std::string(label) + "."))
+        window_->set_footer("Could not toggle a Markdown list at this location.");
 }
 
 bool EditApp::commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,

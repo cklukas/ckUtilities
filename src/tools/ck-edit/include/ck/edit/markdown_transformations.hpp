@@ -27,6 +27,12 @@ enum class MarkdownInlineStyle
     Code,
 };
 
+enum class MarkdownListStyle
+{
+    Bullet,
+    Ordered,
+};
+
 // One atomic replacement plus the semantic selection to restore after it is
 // committed. The transformation layer deliberately has no document, UI, or
 // terminal dependency.
@@ -71,5 +77,16 @@ std::optional<MarkdownTransformEdit> toggle_markdown_task(
 std::optional<MarkdownTransformEdit> toggle_markdown_quote(
     std::string_view source,
     MarkdownByteRange selection);
+
+// Applies one list style to every ordinary nonblank line touched by the
+// selection. Calling it when every selected ordinary line already uses that
+// style removes list (and task) markers, returning plain paragraphs. Ordered
+// lists are numbered sequentially from one within the selection. Fenced and
+// indented code, headings, block quotes, and table-looking lines remain
+// untouched. A zero-width selection targets its current line.
+std::optional<MarkdownTransformEdit> toggle_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection,
+    MarkdownListStyle style);
 
 } // namespace ck::edit

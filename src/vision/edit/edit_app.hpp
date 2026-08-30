@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <cvision/core/filesystem.hpp>
 #include <cvision/ui/application.hpp>
@@ -48,6 +49,8 @@ public:
     ckv::ui::CommandId heading_command(int level) const noexcept;
     ckv::ui::CommandId toggle_task_command() const noexcept { return toggle_task_command_; }
     ckv::ui::CommandId toggle_quote_command() const noexcept { return toggle_quote_command_; }
+    ckv::ui::CommandId toggle_bullet_list_command() const noexcept { return toggle_bullet_list_command_; }
+    ckv::ui::CommandId toggle_ordered_list_command() const noexcept { return toggle_ordered_list_command_; }
 
 private:
     void declare_commands();
@@ -65,6 +68,7 @@ private:
     void toggle_heading_markdown(int level);
     void toggle_task_markdown();
     void toggle_quote_markdown();
+    void toggle_list_markdown(ck::edit::MarkdownListStyle style, std::string_view label);
     bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
                                    std::string_view success_message);
     bool markdown_document() const noexcept;
@@ -86,6 +90,8 @@ private:
     ckv::ui::CommandId inline_code_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_task_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId toggle_quote_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId toggle_bullet_list_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId toggle_ordered_list_command_ = ckv::ui::kInvalidCommand;
     std::array<ckv::ui::CommandId, 6> heading_commands_{};
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;

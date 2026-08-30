@@ -229,12 +229,20 @@ std::string transform_heading_line(std::string_view line, int level, bool &chang
     return transformed;
 }
 
-std::optional<std::size_t> task_list_content_start(std::string_view line, std::size_t indent) noexcept
+struct ListItem
+{
+    MarkdownListStyle style = MarkdownListStyle::Bullet;
+    std::size_t indent = 0;
+    std::size_t content = 0;
+};
+
+std::optional<ListItem> list_item_at(std::string_view line, std::size_t indent) noexcept
 {
     if (indent >= line.size())
         return std::nullopt;
 
     std::size_t marker_end = indent;
+    MarkdownListStyle style = MarkdownListStyle::Bullet;
     if (line[marker_end] == '-' || line[marker_end] == '*' || line[marker_end] == '+')
     {
         ++marker_end;
@@ -248,13 +256,14 @@ std::optional<std::size_t> task_list_content_start(std::string_view line, std::s
             (line[marker_end] != '.' && line[marker_end] != ')'))
             return std::nullopt;
         ++marker_end;
+        style = MarkdownListStyle::Ordered;
     }
 
     if (marker_end == line.size() || (line[marker_end] != ' ' && line[marker_end] != '\t'))
         return std::nullopt;
     while (marker_end < line.size() && (line[marker_end] == ' ' || line[marker_end] == '\t'))
         ++marker_end;
-    return marker_end;
+    return ListItem{style, indent, marker_end};
 }
 
 std::optional<bool> task_checked_at(std::string_view line, std::size_t offset) noexcept
@@ -279,19 +288,19 @@ std::string transform_task_line(std::string_view line, bool &changed)
     if (heading_at(content, indent) || content.substr(indent).starts_with('>') || content.find('|') != std::string_view::npos)
         return std::string(line);
 
-    if (const auto list_content = task_list_content_start(content, indent))
+    if (const auto list = list_item_at(content, indent))
     {
-        if (const auto checked = task_checked_at(content, *list_content))
+        if (const auto checked = task_checked_at(content, list->content))
         {
             std::string transformed(line);
-            transformed[*list_content + 1U] = *checked ? ' ' : 'x';
+            transformed[list->content + 1U] = *checked ? ' ' : 'x';
             changed = true;
             return transformed;
         }
 
-        std::string transformed(content.substr(0, *list_content));
+        std::string transformed(content.substr(0, list->content));
         transformed += "[ ] ";
-        transformed += content.substr(*list_content);
+        transformed += content.substr(list->content);
         if (has_carriage_return)
             transformed.push_back('\r');
         changed = true;
@@ -308,6 +317,126 @@ std::string transform_task_line(std::string_view line, bool &changed)
         transformed.push_back('\r');
     changed = true;
     return transformed;
+}
+
+bool thematic_break(std::string_view line) noexcept
+{
+    char marker = '\0';
+    std::size_t count = 0;
+    for (const char character : line)
+    {
+        if (character == ' ' || character == '\t')
+            continue;
+        if ((character != '-' && character != '*' && character != '_') || (marker != '\0' && character != marker))
+            return false;
+        marker = character;
+        ++count;
+    }
+    return count >= 3U;
+}
+
+bool list_transformable(std::string_view line) noexcept
+{
+    if (line.empty() || indented_code(line))
+        return false;
+
+    const std::size_t indent = heading_indent(line);
+    if (indent >= 4U || !has_non_whitespace(line.substr(indent)) || heading_at(line, indent) ||
+        line.substr(indent).starts_with('>') || line.find('|') != std::string_view::npos || thematic_break(line))
+        return false;
+    return true;
+}
+
+std::size_t task_content_start(std::string_view line, std::size_t offset) noexcept
+{
+    if (!task_checked_at(line, offset))
+        return offset;
+    offset += 3U;
+    while (offset < line.size() && (line[offset] == ' ' || line[offset] == '\t'))
+        ++offset;
+    return offset;
+}
+
+std::string transform_list_line(std::string_view line,
+                                MarkdownListStyle style,
+                                std::size_t ordinal,
+                                bool remove,
+                                bool &changed)
+{
+    const bool has_carriage_return = !line.empty() && line.back() == '\r';
+    const std::string_view content = has_carriage_return ? line.substr(0, line.size() - 1U) : line;
+    if (!list_transformable(content))
+        return std::string(line);
+
+    const std::size_t indent = heading_indent(content);
+    const auto list = list_item_at(content, indent);
+    if (remove)
+    {
+        if (!list || list->style != style)
+            return std::string(line);
+
+        std::string transformed(content.substr(0, list->indent));
+        transformed += content.substr(task_content_start(content, list->content));
+        if (has_carriage_return)
+            transformed.push_back('\r');
+        if (transformed != line)
+            changed = true;
+        return transformed;
+    }
+
+    std::string transformed(content.substr(0, indent));
+    if (style == MarkdownListStyle::Bullet)
+        transformed += "- ";
+    else
+        transformed += std::to_string(ordinal) + ". ";
+    transformed += list ? content.substr(list->content) : content.substr(indent);
+    if (has_carriage_return)
+        transformed.push_back('\r');
+    if (transformed != line)
+        changed = true;
+    return transformed;
+}
+
+bool selection_has_only_list_style(std::string_view source,
+                                   std::size_t first_line,
+                                   std::size_t last_line_end,
+                                   MarkdownListStyle style)
+{
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    bool saw_transformable = false;
+    bool all_matching = true;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+
+        if (active_fence)
+        {
+            if (fence_closes(line, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(line))
+        {
+            active_fence = opening;
+        }
+        else
+        {
+            const std::string_view content = !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1U) : line;
+            if (list_transformable(content))
+            {
+                saw_transformable = true;
+                const auto list = list_item_at(content, heading_indent(content));
+                all_matching = all_matching && list && list->style == style;
+            }
+        }
+
+        if (current_end == last_line_end)
+            break;
+        begin = current_end + 1U;
+    }
+    return saw_transformable && all_matching;
 }
 
 std::size_t quote_indent(std::string_view line) noexcept
@@ -575,10 +704,11 @@ std::optional<MarkdownTransformEdit> toggle_markdown_heading(
 
     if (!changed)
         return std::nullopt;
+    const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
     return MarkdownTransformEdit{
         .replaced = {first_line, last_line_end},
         .replacement = std::move(replacement),
-        .selection = {first_line, first_line + replacement.size()},
+        .selection = restored_selection,
     };
 }
 
@@ -634,10 +764,11 @@ std::optional<MarkdownTransformEdit> toggle_markdown_task(
 
     if (!changed)
         return std::nullopt;
+    const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
     return MarkdownTransformEdit{
         .replaced = {first_line, last_line_end},
         .replacement = std::move(replacement),
-        .selection = {first_line, first_line + replacement.size()},
+        .selection = restored_selection,
     };
 }
 
@@ -694,10 +825,77 @@ std::optional<MarkdownTransformEdit> toggle_markdown_quote(
 
     if (!changed)
         return std::nullopt;
+    const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
     return MarkdownTransformEdit{
         .replaced = {first_line, last_line_end},
         .replacement = std::move(replacement),
-        .selection = {first_line, first_line + replacement.size()},
+        .selection = restored_selection,
+    };
+}
+
+std::optional<MarkdownTransformEdit> toggle_markdown_list(
+    std::string_view source,
+    MarkdownByteRange selection,
+    MarkdownListStyle style)
+{
+    if (!valid_range(source, selection))
+        return std::nullopt;
+
+    const std::size_t first_line = line_start(source, selection.begin);
+    std::size_t last_position = selection.begin;
+    if (selection.end > selection.begin)
+    {
+        last_position = selection.end - 1U;
+        if (source[last_position] == '\n' && last_position > 0U)
+            --last_position;
+    }
+    const std::size_t last_line_end = line_end(source, last_position);
+    const bool remove = selection_has_only_list_style(source, first_line, last_line_end, style);
+
+    std::optional<Fence> active_fence = fence_before(source, first_line);
+    std::string replacement;
+    replacement.reserve(last_line_end - first_line);
+    bool changed = false;
+    std::size_t ordinal = 1;
+
+    for (std::size_t begin = first_line; begin <= last_line_end;)
+    {
+        const std::size_t end = source.find('\n', begin);
+        const std::size_t current_end = end == std::string_view::npos ? source.size() : end;
+        const std::string_view line = source.substr(begin, current_end - begin);
+
+        if (active_fence)
+        {
+            replacement.append(line);
+            if (fence_closes(line, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(line))
+        {
+            replacement.append(line);
+            active_fence = opening;
+        }
+        else
+        {
+            const std::string_view content = !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1U) : line;
+            replacement += transform_list_line(line, style, ordinal, remove, changed);
+            if (list_transformable(content))
+                ++ordinal;
+        }
+
+        if (current_end == last_line_end)
+            break;
+        replacement.push_back('\n');
+        begin = current_end + 1U;
+    }
+
+    if (!changed)
+        return std::nullopt;
+    const MarkdownByteRange restored_selection{first_line, first_line + replacement.size()};
+    return MarkdownTransformEdit{
+        .replaced = {first_line, last_line_end},
+        .replacement = std::move(replacement),
+        .selection = restored_selection,
     };
 }
 
