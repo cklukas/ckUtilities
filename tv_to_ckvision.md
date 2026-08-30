@@ -109,12 +109,13 @@ Historical application baseline: `legacy_tv`
   a load/edit/save round trip. Import and export use that same injected
   boundary. Option metadata now marks derived settings read-only, which keeps
   their value visible while disabling the native Edit and Reset commands. The
-  editor now accepts an application catalog, so its selector switches the
-  table, title, and persistence boundary together rather than treating every
-  setting as belonging to the config executable. `ck-du` is the first native
-  consumer of that profile: on startup it maps its saved options into the
-  framework-neutral scan policy, including symlink handling, filters, and
-  error-reporting behavior.
+  editor's production catalog now contains Disk Usage and Chat, so its selector
+  switches the table, title, and persistence boundary together rather than
+  treating every setting as belonging to the config executable. `ck-du` maps
+  its saved profile into the framework-neutral scan policy at startup,
+  including symlink handling, filters, and error-reporting behavior. `ck-chat`
+  likewise applies a saved active model and system-prompt selection through
+  its service boundary before the UI starts.
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
@@ -197,6 +198,10 @@ Historical application baseline: `legacy_tv`
   request. Downloaded-model selection, deactivation, and confirmed local
   deletion now use an injected `ModelManager` adapter, and the active model ID
   and completed prior turns are carried in every response request. The adapter now owns cancellable
+  `ck-chat` also loads its versioned application profile before its UI starts;
+  a valid saved model or system-prompt identifier is applied through those same
+  adapters, while a missing or stale identifier leaves the manager-owned
+  selection unchanged.
   background downloads behind a cached catalog, so rate-limited typed progress
   and completion reach the UI without racing `ModelManager` or retaining view
   pointers; late response and download callbacks are dropped before accessing

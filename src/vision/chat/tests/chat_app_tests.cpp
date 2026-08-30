@@ -1,4 +1,5 @@
 #include "chat_app.hpp"
+#include "chat_startup_options.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -12,6 +13,8 @@
 
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
+
+#include "chat_options.hpp"
 
 namespace
 {
@@ -358,6 +361,15 @@ int main()
 {
     verify_late_chat_delivery_is_lifetime_safe();
 
+    ck::config::OptionRegistry optionsRegistry("ck-chat");
+    ck::chat::registerChatOptions(optionsRegistry);
+    optionsRegistry.set(ck::chat::kOptionActiveModelId, ck::config::OptionValue(std::string("writer")));
+    optionsRegistry.set(ck::chat::kOptionActivePromptId, ck::config::OptionValue(std::string("review")));
+    const ck::vision::ChatStartupSelection startupSelection =
+        ck::vision::chatStartupSelectionFromRegistry(optionsRegistry);
+    require(startupSelection.active_model_id == "writer" && startupSelection.active_prompt_id == "review",
+            "The chat startup boundary must derive persistent model and prompt selections from its profile.");
+
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
@@ -365,6 +377,16 @@ int main()
     MemoryTranscriptStore transcripts;
     MemoryPromptService prompts;
     MemoryModelService models;
+    ck::vision::applyChatStartupSelection(startupSelection, prompts, models);
+    require(prompts.active_prompt() && prompts.active_prompt()->id == "review" &&
+                models.active_model() && models.active_model()->id == "writer",
+            "The chat startup boundary must apply valid profile selections through the owned services.");
+    require(prompts.activate("default") && models.activate("local"),
+            "The profile-selection test must restore the fixture's initial chat state.");
+    ck::vision::applyChatStartupSelection({"missing-model", "missing-prompt"}, prompts, models);
+    require(prompts.active_prompt() && prompts.active_prompt()->id == "default" &&
+                models.active_model() && models.active_model()->id == "local",
+            "Unavailable profile selections must leave the service-owned chat state unchanged.");
     ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.request().prompt == "Hello" &&

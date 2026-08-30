@@ -9,6 +9,8 @@
 #include "ck/ai/system_prompt_manager.hpp"
 #include "ck/vision/keymap.hpp"
 #include "chat_app.hpp"
+#include "chat_options.hpp"
+#include "chat_startup_options.hpp"
 
 int main(int argc, char **argv)
 {
@@ -17,6 +19,11 @@ int main(int argc, char **argv)
         std::printf("Usage: %s\n", argc > 0 ? argv[0] : "ck-chat-ckvision");
         return 0;
     }
+    ck::config::OptionRegistry optionsRegistry("ck-chat");
+    ck::chat::registerChatOptions(optionsRegistry);
+    optionsRegistry.loadDefaults();
+    const ck::vision::ChatStartupSelection startupSelection =
+        ck::vision::chatStartupSelectionFromRegistry(optionsRegistry);
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
@@ -27,6 +34,7 @@ int main(int argc, char **argv)
     ck::vision::SystemPromptManagerService prompts(prompt_manager);
     ck::ai::ModelManager model_manager;
     ck::vision::ModelManagerService models(model_manager);
+    ck::vision::applyChatStartupSelection(startupSelection, prompts, models);
     ck::vision::LlmChatResponseService responses(models);
     ck::vision::ChatApp chat(application, responses, transcripts, prompts, models);
     keymap.load();

@@ -30,6 +30,18 @@ if(APPLE)
   target_link_libraries(ck_du_core PUBLIC "-framework CoreFoundation" "-framework CoreServices")
 endif()
 
+add_library(ck_chat_options STATIC
+  ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/src/chat_options.cpp
+)
+target_include_directories(ck_chat_options
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_compile_features(ck_chat_options PUBLIC cxx_std_20)
+target_link_libraries(ck_chat_options PUBLIC ck_options)
+
 add_library(ck_find_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/ck-find/src/search_backend.cpp
   ${PROJECT_SOURCE_DIR}/src/tools/ck-find/src/search_model.cpp
@@ -55,10 +67,12 @@ target_include_directories(ck_markdown_core
 )
 target_compile_features(ck_markdown_core PUBLIC cxx_std_20)
 
-install(TARGETS ck_json_view_core ck_du_core ck_find_core ck_markdown_core ARCHIVE DESTINATION lib)
+install(TARGETS ck_json_view_core ck_du_core ck_chat_options ck_find_core ck_markdown_core ARCHIVE DESTINATION lib)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/json-view/include/ DESTINATION include
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include/ DESTINATION include
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include/ DESTINATION include
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 install(FILES
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_parser.hpp
