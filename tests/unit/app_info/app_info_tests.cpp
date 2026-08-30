@@ -54,6 +54,14 @@ TEST(AppInfo, FindMetadataDescribesTheNativeExecutionService)
     EXPECT_EQ(find.longDescription.find("when the full execution engine arrives"), std::string_view::npos);
 }
 
+TEST(AppInfo, ConfigMetadataNamesTheCurrentCatalog)
+{
+    const auto &config = ck::appinfo::requireTool("ck-config");
+    EXPECT_NE(config.longDescription.find("Disk Usage and Chat"), std::string_view::npos);
+    EXPECT_NE(config.longDescription.find("Shortcut conflicts"), std::string_view::npos);
+    EXPECT_EQ(config.longDescription.find("every CK utility"), std::string_view::npos);
+}
+
 TEST(AppInfo, RequireToolThrowsForUnknownId)
 {
     EXPECT_THROW(ck::appinfo::requireTool("does-not-exist"), std::runtime_error);

@@ -59,7 +59,7 @@ namespace ck::appinfo
                 "Config",
                 "Manage ck-utilities configuration defaults.",
                 "Manage ck-utilities configuration defaults.",
-                "Config centralizes application defaults for every CK utility. Browse known apps, tweak options with validation, and export or import profiles for teammates. It keeps environment-wide settings—like ignore patterns or display preferences—consistent without hunting through dotfiles."},
+                "Config manages the native Disk Usage and Chat option profiles alongside suite keyboard shortcuts. Browse supported settings, validate edits, save or reload profiles, and import or export them when needed. Shortcut conflicts are shown explicitly before a replacement is saved."},
         }};
 
     } // namespace
