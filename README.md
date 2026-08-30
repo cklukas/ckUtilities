@@ -15,7 +15,7 @@ modified by the rehearsal.
 
 Current local acceptance evidence covers a clean macOS Debug/Release cutover,
 92 tests, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
-checks, a verified release archive, and real-PTY terminal smoke across three
+checks, a verified release archive, and real-PTY terminal lifecycle smoke across three
 profiles (also under ASan/UBSan). Linux and Windows remain release acceptance
 work. See [the migration roadmap](tv_to_ckvision.md) for the complete status
 and constraints.
@@ -120,8 +120,9 @@ real-model acceptance.
 On macOS or Linux, add `-DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON` and run
 `verify_ckvision_terminal` to smoke-test every staged executable in a real PTY
 under `xterm-256color`, `xterm`, and `vt100`. The gate uses an empty disposable
-configuration root and sends the standard Alt+X quit command after startup; it
-does not replace interactive workflow or cross-platform acceptance.
+configuration root, delivers a PTY resize and the standard Alt+X quit command,
+then verifies clean exit and restoration of persistent terminal mode. It does
+not replace interactive workflow or cross-platform acceptance.
 
 ### Hotkey Schemes
 

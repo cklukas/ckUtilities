@@ -88,9 +88,10 @@ diagnosis.
 
 On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
 `verify_ckvision_terminal` gate. It gives every staged executable a real PTY,
-uses a disposable empty configuration root, and verifies startup plus the
-standard Alt+X quit command under `xterm-256color`, `xterm`, and `vt100`.
-It is terminal-profile smoke evidence, not interactive-journey or
+uses a disposable empty configuration root, delivers a PTY resize and the
+standard Alt+X quit command under `xterm-256color`, `xterm`, and `vt100`, then
+verifies clean exit and restoration of persistent terminal mode. It is
+terminal-profile lifecycle smoke evidence, not interactive-journey or
 cross-platform acceptance. The gate passes in local macOS Debug, Release, and
 ASan/UBSan cutover configurations.
 

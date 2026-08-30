@@ -20,6 +20,18 @@ add_subdirectory(config)
 add_subdirectory(edit)
 add_subdirectory(chat)
 
+if(UNIX)
+  add_executable(ck_vision_terminal_smoke
+    tests/terminal_smoke.cpp
+  )
+  target_compile_features(ck_vision_terminal_smoke PRIVATE cxx_std_20)
+
+  if(NOT APPLE)
+    find_library(CKTOOLS_UTIL_LIBRARY NAMES util REQUIRED)
+    target_link_libraries(ck_vision_terminal_smoke PRIVATE "${CKTOOLS_UTIL_LIBRARY}")
+  endif()
+endif()
+
 if(BUILD_TESTING)
   add_executable(ck_vision_shell_tests
     tests/suite_shell_tests.cpp

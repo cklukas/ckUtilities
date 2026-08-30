@@ -36,7 +36,8 @@ For Unix terminal-profile evidence, additionally enable
 `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` and run
 `verify_ckvision_terminal`. It starts every staged product in a real PTY under
 `xterm-256color`, `xterm`, and `vt100`, then exercises the standard Alt+X quit
-command with a disposable empty configuration root.
+command and a PTY resize with a disposable empty configuration root. It also
+requires clean exit and restored persistent terminal mode.
 
 Current local evidence is macOS Debug/Release plus ASan/UBSan. Linux and
 Windows remain release gates; actual support must match the migration ledger,

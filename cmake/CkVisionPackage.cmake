@@ -125,15 +125,18 @@ function(cktools_add_ckvision_terminal_verification)
     return()
   endif()
 
-  find_program(CKTOOLS_SCRIPT_EXECUTABLE NAMES script REQUIRED)
+  if(NOT TARGET ck_vision_terminal_smoke)
+    message(FATAL_ERROR
+      "CKTOOLS_VERIFY_CKVISION_TERMINAL requires the POSIX terminal-smoke helper.")
+  endif()
 
   add_custom_target(verify_ckvision_terminal
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
       "-DCKTOOLS_TERMINAL_CONFIG_ROOT=${PROJECT_BINARY_DIR}/ckvision-terminal-config"
-      "-DCKTOOLS_SCRIPT_EXECUTABLE=${CKTOOLS_SCRIPT_EXECUTABLE}"
+      "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionTerminal.cmake"
-    DEPENDS verify_ckvision_install
+    DEPENDS verify_ckvision_install ck_vision_terminal_smoke
     USES_TERMINAL
     COMMENT "Smoke-test staged ckVision executables in real terminal profiles")
 endfunction()
