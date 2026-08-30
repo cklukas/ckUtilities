@@ -9,7 +9,7 @@
 
 #include "ck/vision/keymap.hpp"
 #include "disk_usage_app.hpp"
-#include "disk_usage_core.hpp"
+#include "disk_usage_options.hpp"
 
 int main(int argc, char **argv)
 {
@@ -20,8 +20,10 @@ int main(int argc, char **argv)
     }
 
     const std::filesystem::path path = argc > 1 ? argv[1] : ".";
-    ck::du::BuildDirectoryTreeOptions options;
-    options.reportErrors = false;
+    ck::config::OptionRegistry optionsRegistry("ck-du");
+    ck::du::registerDiskUsageOptions(optionsRegistry);
+    optionsRegistry.loadDefaults();
+    ck::du::BuildDirectoryTreeOptions options = ck::du::buildDirectoryTreeOptionsFromRegistry(optionsRegistry);
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);

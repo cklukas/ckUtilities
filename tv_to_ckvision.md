@@ -111,7 +111,10 @@ Historical application baseline: `legacy_tv`
   their value visible while disabling the native Edit and Reset commands. The
   editor now accepts an application catalog, so its selector switches the
   table, title, and persistence boundary together rather than treating every
-  setting as belonging to the config executable.
+  setting as belonging to the config executable. `ck-du` is the first native
+  consumer of that profile: on startup it maps its saved options into the
+  framework-neutral scan policy, including symlink handling, filters, and
+  error-reporting behavior.
   The native keyboard-shortcut window now lists stable command identities,
   captures normalized `KeyChord` values without dispatching them, requires an
   explicit confirmation before replacing an occupied chord, and persists
@@ -129,7 +132,7 @@ Historical application baseline: `legacy_tv`
   bindings intact but inactive. Keymap format 1 data upgrades on its next
   write. A shortcut-scheme selection is transactional: if its bindings cannot
   reload, the previous persisted scheme is restored. Final configuration
-  acceptance remains.
+  acceptance and remaining application option consumers remain.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
   injected file service for native open/save/save-as workflows. Dirty-window
   close now presents an explicit Save/Discard/Cancel decision and invokes the
@@ -212,7 +215,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 90-test cutover suite passes in normal and
+  candidate SDK. The full 91-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -223,7 +226,7 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  90-test cutover configuration, independent package consumer, and staged
+  91-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. That staged gate launches every converted
   child through `ck-utilities --launch <child> --help` and separately proves
   the missing-child diagnostic path. The `verify_ckvision_cutover` gate also
@@ -231,12 +234,12 @@ Historical application baseline: `legacy_tv`
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 90 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 91 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 90-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 91-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

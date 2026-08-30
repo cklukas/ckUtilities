@@ -92,3 +92,32 @@ TEST(DiskUsageOptions, RegistersExpectedDefinitions)
 
     EXPECT_NE(std::find(keys.begin(), keys.end(), "threshold"), keys.end());
 }
+
+TEST(DiskUsageOptions, BuildsScanOptionsFromProfile)
+{
+    ck::config::OptionRegistry registry("ck-du");
+    ck::du::registerDiskUsageOptions(registry);
+    registry.set("symlinkPolicy", ck::config::OptionValue(std::string("command-line")));
+    registry.set("countHardLinksMultiple", ck::config::OptionValue(true));
+    registry.set("ignoreNodump", ck::config::OptionValue(true));
+    registry.set("reportErrors", ck::config::OptionValue(false));
+    registry.set("threshold", ck::config::OptionValue(std::int64_t{4096}));
+    registry.set("stayOnFilesystem", ck::config::OptionValue(true));
+    registry.set("ignorePatterns", ck::config::OptionValue(std::vector<std::string>{"*.tmp", ".cache"}));
+
+    const ck::du::BuildDirectoryTreeOptions options = ck::du::buildDirectoryTreeOptionsFromRegistry(registry);
+
+    EXPECT_EQ(options.symlinkPolicy, ck::du::BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly);
+    EXPECT_TRUE(options.followCommandLineSymlinks);
+    EXPECT_TRUE(options.countHardLinksMultipleTimes);
+    EXPECT_TRUE(options.ignoreNodumpFlag);
+    EXPECT_FALSE(options.reportErrors);
+    EXPECT_EQ(options.threshold, 4096);
+    EXPECT_TRUE(options.stayOnFilesystem);
+    EXPECT_EQ(options.ignoreMasks, (std::vector<std::string>{"*.tmp", ".cache"}));
+
+    registry.set("symlinkPolicy", ck::config::OptionValue(std::string("always")));
+    const ck::du::BuildDirectoryTreeOptions alwaysOptions = ck::du::buildDirectoryTreeOptionsFromRegistry(registry);
+    EXPECT_EQ(alwaysOptions.symlinkPolicy, ck::du::BuildDirectoryTreeOptions::SymlinkPolicy::Always);
+    EXPECT_FALSE(alwaysOptions.followCommandLineSymlinks);
+}

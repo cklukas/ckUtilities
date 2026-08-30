@@ -1,7 +1,5 @@
 #include "disk_usage_options.hpp"
 
-#include "disk_usage_core.hpp"
-
 namespace ck::du
 {
 namespace
@@ -40,5 +38,25 @@ void registerDiskUsageOptions(config::OptionRegistry &registry)
                               "Filename patterns to exclude."});
 }
 
-} // namespace ck::du
+BuildDirectoryTreeOptions buildDirectoryTreeOptionsFromRegistry(const config::OptionRegistry &registry)
+{
+    BuildDirectoryTreeOptions options;
+    const std::string symlinkPolicy = registry.getString(kOptionSymlinkPolicy, "never");
+    if (symlinkPolicy == "always")
+        options.symlinkPolicy = BuildDirectoryTreeOptions::SymlinkPolicy::Always;
+    else if (symlinkPolicy == "command-line")
+    {
+        options.symlinkPolicy = BuildDirectoryTreeOptions::SymlinkPolicy::CommandLineOnly;
+        options.followCommandLineSymlinks = true;
+    }
 
+    options.countHardLinksMultipleTimes = registry.getBool(kOptionHardLinks);
+    options.ignoreNodumpFlag = registry.getBool(kOptionIgnoreNodump);
+    options.reportErrors = registry.getBool(kOptionReportErrors, true);
+    options.threshold = registry.getInteger(kOptionThreshold);
+    options.stayOnFilesystem = registry.getBool(kOptionStayOnFilesystem);
+    options.ignoreMasks = registry.getStringList(kOptionIgnorePatterns);
+    return options;
+}
+
+} // namespace ck::du

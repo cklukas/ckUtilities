@@ -25,6 +25,7 @@ target_include_directories(ck_du_core
     $<INSTALL_INTERFACE:include>
 )
 target_compile_features(ck_du_core PUBLIC cxx_std_20)
+target_link_libraries(ck_du_core PUBLIC ck_options)
 if(APPLE)
   target_link_libraries(ck_du_core PUBLIC "-framework CoreFoundation" "-framework CoreServices")
 endif()
