@@ -51,6 +51,18 @@ int main()
     require(between_crlf_lines.has_value() && apply(prose_crlf, *between_crlf_lines) ==
                                                   "Before\r\n| Header 1 |\r\n| --- |\r\nafter",
             "Table insertion must preserve a CRLF block boundary.");
+    const std::string terminated_prose = "Before\n";
+    const auto at_lf_eof = ck::edit::insert_markdown_table(
+        terminated_prose, {terminated_prose.size(), terminated_prose.size()}, 1, 0);
+    require(at_lf_eof.has_value() && apply(terminated_prose, *at_lf_eof) ==
+                                        "Before\n| Header 1 |\n| --- |\n",
+            "Table insertion must accept end-of-file after a terminating LF as the final empty line.");
+    const std::string terminated_crlf_prose = "Before\r\n";
+    const auto at_crlf_eof = ck::edit::insert_markdown_table(
+        terminated_crlf_prose, {terminated_crlf_prose.size(), terminated_crlf_prose.size()}, 1, 0);
+    require(at_crlf_eof.has_value() && apply(terminated_crlf_prose, *at_crlf_eof) ==
+                                          "Before\r\n| Header 1 |\r\n| --- |\r\n",
+            "Table insertion must accept end-of-file after a terminating CRLF as the final empty line.");
 
     const std::string table = "| Name | Count |\n| :--- | ---: |\n| one\\|two | 2 |\n";
     const auto add_row = ck::edit::insert_markdown_table_row(

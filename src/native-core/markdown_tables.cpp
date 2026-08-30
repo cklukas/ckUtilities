@@ -77,8 +77,8 @@ std::vector<SourceLine> split_lines(std::string_view source)
         lines.push_back({begin, content_end, end, terminated});
         begin = end;
     }
-    if (source.empty())
-        lines.push_back({0, 0, 0, false});
+    if (source.empty() || source.ends_with('\n'))
+        lines.push_back({source.size(), source.size(), source.size(), false});
     return lines;
 }
 
