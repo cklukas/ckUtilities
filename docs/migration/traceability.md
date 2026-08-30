@@ -23,9 +23,24 @@ standard quit chord to each staged executable, then requires clean exit
 with the persistent terminal configuration restored. The macOS kernel's
 transient pending-input state is deliberately excluded from that comparison.
 
-Every row will gain links to domain tests, deterministic headless scenarios,
-interactive platform tests, and release evidence before its work package can
-close.
+The following index links every inventory row to its primary current evidence.
+The release gates prove staged-product composition and terminal lifecycle; they
+do not substitute for the external policy, real-model, upstream, or
+cross-platform acceptance still recorded in the roadmap.
+
+## Primary evidence index
+
+| ID | Domain or core evidence | Headless application evidence | Release or platform evidence |
+|---|---|---|---|
+| CKU-SHELL | [shell composition](../../src/vision/tests/suite_shell_tests.cpp) and [keymap](../../src/vision/keymap/tests/keymap_tests.cpp) | [shell scenario](../../src/vision/tests/suite_shell_tests.cpp) | [UI-boundary gate](../../cmake/CheckUiBoundaries.cmake) and [PTY gate](../../cmake/VerifyCkVisionTerminal.cmake) |
+| CKU-JSON | [JSON core](../../tests/unit/json_view/json_view_core_tests.cpp) | [JSON View scenario](../../src/vision/json-view/tests/json_view_app_tests.cpp) | [installed-product gate](../../cmake/VerifyCkVisionInstall.cmake) |
+| CKU-LAUNCH | [launcher CLI helpers](../../tests/unit/ck_utilities/cli_utils_tests.cpp) | [launcher scenario](../../src/vision/launcher/tests/launcher_app_tests.cpp) | [product-tree launcher checks](../../cmake/VerifyCkVisionProductTree.cmake) |
+| CKU-FIND | [search backend](../../tests/unit/ck_find/search_backend_tests.cpp) and [guided-search policies](../../tests/unit/ck_find/guided_search_tests.cpp) | [Find scenario](../../src/vision/find/tests/find_app_tests.cpp) | [cutover gate](../../cmake/VerifyCkVisionCutover.cmake) |
+| CKU-DU | [disk-usage core](../../tests/unit/ck_du/disk_usage_tests.cpp) | [Disk Usage scenario](../../src/vision/du/tests/disk_usage_app_tests.cpp) | [sanitizer/rehearsal targets](../../cmake/CkVisionPackage.cmake) |
+| CKU-CONFIG | [option registry](../../tests/unit/config/option_registry_tests.cpp) and [keymap](../../src/vision/keymap/tests/keymap_tests.cpp) | [Config scenario](../../src/vision/config/tests/config_app_tests.cpp) | [installed-SDK consumer](../../cmake/VerifyCkVisionConsumer.cmake) |
+| CKU-EDIT | [Markdown transformations](../../tests/unit/ck_edit/markdown_transformations_tests.cpp) | [Edit scenario](../../src/vision/edit/tests/edit_app_tests.cpp) | [sanitizer/rehearsal targets](../../cmake/CkVisionPackage.cmake) |
+| CKU-CHAT | [LLM runtime](../../tests/unit/ckai_core/llm_tests.cpp) and [model manager](../../tests/unit/ckai_core/model_manager_tests.cpp) | [Chat scenario](../../src/vision/chat/tests/chat_app_tests.cpp) | [opt-in real-model hook](ckvision-baseline.md#opt-in-local-model-chat-evidence) |
+| CKU-RELEASE | [package target definitions](../../cmake/CkVisionPackage.cmake) | [terminal smoke helper](../../src/vision/tests/terminal_smoke.cpp) | [baseline record](ckvision-baseline.md) and [cutover gate](../../cmake/VerifyCkVisionCutover.cmake) |
 
 ## Initial ckVision gap ledger
 
