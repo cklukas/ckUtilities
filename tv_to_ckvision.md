@@ -271,7 +271,8 @@ Historical application baseline: `legacy_tv`
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 92-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 92-test normal and ASan/UBSan suites. Its real-PTY
+  terminal-profile gate also passes under ASan/UBSan, on 2026-08-30.
 
 ## 1. Mandate
 

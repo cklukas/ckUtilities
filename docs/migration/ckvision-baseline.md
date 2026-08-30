@@ -91,7 +91,8 @@ On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
 uses a disposable empty configuration root, and verifies startup plus the
 standard Alt+X quit command under `xterm-256color`, `xterm`, and `vt100`.
 It is terminal-profile smoke evidence, not interactive-journey or
-cross-platform acceptance.
+cross-platform acceptance. The gate passes in local macOS Debug, Release, and
+ASan/UBSan cutover configurations.
 
 ### Opt-in local-model chat evidence
 

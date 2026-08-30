@@ -15,9 +15,10 @@ modified by the rehearsal.
 
 Current local acceptance evidence covers a clean macOS Debug/Release cutover,
 92 tests, ASan/UBSan, an installed-SDK consumer, staged executable and launcher
-checks, and a verified release archive. Linux and Windows remain release
-acceptance work. See [the migration roadmap](tv_to_ckvision.md) for the
-complete status and constraints.
+checks, a verified release archive, and real-PTY terminal smoke across three
+profiles (also under ASan/UBSan). Linux and Windows remain release acceptance
+work. See [the migration roadmap](tv_to_ckvision.md) for the complete status
+and constraints.
 
 Target platforms: macOS and Linux terminal hosts; Windows is not advertised
 until its ckVision backend has passed the required gates.
