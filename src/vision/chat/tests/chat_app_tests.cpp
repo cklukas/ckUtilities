@@ -1,4 +1,5 @@
 #include "chat_app.hpp"
+#include "chat_markdown.hpp"
 #include "chat_startup_options.hpp"
 
 #include <algorithm>
@@ -33,6 +34,18 @@ std::string block_text(const ckv::widgets::FlowBlock &block)
         if (const auto *flow_text = std::get_if<ckv::widgets::FlowText>(&inline_content))
             text += flow_text->text;
     return text;
+}
+
+std::size_t block_link_count(const ckv::widgets::FlowBlock &block)
+{
+    std::size_t count = 0;
+    for (const auto &inline_content : block.content)
+    {
+        const auto *flow_text = std::get_if<ckv::widgets::FlowText>(&inline_content);
+        if (flow_text != nullptr && flow_text->link_target)
+            ++count;
+    }
+    return count;
 }
 
 class ManualResponseService final : public ck::vision::ChatResponseService
@@ -352,7 +365,7 @@ void verify_late_chat_delivery_is_lifetime_safe()
         MemoryModelService models;
         MemoryChatSelectionPersistence selections;
         {
-            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections, {});
             require(chat.submit_prompt("Late response"),
                     "The test requires an active native chat response.");
         }
@@ -374,7 +387,7 @@ void verify_late_chat_delivery_is_lifetime_safe()
         MemoryModelService models;
         MemoryChatSelectionPersistence selections;
         {
-            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
+            ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections, {});
             require(chat.start_model_download("download") && chat.model_download_running(),
                     "The test requires an active native model download.");
         }
@@ -394,10 +407,28 @@ int main()
 
     ck::config::OptionRegistry optionsRegistry("ck-chat");
     ck::chat::registerChatOptions(optionsRegistry);
+    require(!ck::vision::chatMarkdownOptionsFromRegistry(optionsRegistry).render_links,
+            "The Chat profile must default to literal, non-hyperlink Markdown links.");
+    ckv::widgets::FlowBlock literal_link_block;
+    ck::vision::append_markdown_flow(literal_link_block, "[ckVision](https://example.test)");
+    require(block_link_count(literal_link_block) == 0,
+            "Disabled link rendering must keep Markdown links out of FlowView navigation.");
     optionsRegistry.set(ck::chat::kOptionActiveModelId, ck::config::OptionValue(std::string("writer")));
     optionsRegistry.set(ck::chat::kOptionActivePromptId, ck::config::OptionValue(std::string("review")));
+    optionsRegistry.set(ck::chat::kOptionParseMarkdownLinks, ck::config::OptionValue(true));
     const ck::vision::ChatStartupSelection startupSelection =
         ck::vision::chatStartupSelectionFromRegistry(optionsRegistry);
+    const ck::vision::ChatMarkdownOptions markdownOptions =
+        ck::vision::chatMarkdownOptionsFromRegistry(optionsRegistry);
+    require(markdownOptions.render_links,
+            "The Chat link-rendering option must map from the application profile.");
+    ckv::widgets::FlowBlock linked_block;
+    ck::vision::append_markdown_flow(linked_block,
+                                     "[ckVision](https://example.test)",
+                                     static_cast<ckv::Attr>(0),
+                                     markdownOptions);
+    require(block_link_count(linked_block) == 1,
+            "Enabled link rendering must expose Markdown links to FlowView navigation.");
     require(startupSelection.active_model_id == "writer" && startupSelection.active_prompt_id == "review",
             "The chat startup boundary must derive persistent model and prompt selections from its profile.");
 
@@ -419,7 +450,7 @@ int main()
     require(prompts.active_prompt() && prompts.active_prompt()->id == "default" &&
                 models.active_model() && models.active_model()->id == "local",
             "Unavailable profile selections must leave the service-owned chat state unchanged.");
-    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections);
+    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selections, markdownOptions);
     require(chat.submit_prompt("Hello"), "The native chat app must accept a non-empty prompt.");
     require(chat.messages().size() == 2 && responses.request().prompt == "Hello" &&
                 responses.request().system_prompt == "Keep responses clear." && responses.request().model_id == "local" &&

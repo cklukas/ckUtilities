@@ -15,6 +15,7 @@
 #include <cvision/widgets/window.hpp>
 
 #include "ck/vision/suite_shell.hpp"
+#include "chat_markdown.hpp"
 #include "chat_services.hpp"
 
 namespace ck::vision
@@ -42,7 +43,8 @@ public:
             ChatTranscriptStore &transcript_store,
             ChatPromptService &prompt_service,
             ChatModelService &model_service,
-            ChatSelectionPersistence &selection_persistence);
+            ChatSelectionPersistence &selection_persistence,
+            ChatMarkdownOptions markdown_options);
     ~ChatApp();
 
     bool submit_prompt(std::string prompt);
@@ -115,6 +117,7 @@ private:
     ChatPromptService &prompt_service_;
     ChatModelService &model_service_;
     ChatSelectionPersistence &selection_persistence_;
+    ChatMarkdownOptions markdown_options_;
     std::vector<ChatMessage> messages_;
     std::unique_ptr<SuiteShell> shell_;
     ckv::widgets::Window *window_ = nullptr;

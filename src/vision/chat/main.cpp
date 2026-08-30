@@ -24,6 +24,8 @@ int main(int argc, char **argv)
     optionsRegistry.loadDefaults();
     const ck::vision::ChatStartupSelection startupSelection =
         ck::vision::chatStartupSelectionFromRegistry(optionsRegistry);
+    const ck::vision::ChatMarkdownOptions markdownOptions =
+        ck::vision::chatMarkdownOptionsFromRegistry(optionsRegistry);
     ckv::term::PosixClock clock;
     ckv::term::PosixTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
@@ -37,7 +39,7 @@ int main(int argc, char **argv)
     ck::vision::applyChatStartupSelection(startupSelection, prompts, models);
     ck::vision::RegistryChatSelectionPersistence selection_persistence(optionsRegistry);
     ck::vision::LlmChatResponseService responses(models);
-    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selection_persistence);
+    ck::vision::ChatApp chat(application, responses, transcripts, prompts, models, selection_persistence, markdownOptions);
     keymap.load();
     application.run();
     return 0;

@@ -24,12 +24,12 @@ using ckv::widgets::StatusLineItem;
 constexpr std::size_t kRenderedMessageLimit = 160;
 constexpr std::size_t kResponseRefreshBatchBytes = 96;
 
-FlowBlock message_block(const ChatMessage &message)
+FlowBlock message_block(const ChatMessage &message, ChatMarkdownOptions markdown_options)
 {
     const std::string prefix = message.role == ChatMessage::Role::User ? "You: " : "Assistant: ";
     FlowBlock block;
     block.content.emplace_back(FlowText{prefix, ckv::Attr::Bold});
-    append_markdown_flow(block, message.content);
+    append_markdown_flow(block, message.content, static_cast<ckv::Attr>(0), markdown_options);
     return block;
 }
 }
@@ -39,10 +39,11 @@ ChatApp::ChatApp(ckv::ui::Application &application,
                  ChatTranscriptStore &transcript_store,
                  ChatPromptService &prompt_service,
                  ChatModelService &model_service,
-                 ChatSelectionPersistence &selection_persistence)
+                 ChatSelectionPersistence &selection_persistence,
+                 ChatMarkdownOptions markdown_options)
     : application_(application), response_service_(response_service), transcript_store_(transcript_store),
       prompt_service_(prompt_service), model_service_(model_service), selection_persistence_(selection_persistence),
-      command_scope_(application.commands())
+      markdown_options_(markdown_options), command_scope_(application.commands())
 {
     declare_commands();
     shell_ = std::make_unique<SuiteShell>(application_, make_shell_options());
@@ -809,7 +810,7 @@ void ChatApp::refresh_active_response()
         return;
     }
     const std::size_t active_block = transcript_->document().blocks.size() - 1;
-    if (!transcript_->replace_block(active_block, message_block(messages_.back())))
+    if (!transcript_->replace_block(active_block, message_block(messages_.back(), markdown_options_)))
         refresh_transcript();
 }
 
@@ -830,7 +831,7 @@ void ChatApp::refresh_transcript()
                                                 " messages are retained for export and model context."}}});
     }
     for (std::size_t index = first_rendered_message; index < messages_.size(); ++index)
-        document.blocks.push_back(message_block(messages_[index]));
+        document.blocks.push_back(message_block(messages_[index], markdown_options_));
     transcript_->set_document(std::move(document));
     if (window_ != nullptr)
     {

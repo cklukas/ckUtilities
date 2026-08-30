@@ -15,7 +15,8 @@ namespace
 ckv::Attr attributes_for(const ck::edit::MarkdownLineInfo &line,
                          std::size_t start,
                          std::size_t end,
-                         ckv::Attr base)
+                         ckv::Attr base,
+                         ChatMarkdownOptions options)
 {
     ckv::Attr attributes = base;
     if (line.kind == ck::edit::MarkdownLineKind::Heading)
@@ -39,15 +40,23 @@ ckv::Attr attributes_for(const ck::edit::MarkdownLineInfo &line,
         case ck::edit::MarkdownSpanKind::Code:
         case ck::edit::MarkdownSpanKind::InlineHtml: attributes |= ckv::Attr::Dim; break;
         case ck::edit::MarkdownSpanKind::Link:
-        case ck::edit::MarkdownSpanKind::Image: attributes |= ckv::Attr::Underline; break;
+        case ck::edit::MarkdownSpanKind::Image:
+            if (options.render_links)
+                attributes |= ckv::Attr::Underline;
+            break;
         case ck::edit::MarkdownSpanKind::PlainText: break;
         }
     }
     return attributes;
 }
 
-std::optional<std::string> link_for(const ck::edit::MarkdownLineInfo &line, std::size_t start, std::size_t end)
+std::optional<std::string> link_for(const ck::edit::MarkdownLineInfo &line,
+                                    std::size_t start,
+                                    std::size_t end,
+                                    ChatMarkdownOptions options)
 {
+    if (!options.render_links)
+        return std::nullopt;
     for (const auto &span : line.spans)
     {
         if ((span.kind == ck::edit::MarkdownSpanKind::Link || span.kind == ck::edit::MarkdownSpanKind::Image) &&
@@ -60,7 +69,8 @@ std::optional<std::string> link_for(const ck::edit::MarkdownLineInfo &line, std:
 void append_line(ckv::widgets::FlowBlock &block,
                  const std::string &line,
                  const ck::edit::MarkdownLineInfo &analysis,
-                 ckv::Attr base_attrs)
+                 ckv::Attr base_attrs,
+                 ChatMarkdownOptions options)
 {
     std::vector<std::size_t> boundaries{0, line.size()};
     for (const auto &span : analysis.spans)
@@ -77,14 +87,17 @@ void append_line(ckv::widgets::FlowBlock &block,
         if (start == end)
             continue;
         block.content.emplace_back(ckv::widgets::FlowText{line.substr(start, end - start),
-                                                            attributes_for(analysis, start, end, base_attrs),
-                                                            link_for(analysis, start, end)});
+                                                            attributes_for(analysis, start, end, base_attrs, options),
+                                                            link_for(analysis, start, end, options)});
     }
 }
 
 } // namespace
 
-void append_markdown_flow(ckv::widgets::FlowBlock &block, std::string_view markdown, ckv::Attr base_attrs)
+void append_markdown_flow(ckv::widgets::FlowBlock &block,
+                          std::string_view markdown,
+                          ckv::Attr base_attrs,
+                          ChatMarkdownOptions options)
 {
     ck::edit::MarkdownAnalyzer analyzer;
     ck::edit::MarkdownParserState state;
@@ -94,7 +107,7 @@ void append_markdown_flow(ckv::widgets::FlowBlock &block, std::string_view markd
         const std::size_t newline = markdown.find('\n', start);
         const std::size_t end = newline == std::string_view::npos ? markdown.size() : newline;
         const std::string line(markdown.substr(start, end - start));
-        append_line(block, line, analyzer.analyzeLine(line, state), base_attrs);
+        append_line(block, line, analyzer.analyzeLine(line, state), base_attrs, options);
         if (newline == std::string_view::npos)
             break;
         block.content.emplace_back(ckv::widgets::FlowLineBreak{});

@@ -12,6 +12,11 @@ ChatStartupSelection chatStartupSelectionFromRegistry(const ck::config::OptionRe
             .active_prompt_id = registry.getString(ck::chat::kOptionActivePromptId)};
 }
 
+ChatMarkdownOptions chatMarkdownOptionsFromRegistry(const ck::config::OptionRegistry &registry)
+{
+    return {.render_links = registry.getBool(ck::chat::kOptionParseMarkdownLinks)};
+}
+
 void applyChatStartupSelection(const ChatStartupSelection &selection,
                                ChatPromptService &prompt_service,
                                ChatModelService &model_service)

@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "ck/options.hpp"
+#include "chat_markdown.hpp"
 
 namespace ck::vision
 {
@@ -21,6 +22,7 @@ struct ChatStartupSelection
 };
 
 ChatStartupSelection chatStartupSelectionFromRegistry(const ck::config::OptionRegistry &registry);
+ChatMarkdownOptions chatMarkdownOptionsFromRegistry(const ck::config::OptionRegistry &registry);
 void applyChatStartupSelection(const ChatStartupSelection &selection,
                                ChatPromptService &prompt_service,
                                ChatModelService &model_service);
