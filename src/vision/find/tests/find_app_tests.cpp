@@ -137,6 +137,21 @@ int main()
     require(find.last_execution_result()->deletedCount == 1,
             "Confirmed deletion outcomes must return to the native presentation on the UI thread.");
 
+    auto custom_command_specification = ck::find::makeDefaultSpecification();
+    ck::find::copyToArray(custom_command_specification.startLocation, directory.string().c_str());
+    custom_command_specification.enableActionOptions = true;
+    custom_command_specification.actionOptions.deleteMatches = true;
+    custom_command_specification.actionOptions.execEnabled = true;
+    ck::find::copyToArray(custom_command_specification.actionOptions.execCommand, "echo must-not-run");
+    find.set_specification(custom_command_specification);
+    require(application.execute_command(find.execute_command()),
+            "Custom-command execution must still dispatch through the command registry.");
+    require(!execution.running(), "An unavailable custom command must not start the execution service.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(!execution.running(),
+            "An unavailable custom command must take precedence over a requested deletion confirmation.");
+
     auto specification = ck::find::makeDefaultSpecification();
     ck::find::copyToArray(specification.startLocation, directory.string().c_str());
     ck::vision::ThreadedFindExecutionService threaded_execution;

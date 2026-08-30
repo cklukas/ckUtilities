@@ -73,8 +73,11 @@ Historical application baseline: `legacy_tv`
   execution bounds rendered matches to 200 while preserving the full match
   count. Confirmed deletion now runs only in
   the injected worker and only removes matching regular files or symbolic
-  links; it never removes directories. Custom commands remain preview-only
-  until a separately sandboxed execution policy is designed.
+  links; it never removes directories. The guided form preserves legacy
+  custom-command settings for saved-search compatibility but presents them as
+  unavailable, and execution rejects them before a deletion confirmation can
+  appear. A separately sandboxed execution policy is required before custom
+  commands can be edited or run.
 - WP-6: `ck-du-ckvision` maps application-owned directory snapshots through a
   stable-ID native `TreeModel` plus selected-directory Table. Its production composition
   root now starts immediately and delegates scanning to an injected joinable

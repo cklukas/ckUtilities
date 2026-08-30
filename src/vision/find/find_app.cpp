@@ -143,9 +143,10 @@ void FindApp::show_guided_search_dialog()
                              state.listMatches});
     dialog.fields.push_back({"&Delete matches", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
                              state.deleteMatches});
-    dialog.fields.push_back({"&Run command", "", nullptr, false, '*', ckv::widgets::FieldKind::Check,
-                             state.runCommand});
-    dialog.fields.push_back({"Custom command:", ck::find::bufferToString(state.customCommand), nullptr});
+    dialog.fields.push_back({.label = "Custom command actions are unavailable until a separately sandboxed executor is accepted.",
+                             .kind = ckv::widgets::FieldKind::Note});
+    dialog.fields.push_back({.label = "Saved custom-command settings are retained for compatibility but cannot be edited or run here.",
+                             .kind = ckv::widgets::FieldKind::Note});
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     search_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
@@ -186,8 +187,10 @@ void FindApp::show_guided_search_dialog()
         applied.includeActionTweaks = result.checked[25];
         applied.listMatches = result.checked[26];
         applied.deleteMatches = result.checked[27];
-        applied.runCommand = result.checked[28];
-        ck::find::copyToArray(applied.customCommand, result.values[29].c_str());
+        // Fields 28 and 29 are explanatory notes. Preserve any legacy
+        // custom-command settings so a native edit does not discard them,
+        // but never offer them as an executable action before a sandboxed
+        // execution policy has been accepted.
         ck::find::applyGuidedStateToSpecification(applied, specification_);
         show_preview();
     });
@@ -296,6 +299,13 @@ void FindApp::request_execution()
         return;
     }
 
+    if (specification_.enableActionOptions && specification_.actionOptions.execEnabled)
+    {
+        present_text_window("Find execution",
+                            "Custom command actions are unavailable in the native workflow until a separately sandboxed executor is accepted.");
+        return;
+    }
+
     if (specification_.enableActionOptions && specification_.actionOptions.deleteMatches)
     {
         destructive_confirmation_.reset();
@@ -311,13 +321,6 @@ void FindApp::request_execution()
             if (result == ckv::widgets::MessageBoxResult::Yes)
                 start_execution(true);
         });
-        return;
-    }
-
-    if (specification_.enableActionOptions && specification_.actionOptions.execEnabled)
-    {
-        present_text_window("Find execution",
-                            "Custom command actions are preview-only in the native workflow until a separately sandboxed executor is available.");
         return;
     }
 
