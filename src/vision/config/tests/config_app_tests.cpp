@@ -69,6 +69,8 @@ public:
               ck::vision::KeymapOverrides &global_overrides,
               ck::vision::KeymapOverrides &application_overrides) override
     {
+        if (fail_load)
+            return false;
         global_overrides = global;
         application_overrides = applications[std::string(application_id)];
         return true;
@@ -101,6 +103,7 @@ public:
     ck::vision::KeymapOverrides global;
     std::map<std::string, ck::vision::KeymapOverrides> applications;
     std::string active_scheme = "default";
+    bool fail_load = false;
 };
 }
 
@@ -206,4 +209,8 @@ int main()
     require(reloaded_editor.load() &&
                 editor_registry.command_for_key(ckv::KeyChord{ckv::Key::Char, ckv::Modifier::Ctrl | ckv::Modifier::Shift, "s"}) == editor_save,
             "A configured application binding must reload when its target executable creates its own native registry.");
+    keymap_persistence.fail_load = true;
+    require(!keymap_config.select_keymap_scheme("default") &&
+                keymap_persistence.active_keymap_scheme() == "personal",
+            "A failed shortcut-scheme reload must restore the previously persisted scheme.");
 }

@@ -113,7 +113,9 @@ Historical application baseline: `legacy_tv`
   offers separate built-in-default and personal-binding schemes. The first
   edit activates the personal scheme; selecting defaults leaves those personal
   bindings intact but inactive. Keymap format 1 data upgrades on its next
-  write. Final configuration acceptance remains.
+  write. A shortcut-scheme selection is transactional: if its bindings cannot
+  reload, the previous persisted scheme is restored. Final configuration
+  acceptance remains.
 - WP-8: `ck-edit-ckvision` uses ckVision's EditorDocument, EditorWindow, and
   injected file service for native open/save/save-as workflows. Dirty-window
   close now presents an explicit Save/Discard/Cancel decision and invokes the

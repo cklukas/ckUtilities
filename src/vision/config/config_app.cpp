@@ -731,9 +731,26 @@ bool ConfigApp::select_keymap_command(std::string_view application_id, std::stri
 
 bool ConfigApp::select_keymap_scheme(std::string_view scheme_id)
 {
-    if (keymap_scheme_persistence_ == nullptr || keymap_catalog_ == nullptr ||
-        !keymap_scheme_persistence_->select_keymap_scheme(scheme_id) || !keymap_catalog_->load())
+    if (keymap_scheme_persistence_ == nullptr || keymap_catalog_ == nullptr)
     {
+        set_keymap_status("Could not select shortcut scheme.");
+        return false;
+    }
+
+    const std::string previous_scheme = keymap_scheme_persistence_->active_keymap_scheme();
+    if (!keymap_scheme_persistence_->select_keymap_scheme(scheme_id))
+    {
+        set_keymap_status("Could not select shortcut scheme.");
+        return false;
+    }
+    if (!keymap_catalog_->load())
+    {
+        // A scheme switch is not useful unless its bindings can become the
+        // active view. Restore the persisted selection and, when possible,
+        // restore the command registries to that prior scheme as well.
+        if (previous_scheme != scheme_id &&
+            keymap_scheme_persistence_->select_keymap_scheme(previous_scheme))
+            keymap_catalog_->load();
         set_keymap_status("Could not select shortcut scheme.");
         return false;
     }
