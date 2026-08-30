@@ -88,7 +88,8 @@ diagnosis.
 
 On 2026-08-30, a fresh macOS Release rehearsal against the selected installed
 SDK passed the independent package consumer, staged-product and legacy-negative
-cutover checks, extracted-TGZ verification, and all 92 CTest cases.
+cutover checks, extracted-TGZ verification, and the then-current 92 CTest
+cases.
 
 On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
 `verify_ckvision_terminal` gate. It gives every staged executable a real PTY,
@@ -136,7 +137,7 @@ with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
 leak detection. The clean `c25a324aa1db9c24851085a6ff84f5ae47e9014b`
 integration candidate passed ckVision's full 169-test sanitizer suite and
-ckUtilities' 92-test cutover configuration in both normal and ASan/UBSan
+ckUtilities' then-current 92-test cutover configuration in both normal and ASan/UBSan
 builds with this procedure on 2026-08-30.
 
 To verify the staged native product as well, enable the installed-product
