@@ -91,6 +91,12 @@ SDK passed the independent package consumer, staged-product and legacy-negative
 cutover checks, extracted-TGZ verification, and the then-current 92 CTest
 cases.
 
+Later local validation on `master` passed 95 CTest cases in both the macOS
+Release and ASan/UBSan configurations, followed by the installed-product
+cutover, real-PTY terminal lifecycle, and extracted-TGZ archive gates. This is
+local evidence only; it does not replace the upstream, policy, real-model, or
+cross-platform acceptance dependencies recorded in the roadmap.
+
 On Unix hosts, `CKTOOLS_VERIFY_CKVISION_TERMINAL=ON` exposes the separate
 `verify_ckvision_terminal` gate. It gives every staged executable a real PTY,
 uses a disposable empty configuration root, delivers a PTY resize and the
