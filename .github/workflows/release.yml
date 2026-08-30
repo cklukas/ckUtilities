@@ -1,10 +1,6 @@
 name: Release Packages
 
 on:
-  push:
-    # Retain the existing remote default and cover the active ckVision
-    # development branch. Release assets still require a published release.
-    branches: [ main, master ]
   release:
     types: [published]
 
@@ -13,95 +9,96 @@ permissions:
 
 jobs:
   release-tests:
-    name: Quick build and test
+    name: ckVision release tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
+      - name: Checkout release
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            libncurses-dev \
-            libncursesw6 \
-            libtinfo-dev \
-            libgpm-dev \
-            pkg-config \
-            libcurl4-openssl-dev
-          multiarch=$(gcc -print-multiarch)
-          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
+          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
+        run: brew install --quiet ninja curl
+
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
         run: |
-          brew update --quiet
-          brew install --quiet ninja ncurses curl
-          NCURSES_PREFIX=$(brew --prefix ncurses)
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
-          CURL_PREFIX=$(brew --prefix curl)
-          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_LINUX_URL }}'
+            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_LINUX_SHA256 }}'
+          else
+            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_MACOS_URL }}'
+            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_MACOS_SHA256 }}'
+          fi
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
       - name: Configure
-        run: cmake --preset dev
+        run: >
+          cmake --preset dev
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
 
-      - name: Build
-        run: cmake --build build/dev
+      - name: Build native products and package consumer
+        run: cmake --build build/dev --target verify_ckvision_package
 
       - name: Run tests
         run: ctest --test-dir build/dev --output-on-failure
 
   release-linux:
-    if: github.event_name == 'release'
+    name: Publish ckVision Linux packages
     needs: release-tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
 
-      - name: Install packaging dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            libncurses-dev \
-            libncursesw6 \
-            libtinfo-dev \
-            libgpm-dev \
-            pkg-config \
-            libcurl4-openssl-dev \
-            rpm
-          multiarch=$(gcc -print-multiarch)
-          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
+          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
 
-      - name: Configure
-        run: cmake --preset pkg
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
+        env:
+          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_LINUX_URL }}
+          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_LINUX_SHA256 }}
+        run: |
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
-      - name: Build packages
-        run: cmake --build build/pkg -t package
+      - name: Configure verified package
+        run: >
+          cmake --preset pkg
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
+          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
+          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
+          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
 
-      - name: Upload Linux assets
+      - name: Verify and build packages
+        run: |
+          cmake --build build/pkg --target verify_ckvision_rehearsal
+          cmake --build build/pkg --target verify_ckvision_terminal
+
+      - name: Attach Linux packages
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -110,163 +107,78 @@ jobs:
             build/pkg/*.tar.gz
 
   release-macos:
-    if: github.event_name == 'release'
+    name: Publish ckVision macOS archive
     needs: release-tests
     runs-on: macos-latest
     steps:
-      - name: Checkout
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
 
-      - name: Install packaging dependencies
+      - name: Install dependencies
+        run: brew install --quiet ninja curl
+
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
+        env:
+          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_MACOS_URL }}
+          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_MACOS_SHA256 }}
         run: |
-          brew update --quiet
-          brew install --quiet ninja ncurses curl
-          NCURSES_PREFIX=$(brew --prefix ncurses)
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
-          CURL_PREFIX=$(brew --prefix curl)
-          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
-      - name: Configure
-        run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+      - name: Configure verified archive
+        run: >
+          cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
+          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
+          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
+          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
 
-      - name: Build macOS archive
-        run: cmake --build build/pkg -t package
+      - name: Verify and build archive
+        run: |
+          cmake --build build/pkg --target verify_ckvision_rehearsal
+          cmake --build build/pkg --target verify_ckvision_terminal
 
-      - name: Upload macOS asset
+      - name: Attach macOS archive
         uses: softprops/action-gh-release@v2
         with:
           files: build/pkg/*.tar.gz
 
-  release-windows:
-    if: github.event_name == 'release'
+  release-homebrew-formula:
+    name: Attach Homebrew formula
     needs: release-tests
-    runs-on: windows-latest
-    env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
-      REPOSITORY: ${{ github.repository }}
-      WINGET_PACKAGE_IDENTIFIER: ckUtilities.ck-utilities
-      WINGET_PACKAGE_NAME: ck-utilities
-      WINGET_PUBLISHER: ckUtilities Project
-      WINGET_LICENSE: GPL-3.0-or-later
-      WINGET_SHORT_DESCRIPTION: Turbo Vision utilities for Windows
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
 
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Install curl dependency (vcpkg)
-        shell: pwsh
+      - name: Generate formula from immutable release source
+        shell: bash
         env:
-          VCPKG_ROOT: C:\vcpkg
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          & "$env:VCPKG_ROOT\vcpkg.exe" install curl:x64-windows
+          version="${RELEASE_TAG#v}"
+          source_url="$SERVER_URL/$REPOSITORY/archive/refs/tags/$RELEASE_TAG.tar.gz"
+          curl --fail --location --silent --show-error --output source.tar.gz "$source_url"
+          source_sha256="$(sha256sum source.tar.gz | awk '{print $1}')"
+          python3 scripts/generate_homebrew_formula.py \
+            --version "$version" \
+            --source-url "$source_url" \
+            --source-sha256 "$source_sha256" \
+            --homepage "$SERVER_URL/$REPOSITORY" \
+            --output build/release/ck-utilities.rb
+          ruby -c build/release/ck-utilities.rb
 
-      - name: Configure
-        run: >
-          cmake --preset pkg
-          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-          -DVCPKG_TARGET_TRIPLET=x64-windows
-
-      - name: Build
-        run: cmake --build build/pkg --config Release
-
-      - name: Stage installer payload
-        id: stage_windows
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $staging = Join-Path (Get-Location) 'build/pkg/windows-installer'
-          New-Item -ItemType Directory -Path $staging -Force | Out-Null
-          $payload = Join-Path $staging 'payload'
-          cmake --install build/pkg --config Release --prefix $payload
-
-          $installerExe = Join-Path (Get-Location) 'build/pkg/bin/cku-win-installer.exe'
-          if (-not (Test-Path $installerExe)) {
-            throw "Installer executable not found at $installerExe"
-          }
-          Copy-Item $installerExe -Destination $staging -Force
-
-          $cache = Get-Content 'build/pkg/CMakeCache.txt'
-          $versionLine = $cache | Where-Object { $_ -match '^cktools_VERSION:STATIC=' }
-          if (-not $versionLine) {
-            throw 'Unable to determine ck-utilities version from CMakeCache.txt'
-          }
-          $version = $versionLine -replace 'cktools_VERSION:STATIC=', ''
-          "CK_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ck_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-          $zipName = "ck-utilities-$version-windows.zip"
-          $zipPath = Join-Path (Get-Location) "build/pkg/$zipName"
-          if (Test-Path $zipPath) {
-            Remove-Item $zipPath
-          }
-          Push-Location $staging
-          try {
-            Compress-Archive -Path * -DestinationPath $zipPath
-          } finally {
-            Pop-Location
-          }
-
-          $sha256 = (Get-FileHash $zipPath -Algorithm SHA256).Hash
-          "INSTALLER_SHA256=$sha256" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "installer_sha256=$sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "installer_zip=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Generate winget manifests
-        id: generate_winget_manifests
-        shell: pwsh
-        env:
-          CK_VERSION: ${{ steps.stage_windows.outputs.ck_version }}
-          INSTALLER_SHA256: ${{ steps.stage_windows.outputs.installer_sha256 }}
-          INSTALLER_ZIP: ${{ steps.stage_windows.outputs.installer_zip }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (-not $env:CK_VERSION) {
-            throw 'CK_VERSION was not exported by the staging step'
-          }
-          $manifestRoot = Join-Path (Get-Location) 'build/pkg/winget-manifests'
-          python scripts/generate_winget_manifest.py `
-            --output $manifestRoot `
-            --package-identifier $env:WINGET_PACKAGE_IDENTIFIER `
-            --package-name $env:WINGET_PACKAGE_NAME `
-            --publisher $env:WINGET_PUBLISHER `
-            --version $env:CK_VERSION `
-            --installer-url "https://github.com/$($env:REPOSITORY)/releases/download/$($env:RELEASE_TAG)/ck-utilities-$($env:CK_VERSION)-windows.zip" `
-            --installer-sha256 $env:INSTALLER_SHA256 `
-            --license $env:WINGET_LICENSE `
-            --publisher-url "https://github.com/$($env:REPOSITORY)" `
-            --short-description $env:WINGET_SHORT_DESCRIPTION `
-            --silent-switch "--quiet --force"
-
-          $manifestZip = Join-Path (Get-Location) "build/pkg/ck-utilities-$($env:CK_VERSION)-winget-manifests.zip"
-          if (Test-Path $manifestZip) {
-            Remove-Item $manifestZip
-          }
-          Push-Location $manifestRoot
-          try {
-            Compress-Archive -Path * -DestinationPath $manifestZip
-          } finally {
-            Pop-Location
-          }
-          "manifest_zip=$manifestZip" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      - name: Upload Windows assets
+      - name: Attach Homebrew formula
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${{ steps.stage_windows.outputs.installer_zip }}
-            ${{ steps.generate_winget_manifests.outputs.manifest_zip }}
+          files: build/release/ck-utilities.rb

@@ -74,14 +74,13 @@ function(cktools_add_ckvision_install_verification)
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_BINARY_DIR=${PROJECT_BINARY_DIR}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
-      "-DCKTOOLS_CKVISION_CUTOVER=${CKTOOLS_CKVISION_CUTOVER}"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionInstall.cmake"
     USES_TERMINAL
     COMMENT "Install and smoke-test every native ckVision executable")
 endfunction()
 
 function(cktools_add_ckvision_cutover_verification)
-  if(NOT CKTOOLS_CKVISION_CUTOVER OR NOT CKTOOLS_VERIFY_CKVISION_INSTALL)
+  if(NOT CKTOOLS_VERIFY_CKVISION_INSTALL)
     return()
   endif()
 
@@ -95,7 +94,7 @@ function(cktools_add_ckvision_cutover_verification)
 endfunction()
 
 function(cktools_add_ckvision_archive_verification)
-  if(NOT CKTOOLS_CKVISION_CUTOVER OR NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
+  if(NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
     return()
   endif()
 
@@ -111,15 +110,13 @@ function(cktools_add_ckvision_archive_verification)
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_PACKAGE_ARCHIVE=${PROJECT_BINARY_DIR}/${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}.tar.gz"
       "-DCKTOOLS_PACKAGE_EXTRACT_DIR=${PROJECT_BINARY_DIR}/ckvision-package-check"
-      -DCKTOOLS_CKVISION_CUTOVER=ON
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
     USES_TERMINAL
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
 endfunction()
 
 function(cktools_add_ckvision_terminal_verification)
-  if(NOT CKTOOLS_CKVISION_CUTOVER OR
-     NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
+  if(NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
      NOT CKTOOLS_VERIFY_CKVISION_TERMINAL OR
      NOT UNIX)
     return()
@@ -148,8 +145,7 @@ endfunction()
 # paths both build from this tree, so parallel prerequisite scheduling would
 # make the composed target needlessly contend with itself.
 function(cktools_add_ckvision_rehearsal_verification)
-  if(NOT CKTOOLS_CKVISION_CUTOVER OR
-     NOT CKTOOLS_VERIFY_CKVISION_PACKAGE OR
+  if(NOT CKTOOLS_VERIFY_CKVISION_PACKAGE OR
      NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
      NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
     return()

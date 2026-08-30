@@ -14,7 +14,7 @@ namespace ck::ai {
  *
  * This class separates the business logic from UI-specific code, making it
  * easier to test and maintain the model management functionality independently
- * of the TurboVision UI.
+ * of a presentation framework.
  */
 class ModelManagerController {
 public:

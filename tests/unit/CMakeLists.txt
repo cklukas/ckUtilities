@@ -16,10 +16,4 @@ add_subdirectory(json_view)
 add_subdirectory(ck_edit)
 add_subdirectory(ck_find)
 
-if(NOT CKTOOLS_CKVISION_CUTOVER)
-  add_subdirectory(ck_utilities)
-  add_subdirectory(ck_chat)
-  add_subdirectory(hotkeys)
-endif()
-
 add_subdirectory(ckai_core)

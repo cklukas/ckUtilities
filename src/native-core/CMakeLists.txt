@@ -1,4 +1,4 @@
-# Framework-neutral application cores used by the ckVision-only cutover build.
+# Framework-neutral application cores used by the ckVision-only product build.
 # Their source locations remain stable during the migration; this composition
 # deliberately excludes the legacy presentation targets and their dependencies.
 

@@ -76,6 +76,4 @@ Open, Save, and Save As are native file workflows. If a file changes externally
 while the document has unsaved edits, `ck-edit` preserves both versions and
 requires an explicit Save As, reload/discard, or continue-editing choice.
 
-The former Turbo Vision command reference is intentionally not retained here:
-it listed obsolete commands and implementation-specific behavior. Native
-coverage lives in `tests/unit/ck_edit` and `src/vision/edit/tests`.
+Coverage lives in `tests/unit/ck_edit` and `src/vision/edit/tests`.

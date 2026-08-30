@@ -24,12 +24,8 @@ add_executable(ckjsonview_ckvision
 
 target_compile_features(ckjsonview_ckvision PRIVATE cxx_std_20)
 target_link_libraries(ckjsonview_ckvision PRIVATE ck_vision_json_view ck_vision_keymap)
-set(_ckvision_json_view_output "ck-json-view-ckvision")
-if(CKTOOLS_CKVISION_CUTOVER)
-  set(_ckvision_json_view_output "ck-json-view")
-endif()
 set_target_properties(ckjsonview_ckvision PROPERTIES
-  OUTPUT_NAME "${_ckvision_json_view_output}"
+  OUTPUT_NAME "ck-json-view"
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
 )
 

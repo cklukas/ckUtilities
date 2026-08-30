@@ -3,12 +3,22 @@ include_guard(GLOBAL)
 function(cktools_add_ui_boundary_check)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+  add_custom_target(check_ckvision_only
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/check_ckvision_only.py"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    COMMENT "Verify that active product files are ckVision-only")
+
   add_custom_target(check_ui_boundaries
     COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/check_ui_boundaries.py"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     COMMENT "Verify that domain libraries do not depend on a UI framework")
 
   if(BUILD_TESTING)
+    add_test(NAME ck_vision_only_check
+      COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/check_ckvision_only.py")
+    set_tests_properties(ck_vision_only_check PROPERTIES
+      LABELS "architecture;ckvision")
+
     add_test(NAME ck_ui_boundary_check
       COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/check_ui_boundaries.py")
     set_tests_properties(ck_ui_boundary_check PROPERTIES

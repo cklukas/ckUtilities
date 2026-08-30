@@ -4,25 +4,14 @@ if(NOT DEFINED CKTOOLS_PRODUCT_PREFIX OR "${CKTOOLS_PRODUCT_PREFIX}" STREQUAL ""
   message(FATAL_ERROR "CKTOOLS_PRODUCT_PREFIX is required for product verification")
 endif()
 
-if(CKTOOLS_CKVISION_CUTOVER)
-  set(_cktools_native_executables
-      ck-utilities
-      ck-json-view
-      ck-find
-      ck-du
-      ck-config
-      ck-edit
-      ck-chat)
-else()
-  set(_cktools_native_executables
-      ck-utilities-ckvision
-      ck-json-view-ckvision
-      ck-find-ckvision
-      ck-du-ckvision
-      ck-config-ckvision
-      ck-edit-ckvision
-      ck-chat-ckvision)
-endif()
+set(_cktools_native_executables
+    ck-utilities
+    ck-json-view
+    ck-find
+    ck-du
+    ck-config
+    ck-edit
+    ck-chat)
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_PRODUCT_PREFIX}/bin/${_cktools_executable}")
@@ -41,8 +30,7 @@ endforeach()
 # The launcher must fail before starting a child when a packaged tool is absent.
 # Exercise that real composition-root path, then restore the product immediately
 # so subsequent cutover checks inspect the complete staged tree.
-if(CKTOOLS_CKVISION_CUTOVER)
-  set(_cktools_launcher_path "${CKTOOLS_PRODUCT_PREFIX}/bin/ck-utilities")
+set(_cktools_launcher_path "${CKTOOLS_PRODUCT_PREFIX}/bin/ck-utilities")
 
   # Passing --help keeps the check non-interactive while proving that the
   # launcher locates its sibling and propagates the child's exit status.
@@ -96,4 +84,3 @@ if(CKTOOLS_CKVISION_CUTOVER)
   if(NOT _cktools_missing_launch_text MATCHES "Unable to locate ck-json-view")
     message(FATAL_ERROR "Launcher did not report the missing packaged tool")
   endif()
-endif()

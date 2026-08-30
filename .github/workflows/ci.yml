@@ -2,14 +2,16 @@ name: CI
 
 on:
   push:
-    # `main` remains the remote default while the migration branch is being
-    # promoted. Run the same checks for the active ckVision development line.
     branches: [ main, master ]
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
+    name: ckVision build and test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -23,132 +25,126 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            python3 \
-            libncurses-dev \
-            libncursesw6 \
-            libtinfo-dev \
-            libgpm-dev \
-            pkg-config \
-            libcurl4-openssl-dev
-          multiarch=$(gcc -print-multiarch)
-          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
+          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
+        run: brew install --quiet ninja curl
+
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
         run: |
-          brew update --quiet
-          brew install --quiet ninja ncurses curl
-          NCURSES_PREFIX=$(brew --prefix ncurses)
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
-          CURL_PREFIX=$(brew --prefix curl)
-          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_LINUX_URL }}'
+            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_LINUX_SHA256 }}'
+          else
+            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_MACOS_URL }}'
+            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_MACOS_SHA256 }}'
+          fi
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
       - name: Configure
-        run: cmake --preset dev
+        run: >
+          cmake --preset dev
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
 
-      - name: Apply repository patches
-        run: scripts/apply_patches.sh
-
-      - name: Build all targets
-        run: cmake --build build/dev
+      - name: Build native products and package consumer
+        run: cmake --build build/dev --target verify_ckvision_package
 
       - name: Run tests
         run: ctest --test-dir build/dev --output-on-failure
 
   package-linux:
+    name: ckVision Linux packages
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install packaging dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            ninja-build \
-            python3 \
-            libncurses-dev \
-            libncursesw6 \
-            libtinfo-dev \
-            libgpm-dev \
-            pkg-config \
-            libcurl4-openssl-dev \
-            rpm
-          multiarch=$(gcc -print-multiarch)
-          echo "LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_LIBRARY_PATH=/usr/lib/$multiarch" >> "$GITHUB_ENV"
-          echo "CPATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "CMAKE_INCLUDE_PATH=/usr/include/$multiarch" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=/usr/lib/$multiarch/pkgconfig" >> "$GITHUB_ENV"
+          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
 
-      - name: Configure
-        run: cmake --preset pkg
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
+        env:
+          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_LINUX_URL }}
+          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_LINUX_SHA256 }}
+        run: |
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
-      - name: Apply repository patches
-        run: scripts/apply_patches.sh
+      - name: Configure release package
+        run: >
+          cmake --preset pkg
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
+          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
+          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
+          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
 
-      - name: Build packages
-        run: cmake --build build/pkg -t package
-
-      - name: List packages
-        run: ls -R1 build/pkg
+      - name: Verify and build packages
+        run: |
+          cmake --build build/pkg --target verify_ckvision_rehearsal
+          cmake --build build/pkg --target verify_ckvision_terminal
 
       - name: Upload Linux packages
         uses: actions/upload-artifact@v4
         with:
           name: ck-utilities-linux-packages
+          if-no-files-found: error
           path: |
             build/pkg/*.deb
             build/pkg/*.rpm
             build/pkg/*.tar.gz
 
   package-macos:
+    name: ckVision macOS archive
     runs-on: macos-latest
     needs: build-and-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install packaging dependencies
+      - name: Install dependencies
+        run: brew install --quiet ninja curl
+
+      - name: Install pinned ckVision SDK
+        id: ckvision
+        shell: bash
+        env:
+          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_MACOS_URL }}
+          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_MACOS_SHA256 }}
         run: |
-          brew update
-          brew install ninja ncurses curl
-          NCURSES_PREFIX=$(brew --prefix ncurses)
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$NCURSES_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$NCURSES_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$NCURSES_PREFIX/lib" >> "$GITHUB_ENV"
-          CURL_PREFIX=$(brew --prefix curl)
-          echo "PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$CURL_PREFIX/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$CURL_PREFIX" >> "$GITHUB_ENV"
-          echo "CPATH=${CPATH:+$CPATH:}$CURL_PREFIX/include" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=${LIBRARY_PATH:+$LIBRARY_PATH:}$CURL_PREFIX/lib" >> "$GITHUB_ENV"
+          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
 
-      - name: Configure
-        run: cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+      - name: Configure release archive
+        run: >
+          cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
+          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
+          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
+          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
+          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
+          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
 
-      - name: Apply repository patches
-        run: scripts/apply_patches.sh
-
-      - name: Build macOS archive
-        run: cmake --build build/pkg -t package
-
-      - name: List macOS package
-        run: ls -R1 build/pkg
+      - name: Verify and build archive
+        run: |
+          cmake --build build/pkg --target verify_ckvision_rehearsal
+          cmake --build build/pkg --target verify_ckvision_terminal
 
       - name: Upload macOS archive
         uses: actions/upload-artifact@v4
         with:
           name: ck-utilities-macos-archive
+          if-no-files-found: error
           path: build/pkg/*.tar.gz

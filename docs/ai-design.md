@@ -1,4 +1,4 @@
-# CkTools — AI Design Doc (`docs/ai-design.md`)
+# ckUtilities — AI Design Doc (`docs/ai-design.md`)
 
 **Status:** design/specification for future implementation.
 **Scope:** make **local, offline AI** a **first-class feature** of CkTools (no add-on package).
@@ -28,8 +28,8 @@
 
 ```
 +---------------------------------------------------------------+
-|                        cktools (TUI apps)                     |
-|  ckfind  ckdiff  cktext  ckdu  ckrescue   ckchat  ckqna  ...  |
+|                    ckUtilities (ckVision apps)                |
+|  ck-find  ck-edit  ck-json-view  ck-du  ck-config  ck-chat    |
 +-------------------------|------------|------------------------+
                           |            |
                     libckai_core   libckai_embed (+ index)
@@ -56,17 +56,11 @@
 ## 3) Code Layout (monorepo tie-in)
 
 ```
-cktools/
+ckUtilities/
 ├─ lib/ckai_core/            # C++ API and backend glue
 ├─ lib/ckai_embed/
-├─ third_party/              # backends populated via FetchContent (pinned)
-│  ├─ llama.cpp/             # retrieved at configure time
-│  └─ whisper.cpp/           # optional
-├─ src/tools/
-│  ├─ ckchat/                # local chat (TUI + CLI)
-│  ├─ ckqna/                 # question-answer over local docs (RAG)
-│  ├─ ckembed/               # embed documents
-│  └─ ckindex/               # build/search vector indexes
+├─ cmake/                    # pinned or package-provided backend setup
+├─ src/vision/chat/          # ckVision local chat application
 ├─ include/ck/ai/            # public headers for internal use
 ├─ docs/ai-design.md         # this file
 └─ configs/
@@ -78,7 +72,7 @@ CMake options:
 * `-DCKAI_BACKEND_LLAMA=ON` (default)
 * `-DCKAI_BACKEND_WHISPER=OFF` (opt-in)
 * `-DCKAI_INDEX_HNSW=OFF` (start with flat; enable later)
-* `-DCKAI_BUILD_TOOLS=ON` (ckchat/ckqna/ckembed/ckindex)
+* `-DCKAI_BACKEND_LLAMA=ON` is required by the current ckVision product set.
 
 ---
 
@@ -226,7 +220,7 @@ public:
 
 ## 8) CLI Tools (ship with suite)
 
-* `ckchat` — local chat (stdin/stdout & TUI).
+* `ck-chat` — local chat application built with ckVision.
 * `ckqna` — grounded Q\&A over local indexes.
 * `ckembed` — embed files/stdin to vectors (writes `.vec` files).
 * `ckindex` — build/search vector indexes from `.vec` files.
@@ -239,7 +233,9 @@ Each supports `--json` for automation and `--seed` for reproducibility.
 ## 9) Build & Packaging
 
 * AI is **part of the regular build**.
-* `third_party/llama.cpp` fetched at configure time via CMake FetchContent (pinned commit).
+* `llama.cpp` comes from a compatible CMake package when available; normal source
+  builds use a pinned FetchContent revision. Release formulas stage the pinned
+  source explicitly so installation never performs an undeclared download.
 * Optional backends toggled via CMake options (see §3).
 * Packages (`.deb`/`.rpm`) include binaries and headers; **not** model weights.
 * Post-install message points to `ckmodel add` instructions.
@@ -301,9 +297,10 @@ Each supports `--json` for automation and `--seed` for reproducibility.
 
 **Phase 0 — Scaffolding (1–2 sprints)**
 
-* Vendoring: add `third_party/llama.cpp` @ pinned commit.
+* Keep the `llama.cpp` revision pinned and stage it explicitly in distributable
+  package recipes.
 * `libckai_core` minimal: load model, count tokens, stream generation.
-* `ckchat` CLI + tiny TUI window (stream to memo widget).
+* `ck-chat` ckVision window (stream to memo widget).
 * Config file parsing; reasonable defaults; seed + stop tokens.
 
 **Phase 1 — Embeddings & Index (1 sprint)**
@@ -381,8 +378,8 @@ Each supports `--json` for automation and `--seed` for reproducibility.
 
 * [ ] `lib/ckai_core` with tests
 * [ ] `lib/ckai_embed` with tests
-* [ ] `third_party/llama.cpp` wired in CMake
-* [ ] `ckchat`, `ckembed`, `ckindex`, `ckqna` CLIs (+ minimal TUIs)
+* [x] pinned `llama.cpp` integration wired in CMake
+* [x] `ck-chat` ckVision application
 * [ ] RAG over `docs/tools/*.md`
 * [ ] Integrations into `cktext`, `ckfind`, `ckdiff`
 * [ ] Docs: user guide & admin notes (models, limits, privacy)

@@ -8,12 +8,8 @@ if(UNIX)
   target_compile_features(ckconfig_ckvision PRIVATE cxx_std_20)
   target_include_directories(ckconfig_ckvision PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
   target_link_libraries(ckconfig_ckvision PRIVATE ck_vision_config ck_du_core ck_chat_options)
-  set(_ckvision_config_output "ck-config-ckvision")
-  if(CKTOOLS_CKVISION_CUTOVER)
-    set(_ckvision_config_output "ck-config")
-  endif()
   set_target_properties(ckconfig_ckvision PROPERTIES
-    OUTPUT_NAME "${_ckvision_config_output}"
+    OUTPUT_NAME "ck-config"
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
   )
   install(TARGETS ckconfig_ckvision RUNTIME DESTINATION bin)

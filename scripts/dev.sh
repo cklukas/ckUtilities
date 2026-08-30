@@ -9,7 +9,7 @@ case "${command}" in
     echo "tidy: clang-tidy integration to be wired up";;
   quick-build)
     cmake --preset dev
-    cmake --build build/dev --target ckjsonview;;
+    cmake --build build/dev --target ckjsonview_ckvision;;
   "")
     echo "usage: $0 {format|tidy|quick-build}" >&2
     exit 1;;

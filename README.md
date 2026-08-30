@@ -1,19 +1,17 @@
 # CK Utilities
 
-**Status:** active ckVision migration and release rehearsal
+**Status:** ckVision-native product and release validation
 
 ![ck-chat conversation interface](images/Screenshot%202025-10-25%20at%2023.34.31.png)
 ![ck-chat model loading](images/Screenshot%202025-10-25%20at%2023.34.40.png)
 ![ck-chat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
 
-CK Utilities is converting its seven terminal products to native ckVision
-applications: `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
-`ck-config`, `ck-edit`, and `ck-chat`. The conversion is currently an opt-in
-release rehearsal while the selected ckVision candidate is accepted upstream.
-The historical implementation remains deliberately separate and is not
-modified by the rehearsal.
+CK Utilities is a native ckVision suite of seven terminal products:
+`ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`, `ck-config`, `ck-edit`,
+and `ck-chat`. Every build and package consumes an installed `ckvision::cvision`
+CMake SDK; no product configuration has an alternative UI path.
 
-Current local acceptance evidence covers a clean macOS Debug/Release cutover,
+Current local acceptance evidence covers a clean macOS Debug/Release build,
 the configured release-and-sanitizer test suite, ASan/UBSan, an installed-SDK
 consumer, staged executable and launcher checks, a verified release archive,
 and real-PTY terminal lifecycle smoke across three profiles (also under
@@ -63,36 +61,35 @@ git clone https://github.com/cklukas/ckUtilities.git
 cd ckUtilities
 ```
 
-#### Configure a native ckVision cutover rehearsal:
+#### Configure the native suite:
 
 ```bash
-cmake -S . -B build/cutover \
+cmake -S . -B build/native \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DCKTOOLS_CKVISION_CUTOVER=ON \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
 ```
 
-The cutover build consumes only the installed SDK; it does not use a
-neighbouring ckVision source tree or the legacy patch helper.
+The build consumes only the installed SDK; it does not use a neighbouring
+ckVision source tree.
 
 #### Build all tools:
 
 ```bash
-cmake --build build/cutover
+cmake --build build/native
 ```
 
 #### Build and run a single tool (example: ck-find):
 
 ```bash
-cmake --build build/cutover -t ckfind_ckvision
-./build/cutover/bin/ck-find --help
+cmake --build build/native -t ckfind_ckvision
+./build/native/bin/ck-find --help
 ```
 
 #### Run tests:
 
 ```bash
-ctest --test-dir build/cutover --output-on-failure
+ctest --test-dir build/native --output-on-failure
 ```
 
 The suite exercises each native presentation and the framework-neutral cores.
@@ -109,19 +106,18 @@ The staged-product, archive, and independent package-consumer gates must use
 the same installed ckVision SDK:
 
 ```bash
-cmake -S . -B build/cutover-release \
+cmake -S . -B build/native-release \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCKTOOLS_CKVISION_CUTOVER=ON \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
   -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON \
   -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON \
   -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
-cmake --build build/cutover-release --target verify_ckvision_rehearsal
+cmake --build build/native-release --target verify_ckvision_rehearsal
 ```
 
 `verify_ckvision_rehearsal` runs the complete local CTest suite, an independent
-installed-SDK consumer, the staged product/cutover checks, and the archive
+installed-SDK consumer, the staged-product checks, and the archive
 check. The latter runs CPack, extracts the delivered TGZ, verifies every
 product executable and launcher path, rejects legacy runtime artifacts, and
 rejects build-only GTest/GMock payload. The focused verification targets remain
@@ -146,7 +142,7 @@ override.
 #### Install (to staging directory):
 
 ```bash
-cmake --install build/cutover-release --prefix /path/to/staging
+cmake --install build/native-release --prefix /path/to/staging
 ```
 
 For more details, see `COMPILE.md`.

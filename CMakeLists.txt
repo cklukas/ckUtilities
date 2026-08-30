@@ -27,22 +27,9 @@ elseif(UNIX)
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
-option(CKTOOLS_ENABLE_CKVISION_MIGRATION
-       "Build the ckVision-native migration targets"
-       OFF)
-
-option(CKTOOLS_CKVISION_CUTOVER
-       "Build only the ckVision-native product layout under production names"
-       OFF)
-
-if(CKTOOLS_CKVISION_CUTOVER)
-  set(CKTOOLS_ENABLE_CKVISION_MIGRATION ON CACHE BOOL
-      "Build the ckVision-native migration targets" FORCE)
-endif()
-
-if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
-  cktools_require_ckvision()
-endif()
+# ckUtilities is a ckVision product.  A source checkout is deliberately not a
+# dependency: every build, test, and package consumes the installed CMake SDK.
+cktools_require_ckvision()
 
 # Add llama.cpp integration
 option(CKAI_BACKEND_LLAMA "Enable llama.cpp backend" ON)
@@ -63,20 +50,9 @@ cktools_add_ckvision_package_verification()
 cktools_add_ckvision_install_verification()
 cktools_add_ckvision_cutover_verification()
 
-if(CKTOOLS_CKVISION_CUTOVER)
-  include(AddCkTool)
-  add_subdirectory(src/common)
-  add_subdirectory(src/native-core)
-  add_subdirectory(src/vision)
-  add_subdirectory(src/tools/ck-win-installer)
-else()
-  add_subdirectory(src/tools)
-  add_subdirectory(src/common)
-
-  if(CKTOOLS_ENABLE_CKVISION_MIGRATION)
-    add_subdirectory(src/vision)
-  endif()
-endif()
+add_subdirectory(src/common)
+add_subdirectory(src/native-core)
+add_subdirectory(src/vision)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)
@@ -85,10 +61,6 @@ endif()
 install(FILES README.md DESTINATION share/doc/ck-utilities)
 install(FILES LICENSE DESTINATION share/licenses/ck-utilities)
 install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs)
-
-if(APPLE)
-  install(PROGRAMS packaging/macos/install.sh DESTINATION share/ck-utilities)
-endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/packaging/CPackConfig.cmake")
 cktools_add_ckvision_archive_verification()
