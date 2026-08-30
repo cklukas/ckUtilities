@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,6 +14,7 @@
 #include <cvision/widgets/message_box.hpp>
 #include <cvision/widgets/syntax_profile.hpp>
 
+#include "ck/edit/markdown_transformations.hpp"
 #include "ck/vision/suite_shell.hpp"
 #include "markdown_profile.hpp"
 
@@ -31,10 +33,19 @@ public:
     std::string path() const;
     std::string syntax_profile() const;
     bool normalise_markdown();
+    ckv::widgets::TextEditor *editor_view() const noexcept
+    {
+        return window_ == nullptr ? nullptr : &window_->editor();
+    }
     ckv::ui::CommandId open_command() const noexcept { return open_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId save_as_command() const noexcept { return save_as_command_; }
     ckv::ui::CommandId normalise_markdown_command() const noexcept { return normalise_markdown_command_; }
+    ckv::ui::CommandId bold_command() const noexcept { return bold_command_; }
+    ckv::ui::CommandId italic_command() const noexcept { return italic_command_; }
+    ckv::ui::CommandId strikethrough_command() const noexcept { return strikethrough_command_; }
+    ckv::ui::CommandId inline_code_command() const noexcept { return inline_code_command_; }
+    ckv::ui::CommandId heading_command(int level) const noexcept;
 
 private:
     void declare_commands();
@@ -48,6 +59,11 @@ private:
     void show_save_conflict_resolution();
     void reload_after_save_conflict();
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
+    void toggle_inline_markdown(ck::edit::MarkdownInlineStyle style, std::string_view label);
+    void toggle_heading_markdown(int level);
+    bool commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
+                                   std::string_view success_message);
+    bool markdown_document() const noexcept;
     static std::string status_message(ckv::widgets::EditorFileStatus status);
 
     ckv::ui::Application &application_;
@@ -60,6 +76,11 @@ private:
     ckv::ui::CommandId save_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId save_as_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId normalise_markdown_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId bold_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId italic_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId strikethrough_command_ = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId inline_code_command_ = ckv::ui::kInvalidCommand;
+    std::array<ckv::ui::CommandId, 6> heading_commands_{};
     std::optional<ckv::widgets::FileDialogPresentation> open_dialog_;
     std::optional<ckv::widgets::DescriptorDialogPresentation> save_as_dialog_;
     std::optional<ckv::widgets::MessageBoxPresentation> message_box_;

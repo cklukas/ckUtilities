@@ -78,6 +78,16 @@ const std::array kEditCommands{
     CommandDefinition{"ck.edit.save", "&Save", "Editor", "Ctrl+S"},
     CommandDefinition{"ck.edit.save_as", "Save &As...", "Editor", ""},
     CommandDefinition{"ck.edit.normalise_markdown", "&Normalize Markdown whitespace", "Editor", ""},
+    CommandDefinition{"ck.edit.bold", "&Bold selection", "Markdown format", "Ctrl+B"},
+    CommandDefinition{"ck.edit.italic", "&Italic selection", "Markdown format", "Ctrl+I"},
+    CommandDefinition{"ck.edit.strikethrough", "&Strikethrough selection", "Markdown format", ""},
+    CommandDefinition{"ck.edit.inline_code", "Inline &code selection", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.1", "Heading &1", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.2", "Heading &2", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.3", "Heading &3", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.4", "Heading &4", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.5", "Heading &5", "Markdown format", ""},
+    CommandDefinition{"ck.edit.heading.6", "Heading &6", "Markdown format", ""},
 };
 
 const std::array kChatCommands{

@@ -3,6 +3,8 @@
 #include "ck/vision/keymap.hpp"
 #include "markdown_normalization.hpp"
 
+#include "ck/edit/markdown_transformations.hpp"
+
 #include <utility>
 
 #include <cvision/widgets/command_presentation.hpp>
@@ -39,6 +41,28 @@ void EditApp::declare_commands()
         application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); }));
     normalise_markdown_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-edit", "ck.edit.normalise_markdown", [this] { normalise_markdown(); }));
+    bold_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.bold", [this] {
+            toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Bold, "bold");
+        }));
+    italic_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.italic", [this] {
+            toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Italic, "italic");
+        }));
+    strikethrough_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.strikethrough", [this] {
+            toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Strikethrough, "strikethrough");
+        }));
+    inline_code_command_ = command_scope_.own(
+        declare_suite_command(application_.commands(), "ck-edit", "ck.edit.inline_code", [this] {
+            toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Code, "inline code");
+        }));
+    for (int level = 1; level <= 6; ++level)
+    {
+        heading_commands_[static_cast<std::size_t>(level - 1)] = command_scope_.own(declare_suite_command(
+            application_.commands(), "ck-edit", "ck.edit.heading." + std::to_string(level),
+            [this, level] { toggle_heading_markdown(level); }));
+    }
 }
 
 SuiteShellOptions EditApp::make_shell_options() const
@@ -50,11 +74,24 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{save_command_, "&Save"}),
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
                 MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
+            }}, MenuBarItem{"&Format", {
+                MenuItem::command(CommandPresentation{bold_command_, "&Bold selection"}),
+                MenuItem::command(CommandPresentation{italic_command_, "&Italic selection"}),
+                MenuItem::command(CommandPresentation{strikethrough_command_, "&Strikethrough selection"}),
+                MenuItem::command(CommandPresentation{inline_code_command_, "Inline &code selection"}),
+                MenuItem::separator(),
+                MenuItem::command(CommandPresentation{heading_commands_[0], "Heading &1"}),
+                MenuItem::command(CommandPresentation{heading_commands_[1], "Heading &2"}),
+                MenuItem::command(CommandPresentation{heading_commands_[2], "Heading &3"}),
+                MenuItem::command(CommandPresentation{heading_commands_[3], "Heading &4"}),
+                MenuItem::command(CommandPresentation{heading_commands_[4], "Heading &5"}),
+                MenuItem::command(CommandPresentation{heading_commands_[5], "Heading &6"}),
             }}},
             .application_status_items = {
                 StatusLineItem{CommandPresentation{open_command_, "&Open"}, 20},
                 StatusLineItem{CommandPresentation{save_command_, "&Save"}, 20},
                 StatusLineItem{CommandPresentation{normalise_markdown_command_, "&Normalize"}, 25},
+                StatusLineItem{CommandPresentation{bold_command_, "&Bold"}, 20},
             }};
 }
 
@@ -252,11 +289,10 @@ std::string EditApp::syntax_profile() const
 
 bool EditApp::normalise_markdown()
 {
-    if (window_ == nullptr)
-        return false;
-    if (window_->editor().profile_id() != "markdown")
+    if (!markdown_document())
     {
-        window_->set_footer("Markdown normalization is available for Markdown documents only.");
+        if (window_ != nullptr)
+            window_->set_footer("Markdown normalization is available for Markdown documents only.");
         return false;
     }
 
@@ -276,6 +312,81 @@ bool EditApp::normalise_markdown()
         return false;
     }
     window_->set_footer("Normalized Markdown whitespace.");
+    return true;
+}
+
+ckv::ui::CommandId EditApp::heading_command(int level) const noexcept
+{
+    if (level < 1 || level > static_cast<int>(heading_commands_.size()))
+        return ckv::ui::kInvalidCommand;
+    return heading_commands_[static_cast<std::size_t>(level - 1)];
+}
+
+bool EditApp::markdown_document() const noexcept
+{
+    return window_ != nullptr && window_->editor().profile_id() == "markdown";
+}
+
+void EditApp::toggle_inline_markdown(ck::edit::MarkdownInlineStyle style, std::string_view label)
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown formatting is available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    if (!selected)
+    {
+        window_->set_footer("Select text before applying Markdown formatting.");
+        return;
+    }
+
+    const auto transform = ck::edit::toggle_markdown_inline_style(
+        document_->text(), {selected->begin.byte, selected->end.byte}, style);
+    if (!transform || !commit_markdown_transform(*transform, "Updated " + std::string(label) + " Markdown."))
+        window_->set_footer("Could not apply Markdown formatting to this selection.");
+}
+
+void EditApp::toggle_heading_markdown(int level)
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown headings are available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+    const ck::edit::MarkdownByteRange range = selected
+                                                  ? ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte}
+                                                  : ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
+    const auto transform = ck::edit::toggle_markdown_heading(document_->text(), range, level);
+    if (!transform || !commit_markdown_transform(*transform, "Toggled Markdown heading " + std::to_string(level) + "."))
+        window_->set_footer("Could not toggle a Markdown heading at this location.");
+}
+
+bool EditApp::commit_markdown_transform(const ck::edit::MarkdownTransformEdit &transform,
+                                        std::string_view success_message)
+{
+    const auto begin = document_->position_at_byte(transform.replaced.begin);
+    const auto end = document_->position_at_byte(transform.replaced.end);
+    if (!begin || !end)
+        return false;
+
+    auto transaction = document_->transaction();
+    transaction.replace({*begin, *end}, transform.replacement);
+    if (!document_->commit(std::move(transaction)))
+        return false;
+
+    const auto selected_begin = document_->position_at_byte(transform.selection.begin);
+    const auto selected_end = document_->position_at_byte(transform.selection.end);
+    if (!selected_begin || !selected_end || !window_->editor().set_selection({*selected_begin, *selected_end}))
+        return false;
+
+    window_->set_footer(std::string(success_message));
     return true;
 }
 

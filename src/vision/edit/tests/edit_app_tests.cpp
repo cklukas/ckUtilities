@@ -60,6 +60,33 @@ int main()
     require(editor.document().text() == "# Heading  \n\nBody\n",
             "Markdown normalization must preserve hard breaks while removing accidental whitespace in one transaction.");
     require(editor.document().modified(), "Markdown normalization must remain an undoable document edit.");
+
+    editor.document().set_text("caf\xC3\xA9\nHeading\n```cpp\n# code\n```\n");
+    const auto inline_begin = editor.document().position_at_byte(0);
+    const auto inline_end = editor.document().position_at_byte(5);
+    require(inline_begin.has_value() && inline_end.has_value() &&
+                editor.editor_view()->set_selection({*inline_begin, *inline_end}),
+            "The native editor must accept a current selection for a controller-owned Markdown transform.");
+    require(application.execute_command(editor.bold_command()),
+            "Bold Markdown must dispatch through the command registry.");
+    require(editor.document().text().starts_with("**caf\xC3\xA9**\n") &&
+                editor.editor_view()->selection().has_value() &&
+                editor.document().text(*editor.editor_view()->selection()) == "caf\xC3\xA9",
+            "Bold Markdown must preserve the selected Unicode content after one document transaction.");
+    require(application.execute_command(editor.bold_command()) && editor.document().text().starts_with("caf\xC3\xA9\n"),
+            "Applying the same inline Markdown command again must remove its exact delimiter.");
+
+    const auto heading_position = editor.document().position_at_byte(6);
+    require(heading_position.has_value() && editor.editor_view()->set_selection({*heading_position, *heading_position}),
+            "The native editor must position a zero-width heading transform at the current line.");
+    require(application.execute_command(editor.heading_command(2)),
+            "Heading Markdown must dispatch through the command registry.");
+    require(editor.document().text() == "caf\xC3\xA9\n## Heading\n```cpp\n# code\n```\n",
+            "Heading transformation must leave fenced code unchanged.");
+    require(application.execute_command(editor.heading_command(2)) &&
+                editor.document().text() == "caf\xC3\xA9\nHeading\n```cpp\n# code\n```\n",
+            "Applying the current heading level again must remove its ATX marker.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");

@@ -11,8 +11,8 @@ never a neighbouring source tree.
 |---|---|
 | Repository | ckVision |
 | Clean foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Current migration commit | `ba97203bbccc257b9e77dee9e0c9c002e2a0301a` (detached clean-worktree integration candidate) |
-| Current migration change | `TreeView::reveal_and_select`, retained materialized visible rows, stable-ID provider-backed `TreeModel`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, checked `FlowView::replace_block` with incremental realized-tail reflow, and explicit `ApplicationShell::detach_desktop` lifecycle cleanup with liveness-guarded standard Help |
+| Current migration commit | `9f097ecde219a35971ccde6f8732b07ef021c35b` (detached clean-worktree integration candidate) |
+| Current migration change | `TreeView::reveal_and_select`, retained materialized visible rows, stable-ID provider-backed `TreeModel`, validated multiline `Memo` fields in declarative dialogs, command-safe normalized `KeyChord` capture, checked `FlowView::replace_block` with incremental realized-tail reflow, explicit `ApplicationShell::detach_desktop` lifecycle cleanup with liveness-guarded standard Help, and transactional `TextEditor::set_selection` for a current validated document range |
 | Branch at foundation selection | `main` |
 | Selection date | 2026-08-29 |
 | CMake package target | `ckvision::cvision` |
@@ -30,7 +30,10 @@ retains that projection and invalidates it when its roots or expansion state
 changes. JSON and disk-usage adoption then justified the generic stable-ID
 `TreeModel`; TreeView queries only visible paths while retaining expansion and
 selection in the view. A controller teardown scenario also justified explicit
-`ApplicationShell::detach_desktop` cleanup.
+`ApplicationShell::detach_desktop` cleanup. The Markdown editor's generic
+controller transaction needs then justified a public `TextEditor::set_selection`
+operation: it refuses stale, invalid, or non-grapheme-aligned current-document
+ranges before moving the selection and repainting the editor.
 All changes have unit coverage, rendering evidence where applicable, and public
 documentation in ckVision. The ordinary ckVision checkout contained
 unrelated staged, unstaged, and untracked work at the time of selection and is
@@ -78,9 +81,10 @@ requirements of `ckvision::cvision`; an installed static library therefore
 brings a client into the same instrumentation domain. A release SDK combined
 with an independently sanitized client is not a valid sanitizer result. On
 macOS, run ASan with `detect_leaks=0`, because that runtime does not support
-leak detection. The clean `ba97203bbccc257b9e77dee9e0c9c002e2a0301a`
+leak detection. The clean `9f097ecde219a35971ccde6f8732b07ef021c35b`
 integration candidate passed ckVision's full 169-test sanitizer suite and
-ckUtilities' 74-test cutover suite with this procedure on 2026-08-30.
+ckUtilities' 79-test cutover configuration in both normal and ASan/UBSan
+builds with this procedure on 2026-08-30.
 
 To verify the staged native product as well, enable the installed-product
 gate and run it from the configured build tree:

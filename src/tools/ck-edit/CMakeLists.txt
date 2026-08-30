@@ -9,6 +9,7 @@ endif()
 
 add_library(ck_markdown_core STATIC
   src/markdown_parser.cpp
+  src/markdown_transformations.cpp
 )
 
 target_include_directories(ck_markdown_core

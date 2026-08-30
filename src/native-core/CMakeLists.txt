@@ -44,6 +44,7 @@ target_link_libraries(ck_find_core PUBLIC ck_options nlohmann_json::nlohmann_jso
 
 add_library(ck_markdown_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/src/markdown_parser.cpp
+  ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/src/markdown_transformations.cpp
 )
 target_include_directories(ck_markdown_core
   PUBLIC
@@ -58,5 +59,7 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/json-view/include/ DESTINATION
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include/ DESTINATION include
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-install(FILES ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_parser.hpp
+install(FILES
+  ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_parser.hpp
+  ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_transformations.hpp
   DESTINATION include/ck/edit)

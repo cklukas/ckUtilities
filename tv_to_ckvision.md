@@ -30,8 +30,9 @@ Historical application baseline: `legacy_tv`
   preservation, explicit close-state cleanup, narrow-terminal recomposition,
   keyboard and mouse tree navigation, and a 2,048-entry search smoke with a
   visible-frame composition cap. ckVision candidate
-  `ba97203bbccc257b9e77dee9e0c9c002e2a0301a` also provides the documented,
-  unit-tested stable-ID `TreeModel` and `TreeView::reveal_and_select` APIs.
+  `9f097ecde219a35971ccde6f8732b07ef021c35b` also provides the documented,
+  unit-tested stable-ID `TreeModel` and `TreeView::reveal_and_select` APIs,
+  together with transactional `TextEditor::set_selection` restoration.
   TreeView owns expansion and cursor state while querying only visible paths;
   its one-million-root test queries just the five painted items. Application-
   realistic refresh and memory budgets remain acceptance work.
@@ -119,8 +120,14 @@ Historical application baseline: `legacy_tv`
   preserving two-space hard breaks and fenced/indented code verbatim while
   removing accidental prose whitespace.
   A save conflict now preserves the externally changed file and gives the user
-  an explicit Save As, reload/discard, or continue-editing choice. Broader
-  Markdown transformations remain the next slice.
+  an explicit Save As, reload/discard, or continue-editing choice. The
+  framework-independent transformation core now toggles bold, italic,
+  strikethrough, and delimiter-safe inline code for a selection, and toggles
+  ATX heading levels 1–6 across ordinary touched lines without changing fenced
+  or indented code. Each action is one document transaction and restores the
+  semantic Unicode selection through ckVision's validated public selection
+  API. Broader transformations (lists, links, reflow, smart-list, and
+  find/replace workflows) remain.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
@@ -145,7 +152,7 @@ Historical application baseline: `legacy_tv`
   latest 160 messages (with an explicit retention notice) while export and
   model context retain the full conversation. The first response chunk renders
   promptly; subsequent small chunks are coalesced until 96 bytes or completion.
-  ckVision candidate `ba97203bbccc257b9e77dee9e0c9c002e2a0301a` provides
+  ckVision candidate `9f097ecde219a35971ccde6f8732b07ef021c35b` provides
   a checked `FlowView::replace_block` API with incremental realized-tail
   reflow, which the active response uses to avoid rebuilding prior
   rich-content blocks. Its `TreeView` also retains materialized visible rows
@@ -153,7 +160,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 74-test cutover suite passes in normal and
+  candidate SDK. The full 79-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -164,18 +171,18 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  74-test cutover configuration, independent package consumer, and staged
+  79-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 74 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 79 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 74-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 79-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 
@@ -872,13 +879,13 @@ These are investigation targets, not pre-approved APIs:
 
 | Candidate | Driven by | Evidence to collect |
 |---|---|---|
-| Provider-backed TreeView with stable node IDs | JSON and disk trees | implemented in candidate `ba97203`; collect application-scale memory, refresh-cost, selection/expansion, and async lazy-load evidence |
+| Provider-backed TreeView with stable node IDs | JSON and disk trees | implemented in candidate `9f097ec`; collect application-scale memory, refresh-cost, selection/expansion, and async lazy-load evidence |
 | FlowView viewport anchoring, selection/copy, and virtualized history | chat transcript | long-session memory, copy/selection and link behavior |
 | Generic color-selection control/dialog | launcher and theme tools | reusable color model, truecolor/degraded palette behavior, keyboard/mouse UX |
 | Safe event diagnostics observer | launcher event viewer and troubleshooting | no dispatch interference/re-entrancy, bounded recording, deterministic replay text |
 | Complete keymap capture/introspection/serialization | config editor and every app | normalized chords, conflicts, unknown commands, scheme switching, portability |
 | General progress/cancellation dialog composition | disk, editor, chat | modal/modeless lifecycle, close/quit races, posted progress coalescing |
-| Editor extension points for semantic transformations/decorations | Markdown editor | atomic transactions, selection preservation, incremental styling cost |
+| Editor extension points for semantic transformations/decorations | Markdown editor | `TextEditor::set_selection` is implemented in candidate `9f097ec` for validated current document ranges; collect richer transformation/decorations, undo, and incremental-styling evidence |
 | More expressive typed dialog/property descriptors | find/config/model dialogs | reusable field kinds, validation/focus, conditional presentation, responsive layout |
 
 ## 9. Verification strategy
