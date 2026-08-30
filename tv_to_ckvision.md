@@ -1134,15 +1134,14 @@ release-acceptance handoffs, in this order:
    immutable installed package available to CI. Update the baseline pin only
    after that acceptance, then repeat the independent-consumer and cutover
    rehearsal against the published package.
-2. Adopt an explicit custom-command policy for `ck-find`: permitted command
-   form and arguments, sandbox/working-directory and filesystem boundaries,
-   environment and output handling, cancellation, audit trail, and failure
-   reporting. The native form must continue to reject this action until the
-   policy and its acceptance tests exist.
-3. Adopt an explicit `ck-du` cloud-action policy covering recursive scope,
-   eligible providers and files, provider completion versus request acceptance,
-   retries, cancellation, and user-visible failure handling. Extend the
-   production adapter only after that policy is accepted.
+2. The accepted `ck-find` custom-command policy is recorded in
+   [`docs/migration/action-policies.md`](docs/migration/action-policies.md).
+   Implement its direct-argv, allowlisted sandbox adapter and acceptance
+   coverage before enabling the native action.
+3. The accepted `ck-du` cloud-action policy is recorded in
+   [`docs/migration/action-policies.md`](docs/migration/action-policies.md).
+   Tighten the macOS iCloud adapter and acceptance coverage before enabling
+   any broader cloud capability.
 4. Provide an authorized local GGUF model and record the opt-in
    `CKTOOLS_REAL_MODEL` macOS scenario's model identity, platform, and
    structured result. The ordinary deterministic suite must remain model-free.

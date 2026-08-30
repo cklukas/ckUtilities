@@ -22,5 +22,5 @@ menus and status line.
 Deleting matches requires an explicit confirmation and is limited to matching
 regular files and symbolic links; directories are never removed. Existing
 saved custom-command settings are retained for compatibility, but custom
-commands cannot be edited or executed by the native workflow until a separate
-sandbox policy has been accepted.
+commands remain unavailable until the accepted sandbox policy has a tested
+native implementation. They are never interpreted by a shell.
