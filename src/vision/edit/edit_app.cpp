@@ -41,6 +41,8 @@ void EditApp::declare_commands()
         application_.commands(), "ck-edit", "ck.edit.save_as", [this] { show_save_as_dialog(); }));
     normalise_markdown_command_ = command_scope_.own(declare_suite_command(
         application_.commands(), "ck-edit", "ck.edit.normalise_markdown", [this] { normalise_markdown(); }));
+    reflow_markdown_command_ = command_scope_.own(declare_suite_command(
+        application_.commands(), "ck-edit", "ck.edit.reflow_markdown", [this] { reflow_markdown(); }));
     bold_command_ = command_scope_.own(
         declare_suite_command(application_.commands(), "ck-edit", "ck.edit.bold", [this] {
             toggle_inline_markdown(ck::edit::MarkdownInlineStyle::Bold, "bold");
@@ -89,6 +91,7 @@ SuiteShellOptions EditApp::make_shell_options() const
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
                 MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
             }}, MenuBarItem{"&Format", {
+                MenuItem::command(CommandPresentation{reflow_markdown_command_, "&Reflow Markdown paragraph"}),
                 MenuItem::command(CommandPresentation{bold_command_, "&Bold selection"}),
                 MenuItem::command(CommandPresentation{italic_command_, "&Italic selection"}),
                 MenuItem::command(CommandPresentation{strikethrough_command_, "&Strikethrough selection"}),
@@ -332,6 +335,25 @@ bool EditApp::normalise_markdown()
     }
     window_->set_footer("Normalized Markdown whitespace.");
     return true;
+}
+
+void EditApp::reflow_markdown()
+{
+    if (!markdown_document())
+    {
+        if (window_ != nullptr)
+            window_->set_footer("Markdown reflow is available for Markdown documents only.");
+        return;
+    }
+
+    const auto selected = window_->editor().selection();
+    const ckv::widgets::DocumentPosition cursor = window_->editor().cursor();
+    const ck::edit::MarkdownByteRange range = selected
+                                                  ? ck::edit::MarkdownByteRange{selected->begin.byte, selected->end.byte}
+                                                  : ck::edit::MarkdownByteRange{cursor.byte, cursor.byte};
+    const auto transform = ck::edit::reflow_markdown_paragraphs(document_->text(), range);
+    if (!transform || !commit_markdown_transform(*transform, "Reflowed Markdown paragraph to 80 columns."))
+        window_->set_footer("Could not reflow a Markdown paragraph at this location.");
 }
 
 ckv::ui::CommandId EditApp::heading_command(int level) const noexcept

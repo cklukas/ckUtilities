@@ -78,6 +78,7 @@ const std::array kEditCommands{
     CommandDefinition{"ck.edit.save", "&Save", "Editor", "Ctrl+S"},
     CommandDefinition{"ck.edit.save_as", "Save &As...", "Editor", ""},
     CommandDefinition{"ck.edit.normalise_markdown", "&Normalize Markdown whitespace", "Editor", ""},
+    CommandDefinition{"ck.edit.reflow_markdown", "&Reflow Markdown paragraph", "Markdown format", ""},
     CommandDefinition{"ck.edit.bold", "&Bold selection", "Markdown format", "Ctrl+B"},
     CommandDefinition{"ck.edit.italic", "&Italic selection", "Markdown format", "Ctrl+I"},
     CommandDefinition{"ck.edit.strikethrough", "&Strikethrough selection", "Markdown format", ""},

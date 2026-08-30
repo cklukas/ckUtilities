@@ -136,8 +136,10 @@ Historical application baseline: `legacy_tv`
   task markers when converting a task list to plain text. Link commands use a
   native destination dialog to insert a link or remove a selected complete
   link or label; parentheses in destinations are supported. Broader
-  transformations (deeper list structure, reflow, smart-list, and find/replace
-  workflows) remain.
+  transformations include deeper list structure, smart-list, and find/replace
+  workflows. The native reflow command wraps each selected ordinary paragraph
+  to 80 UTF-8 code points and deliberately leaves code, hard breaks, Markdown
+  block syntax, references, and Setext headings unchanged.
 - WP-9: `ck-chat-ckvision` owns a native FlowView transcript and prompt
   workflow with registry commands for new/send/cancel/copy. It consumes an
   injected streaming response service; chunks and completion are marshalled to
@@ -170,7 +172,7 @@ Historical application baseline: `legacy_tv`
   stable-ID model for JSON and directory snapshots. Real-model runtime evidence
   remains before acceptance.
 - All seven native executables build together against the installed ckVision
-  candidate SDK. The full 83-test cutover suite passes in normal and
+  candidate SDK. The full 84-test cutover suite passes in normal and
   ASan/UBSan builds. A separate installed-product gate builds the
   complete suite, stages it to a disposable prefix, and verifies that each
   native executable completes `--help`; the gate also protects the chat
@@ -181,18 +183,18 @@ Historical application baseline: `legacy_tv`
   installed candidate: only the framework-neutral cores and seven native
   executables are configured, and the product binaries use their production
   names without configuring or installing the legacy UI runtime. The complete
-  83-test cutover configuration, independent package consumer, and staged
+  84-test cutover configuration, independent package consumer, and staged
   installed-product smoke gate pass. The `verify_ckvision_cutover` gate also
   rejects legacy product linkage, installed legacy artifacts, and legacy
   references in installed public headers. It remains opt-in until the
   candidate is accepted upstream and can be installed reproducibly in CI.
   A macOS ASan/UBSan cutover build against a package built with
-  `CKVISION_SANITIZE=address,undefined` also passes all 83 tests. The
+  `CKVISION_SANITIZE=address,undefined` also passes all 84 tests. The
   sanitizer package propagates its required compile and link flags to CMake
   consumers; validation must use that supported ckVision option rather than a
   release SDK built with ad-hoc sanitizer flags. The clean detached candidate
   passed ckVision's 169-test normal and 169-test ASan/UBSan suites, and this
-  cutover configuration's 83-test normal and ASan/UBSan suites, on 2026-08-30.
+  cutover configuration's 84-test normal and ASan/UBSan suites, on 2026-08-30.
 
 ## 1. Mandate
 

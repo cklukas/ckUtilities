@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 namespace ck::edit
 {
@@ -518,6 +519,173 @@ std::optional<MarkdownTransformEdit> remove_markdown_link(std::string_view sourc
     };
 }
 
+bool reference_definition(std::string_view line) noexcept
+{
+    if (line.empty() || line.front() != '[')
+        return false;
+    const std::size_t close = line.find("]:");
+    return close != std::string_view::npos && close > 1U;
+}
+
+bool setext_underline(std::string_view line) noexcept
+{
+    const std::size_t indent = heading_indent(line);
+    if (indent >= 4U || indent == line.size() || (line[indent] != '=' && line[indent] != '-'))
+        return false;
+    const char marker = line[indent];
+    for (std::size_t offset = indent; offset < line.size(); ++offset)
+    {
+        if (line[offset] != marker && line[offset] != ' ' && line[offset] != '\t')
+            return false;
+    }
+    return true;
+}
+
+bool paragraph_reflowable_line(std::string_view line) noexcept
+{
+    if (line.empty() || indented_code(line))
+        return false;
+
+    const std::size_t indent = heading_indent(line);
+    if (indent >= 4U)
+        return false;
+    const std::string_view content = line.substr(indent);
+    return has_non_whitespace(content) && !heading_at(line, indent) && !content.starts_with('>') &&
+           !list_item_at(line, indent) && content.find('|') == std::string_view::npos && !thematic_break(content) &&
+           !reference_definition(content);
+}
+
+struct MarkdownSourceLine
+{
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::string_view content;
+    bool crlf = false;
+    bool reflowable = false;
+};
+
+std::vector<MarkdownSourceLine> markdown_source_lines(std::string_view source)
+{
+    std::vector<MarkdownSourceLine> lines;
+    std::optional<Fence> active_fence;
+    for (std::size_t begin = 0;;)
+    {
+        const std::size_t newline = source.find('\n', begin);
+        const std::size_t end = newline == std::string_view::npos ? source.size() : newline;
+        const std::string_view raw = source.substr(begin, end - begin);
+        const bool crlf = !raw.empty() && raw.back() == '\r';
+        const std::string_view content = crlf ? raw.substr(0, raw.size() - 1U) : raw;
+        bool reflowable = false;
+
+        if (active_fence)
+        {
+            if (fence_closes(content, *active_fence))
+                active_fence.reset();
+        }
+        else if (const auto opening = fence_at(content))
+        {
+            active_fence = opening;
+        }
+        else
+        {
+            reflowable = paragraph_reflowable_line(content);
+        }
+        lines.push_back({begin, end, content, crlf, reflowable});
+
+        if (newline == std::string_view::npos)
+            break;
+        begin = newline + 1U;
+    }
+
+    for (std::size_t index = 0; index + 1U < lines.size(); ++index)
+    {
+        if (lines[index].reflowable && setext_underline(lines[index + 1U].content))
+            lines[index].reflowable = false;
+    }
+    return lines;
+}
+
+bool paragraph_reflow_safe(const std::vector<MarkdownSourceLine> &lines,
+                           std::size_t begin,
+                           std::size_t end) noexcept
+{
+    for (std::size_t index = begin; index < end; ++index)
+    {
+        const std::string_view content = lines[index].content;
+        if (content.find('`') != std::string_view::npos || content.ends_with("  ") || content.ends_with('\\'))
+            return false;
+    }
+    return true;
+}
+
+std::size_t utf8_code_point_count(std::string_view value) noexcept
+{
+    return static_cast<std::size_t>(std::count_if(value.begin(), value.end(), [](char character) {
+        return (static_cast<unsigned char>(character) & 0xC0U) != 0x80U;
+    }));
+}
+
+std::string reflow_paragraph(const std::vector<MarkdownSourceLine> &lines,
+                             std::size_t begin,
+                             std::size_t end,
+                             std::size_t width)
+{
+    const std::size_t indent_size = heading_indent(lines[begin].content);
+    const std::string indent(lines[begin].content.substr(0, indent_size));
+    const std::string_view newline = lines[begin].crlf ? "\r\n" : "\n";
+    std::vector<std::string> words;
+
+    for (std::size_t index = begin; index < end; ++index)
+    {
+        std::string_view content = lines[index].content.substr(heading_indent(lines[index].content));
+        while (!content.empty() && (content.back() == ' ' || content.back() == '\t'))
+            content.remove_suffix(1U);
+        for (std::size_t word_begin = 0; word_begin < content.size();)
+        {
+            while (word_begin < content.size() && (content[word_begin] == ' ' || content[word_begin] == '\t'))
+                ++word_begin;
+            const std::size_t word_end = content.find_first_of(" \t", word_begin);
+            if (word_begin < content.size())
+                words.emplace_back(content.substr(word_begin, word_end - word_begin));
+            if (word_end == std::string_view::npos)
+                break;
+            word_begin = word_end + 1U;
+        }
+    }
+
+    std::string reflowed;
+    std::string current = indent;
+    std::size_t current_width = utf8_code_point_count(indent);
+    bool has_word = false;
+    for (const std::string &word : words)
+    {
+        const std::size_t word_width = utf8_code_point_count(word);
+        if (has_word && current_width + 1U + word_width > width)
+        {
+            if (!reflowed.empty())
+                reflowed += newline;
+            reflowed += current;
+            current = indent;
+            current_width = utf8_code_point_count(indent);
+            has_word = false;
+        }
+        if (has_word)
+        {
+            current.push_back(' ');
+            ++current_width;
+        }
+        current += word;
+        current_width += word_width;
+        has_word = true;
+    }
+    if (!reflowed.empty())
+        reflowed += newline;
+    reflowed += current;
+    if (lines[end - 1U].crlf)
+        reflowed.push_back('\r');
+    return reflowed;
+}
+
 std::size_t quote_indent(std::string_view line) noexcept
 {
     std::size_t indent = 0;
@@ -1004,6 +1172,90 @@ std::optional<MarkdownTransformEdit> toggle_markdown_link(
         .replaced = selection,
         .replacement = "[" + std::string(label) + "](" + std::string(destination) + ")",
         .selection = {selection.begin + 1U, selection.end + 1U},
+    };
+}
+
+std::optional<MarkdownTransformEdit> reflow_markdown_paragraphs(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::size_t width)
+{
+    if (!valid_range(source, selection) || width < 20U)
+        return std::nullopt;
+
+    const std::size_t first_line = line_start(source, selection.begin);
+    std::size_t last_position = selection.begin;
+    if (selection.end > selection.begin)
+    {
+        last_position = selection.end - 1U;
+        if (source[last_position] == '\n' && last_position > 0U)
+            --last_position;
+    }
+    const std::size_t last_line_end = line_end(source, last_position);
+    const std::vector<MarkdownSourceLine> lines = markdown_source_lines(source);
+
+    std::size_t first_selected = lines.size();
+    std::size_t last_selected = lines.size();
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        if (lines[index].begin == first_line)
+            first_selected = index;
+        if (lines[index].end == last_line_end)
+            last_selected = index;
+    }
+    if (first_selected == lines.size() || last_selected == lines.size() || first_selected > last_selected)
+        return std::nullopt;
+
+    struct ParagraphReplacement
+    {
+        std::size_t begin = 0;
+        std::size_t end = 0;
+        std::string text;
+    };
+    std::vector<ParagraphReplacement> replacements;
+
+    for (std::size_t paragraph_begin = 0; paragraph_begin < lines.size();)
+    {
+        if (!lines[paragraph_begin].reflowable)
+        {
+            ++paragraph_begin;
+            continue;
+        }
+        std::size_t paragraph_end = paragraph_begin + 1U;
+        while (paragraph_end < lines.size() && lines[paragraph_end].reflowable)
+            ++paragraph_end;
+
+        const bool selected = paragraph_begin <= last_selected && paragraph_end > first_selected;
+        if (selected && paragraph_reflow_safe(lines, paragraph_begin, paragraph_end))
+        {
+            std::string reflowed = reflow_paragraph(lines, paragraph_begin, paragraph_end, width);
+            const std::size_t begin = lines[paragraph_begin].begin;
+            const std::size_t end = lines[paragraph_end - 1U].end;
+            if (reflowed != source.substr(begin, end - begin))
+                replacements.push_back({begin, end, std::move(reflowed)});
+        }
+        paragraph_begin = paragraph_end;
+    }
+
+    if (replacements.empty())
+        return std::nullopt;
+
+    const std::size_t replace_begin = replacements.front().begin;
+    const std::size_t replace_end = replacements.back().end;
+    std::string replacement;
+    std::size_t copied_until = replace_begin;
+    for (const ParagraphReplacement &paragraph : replacements)
+    {
+        replacement += source.substr(copied_until, paragraph.begin - copied_until);
+        replacement += paragraph.text;
+        copied_until = paragraph.end;
+    }
+    replacement += source.substr(copied_until, replace_end - copied_until);
+    const MarkdownByteRange restored_selection{replace_begin, replace_begin + replacement.size()};
+    return MarkdownTransformEdit{
+        .replaced = {replace_begin, replace_end},
+        .replacement = std::move(replacement),
+        .selection = restored_selection,
     };
 }
 

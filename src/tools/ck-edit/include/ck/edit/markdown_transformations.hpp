@@ -99,4 +99,16 @@ std::optional<MarkdownTransformEdit> toggle_markdown_link(
     MarkdownByteRange selection,
     std::string_view destination);
 
+// Reflows each ordinary paragraph touched by the selection to `width` UTF-8
+// code points (default 80). A zero-width selection targets its current
+// paragraph. Fenced/indented code, headings, quotes, lists, tables,
+// reference definitions, Setext headings, hard breaks, and paragraphs with
+// inline code remain byte-for-byte unchanged. Reflowed paragraphs retain the
+// first line's indentation and newline style and are returned as one atomic
+// transaction-ready edit.
+std::optional<MarkdownTransformEdit> reflow_markdown_paragraphs(
+    std::string_view source,
+    MarkdownByteRange selection,
+    std::size_t width = 80U);
+
 } // namespace ck::edit

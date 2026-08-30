@@ -14,6 +14,7 @@ using ck::edit::toggle_markdown_link;
 using ck::edit::toggle_markdown_list;
 using ck::edit::toggle_markdown_quote;
 using ck::edit::toggle_markdown_task;
+using ck::edit::reflow_markdown_paragraphs;
 
 TEST(MarkdownTransformations, TogglesInlineStylesAndRestoresTheContentSelection)
 {
@@ -182,6 +183,32 @@ TEST(MarkdownTransformations, TogglesLinksAndKeepsTheLabelSelected)
 
     EXPECT_FALSE(toggle_markdown_link("Read this", {5, 9}, "not a destination"));
     EXPECT_FALSE(toggle_markdown_link("Read this", {5, 5}, "https://example.test"));
+}
+
+TEST(MarkdownTransformations, ReflowsOrdinaryParagraphsWithoutChangingProtectedSyntax)
+{
+    constexpr std::string_view source =
+        "Alpha beta\ngamma delta epsilon\nzeta\n\n# Heading\n\n```cpp\nalpha beta gamma\n```\n";
+    const auto reflowed = reflow_markdown_paragraphs(source, {7, 7}, 20);
+    ASSERT_TRUE(reflowed.has_value());
+    EXPECT_EQ(reflowed->replaced, (MarkdownByteRange{0, 35}));
+    EXPECT_EQ(reflowed->replacement, "Alpha beta gamma\ndelta epsilon zeta");
+    EXPECT_EQ(reflowed->selection, (MarkdownByteRange{0, reflowed->replacement.size()}));
+
+    constexpr std::string_view crlf_source = "One two\r\nthree four five\r\n";
+    const auto crlf = reflow_markdown_paragraphs(crlf_source, {0, crlf_source.size()}, 20);
+    ASSERT_TRUE(crlf.has_value());
+    EXPECT_EQ(crlf->replacement, "One two three four\r\nfive\r");
+
+    constexpr std::string_view unicode_source = "caf\xC3\xA9 alpha\nbeta gamma delta\n";
+    const auto unicode = reflow_markdown_paragraphs(unicode_source, {0, unicode_source.size()}, 20);
+    ASSERT_TRUE(unicode.has_value());
+    EXPECT_EQ(unicode->replacement, "caf\xC3\xA9 alpha beta\ngamma delta");
+
+    EXPECT_FALSE(reflow_markdown_paragraphs("Keep  \nthis hard break\n", {0, 0}, 20));
+    EXPECT_FALSE(reflow_markdown_paragraphs("Use `inline code` exactly\n", {0, 0}, 20));
+    EXPECT_FALSE(reflow_markdown_paragraphs("Heading\n---\n", {0, 0}, 20));
+    EXPECT_FALSE(reflow_markdown_paragraphs("[reference]: https://example.test\n", {0, 0}, 20));
 }
 
 TEST(MarkdownTransformations, RejectsEmptyAndInvalidRanges)

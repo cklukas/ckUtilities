@@ -148,6 +148,14 @@ int main()
     require(application.execute_command(editor.toggle_link_command()) && editor.document().text() == "Read docs\n",
             "The native link command must remove a link when its label remains selected.");
 
+    editor.document().set_text("Alpha beta\ngamma delta epsilon\nzeta\n");
+    const auto reflow_position = editor.document().position_at_byte(7);
+    require(reflow_position.has_value() && editor.editor_view()->set_selection({*reflow_position, *reflow_position}),
+            "The native editor must position a zero-width paragraph-reflow transform at the current line.");
+    require(application.execute_command(editor.reflow_markdown_command()) &&
+                editor.document().text() == "Alpha beta gamma delta epsilon zeta\n",
+            "The native reflow command must join and wrap an ordinary Markdown paragraph through one transaction.");
+
     require(application.execute_command(editor.save_command()), "Save must dispatch through the command registry.");
     require(!editor.document().modified(), "A successful save must establish a clean editor revision.");
     require(application.execute_command(editor.save_as_command()), "Save As must dispatch through the command registry.");
