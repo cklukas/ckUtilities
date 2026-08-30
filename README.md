@@ -24,6 +24,66 @@ until its ckVision backend has passed the required gates.
 
 Tech stack: C++20 and an installed `ckvision::cvision` CMake package.
 
+## Install a released build
+
+Only ckVision-native release assets are supported. Choose the section for your
+platform; do not mix assets from different releases or architectures.
+
+### Linux
+
+Download the `.deb` or `.rpm` asset attached to the matching GitHub release,
+then install it with the native package manager:
+
+```sh
+# Debian, Ubuntu, and derivatives
+sudo apt install ./ck-utilities_*.deb
+
+# Fedora, RHEL, openSUSE, and other RPM-family distributions
+sudo dnf install ./ck-utilities-*.rpm
+```
+
+The package installs `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
+`ck-config`, `ck-edit`, and `ck-chat` on `PATH`. Confirm the install with:
+
+```sh
+ck-utilities --help
+```
+
+### macOS
+
+Each release contains a native archive named
+`ck-utilities-<version>-macos.tar.gz`. Extract it wherever you keep local
+applications, then add its `bin` directory to your shell path:
+
+```sh
+tar -xzf ck-utilities-<version>-macos.tar.gz
+export PATH="$PWD/ck-utilities-<version>-macos/bin:$PATH"
+ck-utilities --help
+```
+
+Add the `export` line to your shell profile if you want it to persist.
+
+A Homebrew formula is attached to each release but is not yet published to a
+named public tap: it needs a companion `ckvision` formula in the same
+user-owned tap. Once those formulae are published, installation will be:
+
+```sh
+brew tap <tap-providing-ckvision>
+brew tap <tap-providing-ck-utilities>
+brew install ck-utilities
+```
+
+Until then, use the verified archive above rather than an untracked local
+formula copy.
+
+### Windows
+
+There is currently no supported Windows installer, WinGet manifest, or binary
+release. This is intentional: Windows packaging will begin only after the
+ckVision native Windows terminal backend and installer acceptance gates pass.
+Use a supported macOS or Linux release, or follow the source-build instructions
+below when Windows support is formally introduced.
+
 ## Native tool guides
 
 - [CK Utilities launcher](docs/tools/ck-utilities.md)
