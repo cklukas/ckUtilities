@@ -382,8 +382,8 @@ int main()
         ck::vision::DiskUsageApp disk_usage(application, make_snapshot());
 
         require(disk_usage.root_directory() != nullptr, "The native disk-usage app must retain the scan snapshot.");
-        require(disk_usage.tree() != nullptr && disk_usage.tree()->model() != nullptr && disk_usage.table() != nullptr,
-                "The native disk-usage app must compose a provider-backed tree and selected-directory table.");
+        require(disk_usage.tree() != nullptr && disk_usage.tree()->selected() != nullptr && disk_usage.table() != nullptr,
+                "The native disk-usage app must compose a materialized tree and selected-directory table.");
         require(disk_usage.table()->row_count() == 2,
                 "The selected root directory must populate its child-directory table.");
         application.step(0);
@@ -405,40 +405,42 @@ int main()
     scan_service.complete(make_snapshot());
     application.step(0);
     require(disk_usage.root_directory() != nullptr && disk_usage.tree() != nullptr &&
-                disk_usage.tree()->model() != nullptr && disk_usage.table() != nullptr,
-            "A completed scan snapshot must be mapped into provider-backed tree and table views.");
+                disk_usage.tree()->selected() != nullptr && disk_usage.table() != nullptr,
+            "A completed scan snapshot must be mapped into materialized tree and table views.");
     require(disk_usage.selected_directory() == disk_usage.root_directory(),
             "A completed scan must establish a stable root selection.");
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
     application.step(0);
     require(disk_usage.selected_directory() != nullptr && disk_usage.selected_directory()->path == "/workspace/src",
             "The disk-usage tree must navigate to a child before its refresh scenario.");
-    const auto retained_selection_id = disk_usage.tree()->selected_id();
-    auto *const retained_model = disk_usage.tree()->model();
-    require(retained_selection_id.has_value() && retained_model != nullptr,
-            "The disk-usage refresh fixture must expose a stable provider selection.");
+    const std::uint64_t retained_selection_id = disk_usage.tree()->selected()->id;
+    auto *const retained_tree = disk_usage.tree();
+    require(retained_selection_id != 0,
+            "The disk-usage refresh fixture must expose a stable tree selection.");
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Right, ckv::Modifier::None, ""}});
     application.step(0);
-    require(disk_usage.tree()->item_expanded(*retained_selection_id),
+    require(disk_usage.tree()->selected()->expanded,
             "The disk-usage refresh fixture must expand its selected directory.");
     require(application.execute_command(disk_usage.rescan_command()) && disk_usage.scan_running() &&
-                disk_usage.tree()->model() == retained_model &&
+                disk_usage.tree() == retained_tree &&
                 disk_usage.selected_directory()->path == "/workspace/src",
             "A rescan must retain the last valid disk-usage snapshot until replacement succeeds.");
     scan_service.complete(make_refreshed_snapshot());
     application.step(0);
-    require(disk_usage.tree()->model() == retained_model &&
-                disk_usage.tree()->selected_id() == retained_selection_id &&
-                disk_usage.tree()->item_expanded(*retained_selection_id) &&
+    require(disk_usage.tree() != retained_tree &&
+                disk_usage.tree()->selected() != nullptr &&
+                disk_usage.tree()->selected()->id == retained_selection_id &&
+                disk_usage.tree()->selected()->expanded &&
                 disk_usage.selected_directory() != nullptr &&
                 disk_usage.selected_directory()->path == "/workspace/src" &&
                 disk_usage.selected_directory()->stats.totalSize == 7168,
-            "A refreshed disk snapshot must retain its provider and surviving directory selection.");
+            "A refreshed disk snapshot must retain its materialized tree selection.");
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Up, ckv::Modifier::None, ""}});
     application.step(0);
     require(disk_usage.selected_directory() == disk_usage.root_directory(),
             "Disk-usage navigation must return to the root after refresh acceptance.");
     const ck::du::DirectoryNode *const last_completed_root = disk_usage.root_directory();
+    auto *const refreshed_tree = disk_usage.tree();
     require(application.execute_command(disk_usage.rescan_command()),
             "A cancelled disk-usage refresh must start through the native rescan command.");
     auto cancelled_snapshot = make_snapshot();
@@ -446,8 +448,8 @@ int main()
     scan_service.complete(std::move(cancelled_snapshot));
     application.step(0);
     require(disk_usage.root_directory() == last_completed_root &&
-                disk_usage.tree()->model() == retained_model,
-            "A cancelled disk-usage refresh must retain the last completed provider snapshot.");
+                disk_usage.tree() == refreshed_tree,
+            "A cancelled disk-usage refresh must retain the last completed tree snapshot.");
     require(application.execute_command(disk_usage.view_files_command()), "File listing must be a registry command.");
     require(file_list_service.running() && file_list_service.directory() == "/workspace" && !file_list_service.recursive(),
             "The selected directory must be listed through the injected file-list service.");
@@ -539,14 +541,14 @@ int main()
     application.step(0);
     const auto terminal_cells = static_cast<std::size_t>(terminal.size().width) *
                                 static_cast<std::size_t>(terminal.size().height);
-    require(disk_usage.provider_node_count() == scale_entries + 1 &&
+    require(disk_usage.tree_node_count() == scale_entries + 1 &&
                 application.last_compose_cells_touched() <= terminal_cells,
-            "The application-scale disk snapshot exceeded its visible-frame provider budget.");
+            "The application-scale disk snapshot exceeded its visible-frame composition budget.");
     require(application.execute_command(disk_usage.rescan_command()),
             "The small disk snapshot must start through the native rescan command.");
     scan_service.complete(make_snapshot());
     application.step(0);
-    require(disk_usage.provider_node_count() == 4 &&
+    require(disk_usage.tree_node_count() == 4 &&
                 application.last_compose_cells_touched() <= terminal_cells,
             "A small disk refresh retained indexes from the obsolete large snapshot.");
 

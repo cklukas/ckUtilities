@@ -31,19 +31,20 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install --quiet ninja curl
 
-      - name: Install pinned ckVision SDK
+      - name: Checkout pinned ckVision 0.1.3 source
+        uses: actions/checkout@v4
+        with:
+          repository: cklukas/ckVision
+          ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
+          path: .deps/ckvision
+          persist-credentials: false
+
+      - name: Build pinned ckVision SDK
         id: ckvision
         shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_LINUX_URL }}'
-            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_LINUX_SHA256 }}'
-          else
-            export CKVISION_SDK_URL='${{ vars.CKVISION_SDK_MACOS_URL }}'
-            export CKVISION_SDK_SHA256='${{ vars.CKVISION_SDK_MACOS_SHA256 }}'
-          fi
-          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
-          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
+          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
 
       - name: Configure
         run: >
@@ -51,12 +52,22 @@ jobs:
           -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
           -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
           -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
+          -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON
+          -DCKTOOLS_CKVISION_SOURCE_DIR="$GITHUB_WORKSPACE/.deps/ckvision"
 
       - name: Build native products and package consumer
         run: cmake --build build/dev --target verify_ckvision_package
 
       - name: Run tests
         run: ctest --test-dir build/dev --output-on-failure
+
+      - name: Regenerate and verify README screenshots
+        shell: bash
+        run: |
+          mkdir -p docs/generated/screenshots
+          build/dev/tools/docgen/capture_ckutilities_screenshots docs/generated/screenshots
+          git diff --exit-code -- docs/generated/screenshots
+          test -z "$(git status --porcelain --untracked-files=all -- docs/generated/screenshots)"
 
   release-linux:
     name: Publish ckVision Linux packages
@@ -73,15 +84,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
 
-      - name: Install pinned ckVision SDK
+      - name: Checkout pinned ckVision 0.1.3 source
+        uses: actions/checkout@v4
+        with:
+          repository: cklukas/ckVision
+          ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
+          path: .deps/ckvision
+          persist-credentials: false
+
+      - name: Build pinned ckVision SDK
         id: ckvision
         shell: bash
-        env:
-          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_LINUX_URL }}
-          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_LINUX_SHA256 }}
         run: |
-          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
-          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
+          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
 
       - name: Configure verified package
         run: >
@@ -119,15 +135,20 @@ jobs:
       - name: Install dependencies
         run: brew install --quiet ninja curl
 
-      - name: Install pinned ckVision SDK
+      - name: Checkout pinned ckVision 0.1.3 source
+        uses: actions/checkout@v4
+        with:
+          repository: cklukas/ckVision
+          ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
+          path: .deps/ckvision
+          persist-credentials: false
+
+      - name: Build pinned ckVision SDK
         id: ckvision
         shell: bash
-        env:
-          CKVISION_SDK_URL: ${{ vars.CKVISION_SDK_MACOS_URL }}
-          CKVISION_SDK_SHA256: ${{ vars.CKVISION_SDK_MACOS_SHA256 }}
         run: |
-          prefix="$(scripts/install_ckvision_sdk.sh "$RUNNER_TEMP/ckvision-sdk")"
-          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
+          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
 
       - name: Configure verified archive
         run: >

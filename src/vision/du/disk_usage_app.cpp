@@ -29,91 +29,6 @@ std::string format_directory_label(const ck::du::DirectoryNode &node)
            std::to_string(node.stats.fileCount) + " files]";
 }
 
-class DiskUsageTreeModel final : public ckv::widgets::TreeModel
-{
-public:
-    DiskUsageTreeModel(ck::du::DirectoryNode &root,
-                       const std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> &node_ids,
-                       const std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> &nodes_by_id,
-                       const std::unordered_map<const ck::du::DirectoryNode *, std::size_t> &sibling_indexes)
-        : root_(&root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
-    {
-    }
-
-    void set_root(ck::du::DirectoryNode &root) noexcept { root_ = &root; }
-
-    std::size_t root_count() const override { return 1; }
-
-    ckv::widgets::TreeItemId root_id_at(std::size_t index) const override
-    {
-        return index == 0 ? id_for(root_) : ckv::widgets::kInvalidTreeItemId;
-    }
-
-    std::optional<std::size_t> root_index_of(ckv::widgets::TreeItemId id) const override
-    {
-        return id == id_for(root_) ? std::optional<std::size_t>(0) : std::nullopt;
-    }
-
-    std::optional<ckv::widgets::TreeItemId> parent_id_of(ckv::widgets::TreeItemId id) const override
-    {
-        const ck::du::DirectoryNode *node = node_for(id);
-        if (node == nullptr || node == root_)
-            return std::nullopt;
-        return id_for(node->parent);
-    }
-
-    std::size_t child_count(ckv::widgets::TreeItemId parent) const override
-    {
-        const ck::du::DirectoryNode *node = node_for(parent);
-        return node == nullptr ? 0 : node->children.size();
-    }
-
-    ckv::widgets::TreeItemId child_id_at(ckv::widgets::TreeItemId parent, std::size_t index) const override
-    {
-        const ck::du::DirectoryNode *node = node_for(parent);
-        if (node == nullptr || index >= node->children.size())
-            return ckv::widgets::kInvalidTreeItemId;
-        return id_for(node->children[index].get());
-    }
-
-    std::optional<std::size_t> child_index_of(ckv::widgets::TreeItemId parent,
-                                               ckv::widgets::TreeItemId child) const override
-    {
-        const ck::du::DirectoryNode *parent_node = node_for(parent);
-        const ck::du::DirectoryNode *child_node = node_for(child);
-        if (parent_node == nullptr || child_node == nullptr || child_node->parent != parent_node)
-            return std::nullopt;
-        const auto found = sibling_indexes_.find(child_node);
-        return found == sibling_indexes_.end() ? std::nullopt : std::optional<std::size_t>(found->second);
-    }
-
-    std::optional<ckv::widgets::TreeItem> item(ckv::widgets::TreeItemId id) const override
-    {
-        ck::du::DirectoryNode *node = node_for(id);
-        if (node == nullptr)
-            return std::nullopt;
-        return ckv::widgets::TreeItem{format_directory_label(*node), true, node};
-    }
-
-private:
-    ckv::widgets::TreeItemId id_for(const ck::du::DirectoryNode *node) const
-    {
-        const auto found = node_ids_.find(node);
-        return found == node_ids_.end() ? ckv::widgets::kInvalidTreeItemId : found->second;
-    }
-
-    ck::du::DirectoryNode *node_for(ckv::widgets::TreeItemId id) const
-    {
-        const auto found = nodes_by_id_.find(id);
-        return found == nodes_by_id_.end() ? nullptr : found->second;
-    }
-
-    ck::du::DirectoryNode *root_;
-    const std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> &node_ids_;
-    const std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> &nodes_by_id_;
-    const std::unordered_map<const ck::du::DirectoryNode *, std::size_t> &sibling_indexes_;
-};
-
 } // namespace
 
 DiskUsageApp::DiskUsageApp(ckv::ui::Application &application, ck::du::BuildDirectoryTreeResult snapshot)
@@ -241,7 +156,6 @@ void DiskUsageApp::show_scan_state(std::string text)
     window_->set_content(std::move(content));
     tree_ = nullptr;
     table_ = nullptr;
-    tree_model_.reset();
 }
 
 void DiskUsageApp::start_scan()
@@ -348,11 +262,15 @@ void DiskUsageApp::complete_scan(ck::du::BuildDirectoryTreeResult snapshot)
         return;
     }
 
-    const bool can_refresh_view = tree_ != nullptr && tree_model_ != nullptr && snapshot_.root != nullptr;
+    const bool can_refresh_view = tree_ != nullptr && snapshot_.root != nullptr;
+    const std::optional<std::uint64_t> retained_selection =
+        can_refresh_view ? selected_tree_node_id() : std::nullopt;
+    const bool retained_selection_expanded =
+        can_refresh_view && tree_->selected() != nullptr && tree_->selected()->expanded;
     snapshot_ = std::move(snapshot);
     window_->set_title("Disk usage: " + snapshot_.root->path.string());
     if (can_refresh_view)
-        refresh_snapshot_view();
+        rebuild_snapshot_view(retained_selection, retained_selection_expanded);
     else
         rebuild_snapshot_view();
 }
@@ -551,13 +469,19 @@ void DiskUsageApp::show_message(ckv::widgets::MessageBoxKind kind, std::string t
     message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
 }
 
-void DiskUsageApp::rebuild_snapshot_view()
+void DiskUsageApp::rebuild_snapshot_view(std::optional<std::uint64_t> selection_id,
+                                         bool restore_selection_expansion)
 {
     if (window_ == nullptr || snapshot_.root == nullptr)
         return;
 
     refresh_tree_indexes();
-    auto model = std::make_unique<DiskUsageTreeModel>(*snapshot_.root, node_ids_, nodes_by_id_, sibling_indexes_);
+    if (selection_id && restore_selection_expansion)
+    {
+        const auto selected = nodes_by_id_.find(*selection_id);
+        if (selected != nodes_by_id_.end())
+            selected->second->expanded = true;
+    }
     auto tree = std::make_unique<ckv::widgets::TreeView>();
     tree_ = tree.get();
     tree_->set_connector_style(ckv::widgets::TreeConnectorStyle::Outline);
@@ -566,16 +490,6 @@ void DiskUsageApp::rebuild_snapshot_view()
         if (node != nullptr && *node != nullptr)
             show_directory(**node);
     };
-    tree_->set_model(*model);
-    std::function<void(const ck::du::DirectoryNode &)> apply_expansion;
-    apply_expansion = [this, &apply_expansion](const ck::du::DirectoryNode &node) {
-        if (node.parent == nullptr || node.expanded)
-            tree_->set_item_expanded(node_ids_.at(&node), true);
-        for (const auto &child : node.children)
-            apply_expansion(*child);
-    };
-    apply_expansion(*snapshot_.root);
-
     auto table = std::make_unique<ckv::widgets::Table>();
     table_ = table.get();
     table_->set_columns({
@@ -584,12 +498,16 @@ void DiskUsageApp::rebuild_snapshot_view()
         {"Directories", 13, 5, ckv::widgets::TableCellType::Integer},
         {"Total size", 16, 8},
     });
-    show_directory(*snapshot_.root);
-
     auto splitter = std::make_unique<ckv::widgets::Splitter>(window_->content_rect(), std::move(tree), std::move(table));
     window_->set_content(std::move(splitter));
-    tree_model_ = std::move(model);
+    tree_->set_roots({make_tree_node(*snapshot_.root)});
     application_.set_focus(tree_);
+    if (selection_id)
+        select_tree_node(*selection_id);
+    if (const ck::du::DirectoryNode *selected = selected_directory())
+        show_directory(*selected);
+    else
+        show_directory(*snapshot_.root);
 }
 
 bool DiskUsageApp::scan_running() const noexcept
@@ -602,36 +520,17 @@ bool DiskUsageApp::cloud_operation_running() const noexcept
     return cloud_service_ != nullptr && cloud_service_->running();
 }
 
-void DiskUsageApp::refresh_snapshot_view()
-{
-    if (tree_ == nullptr || tree_model_ == nullptr || snapshot_.root == nullptr)
-    {
-        rebuild_snapshot_view();
-        return;
-    }
-
-    refresh_tree_indexes();
-    static_cast<DiskUsageTreeModel *>(tree_model_.get())->set_root(*snapshot_.root);
-    tree_->model_changed();
-    if (const ck::du::DirectoryNode *selected = selected_directory())
-        show_directory(*selected);
-    else
-        show_directory(*snapshot_.root);
-    application_.set_focus(tree_);
-}
-
 void DiskUsageApp::refresh_tree_indexes()
 {
     const auto previous_ids = std::move(stable_node_ids_by_path_);
     node_ids_ = {};
     nodes_by_id_ = {};
-    sibling_indexes_ = {};
     stable_node_ids_by_path_ = {};
-    index_tree_nodes(*snapshot_.root, 0, previous_ids, stable_node_ids_by_path_);
+    index_tree_nodes(*snapshot_.root, previous_ids, stable_node_ids_by_path_);
 }
 
 void DiskUsageApp::index_tree_nodes(
-    ck::du::DirectoryNode &node, std::size_t sibling_index,
+    ck::du::DirectoryNode &node,
     const std::unordered_map<std::string, std::uint64_t> &previous_ids,
     std::unordered_map<std::string, std::uint64_t> &next_ids)
 {
@@ -641,9 +540,41 @@ void DiskUsageApp::index_tree_nodes(
     next_ids.emplace(path, id);
     node_ids_.emplace(&node, id);
     nodes_by_id_.emplace(id, &node);
-    sibling_indexes_.emplace(&node, sibling_index);
     for (std::size_t index = 0; index < node.children.size(); ++index)
-        index_tree_nodes(*node.children[index], index, previous_ids, next_ids);
+        index_tree_nodes(*node.children[index], previous_ids, next_ids);
+}
+
+ckv::widgets::TreeNode DiskUsageApp::make_tree_node(const ck::du::DirectoryNode &node) const
+{
+    ckv::widgets::TreeNode tree_node;
+    tree_node.label = format_directory_label(node);
+    tree_node.expanded = node.parent == nullptr || node.expanded;
+    tree_node.id = node_ids_.at(&node);
+    tree_node.user_data = const_cast<ck::du::DirectoryNode *>(&node);
+    tree_node.children.reserve(node.children.size());
+    for (const auto &child : node.children)
+        tree_node.children.push_back(make_tree_node(*child));
+    return tree_node;
+}
+
+std::optional<std::uint64_t> DiskUsageApp::selected_tree_node_id() const noexcept
+{
+    if (tree_ == nullptr || tree_->selected() == nullptr)
+        return std::nullopt;
+    return tree_->selected()->id;
+}
+
+bool DiskUsageApp::select_tree_node(std::uint64_t id)
+{
+    if (tree_ == nullptr)
+        return false;
+    for (std::size_t index = 0; index <= node_ids_.size(); ++index)
+    {
+        if (tree_->selected() != nullptr && tree_->selected()->id == id)
+            return true;
+        tree_->on_key(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    }
+    return false;
 }
 
 void DiskUsageApp::show_directory(const ck::du::DirectoryNode &node)

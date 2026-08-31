@@ -53,6 +53,7 @@ cktools_add_ckvision_cutover_verification()
 add_subdirectory(src/common)
 add_subdirectory(src/native-core)
 add_subdirectory(src/vision)
+add_subdirectory(tools/docgen)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

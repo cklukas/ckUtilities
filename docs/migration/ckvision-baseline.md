@@ -7,16 +7,16 @@ checkout is not a build input.
 
 | Field | Value |
 | --- | --- |
-| Foundation commit | `e40c9beee7b0be8450fd417aa0d55480418807bb` |
-| Integration candidate | `c25a324aa1db9c24851085a6ff84f5ae47e9014b` |
+| ckVision version | `0.1.3` |
+| Pinned source revision | `4f211569a95ddcd0875d6c5d9778d06d2bf74fec` |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |
 | Local evidence | macOS Release, ASan/UBSan, package consumer, staged product, archive, and real-PTY gates |
 
-The release pipeline is enabled only after a platform-specific SDK archive is
-published from an accepted upstream revision. Record its immutable URL,
-SHA-256, platform, architecture, compiler, and package version in the release
-record before configuring repository variables.
+CI checks out this exact public revision and builds an installed SDK on every
+Linux and macOS runner before it configures ckUtilities. This keeps the
+application’s dependency boundary identical to a user build while eliminating
+manual SDK-archive configuration.
 
 ## Local verification
 
@@ -39,12 +39,7 @@ prefix.
 
 ## CI input
 
-GitHub Actions validates the SDK archive checksum before invoking CMake. Set
-both URL and SHA-256 variables for every published platform:
-
-- `CKVISION_SDK_LINUX_URL` / `CKVISION_SDK_LINUX_SHA256`
-- `CKVISION_SDK_MACOS_URL` / `CKVISION_SDK_MACOS_SHA256`
-
-Change this baseline only after the upstream SDK’s specification, tests,
-documentation, release artifact, and provenance evidence have all been
-accepted.
+The source revision is recorded directly in both GitHub Actions workflows.
+Change it only after accepting the upstream specification, tests,
+documentation, release artifact, and provenance evidence, then run the normal,
+package-consumer, archive, and terminal checks from GitHub Actions.

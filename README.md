@@ -1,8 +1,8 @@
 # CK Utilities
 
-![ck-chat conversation interface](images/Screenshot%202025-10-25%20at%2023.34.31.png)
-![ck-chat model loading](images/Screenshot%202025-10-25%20at%2023.34.40.png)
-![ck-chat result](images/Screenshot%202025-10-25%20at%2023.36.05.png)
+![CK Utilities launcher](docs/generated/screenshots/ck-utilities-launcher.svg)
+![JSON View](docs/generated/screenshots/ck-json-view.svg)
+![Markdown editor](docs/generated/screenshots/ck-edit.svg)
 
 CK Utilities is a collection of focused terminal applications for everyday
 work: finding files, inspecting JSON, understanding disk usage, editing

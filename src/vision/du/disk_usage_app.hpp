@@ -23,10 +23,9 @@ namespace ck::vision
 {
 
 // A native ckVision presentation for application-owned disk-usage snapshots.
-// It exposes their stable node identities through a borrowed TreeModel rather
-// than duplicating the snapshot into a presentation tree. It can render a
-// supplied snapshot or request one from an injected service; view code never
-// traverses the filesystem or owns a worker thread.
+// It materializes a TreeView projection with stable node identities. It can
+// render a supplied snapshot or request one from an injected service; view
+// code never traverses the filesystem or owns a worker thread.
 class DiskUsageApp
 {
 public:
@@ -58,8 +57,9 @@ public:
     bool cloud_operation_running() const noexcept;
     ckv::widgets::TreeView *tree() const noexcept { return tree_; }
     ckv::widgets::Table *table() const noexcept { return table_; }
-    // Snapshot-local provider count used by headless refresh acceptance.
-    std::size_t provider_node_count() const noexcept { return node_ids_.size(); }
+    // Snapshot-local materialized-tree count used by headless refresh
+    // acceptance.
+    std::size_t tree_node_count() const noexcept { return node_ids_.size(); }
 
 private:
     void declare_commands();
@@ -75,12 +75,15 @@ private:
     void start_cloud_action(DiskUsageCloudAction action, std::filesystem::path target);
     void complete_cloud_action(DiskUsageCloudOperationResult result, std::filesystem::path target);
     void show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message);
-    void rebuild_snapshot_view();
-    void refresh_snapshot_view();
+    void rebuild_snapshot_view(std::optional<std::uint64_t> selection_id = std::nullopt,
+                               bool restore_selection_expansion = false);
     void refresh_tree_indexes();
-    void index_tree_nodes(ck::du::DirectoryNode &node, std::size_t sibling_index,
+    void index_tree_nodes(ck::du::DirectoryNode &node,
                           const std::unordered_map<std::string, std::uint64_t> &previous_ids,
                           std::unordered_map<std::string, std::uint64_t> &next_ids);
+    ckv::widgets::TreeNode make_tree_node(const ck::du::DirectoryNode &node) const;
+    std::optional<std::uint64_t> selected_tree_node_id() const noexcept;
+    bool select_tree_node(std::uint64_t id);
     void show_directory(const ck::du::DirectoryNode &node);
     std::string directory_label(const ck::du::DirectoryNode &node) const;
 
@@ -93,15 +96,10 @@ private:
     ck::du::BuildDirectoryTreeOptions scan_options_;
     std::unordered_map<const ck::du::DirectoryNode *, std::uint64_t> node_ids_;
     std::unordered_map<std::uint64_t, ck::du::DirectoryNode *> nodes_by_id_;
-    std::unordered_map<const ck::du::DirectoryNode *, std::size_t> sibling_indexes_;
     // Stable only for the current snapshot. A refresh preserves identities
     // for paths that survive while releasing identifiers for removed paths.
     std::unordered_map<std::string, std::uint64_t> stable_node_ids_by_path_;
     std::uint64_t next_node_id_ = 1;
-    // TreeView borrows this provider and its domain-node indices. They must
-    // therefore outlive the shell that owns the TreeView.
-    std::unique_ptr<ckv::widgets::TreeModel> tree_model_;
-
     std::unique_ptr<SuiteShell> shell_;
     ckv::ui::CommandId rescan_command_ = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId cancel_scan_command_ = ckv::ui::kInvalidCommand;

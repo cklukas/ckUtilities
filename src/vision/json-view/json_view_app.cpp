@@ -30,90 +30,6 @@ std::string lowercase(std::string value)
     return value;
 }
 
-class JsonTreeModel final : public ckv::widgets::TreeModel
-{
-public:
-    JsonTreeModel(Node &root, const std::unordered_map<const Node *, std::uint64_t> &node_ids,
-                  const std::unordered_map<std::uint64_t, Node *> &nodes_by_id,
-                  const std::unordered_map<const Node *, std::size_t> &sibling_indexes)
-        : root_(&root), node_ids_(node_ids), nodes_by_id_(nodes_by_id), sibling_indexes_(sibling_indexes)
-    {
-    }
-
-    void set_root(Node &root) noexcept { root_ = &root; }
-
-    std::size_t root_count() const override { return 1; }
-
-    ckv::widgets::TreeItemId root_id_at(std::size_t index) const override
-    {
-        return index == 0 ? id_for(root_) : ckv::widgets::kInvalidTreeItemId;
-    }
-
-    std::optional<std::size_t> root_index_of(ckv::widgets::TreeItemId id) const override
-    {
-        return id == id_for(root_) ? std::optional<std::size_t>(0) : std::nullopt;
-    }
-
-    std::optional<ckv::widgets::TreeItemId> parent_id_of(ckv::widgets::TreeItemId id) const override
-    {
-        const Node *node = node_for(id);
-        if (node == nullptr || node == root_)
-            return std::nullopt;
-        return id_for(node->parent);
-    }
-
-    std::size_t child_count(ckv::widgets::TreeItemId parent) const override
-    {
-        const Node *node = node_for(parent);
-        return node == nullptr ? 0 : node->children.size();
-    }
-
-    ckv::widgets::TreeItemId child_id_at(ckv::widgets::TreeItemId parent, std::size_t index) const override
-    {
-        const Node *node = node_for(parent);
-        if (node == nullptr || index >= node->children.size())
-            return ckv::widgets::kInvalidTreeItemId;
-        return id_for(node->children[index].get());
-    }
-
-    std::optional<std::size_t> child_index_of(ckv::widgets::TreeItemId parent,
-                                               ckv::widgets::TreeItemId child) const override
-    {
-        const Node *parent_node = node_for(parent);
-        const Node *child_node = node_for(child);
-        if (parent_node == nullptr || child_node == nullptr || child_node->parent != parent_node)
-            return std::nullopt;
-        const auto found = sibling_indexes_.find(child_node);
-        return found == sibling_indexes_.end() ? std::nullopt : std::optional<std::size_t>(found->second);
-    }
-
-    std::optional<ckv::widgets::TreeItem> item(ckv::widgets::TreeItemId id) const override
-    {
-        Node *node = node_for(id);
-        if (node == nullptr)
-            return std::nullopt;
-        return ckv::widgets::TreeItem{getContentLabel(node), true, node};
-    }
-
-private:
-    ckv::widgets::TreeItemId id_for(const Node *node) const
-    {
-        const auto found = node_ids_.find(node);
-        return found == node_ids_.end() ? ckv::widgets::kInvalidTreeItemId : found->second;
-    }
-
-    Node *node_for(ckv::widgets::TreeItemId id) const
-    {
-        const auto found = nodes_by_id_.find(id);
-        return found == nodes_by_id_.end() ? nullptr : found->second;
-    }
-
-    Node *root_;
-    const std::unordered_map<const Node *, std::uint64_t> &node_ids_;
-    const std::unordered_map<std::uint64_t, Node *> &nodes_by_id_;
-    const std::unordered_map<const Node *, std::size_t> &sibling_indexes_;
-};
-
 } // namespace
 
 JsonViewApp::JsonViewApp(ckv::ui::Application &application, ckv::FileSystem &files)
@@ -240,8 +156,9 @@ bool JsonViewApp::install_document(std::string source_name, const std::string &c
         return false;
     }
 
-    const bool can_refresh_view = retain_existing_view && window_ != nullptr && tree_ != nullptr &&
-                                  tree_model_ != nullptr;
+    const bool can_refresh_view = retain_existing_view && window_ != nullptr && tree_ != nullptr;
+    const std::optional<std::uint64_t> retained_selection =
+        can_refresh_view ? selected_tree_node_id() : std::nullopt;
     if (!can_refresh_view)
         close_file();
     document_ = std::move(parsed);
@@ -255,11 +172,7 @@ bool JsonViewApp::install_document(std::string source_name, const std::string &c
         return true;
     }
 
-    refresh_tree_indexes();
-    static_cast<JsonTreeModel *>(tree_model_.get())->set_root(*root_);
-    tree_->model_changed();
-    application_.set_focus(tree_);
-    update_footer();
+    rebuild_tree(retained_selection);
     return true;
 }
 
@@ -269,13 +182,11 @@ void JsonViewApp::close_file()
         shell_->desktop().remove_window(window_);
     window_ = nullptr;
     tree_ = nullptr;
-    tree_model_.reset();
     document_.reset();
     root_.reset();
     document_path_.clear();
     node_ids_.clear();
     nodes_by_id_.clear();
-    sibling_indexes_.clear();
     stable_node_ids_by_path_.clear();
     search_ = SearchState{};
 }
@@ -424,30 +335,28 @@ void JsonViewApp::create_document_window()
     rebuild_tree();
 }
 
-void JsonViewApp::rebuild_tree()
+void JsonViewApp::rebuild_tree(std::optional<std::uint64_t> selection_id)
 {
     if (window_ == nullptr || !root_)
         return;
 
     refresh_tree_indexes();
+    if (selection_id)
+    {
+        const auto selected = nodes_by_id_.find(*selection_id);
+        if (selected != nodes_by_id_.end())
+            expandPath(selected->second);
+    }
 
-    auto model = std::make_unique<JsonTreeModel>(*root_, node_ids_, nodes_by_id_, sibling_indexes_);
     auto tree = std::make_unique<ckv::widgets::TreeView>();
     tree->set_connector_style(ckv::widgets::TreeConnectorStyle::Outline);
     tree_ = tree.get();
     tree_->on_selection_changed = [this](ckv::widgets::TreeNode &) { update_footer(); };
-    tree_->set_model(*model);
-    std::function<void(const Node &)> apply_expansion;
-    apply_expansion = [this, &apply_expansion](const Node &node) {
-        if (node.expanded)
-            tree_->set_item_expanded(node_ids_.at(&node), true);
-        for (const auto &child : node.children)
-            apply_expansion(*child);
-    };
-    apply_expansion(*root_);
+    tree_->set_roots({make_tree_node(*root_)});
     window_->set_content(std::move(tree));
-    tree_model_ = std::move(model);
     application_.set_focus(tree_);
+    if (selection_id)
+        select_tree_node(*selection_id);
     update_footer();
 }
 
@@ -456,13 +365,12 @@ void JsonViewApp::refresh_tree_indexes()
     const auto previous_ids = std::move(stable_node_ids_by_path_);
     node_ids_ = {};
     nodes_by_id_ = {};
-    sibling_indexes_ = {};
     stable_node_ids_by_path_ = {};
-    index_tree_nodes(*root_, 0, {}, previous_ids, stable_node_ids_by_path_);
+    index_tree_nodes(*root_, {}, previous_ids, stable_node_ids_by_path_);
 }
 
 void JsonViewApp::index_tree_nodes(
-    Node &node, std::size_t sibling_index, std::string path,
+    Node &node, std::string path,
     const std::unordered_map<std::string, std::uint64_t> &previous_ids,
     std::unordered_map<std::string, std::uint64_t> &next_ids)
 {
@@ -472,7 +380,6 @@ void JsonViewApp::index_tree_nodes(
     next_ids.emplace(std::move(path), id);
     node_ids_.emplace(&node, id);
     nodes_by_id_.emplace(id, &node);
-    sibling_indexes_.emplace(&node, sibling_index);
     for (std::size_t index = 0; index < node.children.size(); ++index)
     {
         const Node &child = *node.children[index];
@@ -491,8 +398,41 @@ void JsonViewApp::index_tree_nodes(
         const std::string child_path = parent_path +
                                        (node.value->is_array() ? "/a:" : "/o:") +
                                        escaped_segment;
-        index_tree_nodes(*node.children[index], index, child_path, previous_ids, next_ids);
+        index_tree_nodes(*node.children[index], child_path, previous_ids, next_ids);
     }
+}
+
+ckv::widgets::TreeNode JsonViewApp::make_tree_node(const Node &node) const
+{
+    ckv::widgets::TreeNode tree_node;
+    tree_node.label = getContentLabel(const_cast<Node *>(&node));
+    tree_node.expanded = node.expanded;
+    tree_node.id = node_ids_.at(&node);
+    tree_node.user_data = const_cast<Node *>(&node);
+    tree_node.children.reserve(node.children.size());
+    for (const auto &child : node.children)
+        tree_node.children.push_back(make_tree_node(*child));
+    return tree_node;
+}
+
+std::optional<std::uint64_t> JsonViewApp::selected_tree_node_id() const noexcept
+{
+    if (tree_ == nullptr || tree_->selected() == nullptr)
+        return std::nullopt;
+    return tree_->selected()->id;
+}
+
+bool JsonViewApp::select_tree_node(std::uint64_t id)
+{
+    if (tree_ == nullptr)
+        return false;
+    for (std::size_t index = 0; index <= node_ids_.size(); ++index)
+    {
+        if (tree_->selected() != nullptr && tree_->selected()->id == id)
+            return true;
+        tree_->on_key(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    }
+    return false;
 }
 
 bool JsonViewApp::reveal_current_match()
@@ -503,9 +443,9 @@ bool JsonViewApp::reveal_current_match()
 
     Node *match = const_cast<Node *>(search_.matches[static_cast<std::size_t>(search_.currentIndex)]);
     expandPath(match);
-    rebuild_tree();
+    rebuild_tree(node_ids_.at(match));
     const auto id = node_ids_.find(match);
-    if (id == node_ids_.end() || !tree_->reveal_and_select(id->second))
+    if (id == node_ids_.end() || !select_tree_node(id->second))
         return false;
     update_footer();
     return true;

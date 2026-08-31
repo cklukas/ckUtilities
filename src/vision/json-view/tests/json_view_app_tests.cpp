@@ -46,7 +46,7 @@ std::string wide_document(std::size_t entries)
     return document;
 }
 
-bool provider_view_teardown_is_lifetime_safe()
+bool materialized_view_teardown_is_lifetime_safe()
 {
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
@@ -57,22 +57,22 @@ bool provider_view_teardown_is_lifetime_safe()
     {
         ck::vision::JsonViewApp json_view(application, files);
         if (!expect(json_view.load_file("/teardown.json") && json_view.tree() != nullptr &&
-                        json_view.tree()->model() != nullptr,
-                    "the teardown fixture did not bind its JSON provider"))
+                        json_view.tree()->selected() != nullptr,
+                    "the teardown fixture did not materialize its JSON tree"))
             return false;
         application.step(0);
     }
 
     application.step(0);
     return expect(application.current_frame().size() == ckv::Size{100, 30},
-                  "destroying a JSON provider view left stale ckVision chrome behind");
+                  "destroying a JSON tree view left stale ckVision chrome behind");
 }
 
 } // namespace
 
 int main()
 {
-    if (!provider_view_teardown_is_lifetime_safe())
+    if (!materialized_view_teardown_is_lifetime_safe())
         return 1;
 
     ckv::ManualClock clock;
@@ -86,8 +86,8 @@ int main()
     if (!expect(json_view.load_file("/fixture.json"),
                 "JSON document did not load"))
         return 1;
-    if (!expect(json_view.tree() != nullptr && json_view.tree()->model() != nullptr,
-                "JSON tree was not bound to its application-owned provider"))
+    if (!expect(json_view.tree() != nullptr && json_view.tree()->selected() != nullptr,
+                "JSON tree was not materialized from its application-owned document"))
         return 1;
     if (!expect(json_view.find("ckutilities", false, true), "value search did not find a result"))
         return 1;
@@ -97,8 +97,8 @@ int main()
         return 1;
     if (!expect(application.execute_command(json_view.level_command(0)), "level command was unavailable"))
         return 1;
-    if (!expect(json_view.tree() != nullptr && json_view.tree()->model() != nullptr,
-                "tree provider was lost after an expansion-level change"))
+    if (!expect(json_view.tree() != nullptr && json_view.tree()->selected() != nullptr,
+                "tree projection was lost after an expansion-level change"))
         return 1;
     if (!expect(json_view.find("ckutilities", false, true), "search did not recover after an expansion-level change"))
         return 1;
@@ -160,20 +160,21 @@ int main()
     if (!expect(json_view.load_file("/refresh.json") && json_view.find("before", false, true),
                 "the JSON reload fixture did not select its original value"))
         return 1;
-    const auto retained_selection_id = json_view.tree()->selected_id();
-    auto *const retained_model = json_view.tree()->model();
-    if (!expect(retained_selection_id.has_value() && retained_model != nullptr,
-                "the JSON reload fixture did not expose a stable provider selection"))
+    const std::uint64_t retained_selection_id = json_view.tree()->selected()->id;
+    auto *const retained_tree = json_view.tree();
+    if (!expect(retained_selection_id != 0,
+                "the JSON reload fixture did not expose a stable tree selection"))
         return 1;
     files.add_file("/refresh.json", R"({"settings":{"version":"after"},"introduced":true})");
     if (!expect(application.execute_command(json_view.reload_command()),
                 "reload command was unavailable"))
         return 1;
-    if (!expect(json_view.tree()->model() == retained_model &&
-                    json_view.tree()->selected_id() == retained_selection_id &&
+    if (!expect(json_view.tree() != retained_tree &&
+                    json_view.tree()->selected() != nullptr &&
+                    json_view.tree()->selected()->id == retained_selection_id &&
                     json_view.selected_json_node() != nullptr &&
                     reconstructJson(json_view.selected_json_node()) == json("after"),
-                "JSON reload did not retain a surviving provider selection"))
+                "JSON reload did not retain a surviving materialized-tree selection"))
         return 1;
     files.add_file("/refresh.json", "{\"settings\":");
     if (!expect(application.execute_command(json_view.reload_command()),
@@ -181,7 +182,8 @@ int main()
         return 1;
     terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Escape, ckv::Modifier::None, ""}});
     application.step(0);
-    if (!expect(json_view.tree()->selected_id() == retained_selection_id &&
+    if (!expect(json_view.tree()->selected() != nullptr &&
+                    json_view.tree()->selected()->id == retained_selection_id &&
                     json_view.find("after", false, true),
                 "a malformed refresh discarded the previous JSON snapshot"))
         return 1;
@@ -204,9 +206,9 @@ int main()
     constexpr std::size_t scale_entries = 12000;
     files.add_file("/scale.json", wide_document(scale_entries));
     if (!expect(json_view.load_file("/scale.json") &&
-                    json_view.provider_node_count() == 1 + (scale_entries * 2) &&
+                    json_view.tree_node_count() == 1 + (scale_entries * 2) &&
                     json_view.find("record-11999", false, true),
-                "the JSON viewer did not materialize an application-scale provider snapshot"))
+                "the JSON viewer did not materialize an application-scale tree snapshot"))
         return 1;
     application.step(0);
     if (!expect(application.last_compose_cells_touched() <= terminal_cells,
@@ -214,7 +216,7 @@ int main()
         return 1;
     files.add_file("/scale.json", R"({"status":"refreshed"})");
     if (!expect(application.execute_command(json_view.reload_command()) &&
-                    json_view.provider_node_count() == 2 &&
+                    json_view.tree_node_count() == 2 &&
                     json_view.find("refreshed", false, true) &&
                     json_view.selected_json_node() != nullptr &&
                     json_view.selected_json_node()->key == "status",

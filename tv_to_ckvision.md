@@ -21,8 +21,8 @@ coverage.
 - Product packages contain only the native suite, framework-neutral cores, and
   their declared runtime dependencies. The install/archive verification rejects
   non-native UI artifacts and build-only test payloads.
-- CI validates a checksummed, platform-specific SDK archive before it runs
-  CMake. It has no fallback framework or unpinned SDK input.
+- CI checks out ckVision 0.1.3 at a fixed public revision, builds its SDK, and
+  then runs CMake. It has no fallback framework or unpinned SDK input.
 - Source-level architecture checks reject non-native UI markers from all active
   product files. The protected `src/tools` area remains excluded from that
   scan only because it temporarily hosts framework-neutral domain cores used by
@@ -30,8 +30,9 @@ coverage.
 
 ## Current evidence
 
-On 2026-08-30 the native suite passed a clean macOS Release rehearsal against
-the installed candidate SDK:
+On 2026-08-31 the native suite passed a clean macOS Release rehearsal against
+the installed ckVision 0.1.3 SDK at
+`4f211569a95ddcd0875d6c5d9778d06d2bf74fec`:
 
 - independent package consumer;
 - staged product and archive verification;
@@ -49,8 +50,8 @@ GitHub Actions has separate native package jobs:
 
 | Platform | Release output | Preconditions |
 | --- | --- | --- |
-| Linux | `.deb`, `.rpm`, `.tar.gz` | `CKVISION_SDK_LINUX_URL` and matching SHA-256 repository variables |
-| macOS | `.tar.gz` and a generated Homebrew formula | `CKVISION_SDK_MACOS_URL` and matching SHA-256 repository variables; a tap containing `ckvision` before formula publication |
+| Linux | `.deb`, `.rpm`, `.tar.gz` | GitHub Actions builds the pinned ckVision 0.1.3 source revision |
+| macOS | `.tar.gz` and a generated Homebrew formula | GitHub Actions builds the pinned ckVision 0.1.3 source revision; a tap containing `ckvision` before formula publication |
 | Windows | not published | accepted native terminal backend, native installer, package checks, and WinGet installation/uninstallation evidence |
 
 The formula is deliberately attached to a release instead of pushed to an
@@ -59,13 +60,12 @@ matching `ckvision` formula.
 
 ## Remaining work packages
 
-### WP-R1 — immutable SDK distribution
+### WP-R1 — pinned SDK provenance
 
-Publish platform-specific ckVision SDK archives from an accepted upstream
-revision. Record immutable URLs, SHA-256 digests, revision identity, compiler,
-architecture, and sanitizer compatibility. Configure the four repository
-variables used by CI, then run the normal, package-consumer, archive, and PTY
-jobs from GitHub Actions.
+Keep the GitHub Actions revision pin synchronized with accepted ckVision
+releases. Record the revision identity, compiler, architecture, and sanitizer
+compatibility, then run the normal, package-consumer, archive, and PTY jobs
+from GitHub Actions.
 
 ### WP-R2 — Linux release acceptance
 

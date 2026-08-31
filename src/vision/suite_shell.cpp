@@ -1,6 +1,7 @@
 #include "ck/vision/suite_shell.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
 #include <memory>
 #include <utility>
@@ -26,6 +27,13 @@ using ckv::widgets::StatusLineItem;
 
 ckv::widgets::TimeValue local_time()
 {
+    // Documentation capture drives real applications through HeadlessTerminal.
+    // Keep its visual clock stable so a CI regeneration can verify the tracked
+    // SVGs byte-for-byte without changing normal interactive behavior.
+    if (const char *capture_mode = std::getenv("CKTOOLS_DOCUMENTATION_CAPTURE");
+        capture_mode != nullptr && std::string_view(capture_mode) == "1")
+        return {8, 0, 0};
+
     const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::tm local{};
 #if defined(_WIN32)
@@ -108,7 +116,12 @@ SuiteShell::~SuiteShell()
     application_.commands().withdraw(about_command_);
     if (return_to_launcher_command_ != ckv::ui::kInvalidCommand)
         application_.commands().withdraw(return_to_launcher_command_);
-    shell_.detach_desktop();
+    // ApplicationShell attaches its desktop to Application::root().  ckVision
+    // 0.1.2 intentionally leaves ownership with that root, so release the
+    // child through the public view API before this helper goes away.  This
+    // keeps sequential CK Utilities presentations from stacking desktops and
+    // clears any focus held by the application while the desktop is detached.
+    application_.root().remove_child(&shell_.desktop());
 }
 
 ckv::widgets::Desktop &SuiteShell::desktop() noexcept
