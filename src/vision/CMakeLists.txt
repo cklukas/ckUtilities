@@ -27,8 +27,13 @@ if(UNIX)
   target_compile_features(ck_vision_terminal_smoke PRIVATE cxx_std_20)
 
   if(NOT APPLE)
-    find_library(CKTOOLS_UTIL_LIBRARY NAMES util REQUIRED)
-    target_link_libraries(ck_vision_terminal_smoke PRIVATE "${CKTOOLS_UTIL_LIBRARY}")
+    # Modern Linux libc provides openpty directly; older platforms still
+    # expose it through libutil.  Link that compatibility library when it is
+    # present without making an absent standalone archive a configure error.
+    find_library(CKTOOLS_UTIL_LIBRARY NAMES util)
+    if(CKTOOLS_UTIL_LIBRARY)
+      target_link_libraries(ck_vision_terminal_smoke PRIVATE "${CKTOOLS_UTIL_LIBRARY}")
+    endif()
   endif()
 endif()
 

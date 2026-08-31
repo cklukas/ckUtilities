@@ -55,7 +55,10 @@ jobs:
           -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON
           -DCKTOOLS_CKVISION_SOURCE_DIR="$GITHUB_WORKSPACE/.deps/ckvision"
 
-      - name: Build native products and package consumer
+      - name: Build native products and tests
+        run: cmake --build build/dev
+
+      - name: Verify ckVision package consumer
         run: cmake --build build/dev --target verify_ckvision_package
 
       - name: Run tests
