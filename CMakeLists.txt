@@ -24,7 +24,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(APPLE)
   set(CMAKE_INSTALL_RPATH "@loader_path/../lib")
 elseif(UNIX)
-  set(_cktools_runtime_rpath "$ORIGIN/../lib")
+  # Executables live in bin/ while shared libraries can depend on siblings in
+  # lib/ or lib/<multiarch>/. Keep both the loader's own directory and the
+  # executable-relative library locations in the installed runtime path.
+  set(_cktools_runtime_rpath "$ORIGIN" "$ORIGIN/../lib")
   # Third-party shared libraries use CMake's multi-architecture library
   # directory on Debian-family systems (for example lib/x86_64-linux-gnu).
   # Retain the conventional lib/ lookup and include that directory when the
