@@ -4,6 +4,8 @@
 lists the installed tools and provides shared window, theme, help, and quit
 behavior.
 
+![CK Utilities launcher](../generated/screenshots/ck-utilities-launcher.svg)
+
 ## Usage
 
 ```text

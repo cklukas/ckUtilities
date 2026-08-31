@@ -4,6 +4,8 @@
 background and presents a navigable directory tree and file listings without
 requiring `du` command pipelines.
 
+![Disk Usage directory tree](../generated/screenshots/ck-du.svg)
+
 ## Usage
 
 ```text

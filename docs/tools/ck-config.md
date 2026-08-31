@@ -4,6 +4,8 @@
 currently manages the Disk Usage and Chat option profiles, plus the suite's
 keyboard shortcut schemes.
 
+![Config option profiles](../generated/screenshots/ck-config.svg)
+
 ## Usage
 
 ```text

@@ -5,6 +5,8 @@ a navigable tree, with keyboard-first selection, expandable nodes, type-aware
 previews, incremental search, and clipboard copy when the terminal supports
 it.
 
+![JSON View browsing a document](../generated/screenshots/ck-json-view.svg)
+
 ## Usage
 
 ```text

@@ -4,6 +4,8 @@
 editing, Markdown transformations, search and replacement, and configurable
 keyboard shortcuts.
 
+![Markdown editor](../generated/screenshots/ck-edit.svg)
+
 ## Usage
 
 ```text

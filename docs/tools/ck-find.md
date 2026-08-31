@@ -7,6 +7,8 @@ permission audit, and safe result actions. The generated command plan is
 available for preview, while the search itself runs through a cancellable
 background service and returns results to the interface.
 
+![Find results](../generated/screenshots/ck-find.svg)
+
 ## Usage
 
 ```bash

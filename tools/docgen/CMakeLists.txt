@@ -39,6 +39,9 @@ if(CKTOOLS_BUILD_DOCUMENTATION_CAPTURES)
   add_executable(capture_ckutilities_screenshots capture_ckutilities_screenshots.cpp)
   target_include_directories(capture_ckutilities_screenshots PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include"
+    "${PROJECT_SOURCE_DIR}/src/tools/ck-du/include"
+    "${PROJECT_SOURCE_DIR}/src/tools/ck-find/include"
     "${PROJECT_SOURCE_DIR}/src/tools/json-view/include"
     "${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include")
   target_link_libraries(capture_ckutilities_screenshots PRIVATE
@@ -46,6 +49,12 @@ if(CKTOOLS_BUILD_DOCUMENTATION_CAPTURES)
     ck_vision_launcher
     ck_vision_json_view
     ck_vision_edit
+    ck_vision_find
+    ck_vision_du
+    ck_vision_config
+    ck_vision_chat
+    ck_du_core
+    ck_chat_options
     ckvision::cvision)
   target_compile_features(capture_ckutilities_screenshots PRIVATE cxx_std_20)
 endif()
