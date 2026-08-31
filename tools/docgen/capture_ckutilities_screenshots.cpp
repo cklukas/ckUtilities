@@ -321,10 +321,13 @@ void capture_config(const std::filesystem::path &directory)
     ckv::ui::Application application(terminal, clock);
     ck::config::OptionRegistry disk_usage_registry("ck-du");
     ck::du::registerDiskUsageOptions(disk_usage_registry);
-    disk_usage_registry.loadDefaults();
     ck::config::OptionRegistry chat_registry("ck-chat");
     ck::chat::registerChatOptions(chat_registry);
-    chat_registry.loadDefaults();
+    chat_registry.set("activeModelId", ck::config::OptionValue(std::string("guide-assistant")));
+    chat_registry.set("activePromptId", ck::config::OptionValue(std::string("guide")));
+    chat_registry.set("parseMarkdownLinks", ck::config::OptionValue(true));
+    chat_registry.set("showAnalysis", ck::config::OptionValue(false));
+    chat_registry.set("showThinking", ck::config::OptionValue(false));
     DocumentationConfigPersistence persistence;
     ck::vision::ConfigApp config(application,
                                  {{"ck-du", "Disk Usage", &disk_usage_registry, &persistence},
