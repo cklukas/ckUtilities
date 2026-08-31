@@ -116,7 +116,7 @@ jobs:
           cmake --build build/pkg --target verify_ckvision_terminal
 
       - name: Upload Linux packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ck-utilities-linux-packages
           if-no-files-found: error
@@ -167,7 +167,7 @@ jobs:
           cmake --build build/pkg --target verify_ckvision_terminal
 
       - name: Upload macOS archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ck-utilities-macos-archive
           if-no-files-found: error

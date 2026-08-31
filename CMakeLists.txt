@@ -24,7 +24,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(APPLE)
   set(CMAKE_INSTALL_RPATH "@loader_path/../lib")
 elseif(UNIX)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+  set(_cktools_runtime_rpath "$ORIGIN/../lib")
+  # Third-party shared libraries use CMake's multi-architecture library
+  # directory on Debian-family systems (for example lib/x86_64-linux-gnu).
+  # Retain the conventional lib/ lookup and include that directory when the
+  # toolchain defines one, so installed executables remain self-contained.
+  if(CMAKE_LIBRARY_ARCHITECTURE)
+    list(APPEND _cktools_runtime_rpath "$ORIGIN/../lib/${CMAKE_LIBRARY_ARCHITECTURE}")
+  endif()
+  set(CMAKE_INSTALL_RPATH "${_cktools_runtime_rpath}")
 endif()
 
 # ckUtilities is a ckVision product.  A source checkout is deliberately not a
