@@ -1,0 +1,4 @@
+interface:
+  display_name: "ckVision Guide Screenshots"
+  short_description: "Generate verified ckVision guide images"
+  default_prompt: "Use $ckvision-guide-screenshots to add or refresh a guide screenshot."
