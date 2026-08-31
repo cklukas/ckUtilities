@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <cmath>
+#include <optional>
 #include <system_error>
 
 namespace ck::vision
