@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
 
@@ -32,7 +32,7 @@ jobs:
         run: brew install --quiet ninja curl
 
       - name: Checkout pinned ckVision 0.1.3 source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
           ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
 
@@ -88,7 +88,7 @@ jobs:
           sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
 
       - name: Checkout pinned ckVision 0.1.3 source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
           ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
@@ -131,7 +131,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
 
@@ -139,7 +139,7 @@ jobs:
         run: brew install --quiet ninja curl
 
       - name: Checkout pinned ckVision 0.1.3 source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
           ref: 4f211569a95ddcd0875d6c5d9778d06d2bf74fec
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
 
