@@ -236,7 +236,7 @@ void capture_json_view(const std::filesystem::path &directory)
     ckv::ui::Application application(terminal, clock);
     ckv::MemoryFileSystem files;
     files.add_file("/workspace/release-notes.json",
-                   R"({"product":"CK Utilities","framework":"ckVision 0.1.3","tools":["JSON View","Find","Disk Usage","Markdown Editor","Chat"],"release":{"platforms":["macOS","Linux"],"packages":["archive","deb","rpm"],"status":"ready"}})");
+                   R"({"product":"CK Utilities","framework":"ckVision 0.1.8","tools":["JSON View","Find","Disk Usage","Markdown Editor","Chat"],"release":{"platforms":["macOS","Linux"],"packages":["archive","deb","rpm"],"status":"ready"}})");
     ck::vision::JsonViewApp json_view(application, files);
     if (!json_view.load_file("/workspace/release-notes.json"))
         throw std::runtime_error("could not load JSON capture fixture");

@@ -1,11 +1,11 @@
 include_guard(GLOBAL)
 
-# This is the clean ckVision commit selected by WP-0. It is a compatibility
+# This is the released ckVision commit validated for ckUtilities. It is a compatibility
 # record for development and CI, not a source-tree dependency: consumers must
 # find an installed package through CMAKE_PREFIX_PATH or the normal CMake
 # package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "bf4c1c6404d58f33693d84e7654789cf60413839"
+    "338d950e7473c5fdd4f88ea6b37d9f842543ac15"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 
@@ -34,7 +34,7 @@ option(CKTOOLS_VERIFY_CKVISION_TERMINAL
        OFF)
 
 function(cktools_require_ckvision)
-  find_package(ckvision CONFIG REQUIRED)
+  find_package(ckvision 0.1.8 CONFIG REQUIRED)
 
   if(NOT TARGET ckvision::cvision)
     message(FATAL_ERROR

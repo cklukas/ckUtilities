@@ -208,7 +208,7 @@ void ChatApp::show_prompt_dialog()
     dialog.fields.push_back({"&Prompt:", "", [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Send", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    send_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    send_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     send_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && !result.values.empty())
             submit_prompt(result.values[0]);
@@ -451,7 +451,7 @@ void ChatApp::show_select_prompt_dialog()
                              false, std::move(labels), selected});
     dialog.buttons.push_back({"&Select", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    prompt_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    prompt_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     prompt_dialog_->set_completion_handler([this, ids = std::move(ids)](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0 ||
             static_cast<std::size_t>(result.selected[0]) >= ids.size())
@@ -475,7 +475,7 @@ void ChatApp::show_add_prompt_dialog()
                              .memo_rows = 6});
     dialog.buttons.push_back({"&Save", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    prompt_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    prompt_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     prompt_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && result.values.size() == 2)
             add_or_update_prompt({.name = result.values[0], .message = result.values[1]});
@@ -505,7 +505,7 @@ void ChatApp::show_edit_active_prompt_dialog()
                              .memo_rows = 6});
     dialog.buttons.push_back({"&Save", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    prompt_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    prompt_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     prompt_dialog_->set_completion_handler([this, current = *current](ckv::widgets::DialogResult result) mutable {
         if (!result.accepted || result.values.size() != 2)
             return;
@@ -544,7 +544,7 @@ void ChatApp::request_delete_active_prompt()
     }
 
     delete_prompt_confirmation_.reset();
-    delete_prompt_confirmation_.emplace(ckv::widgets::present_message_box(
+    delete_prompt_confirmation_.emplace(ckv::widgets::present_modal_message_box(
         application_, shell_->desktop(), shell_->roles(),
         {ckv::widgets::MessageBoxKind::Warning,
          "Delete system prompt",
@@ -587,7 +587,7 @@ void ChatApp::show_select_model_dialog()
                              false, std::move(labels), selected});
     dialog.buttons.push_back({"&Activate", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    model_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    model_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     model_dialog_->set_completion_handler([this, ids = std::move(ids)](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0 ||
             static_cast<std::size_t>(result.selected[0]) >= ids.size())
@@ -630,7 +630,7 @@ void ChatApp::show_download_model_dialog()
     dialog.buttons.push_back({"&Download", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     model_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     model_dialog_->set_completion_handler([this, ids = std::move(ids)](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0 ||
             static_cast<std::size_t>(result.selected[0]) >= ids.size())
@@ -662,7 +662,7 @@ void ChatApp::request_delete_active_model()
     }
 
     delete_model_confirmation_.reset();
-    delete_model_confirmation_.emplace(ckv::widgets::present_message_box(
+    delete_model_confirmation_.emplace(ckv::widgets::present_modal_message_box(
         application_, shell_->desktop(), shell_->roles(),
         {ckv::widgets::MessageBoxKind::Warning,
          "Delete local model",
@@ -754,7 +754,7 @@ void ChatApp::show_export_dialog()
     dialog.fields.push_back({"&Path:", "conversation.txt", [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Export", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    export_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    export_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     export_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && result.values.size() == 1)
             export_transcript(result.values.front());

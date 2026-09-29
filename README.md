@@ -70,7 +70,15 @@ ck-utilities --help
 
 Add the `export` line to your shell profile if you want it to persist.
 
-Homebrew installation is not available yet; use the archive above.
+Alternatively, install through the Homebrew tap (builds from the release source
+with the pinned ckVision SDK):
+
+```sh
+brew install cklukas/ckmux/ck-utilities
+```
+
+If already installed, run `brew update` and
+`brew upgrade cklukas/ckmux/ck-utilities`.
 
 ### Windows
 

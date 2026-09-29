@@ -215,8 +215,11 @@ void EditApp::create_editor_window()
     };
     window->on_closed = [this] { close_editor_window(); };
     window_ = static_cast<ckv::widgets::EditorWindow *>(shell_->desktop().add_window(std::move(window)));
-    window_->editor().set_newline_handler(
-        [this](ckv::widgets::TextEditor &editor) { return continue_markdown_list_on_enter(editor); });
+    window_->editor().set_edit_handler(
+        [this](ckv::widgets::TextEditor &editor, const ckv::widgets::EditRequest &request) {
+            return request.kind == ckv::widgets::EditKind::LineBreak &&
+                   continue_markdown_list_on_enter(editor);
+        });
     application_.set_focus(&window_->editor());
 }
 
@@ -252,7 +255,7 @@ void EditApp::show_close_confirmation()
     if (window_ == nullptr || !window_->controller().modified())
         return;
     close_confirmation_.reset();
-    close_confirmation_.emplace(ckv::widgets::present_message_box(
+    close_confirmation_.emplace(ckv::widgets::present_modal_message_box(
         application_, shell_->desktop(), shell_->roles(),
         {ckv::widgets::MessageBoxKind::Warning,
          "Unsaved document",
@@ -288,7 +291,7 @@ bool EditApp::open_file(const std::string &path)
 void EditApp::open_file_dialog()
 {
     open_dialog_.reset();
-    open_dialog_.emplace(ckv::widgets::present_file_dialog(
+    open_dialog_.emplace(ckv::widgets::present_modal_file_dialog(
         ckv::widgets::FileDialogMode::Open, ".", files_, {}, application_, shell_->desktop(), shell_->roles()));
     open_dialog_->set_completion_handler([this](ckv::widgets::FileDialogResult result) {
         if (result.accepted)
@@ -320,7 +323,7 @@ void EditApp::show_save_as_dialog()
     dialog.fields.push_back({"&Path:", window_->controller().path(), [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Save", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    save_as_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    save_as_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     save_as_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.empty() || window_ == nullptr)
             return;
@@ -335,7 +338,7 @@ void EditApp::show_save_conflict_resolution()
     if (window_ == nullptr)
         return;
     save_conflict_confirmation_.reset();
-    save_conflict_confirmation_.emplace(ckv::widgets::present_message_box(
+    save_conflict_confirmation_.emplace(ckv::widgets::present_modal_message_box(
         application_, shell_->desktop(), shell_->roles(),
         {ckv::widgets::MessageBoxKind::Warning,
          "Document changed on disk",
@@ -639,7 +642,7 @@ void EditApp::show_link_destination_dialog()
     dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     link_destination_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     link_destination_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 1U || !markdown_document())
             return;
@@ -692,7 +695,7 @@ void EditApp::show_image_destination_dialog()
     dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     image_destination_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     image_destination_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 1U || !markdown_document())
             return;
@@ -730,7 +733,7 @@ void EditApp::show_footnote_identifier_dialog()
     dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     footnote_identifier_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     footnote_identifier_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 1U || !markdown_document())
             return;
@@ -770,7 +773,7 @@ void EditApp::show_table_dimensions_dialog()
     dialog.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     table_dimensions_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     table_dimensions_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 2U || !markdown_document())
             return;
@@ -886,7 +889,7 @@ void EditApp::show_search_dialog(SearchAction action)
     dialog.buttons.push_back({action_label, ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     search_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     search_dialog_->set_completion_handler([this, action](ckv::widgets::DialogResult result) {
         const std::size_t expected_field_count = action == SearchAction::Find ? 3U : 4U;
         if (!result.accepted || window_ == nullptr || result.values.size() != expected_field_count ||
@@ -1024,7 +1027,7 @@ std::optional<ck::edit::MarkdownByteRange> EditApp::markdown_range_at_selection_
 void EditApp::show_message(ckv::widgets::MessageBoxKind kind, std::string title, std::string message)
 {
     message_box_.reset();
-    message_box_.emplace(ckv::widgets::present_message_box(
+    message_box_.emplace(ckv::widgets::present_modal_message_box(
         application_, shell_->desktop(), shell_->roles(), {kind, std::move(title), std::move(message), ckv::widgets::MessageBoxButtons::Ok}));
     message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
 }

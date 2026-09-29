@@ -49,13 +49,16 @@ archive on macOS:
 cmake --build build/pkg --target package
 ```
 
-GitHub Actions checks out and builds the immutable ckVision 0.1.3 revision
-`4f211569a95ddcd0875d6c5d9778d06d2bf74fec` on each Linux and macOS runner,
+GitHub Actions checks out and builds the immutable ckVision 0.1.8 revision
+`338d950e7473c5fdd4f88ea6b37d9f842543ac15` on each Linux and macOS runner,
 then configures ckUtilities exclusively against that installed SDK. No
 repository variables or prebuilt framework archive are required.
 
 Release jobs publish only the native package outputs. A Homebrew formula is
-attached to each release; it expects the chosen tap to provide `ckvision`.
+attached to each release and published in the `cklukas/ckmux` Homebrew tap.
+It builds the pinned ckVision SDK as a resource, so no separately installed
+`ckvision` formula is required. Install with
+`brew install cklukas/ckmux/ck-utilities`.
 Windows packaging is intentionally not part of the current release workflow.
 
 ## Documentation screenshots
@@ -66,7 +69,7 @@ ckVision's `HeadlessTerminal`, then uses ckVision's SVG renderer to record the
 decoded display.
 
 To regenerate them, point the script at the installed SDK and the matching
-ckVision 0.1.3 source checkout:
+ckVision 0.1.8 source checkout:
 
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \

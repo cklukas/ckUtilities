@@ -421,7 +421,7 @@ void ConfigApp::edit_selected()
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     const std::string key = definition->key;
     const ck::config::OptionKind kind = definition->kind;
-    edit_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    edit_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     ck::config::OptionRegistry *const edited_registry = &registry;
     edit_dialog_->set_completion_handler([this, edited_registry, key, kind](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() < 2 || result.selected.size() < 2 || result.numbers.size() < 2)
@@ -487,7 +487,7 @@ void ConfigApp::show_application_dialog()
     dialog.buttons.push_back({"&Select", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     application_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     application_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.empty() || result.selected.front() >= applications_.size())
             return;
@@ -503,7 +503,7 @@ void ConfigApp::show_import_dialog()
     dialog.fields.push_back({"&Path:", "", [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Import", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    transfer_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    transfer_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     transfer_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && result.values.size() == 1)
             import_configuration(result.values.front());
@@ -519,7 +519,7 @@ void ConfigApp::show_export_dialog()
                              [](const std::string &value) { return !value.empty(); }});
     dialog.buttons.push_back({"&Export", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    transfer_dialog_.emplace(ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    transfer_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     transfer_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && result.values.size() == 1)
             export_configuration(result.values.front());
@@ -638,7 +638,7 @@ void ConfigApp::show_keymap_scheme_dialog()
     dialog.buttons.push_back({"&Use scheme", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     keymap_scheme_dialog_.emplace(
-        ckv::widgets::present_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
     keymap_scheme_dialog_->set_completion_handler([this, schemes](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.empty() || result.selected.front() >= schemes.size())
             return;
@@ -689,7 +689,7 @@ void ConfigApp::edit_selected_shortcut()
             return;
         }
         const std::string occupied = update.conflict->existing_command_key;
-        keymap_conflict_ = ckv::widgets::present_message_box(
+        keymap_conflict_ = ckv::widgets::present_modal_message_box(
             application_, shell_->desktop(), shell_->roles(),
             {ckv::widgets::MessageBoxKind::Confirm, "Replace shortcut?",
              ckv::format(*requested) + " is assigned to " + occupied + ". Replace it?",

@@ -187,7 +187,7 @@ ckv::widgets::ApplicationShellOptions SuiteShell::make_shell_options() const
 
 void SuiteShell::show_about()
 {
-    auto presentation = ckv::widgets::present_message_box(
+    auto presentation = ckv::widgets::present_modal_message_box(
         application_, desktop(), roles_,
         {ckv::widgets::MessageBoxKind::Info, options_.application_name, options_.about_text,
          ckv::widgets::MessageBoxButtons::Ok});
