@@ -74,11 +74,11 @@ Alternatively, install through the Homebrew tap (builds from the release source
 with the pinned ckVision SDK):
 
 ```sh
-brew install cklukas/ckmux/ck-utilities
+brew install cklukas/ckutilities/ck-utilities
 ```
 
 If already installed, run `brew update` and
-`brew upgrade cklukas/ckmux/ck-utilities`.
+`brew upgrade cklukas/ckutilities/ck-utilities`.
 
 ### Windows
 

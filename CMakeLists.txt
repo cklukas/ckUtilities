@@ -5,7 +5,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VersionFromGit)
 include(CkVisionPackage)
 include(CheckUiBoundaries)
-set(CKTOOLS_VERSION "0.1.0" CACHE STRING "ck-utilities version" FORCE)
+set(CKTOOLS_VERSION "0.1.1" CACHE STRING "ck-utilities version" FORCE)
 message(STATUS "ck-utilities version: ${CKTOOLS_VERSION}")
 
 if(APPLE)

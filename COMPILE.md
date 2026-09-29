@@ -55,10 +55,10 @@ then configures ckUtilities exclusively against that installed SDK. No
 repository variables or prebuilt framework archive are required.
 
 Release jobs publish only the native package outputs. A Homebrew formula is
-attached to each release and published in the `cklukas/ckmux` Homebrew tap.
+attached to each release and published in the `cklukas/ckutilities` Homebrew tap.
 It builds the pinned ckVision SDK as a resource, so no separately installed
 `ckvision` formula is required. Install with
-`brew install cklukas/ckmux/ck-utilities`.
+`brew install cklukas/ckutilities/ck-utilities`.
 Windows packaging is intentionally not part of the current release workflow.
 
 ## Documentation screenshots
