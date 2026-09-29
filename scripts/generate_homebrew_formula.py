@@ -96,6 +96,9 @@ def main() -> None:
                *std_cmake_args
         system "cmake", "--build", "build"
         system "cmake", "--install", "build"
+        # The suite carries a JSON header for its own builds; Homebrew already
+        # provides this header through the nlohmann-json dependency.
+        (include/"nlohmann").rmtree
       end
 
       test do
