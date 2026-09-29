@@ -17,7 +17,7 @@ All builds used Ninja, Apple Clang, Release, and a fresh installed SDK. No compa
 
 Source manifest SHA-256 (sorted repository paths and content hashes under src/, include/, lib/): `7473b3b3878f06a28483c2a95d28933928614bfc0439218971bf15414cf85297`. Source bytes remained unchanged through validation.
 
-Current verified installed output: `/Volumes/PRO-BLADE/tmp/ckutilities-ckvision-update-20260929/utilities-build/ckvision-install-check`. No persistent app instance was launched.
+Verified installed output at the time of this check: `/Volumes/PRO-BLADE/tmp/ckutilities-ckvision-update-20260929/utilities-build/ckvision-install-check`. This output was superseded by the verified [Homebrew installation](ckutilities-0.1.1-homebrew-validation.md) and removed. No persistent app instance was launched.
 
 ## Verification
 
