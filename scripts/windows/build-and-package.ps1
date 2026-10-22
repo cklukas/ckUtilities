@@ -40,8 +40,9 @@ Invoke-Step 'Build ckVision SDK' { cmake --build (Join-Path $WorkRoot 'ckvision-
 Invoke-Step 'Install ckVision SDK' { cmake --install (Join-Path $WorkRoot 'ckvision-build') }
 
 $build = Join-Path $WorkRoot 'build'
-Invoke-Step 'Configure CK Utilities' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DBUILD_TESTING=ON }
+Invoke-Step 'Configure CK Utilities' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON -DBUILD_TESTING=ON }
 Invoke-Step 'Build CK Utilities' { cmake --build $build --parallel }
+Invoke-Step 'Verify installed ckVision SDK consumer' { cmake --build $build --target verify_ckvision_package }
 Invoke-Step 'Test CK Utilities' { ctest --test-dir $build --output-on-failure --parallel 4 }
 
 $packages = Join-Path $WorkRoot 'packages'

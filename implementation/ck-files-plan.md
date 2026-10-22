@@ -1,7 +1,10 @@
 # Files (`ck-files`) — implementation work packages
 
-Status: proposed implementation plan; no feature is implemented by this document.
+Status: implementation active; WP-00 complete. Files runtime features are not yet implemented.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
+
+Execution: WP-00 complete; WP-01 next. See [behavioral and adapter contracts](ck-files-contracts.md)
+and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
 
 ## Product commitment
 
@@ -25,7 +28,7 @@ The latest published ckVision release checked on this date is
 [v1.4.0](https://github.com/cklukas/ckVision/releases/tag/v1.4.0), released on
 2026-10-22. The annotated tag resolves to commit
 `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` (verified with `git ls-remote`).
-ckUtilities currently requires 1.3.0 and records revision
+At initial review, ckUtilities required 1.3.0 and recorded revision
 `57b379d0dddd6a3b517b614a4eb2d1a1c99b474b` in
 `cmake/CkVisionPackage.cmake` and `docs/migration/ckvision-baseline.md`.
 
@@ -265,7 +268,7 @@ permissions do not confer file-manager mutation capabilities.
 
 ## Work packages and acceptance
 
-All packages start unchecked. Each completion record names its commit, tests,
+Completed packages are checked below. Each completion record names its commit, tests,
 platform/filesystem evidence and remaining limitations. A failing acceptance
 criterion keeps the package open; do not replace it with a workaround.
 
@@ -283,15 +286,15 @@ criterion keeps the package open; do not replace it with a workaround.
 
 ### WP-00 — baseline and contracts
 
-- [ ] Upgrade and validate the installed latest stable SDK; update CMake,
+- [x] Upgrade and validate the installed latest stable SDK; update CMake,
   CI/release pins, Windows script, Homebrew resource, screenshot expectations,
   baseline docs and a new validation record consistently.
-- [ ] Map each selected widget/service to its public API. Resolve lossless-name,
+- [x] Map each selected widget/service to its public API. Resolve lossless-name,
   scale and lifecycle gaps without depending on private SDK internals.
-- [ ] Specify the feature support/preservation matrix, native API choices,
+- [x] Specify the feature support/preservation matrix, native API choices,
   security/permission equivalence rules, atomicity/durability guarantees,
   consent schema and journal transitions. Review threat cases and race windows.
-- [ ] Accept concrete layout/command flows and the complete release scope above.
+- [x] Accept concrete layout/command flows and the complete release scope above.
 
 Acceptance: existing tools, independent SDK consumer, architecture boundaries,
 installation/archive and terminal checks pass with the new baseline. Every
@@ -443,7 +446,10 @@ then allocate a unique task directory beneath `/Volumes/S8T/tmp`; use
 `/Volumes/PRO-BLADE/tmp` only if necessary. Set `TMPDIR` explicitly for tools;
 put builds, SDK staging, indexes, filesystem images, caches and test data there.
 Never use `/tmp` or `/private/tmp`; stop if neither permitted volume is mounted.
-Remote Linux/Windows work uses explicit sensible local workspaces. Production
+Remote Linux work uses explicit sensible local workspaces. All Windows
+workstation development uses `V:` exclusively, with a unique `V:\tmp` task
+directory and `TEMP`, `TMP` and applicable `TMPDIR` set beneath it. Verify `V:`
+first and never fall back to another drive. Production
 destination-side transaction objects are part of the defined file operation;
 tests of them must remain inside task-owned test volumes/directories. Durable
 plans and concise validation evidence belong in the repository, not S8T.

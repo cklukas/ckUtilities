@@ -5,7 +5,7 @@ include_guard(GLOBAL)
 # find an installed package through CMAKE_PREFIX_PATH or the normal CMake
 # package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "57b379d0dddd6a3b517b614a4eb2d1a1c99b474b"
+    "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 
@@ -34,7 +34,7 @@ option(CKTOOLS_VERIFY_CKVISION_TERMINAL
        OFF)
 
 function(cktools_require_ckvision)
-  find_package(ckvision 1.3.0 CONFIG REQUIRED)
+  find_package(ckvision 1.4.0 CONFIG REQUIRED)
 
   if(NOT TARGET ckvision::cvision)
     message(FATAL_ERROR
@@ -60,6 +60,10 @@ function(cktools_add_ckvision_package_verification)
       "-DCKTOOLS_CKVISION_CONSUMER_SOURCE_DIR=${PROJECT_SOURCE_DIR}/tests/integration/ckvision_consumer"
       "-DCKTOOLS_CKVISION_CONSUMER_BINARY_DIR=${PROJECT_BINARY_DIR}/ckvision-package-consumer"
       "-DCKTOOLS_CKVISION_CONSUMER_BUILD_TYPE=${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}"
+      "-DCKTOOLS_CKVISION_CONSUMER_GENERATOR=${CMAKE_GENERATOR}"
+      "-DCKTOOLS_CKVISION_CONSUMER_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+      "-DCKTOOLS_CKVISION_CONSUMER_GENERATOR_TOOLSET=${CMAKE_GENERATOR_TOOLSET}"
+      "-DCKTOOLS_CKVISION_CONSUMER_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionConsumer.cmake"
     USES_TERMINAL
     COMMENT "Configure, build, and run an independent ckVision package consumer")

@@ -23,12 +23,35 @@ endif()
 
 file(REMOVE_RECURSE "${CKTOOLS_CKVISION_CONSUMER_BINARY_DIR}")
 
+# The external client must use the invoking build's generator/architecture.
+# In particular, a Ninja arm64 developer environment must not silently turn
+# into the default Visual Studio x64 generator. Match the Windows C runtime
+# as well: the installed SDK used by release jobs has the static CRT.
+set(_cktools_consumer_configure_args)
+if(CKTOOLS_CKVISION_CONSUMER_GENERATOR)
+  list(APPEND _cktools_consumer_configure_args
+    -G "${CKTOOLS_CKVISION_CONSUMER_GENERATOR}")
+endif()
+if(CKTOOLS_CKVISION_CONSUMER_GENERATOR_PLATFORM)
+  list(APPEND _cktools_consumer_configure_args
+    -A "${CKTOOLS_CKVISION_CONSUMER_GENERATOR_PLATFORM}")
+endif()
+if(CKTOOLS_CKVISION_CONSUMER_GENERATOR_TOOLSET)
+  list(APPEND _cktools_consumer_configure_args
+    -T "${CKTOOLS_CKVISION_CONSUMER_GENERATOR_TOOLSET}")
+endif()
+if(CKTOOLS_CKVISION_CONSUMER_MSVC_RUNTIME_LIBRARY)
+  list(APPEND _cktools_consumer_configure_args
+    "-DCMAKE_MSVC_RUNTIME_LIBRARY=${CKTOOLS_CKVISION_CONSUMER_MSVC_RUNTIME_LIBRARY}")
+endif()
+
 execute_process(
   COMMAND "${CMAKE_COMMAND}"
     -S "${CKTOOLS_CKVISION_CONSUMER_SOURCE_DIR}"
     -B "${CKTOOLS_CKVISION_CONSUMER_BINARY_DIR}"
     "-DCMAKE_PREFIX_PATH=${CKTOOLS_CKVISION_PREFIX}"
     "-DCMAKE_BUILD_TYPE=${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}"
+    ${_cktools_consumer_configure_args}
   RESULT_VARIABLE _cktools_configure_result)
 if(NOT _cktools_configure_result EQUAL 0)
   message(FATAL_ERROR "ckVision package consumer configuration failed")

@@ -58,3 +58,29 @@ tests pass: Find tests must cover allowlist refusal, direct-argv planning,
 output/time/cancellation handling, and teardown; Disk Usage tests must cover
 scope/provider refusal, confirmation, cancellation, explicit retry,
 teardown, and unsupported platforms.
+
+## Files operations (planned; not enabled)
+
+The Files work packages introduce a separate operation capability. Find custom
+commands and Disk Usage cloud actions do not grant that capability. The
+source specification `implementation/ck-files-contracts.md` defines its
+inventory, review, consent, transaction and recovery requirements.
+
+File mutation remains unavailable until its native adapter and acceptance
+tests pass on the relevant platform/filesystem combination. A reviewed plan
+must identify exact source objects, destination, conflicts, preservation
+differences and any permitted loss. UI consent applies only to that plan;
+changed evidence requires renewed review. Missing additional streams are data
+loss, and dropping or changing security metadata requires a distinct explanation.
+No generic overwrite choice or saved preference authorizes these consequences.
+
+Cross-filesystem source removal requires verified data/metadata, durable
+destination commit, source-stability evidence and an identity-safe retirement
+protocol. An unsupported guarantee retains the source or refuses the operation;
+it cannot be bypassed by a generic confirmation. An indeterminate native
+outcome requires reconciliation rather than blind retry. Trash must never fall
+back to permanent deletion; permanent deletion has its own explicit scope and
+confirmation. All native mutations run without shell commands or elevation.
+
+This policy and the specification alone enable no commands. The work-package
+acceptance evidence is the enablement gate.
