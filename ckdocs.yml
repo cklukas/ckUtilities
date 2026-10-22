@@ -43,6 +43,7 @@ nav:
       - docs/ai-design.md
       - docs/migration/ckvision-baseline.md
       - docs/migration/ckvision-1.3.0-validation.md
+      - docs/migration/ck-todo-sysmon-move-validation.md
       - docs/migration/ckvision-0.1.8-validation.md
       - docs/migration/ckutilities-0.1.1-homebrew-validation.md
       - docs/migration/native-executables.md
