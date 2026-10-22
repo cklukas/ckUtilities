@@ -37,7 +37,19 @@ all four ckVision verification options enabled.
   commit recomputed as
   `f9d54bc52541919c6d5700d32801432e0b258dc3c49f99a1b458caf952509508`.
 - `git diff --check`: passed.
-- Linux, sanitizer, and GitHub Actions checks were not run locally.
+- Sanitizer and GitHub Actions checks were not run locally.
+
+## Linux
+
+Commit `2c1da762363a08ed04f25cd5e259e16f366d8264`, taken with `git archive`,
+built in the Debian 13 aarch64 VM (`ckdev`) with GCC 14.2.0 and CMake
+3.31.6. The ckVision v1.3.0 SDK (`57b379d`, checked after checkout) was
+built with `scripts/build_ckvision_sdk.sh`, then the suite was built from the
+`dev` preset (Debug) with the same options as the CI Linux job.
+
+- Configure, build: passed, 0 warnings.
+- `verify_ckvision_package`: passed.
+- CTest (Debug): 97/97 passed.
 
 ## Staged executable fingerprints
 
