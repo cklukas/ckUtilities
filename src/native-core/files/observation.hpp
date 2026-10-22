@@ -15,7 +15,8 @@ enum class ObservationState { Available, Unsupported, Unknown, Denied, Gone, Cha
 enum class ErrorDomain { None, Posix, Win32, Adapter };
 enum class AdapterError : std::int64_t {
     InvalidPath = 1, InvalidNativeResult = 2, NotApplicable = 3,
-    UnsupportedQuery = 4, UnqualifiedIdentity = 5
+    UnsupportedQuery = 4, UnqualifiedIdentity = 5, InterruptedRead = 6,
+    FinalLinkRejected = 7, NotDirectory = 8
 };
 
 // Preserve native codes without translating them to a boolean or injecting a
@@ -63,6 +64,13 @@ public:
 
     ObservationState state() const noexcept {
         return value() ? ObservationState::Available : unavailable_detail()->state;
+    }
+    // Explicit transfer for owning payloads. A successfully consumed observation
+    // becomes Unknown; extracting an unavailable value throws bad_variant_access.
+    T take_value() && {
+        T result = std::move(std::get<0>(storage_));
+        storage_.template emplace<1>(UnavailableObservation{});
+        return result;
     }
     const T* value() const noexcept { return std::get_if<0>(&storage_); }
     const UnavailableObservation* unavailable_detail() const noexcept { return std::get_if<1>(&storage_); }

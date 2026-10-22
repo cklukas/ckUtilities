@@ -2,17 +2,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "file_metadata.hpp"
+#include "directory_cursor.hpp"
 
 #include <filesystem>
+#include <memory>
 
 namespace ck::files {
 
-// Injected, read-only basic-inspection boundary. Calls can block in the OS and
+// Injected, read-only basic-inspection and directory boundary. Calls can block in the OS and
 // belong to workers. This interface has no mutation, shell or elevation API.
 class BasicFileSystem {
 public:
     virtual ~BasicFileSystem() = default;
+    virtual Observation<std::unique_ptr<DirectoryCursor>> open_directory(
+        const std::filesystem::path& absolute_path, DirectoryLinkPolicy policy = DirectoryLinkPolicy::RejectFinalLink) const = 0;
     virtual Observation<BasicMetadata> inspect_basic(const std::filesystem::path& absolute_path) const = 0;
 };
 
@@ -29,6 +32,10 @@ public:
     // names are refused before opening; literal reserved basenames require an
     // extended filesystem path rather than ambiguous Win32 device spelling.
     Observation<BasicMetadata> inspect_basic(const std::filesystem::path& absolute_path) const override;
+    // Owns a native directory stream, never reopens a path while reading. The
+    // policy concerns the final component; parents retain host navigation rules.
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory(
+        const std::filesystem::path& absolute_path, DirectoryLinkPolicy policy = DirectoryLinkPolicy::RejectFinalLink) const override;
 private:
     AdapterScope scope_;
 };

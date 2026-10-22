@@ -1,13 +1,17 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#include "windows_directory_record.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
 
+#include <array>
+#include <cstddef>
 #include <cstring>
+#include <optional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -159,6 +163,45 @@ Observation<std::uint64_t> nonnegative(LONGLONG value, const char* operation) {
     return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(value));
 }
 
+using OwnedHandle = std::unique_ptr<void, HandleCloser>;
+class WindowsDirectoryCursor final : public DirectoryCursor {
+public:
+    WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity)
+        : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)) {}
+private:
+    Observation<DirectoryStep> next_step() override {
+        using Result = Observation<DirectoryStep>;
+        static_assert(offsetof(FILE_ID_BOTH_DIR_INFO, FileName) == detail::windows_directory_name_offset);
+        static_assert(offsetof(FILE_ID_BOTH_DIR_INFO, FileNameLength) == detail::windows_directory_name_length_offset);
+        if (!offset_) {
+            buffer_.fill(std::byte{});
+            const auto info_class = started_ ? FileIdBothDirectoryInfo : FileIdBothDirectoryRestartInfo;
+            if (!GetFileInformationByHandleEx(handle_.get(), info_class, buffer_.data(), static_cast<DWORD>(buffer_.size()))) {
+                const DWORD code = GetLastError();
+                if (code == ERROR_NO_MORE_FILES) return Result::available(DirectoryEnd{});
+                return failure<DirectoryStep>(code, "FileIdBothDirectoryInfo");
+            }
+            started_ = true;
+            offset_ = 0;
+        }
+        auto decoded = detail::decode_windows_directory_record(buffer_, *offset_);
+        if (!decoded.value()) {
+            const auto& error = *decoded.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto record = std::move(decoded).take_value();
+        offset_ = record.next_offset;
+        if (!record.name) return Result::available(DirectorySkip{});
+        return Result::available(std::move(*record.name));
+    }
+    OwnedHandle handle_;
+    // Fixed bound, sufficient for a full native UTF-16 component plus header.
+    // A provider rejecting the query reports an error; never reopen by path.
+    alignas(8) std::array<std::byte, 128 * 1024> buffer_{};
+    std::optional<std::size_t> offset_;
+    bool started_ = false;
+};
+
 } // namespace
 
 Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem::path& path) const {
@@ -220,4 +263,28 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
     return Observation<BasicMetadata>::available(std::move(result));
 }
 
+Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
+    const std::filesystem::path& path, DirectoryLinkPolicy policy) const {
+    using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+    if (!path.is_absolute() || path.native().find(L'\0') != std::wstring::npos || !filesystem_path(path) ||
+        (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink))
+        return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "open_directory"});
+    const DWORD link_flag = policy == DirectoryLinkPolicy::RejectFinalLink ? FILE_FLAG_OPEN_REPARSE_POINT : 0;
+    OwnedHandle handle(CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_NO_RECALL | link_flag, nullptr));
+    if (handle.get() == INVALID_HANDLE_VALUE) return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(), "CreateFileW.directory");
+    FILE_BASIC_INFO basic{};
+    if (!GetFileInformationByHandleEx(handle.get(), FileBasicInfo, &basic, sizeof(basic)))
+        return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(), "FileBasicInfo.directory");
+    if (policy == DirectoryLinkPolicy::RejectFinalLink && (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::FinalLinkRejected), "open_directory.reparse"});
+    if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotDirectory), "open_directory.kind"});
+    auto native_identity = identity(handle.get(), scope_);
+    return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(handle), std::move(native_identity)));
+}
 } // namespace ck::files

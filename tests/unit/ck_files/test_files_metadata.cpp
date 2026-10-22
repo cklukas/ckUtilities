@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -128,4 +129,15 @@ CK_TEST(uninspected_basic_fields_default_to_unknown_instead_of_zero) {
     CK_CHECK(metadata.logical_size.state() == ObservationState::Unknown);
     CK_CHECK(metadata.created.state() == ObservationState::Unknown);
     CK_CHECK(metadata.linux_attributes.state() == ObservationState::Unknown);
+}
+
+CK_TEST(observation_ownership_extraction_resets_state_and_rejects_unavailable_values) {
+    auto owned = Observation<std::unique_ptr<int>>::available(std::make_unique<int>(42));
+    auto value = std::move(owned).take_value();
+    CK_CHECK(value && *value == 42);
+    CK_CHECK(owned.state() == ObservationState::Unknown && owned.value() == nullptr);
+    bool rejected = false;
+    try { (void)std::move(owned).take_value(); }
+    catch (const std::bad_variant_access&) { rejected = true; }
+    CK_CHECK(rejected && owned.state() == ObservationState::Unknown);
 }

@@ -117,7 +117,7 @@ Validation on 2026-10-23, Release, warnings as errors, targets
 
 | Host | Final incremental build interval (Europe/Berlin) | Elapsed | Result |
 | --- | --- | --- | --- |
-| macOS arm64 / Apple Clang 21 | 01:30:34.230–01:31:01.997 | 27.764 s | 20 cases, three CTest entries passed |
+| macOS arm64 / Apple Clang 21 | 01:49:09.058–01:49:22.754 | 27.764 s | 20 cases, three CTest entries passed |
 | Lima Debian 13 arm64 / GCC 14 | 01:29:40.103–01:30:32.326 | 51.902 s | 21 cases, three CTest entries passed |
 | Windows x64 / MSVC 19.44, static CRT | 01:31:14.244–01:31:24.436 | 10.192 s | 21 cases, three CTest entries passed |
 
@@ -151,7 +151,88 @@ were above earlier incremental observations. Timing alone was not treated as
 freshness evidence. Disposable sanitizer output is removed after retaining this
 record; current CMake test binaries remain available. No Files app was launched.
 
-Remaining WP-01 work includes pinned directory access/enumeration, complete
-metadata/stream inventories, destination capability inspection, fake service
-adapters and pane sorting/filter/selection behavior. No WP-01 checkbox is marked
+### Owning directory cursors and bounded enumeration
+
+Directory cursors now own the opened directory object. POSIX uses
+`open(O_DIRECTORY | O_CLOEXEC)` and `fdopendir`/`readdir`; Windows uses a shared
+native directory handle and `FileIdBothDirectoryInfo` continuation queries.
+Neither adapter reconstructs/reopens the original pathname while enumerating.
+The implementation follows the public [Windows directory-query contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_both_dir_info),
+[POSIX descriptor ownership](https://man7.org/linux/man-pages/man3/fdopendir.3p.html)
+and [readdir end/error rules](https://man7.org/linux/man-pages/man3/readdir.3.html).
+Native tests rename the opened directory, create a replacement at its former
+path and destroy the filesystem adapter, then prove that the cursor still lists
+the original directory. The captured native identity remains scoped to that
+adapter and differs from the replacement's identity.
+
+Final links/reparse points require an explicit follow policy. POSIX rejects
+final symlinks with and without trailing slashes; Windows rejects junctions with
+and without trailing separators. Earlier components retain host navigation
+semantics. These handles do not freeze child entries or create a filesystem
+snapshot, and names are not authority to mutate an object later.
+
+A read returns at most the requested number of names (1–4096) and performs at
+most 4096 native steps, including omitted navigation entries. Native order is
+unsorted. Cancellation is checked between steps; a cancelled partial batch can
+resume without dropping names. Native calls may block and belong to workers.
+End and errors are sticky; a late error retains the names already read and its
+native error details. If an adapter or allocation throws after cursor progress,
+resumption reports failure rather than falsely claiming a complete listing.
+Explicit extraction of an owning observation payload resets its state to Unknown.
+POSIX directory-open ENOTDIR is a failure with its native code preserved: it can
+mean an existing non-directory or a rejected final link, not a vanished object.
+
+Windows buffers have a fixed 128 KiB bound. The portable counted UTF-16 decoder
+checks record/name/next offsets, alignment, lengths and invalid basename data;
+its layout constants are statically checked against the Windows SDK. Synthetic
+malformed/truncated buffer tests run on all hosts, including under sanitizers.
+Native tests read 601 entries with long names across multiple native buffers and
+small requested batches, without truncation, duplicates or navigation entries.
+They also cover cancellation, unusual native units, invalid/missing/non-directory
+paths, POSIX permission denial and Windows sharing denial/device rejection.
+
+The first macOS unusual-name fixture attempted invalid UTF-8 on APFS, which
+rejected its creation. It now uses valid Unicode, backslash and newline there;
+Linux retains a raw invalid-byte name and Windows an unpaired UTF-16 surrogate.
+Portable core tests still retain arbitrary valid POSIX component bytes. The
+initial Windows sharing fixture used attribute-only access, which did not
+establish a share conflict; the corrected fixture holds directory-list access.
+That initial assertion failed and a subsequent test dereference of absent error
+details crashed the test process; the detail assertion is now guarded. The
+corrected sharing-denial fixture passes. No adapter behavior was weakened to
+accommodate either fixture error.
+
+Final validation on 2026-10-23 used warnings as errors and the same 22-file
+SHA-256 manifest on all hosts. The full manifest, commands and machine-readable
+timings are in [the evidence record](evidence/ck-files-directory-20261023.json).
+
+| Host / Release toolchain | Final incremental build interval (Europe/Berlin) | Elapsed | Files test result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:49:09.058–01:49:22.754 | 13.692 s | 35 cases, five CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:48:59.412–01:49:18.238 | 18.826 s | 36 cases, five CTest entries passed |
+| Windows workstation x64 / MSVC 19.44, static CRT | 01:49:01.342–01:49:04.863 | 3.521 s | 36 cases, five CTest entries passed |
+
+Test commands took 2.086 s, 0.307 s and 0.687 s respectively. Final logs
+show the changed platform/test inputs compiled and native tests linked; earlier
+incremental runs compiled the new core/decoder and linked both test executables.
+CMake regeneration builds earlier in this milestone took 31.866 s and
+35.156 s on macOS, including configuration; the final incremental build did not
+need regeneration. These are target-specific observations, not full-app clean
+build baselines. Current binaries remain in the previously recorded active
+build directories, at `tests/unit/ck_files/ck_files_core_tests` and
+`ck_files_native_tests` (Windows `.exe`). No Files application was launched.
+
+A direct macOS AddressSanitizer/UndefinedBehaviorSanitizer build compiled all
+11 core/POSIX/test translation units with `-O1 -g`, frame pointers and strict
+warnings. Build interval: 01:49:09.109–01:50:26.479 Berlin (77.364 s); all 35
+cases passed in 0.918 s without reported violations. Its input tree fingerprint
+matches both the final CMake build and test records. This direct compiler command
+uses no build cache; its explicit source list and logs were checked because
+host contention made earlier timing observations unusually variable. Disposable
+sanitizer output and known abandoned failed-fixture directories are cleaned
+after retaining evidence; source, current test builds and logs are preserved.
+
+Remaining WP-01 work includes pinned child-entry access/revalidation, complete
+metadata/stream inventories, destination capability inspection, fake filesystem
+services and pane sorting/filter/selection behavior. No WP-01 checkbox is marked
 complete by these foundational milestones. No file mutation command exists yet.

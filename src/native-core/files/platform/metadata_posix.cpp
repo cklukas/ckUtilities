@@ -6,12 +6,18 @@
 #include "native_filesystem.hpp"
 
 #include <cerrno>
+#include <cstddef>
+#include <cstring>
+#include <memory>
+#include <string_view>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
 
+#include <dirent.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #if defined(__linux__)
 #include <sys/sysmacros.h>
@@ -161,6 +167,45 @@ Observation<BasicMetadata> statx_metadata(const std::filesystem::path& path, con
     return Observation<BasicMetadata>::available(std::move(result));
 }
 #endif
+struct DirectoryCloser {
+    void operator()(DIR* directory) const noexcept { closedir(directory); }
+};
+using OwnedDirectory = std::unique_ptr<DIR, DirectoryCloser>;
+
+class PosixDirectoryCursor final : public DirectoryCursor {
+public:
+    PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity)
+        : DirectoryCursor(std::move(identity)), directory_(std::move(directory)) {}
+private:
+    Observation<DirectoryStep> next_step() override {
+        using Result = Observation<DirectoryStep>;
+        errno = 0;
+        const auto* entry = readdir(directory_.get());
+        if (!entry) {
+            const int code = errno;
+            if (code == 0) return Result::available(DirectoryEnd{});
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "readdir"});
+        }
+        constexpr auto name_offset = offsetof(struct dirent, d_name);
+        if (entry->d_reclen <= name_offset)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "readdir.record"));
+        const auto capacity = static_cast<std::size_t>(entry->d_reclen) - name_offset;
+        const auto length = strnlen(entry->d_name, capacity);
+        if (length == capacity)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "readdir.name_length"));
+        const std::string_view spelling(entry->d_name, length);
+        if (spelling == "." || spelling == "..") return Result::available(DirectorySkip{});
+        auto name = NativeName::from_posix(std::string(spelling));
+        if (!name)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "readdir.name"));
+        return Result::available(std::move(*name));
+    }
+    OwnedDirectory directory_;
+};
+
 } // namespace
 
 Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem::path& path) const {
@@ -173,4 +218,47 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
 #endif
 }
 
+Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
+    const std::filesystem::path& path, DirectoryLinkPolicy policy) const {
+    using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+    if (!path.is_absolute() || path.native().find('\0') != std::string::npos ||
+        (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink))
+        return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "open_directory"));
+    auto spelling = path.native();
+    // A trailing slash must not turn an explicitly rejected final symlink into
+    // a followed parent component. Preserve all-slash root spellings verbatim.
+    if (spelling.find_first_not_of('/') != std::string::npos)
+        while (spelling.size() > 1 && spelling.back() == '/') spelling.pop_back();
+    struct OwnedFd {
+        int value;
+        ~OwnedFd() { if (value >= 0) close(value); }
+    } fd{open(spelling.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC |
+        (policy == DirectoryLinkPolicy::RejectFinalLink ? O_NOFOLLOW : 0))};
+    if (fd.value < 0) {
+        const int code = errno;
+        // The requested directory can instead be an existing non-directory
+        // (or a refused final link). ENOTDIR here does not prove it vanished.
+        const auto state = code == ENOTDIR ? ObservationState::Failed : errno_state(code);
+        return Result::unavailable(state, {ErrorDomain::Posix, code, "open.directory"});
+    }
+    struct stat native{};
+    if (fstat(fd.value, &native) != 0) {
+        const int code = errno;
+        return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fstat.directory"});
+    }
+    std::optional<std::uint64_t> generation;
+#if defined(__APPLE__)
+    generation = native.st_gen;
+#endif
+    auto identity = Observation<ObjectIdentity>::available({scope_, IdentityScheme::PosixDeviceInode,
+        NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_dev)),
+        NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_ino)), generation});
+    OwnedDirectory directory(fdopendir(fd.value));
+    if (!directory) {
+        const int code = errno;
+        return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fdopendir"});
+    }
+    fd.value = -1; // fdopendir now owns the descriptor, including CLOEXEC.
+    return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(directory), std::move(identity)));
+}
 } // namespace ck::files
