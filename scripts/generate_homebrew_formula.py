@@ -95,10 +95,11 @@ def main() -> None:
            "-DCK_LLAMA_CPP_SOURCE_DIR=#{{llama_source}}",
                *std_cmake_args
         system "cmake", "--build", "build"
-        system "cmake", "--install", "build"
-        # The suite carries a JSON header for its own builds; Homebrew already
-        # provides this header through the nlohmann-json dependency.
-        (include/"nlohmann").rmtree
+        # Only the product: the executables, documentation, license and
+        # sample configuration. Development headers and libraries, ours and
+        # the bundled llama.cpp's, would collide with Homebrew's own
+        # nlohmann-json and llama.cpp when the keg is linked.
+        system "cmake", "--install", "build", "--component", "Runtime"
       end
 
       test do
