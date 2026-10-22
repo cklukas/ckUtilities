@@ -4,6 +4,8 @@
 
 include(${PROJECT_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 
+add_subdirectory(files)
+
 add_library(ck_json_view_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/json-view/src/json_view_core.cpp
 )

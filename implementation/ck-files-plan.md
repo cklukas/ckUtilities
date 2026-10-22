@@ -3,7 +3,8 @@
 Status: implementation active; WP-00 complete. Files runtime features are not yet implemented.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
 
-Execution: WP-00 complete; WP-01 next. See [behavioral and adapter contracts](ck-files-contracts.md)
+Execution: WP-00 complete; WP-01 in progress. See [implementation evidence](ck-files-progress.md),
+[behavioral and adapter contracts](ck-files-contracts.md)
 and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
 
 ## Product commitment
