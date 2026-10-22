@@ -74,7 +74,84 @@ build-relative test path. Windows uses only
 `work\build\tests\unit\ck_files\ck_files_core_tests.exe`. Native test paths
 remain inside their selected task workspaces. No Files application is launched.
 
-Remaining WP-01 work includes typed identity/observation results, native
-directory and metadata/stream inventories, capability inspection, and pane
-sorting/filter/selection behavior with real native adapter qualification.
-No WP-01 checkbox is marked complete by the filename foundation alone.
+### Explicit observations and native basic metadata
+
+The next WP-01 milestone adds `Observation<T>`, scoped native identities,
+lossless timestamps and an injected, read-only `BasicFileSystem` boundary.
+Unavailable fields distinguish unsupported, unknown, denied, gone, changed and
+failed states, retaining native error domains/codes. Available zero or an empty
+value cannot become an unknown value. Throwing-copy tests verify that assignment
+cannot leave an observation without an active variant state.
+
+Identity comparison retains the complete 128-bit Windows ID, native volume,
+identity scheme and optional generation. Independent adapter instances cannot
+assert identity equality. Equal native IDs establish neither content equality
+nor durable identity across remounts/restarts, and never authorize mutation.
+Timestamp conversion preserves pre-epoch values and native fractional units
+without overflow, truncation to seconds or fabricated zero values.
+
+`ck_files_platform` uses native absolute paths without a UTF-8 round trip or
+process-current-directory fallback. macOS uses `lstat`; Linux uses no-follow
+`statx`, respecting each returned field mask. Only unavailable kernel `statx`
+(ENOSYS) invokes the documented older `lstat` query; denial and I/O errors are
+preserved. Linux attribute values retain the supported-bit mask. Windows uses
+attribute-only, shared handles with open-reparse-point/no-recall flags and
+handle-based queries. Unsupported 128-bit identity queries may use the explicit
+legacy 64-bit identity scheme; an unqualified zero legacy index remains unknown.
+Direct Windows device, pipe and ambiguous DOS-device path spellings are rejected
+before opening. Ordinary drive/UNC, extended filesystem and volume-GUID path
+namespaces are handled explicitly. Earlier path components retain host
+navigation semantics: this is not a pinned-parent security boundary.
+
+Native fixtures cover regular/empty files, directories, hard links, independent
+adapter scopes, missing/invalid paths, POSIX final/dangling links and FIFOs,
+permission denial, mode zero, exact pre-epoch/nanosecond POSIX timestamps, Linux
+raw non-UTF-8 names, Windows unpaired UTF-16 names, exact 100-nanosecond Windows
+timestamps, direct device rejection and extended/volume-GUID aliases. Core tests
+also cover all observation states, full-width IDs, optional generation and
+extreme timestamp conversions. These are basic metadata tests, not qualification
+of all filesystems, ACLs, streams, provider data or operation preservation.
+
+Validation on 2026-10-23, Release, warnings as errors, targets
+`ck_files_core_tests` and `ck_files_native_tests`:
+
+| Host | Final incremental build interval (Europe/Berlin) | Elapsed | Result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:30:34.230–01:31:01.997 | 27.764 s | 20 cases, three CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:29:40.103–01:30:32.326 | 51.902 s | 21 cases, three CTest entries passed |
+| Windows x64 / MSVC 19.44, static CRT | 01:31:14.244–01:31:24.436 | 10.192 s | 21 cases, three CTest entries passed |
+
+Final test-command elapsed times were 3.981 s, 1.167 s and 1.722 s respectively.
+All three final incremental logs show compilation of the changed native fixture
+and linking of the native test executable. Earlier builds compiled the new core
+and platform sources. The Windows alias fixture initially used forward slashes
+in an extended path and failed; its construction now uses native preferred
+separators. Production paths were not rewritten to conceal this fixture error.
+
+Both remote hosts verified exactly the same 16-file SHA-256 input manifest as
+the current local sources before compiling. Manifest SHA-256:
+`8648fca6b901bca0b0e86f094d80ea4bc6a153cd185262514de02de9a44a6a5c`.
+The Windows adapter fingerprint is
+`f529154bd33e2b88c1da695a1ae1f11851b98c3e5b4746f9a2324b97b7ecf101`;
+the POSIX adapter fingerprint is
+`0b6d06ad2a207fa8f21116f75a74d90e7a6fab709485c7e15249c137af1cf7d5`.
+Detailed command logs, timing JSON and the manifest remain under the task root.
+The current verified binaries reside in the same build directories recorded
+above: `ck_files_core_tests` and `ck_files_native_tests` (Windows `.exe`).
+
+A separate macOS direct compile with AddressSanitizer/UndefinedBehaviorSanitizer,
+`-O1 -g`, frame pointers and strict warnings passed all 20 core/POSIX-native
+cases with no reported violations. Build interval: 01:25:47.160–01:27:52.582
+Berlin, 125.421 s; test elapsed: 1.205 s. The subsequent source edit changed only
+the Windows-conditional alias fixture, excluded from this sanitizer build.
+The sanitizer command directly compiled seven translation units without a build
+cache. Host load was unusually high during these runs (observed load averages
+over 190); logs and actual compiled inputs were checked because elapsed times
+were above earlier incremental observations. Timing alone was not treated as
+freshness evidence. Disposable sanitizer output is removed after retaining this
+record; current CMake test binaries remain available. No Files app was launched.
+
+Remaining WP-01 work includes pinned directory access/enumeration, complete
+metadata/stream inventories, destination capability inspection, fake service
+adapters and pane sorting/filter/selection behavior. No WP-01 checkbox is marked
+complete by these foundational milestones. No file mutation command exists yet.
