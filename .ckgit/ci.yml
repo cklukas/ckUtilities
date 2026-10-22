@@ -1,0 +1,31 @@
+# Copyright (c) 2026 C. Klukas. All rights reserved.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The self-hosted (rpi4) lane publishes the documentation site. ckdocs is
+# compiled from the ck-git-hosting sister project at its pinned 0.8.1 commit,
+# the release .github/workflows/pages.yml installs, so the LAN and GitHub Pages
+# publish the same site. `--strict` fails the run on a broken link, a heading
+# fragment, or a page the navigation does not list, before `pages:` ever sees
+# "public". The checkout comes from `git archive` and has no .git, so ckdocs
+# walks the tree rather than listing tracked files — the same set, since the
+# archive holds only those.
+#
+# There is no build lane here: configuring ckUtilities downloads googletest
+# and llama.cpp, and this lane runs offline from pinned sister snapshots.
+# GitHub Actions builds and tests every platform.
+version: 1
+on:
+  branches: [master]
+sisters:
+  - name: ck-git-hosting
+    ref: ad6dc1de73cedef8eb64d53ab607043ae09845ee
+jobs:
+  - name: docs
+    steps:
+      - name: site
+        script: |
+          make -C ../ck-git-hosting BUILD_ROOT="$TMPDIR" BUILD_DIR="$TMPDIR/ckdocs" client
+          "$TMPDIR/ckdocs/bin/ckdocs" --version
+          "$TMPDIR/ckdocs/bin/ckdocs" build --root "$PWD" --out "$PWD/public" --strict
+pages:
+  path: public
