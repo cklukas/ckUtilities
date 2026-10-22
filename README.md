@@ -8,10 +8,12 @@
 
 CK Utilities is a collection of focused terminal applications for everyday
 work: finding files, inspecting JSON, understanding disk usage, editing
-Markdown, managing settings, and working with local AI models.
+Markdown, organizing tasks, watching system load, managing settings, and
+working with local AI models.
 
 Use `ck-utilities` as a launcher, or start any tool directly:
-`ck-json-view`, `ck-find`, `ck-du`, `ck-config`, `ck-edit`, and `ck-chat`.
+`ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`, `ck-todo`,
+`ck-sysmon`, and `ck-config`.
 
 ## Free software; no user support or warranty
 
@@ -30,6 +32,8 @@ own discretion; the legal terms are in [LICENSE](LICENSE).
 | `ck-config` | Edit Disk Usage and Chat settings; manage keyboard shortcuts. |
 | `ck-edit` | Edit Markdown with search, undo/redo, formatting, links, footnotes, and tables. |
 | `ck-chat` | Chat with local GGUF models; manage prompts and models, cancel responses, and export conversations. |
+| `ck-todo` | Organize tasks on Kanban boards with notes, due dates, archives, and safe sharing between running copies. |
+| `ck-sysmon` | Watch CPU, memory, GPU, and loaded Ollama models on this machine and on passwordless SSH hosts. |
 
 CK Utilities runs on macOS and Linux. A Windows version is not available yet.
 
@@ -52,7 +56,7 @@ sudo dnf install ./ck-utilities-*.rpm
 ```
 
 The package installs `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
-`ck-config`, `ck-edit`, and `ck-chat` on `PATH`. Confirm the install with:
+`ck-edit`, `ck-chat`, `ck-todo`, `ck-sysmon`, and `ck-config` on `PATH`. Confirm the install with:
 
 ```sh
 ck-utilities --help
@@ -93,6 +97,8 @@ macOS or Linux download for now.
 - [JSON View](docs/tools/json-view.md)
 - [Find](docs/tools/ck-find.md)
 - [Disk Usage](docs/tools/ck-du.md)
+- [Todo](docs/tools/ck-todo.md)
+- [System Monitor](docs/tools/ck-sysmon.md)
 - [Config](docs/tools/ck-config.md)
 - [Edit](docs/tools/ck-edit.md)
 - [Chat](docs/tools/ck-chat.md)

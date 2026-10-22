@@ -64,13 +64,16 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build/dev --output-on-failure
 
-      - name: Regenerate and verify README screenshots
+      - name: Regenerate and verify documentation screenshots and goldens
         shell: bash
         run: |
           mkdir -p docs/generated/screenshots
           build/dev/tools/docgen/capture_ckutilities_screenshots docs/generated/screenshots
-          git diff --exit-code -- docs/generated/screenshots
-          test -z "$(git status --porcelain --untracked-files=all -- docs/generated/screenshots)"
+          build/dev/tools/docgen/capture_todo_screenshots docs/generated/screenshots src/vision/todo/tests/golden
+          build/dev/tools/docgen/generate_sysmon_goldens src/vision/sysmon/tests/golden
+          build/dev/tools/docgen/capture_sysmon_screenshots docs/generated/screenshots
+          git diff --exit-code -- docs/generated/screenshots src/vision/todo/tests/golden src/vision/sysmon/tests/golden
+          test -z "$(git status --porcelain --untracked-files=all -- docs/generated/screenshots src/vision/todo/tests/golden src/vision/sysmon/tests/golden)"
 
   package-linux:
     name: ckVision Linux packages

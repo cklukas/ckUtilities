@@ -1,7 +1,7 @@
 set(CPACK_PACKAGE_NAME "ck-utilities")
 set(CPACK_PACKAGE_VENDOR "ckUtilities Project")
 set(CPACK_PACKAGE_CONTACT "maintainers@ckutilities.dev")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ckVision-native terminal utilities including ck-json-view, ck-du, ck-find, and ck-chat")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "ckVision-native terminal utilities including ck-json-view, ck-du, ck-find, ck-chat, ck-todo, and ck-sysmon")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")

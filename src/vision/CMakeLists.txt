@@ -19,6 +19,9 @@ add_subdirectory(du)
 add_subdirectory(config)
 add_subdirectory(edit)
 add_subdirectory(chat)
+add_subdirectory(host)
+add_subdirectory(todo)
+add_subdirectory(sysmon)
 
 if(UNIX)
   add_executable(ck_vision_terminal_smoke

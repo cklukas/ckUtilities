@@ -14,7 +14,9 @@ set(_cktools_product_binaries
     ck-du
     ck-config
     ck-edit
-    ck-chat)
+    ck-chat
+    ck-todo
+    ck-sysmon)
 
 foreach(_cktools_binary IN LISTS _cktools_product_binaries)
   set(_cktools_binary_path "${CKTOOLS_INSTALL_PREFIX}/bin/${_cktools_binary}")

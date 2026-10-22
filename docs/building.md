@@ -63,10 +63,12 @@ Windows packaging is intentionally not part of the current release workflow.
 
 ## Documentation screenshots
 
-The README images are generated SVGs, not hand-made illustrations. The
-capture executable runs the real launcher, JSON View, and Markdown editor on
-ckVision's `HeadlessTerminal`, then uses ckVision's SVG renderer to record the
-decoded display.
+The screenshots in the README and on the documentation site are generated
+SVGs, not hand-made illustrations. The capture executables run the real
+launcher, JSON View, Markdown editor, ck-todo and ck-sysmon on ckVision's
+`HeadlessTerminal`, then use ckVision's SVG renderer to record the decoded
+display. ck-todo's and ck-sysmon's golden frames, which their test suites
+compare against, are written by the same run.
 
 To regenerate them, point the script at the installed SDK and the matching
 ckVision 1.3.0 source checkout:
@@ -77,8 +79,29 @@ CKTOOLS_CKVISION_SOURCE_DIR=/path/to/ckvision \
 tools/docgen/generate_screenshots.sh
 ```
 
-CI and release verification regenerate these files and fail if the tracked
-SVGs differ.
+CI regenerates the screenshots and goldens and fails if any tracked file
+differs, so review a regenerated golden as carefully as the code that changed
+it.
+
+## Strict targets, fuzzers, and benchmarks
+
+ck-todo and ck-sysmon, with their tests and tools, build with every warning
+as an error (`cmake/CkToolsStrict.cmake`; `-DCKTOOLS_WARNINGS_AS_ERRORS=OFF`
+relaxes it for a newer toolchain). Their tests use ckVision's `cktest`, one
+CTest entry per test file.
+
+The libFuzzer targets for ck-todo's workspace codec and ck-sysmon's parsers
+need an LLVM Clang (not Apple Clang) and are off by default:
+
+```sh
+cmake -S . -B build/fuzz -G Ninja -DCMAKE_CXX_COMPILER=clang++ \
+  -DCKTOOLS_BUILD_FUZZERS=ON -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk
+cmake --build build/fuzz --target cktools_fuzzers
+ctest --test-dir build/fuzz -L fuzz-corpus
+```
+
+`todo_bench` prints ck-todo's timings; its `todo_benchmark_smoke` CTest entry
+checks the deterministic work budgets only, never wall-clock speed.
 
 ## Site images
 

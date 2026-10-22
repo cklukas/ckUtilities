@@ -1,0 +1,1 @@
+{"schema_version":1,"last_board_id":1,"next_board_id":2,"next_lane_id":4,"next_task_id":1,"boards":[{"id":1,"name":"main","lanes":[{"id":1,"title":"To Do","color":null,"sort":"manual","task_ids":[]},{"id":2,"title":"Doing","color":null,"sort":"manual","task_ids":[]},{"id":3,"title":"Done","color":null,"sort":"manual","task_ids":[]}]}],"tasks":[]}

@@ -57,4 +57,27 @@ if(CKTOOLS_BUILD_DOCUMENTATION_CAPTURES)
     ck_chat_options
     ckvision::cvision)
   target_compile_features(capture_ckutilities_screenshots PRIVATE cxx_std_20)
+
+  # ck-todo: drives the real app on HeadlessTerminal and writes each scene's
+  # SVG and, given a second directory, its golden dump.
+  add_executable(capture_todo_screenshots capture_todo_screenshots.cpp)
+  target_link_libraries(capture_todo_screenshots PRIVATE
+    cktools_docgen_frame_svg ck_vision_todo ckvision::cvision)
+  cktools_strict(capture_todo_screenshots)
+
+  # ck-sysmon: the screenshots are rendered from the reviewed golden dumps,
+  # which generate_sysmon_goldens writes from the deterministic fixture.
+  set(_cktools_sysmon_tests "${PROJECT_SOURCE_DIR}/src/vision/sysmon/tests")
+  add_executable(capture_sysmon_screenshots capture_sysmon_screenshots.cpp)
+  target_include_directories(capture_sysmon_screenshots PRIVATE "${_cktools_sysmon_tests}")
+  target_link_libraries(capture_sysmon_screenshots PRIVATE
+    cktools_docgen_frame_svg ck_vision_sysmon ckvision::cvision)
+  target_compile_definitions(capture_sysmon_screenshots PRIVATE
+    CKTOOLS_SYSMON_GOLDENS="${_cktools_sysmon_tests}/golden")
+  cktools_strict(capture_sysmon_screenshots)
+
+  add_executable(generate_sysmon_goldens generate_sysmon_goldens.cpp)
+  target_include_directories(generate_sysmon_goldens PRIVATE "${_cktools_sysmon_tests}")
+  target_link_libraries(generate_sysmon_goldens PRIVATE ck_vision_sysmon ckvision::cvision)
+  cktools_strict(generate_sysmon_goldens)
 endif()

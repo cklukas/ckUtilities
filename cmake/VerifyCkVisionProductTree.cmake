@@ -11,7 +11,9 @@ set(_cktools_native_executables
     ck-du
     ck-config
     ck-edit
-    ck-chat)
+    ck-chat
+    ck-todo
+    ck-sysmon)
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_PRODUCT_PREFIX}/bin/${_cktools_executable}")
@@ -40,7 +42,9 @@ set(_cktools_launcher_path "${CKTOOLS_PRODUCT_PREFIX}/bin/ck-utilities")
       ck-du
       ck-config
       ck-edit
-      ck-chat)
+      ck-chat
+      ck-todo
+      ck-sysmon)
     execute_process(
       COMMAND "${_cktools_launcher_path}" --launch "${_cktools_child_executable}" --help
       TIMEOUT 20

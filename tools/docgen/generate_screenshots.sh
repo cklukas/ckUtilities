@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Regenerate the README SVGs from real ckUtilities + ckVision rendering.
+# Regenerate the documentation SVGs and the ck-todo/ck-sysmon golden frames
+# from real ckUtilities + ckVision rendering.
 set -euo pipefail
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -21,6 +22,12 @@ cmake -S "$project_root" -B "$build_dir" -G Ninja \
   -DCKTOOLS_CKVISION_PREFIX="$ckvision_prefix" \
   -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON \
   -DCKTOOLS_CKVISION_SOURCE_DIR="$ckvision_source"
-cmake --build "$build_dir" --target capture_ckutilities_screenshots --parallel
+cmake --build "$build_dir" --parallel --target capture_ckutilities_screenshots \
+  capture_todo_screenshots generate_sysmon_goldens capture_sysmon_screenshots
 mkdir -p "$output_dir"
 "$build_dir/tools/docgen/capture_ckutilities_screenshots" "$output_dir"
+# ck-todo writes each scene's SVG and its golden dump together; ck-sysmon's
+# screenshots are rendered from its goldens, so those are written first.
+"$build_dir/tools/docgen/capture_todo_screenshots" "$output_dir" "$project_root/src/vision/todo/tests/golden"
+"$build_dir/tools/docgen/generate_sysmon_goldens" "$project_root/src/vision/sysmon/tests/golden"
+"$build_dir/tools/docgen/capture_sysmon_screenshots" "$output_dir"

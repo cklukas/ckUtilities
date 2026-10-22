@@ -10,7 +10,7 @@ namespace ck::appinfo
     namespace
     {
 
-        constexpr std::array<ToolInfo, 7> kTools{{
+        constexpr std::array<ToolInfo, 9> kTools{{
             ToolInfo{
                 "ck-utilities",
                 "ck-utilities",
@@ -60,6 +60,20 @@ namespace ck::appinfo
                 "Manage ck-utilities configuration defaults.",
                 "Manage ck-utilities configuration defaults.",
                 "Config manages the native Disk Usage and Chat option profiles alongside suite keyboard shortcuts. Browse supported settings, validate edits, save or reload profiles, and import or export them when needed. Shortcut conflicts are shown explicitly before a replacement is saved."},
+            ToolInfo{
+                "ck-todo",
+                "ck-todo",
+                "Todo",
+                "Organize tasks on boards with lanes, notes, and due dates.",
+                "Organize tasks on boards with lanes, notes, and due dates.",
+                "Todo keeps boards of lanes and tasks in the terminal. Move tasks with the keyboard or mouse, attach notes that open as full editor windows, set typed due dates and times, and archive what is done. The workspace saves itself atomically after every change and keeps backups, and a change made by another running copy is reconciled visibly instead of being lost."},
+            ToolInfo{
+                "ck-sysmon",
+                "ck-sysmon",
+                "System Monitor",
+                "Watch CPU, memory, and GPU load on this and other machines.",
+                "Watch CPU, memory, and GPU load on this and other machines.",
+                "System Monitor shows native CPU, memory, and GPU metrics with history, for the local machine and for hosts reachable by passwordless SSH. It also lists the models a local Ollama server has loaded. Page through hosts and resource details from the keyboard; a metric the host cannot report is shown as missing, never as zero."},
         }};
 
     } // namespace

@@ -688,6 +688,19 @@
 <path d="M 4.5 143.5 L 4.5 153 L 4.5 162.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 143.5 L 4.5 153 L 4.5 162.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="158" xml:space="preserve" fill="#000000">S</text>
+<text x="18" y="158" xml:space="preserve" fill="#000000">y</text>
+<text x="27" y="158" xml:space="preserve" fill="#000000">s</text>
+<text x="36" y="158" xml:space="preserve" fill="#000000">t</text>
+<text x="45" y="158" xml:space="preserve" fill="#000000">e</text>
+<text x="54" y="158" xml:space="preserve" fill="#000000">m</text>
+<text x="72" y="158" xml:space="preserve" fill="#000000">M</text>
+<text x="81" y="158" xml:space="preserve" fill="#000000">o</text>
+<text x="90" y="158" xml:space="preserve" fill="#000000">n</text>
+<text x="99" y="158" xml:space="preserve" fill="#000000">i</text>
+<text x="108" y="158" xml:space="preserve" fill="#000000">t</text>
+<text x="117" y="158" xml:space="preserve" fill="#000000">o</text>
+<text x="126" y="158" xml:space="preserve" fill="#000000">r</text>
 <g data-box-drawing="single">
 <path d="M 535.5 143.5 L 535.5 153 L 535.5 162.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -743,6 +756,10 @@
 <path d="M 4.5 161.5 L 4.5 171 L 4.5 180.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 161.5 L 4.5 171 L 4.5 180.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="176" xml:space="preserve" fill="#000000">T</text>
+<text x="18" y="176" xml:space="preserve" fill="#000000">o</text>
+<text x="27" y="176" xml:space="preserve" fill="#000000">d</text>
+<text x="36" y="176" xml:space="preserve" fill="#000000">o</text>
 <g data-box-drawing="single">
 <path d="M 535.5 161.5 L 535.5 171 L 535.5 180.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

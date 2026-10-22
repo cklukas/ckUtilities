@@ -34,6 +34,8 @@ nav:
       - docs/tools/ck-edit.md
       - docs/markdown-commands.md
       - docs/tools/ck-chat.md
+      - docs/tools/ck-todo.md
+      - docs/tools/ck-sysmon.md
       - docs/tools/ck-config.md
   - title: Development
     pages:

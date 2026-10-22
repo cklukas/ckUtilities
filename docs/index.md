@@ -6,7 +6,7 @@ hero:
   name: CK Utilities
   text: Everyday tools for the terminal, with a real interface.
   tagline: >
-    Seven focused applications in the spirit of the classic utility
+    Focused applications in the spirit of the classic utility
     suites, built on ckVision: a menu bar, movable windows, mouse support,
     and a footer that always shows the keys you can use right now.
   image:
@@ -41,18 +41,26 @@ features:
     icon: "…"
     details: Chat with local GGUF models; manage prompts and models, cancel responses, and export conversations.
     link: tools/ck-chat.md
+  - title: Todo
+    icon: "☑"
+    details: Organize tasks on boards with lanes, notes, due dates, and a durable archive.
+    link: tools/ck-todo.md
+  - title: System Monitor
+    icon: "▁▃▆"
+    details: Watch CPU, memory, GPU, and loaded Ollama models here and on SSH hosts.
+    link: tools/ck-sysmon.md
   - title: Config
     icon: "⚙"
     details: Edit Disk Usage and Chat settings, and manage keyboard shortcuts.
     link: tools/ck-config.md
 ---
 
-## One launcher, seven tools
+## One launcher, eight tools
 
 Start `ck-utilities` to pick a tool from the launcher, or run any tool
-directly: `ck-json-view`, `ck-find`, `ck-du`, `ck-config`, `ck-edit`, and
-`ck-chat`. Every tool shares the same menu bar, window handling, help, and
-key footer, so what you learn in one works in all of them.
+directly: `ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`,
+`ck-todo`, `ck-sysmon`, and `ck-config`. Every tool shares the same menu
+bar, window handling, help, and key footer, so what you learn in one works in all of them.
 
 ![The CK Utilities launcher](generated/screenshots/ck-utilities-launcher.svg)
 
@@ -73,6 +81,8 @@ key footer, so what you learn in one works in all of them.
 | See what is using disk space | [Disk Usage](tools/ck-du.md) |
 | Write and format Markdown | [Edit](tools/ck-edit.md) and [Markdown commands](markdown-commands.md) |
 | Talk to a local model | [Chat](tools/ck-chat.md) |
+| Keep track of tasks | [Todo](tools/ck-todo.md) |
+| Watch CPU, memory, and GPU load | [System Monitor](tools/ck-sysmon.md) |
 | Change settings and shortcuts | [Config](tools/ck-config.md) |
 | Build and test the source | [Building from source](building.md) |
 

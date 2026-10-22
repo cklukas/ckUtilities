@@ -61,10 +61,18 @@ cktools_add_ckvision_package_verification()
 cktools_add_ckvision_install_verification()
 cktools_add_ckvision_cutover_verification()
 
+include(CkToolsStrict)
+
 add_subdirectory(src/common)
 add_subdirectory(src/native-core)
 add_subdirectory(src/vision)
 add_subdirectory(tools/docgen)
+add_subdirectory(benchmarks)
+
+option(CKTOOLS_BUILD_FUZZERS "Build the libFuzzer targets (LLVM Clang only)" OFF)
+if(CKTOOLS_BUILD_FUZZERS)
+  add_subdirectory(fuzz)
+endif()
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

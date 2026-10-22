@@ -9,8 +9,9 @@ system from the
 [release page](https://github.com/cklukas/ckUtilities/releases), or install
 it with Homebrew.
 
-Every installation provides the same seven commands: `ck-utilities`,
-`ck-json-view`, `ck-find`, `ck-du`, `ck-config`, `ck-edit`, and `ck-chat`.
+Every installation provides the same commands: `ck-utilities`,
+`ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`, `ck-todo`,
+`ck-sysmon`, and `ck-config`.
 
 ## Linux
 

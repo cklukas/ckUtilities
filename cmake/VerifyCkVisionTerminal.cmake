@@ -20,7 +20,9 @@ set(_cktools_native_executables
     ck-du
     ck-config
     ck-edit
-    ck-chat)
+    ck-chat
+    ck-todo
+    ck-sysmon)
 set(_cktools_terminal_profiles xterm-256color xterm vt100)
 
 file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
@@ -31,6 +33,14 @@ foreach(_cktools_executable IN LISTS _cktools_native_executables)
   if(NOT EXISTS "${_cktools_path}")
     message(FATAL_ERROR "Native executable is missing: ${_cktools_path}")
   endif()
+  # ck-todo opens a modal welcome dialog on first run, and ckVision suppresses
+  # the standard quit chord while a modal dialog is open (by specification).
+  # Its in-memory demo opens straight onto a board and writes nothing, so it
+  # exercises the same resize, quit and terminal-mode contract.
+  set(_cktools_arguments)
+  if(_cktools_executable STREQUAL "ck-todo")
+    set(_cktools_arguments --demo)
+  endif()
   foreach(_cktools_terminal_profile IN LISTS _cktools_terminal_profiles)
     # The helper owns a PTY, resizes it after startup, sends the default Alt+X
     # chord, and compares the terminal mode after the
@@ -39,7 +49,7 @@ foreach(_cktools_executable IN LISTS _cktools_native_executables)
       COMMAND "${CKTOOLS_TERMINAL_SMOKE_EXECUTABLE}"
         --term "${_cktools_terminal_profile}"
         --config-root "${CKTOOLS_TERMINAL_CONFIG_ROOT}"
-        -- "${_cktools_path}"
+        -- "${_cktools_path}" ${_cktools_arguments}
       TIMEOUT 12
       RESULT_VARIABLE _cktools_terminal_result
       OUTPUT_VARIABLE _cktools_terminal_output

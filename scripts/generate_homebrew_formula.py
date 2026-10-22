@@ -102,7 +102,7 @@ def main() -> None:
       end
 
       test do
-        %w[ck-utilities ck-json-view ck-find ck-du ck-config ck-edit ck-chat].each do |tool|
+        %w[ck-utilities ck-json-view ck-find ck-du ck-config ck-edit ck-chat ck-todo ck-sysmon].each do |tool|
           assert_match "Usage:", shell_output("#{{bin}}/#{{tool}} --help")
         end
       end
