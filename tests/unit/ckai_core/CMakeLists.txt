@@ -34,6 +34,7 @@ target_link_libraries(test_ckai_core_model_manager
 )
 
 target_include_directories(test_ckai_core_model_manager PRIVATE
+  ${PROJECT_SOURCE_DIR}/tests/support
   ${PROJECT_SOURCE_DIR}/include
 )
 

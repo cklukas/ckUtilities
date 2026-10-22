@@ -1,4 +1,9 @@
 #include "ck/ai/model_manager.hpp"
+#include "test_environment.hpp"
+#include <cstdlib>
+#include <utility>
+#include <vector>
+#include <optional>
 
 #include <chrono>
 #include <filesystem>
@@ -19,6 +24,19 @@ protected:
          std::to_string(
              std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(test_dir_);
+
+    // Each test gets its own per-user data folder, so tests running in
+    // parallel never share the configuration ModelManager reads and writes,
+    // and no test touches the developer's own ~/.local/share/cktools.
+    const std::filesystem::path home = test_dir_ / "home";
+    std::filesystem::create_directories(home);
+    for (const char *name : kUserFolderVariables) {
+      if (const char *value = std::getenv(name))
+        saved_environment_.emplace_back(name, std::string(value));
+      else
+        saved_environment_.emplace_back(name, std::nullopt);
+      ck::testing::set_environment(name, home.string());
+    }
 
     // Initialize ModelManager with test directory
     modelManager_ = std::make_unique<ck::ai::ModelManager>();
@@ -42,6 +60,13 @@ protected:
   }
 
   void TearDown() override {
+    modelManager_.reset();
+    for (const auto &[name, value] : saved_environment_) {
+      if (value)
+        ck::testing::set_environment(name, *value);
+      else
+        ck::testing::unset_environment(name);
+    }
     // Clean up test directory
     if (std::filesystem::exists(test_dir_)) {
       std::filesystem::remove_all(test_dir_);
@@ -55,8 +80,16 @@ protected:
     file.close();
   }
 
+  // Where ModelManager finds the per-user data folder on each platform.
+#if defined(_WIN32)
+  static constexpr const char *kUserFolderVariables[] = {"LOCALAPPDATA", "APPDATA"};
+#else
+  static constexpr const char *kUserFolderVariables[] = {"HOME"};
+#endif
+
   std::filesystem::path test_dir_;
   std::unique_ptr<ck::ai::ModelManager> modelManager_;
+  std::vector<std::pair<const char *, std::optional<std::string>>> saved_environment_;
 };
 
 // Basic functionality tests

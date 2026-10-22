@@ -30,6 +30,14 @@ if(NOT TARGET llama)
     # Package managers can provide a compatible CMake package.  Keep the
     # source-pinned FetchContent path as the normal development fallback.
     find_package(llama CONFIG QUIET)
+    if(TARGET llama)
+      # An installed llama/ggml package (Homebrew's, for one) carries C
+      # compile features on its imported targets, so C must be enabled here,
+      # project-wide, before any target uses them. It is not enabled in
+      # project(): with OBJCXX enabled there, ggml's Objective-C .m sources
+      # would compile as Objective-C++ when llama.cpp is built from source.
+      enable_language(C)
+    endif()
   endif()
 
 endif()

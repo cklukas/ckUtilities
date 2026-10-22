@@ -9,9 +9,9 @@ set(CKTOOLS_VERSION "0.2.0" CACHE STRING "ck-utilities version" FORCE)
 message(STATUS "ck-utilities version: ${CKTOOLS_VERSION}")
 
 if(APPLE)
-  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES C CXX OBJCXX)
+  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX OBJCXX)
 else()
-  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES C CXX)
+  project(cktools VERSION "${CKTOOLS_VERSION}" LANGUAGES CXX)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
