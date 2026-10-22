@@ -1,0 +1,22 @@
+/* CK Utilities site colours: the hero's dusk navy and its screen's teal (tools/docgen/generate_brand_images.py), on ckdocs's colour tokens. */
+:root {
+  --accent: #16206b;
+  --tint: #e6f6f4;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme=light]) {
+    --accent: #5eead4;
+    --tint: #0f2a3a;
+  }
+}
+:root[data-theme=dark] {
+  --accent: #5eead4;
+  --tint: #0f2a3a;
+}
+
+/* The hero is 320x180 pixel art stored at 4x: keep its pixels hard edged. */
+.layout-home .hero img {
+  image-rendering: pixelated;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(27, 18, 54, 0.35);
+}

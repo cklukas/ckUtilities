@@ -7,7 +7,7 @@ build_dir="${CKTOOLS_DOCS_BUILD_DIR:-$project_root/build/docs}"
 ckvision_source="${CKTOOLS_CKVISION_SOURCE_DIR:?CKTOOLS_CKVISION_SOURCE_DIR is required}"
 ckvision_prefix="${CKTOOLS_CKVISION_PREFIX:?CKTOOLS_CKVISION_PREFIX is required}"
 output_dir="$project_root/docs/generated/screenshots"
-expected_revision="338d950e7473c5fdd4f88ea6b37d9f842543ac15"
+expected_revision="57b379d0dddd6a3b517b614a4eb2d1a1c99b474b"
 actual_revision="$(git -C "$ckvision_source" rev-parse HEAD)"
 
 if [[ "$actual_revision" != "$expected_revision" ]]; then

@@ -21,4 +21,4 @@ the staged commands in three real terminal profiles.
 
 The exact SDK identity and CI input contract are recorded in
 [the baseline](ckvision-baseline.md). The package architecture and remaining
-release work are recorded in [the roadmap](../../tv_to_ckvision.md).
+release work are recorded in [the roadmap](https://github.com/cklukas/ckUtilities/blob/master/tv_to_ckvision.md).

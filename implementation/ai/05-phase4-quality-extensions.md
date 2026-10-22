@@ -33,7 +33,7 @@
 
 5. **Documentation & release readiness**
    1. Produce comprehensive admin + user guides detailing model management (`ckmodel`), offline operation, and troubleshooting. Update `docs/ai-design.md` appendices accordingly.
-   2. Ensure README and `COMPILE.md` mention the new AI tooling, optional backends, and required build flags.
+   2. Ensure README and `docs/building.md` mention the new AI tooling, optional backends, and required build flags.
    3. Add upgrade notes / migration steps for existing installations (e.g., config schema changes).
 
 6. **Packaging & CI hardening**

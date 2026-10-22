@@ -1,5 +1,7 @@
 # CK Utilities
 
+**Documentation:** <https://cklukas.github.io/ckUtilities/>
+
 ![CK Utilities launcher](docs/generated/screenshots/ck-utilities-launcher.svg)
 ![JSON View](docs/generated/screenshots/ck-json-view.svg)
 ![Markdown editor](docs/generated/screenshots/ck-edit.svg)
@@ -121,4 +123,4 @@ cmake --build build/native
 ./build/native/bin/ck-find --help
 ```
 
-For build, packaging, and test details, see [COMPILE.md](COMPILE.md).
+For build, packaging, and test details, see [Building from source](docs/building.md).

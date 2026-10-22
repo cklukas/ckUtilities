@@ -5,7 +5,7 @@
 ## Prerequisites
 
 * Read `docs/ai-design.md` sections 1–5 and 9–12.
-* Understand the build flow in `COMPILE.md` (CMake presets, library layout, packaging via CPack).
+* Understand the build flow in `docs/building.md` (CMake presets, library layout, packaging via CPack).
 * Ensure you have local write access to the `third_party/` directory and can update CMake toolchain files.
 
 ## Implementation Steps

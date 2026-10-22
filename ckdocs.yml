@@ -1,0 +1,48 @@
+# The documentation site, built by ckdocs (the documentation-site generator
+# of ck-git-hosting) from docs/, and published on GitHub Pages by
+# .github/workflows/pages.yml. docs/index.md is the home page. The hero and
+# the logo come from tools/docgen/generate_brand_images.py; the tool
+# screenshots from tools/docgen/generate_screenshots.sh.
+version: 1
+site:
+  title: CK Utilities
+  description: Focused terminal applications for finding files, inspecting JSON, understanding disk usage, editing Markdown, managing settings, and chatting with local AI models.
+  logo: docs/images/logo.svg
+  favicon: docs/images/logo.svg
+  stylesheet: docs/site.css
+  footer: "© 2026 C. Klukas · GNU General Public License v3"
+  links:
+    - title: GitHub
+      url: https://github.com/cklukas/ckUtilities
+      icon: github
+    - title: Releases
+      url: https://github.com/cklukas/ckUtilities/releases
+    - title: ckVision
+      url: https://cklukas.github.io/ckVision/
+search: true
+nav:
+  - title: Home
+    page: docs/index.md
+  - title: Installation
+    page: docs/installation.md
+  - title: Tools
+    pages:
+      - docs/tools/ck-utilities.md
+      - docs/tools/json-view.md
+      - docs/tools/ck-find.md
+      - docs/tools/ck-du.md
+      - docs/tools/ck-edit.md
+      - docs/markdown-commands.md
+      - docs/tools/ck-chat.md
+      - docs/tools/ck-config.md
+  - title: Development
+    pages:
+      - docs/building.md
+      - docs/ai-design.md
+      - docs/migration/ckvision-baseline.md
+      - docs/migration/ckvision-1.3.0-validation.md
+      - docs/migration/ckvision-0.1.8-validation.md
+      - docs/migration/ckutilities-0.1.1-homebrew-validation.md
+      - docs/migration/native-executables.md
+      - docs/migration/action-policies.md
+      - docs/migration/traceability.md

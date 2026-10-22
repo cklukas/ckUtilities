@@ -9,8 +9,8 @@ import re
 import textwrap
 
 
-CKVISION_URL = "https://github.com/cklukas/ckVision/archive/338d950e7473c5fdd4f88ea6b37d9f842543ac15.tar.gz"
-CKVISION_SHA256 = "fcded487cff6c55782c1723df659cef16abb8c1fcd0b4a95366a6b554f07fc6d"
+CKVISION_URL = "https://github.com/cklukas/ckVision/archive/57b379d0dddd6a3b517b614a4eb2d1a1c99b474b.tar.gz"
+CKVISION_SHA256 = "f9d54bc52541919c6d5700d32801432e0b258dc3c49f99a1b458caf952509508"
 
 
 LLAMA_CPP_URL = (

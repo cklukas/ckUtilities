@@ -1,0 +1,66 @@
+# The documentation site: ckdocs, the documentation-site generator of
+# ck-git-hosting, builds docs/ with ckdocs.yml and publishes it on GitHub
+# Pages. ckdocs is installed from the pinned ck-git-hosting release's Debian
+# package, which must match the SHA-256 recorded here. The site is built only
+# from a commit whose CI workflow succeeded; `--strict` fails the build on a
+# broken link, a heading fragment, or a page the navigation does not list.
+name: pages
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  CKDOCS_REPOSITORY: cklukas/ck-git-hosting
+  CKDOCS_VERSION: 0.8.1
+  CKDOCS_SHA256: 054a447ca09f9602e926fea186b68c1848a75f7c95904cbfe6b32f64b4aecfe6
+
+jobs:
+  build:
+    name: Build the site
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Install ckdocs
+        run: |
+          deb="$RUNNER_TEMP/ckdocs_${CKDOCS_VERSION}_amd64.deb"
+          curl --fail --location --silent --show-error --retry 3 --output "$deb" \
+            "https://github.com/$CKDOCS_REPOSITORY/releases/download/v$CKDOCS_VERSION/ckdocs_${CKDOCS_VERSION}_amd64.deb"
+          echo "$CKDOCS_SHA256  $deb" | sha256sum --check --strict
+          sudo dpkg --install "$deb"
+          ckdocs --version
+          ckdocs --version | grep -F "ckdocs $CKDOCS_VERSION"
+      - name: Build the site
+        run: ckdocs build --root "$PWD" --out "$RUNNER_TEMP/site" --strict
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

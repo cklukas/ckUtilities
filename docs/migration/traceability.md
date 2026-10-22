@@ -20,4 +20,4 @@ returning to the product branch.
 
 Framework improvements require a separate problem statement, public contract,
 focused framework coverage, and one adopting-product scenario before a native
-package may depend on them. See [the roadmap](../../tv_to_ckvision.md).
+package may depend on them. See [the roadmap](https://github.com/cklukas/ckUtilities/blob/master/tv_to_ckvision.md).

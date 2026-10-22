@@ -1,4 +1,4 @@
-# ckUtilities build, verification, and packaging
+# Building from source
 
 ckUtilities is a ckVision-native C++20 suite. Every build requires an
 installed `ckvision::cvision` CMake package; a neighbouring ckVision source
@@ -49,8 +49,8 @@ archive on macOS:
 cmake --build build/pkg --target package
 ```
 
-GitHub Actions checks out and builds the immutable ckVision 0.1.8 revision
-`338d950e7473c5fdd4f88ea6b37d9f842543ac15` on each Linux and macOS runner,
+GitHub Actions checks out and builds the immutable ckVision 1.3.0 revision
+`57b379d0dddd6a3b517b614a4eb2d1a1c99b474b` on each Linux and macOS runner,
 then configures ckUtilities exclusively against that installed SDK. No
 repository variables or prebuilt framework archive are required.
 
@@ -69,7 +69,7 @@ ckVision's `HeadlessTerminal`, then uses ckVision's SVG renderer to record the
 decoded display.
 
 To regenerate them, point the script at the installed SDK and the matching
-ckVision 0.1.8 source checkout:
+ckVision 1.3.0 source checkout:
 
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
@@ -79,3 +79,24 @@ tools/docgen/generate_screenshots.sh
 
 CI and release verification regenerate these files and fail if the tracked
 SVGs differ.
+
+## Site images
+
+The documentation site's hero (`docs/images/hero.png`, 320x180 pixel art
+stored at 4x) and its logo and favicon (`docs/images/logo.svg`) are
+generated, deterministic artwork:
+
+```sh
+python3 tools/docgen/generate_brand_images.py
+```
+
+## Documentation site
+
+The site is built by ckdocs 0.8.1 from `ckdocs.yml`; the
+`pages` workflow publishes it to GitHub Pages after CI succeeds on `master`.
+Preview and check it locally with:
+
+```sh
+ckdocs serve --root .
+ckdocs check --root .
+```

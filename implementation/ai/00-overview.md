@@ -1,13 +1,13 @@
 # AI Backend Implementation Plan — Overview
 
-This directory contains the implementation playbooks for turning the concepts in `docs/ai-design.md`, `README.md`, `COMPILE.md`, and `IDEA.md` into an offline-first AI backend for CkTools.
+This directory contains the implementation playbooks for turning the concepts in `docs/ai-design.md`, `README.md`, `docs/building.md`, and `IDEA.md` into an offline-first AI backend for CkTools.
 
 ## Guiding Principles
 
 1. **Offline by default** — all inference runs locally; only allow manual model downloads.
 2. **Minimal dependencies** — reuse existing build + packaging tooling and vendor only what we must (e.g., `llama.cpp`).
 3. **C++-first integration** — expose AI capabilities through `libckai_*` libraries, consistent with our current monorepo layout and CMake workflows.
-4. **Reproducible & testable** — every phase must add tests and CI hooks as described in `COMPILE.md`.
+4. **Reproducible & testable** — every phase must add tests and CI hooks as described in `docs/building.md`.
 5. **Package-ready** — update CPack + distro specs alongside new binaries so `.deb`, `.rpm`, and tarball builds keep working.
 
 ## Phase Structure
@@ -24,7 +24,7 @@ Each document contains:
 
 * **Prerequisites** — what must be ready before you start.
 * **Implementation steps** — ordered tasks with file paths, build targets, and code integration notes.
-* **Validation checklist** — commands to run (build, tests, packaging) per `COMPILE.md`.
+* **Validation checklist** — commands to run (build, tests, packaging) per `docs/building.md`.
 * **Deliverables** — artifacts or code expected in the PR for that phase.
 
 > ⚠️ Do not skip ahead. Later phases assume the interfaces, configs, and packaging from earlier steps are in place.
