@@ -15,7 +15,7 @@ inline constexpr std::string_view kSuiteVersion = CK_UTILITIES_VERSION;
 inline constexpr std::string_view kCopyrightNotice =
     "Copyright (c) 2026 C. Klukas. All rights reserved.";
 
-// "ck-todo 0.1.1 (ckVision 1.3.0)" -- what --version prints.
+// "ck-todo 0.2.0 (ckVision 1.3.0)" -- what --version prints.
 inline std::string version_line(std::string_view tool) {
     return std::string(tool) + " " + std::string(kSuiteVersion) + " (ckVision " +
            std::string(ckv::version_string()) + ")";
