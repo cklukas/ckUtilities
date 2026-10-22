@@ -10,16 +10,14 @@ target_include_directories(ck_vision_find
 target_compile_features(ck_vision_find PUBLIC cxx_std_20)
 target_link_libraries(ck_vision_find PUBLIC ck_vision_shell ck_vision_keymap ck_find_core)
 
-if(UNIX)
-  add_executable(ckfind_ckvision main.cpp)
-  target_compile_features(ckfind_ckvision PRIVATE cxx_std_20)
-  target_link_libraries(ckfind_ckvision PRIVATE ck_vision_find ck_vision_keymap)
-  set_target_properties(ckfind_ckvision PROPERTIES
-    OUTPUT_NAME "ck-find"
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
-  )
-  install(TARGETS ckfind_ckvision RUNTIME DESTINATION bin)
-endif()
+add_executable(ckfind_ckvision main.cpp)
+target_compile_features(ckfind_ckvision PRIVATE cxx_std_20)
+target_link_libraries(ckfind_ckvision PRIVATE ck_vision_host ck_vision_find ck_vision_keymap)
+set_target_properties(ckfind_ckvision PROPERTIES
+  OUTPUT_NAME "ck-find"
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+)
+install(TARGETS ckfind_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_find_tests tests/find_app_tests.cpp)

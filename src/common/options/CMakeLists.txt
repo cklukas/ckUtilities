@@ -14,8 +14,8 @@ target_compile_features(ck_options PUBLIC cxx_std_20)
 
 install(TARGETS ck_options
   ARCHIVE DESTINATION lib
-)
+  COMPONENT Development)
 
 install(FILES ${PROJECT_SOURCE_DIR}/include/ck/options.hpp
   DESTINATION include/ck
-)
+  COMPONENT Development)

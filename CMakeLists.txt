@@ -78,11 +78,14 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
-install(FILES README.md DESTINATION share/doc/ck-utilities)
-install(FILES LICENSE DESTINATION share/licenses/ck-utilities)
-install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs)
+install(FILES README.md DESTINATION share/doc/ck-utilities COMPONENT Runtime)
+install(FILES LICENSE DESTINATION share/licenses/ck-utilities COMPONENT Runtime)
+install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs COMPONENT Runtime)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/packaging/CPackConfig.cmake")
 cktools_add_ckvision_archive_verification()
 cktools_add_ckvision_terminal_verification()
 cktools_add_ckvision_rehearsal_verification()
+
+include(CkToolsWindowsManifest)
+cktools_embed_windows_manifests()

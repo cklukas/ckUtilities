@@ -46,7 +46,7 @@ set_target_properties(cksysmon_ckvision PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
 )
 cktools_strict(cksysmon_ckvision)
-install(TARGETS cksysmon_ckvision RUNTIME DESTINATION bin)
+install(TARGETS cksysmon_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   set(_ck_sysmon_suites test_sysmon.cpp test_sysmon_native.cpp)

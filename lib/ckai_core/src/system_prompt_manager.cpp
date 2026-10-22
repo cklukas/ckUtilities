@@ -1,4 +1,5 @@
 #include "ck/ai/system_prompt_manager.hpp"
+#include "user_directories.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -38,11 +39,7 @@ SystemPrompt normalize_prompt(SystemPrompt prompt) {
 } // namespace
 
 SystemPromptManager::SystemPromptManager() {
-  const char *home = std::getenv("HOME");
-  if (home)
-    base_directory_ = std::filesystem::path(home) / ".local" / "share" / "cktools";
-  else
-    base_directory_ = std::filesystem::current_path();
+  base_directory_ = detail::data_directory();
 
   std::filesystem::create_directories(base_directory_ / "prompts");
   load();

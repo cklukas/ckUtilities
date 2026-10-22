@@ -206,3 +206,38 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/release/ck-utilities.rb
+
+  release-windows:
+    name: Publish Windows archive
+    needs: release-tests
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Checkout pinned ckVision 1.3.0 source
+        uses: actions/checkout@v5
+        with:
+          repository: cklukas/ckVision
+          ref: 57b379d0dddd6a3b517b614a4eb2d1a1c99b474b
+          path: .deps/ckvision
+          persist-credentials: false
+
+      - name: Build, test and package
+        run: >
+          ./scripts/windows/build-and-package.ps1
+          -CkVisionSource "$env:GITHUB_WORKSPACE/.deps/ckvision"
+          -WorkRoot "$env:RUNNER_TEMP/ck-utilities"
+
+      - name: Attach Windows archive
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ runner.temp }}/ck-utilities/packages/*.zip
+            ${{ runner.temp }}/ck-utilities/packages/*.zip.sha256

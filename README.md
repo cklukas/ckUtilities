@@ -35,7 +35,7 @@ own discretion; the legal terms are in [LICENSE](LICENSE).
 | `ck-todo` | Organize tasks on Kanban boards with notes, due dates, archives, and safe sharing between running copies. |
 | `ck-sysmon` | Watch CPU, memory, GPU, and loaded Ollama models on this machine and on passwordless SSH hosts. |
 
-CK Utilities runs on macOS and Linux. A Windows version is not available yet.
+CK Utilities runs on macOS, Linux, and Windows.
 
 ## Install
 
@@ -88,8 +88,10 @@ If already installed, run `brew update` and
 
 ### Windows
 
-There is no Windows installer, WinGet manifest, or binary download yet. Use a
-macOS or Linux download for now.
+Download `ck-utilities-<version>-windows-x64.zip` from the release page,
+extract it, and add its `bin` folder to your user `PATH`. Each tool is a single
+self-contained `.exe`; Windows 10 version 1903 or later is required. See the
+[installation guide](docs/installation.md#windows).
 
 ## Tool guides
 

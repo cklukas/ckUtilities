@@ -44,6 +44,14 @@ include("${CMAKE_CURRENT_LIST_DIR}/VerifyCkVisionProductTree.cmake")
 set(CKTOOLS_INSTALL_PREFIX "${CKTOOLS_PRODUCT_PREFIX}")
 include("${CMAKE_CURRENT_LIST_DIR}/VerifyCkVisionCutover.cmake")
 
+# A product archive is the executables and their documentation: no
+# development headers or libraries, ours or a dependency's.
+foreach(_cktools_development_path "${CKTOOLS_PRODUCT_PREFIX}/include" "${CKTOOLS_PRODUCT_PREFIX}/lib")
+  if(EXISTS "${_cktools_development_path}")
+    message(FATAL_ERROR "Development payload was packaged: ${_cktools_development_path}")
+  endif()
+endforeach()
+
 foreach(_cktools_forbidden_test_path
     "${CKTOOLS_PRODUCT_PREFIX}/include/gtest"
     "${CKTOOLS_PRODUCT_PREFIX}/include/gmock"

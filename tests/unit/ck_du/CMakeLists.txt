@@ -12,4 +12,5 @@ target_include_directories(ck_du_core_tests
   PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include
+    ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src
 )

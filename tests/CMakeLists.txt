@@ -18,3 +18,19 @@ enable_testing()
 add_subdirectory(unit)
 
 add_subdirectory(integration)
+
+# Windows: every tool starts in a real ConPTY pseudo-console, draws, and quits
+# through Alt+X - the counterpart of the POSIX terminal-profile verification.
+if(WIN32)
+  add_executable(ck_windows_tools_contract windows/windows_tools_contract.cpp)
+  target_link_libraries(ck_windows_tools_contract PRIVATE ck_vision_cktest_main ckvision::cvision)
+  target_compile_definitions(ck_windows_tools_contract PRIVATE
+    CKTOOLS_TOOL_BINARY_DIR="${PROJECT_BINARY_DIR}/bin")
+  cktools_strict(ck_windows_tools_contract)
+  add_dependencies(ck_windows_tools_contract
+    ckutilities_ckvision ckjsonview_ckvision ckfind_ckvision ckdu_ckvision ckedit_ckvision
+    ckchat_ckvision cktodo_ckvision cksysmon_ckvision ckconfig_ckvision)
+  add_test(NAME ck_windows_tools_contract COMMAND ck_windows_tools_contract)
+  set_tests_properties(ck_windows_tools_contract PROPERTIES
+    LABELS "platform;windows;native" TIMEOUT 300)
+endif()

@@ -51,6 +51,11 @@ inline std::optional<std::filesystem::path> locateProgramPath(const std::filesys
                                                               const ck::appinfo::ToolInfo &info)
 {
     std::filesystem::path programPath = (toolDirectory / std::filesystem::path(info.executable)).lexically_normal();
+#if defined(_WIN32)
+    // Tool executables are named ck-du.exe and so on.
+    if (!programPath.has_extension())
+        programPath += ".exe";
+#endif
 
     std::error_code existsEc;
     if (!std::filesystem::exists(programPath, existsEc))

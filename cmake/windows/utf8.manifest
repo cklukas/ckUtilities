@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Copyright (c) 2026 C. Klukas. All rights reserved. -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Every CK Utilities executable runs with UTF-8 as its process code page
+     (Windows 10 version 1903 and later), so narrow strings - paths from
+     std::filesystem::path::string(), fopen, the C runtime - are UTF-8 as on
+     macOS and Linux, and file names outside the system's legacy code page
+     survive. -->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>

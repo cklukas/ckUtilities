@@ -1,7 +1,9 @@
 #include "ck/ai/model_manager.hpp"
 
+#include "http_download.hpp"
+#include "user_directories.hpp"
+
 #include <chrono>
-#include <curl/curl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -178,42 +180,11 @@ const std::vector<ModelInfo> CURATED_MODELS = {
      8192, recommended_response_tokens(8192), recommended_summary_trigger(8192),
      {}}};
 
-// CURL write callback for downloads
-size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-  size_t total_size = size * nmemb;
-  std::ofstream *file = static_cast<std::ofstream *>(userp);
-  file->write(static_cast<char *>(contents), total_size);
-  return total_size;
-}
-
-// CURL progress callback
-int ProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
-                     curl_off_t ultotal, curl_off_t ulnow) {
-  auto *callback_data =
-      static_cast<std::pair<CancellableModelDownloadProgressCallback,
-                            std::string> *>(clientp);
-  if (callback_data && callback_data->first) {
-    ModelDownloadProgress progress;
-    progress.model_id = callback_data->second;
-    progress.bytes_downloaded = static_cast<std::size_t>(dlnow);
-    progress.total_bytes = static_cast<std::size_t>(dltotal);
-    progress.is_complete = (dltotal > 0 && dlnow >= dltotal);
-    progress.progress_percentage =
-        (dltotal > 0) ? (static_cast<double>(dlnow) / dltotal) * 100.0 : 0.0;
-    progress.error_message.clear();
-    return callback_data->first(progress) ? 0 : 1;
-  }
-  return 0;
-}
 } // namespace
 
 ModelManager::ModelManager() {
-  // Initialize CURL
-  curl_global_init(CURL_GLOBAL_DEFAULT);
-
   // Set default models directory
-  std::filesystem::path home = std::getenv("HOME") ? std::getenv("HOME") : ".";
-  models_directory_ = home / ".local" / "share" / "cktools" / "models" / "llm";
+  models_directory_ = detail::data_directory() / "models" / "llm";
 
   // Create models directory if it doesn't exist
   std::filesystem::create_directories(models_directory_);
@@ -223,7 +194,7 @@ ModelManager::ModelManager() {
   load_configuration();
 }
 
-ModelManager::~ModelManager() { curl_global_cleanup(); }
+ModelManager::~ModelManager() = default;
 
 std::vector<ModelInfo> ModelManager::get_available_models() const {
   return available_models_;
@@ -535,71 +506,36 @@ bool ModelManager::download_file(
     const std::string &url, const std::filesystem::path &destination,
     CancellableModelDownloadProgressCallback progress_callback,
     const std::string &model_id, std::string *error_message) {
-  CURL *curl = curl_easy_init();
-  if (!curl) {
-    if (error_message)
-      *error_message = "Failed to initialize CURL";
-    return false;
-  }
-
   std::ofstream file(destination, std::ios::binary);
   if (!file.is_open()) {
-    curl_easy_cleanup(curl);
     if (error_message)
       *error_message =
           "Failed to open destination file: " + destination.string();
     return false;
   }
 
-  auto callback_data = std::make_pair(std::move(progress_callback), model_id);
-
-  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &file);
-  curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-  curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, ProgressCallback);
-  curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &callback_data);
-
-  // Add timeout and connection settings
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L); // No timeout
-  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT,
-                   30L); // 30 second connection timeout
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1000L); // 1KB/s minimum
-  curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME,
-                   60L); // Abort if below speed for 60s
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, "ck-utilities/1.0");
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-
-  CURLcode res = curl_easy_perform(curl);
+  const detail::HttpProgress progress = [&](std::uint64_t received, std::uint64_t total) {
+    if (!progress_callback)
+      return true;
+    ModelDownloadProgress report;
+    report.model_id = model_id;
+    report.bytes_downloaded = static_cast<std::size_t>(received);
+    report.total_bytes = static_cast<std::size_t>(total);
+    report.is_complete = total > 0 && received >= total;
+    report.progress_percentage =
+        total > 0 ? (static_cast<double>(received) / static_cast<double>(total)) * 100.0 : 0.0;
+    return progress_callback(report);
+  };
+  const detail::HttpDownloadResult result = detail::http_download(url, file, progress);
   file.close();
 
-  long response_code = 0;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-  bool success = (res == CURLE_OK && response_code == 200);
-
-  if (!success && error_message) {
-    if (res == CURLE_ABORTED_BY_CALLBACK) {
-      *error_message = "Download cancelled";
-    } else if (res != CURLE_OK) {
-      const char *curl_error = curl_easy_strerror(res);
-      *error_message =
-          curl_error ? std::string(curl_error) : "unknown curl error";
-    } else if (response_code != 200) {
-      *error_message = "HTTP error: " + std::to_string(response_code);
-    }
-  }
-
-  curl_easy_cleanup(curl);
-
-  if (!success) {
+  if (!result.ok) {
+    if (error_message)
+      *error_message = result.error;
     std::error_code ec;
     std::filesystem::remove(destination, ec);
   }
-
-  return success;
+  return result.ok;
 }
 
 std::string ModelManager::generate_model_id(const std::string &name) const {

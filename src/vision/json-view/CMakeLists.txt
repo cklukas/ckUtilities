@@ -23,13 +23,13 @@ add_executable(ckjsonview_ckvision
 )
 
 target_compile_features(ckjsonview_ckvision PRIVATE cxx_std_20)
-target_link_libraries(ckjsonview_ckvision PRIVATE ck_vision_json_view ck_vision_keymap)
+target_link_libraries(ckjsonview_ckvision PRIVATE ck_vision_host ck_vision_json_view ck_vision_keymap)
 set_target_properties(ckjsonview_ckvision PROPERTIES
   OUTPUT_NAME "ck-json-view"
   RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
 )
 
-install(TARGETS ckjsonview_ckvision RUNTIME DESTINATION bin)
+install(TARGETS ckjsonview_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_json_view_tests

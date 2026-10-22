@@ -57,7 +57,7 @@ TEST(SearchBackend, ExecutesSpecificationWithoutExternalFind)
     }
 
     auto spec = ck::find::makeDefaultSpecification();
-    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.c_str());
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.string().c_str());
     std::snprintf(spec.searchText.data(), spec.searchText.size(), "%s", "hello");
     spec.textOptions.searchInContents = true;
     spec.textOptions.searchInFileNames = false;
@@ -92,7 +92,7 @@ TEST(SearchBackend, ReportsCancellationAtTraversalBoundaries)
     }
 
     auto spec = ck::find::makeDefaultSpecification();
-    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.c_str());
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.string().c_str());
     bool cancel = false;
     ck::find::SearchExecutionOptions options;
     options.captureMatches = true;

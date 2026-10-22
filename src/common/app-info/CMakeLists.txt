@@ -12,9 +12,9 @@ target_compile_features(ck_app_info PUBLIC cxx_std_20)
 
 install(TARGETS ck_app_info
   ARCHIVE DESTINATION lib
-)
+  COMPONENT Development)
 
 install(FILES ${PROJECT_SOURCE_DIR}/include/ck/app_info.hpp
   DESTINATION include/ck
-)
+  COMPONENT Development)
 

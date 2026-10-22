@@ -175,3 +175,40 @@ jobs:
           name: ck-utilities-macos-archive
           if-no-files-found: error
           path: build/pkg/*.tar.gz
+
+  windows:
+    name: Windows build, test and archive (x64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Checkout pinned ckVision 1.3.0 source
+        uses: actions/checkout@v5
+        with:
+          repository: cklukas/ckVision
+          ref: 57b379d0dddd6a3b517b614a4eb2d1a1c99b474b
+          path: .deps/ckvision
+          persist-credentials: false
+
+      # Builds the pinned ckVision SDK and the suite (MSVC, Ninja, Release,
+      # static runtime), runs every CTest suite including the ConPTY contract
+      # that starts and quits each tool, then packages and checks the ZIP.
+      - name: Build, test and package
+        run: >
+          ./scripts/windows/build-and-package.ps1
+          -CkVisionSource "$env:GITHUB_WORKSPACE/.deps/ckvision"
+          -WorkRoot "$env:RUNNER_TEMP/ck-utilities"
+
+      - name: Upload Windows archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: ck-utilities-windows-archive
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/ck-utilities/packages/*.zip
+            ${{ runner.temp }}/ck-utilities/packages/*.zip.sha256

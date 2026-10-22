@@ -42,5 +42,16 @@ if(NOT TARGET llama)
     GIT_SHALLOW    TRUE
   )
 
+  # Static llama and ggml libraries: every tool stays one self-contained
+  # executable, with no shared library to locate at run time (Windows has no
+  # rpath). llama.cpp's BUILD_SHARED_LIBS option defers to this variable
+  # (CMP0077), and googletest, configured later, builds static as well.
+  set(BUILD_SHARED_LIBS OFF)
+  # llama.cpp is written for C++17; under the suite's C++20, MSVC types its
+  # u8"" literals as char8_t and the build fails. The standard is scoped to
+  # this subproject and restored afterwards.
+  set(_ck_saved_cxx_standard "${CMAKE_CXX_STANDARD}")
+  set(CMAKE_CXX_STANDARD 17)
   FetchContent_MakeAvailable(llama_cpp)
+  set(CMAKE_CXX_STANDARD "${_ck_saved_cxx_standard}")
 endif()

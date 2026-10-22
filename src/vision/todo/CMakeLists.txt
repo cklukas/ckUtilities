@@ -31,7 +31,7 @@ if(MINGW)
   target_link_options(cktodo_ckvision PRIVATE -municode)
 endif()
 cktools_strict(cktodo_ckvision)
-install(TARGETS cktodo_ckvision RUNTIME DESTINATION bin)
+install(TARGETS cktodo_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   set(_ck_todo_suites

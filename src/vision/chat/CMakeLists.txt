@@ -3,21 +3,20 @@ target_include_directories(ck_vision_chat PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(ck_vision_chat PUBLIC cxx_std_20)
 target_link_libraries(ck_vision_chat PUBLIC ck_vision_shell ck_vision_keymap ck_markdown_core ckai_core ck_chat_options)
 
-if(UNIX)
-  add_executable(ckchat_ckvision main.cpp)
-  target_compile_features(ckchat_ckvision PRIVATE cxx_std_20)
-  target_link_libraries(ckchat_ckvision PRIVATE ck_vision_chat ck_vision_keymap)
-  set_target_properties(ckchat_ckvision PROPERTIES
-    OUTPUT_NAME "ck-chat"
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
-  )
-  install(TARGETS ckchat_ckvision RUNTIME DESTINATION bin)
-endif()
+add_executable(ckchat_ckvision main.cpp)
+target_compile_features(ckchat_ckvision PRIVATE cxx_std_20)
+target_link_libraries(ckchat_ckvision PRIVATE ck_vision_host ck_vision_chat ck_vision_keymap)
+set_target_properties(ckchat_ckvision PROPERTIES
+  OUTPUT_NAME "ck-chat"
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+)
+install(TARGETS ckchat_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_chat_tests tests/chat_app_tests.cpp)
   target_compile_features(ck_vision_chat_tests PRIVATE cxx_std_20)
   target_link_libraries(ck_vision_chat_tests PRIVATE ck_vision_chat)
+  target_include_directories(ck_vision_chat_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/support)
   add_test(NAME ck_vision_chat_tests COMMAND ck_vision_chat_tests)
   set_tests_properties(ck_vision_chat_tests PROPERTIES LABELS "ckvision-migration;chat")
 endif()

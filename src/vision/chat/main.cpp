@@ -1,22 +1,25 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <vector>
 
-#include <cvision/term/posix_clock.hpp>
-#include <cvision/term/posix_terminal.hpp>
 
 #include "ck/ai/model_manager.hpp"
 #include "ck/ai/system_prompt_manager.hpp"
 #include "ck/vision/keymap.hpp"
+#include "native_host.hpp"
 #include "chat_app.hpp"
 #include "chat_options.hpp"
 #include "chat_startup_options.hpp"
 
-int main(int argc, char **argv)
+namespace
 {
-    if (argc > 1 && (std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h"))
+
+int run(const std::vector<std::string> &args)
+{
+    if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
-        std::printf("Usage: %s\n", argc > 0 ? argv[0] : "ck-chat-ckvision");
+        std::printf("Usage: %s\n", args.empty() ? "ck-chat" : args[0].c_str());
         return 0;
     }
     ck::config::OptionRegistry optionsRegistry("ck-chat");
@@ -26,8 +29,8 @@ int main(int argc, char **argv)
         ck::vision::chatStartupSelectionFromRegistry(optionsRegistry);
     const ck::vision::ChatMarkdownOptions markdownOptions =
         ck::vision::chatMarkdownOptionsFromRegistry(optionsRegistry);
-    ckv::term::PosixClock clock;
-    ckv::term::PosixTerminal terminal(clock);
+    ck::host::NativeClock clock;
+    ck::host::NativeTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
     ck::vision::DefaultKeymapPersistence keymap_persistence;
     ck::vision::KeymapController keymap("ck-chat", application.commands(), keymap_persistence);
@@ -43,4 +46,15 @@ int main(int argc, char **argv)
     keymap.load();
     application.run();
     return 0;
+}
+
+} // namespace
+
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **argv)
+#else
+int main(int argc, char **argv)
+#endif
+{
+    return run(ck::host::native_arguments(argc, argv));
 }

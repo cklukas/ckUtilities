@@ -1,4 +1,5 @@
 #include "ck/ai/config.hpp"
+#include "user_directories.hpp"
 
 #include <cctype>
 #include <charconv>
@@ -63,15 +64,7 @@ std::optional<long long> parse_integer(const std::string &value)
 
 std::filesystem::path ConfigLoader::default_config_path()
 {
-    std::filesystem::path config_home;
-    if (const char *xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
-        config_home = xdg;
-    else if (const char *home = std::getenv("HOME"); home && *home)
-        config_home = std::filesystem::path(home) / ".config";
-    else
-        config_home = std::filesystem::current_path();
-
-    return config_home / "cktools" / "ckai.toml";
+    return detail::config_directory() / "ckai.toml";
 }
 
 Config ConfigLoader::load_from_file(const std::filesystem::path &path)

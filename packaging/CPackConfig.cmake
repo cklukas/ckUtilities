@@ -17,6 +17,16 @@ if(APPLE)
   # near-empty archive) because the staged install ends up under a sibling
   # directory named with a trailing dot.
   set(CPACK_PACKAGING_INSTALL_PREFIX "")
+elseif(WIN32)
+  # A portable archive: bin\ holds the nine self-contained executables (static
+  # C runtime, static llama), so nothing else needs installing.
+  set(CPACK_GENERATOR "ZIP")
+  set(_cpack_windows_arch "x64")
+  if(CMAKE_CXX_COMPILER_ARCHITECTURE_ID MATCHES "[Aa][Rr][Mm]64")
+    set(_cpack_windows_arch "arm64")
+  endif()
+  set(CPACK_PACKAGE_FILE_NAME "ck-utilities-${CPACK_PACKAGE_VERSION}-windows-${_cpack_windows_arch}")
+  set(CPACK_PACKAGING_INSTALL_PREFIX "")
 else()
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
   string(TOLOWER "${CMAKE_SYSTEM_NAME}" _cpack_system)
@@ -24,6 +34,20 @@ else()
 endif()
 
 set(CPACK_SOURCE_GENERATOR "TGZ")
+
+# Packages hold the product only: the executables, documentation, license and
+# sample configuration (component Runtime). Domain-library headers and
+# archives (Development) and fetched dependencies' install rules (llama.cpp,
+# ggml) are never packaged.
+set(CPACK_COMPONENTS_ALL Runtime)
+# Component selection applies only when generators install by component;
+# grouping keeps it one package per format, named as before.
+set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+set(CPACK_DEB_COMPONENT_INSTALL ON)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+# Archives get a top-level folder, DEB and RPM do not: decided per generator.
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_CURRENT_LIST_DIR}/CPackGeneratorOptions.cmake")
 
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "ckUtilities Maintainers")
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")

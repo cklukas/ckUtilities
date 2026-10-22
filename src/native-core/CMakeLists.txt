@@ -16,8 +16,16 @@ target_compile_features(ck_json_view_core PUBLIC cxx_std_20)
 
 add_library(ck_du_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src/disk_usage_core.cpp
+  ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src/disk_usage_glob.cpp
   ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src/disk_usage_options.cpp
 )
+# File metadata: lstat on POSIX; Win32 file information and security on Windows.
+if(WIN32)
+  target_sources(ck_du_core PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src/disk_usage_platform_windows.cpp)
+  target_link_libraries(ck_du_core PRIVATE advapi32)
+else()
+  target_sources(ck_du_core PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/src/disk_usage_platform_posix.cpp)
+endif()
 target_include_directories(ck_du_core
   PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/tools/ck-du/include>
@@ -78,18 +86,19 @@ target_include_directories(ck_markdown_table_core
 target_compile_features(ck_markdown_table_core PUBLIC cxx_std_20)
 target_link_libraries(ck_markdown_table_core PUBLIC ck_markdown_core)
 
-install(TARGETS ck_json_view_core ck_du_core ck_chat_options ck_find_core ck_markdown_core ck_markdown_table_core ARCHIVE DESTINATION lib)
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/json-view/include/ DESTINATION include
+install(TARGETS ck_json_view_core ck_du_core ck_chat_options ck_find_core ck_markdown_core ck_markdown_table_core ARCHIVE DESTINATION lib COMPONENT Development)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/json-view/include/ DESTINATION include COMPONENT Development
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include/ DESTINATION include
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include/ DESTINATION include COMPONENT Development
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include/ DESTINATION include
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/tools/ck-chat/include/ DESTINATION include COMPONENT Development
   FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 install(FILES
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_parser.hpp
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include/ck/edit/markdown_transformations.hpp
   ${PROJECT_SOURCE_DIR}/include/ck/edit/markdown_tables.hpp
-  DESTINATION include/ck/edit)
+  DESTINATION include/ck/edit
+  COMPONENT Development)
 
 if(BUILD_TESTING)
   add_executable(ck_markdown_table_core_tests markdown_tables_tests.cpp)

@@ -3,31 +3,22 @@
 #endif
 
 #include "disk_usage_core.hpp"
+#include "disk_usage_platform.hpp"
 
 #include <algorithm>
 #include <chrono>
-#include <cerrno>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <fcntl.h>
-#include <grp.h>
 #include <iomanip>
 #include <map>
 #include <unordered_map>
-#include <pwd.h>
 #include <sstream>
 #include <string>
 #include <unordered_set>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <system_error>
-#include <unistd.h>
 
-#if !defined(_WIN32)
-#include <fnmatch.h>
-#endif
 
 #if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
@@ -236,45 +227,25 @@ std::string mimeFromExtensionUTType(const std::string &ext)
 }
 #endif
 
-std::uintmax_t fileLogicalSize(const struct stat &sb)
-{
-    if (sb.st_size < 0)
-        return 0;
-    return static_cast<std::uintmax_t>(sb.st_size);
-}
-
-std::uintmax_t fileAllocatedBytes(const struct stat &sb)
-{
-#if defined(_WIN32)
-    return fileLogicalSize(sb);
-#else
-    if (sb.st_blocks < 0)
-        return 0;
-    return static_cast<std::uintmax_t>(sb.st_blocks) * 512ULL;
-#endif
-}
-
-SizeBreakdown computeSizeBreakdown(const fs::path &path, const struct stat &sb)
+SizeBreakdown computeSizeBreakdown(const fs::path &path, const platform::FileMetadata &sb)
 {
     SizeBreakdown breakdown;
-    breakdown.logicalSize = fileLogicalSize(sb);
-    breakdown.onDiskSize = fileAllocatedBytes(sb);
+    breakdown.logicalSize = sb.logicalSize;
+    breakdown.onDiskSize = sb.allocatedSize;
 
 #if defined(__APPLE__)
-#ifdef UF_OFFLINE
-    if ((sb.st_flags & UF_OFFLINE) != 0)
+    if (sb.offlinePlaceholder)
     {
         breakdown.isOfflinePlaceholder = true;
         breakdown.isICloudItem = true;
         breakdown.isICloudDownloaded = false;
     }
-#endif
     const std::string native = path.string();
     CFURLRef url = CFURLCreateFromFileSystemRepresentation(
         kCFAllocatorDefault,
         reinterpret_cast<const UInt8 *>(native.c_str()),
         static_cast<CFIndex>(native.size()),
-        S_ISDIR(sb.st_mode));
+        sb.isDirectory);
     if (url)
     {
         bool boolValue = false;
@@ -311,15 +282,6 @@ SizeBreakdown computeSizeBreakdown(const fs::path &path, const struct stat &sb)
     return breakdown;
 }
 
-int lstatCompat(const char *path, struct stat *sb)
-{
-#if defined(_WIN32)
-    return stat(path, sb);
-#else
-    return lstat(path, sb);
-#endif
-}
-
 std::string detectFileType(const fs::path &path)
 {
     std::string ext = extensionWithoutDot(path);
@@ -339,53 +301,6 @@ std::string detectFileType(const fs::path &path)
     return "application/x-" + ext;
 }
 
-bool hasNoDumpFlag(const struct stat &sb)
-{
-#ifdef UF_NODUMP
-    return (sb.st_flags & UF_NODUMP) != 0;
-#else
-    (void)sb;
-    return false;
-#endif
-}
-
-bool matchPattern(const std::string &pattern, const std::string &value)
-{
-#if !defined(_WIN32)
-    return fnmatch(pattern.c_str(), value.c_str(), 0) == 0;
-#else
-    const char *p = pattern.c_str();
-    const char *s = value.c_str();
-    const char *star = nullptr;
-    const char *ss = nullptr;
-    while (*s)
-    {
-        if (*p == '*')
-        {
-            star = p++;
-            ss = s;
-        }
-        else if (*p == '?' || *p == *s)
-        {
-            ++p;
-            ++s;
-        }
-        else if (star)
-        {
-            p = star + 1;
-            s = ++ss;
-        }
-        else
-        {
-            return false;
-        }
-    }
-    while (*p == '*')
-        ++p;
-    return *p == '\0';
-#endif
-}
-
 bool shouldIgnorePath(const fs::path &path, const ScanContext &context)
 {
     if (context.options.ignoreMasks.empty())
@@ -394,7 +309,7 @@ bool shouldIgnorePath(const fs::path &path, const ScanContext &context)
     std::string filename = path.filename().string();
     fs::path relativePath = path.lexically_relative(context.rootPath);
     std::string relativeString;
-    if (relativePath.empty() || relativePath.native() == ".")
+    if (relativePath.empty() || relativePath == fs::path("."))
         relativeString = filename;
     else
         relativeString = relativePath.generic_string();
@@ -403,9 +318,9 @@ bool shouldIgnorePath(const fs::path &path, const ScanContext &context)
     {
         if (pattern.empty())
             continue;
-        if (matchPattern(pattern, filename))
+        if (platform::glob_match(pattern, filename))
             return true;
-        if (!relativeString.empty() && matchPattern(pattern, relativeString))
+        if (!relativeString.empty() && platform::glob_match(pattern, relativeString))
             return true;
     }
     return false;
@@ -433,9 +348,10 @@ ScanContext makeScanContext(const fs::path &root, const BuildDirectoryTreeOption
 {
     ScanContext context{options};
     context.rootPath = root;
-    struct stat sb;
-    if (lstatCompat(root.c_str(), &sb) == 0)
-        context.rootDevice = static_cast<std::uintmax_t>(sb.st_dev);
+    platform::FileMetadata sb;
+    std::error_code statError;
+    if (platform::read_metadata(root, sb, statError))
+        context.rootDevice = sb.device;
     return context;
 }
 
@@ -460,20 +376,6 @@ std::string formatTimePoint(const std::chrono::system_clock::time_point &tp)
     return out.str();
 }
 
-std::string ownerName(uid_t uid)
-{
-    if (passwd *pw = getpwuid(uid))
-        return pw->pw_name;
-    return std::to_string(uid);
-}
-
-std::string groupName(gid_t gid)
-{
-    if (group *gr = getgrgid(gid))
-        return gr->gr_name;
-    return std::to_string(gid);
-}
-
 struct ScanCancelled
 {
 };
@@ -488,19 +390,20 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
     node.path = path;
     DirectoryStats stats{};
 
-    struct stat sb{};
-    bool haveStat = (lstatCompat(path.c_str(), &sb) == 0);
+    platform::FileMetadata sb;
+    std::error_code statError;
+    bool haveStat = platform::read_metadata(path, sb, statError);
     if (haveStat)
-        node.modifiedTime = std::chrono::system_clock::from_time_t(sb.st_mtime);
+        node.modifiedTime = sb.modified;
     else
         node.modifiedTime = std::chrono::system_clock::time_point{};
 
-    if (haveStat && context.options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+    if (haveStat && context.options.ignoreNodumpFlag && sb.noDump)
         return stats;
 
     if (haveStat && !context.options.countHardLinksMultipleTimes)
     {
-        FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+        FileIdentity identity{sb.device, sb.fileId};
         auto [it, inserted] = context.visited.insert(identity);
         if (!inserted)
             return stats;
@@ -546,19 +449,20 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
             continue;
         }
 
-        struct stat entryStat{};
-        if (lstatCompat(entryPath.c_str(), &entryStat) != 0)
+        platform::FileMetadata entryStat;
+        std::error_code statError;
+        if (!platform::read_metadata(entryPath, entryStat, statError))
         {
-            reportError(context, entryPath, std::error_code(errno, std::generic_category()));
+            reportError(context, entryPath, statError);
             continue;
         }
-        bool isSymlink = S_ISLNK(entryStat.st_mode);
+        bool isSymlink = entryStat.isSymlink;
 
-        if (context.options.ignoreNodumpFlag && hasNoDumpFlag(entryStat))
+        if (context.options.ignoreNodumpFlag && entryStat.noDump)
             continue;
 
         if (context.options.stayOnFilesystem && context.rootDevice != 0 &&
-            static_cast<std::uintmax_t>(entryStat.st_dev) != context.rootDevice)
+            entryStat.device != context.rootDevice)
         {
             continue;
         }
@@ -589,8 +493,8 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
             bool count = true;
             if (!context.options.countHardLinksMultipleTimes)
             {
-                FileIdentity identity{static_cast<std::uintmax_t>(entryStat.st_dev),
-                                       static_cast<std::uintmax_t>(entryStat.st_ino)};
+                FileIdentity identity{entryStat.device,
+                                       entryStat.fileId};
                 auto [it2, inserted] = context.visited.insert(identity);
                 count = inserted;
             }
@@ -611,7 +515,7 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
     return stats;
 }
 
-FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const struct stat &sb,
+FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const platform::FileMetadata &sb,
                         const SizeBreakdown &breakdown)
 {
     FileEntry entry;
@@ -628,26 +532,13 @@ FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const struct
     entry.isICloudDownloading = breakdown.isICloudDownloading;
     entry.iCloudStatus = breakdown.iCloudStatus;
 
-    entry.owner = ownerName(sb.st_uid);
-    entry.group = groupName(sb.st_gid);
-    entry.modifiedTime = std::chrono::system_clock::from_time_t(sb.st_mtime);
+    const auto [owner, group] = platform::owner_and_group(path, sb);
+    entry.owner = owner;
+    entry.group = group;
+    entry.modifiedTime = sb.modified;
     entry.modified = formatTimePoint(entry.modifiedTime);
-#if defined(__linux__) && defined(STATX_BTIME)
-    struct statx stx;
-    if (statx(AT_FDCWD, path.c_str(), AT_STATX_SYNC_AS_STAT, STATX_BTIME, &stx) == 0 &&
-        (stx.stx_mask & STATX_BTIME))
-    {
-        entry.createdTime =
-            std::chrono::system_clock::from_time_t(stx.stx_btime.tv_sec) +
-            std::chrono::nanoseconds(stx.stx_btime.tv_nsec);
-        entry.created = formatTimePoint(entry.createdTime);
-    }
-    else
-#endif
-    {
-        entry.createdTime = std::chrono::system_clock::from_time_t(sb.st_ctime);
-        entry.created = formatTimePoint(entry.createdTime);
-    }
+    entry.createdTime = sb.created;
+    entry.created = formatTimePoint(entry.createdTime);
 
     if (entry.displayPath.empty())
         entry.displayPath = path.filename().string();
@@ -742,19 +633,19 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
             options.progressCallback(path);
     };
 
-    auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+    auto considerFile = [&](const fs::path &path, const platform::FileMetadata &sb) {
         if (cancelRequested())
             return;
         if (shouldIgnorePath(path, context))
             return;
-        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+        if (options.ignoreNodumpFlag && sb.noDump)
             return;
         if (options.stayOnFilesystem && context.rootDevice != 0 &&
-            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            sb.device != context.rootDevice)
             return;
         if (!options.countHardLinksMultipleTimes)
         {
-            FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+            FileIdentity identity{sb.device, sb.fileId};
             auto [it, inserted] = context.visited.insert(identity);
             if (!inserted)
                 return;
@@ -765,13 +656,13 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
         files.push_back(makeFileEntry(path, scanPath, sb, breakdown));
     };
 
-    auto shouldSkipDirectory = [&](const fs::path &path, const struct stat &sb, bool isSymlink) {
+    auto shouldSkipDirectory = [&](const fs::path &path, const platform::FileMetadata &sb, bool isSymlink) {
         if (shouldIgnorePath(path, context))
             return true;
-        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+        if (options.ignoreNodumpFlag && sb.noDump)
             return true;
         if (options.stayOnFilesystem && context.rootDevice != 0 &&
-            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            sb.device != context.rootDevice)
             return true;
         if (isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
             return true;
@@ -805,16 +696,17 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
 
             reportProgress(path);
 
-            struct stat sb;
-            if (lstatCompat(path.c_str(), &sb) != 0)
+            platform::FileMetadata sb;
+            std::error_code statError;
+            if (!platform::read_metadata(path, sb, statError))
             {
-                reportError(context, path, std::error_code(errno, std::generic_category()));
+                reportError(context, path, statError);
                 continue;
             }
 
             std::error_code entryEc;
             bool isSymlink = entry.is_symlink(entryEc) && !entryEc;
-            bool isDirectory = S_ISDIR(sb.st_mode);
+            bool isDirectory = sb.isDirectory;
 
             if (isDirectory)
             {
@@ -858,10 +750,11 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
             if (!entry.is_regular_file(entryEc) || entryEc)
                 continue;
 
-            struct stat sb;
-            if (lstatCompat(path.c_str(), &sb) != 0)
+            platform::FileMetadata sb;
+            std::error_code statError;
+            if (!platform::read_metadata(path, sb, statError))
             {
-                reportError(context, path, std::error_code(errno, std::generic_category()));
+                reportError(context, path, statError);
                 continue;
             }
 
@@ -909,19 +802,19 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
             options.progressCallback(path);
     };
 
-    auto considerFile = [&](const fs::path &path, const struct stat &sb) {
+    auto considerFile = [&](const fs::path &path, const platform::FileMetadata &sb) {
         if (cancelRequested())
             return;
         if (shouldIgnorePath(path, context))
             return;
-        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+        if (options.ignoreNodumpFlag && sb.noDump)
             return;
         if (options.stayOnFilesystem && context.rootDevice != 0 &&
-            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            sb.device != context.rootDevice)
             return;
         if (!options.countHardLinksMultipleTimes)
         {
-            FileIdentity identity{static_cast<std::uintmax_t>(sb.st_dev), static_cast<std::uintmax_t>(sb.st_ino)};
+            FileIdentity identity{sb.device, sb.fileId};
             auto [it, inserted] = context.visited.insert(identity);
             if (!inserted)
                 return;
@@ -941,13 +834,13 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
         ++summary.count;
     };
 
-    auto shouldSkipDirectory = [&](const fs::path &path, const struct stat &sb, bool isSymlink) {
+    auto shouldSkipDirectory = [&](const fs::path &path, const platform::FileMetadata &sb, bool isSymlink) {
         if (shouldIgnorePath(path, context))
             return true;
-        if (options.ignoreNodumpFlag && hasNoDumpFlag(sb))
+        if (options.ignoreNodumpFlag && sb.noDump)
             return true;
         if (options.stayOnFilesystem && context.rootDevice != 0 &&
-            static_cast<std::uintmax_t>(sb.st_dev) != context.rootDevice)
+            sb.device != context.rootDevice)
             return true;
         if (isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
             return true;
@@ -981,16 +874,17 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
 
             reportProgress(path);
 
-            struct stat sb;
-            if (lstatCompat(path.c_str(), &sb) != 0)
+            platform::FileMetadata sb;
+            std::error_code statError;
+            if (!platform::read_metadata(path, sb, statError))
             {
-                reportError(context, path, std::error_code(errno, std::generic_category()));
+                reportError(context, path, statError);
                 continue;
             }
 
             std::error_code entryEc;
             bool isSymlink = entry.is_symlink(entryEc) && !entryEc;
-            bool isDirectory = S_ISDIR(sb.st_mode);
+            bool isDirectory = sb.isDirectory;
 
             if (isDirectory)
             {
@@ -1034,10 +928,11 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
             if (!entry.is_regular_file(entryEc) || entryEc)
                 continue;
 
-            struct stat sb;
-            if (lstatCompat(path.c_str(), &sb) != 0)
+            platform::FileMetadata sb;
+            std::error_code statError;
+            if (!platform::read_metadata(path, sb, statError))
             {
-                reportError(context, path, std::error_code(errno, std::generic_category()));
+                reportError(context, path, statError);
                 continue;
             }
 

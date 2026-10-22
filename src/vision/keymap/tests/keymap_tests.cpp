@@ -1,4 +1,5 @@
 #include "ck/vision/keymap.hpp"
+#include "test_environment.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -99,7 +100,7 @@ int main()
     std::error_code error;
     std::filesystem::create_directories(scheme_root, error);
     require(!error, "The persistent-scheme test must create an isolated configuration root.");
-    require(setenv("XDG_CONFIG_HOME", scheme_root.c_str(), 1) == 0,
+    require(ck::testing::set_environment(ck::testing::kConfigRootVariable, scheme_root.string()),
             "The persistent-scheme test must direct keymap storage to its isolated root.");
 
     ck::vision::DefaultKeymapPersistence persisted_schemes;
@@ -128,8 +129,13 @@ int main()
     require(persisted_schemes.active_keymap_scheme() == "personal" && scheme_controller.load() &&
                 scheme_registry.command_for_key(chord("Ctrl+Shift+O")) == scheme_open && scheme_controller.save(),
             "A format-1 keymap must load as personal bindings and upgrade on its next write.");
-    std::ifstream upgraded(scheme_file);
-    const std::string upgraded_document{std::istreambuf_iterator<char>(upgraded), std::istreambuf_iterator<char>()};
+    std::string upgraded_document;
+    {
+        // Closed before the file is rewritten and the root removed: Windows
+        // cannot delete a file that is still open.
+        std::ifstream upgraded(scheme_file);
+        upgraded_document.assign(std::istreambuf_iterator<char>(upgraded), std::istreambuf_iterator<char>());
+    }
     require(upgraded_document.find("\"format_version\": 2") != std::string::npos,
             "Saving a migrated keymap must write the versioned scheme document.");
     {

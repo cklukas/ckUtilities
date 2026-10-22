@@ -49,6 +49,12 @@ inline std::vector<std::string> native_arguments(int argc, char** argv) {
     return {argv, argv + argc};
 }
 #endif
+// A UTF-8 command-line or configuration string as a filesystem path. A path
+// built from a plain std::string is read in the ANSI code page on Windows.
+inline std::filesystem::path utf8_path(std::string_view text) {
+    return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
 struct UserIdentity { std::string home, name; };
 inline UserIdentity current_user() {
     UserIdentity result;

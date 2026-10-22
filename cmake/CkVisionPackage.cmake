@@ -113,6 +113,13 @@ function(cktools_add_ckvision_archive_verification)
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
     USES_TERMINAL
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
+  if(UNIX AND NOT APPLE)
+    # The same cpack run produced the DEB and RPM: check their install layout.
+    add_custom_command(TARGET verify_ckvision_archive POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" "-DCKTOOLS_PACKAGE_DIR=${PROJECT_BINARY_DIR}"
+        -P "${PROJECT_SOURCE_DIR}/cmake/VerifyLinuxPackages.cmake"
+      VERBATIM)
+  endif()
 endfunction()
 
 function(cktools_add_ckvision_terminal_verification)

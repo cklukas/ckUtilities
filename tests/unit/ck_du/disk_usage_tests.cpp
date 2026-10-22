@@ -2,6 +2,7 @@
 
 #include "disk_usage_core.hpp"
 #include "disk_usage_options.hpp"
+#include "disk_usage_platform.hpp"
 
 #include "ck/options.hpp"
 
@@ -120,4 +121,72 @@ TEST(DiskUsageOptions, BuildsScanOptionsFromProfile)
     const ck::du::BuildDirectoryTreeOptions alwaysOptions = ck::du::buildDirectoryTreeOptionsFromRegistry(registry);
     EXPECT_EQ(alwaysOptions.symlinkPolicy, ck::du::BuildDirectoryTreeOptions::SymlinkPolicy::Always);
     EXPECT_FALSE(alwaysOptions.followCommandLineSymlinks);
+}
+
+TEST(DiskUsagePlatform, GlobMatchesShellPatterns)
+{
+    using ck::du::platform::glob_match;
+    EXPECT_TRUE(glob_match("*.tmp", "cache.tmp"));
+    EXPECT_FALSE(glob_match("*.tmp", "cache.tmpx"));
+    EXPECT_TRUE(glob_match("*", ""));
+    EXPECT_TRUE(glob_match("a*b*c", "a-b-b-c"));
+    EXPECT_FALSE(glob_match("a*b*c", "a-b-b-d"));
+    EXPECT_TRUE(glob_match("node_modules/*", "node_modules/pkg/index.js")); // '*' crosses '/'
+    EXPECT_TRUE(glob_match("file?.log", "file1.log"));
+    EXPECT_FALSE(glob_match("file?.log", "file.log"));
+    EXPECT_TRUE(glob_match("[abc].txt", "b.txt"));
+    EXPECT_FALSE(glob_match("[abc].txt", "d.txt"));
+    EXPECT_TRUE(glob_match("[a-c][0-9]", "b7"));
+    EXPECT_TRUE(glob_match("[!a-c]x", "dx"));
+    EXPECT_FALSE(glob_match("[!a-c]x", "bx"));
+    EXPECT_TRUE(glob_match("[]]", "]")); // ']' first in a set is literal
+    EXPECT_TRUE(glob_match("\\*.md", "*.md"));
+    EXPECT_FALSE(glob_match("\\*.md", "a.md"));
+    EXPECT_TRUE(glob_match("[abc", "[abc")); // an unclosed '[' is an ordinary character
+}
+
+TEST(DiskUsagePlatform, ReadsMetadataAndHardLinkIdentity)
+{
+    namespace fs = std::filesystem;
+    const fs::path directory = fs::temp_directory_path() /
+                               ("ck-du-metadata-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(directory);
+    const fs::path file = directory / "data.bin";
+    {
+        std::ofstream out(file, std::ios::binary);
+        out << std::string(5000, 'x');
+    }
+
+    ck::du::platform::FileMetadata fileInfo;
+    ck::du::platform::FileMetadata dirInfo;
+    std::error_code error;
+    ASSERT_TRUE(ck::du::platform::read_metadata(file, fileInfo, error)) << error.message();
+    ASSERT_TRUE(ck::du::platform::read_metadata(directory, dirInfo, error)) << error.message();
+    EXPECT_FALSE(fileInfo.isDirectory);
+    EXPECT_FALSE(fileInfo.isSymlink);
+    EXPECT_TRUE(dirInfo.isDirectory);
+    EXPECT_EQ(fileInfo.logicalSize, 5000u);
+    EXPECT_EQ(fileInfo.device, dirInfo.device);
+    EXPECT_NE(fileInfo.fileId, dirInfo.fileId);
+    EXPECT_NE(fileInfo.modified.time_since_epoch().count(), 0);
+
+    // A hard link is the same file: same volume, same identity.
+    const fs::path link = directory / "link.bin";
+    fs::create_hard_link(file, link, error);
+    if (!error)
+    {
+        ck::du::platform::FileMetadata linkInfo;
+        ASSERT_TRUE(ck::du::platform::read_metadata(link, linkInfo, error)) << error.message();
+        EXPECT_EQ(linkInfo.device, fileInfo.device);
+        EXPECT_EQ(linkInfo.fileId, fileInfo.fileId);
+    }
+
+    ck::du::platform::FileMetadata missing;
+    EXPECT_FALSE(ck::du::platform::read_metadata(directory / "absent", missing, error));
+    EXPECT_TRUE(static_cast<bool>(error));
+
+    const auto [owner, group] = ck::du::platform::owner_and_group(file, fileInfo);
+    EXPECT_FALSE(owner.empty());
+    EXPECT_FALSE(group.empty());
+    fs::remove_all(directory);
 }

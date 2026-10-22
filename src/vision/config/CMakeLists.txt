@@ -3,17 +3,15 @@ target_include_directories(ck_vision_config PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(ck_vision_config PUBLIC cxx_std_20)
 target_link_libraries(ck_vision_config PUBLIC ck_vision_shell ck_vision_keymap ck_options)
 
-if(UNIX)
-  add_executable(ckconfig_ckvision main.cpp)
-  target_compile_features(ckconfig_ckvision PRIVATE cxx_std_20)
-  target_include_directories(ckconfig_ckvision PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
-  target_link_libraries(ckconfig_ckvision PRIVATE ck_vision_config ck_du_core ck_chat_options)
-  set_target_properties(ckconfig_ckvision PROPERTIES
-    OUTPUT_NAME "ck-config"
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
-  )
-  install(TARGETS ckconfig_ckvision RUNTIME DESTINATION bin)
-endif()
+add_executable(ckconfig_ckvision main.cpp)
+target_compile_features(ckconfig_ckvision PRIVATE cxx_std_20)
+target_include_directories(ckconfig_ckvision PRIVATE ${PROJECT_SOURCE_DIR}/src/tools/ck-du/include)
+target_link_libraries(ckconfig_ckvision PRIVATE ck_vision_host ck_vision_config ck_du_core ck_chat_options)
+set_target_properties(ckconfig_ckvision PROPERTIES
+  OUTPUT_NAME "ck-config"
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+)
+install(TARGETS ckconfig_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
 
 if(BUILD_TESTING)
   add_executable(ck_vision_config_tests tests/config_app_tests.cpp)

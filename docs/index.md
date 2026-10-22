@@ -66,7 +66,7 @@ bar, window handling, help, and key footer, so what you learn in one works in al
 
 ## Start here
 
-1. [Install CK Utilities](installation.md) on macOS or Linux.
+1. [Install CK Utilities](installation.md) on macOS, Linux, or Windows.
 2. Open the [launcher](tools/ck-utilities.md) and try a tool.
 3. Set up [Chat with a local model](tools/ck-chat.md) if you want AI
    assistance that never leaves your computer.
@@ -88,7 +88,7 @@ bar, window handling, help, and key footer, so what you learn in one works in al
 
 ## Platforms
 
-CK Utilities runs on macOS and Linux. A Windows version is not available yet.
+CK Utilities runs on macOS, Linux, and Windows.
 
 CK Utilities is free software, provided as-is under the
 [GNU General Public License, version 3](https://github.com/cklukas/ckUtilities/blob/master/LICENSE),

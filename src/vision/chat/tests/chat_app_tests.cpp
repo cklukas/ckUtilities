@@ -1,6 +1,7 @@
 #include "chat_app.hpp"
 #include "chat_markdown.hpp"
 #include "chat_startup_options.hpp"
+#include "test_environment.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -58,17 +59,17 @@ public:
         if (const char *existing = std::getenv("CK_AI_FORCE_STUB"))
             previous_ = existing;
         if (enabled)
-            setenv("CK_AI_FORCE_STUB", "1", 1);
+            ck::testing::set_environment("CK_AI_FORCE_STUB", "1");
         else
-            unsetenv("CK_AI_FORCE_STUB");
+            ck::testing::unset_environment("CK_AI_FORCE_STUB");
     }
 
     ~ScopedStubMode()
     {
         if (previous_)
-            setenv("CK_AI_FORCE_STUB", previous_->c_str(), 1);
+            ck::testing::set_environment("CK_AI_FORCE_STUB", *previous_);
         else
-            unsetenv("CK_AI_FORCE_STUB");
+            ck::testing::unset_environment("CK_AI_FORCE_STUB");
     }
 
 private:

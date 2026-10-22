@@ -15,12 +15,35 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#if defined(_WIN32)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
+
 #include <wchar.h>
+
+static bool stdoutIsTerminal()
+{
+#if defined(_WIN32)
+    return _isatty(_fileno(stdout)) != 0;
+#else
+    return isatty(fileno(stdout)) != 0;
+#endif
+}
 
 // Calculate the display width of a UTF-8 string (handles Unicode properly)
 int getDisplayWidth(const std::string &str)
 {
+#if defined(_WIN32)
+    // Windows has no wcswidth: count code points, skipping UTF-8
+    // continuation bytes, as an approximation of one column each.
+    int width = 0;
+    for (const unsigned char ch : str)
+        if ((ch & 0xC0) != 0x80)
+            ++width;
+    return width;
+#else
     // Convert UTF-8 string to wide character string
     size_t len = str.length();
     wchar_t *wstr = new wchar_t[len + 1];
@@ -41,6 +64,7 @@ int getDisplayWidth(const std::string &str)
 
     // wcswidth returns -1 for unprintable characters, fall back to byte length
     return (width >= 0) ? width : str.length();
+#endif
 }
 
 // Build a tree of Node objects mirroring the structure of a JSON
@@ -586,7 +610,7 @@ void copyToClipboard(const std::string &text)
     {
         // Try to write to /dev/tty first, fall back to stdout
         FILE *out = std::fopen("/dev/tty", "w");
-        if (!out && isatty(fileno(stdout)))
+        if (!out && stdoutIsTerminal())
         {
             out = stdout;
         }

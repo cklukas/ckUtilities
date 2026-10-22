@@ -59,7 +59,16 @@ attached to each release and published in the `cklukas/ckutilities` Homebrew tap
 It builds the pinned ckVision SDK as a resource, so no separately installed
 `ckvision` formula is required. Install with
 `brew install cklukas/ckutilities/ck-utilities`.
-Windows packaging is intentionally not part of the current release workflow.
+Windows builds use Visual Studio 2022 (MSVC) with Ninja, in Release with the
+static C runtime, against a ckVision SDK built the same way.
+`scripts/windows/build-and-package.ps1` does all of it - the pinned ckVision
+SDK, the suite, every CTest suite (including a ConPTY test that starts each
+tool and quits it with Alt+X), and the ZIP archive, extracted and checked - and
+is what the CI and release workflows run:
+
+```powershell
+./scripts/windows/build-and-package.ps1 -CkVisionSource C:\src\ckvision -WorkRoot C:\build\ck-utilities
+```
 
 ## Documentation screenshots
 

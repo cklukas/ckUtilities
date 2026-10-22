@@ -1,6 +1,5 @@
 #include "launcher_app.hpp"
 
-#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -10,19 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#include <cvision/term/posix_clock.hpp>
-#include <cvision/term/posix_terminal.hpp>
 #include <cvision/ui/application.hpp>
 
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
 #include "ck/vision/keymap.hpp"
-
-extern char **environ;
+#include "launcher_platform.hpp"
+#include "native_host.hpp"
 
 namespace
 {
@@ -33,44 +26,11 @@ struct LaunchRequest
     std::vector<std::string> arguments;
 };
 
-int run_program(const std::filesystem::path &program, const std::vector<std::string> &arguments,
-                bool launched_from_launcher)
-{
-    const pid_t pid = fork();
-    if (pid < 0)
-        return -1;
-    if (pid == 0)
-    {
-        if (launched_from_launcher)
-            setenv(ck::launcher::kLauncherEnvVar, ck::launcher::kLauncherEnvValue, 1);
-
-        std::vector<std::string> values;
-        values.reserve(arguments.size() + 1);
-        values.push_back(program.string());
-        values.insert(values.end(), arguments.begin(), arguments.end());
-        std::vector<char *> argv;
-        argv.reserve(values.size() + 1);
-        for (std::string &value : values)
-            argv.push_back(value.data());
-        argv.push_back(nullptr);
-        execve(program.c_str(), argv.data(), environ);
-        _exit(127);
-    }
-
-    int status = 0;
-    pid_t result = 0;
-    do
-    {
-        result = waitpid(pid, &status, 0);
-    } while (result < 0 && errno == EINTR);
-    return result < 0 ? -1 : status;
-}
-
 std::optional<LaunchRequest> show_launcher()
 {
     std::optional<LaunchRequest> request;
-    ckv::term::PosixClock clock;
-    ckv::term::PosixTerminal terminal(clock);
+    ck::host::NativeClock clock;
+    ck::host::NativeTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
     ck::vision::DefaultKeymapPersistence keymap_persistence;
     ck::vision::KeymapController keymap("ck-utilities", application.commands(), keymap_persistence);
@@ -89,51 +49,49 @@ const ck::appinfo::ToolInfo *find_tool(std::string_view name)
     return ck::appinfo::findToolByExecutable(name);
 }
 
-int status_to_exit_code(int status)
-{
-    if (status < 0)
-        return EXIT_FAILURE;
-    if (WIFSIGNALED(status))
-        return 128 + WTERMSIG(status);
-    return WIFEXITED(status) ? WEXITSTATUS(status) : status;
-}
-
-int launch(const LaunchRequest &request, const std::filesystem::path &tool_directory, bool return_to_launcher)
+// The tool's exit code, or nothing when it could not be found or started.
+std::optional<int> launch(const LaunchRequest &request, const std::filesystem::path &tool_directory,
+                          bool return_to_launcher)
 {
     if (request.tool == nullptr)
-        return EXIT_FAILURE;
+        return std::nullopt;
     const auto program = ck::launcher::locateProgramPath(tool_directory, *request.tool);
     if (!program)
     {
         std::fprintf(stderr, "Unable to locate %s\n", request.tool->executable.data());
-        return EXIT_FAILURE;
+        return std::nullopt;
     }
-    return run_program(*program, request.arguments, return_to_launcher);
+    const ck::vision::ForegroundRun run = ck::vision::run_foreground(*program, request.arguments, return_to_launcher);
+    if (!run.started)
+    {
+        std::fprintf(stderr, "Unable to start %s\n", request.tool->executable.data());
+        return std::nullopt;
+    }
+    return run.exit_code;
 }
 
-} // namespace
-
-int main(int argc, char **argv)
+int run(const std::vector<std::string> &args)
 {
-    const std::filesystem::path tool_directory = ck::launcher::resolveToolDirectory(argc > 0 ? argv[0] : nullptr);
-    if (argc > 1 && (std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h"))
+    const std::filesystem::path tool_directory = ck::vision::launcher_tool_directory(args.empty() ? std::string() : args[0]);
+    const char *self = args.empty() ? "ck-utilities" : args[0].c_str();
+    if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
-        std::printf("Usage: %s [--launch TOOL [ARGS...]]\n", argc > 0 ? argv[0] : "ck-utilities");
+        std::printf("Usage: %s [--launch TOOL [ARGS...]]\n", self);
         return EXIT_SUCCESS;
     }
 
-    if (argc > 2 && std::string_view(argv[1]) == "--launch")
+    if (args.size() > 2 && args[1] == "--launch")
     {
-        const ck::appinfo::ToolInfo *tool = find_tool(argv[2]);
+        const ck::appinfo::ToolInfo *tool = find_tool(args[2]);
         if (tool == nullptr)
         {
-            std::fprintf(stderr, "Unknown tool '%s'.\n", argv[2]);
+            std::fprintf(stderr, "Unknown tool '%s'.\n", args[2].c_str());
             return EXIT_FAILURE;
         }
-        LaunchRequest request{tool, std::vector<std::string>(argv + 3, argv + argc)};
-        return status_to_exit_code(launch(request, tool_directory, false));
+        LaunchRequest request{tool, std::vector<std::string>(args.begin() + 3, args.end())};
+        return launch(request, tool_directory, false).value_or(EXIT_FAILURE);
     }
-    if (argc > 1 && std::string_view(argv[1]) == "--launch")
+    if (args.size() > 1 && args[1] == "--launch")
     {
         std::fputs("--launch requires a tool identifier.\n", stderr);
         return EXIT_FAILURE;
@@ -145,10 +103,20 @@ int main(int argc, char **argv)
         if (!request)
             return EXIT_SUCCESS;
 
-        const int status = launch(*request, tool_directory, true);
-        if (status >= 0 && WIFEXITED(status) &&
-            WEXITSTATUS(status) == ck::launcher::kReturnToLauncherExitCode)
+        const std::optional<int> status = launch(*request, tool_directory, true);
+        if (status == ck::launcher::kReturnToLauncherExitCode)
             continue;
-        return status_to_exit_code(status);
+        return status.value_or(EXIT_FAILURE);
     }
+}
+
+} // namespace
+
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **argv)
+#else
+int main(int argc, char **argv)
+#endif
+{
+    return run(ck::host::native_arguments(argc, argv));
 }
