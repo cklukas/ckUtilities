@@ -3,6 +3,7 @@
 #include "simulated_filesystem.hpp"
 #include "pane_listing_job.hpp"
 #include "cvision/testing/cktest.hpp"
+#include <array>
 #include <type_traits>
 namespace {
 using namespace ck::files;
@@ -151,4 +152,243 @@ CK_TEST(simulated_held_refresh_detects_replacement_even_with_an_old_open_handle)
     CK_CHECK(!refreshed->continues(*held) && take(refreshed->previous_continuity()) == IdentityComparison::Different);
     CK_CHECK(fs.live_entries() == 2 && fs.live_cursors() == 1);
     held.reset(); refreshed.reset(); parent.reset(); CK_CHECK(fs.live_entries() == 0 && fs.live_cursors() == 0);
+}
+
+namespace {
+using Inventory = ck::testing::SimulatedInventory;
+NativeFeatureIdentifier feature(const char* text = "user.raw") { return *NativeFeatureIdentifier::from_posix(text); }
+Inventory inventory(FileSystem& fs, const FileSystem::Pointer& object) {
+    const auto owner = fs.metadata(object).identity;
+    Inventory result;
+    StorageInfo storage; storage.owner = owner; storage.model = StorageModel::LinuxStatx;
+    storage.allocated_size = Observation<std::uint64_t>::available(4096);
+    result.storage = Observation<StorageInfo>::available(storage);
+    result.link = Observation<LinkMetadata>::available({owner, PosixSymlinkData{std::string{"../raw\xff", 7}}});
+    DataChannelCatalog channels; channels.owner = owner; channels.coverage = DataChannelCoverage::WindowsFileStreamInfo;
+    channels.channels.push_back({*NativeFeatureIdentifier::from_windows(u":extra:$DATA"), DataChannelKind::NamedData,
+        Observation<std::uint64_t>::available(5), {}});
+    result.channels = Observation<DataChannelCatalog>::available(std::move(channels));
+    AttributeCatalog attributes; attributes.owner = owner; attributes.coverage = AttributeCoverage::CredentialsVisiblePosix;
+    attributes.attributes.push_back({feature(), AttributeRole::Opaque, Observation<std::uint64_t>::available(3), {}});
+    result.attributes = Observation<AttributeCatalog>::available(std::move(attributes));
+    result.values.emplace(feature(), Observation<AttributeValue>::available({feature(), {std::byte{0}, std::byte{0xff}, std::byte{7}}, owner, {}}));
+    for (auto part : {SecurityPart::LinuxAccessAcl, SecurityPart::LinuxDefaultAcl, SecurityPart::DarwinExtendedAcl,
+        SecurityPart::WindowsAccess, SecurityPart::WindowsIntegrity, SecurityPart::WindowsFullDescriptor}) {
+        // Opaque, deliberately not structurally valid native ACL data. Tests of
+        // native decoders use their separate byte fixtures; this tests transport.
+        result.security.emplace(part, Observation<NativeSecurityValue>::available({part, SecurityEncoding::Unknown,
+            SecurityPresence::Present, {std::byte{9}, std::byte{0}}, owner, 0}));
+    }
+    return result;
+}
+std::unique_ptr<OpenedEntry> entry(FileSystem& fs, EntryAccess access = EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity) {
+    return take(take(fs.open_directory(path()))->open_child(name("a"), access));
+}
+FileSystem::Pointer inventory_object(FileSystem& fs) {
+    auto directory = root(fs); auto object = fs.make_node(ObjectKind::RegularFile);
+    fs.put(directory, name("a"), object); fs.set_inventory(object, inventory(fs, object)); return object;
+}
+std::vector<ObservationState> inventory_states(const OpenedEntry& object) {
+    return {object.inspect_storage().state(), object.read_link_metadata().state(), object.inspect_data_channels().state(),
+        object.inspect_attributes().state(), object.read_attribute(feature()).state(), object.read_security(SecurityPart::WindowsAccess).state()};
+}
+constexpr std::array inventory_operations{Operation::InspectStorage, Operation::ReadLink, Operation::InspectChannels,
+    Operation::InspectAttributes, Operation::ReadAttribute, Operation::ReadSecurity};
+}
+CK_TEST(simulated_inventory_roundtrips_all_query_families_and_exact_native_data_without_host_assumptions) {
+    FileSystem fs; auto object = inventory_object(fs); auto held = entry(fs);
+    for (auto state : inventory_states(*held)) CK_CHECK(state == ObservationState::Available);
+    const auto storage = take(held->inspect_storage());
+    CK_CHECK(take(storage.allocated_size) == 4096 && compare_identity(take(storage.owner), take(fs.metadata(object).identity)) == IdentityComparison::Same);
+    const auto link = take(held->read_link_metadata());
+    CK_CHECK(std::get<PosixSymlinkData>(link.payload).target == std::string("../raw\xff", 7));
+    const auto channels = take(held->inspect_data_channels());
+    CK_CHECK(channels.coverage == DataChannelCoverage::WindowsFileStreamInfo && channels.channels.size() == 1);
+    CK_CHECK(channels.channels[0].identifier.windows_units() && *channels.channels[0].identifier.windows_units() == u":extra:$DATA");
+    const auto attributes = take(held->inspect_attributes());
+    CK_CHECK(attributes.coverage == AttributeCoverage::CredentialsVisiblePosix && attributes.attributes.size() == 1);
+    const NativeBytes expected{std::byte{0}, std::byte{0xff}, std::byte{7}};
+    CK_CHECK(take(held->read_attribute(feature())).bytes == expected);
+    for (const auto& [part, reply] : inventory(fs, object).security) {
+        const auto value = take(held->read_security(part));
+        CK_CHECK(value.part == part && value.bytes == take(reply).bytes && value.encoding == SecurityEncoding::Unknown);
+    }
+    CK_CHECK(fs.live_cursors() == 0 && fs.live_entries() == 1);
+    held.reset(); CK_CHECK(fs.live_entries() == 0);
+}
+CK_TEST(simulated_inventory_unconfigured_queries_and_keys_are_unsupported_not_empty_or_absent) {
+    FileSystem fs; auto directory = root(fs); fs.put(directory, name("a"), fs.make_node(ObjectKind::RegularFile));
+    auto held = entry(fs);
+    for (auto state : inventory_states(*held)) CK_CHECK(state == ObservationState::Unsupported);
+}
+CK_TEST(simulated_inventory_every_family_preserves_independent_failure_states_errors_and_actions) {
+    for (auto state : {ObservationState::Unsupported, ObservationState::Unknown, ObservationState::Denied,
+        ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {
+        FileSystem fs; (void)inventory_object(fs); auto held = entry(fs);
+        for (auto operation : inventory_operations) fs.enqueue(operation, {UnavailableObservation{state,
+            {ErrorDomain::NtStatus, 0x1234, "inventory.injected"}}, std::chrono::milliseconds(3), {}, false});
+        for (auto actual : inventory_states(*held)) CK_CHECK(actual == state);
+        CK_CHECK(fs.clock()->now().time_since_epoch() == std::chrono::milliseconds(18));
+        for (auto actual : inventory_states(*held)) CK_CHECK(actual == ObservationState::Available);
+        fs.enqueue(Operation::ReadAttribute, {denied(), {}, {}, false});
+        const auto value = held->read_attribute(feature()); CK_CHECK(value.unavailable_detail()->error == denied().error);
+    }
+}
+CK_TEST(simulated_inventory_configured_unavailable_and_partial_fields_are_not_rewritten) {
+    FileSystem fs; auto object = inventory_object(fs); auto data = inventory(fs, object);
+    data.storage = Observation<StorageInfo>::unavailable(ObservationState::Denied, denied().error);
+    auto channels = take(*data.channels);
+    channels.channels[0].logical_size = Observation<std::uint64_t>::unavailable(ObservationState::Unknown, denied().error);
+    channels.owner = Observation<ObjectIdentity>::unavailable(ObservationState::Changed, denied().error);
+    data.channels = Observation<DataChannelCatalog>::available(std::move(channels));
+    data.values.insert_or_assign(feature(), Observation<AttributeValue>::unavailable(ObservationState::Gone, denied().error));
+    fs.set_inventory(object, std::move(data)); auto held = entry(fs);
+    CK_CHECK(held->inspect_storage().state() == ObservationState::Denied && held->read_attribute(feature()).state() == ObservationState::Gone);
+    const auto result = take(held->inspect_data_channels());
+    CK_CHECK(result.owner.state() == ObservationState::Changed && result.channels[0].logical_size.state() == ObservationState::Unknown);
+    CK_CHECK(take(held->inspect_attributes()).attributes.size() == 1);
+}
+CK_TEST(simulated_inventory_access_requests_are_recorded_and_do_not_grant_unrequested_reads) {
+    FileSystem fs; (void)inventory_object(fs);
+    for (auto access : {EntryAccess::MetadataOnly, EntryAccess::MetadataAndAttributes, EntryAccess::MetadataAndSecurity,
+        EntryAccess::MetadataAndFullSecurity, EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity}) {
+        auto held = entry(fs, access);
+        CK_CHECK(fs.calls().back().operation == Operation::OpenChild && fs.calls().back().access == access);
+        CK_CHECK(held->inspect_storage().value() && held->inspect_data_channels().value() && held->read_link_metadata().value());
+        CK_CHECK(held->inspect_attributes().state() == (requests_attributes(access) ? ObservationState::Available : ObservationState::Denied));
+        CK_CHECK(held->read_attribute(feature()).state() == (requests_attributes(access) ? ObservationState::Available : ObservationState::Denied));
+        CK_CHECK(held->read_security(SecurityPart::WindowsAccess).state() == (requests_security(access) ? ObservationState::Available : ObservationState::Denied));
+        CK_CHECK(held->read_security(SecurityPart::WindowsFullDescriptor).state() == (requests_audit_security(access) ? ObservationState::Available : ObservationState::Denied));
+        CK_CHECK(fs.calls().back().access == access);
+    }
+    auto cursor = take(fs.open_directory(path())); const auto count = fs.calls().size();
+    CK_CHECK(!cursor->open_child(name("a"), static_cast<EntryAccess>(4)).value() && fs.calls().size() == count);
+}
+CK_TEST(simulated_inventory_queries_apply_exact_byte_and_record_limits_without_partial_prefixes) {
+    FileSystem fs; (void)inventory_object(fs); auto held = entry(fs);
+    CK_CHECK(held->inspect_data_channels({24, 1}).value());
+    CK_CHECK(held->inspect_data_channels({23, 1}).state() == ObservationState::Failed);
+    CK_CHECK(held->inspect_attributes({8, 1}).value());
+    CK_CHECK(held->inspect_attributes({7, 1}).state() == ObservationState::Failed);
+    CK_CHECK(held->read_attribute(feature(), {3, 1}).value() && !held->read_attribute(feature(), {2, 1}).value());
+    CK_CHECK(held->read_link_metadata({7, 1}).value() && !held->read_link_metadata({6, 1}).value());
+    CK_CHECK(held->read_security(SecurityPart::WindowsAccess, {2, 1}).value());
+    const auto failure = held->read_security(SecurityPart::WindowsAccess, {1, 1});
+    CK_CHECK(failure.state() == ObservationState::Failed && failure.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit));
+    const auto call = fs.calls().back();
+    CK_CHECK(call.security == SecurityPart::WindowsAccess && call.limits && call.limits->max_native_bytes == 1 && call.limits->max_records == 1);
+}
+CK_TEST(simulated_inventory_invalid_query_limits_do_not_consume_faults_or_make_calls) {
+    FileSystem fs; (void)inventory_object(fs); auto held = entry(fs); const auto calls = fs.calls().size();
+    for (auto operation : inventory_operations) fs.enqueue(operation, {denied(), {}, {}, false});
+    for (auto limits : {InventoryLimits{0, 1}, InventoryLimits{1, 0}, InventoryLimits{InventoryLimits::hard_native_bytes + 1, 1},
+        InventoryLimits{1, InventoryLimits::hard_records + 1}}) {
+        CK_CHECK(held->read_link_metadata(limits).state() == ObservationState::Failed);
+        CK_CHECK(held->inspect_data_channels(limits).state() == ObservationState::Failed);
+        CK_CHECK(held->inspect_attributes(limits).state() == ObservationState::Failed);
+        CK_CHECK(held->read_attribute(feature(), limits).state() == ObservationState::Failed);
+        CK_CHECK(held->read_security(SecurityPart::WindowsAccess, limits).state() == ObservationState::Failed);
+    }
+    CK_CHECK(held->read_security(SecurityPart::Unknown).state() == ObservationState::Failed && fs.calls().size() == calls);
+    for (auto state : inventory_states(*held)) CK_CHECK(state == ObservationState::Denied);
+}
+CK_TEST(simulated_inventory_feature_keys_preserve_namespace_and_invalid_encoding_and_trace_requested_key) {
+    FileSystem fs; auto object = inventory_object(fs); Inventory data;
+    const std::array keys{feature("same"), *NativeFeatureIdentifier::from_windows_ea("same"),
+        *NativeFeatureIdentifier::from_windows(u"same"), feature("raw\xff"),
+        *NativeFeatureIdentifier::from_windows(std::u16string{u'x', char16_t{0xd800}})};
+    for (std::size_t i = 0; i < keys.size(); ++i)
+        data.values.emplace(keys[i], Observation<AttributeValue>::available({keys[i], {static_cast<std::byte>(i)}, {}, {}}));
+    fs.set_inventory(object, std::move(data)); auto held = entry(fs);
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        const auto value = take(held->read_attribute(keys[i], {1, 1}));
+        CK_CHECK(value.identifier == keys[i] && value.bytes.size() == 1 && value.bytes[0] == static_cast<std::byte>(i));
+        CK_CHECK(fs.calls().back().feature == keys[i] && fs.calls().back().object == object->id());
+    }
+    CK_CHECK(held->read_attribute(feature("missing")).state() == ObservationState::Unsupported);
+}
+CK_TEST(simulated_inventory_handle_replacement_and_query_effects_keep_object_ownership_and_current_replies) {
+    FileSystem fs; auto object = inventory_object(fs); auto held = entry(fs);
+    auto replacement = fs.make_node(ObjectKind::RegularFile); auto directory = root(fs); fs.put(directory, name("a"), replacement);
+    auto new_entry = entry(fs); CK_CHECK(new_entry->inspect_storage().state() == ObservationState::Unsupported);
+    fs.enqueue(Operation::ReadAttribute, {{}, {}, [&] {
+        auto data = inventory(fs, object);
+        data.values.insert_or_assign(feature(), Observation<AttributeValue>::available({feature(), {std::byte{42}}, fs.metadata(object).identity, {}}));
+        fs.set_inventory(object, std::move(data));
+    }, false});
+    CK_CHECK(take(held->read_attribute(feature())).bytes == NativeBytes{std::byte{42}});
+    CK_CHECK(fs.calls().back().object == object->id());
+    fs.enqueue(Operation::InspectChannels, {{}, {}, [&] {
+        Inventory data; data.channels = Observation<DataChannelCatalog>::unavailable(ObservationState::Changed, denied().error);
+        fs.set_inventory(object, std::move(data));
+    }, false});
+    CK_CHECK(held->inspect_data_channels().state() == ObservationState::Changed);
+    held.reset(); new_entry.reset(); CK_CHECK(fs.live_cursors() == 0 && fs.live_entries() == 0);
+}
+CK_TEST(simulated_inventory_configuration_rejects_cumulative_bytes_records_and_invalid_security_without_replacing_old_data) {
+    FileSystem fs; auto object = inventory_object(fs); auto held = entry(fs);
+    for (int scenario = 0; scenario < 3; ++scenario) {
+        Inventory data;
+        if (scenario == 0) {
+            data.values.emplace(feature(), Observation<AttributeValue>::available({feature(), NativeBytes(InventoryLimits::hard_native_bytes), {}, {}}));
+        } else if (scenario == 1) {
+            AttributeCatalog attributes;
+            attributes.attributes.assign(InventoryLimits::hard_records, {feature(), AttributeRole::Opaque, {}, {}});
+            data.attributes = Observation<AttributeCatalog>::available(std::move(attributes));
+        } else data.security.emplace(SecurityPart::Unknown, Observation<NativeSecurityValue>{});
+        bool rejected = false;
+        try { fs.set_inventory(object, std::move(data)); }
+        catch (const std::length_error&) { rejected = true; }
+        catch (const std::invalid_argument&) { rejected = true; }
+        CK_CHECK(rejected && take(held->inspect_storage()).model == StorageModel::LinuxStatx);
+    }
+}
+CK_TEST(simulated_inventory_every_query_can_throw_without_leaking_or_rebinding_handles) {
+    FileSystem fs; auto object = inventory_object(fs); auto held = entry(fs);
+    const auto before = take(take(held->inspect_basic()).identity);
+    for (auto operation : inventory_operations) fs.enqueue(operation, {{}, {}, {}, true});
+    int caught = 0;
+    try { (void)held->inspect_storage(); } catch (const std::runtime_error&) { ++caught; }
+    try { (void)held->read_link_metadata(); } catch (const std::runtime_error&) { ++caught; }
+    try { (void)held->inspect_data_channels(); } catch (const std::runtime_error&) { ++caught; }
+    try { (void)held->inspect_attributes(); } catch (const std::runtime_error&) { ++caught; }
+    try { (void)held->read_attribute(feature()); } catch (const std::runtime_error&) { ++caught; }
+    try { (void)held->read_security(SecurityPart::WindowsAccess); } catch (const std::runtime_error&) { ++caught; }
+    CK_CHECK(caught == 6 && fs.live_entries() == 1 && fs.live_cursors() == 0);
+    CK_CHECK(compare_identity(before, take(take(held->inspect_basic()).identity)) == IdentityComparison::Same);
+    for (auto state : inventory_states(*held)) CK_CHECK(state == ObservationState::Available);
+    held.reset(); CK_CHECK(fs.live_entries() == 0 && object->id() != 0);
+}
+CK_TEST(simulated_inventory_catalog_record_limits_are_independent_of_byte_limits) {
+    FileSystem fs; auto object = inventory_object(fs); auto data = inventory(fs, object);
+    auto channels = take(*data.channels); channels.channels.push_back(channels.channels.front());
+    auto attributes = take(*data.attributes); attributes.attributes.push_back(attributes.attributes.front());
+    data.channels = Observation<DataChannelCatalog>::available(std::move(channels));
+    data.attributes = Observation<AttributeCatalog>::available(std::move(attributes));
+    fs.set_inventory(object, std::move(data)); auto held = entry(fs);
+    CK_CHECK(held->inspect_data_channels({48, 2}).value() && !held->inspect_data_channels({48, 1}).value());
+    CK_CHECK(held->inspect_attributes({16, 2}).value() && !held->inspect_attributes({16, 1}).value());
+    CK_CHECK(!held->inspect_data_channels({47, 2}).value() && !held->inspect_attributes({15, 2}).value());
+}
+CK_TEST(simulated_inventory_windows_reparse_bytes_and_decoded_names_have_distinct_query_and_fixture_budgets) {
+    FileSystem fs; auto object = inventory_object(fs); Inventory data;
+    WindowsReparseData reparse; reparse.tag = 0x1234; reparse.kind = WindowsReparseKind::OpaqueGuid;
+    reparse.raw = {std::byte{0xff}, std::byte{0}};
+    reparse.names = WindowsLinkNames{std::u16string{u'x', char16_t{0xd800}}, u"print", 0x80};
+    data.link = Observation<LinkMetadata>::available({fs.metadata(object).identity, reparse});
+    fs.set_inventory(object, std::move(data)); auto held = entry(fs);
+    const auto value = std::get<WindowsReparseData>(take(held->read_link_metadata({2, 1})).payload);
+    CK_CHECK(value.raw == reparse.raw && value.names->substitute == reparse.names->substitute && value.names->flags == 0x80);
+    CK_CHECK(!held->read_link_metadata({1, 1}).value());
+    reparse.names->print.assign(InventoryLimits::hard_native_bytes / 2 + 1, u'x');
+    data.link = Observation<LinkMetadata>::available({{}, std::move(reparse)});
+    bool refused = false; try { fs.set_inventory(object, std::move(data)); } catch (const std::length_error&) { refused = true; }
+    CK_CHECK(refused && held->read_link_metadata({2, 1}).value());
+}
+CK_TEST(simulated_inventory_oversize_query_keys_are_rejected_before_trace_copy_or_action_consumption) {
+    FileSystem fs; (void)inventory_object(fs); auto held = entry(fs);
+    fs.enqueue(Operation::ReadAttribute, {denied(), {}, {}, false}); const auto calls = fs.calls().size();
+    const auto key = *NativeFeatureIdentifier::from_windows(std::u16string(InventoryLimits::hard_native_bytes / 2 + 1, u'x'));
+    CK_CHECK(held->read_attribute(key).state() == ObservationState::Failed && fs.calls().size() == calls);
+    CK_CHECK(held->read_attribute(feature()).state() == ObservationState::Denied);
 }

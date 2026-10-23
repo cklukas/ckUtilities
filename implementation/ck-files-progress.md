@@ -1825,3 +1825,57 @@ compiler commands and cleanup. Boundaries (76 core sources / 446 active files),
 ckdocs (24 pages) and whitespace checks pass. Initial selection pinning, UI
 scheduling/ownership, large-view indexes, remaining inventories and full collision /
 capability planning still require implementation. WP-01 acceptance stays open.
+
+## 2026-10-24 — WP-01 explicit inventory simulation
+
+Extended the shared filesystem simulator with independent replies for storage,
+links/reparse data, channel and attribute catalogs, attribute values and all six
+native security query parts. Exact feature namespaces, opaque bytes, coverage,
+owners and partial/unavailable observations survive transport. Unconfigured
+queries remain Unsupported with the requested access; they never imply absence.
+This is test infrastructure, not native capability evidence or mutation support.
+
+All query families support queued faults, latency, side effects and exceptions.
+Calls record requested access, exact feature/security keys and resource limits.
+Reply lookup happens after injected effects. Attribute/security reads enforce
+explicit requested access. Invalid inputs do not consume actions; catalog/value
+limits return failure without a prefix. Cumulative per-node payload/record limits
+are checked before replacing configured replies, including decoded link names
+and overflow-safe UTF-16 accounting.
+
+Fourteen additional deterministic cases cover these contracts, live ownership
+after path replacement, all six failure states, unknown/changed fields, access,
+exact byte/record boundaries, namespace separation, configuration refusal and
+exceptions. The same 100-file source export was verified on all hosts; the
+unchanged test host source was independently hash-checked as a supplemental input.
+All 37 Files suites passed: **278 macOS / 276 Linux / 282 Windows cases**.
+Final incremental build/test seconds were 4.376/1.592, 6.725/0.131 and
+17.590/4.861 respectively (UTC validation on 2026-10-23). Mac's final two-step
+test update followed an already verified four-step shared-header rebuild;
+Linux/Windows compiled three dependent fixtures and linked. No native source
+changed, so current verified native executables remained valid.
+
+Focused sanitizers compiled all 24 core units, three affected fixtures and test
+host without cached objects (28 units). **52 cases passed on each host**:
+Mac ASan+UBSan 46.560 s build / 0.083 s test; Linux ASan+UBSan
+106.328/0.101; Windows ASan 80.216/0.405. Previous different-fixture 28-unit
+Mac/Windows builds were 44.833/64.181 s; the previous 29-unit Linux build was
+87.946 s. Actual compilation inputs, new test markers and hashes establish
+freshness; these different fixture sets are not identical duration baselines.
+An initial Mac sanitizer startup requested unsupported LeakSanitizer and ran no
+tests; it is explicitly excluded. The same binary passed using supported
+ASan+UBSan options. No successful sanitizer run reported diagnostics.
+
+Diagnostic outputs were hashed, checked for active owners and removed. Full
+scratch-root audits ended empty. Windows had one older fixture from 2026-10-22:
+its exact source test, non-reparse status, sole nine-byte `namespace` file and
+zero task executable owners were verified before recording its hash and removing
+only that file and empty parent. Current normal builds remain. Windows writes
+stayed on V:, Mac temporary work stayed on S8T, and no GUI was launched.
+
+[Inventory simulation evidence](evidence/ck-files-inventory-simulation-20261024.json)
+records source/output/log hashes, compiler commands, timestamps, excluded startup
+and cleanup. UI boundaries (76 domain sources), ckVision-only (447 active files),
+ckdocs (24 pages) and whitespace checks pass. Initial selection pinning, remaining
+native inventories, operation capabilities, collision rules and worker/UI/large-view
+integration remain; WP-01 acceptance stays open and WP-02 has not started.

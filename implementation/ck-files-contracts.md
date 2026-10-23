@@ -315,13 +315,50 @@ The fixture is single-owner. Nodes (4096 creations), path bindings (4096), child
 bindings (4096 per directory), queued actions (4096) and retained call records
 (100000) have explicit test limits. These counts are not a process-memory quota.
 It does not emulate case folding, normalization, native error witnesses, link
-traversal, provider behavior or mutation guarantees. Unimplemented inventory queries and unconfigured location queries retain the
-boundary's Unsupported defaults. NativeDefault lookup uses exact simulated name
-units; WindowsIgnoreCase remains Unsupported. Full
-inventory/mutation simulation still requires explicit query-family extensions.
+traversal, provider behavior or mutation guarantees. Unconfigured location queries
+retain Unsupported. NativeDefault lookup uses exact simulated name units;
+WindowsIgnoreCase remains Unsupported. Mutation simulation remains unimplemented.
 
 [Simulation evidence](evidence/ck-files-simulation-20261023.json) covers the
 fixture with the production discovery, pane and held-child code on all hosts.
+
+### Explicit inventory replies
+
+`tests/support/simulated_inventory.hpp` extends each simulated held object with
+independent storage, link/reparse, data-channel catalog, attribute catalog/value
+and six native security-part replies. Configuration is explicit: with the
+requested access, an unconfigured family/key returns Unsupported, never an empty
+catalog, missing attribute or absent ACL. Exact POSIX, Windows UTF-16 and Windows
+EA identifiers inhabit separate map namespaces, without folding or decoding.
+Available replies retain supplied owners, coverage, opaque bytes, flags and
+per-field unavailable observations. Malformed or inconsistent records can be
+configured deliberately; this fixture does not validate native structures or
+claim preservation capabilities.
+
+Every family participates in the action queue (failure, elapsed time, side
+effect, exception). Calls record object, feature/security key, inventory limits
+and requested access. Query effects run before selecting the current reply,
+including attribute/security map lookup. Rebinding a pathname cannot retarget
+an open entry. Attribute/security reads require their respective requested
+access; a full Windows descriptor additionally requires audit-security access.
+These are explicit fixture rules, not emulation of host access checks or grants.
+
+Invalid limits, invalid security-part keys and attribute query identifiers over
+the 8 MiB hard bound are refused before tracing or consuming actions. Valid
+catalog queries enforce record counts and the sum of identifier bytes; values,
+security and links enforce returned value/native-payload byte limits. No partial
+prefix escapes. These byte-accounting rules are fixture rules, not native wire
+buffer layouts. A node configuration cumulatively bounds binary payloads,
+identifiers and decoded link names to 8 MiB, and counts configured replies and
+catalog records against 65536. Checked addition and UTF-16 multiplication prevent
+overflow. Validation precedes replacement, so an invalid configuration leaves
+previous replies intact. These bounds do not constitute a total process-memory
+quota or limit caller-owned configuration construction or diagnostic strings.
+
+[Inventory simulation evidence](evidence/ck-files-inventory-simulation-20261024.json)
+covers cross-platform execution, all failure states, limits, access requests,
+exact transport, ownership and injected query changes. Native inventory coverage
+still needs its own feature-bearing fixtures; simulation does not close WP-01.
 
 ## Listing cancellation and worker resource ownership
 

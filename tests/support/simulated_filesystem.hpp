@@ -3,6 +3,7 @@
 #pragma once
 #include "native_filesystem.hpp"
 #include "manual_monotonic_clock.hpp"
+#include "simulated_inventory.hpp"
 #include <deque>
 #include <functional>
 #include <map>
@@ -14,22 +15,29 @@ namespace ck::testing {
 // Names use exact native units; no case/normalization, symlink traversal, native
 // error-code emulation or preservation-capability claim is made. A cursor takes
 // a name sequence at open, while child opens resolve live membership. Handles
-// retain objects independently of path rebinding/removal. Extend explicit query
-// families before using this fixture to qualify inventories or mutations.
+// retain objects independently of path rebinding/removal. Inventory replies are
+// explicit fixtures; there is no mutation API or native capability emulation.
 class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     using Metadata = ck::files::BasicMetadata;
     using Name = ck::files::NativeName;
     using Kind = ck::files::ObjectKind;
     template<class T> using Observed = ck::files::Observation<T>;
 public:
-    enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation };
+    enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation,
+        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
         std::function<void()> effect;
         bool throws = false;
     };
-    struct Call { Operation operation; std::uint64_t object; std::optional<Name> name; };
+    struct Call {
+        Operation operation; std::uint64_t object; std::optional<Name> name;
+        std::optional<ck::files::NativeFeatureIdentifier> feature;
+        std::optional<ck::files::SecurityPart> security;
+        std::optional<ck::files::InventoryLimits> limits;
+        ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly;
+    };
     class Node;
     using Pointer = std::shared_ptr<Node>;
     class Node final {
@@ -41,6 +49,7 @@ public:
         Kind kind_;
         Metadata metadata_;
         std::optional<Observed<ck::files::LocationInfo>> location_;
+        SimulatedInventory inventory_;
         std::vector<std::pair<Name, Pointer>> children_;
     public:
         std::uint64_t id() const noexcept { return id_; }
@@ -66,6 +75,9 @@ public:
     }
     void set_location(const Pointer& node, Observed<ck::files::LocationInfo> location) {
         require(node); node->location_ = std::move(location);
+    }
+    void set_inventory(const Pointer& node, SimulatedInventory inventory) {
+        require(node); inventory.validate(); node->inventory_ = std::move(inventory);
     }
     void unbind(const std::filesystem::path& absolute) { state_->paths.erase(absolute); }
     void put(const Pointer& parent, Name name, Pointer child) {
@@ -149,9 +161,12 @@ private:
         return false;
     }
     static std::optional<ck::files::UnavailableObservation> step(const std::shared_ptr<State>& state,
-        Operation operation, const Pointer& node, std::optional<Name> name = {}) {
+        Operation operation, const Pointer& node, std::optional<Name> name = {},
+        std::optional<ck::files::NativeFeatureIdentifier> feature = {},
+        std::optional<ck::files::SecurityPart> security = {}, std::optional<ck::files::InventoryLimits> limits = {},
+        ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly) {
         if (state->calls.size() == max_calls) throw std::length_error("simulated call limit");
-        state->calls.push_back({operation, node ? node->id_ : 0, std::move(name)});
+        state->calls.push_back({operation, node ? node->id_ : 0, std::move(name), std::move(feature), security, limits, access});
         auto& queue = state->actions[operation];
         if (queue.empty()) return {};
         auto action = std::move(queue.front()); queue.pop_front(); --state->queued;
@@ -162,13 +177,83 @@ private:
     }
     class Entry final : public ck::files::OpenedEntry {
     public:
-        Entry(std::shared_ptr<State> state, Pointer node) : state_(std::move(state)), node_(std::move(node)) { ++state_->entries; }
+        Entry(std::shared_ptr<State> state, Pointer node, ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly)
+            : state_(std::move(state)), node_(std::move(node)), access_(access) { ++state_->entries; }
         ~Entry() override { --state_->entries; }
         Observed<Metadata> inspect_basic() const override {
             const auto fault = step(state_, Operation::InspectHandle, node_);
             return fault ? Observed<Metadata>::unavailable(fault->state, fault->error) : Observed<Metadata>::available(node_->metadata_);
         }
-    private: std::shared_ptr<State> state_; Pointer node_;
+        Observed<ck::files::StorageInfo> inspect_storage() const override {
+            const auto fault = step(state_, Operation::InspectStorage, node_, {}, {}, {}, {}, access_);
+            if (fault) return Observed<ck::files::StorageInfo>::unavailable(fault->state, fault->error);
+            return node_->inventory_.storage ? *node_->inventory_.storage : OpenedEntry::inspect_storage();
+        }
+        Observed<ck::files::LinkMetadata> read_link_metadata(ck::files::InventoryLimits limits = {}) const override {
+            return query(Operation::ReadLink, node_->inventory_.link, limits);
+        }
+        Observed<ck::files::DataChannelCatalog> inspect_data_channels(ck::files::InventoryLimits limits = {}) const override {
+            return query(Operation::InspectChannels, node_->inventory_.channels, limits);
+        }
+        Observed<ck::files::AttributeCatalog> inspect_attributes(ck::files::InventoryLimits limits = {}) const override {
+            return query(Operation::InspectAttributes, node_->inventory_.attributes, limits, {}, {}, ck::files::requests_attributes(access_));
+        }
+        Observed<ck::files::AttributeValue> read_attribute(const ck::files::NativeFeatureIdentifier& key,
+            ck::files::InventoryLimits limits = {}) const override {
+            // Capture lookup after the injected effect, not before it; effects
+            // may replace the entire inventory and invalidate map references.
+            return attribute_query(key, limits);
+        }
+        Observed<ck::files::NativeSecurityValue> read_security(ck::files::SecurityPart part,
+            ck::files::InventoryLimits limits = {}) const override {
+            using Result = Observed<ck::files::NativeSecurityValue>;
+            if (!ck::files::valid_security_part(part)) return rejected<Result>(ck::files::ObservationState::Failed,
+                ck::files::AdapterError::InvalidIdentifier, "simulated.security_part");
+            if (!limits.valid()) return invalid_limits<Result>();
+            const auto fault = step(state_, Operation::ReadSecurity, node_, {}, {}, part, limits, access_);
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            if (!ck::files::requests_security(access_) || (part == ck::files::SecurityPart::WindowsFullDescriptor && !ck::files::requests_audit_security(access_)))
+                return access_denied<Result>();
+            const auto found = node_->inventory_.security.find(part);
+            return found == node_->inventory_.security.end() ? unsupported<Result>() : bounded(found->second, limits);
+        }
+    private:
+        template<class Result> static Result rejected(ck::files::ObservationState state, ck::files::AdapterError error, const char* operation) {
+            return Result::unavailable(state, {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(error), operation});
+        }
+        template<class Result> static Result invalid_limits() { return rejected<Result>(ck::files::ObservationState::Failed,
+            ck::files::AdapterError::InvalidLimit, "simulated.inventory_limits"); }
+        template<class Result> static Result access_denied() { return Result::unavailable(ck::files::ObservationState::Denied,
+            {ck::files::ErrorDomain::Adapter, 53, "simulated.access_not_requested"}); }
+        template<class Result> static Result unsupported() { return rejected<Result>(ck::files::ObservationState::Unsupported,
+            ck::files::AdapterError::UnsupportedQuery, "simulated.inventory_unconfigured"); }
+        template<class T> static Observed<T> bounded(const Observed<T>& reply, ck::files::InventoryLimits limits) {
+            if (reply.value() && !SimulatedInventory::fits(*reply.value(), limits)) return rejected<Observed<T>>(ck::files::ObservationState::Failed,
+                ck::files::AdapterError::InventoryLimit, "simulated.inventory_limit");
+            return reply;
+        }
+        template<class T> Observed<T> query(Operation operation, const std::optional<Observed<T>>& reply,
+            ck::files::InventoryLimits limits, std::optional<ck::files::NativeFeatureIdentifier> key = {},
+            std::optional<ck::files::SecurityPart> part = {}, bool permitted = true) const {
+            using Result = Observed<T>;
+            if (!limits.valid()) return invalid_limits<Result>();
+            const auto fault = step(state_, operation, node_, {}, std::move(key), part, limits, access_);
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            if (!permitted) return access_denied<Result>();
+            return reply ? bounded(*reply, limits) : unsupported<Result>();
+        }
+        Observed<ck::files::AttributeValue> attribute_query(const ck::files::NativeFeatureIdentifier& key, ck::files::InventoryLimits limits) const {
+            using Result = Observed<ck::files::AttributeValue>;
+            if (!limits.valid()) return invalid_limits<Result>();
+            if (SimulatedInventory::bytes(key) > ck::files::InventoryLimits::hard_native_bytes)
+                return rejected<Result>(ck::files::ObservationState::Failed, ck::files::AdapterError::InventoryLimit, "simulated.feature_limit");
+            const auto fault = step(state_, Operation::ReadAttribute, node_, {}, key, {}, limits, access_);
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            if (!ck::files::requests_attributes(access_)) return access_denied<Result>();
+            const auto found = node_->inventory_.values.find(key);
+            return found == node_->inventory_.values.end() ? unsupported<Result>() : bounded(found->second, limits);
+        }
+        std::shared_ptr<State> state_; Pointer node_; ck::files::EntryAccess access_;
     };
     class Cursor final : public ck::files::DirectoryCursor {
     public:
@@ -181,11 +266,11 @@ private:
         Observed<std::unique_ptr<ck::files::OpenedEntry>> open_child(const Name& name,
             ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly) const override {
             using Result = Observed<std::unique_ptr<ck::files::OpenedEntry>>;
-            if (!name.is_valid() || access != ck::files::EntryAccess::MetadataOnly) return failed<Result>("simulated.child_access");
-            const auto fault = step(state_, Operation::OpenChild, node_, name);
+            if (!name.is_valid() || !ck::files::valid_entry_access(access)) return failed<Result>("simulated.child_access");
+            const auto fault = step(state_, Operation::OpenChild, node_, name, {}, {}, {}, access);
             if (fault) return Result::unavailable(fault->state, fault->error);
             auto child = find(name);
-            return child ? Result::available(std::make_unique<Entry>(state_, std::move(child))) : missing<Result>();
+            return child ? Result::available(std::make_unique<Entry>(state_, std::move(child), access)) : missing<Result>();
         }
         Observed<ck::files::LocationInfo> inspect_location() const override {
             using Result = Observed<ck::files::LocationInfo>;
