@@ -60,3 +60,31 @@ CK_TEST(space_accounting_preserves_zero_and_rejects_negative_counts_zero_units_a
     CK_CHECK(detail::signed_space_bytes(-1, 4096).state() == ObservationState::Unknown);
     CK_CHECK(*detail::signed_space_bytes(1, 4096).value() == 4096);
 }
+CK_TEST(linux_directory_flags_decode_only_their_query_namespace_and_keep_clear_distinct_from_support) {
+    LocationInfo location; location.family = LocationQueryFamily::LinuxDescriptor;
+    for (auto feature : {LinuxDirectoryFeature::Casefold, LinuxDirectoryFeature::NoCow, LinuxDirectoryFeature::ProjectInherit}) {
+        const auto bit = feature == LinuxDirectoryFeature::Casefold ? 0x40000000U : feature == LinuxDirectoryFeature::NoCow ? 0x00800000U : 0x20000000U;
+        location.linux_directory_inode_flags = Observation<std::uint32_t>::available(bit | 0x80000000U);
+        const auto set = reported_linux_directory_flag(location, feature);
+        CK_CHECK(set.value() && *set.value() == ReportedFlag::Set);
+        location.linux_directory_inode_flags = Observation<std::uint32_t>::available(~bit);
+        const auto clear = reported_linux_directory_flag(location, feature);
+        CK_CHECK(clear.value() && *clear.value() == ReportedFlag::Clear);
+    }
+    CK_CHECK(location.case_sensitive_directory.state() == ObservationState::Unknown);
+    for (auto family : {LocationQueryFamily::Unknown, LocationQueryFamily::DarwinDescriptor, LocationQueryFamily::WindowsHandle}) {
+        location.family = family;
+        CK_CHECK(reported_linux_directory_flag(location, LinuxDirectoryFeature::Casefold).state() == ObservationState::Unsupported);
+    }
+    CK_CHECK(reported_linux_directory_flag(location, static_cast<LinuxDirectoryFeature>(999)).state() == ObservationState::Failed);
+}
+CK_TEST(linux_directory_flag_failures_retain_the_original_state_and_native_diagnostic) {
+    LocationInfo location; location.family = LocationQueryFamily::LinuxDescriptor;
+    const NativeError error{ErrorDomain::Posix, 25, "FS_IOC_GETFLAGS.directory"};
+    for (auto state : {ObservationState::Unsupported, ObservationState::Unknown, ObservationState::Denied,
+        ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {
+        location.linux_directory_inode_flags = Observation<std::uint32_t>::unavailable(state, error);
+        const auto result = reported_linux_directory_flag(location, LinuxDirectoryFeature::Casefold);
+        CK_CHECK(result.state() == state && result.unavailable_detail() && result.unavailable_detail()->error == error);
+    }
+}

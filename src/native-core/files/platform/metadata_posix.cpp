@@ -29,6 +29,8 @@
 #include <sys/sysmacros.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
+#include <linux/fs.h>
+#include <sys/ioctl.h>
 #include <sys/statvfs.h>
 #endif
 
@@ -516,6 +518,20 @@ public:
         result.posix_path_max = limit(_PC_PATH_MAX, "fpathconf.path_max");
 #if defined(__linux__)
         result.family = LocationQueryFamily::LinuxDescriptor;
+        // The ioctl ABI takes int*, despite its historical long-sized request
+        // encoding. No SETFLAGS, path reopen, synchronization or retry occurs.
+        static_assert(sizeof(int) == sizeof(std::uint32_t));
+        static_assert(FS_CASEFOLD_FL == 0x40000000U && FS_NOCOW_FL == 0x00800000U && FS_PROJINHERIT_FL == 0x20000000U);
+        int inode_flags = 0;
+        if (ioctl(fd, FS_IOC_GETFLAGS, &inode_flags) == 0)
+            result.linux_directory_inode_flags = Observation<std::uint32_t>::available(static_cast<std::uint32_t>(inode_flags));
+        else {
+            const int code = errno;
+            result.linux_directory_inode_flags = Observation<std::uint32_t>::unavailable(
+                code == ENOTTY ? ObservationState::Unsupported : errno_state(code),
+                {ErrorDomain::Posix, code, "FS_IOC_GETFLAGS.directory"});
+        }
+
         result.posix_name_chars_max = not_applicable<std::uint64_t>("volume.name_chars_max");
         result.features = Observation<NativeVolumeFeatures>::unavailable(ObservationState::Unsupported,
             adapter_error(AdapterError::UnsupportedQuery, "volume.feature_advertisements"));
@@ -544,6 +560,7 @@ public:
         struct statfs native{};
 #else
         result.family = LocationQueryFamily::DarwinDescriptor;
+        result.linux_directory_inode_flags = not_applicable<std::uint32_t>("volume.linux_directory_inode_flags");
         result.posix_name_chars_max = limit(_PC_NAME_CHARS_MAX, "fpathconf.name_chars_max");
         const auto boolean = [&](int name, const char* operation) {
             errno = 0;

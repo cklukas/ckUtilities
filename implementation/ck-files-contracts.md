@@ -144,6 +144,36 @@ provider hydration or mutation guarantee is implied.
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
 publication/failure tests and native streaming-to-pane tests on all three hosts.
 
+## Linux held-directory inode flag inventory
+
+`LocationInfo::linux_directory_inode_flags` retains the raw 32-bit result of
+`FS_IOC_GETFLAGS` on the already-held Linux directory descriptor. This is a
+separate namespace from `statx` attributes and mount flags. The query takes an
+`int*` despite its historical request encoding; the adapter checks native bit
+constants and preserves unknown returned bits. It neither reopens a pathname,
+consumes enumeration, requests synchronization, retries errors nor sets flags.
+`ENOTTY` is Unsupported; other failures retain native state/code. macOS and
+Windows explicitly mark this Linux query NotApplicable/Unsupported.
+
+`reported_linux_directory_flag` decodes casefold, no-COW and project-inherit
+bits only for the Linux query family. Invalid feature selectors fail. Every
+unavailable observation retains its state and diagnostic. Clear means the bit
+was reported clear, not that the filesystem lacks the feature. A set bit is
+not an operation capability, actual extent relationship, project quota ID or
+permission to create/move anything.
+
+In particular, the adapter does not derive generic directory case sensitivity
+or Unicode collision equivalence from these bits. Linux filesystems may use
+different encoding/strictness rules; native lookup and further destination
+qualification remain required. See the Linux [inode flag API](https://www.man7.org/linux/man-pages/man2/ioctl_iflags.2.html),
+[UAPI flag namespace](https://github.com/torvalds/linux/blob/master/include/uapi/linux/fs.h)
+and [ext4 casefold contract](https://docs.kernel.org/admin-guide/ext4.html#case-insensitive-file-name-lookups).
+
+[Inode-flag evidence](evidence/ck-files-inode-flags-20261023.json) includes
+independent native descriptor queries and a private casefold-enabled ext4 image.
+The latter requires successful flag activation and verifies ASCII native lookup;
+it does not qualify every Unicode/name rule or every filesystem.
+
 ## Deterministic discovery simulation
 
 `tests/support/simulated_filesystem.hpp` implements the injected `BasicFileSystem`

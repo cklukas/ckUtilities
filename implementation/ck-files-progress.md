@@ -1599,3 +1599,68 @@ lookup, not a native snapshot guarantee. Other query families remain explicitly
 Unsupported. Inventory/mutation simulation, remaining native queries,
 collision/path planning, large indexes, refresh integration and scheduling remain
 unfinished. No WP-01 acceptance box is closed and no production mutation added.
+
+## 2026-10-23 — WP-01 Linux held-directory inode flags
+
+Added raw `FS_IOC_GETFLAGS` inventory to the held Linux directory location query,
+separate from statx attributes and mount flags. The adapter uses the native int
+pointer ABI, retains all returned bits and errors, classifies ENOTTY as
+Unsupported and performs no retry, synchronization, pathname reopen or flag
+mutation. macOS/Windows explicitly report this query NotApplicable/Unsupported.
+A typed helper decodes reported casefold, no-COW and project-inherit bits;
+invalid selectors fail and unavailable observations retain their diagnostics.
+Neither set nor clear bits establish preservation capabilities, extent sharing,
+quota IDs or Unicode collision equivalence. Generic Linux directory case
+sensitivity remains unqualified.
+
+Two new portable cases cover namespace/bit decoding and unavailable states.
+A native case on each host compares independent held-descriptor results or
+checks the non-Linux refusal. A Linux-only case activates casefold on its own
+exclusive empty test directory where the volume supports it; the ordinary
+Linux test volume explicitly reported EOPNOTSUPP. All 33 Files suites pass
+against a common final 91-file source manifest:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 | 20:41:41.751–20:41:42.974 | 1.222 / 0.849 | 231 |
+| Lima Debian 13 arm64 | 20:41:41.504–20:41:55.552 | 14.048 / 0.097 | 229 |
+| Windows x64, static CRT | 20:41:47.116–20:43:16.326 | 89.210 / 4.139 | 235 |
+
+The shared-header change caused 38 build steps on each host. Mac's initial
+broad build took 9.816 s; final diagnostic edits required two native-fixture
+compile/link increments (1.116/1.222 s). Windows exceeded the earlier broad
+53-step 73.927 s build. Its final Ninja records confirm 88.801 s of actual work:
+platform compilation 23.202 s, simulation fixture 15.744 s and pane fixture
+14.000 s among the longest steps. Logs, actual compiled inputs, links and final
+hashes were checked; elapsed time alone did not establish freshness.
+
+Focused Mac ASan+UBSan and Windows ASan instrument all 22 core units, platform,
+two location fixtures and test host (26 units). Each passes 11 cases. Mac built
+20:42:04.064–20:42:30.229 UTC in 26.165 s and tested in 0.206 s; Windows built
+in 38.710 s and tested in 0.121 s. Preceding native-adapter sanitizer builds
+with different fixtures/27 units took 34.224/40.727 s. Strict warnings and
+halt-on-error produced no diagnostics; exact units/flags/hashes were checked.
+
+A separate private 64 MiB ext4 image enabled casefold on the Linux VM. A strict
+fixture build required successful activation and observed native ASCII lookup
+of MixedCase through mixedcase, with flags 1074266112 (casefold plus extents).
+Its 25-unit normal build took 21.315 s and passed five native location cases.
+A second private image ran ASan+UBSan across all 26 units and both location
+fixtures: 53.495 s build, 0.031 s test, all 12 cases passed. This records the
+first comparable Linux sanitizer baseline. These checks qualify the set flag
+and ASCII lookup on this image, not every Unicode rule or Linux filesystem.
+
+Both images used owned remote task workspaces and nodev/nosuid/noexec mounts.
+Only exclusively created test directories received SETFLAGS; production code
+is read-only. Each image was unmounted, loop devices audited empty and image /
+diagnostic workspace removed. Final audits found no location fixtures, owned
+test processes or casefold workspaces. Mac/Windows sanitizer hashes and zero
+owners were recorded before disposal. Current normal builds remain; Windows
+writes stayed on V:. No GUI was launched.
+
+[Inode-flag evidence](evidence/ck-files-inode-flags-20261023.json) records native
+and sanitizer results, exact compiler commands, mount/cleanup evidence and build
+timing investigation. Boundaries (72 core sources / 438 active files), ckdocs
+(24 pages) and whitespace checks pass. Other filesystem metadata APIs, complete
+collision/capability planning, large indexes, refresh/scheduling integration and
+operation work remain. No WP-01 acceptance box is closed.

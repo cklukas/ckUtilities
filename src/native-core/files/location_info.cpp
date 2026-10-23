@@ -58,6 +58,22 @@ Observation<FeatureAdvertisement> advertised_feature(const Observation<NativeVol
     return Result::available((features.value()->value[bit->group] & bit->bit) != 0 ?
         FeatureAdvertisement::Advertised : FeatureAdvertisement::NotAdvertised);
 }
+Observation<ReportedFlag> reported_linux_directory_flag(const LocationInfo& location, LinuxDirectoryFeature feature) {
+    std::uint32_t bit = 0;
+    switch (feature) {
+    case LinuxDirectoryFeature::Casefold: bit = 0x40000000U; break;
+    case LinuxDirectoryFeature::NoCow: bit = 0x00800000U; break;
+    case LinuxDirectoryFeature::ProjectInherit: bit = 0x20000000U; break;
+    default: return error<ReportedFlag>(ObservationState::Failed, AdapterError::InvalidIdentifier, "directory.linux_flag");
+    }
+    if (location.family != LocationQueryFamily::LinuxDescriptor)
+        return error<ReportedFlag>(ObservationState::Unsupported, AdapterError::NotApplicable, "directory.linux_flag_family");
+    if (!location.linux_directory_inode_flags.value()) {
+        const auto& unavailable = *location.linux_directory_inode_flags.unavailable_detail();
+        return Observation<ReportedFlag>::unavailable(unavailable.state, unavailable.error);
+    }
+    return Observation<ReportedFlag>::available((*location.linux_directory_inode_flags.value() & bit) != 0 ? ReportedFlag::Set : ReportedFlag::Clear);
+}
 namespace detail {
 Observation<std::uint64_t> space_bytes(std::uint64_t count, std::uint64_t unit) {
     if (unit == 0) return error<std::uint64_t>(ObservationState::Failed, AdapterError::InvalidNativeResult, "volume.allocation_unit");

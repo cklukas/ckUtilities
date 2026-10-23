@@ -24,6 +24,9 @@
 #include <sys/mount.h>
 #else
 #include <sys/statvfs.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
+#include <cerrno>
 #endif
 #endif
 
@@ -188,5 +191,64 @@ CK_TEST(native_posix_location_queries_match_descriptor_mount_and_pathconf_result
 #endif
     CK_CHECK(required(info.total_bytes) > 0);
     (void)required(info.free_bytes); (void)required(info.available_bytes);
+}
+#endif
+CK_TEST(native_directory_inode_flags_are_linux_scoped_and_match_an_independent_held_descriptor) {
+    const ck::testing::ScratchDirectory scratch("files-location-inode-flags");
+    NativeFileSystem filesystem;
+    auto directory = open_directory(filesystem, scratch.path());
+    const auto queried = directory->inspect_location(); const auto& info = required(queried);
+#if defined(__linux__)
+    const int descriptor = open(scratch.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (descriptor < 0) throw std::runtime_error("cannot open independent inode-flags descriptor");
+    int flags = 0; const int status = ioctl(descriptor, FS_IOC_GETFLAGS, &flags); const int code = errno;
+    close(descriptor);
+    if (status == 0) {
+        CK_CHECK(required(info.linux_directory_inode_flags) == static_cast<std::uint32_t>(flags));
+        const auto casefold = reported_linux_directory_flag(info, LinuxDirectoryFeature::Casefold);
+        CK_CHECK(required(casefold) == ((flags & FS_CASEFOLD_FL) != 0 ? ReportedFlag::Set : ReportedFlag::Clear));
+    } else {
+        CK_CHECK(!info.linux_directory_inode_flags.value() && info.linux_directory_inode_flags.unavailable_detail()->error.domain == ErrorDomain::Posix);
+        CK_CHECK(info.linux_directory_inode_flags.unavailable_detail() && info.linux_directory_inode_flags.unavailable_detail()->error.code == code);
+    }
+    CK_CHECK(info.case_sensitive_directory.state() == ObservationState::Unsupported);
+#else
+    CK_CHECK(info.linux_directory_inode_flags.state() == ObservationState::Unsupported);
+    CK_CHECK(reported_linux_directory_flag(info, LinuxDirectoryFeature::Casefold).state() == ObservationState::Unsupported);
+#endif
+}
+#if defined(__linux__)
+CK_TEST(native_linux_casefold_query_preserves_reported_flags_without_emulating_lookup_equivalence) {
+    const ck::testing::ScratchDirectory scratch("files-location-casefold");
+    const int descriptor = open(scratch.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (descriptor < 0) throw std::runtime_error("cannot open owned casefold fixture");
+    int flags = 0;
+    if (ioctl(descriptor, FS_IOC_GETFLAGS, &flags) != 0) {
+        const int code = errno; close(descriptor);
+#if defined(CK_FILES_REQUIRE_CASEFOLD)
+        throw std::runtime_error("required casefold fixture GETFLAGS failed: " + std::to_string(code));
+#else
+        if (code != ENOTTY && code != EOPNOTSUPP && code != EINVAL) throw std::runtime_error("unexpected casefold GETFLAGS failure");
+        std::cout << "CASEFOLD_UNAVAILABLE query_errno=" << code << std::endl; return;
+#endif
+    }
+    flags |= FS_CASEFOLD_FL;
+    const int changed = ioctl(descriptor, FS_IOC_SETFLAGS, &flags); const int code = errno; close(descriptor);
+    if (changed != 0) {
+#if defined(CK_FILES_REQUIRE_CASEFOLD)
+        throw std::runtime_error("required casefold fixture SETFLAGS failed: " + std::to_string(code));
+#else
+        if (code != ENOTTY && code != EOPNOTSUPP && code != EINVAL) throw std::runtime_error("unexpected casefold SETFLAGS failure");
+        std::cout << "CASEFOLD_UNAVAILABLE set_errno=" << code << std::endl; return;
+#endif
+    }
+    write_file(scratch.path() / "MixedCase");
+    NativeFileSystem filesystem; auto directory = open_directory(filesystem, scratch.path());
+    const auto queried = directory->inspect_location(); const auto& info = required(queried);
+    CK_CHECK(required(reported_linux_directory_flag(info, LinuxDirectoryFeature::Casefold)) == ReportedFlag::Set);
+    CK_CHECK(info.case_sensitive_directory.state() == ObservationState::Unsupported);
+    const auto lookup = directory->lookup_child(*NativeName::from_posix("mixedcase"), ChildLookupMode::NativeDefault);
+    CK_CHECK(required(lookup).state() == ChildLookupState::Found);
+    std::cout << "CASEFOLD_QUALIFIED flags=" << required(info.linux_directory_inode_flags) << std::endl;
 }
 #endif

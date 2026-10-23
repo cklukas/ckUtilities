@@ -523,6 +523,8 @@ public:
     Observation<LocationInfo> inspect_location() const override {
         LocationInfo result;
         result.family = LocationQueryFamily::WindowsHandle;
+        result.linux_directory_inode_flags = Observation<std::uint32_t>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "volume.linux_directory_inode_flags"});
         result.directory = ck::files::identity(handle_.get(), scope_);
         const auto not_applicable = [](const char* operation) {
             return Observation<std::uint64_t>::unavailable(ObservationState::Unsupported,
