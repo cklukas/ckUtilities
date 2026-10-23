@@ -193,6 +193,33 @@ class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope)
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)) {}
+    Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
+        using Result = Observation<LinkMetadata>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "link.limits"));
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!metadata.value()->kind.value()) { const auto& e = *metadata.value()->kind.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (*metadata.value()->kind.value() != ObjectKind::SymbolicLink)
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "link.object_kind"));
+        const auto query = [&](std::span<std::byte> buffer) -> detail::LinkReadReply {
+#if defined(__linux__)
+            const auto count = readlinkat(descriptor_.get(), "", reinterpret_cast<char*>(buffer.data()), buffer.size());
+            constexpr const char* operation = "readlinkat.descriptor";
+#else
+            ssize_t count = -1;
+            if (__builtin_available(macos 13.0, *))
+                count = freadlink(descriptor_.get(), reinterpret_cast<char*>(buffer.data()), buffer.size());
+            else return UnavailableObservation{ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, "freadlink.availability")};
+            constexpr const char* operation = "freadlink";
+#endif
+            if (count >= 0) return static_cast<std::size_t>(count);
+            const int code = errno;
+            return UnavailableObservation{errno_state(code), {ErrorDomain::Posix, code, operation}};
+        };
+        auto target = detail::read_posix_link(query, limits);
+        if (!target.value()) { const auto& e = *target.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({metadata.value()->identity, std::move(target).take_value()});
+    }
     Observation<StorageInfo> inspect_storage() const override {
         const auto metadata = inspect_basic();
         if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Observation<StorageInfo>::unavailable(e.state, e.error); }

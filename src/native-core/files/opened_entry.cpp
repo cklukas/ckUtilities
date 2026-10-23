@@ -3,6 +3,10 @@
 #include "opened_entry.hpp"
 
 namespace ck::files {
+Observation<LinkMetadata> OpenedEntry::read_link_metadata(InventoryLimits limits) const {
+    return Observation<LinkMetadata>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "link.native_query"});
+}
 Observation<StorageInfo> OpenedEntry::inspect_storage() const {
     return Observation<StorageInfo>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "storage.native_query"});

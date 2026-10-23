@@ -756,3 +756,71 @@ relationships, positive encryption/compression fixtures, provider coordination
 and race conformance, driver-specific inventories, operation-specific capability
 checks, filesystem/time fakes and pane semantics remain WP-01 work. No package
 acceptance checkbox is closed by this milestone; no mutation command exists.
+
+### WP-01 — held-object link and reparse observations (2026-10-23)
+
+Added bounded `OpenedEntry::read_link_metadata` observations and a UI-free
+structural decoder. [Validation evidence](evidence/ck-files-links-20261023.json)
+records the shared 54-file manifest, commands, source fingerprints, timestamps,
+results, output paths and cleanup. This remains a partial WP-01 milestone.
+
+POSIX targets remain raw bytes, including relative, dangling and invalid-UTF-8
+names. Linux uses `readlinkat` with the held O_PATH descriptor and an empty path.
+macOS uses public `freadlink`, guarded for macOS 13 availability; earlier systems
+report Unsupported. Neither adapter reopens the original pathname. The bounded
+reader grows only when the native result could be truncated, uses a budget+1
+witness for an exact-budget target, preserves native errors and never returns a
+truncated prefix as a successful observation.
+
+Windows queries `FSCTL_GET_REPARSE_POINT` through the held reparse handle, with
+bounded whole-query buffer growth. The decoder validates complete native
+lengths, counted UTF-16 fields and offsets. It retains raw bytes, unknown flags,
+opaque Microsoft payloads and GUID-owned payloads; only symbolic-link and
+mount-point records receive structural name decoding. A changed observed tag
+returns Changed. Decoding never authorizes traversal or replay, and identity
+plus separate queries does not imply a snapshot or protection from same-tag
+content changes.
+
+All eighteen Files CTest entries passed on each host:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 02:15:51.904–02:16:54.526 | 62.617 / 0.823 | 97 |
+| Lima Debian 13 arm64 / GCC 14 | 02:17:16.465–02:18:13.502 | 57.037 / 0.195 | 94 |
+| Windows x64 / MSVC 19.44, static CRT | 02:17:19.352–02:17:52.647 | 33.295 / 1.532 | 101 |
+
+Native POSIX fixtures preserve the held symlink target after rename,
+replacement and unlink. Windows ReFS fixtures qualify a long dangling junction
+that forces buffer growth, exact and insufficient budgets, retained ownership
+through rename/replacement/unlink, and a 1500-byte GUID-owned opaque payload.
+Positive native Windows symbolic-link-tag qualification remains pending;
+parser tests cover counted names, unpaired UTF-16, unknown flags, malformed
+lengths, offsets, embedded NULs and truncation. No Files GUI was launched.
+
+The build logs show CMake regeneration and broad header-driven recompilation:
+33 compile/link steps on Mac and Linux, 33 on Windows. Mac configuration took
+16.4 s plus 0.4 s generation; Linux took 4.9 s plus 0.2 s. These runs cover more
+inputs than the preceding storage implementation build (30 affected steps,
+37.548 s Mac / 34.683 s Linux); no stale-output inference is based on timing.
+
+Direct sanitizer builds compile all 32 core/platform/test units, including the
+three added link units, without a compiler-cache wrapper. Mac ASan + UBSan
+(-O1 -g, strict warnings, frame pointers) built 02:22:26.220–02:24:56.487 UTC
+in 150.267 s and passed 97 cases in 1.245 s. Windows MSVC ASan
+(/O1 /Zi /MT /W4 /WX) built 02:22:26.607–02:23:21.992 UTC in 55.386 s and
+passed 101 cases in 0.990 s. Both used halt-on-error and produced no sanitizer
+diagnostics. The Mac run was substantially slower than the preceding 29-unit
+58.750 s run: live compiler inspection confirmed progress through the expected
+translation units, the full direct command records all inputs, and an uptime
+sample during compilation showed load averages 26.63 / 34.16 / 38.70 alongside
+several unrelated CPU-intensive project processes. This establishes observed
+contention, not an exact attribution of elapsed time. No unrelated work was
+interrupted. Current normal builds remain; owned sanitizer outputs were removed
+after recording executable hashes and confirming no active owners.
+
+UI boundary checks passed (52 domain sources, 401 ckVision-only active files),
+and ckdocs checked 24 pages. Full metadata inventories, provider coordination,
+operation-specific destination capabilities, filesystem/time fakes, pane state
+and collision semantics remain WP-01 work. Unknown provider behavior and
+hydration races are not qualified by these metadata fixtures. No package
+acceptance checkbox is closed and no mutation command exists.

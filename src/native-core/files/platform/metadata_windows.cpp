@@ -9,6 +9,7 @@
 #endif
 #include <windows.h>
 #include <winternl.h>
+#include <winioctl.h>
 
 #include <bit>
 #include <set>
@@ -258,6 +259,42 @@ public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
         : handle_(std::move(handle)), scope_(std::move(scope)) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
+        using Result = Observation<LinkMetadata>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "link.limits"});
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!metadata.value()->windows_attributes.value()) { const auto& e = *metadata.value()->windows_attributes.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if ((*metadata.value()->windows_attributes.value() & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "link.object_kind"});
+        static_assert(MAXIMUM_REPARSE_DATA_BUFFER_SIZE == detail::windows_reparse_max_bytes);
+        const auto maximum = std::min(limits.max_native_bytes, detail::windows_reparse_max_bytes);
+        if (maximum < 8) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "reparse.buffer_limit"});
+        auto capacity = std::min<std::size_t>(1024, maximum);
+        for (;;) {
+            std::vector<std::uint64_t> buffer((capacity + 7) / 8, 0);
+            DWORD returned = 0;
+            if (DeviceIoControl(handle_.get(), FSCTL_GET_REPARSE_POINT, nullptr, 0, buffer.data(), static_cast<DWORD>(capacity), &returned, nullptr)) {
+                if (returned > capacity) return Result::unavailable(ObservationState::Failed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "reparse.returned_count"});
+                auto decoded = detail::decode_windows_reparse(std::as_bytes(std::span(buffer)).first(returned), limits);
+                if (!decoded.value()) { const auto& e = *decoded.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+                auto data = std::move(decoded).take_value();
+                if (metadata.value()->reparse_tag.value() && *metadata.value()->reparse_tag.value() != data.tag)
+                    return Result::unavailable(ObservationState::Changed,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "reparse.tag_changed"});
+                return Result::available({metadata.value()->identity, std::move(data)});
+            }
+            const DWORD code = GetLastError();
+            if (code != ERROR_INSUFFICIENT_BUFFER && code != ERROR_MORE_DATA) return failure<LinkMetadata>(code, "FSCTL_GET_REPARSE_POINT");
+            if (capacity == maximum) return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, code, "FSCTL_GET_REPARSE_POINT.buffer_limit"});
+            capacity = capacity > maximum / 2 ? maximum : capacity * 2;
+        }
+    }
     Observation<StorageInfo> inspect_storage() const override {
         using Result = Observation<StorageInfo>;
         const auto metadata = inspect_basic();
