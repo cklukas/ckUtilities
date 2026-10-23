@@ -1,0 +1,376 @@
+{
+  "milestone": "WP-01 native security observations; WP-01 remains incomplete",
+  "date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release, warnings as errors",
+  "manifest_sha256": "b6f277292d5ec8d8667736139f1ff36e14c65b59114658a516c1b272bac8706f",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "38b74df4accee0e7f74e008cadf30029da7cd0591c42a7bfc65d0f023e265008",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/directory_cursor.cpp": "da0efb2c7d196a5bb07f4e845fb169b7969f083b46063d673bb230a2e2017115",
+    "src/native-core/files/directory_cursor.hpp": "368e59007adc8fdded76dbd0f3167a941c6eca107933e1ba2c5f4231a305f3bc",
+    "src/native-core/files/file_metadata.cpp": "f44f8b2a44abd4e97167bb8ebfea886f2ba9d5da39188da12896a3089d6dfacc",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "5bb25dde8607165ffc62cf15493971c2044916372fcc9785a850dc1dc235aea8",
+    "src/native-core/files/native_name.hpp": "ca08f9251e9fabe014725a64c1370a63a59df987aa5f809e35bddeab50cbd6ee",
+    "src/native-core/files/observation.hpp": "ab532f5a0f22aa249aa5f67cefa10dfa6c4d825df37c0960408d2d233931d0d0",
+    "src/native-core/files/opened_entry.cpp": "b58dd4a111072429de5e05b7f667ff6c0b0a6f1077a15ae8b7947b02678912a1",
+    "src/native-core/files/opened_entry.hpp": "a079b0618168c6d7f66f70412a46bc5cb94cfb172f21fda0acc60d5ee7c9a105",
+    "src/native-core/files/platform/metadata_posix.cpp": "6b34a8b901db09790d0cc6dbab762324dde239ec46119b5423f9646472f1e754",
+    "src/native-core/files/platform/metadata_windows.cpp": "53f9c12cf8b19d183b1205f74f6458fc8cc91f6e91f7530d730a69b8c0d198b3",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "b0aa34878a05054cb35db3cef38124650bdd3e6d16d7238dec97afe750fe668b",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "74f37459a236ee5e7ae3595cd16913c25cf065126b1c615c815342b9473c76bd",
+          "files": 498,
+          "git_head": "6e890759240a6cffcd3e4f1af2a584127741ff4f"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-security-mac-final-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:21:15.253756+00:00",
+      "end": "2026-10-23T01:21:24.790499+00:00",
+      "elapsed_seconds": 9.536,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "74f37459a236ee5e7ae3595cd16913c25cf065126b1c615c815342b9473c76bd",
+          "files": 498,
+          "git_head": "6e890759240a6cffcd3e4f1af2a584127741ff4f"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-security-mac-final-test",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:21:25.777075+00:00",
+      "end": "2026-10-23T01:21:26.470099+00:00",
+      "elapsed_seconds": 0.693,
+      "exit_code": 0
+    }
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T01:21:11.538460+00:00",
+        "end": "2026-10-23T01:21:23.379859+00:00",
+        "elapsed_seconds": 11.842,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T01:21:23.382460+00:00",
+        "end": "2026-10-23T01:21:23.562864+00:00",
+        "elapsed_seconds": 0.18,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ]
+  },
+  "windows": {
+    "start": "2026-10-23T01:21:14.6555929Z",
+    "buildEnd": "2026-10-23T01:21:30.8228400Z",
+    "end": "2026-10-23T01:21:32.4220206Z",
+    "buildSeconds": 16.1672471,
+    "testSeconds": 1.5991806,
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe"
+  },
+  "cases": {
+    "macos": 70,
+    "linux": 68,
+    "windows": 71
+  },
+  "ctest_log_sha256": {
+    "macos": "a44e1c44eedfd6cc4bd2785f3a5c8833ccfe1a0df5fe5b83af1efb318b4bf529",
+    "linux": "d2d5649afd9cf4157e3f59a1b39cfb555e53e6b41e82e7078b7c28732a2fc700",
+    "windows": "41d2a02a12acd50db28523775efc99076bec71cf1a96035c19b1afac98323621"
+  },
+  "macos_sanitizers": {
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "74f37459a236ee5e7ae3595cd16913c25cf065126b1c615c815342b9473c76bd",
+          "files": 498,
+          "git_head": "6e890759240a6cffcd3e4f1af2a584127741ff4f"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-security-sanitizer-build",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_names.cpp",
+        "tests/unit/ck_files/test_files_metadata.cpp",
+        "tests/unit/ck_files/test_files_directory.cpp",
+        "tests/unit/ck_files/test_files_native.cpp",
+        "tests/unit/ck_files/test_files_directory_native.cpp",
+        "tests/unit/ck_files/test_files_child_native.cpp",
+        "tests/unit/ck_files/test_files_channels.cpp",
+        "tests/unit/ck_files/test_files_channels_native.cpp",
+        "tests/unit/ck_files/test_files_attributes.cpp",
+        "tests/unit/ck_files/test_files_attributes_native.cpp",
+        "tests/unit/ck_files/test_files_security.cpp",
+        "tests/unit/ck_files/test_files_security_native.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/security-sanitizer/ck-files-security-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:21:27.269515+00:00",
+      "end": "2026-10-23T01:22:08.562170+00:00",
+      "elapsed_seconds": 41.293,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "74f37459a236ee5e7ae3595cd16913c25cf065126b1c615c815342b9473c76bd",
+          "files": 498,
+          "git_head": "6e890759240a6cffcd3e4f1af2a584127741ff4f"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-security-sanitizer-test",
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/security-sanitizer/ck-files-security-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:22:09.060946+00:00",
+      "end": "2026-10-23T01:22:09.676600+00:00",
+      "elapsed_seconds": 0.615,
+      "exit_code": 0
+    }
+  },
+  "windows_asan": {
+    "start": "2026-10-23T01:21:35.8984417Z",
+    "buildEnd": "2026-10-23T01:22:18.2309316Z",
+    "end": "2026-10-23T01:22:19.2241830Z",
+    "buildSeconds": 42.3324899,
+    "testSeconds": 0.9932514,
+    "units": {
+      "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+      "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+      "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+      "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+      "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+      "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+      "src/native-core/files/directory_cursor.cpp": "da0efb2c7d196a5bb07f4e845fb169b7969f083b46063d673bb230a2e2017115",
+      "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+      "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+      "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+      "src/native-core/files/file_metadata.cpp": "f44f8b2a44abd4e97167bb8ebfea886f2ba9d5da39188da12896a3089d6dfacc",
+      "src/native-core/files/native_name.cpp": "5bb25dde8607165ffc62cf15493971c2044916372fcc9785a850dc1dc235aea8",
+      "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+      "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+      "src/native-core/files/platform/metadata_windows.cpp": "53f9c12cf8b19d183b1205f74f6458fc8cc91f6e91f7530d730a69b8c0d198b3",
+      "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+      "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+      "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+      "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+      "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+      "src/native-core/files/opened_entry.cpp": "b58dd4a111072429de5e05b7f667ff6c0b0a6f1077a15ae8b7947b02678912a1",
+      "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+      "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b"
+    },
+    "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+    "flags": [
+      "/nologo",
+      "/std:c++20",
+      "/O1",
+      "/Zi",
+      "/MT",
+      "/DNDEBUG",
+      "/EHsc",
+      "/W4",
+      "/WX",
+      "/permissive-",
+      "/utf-8",
+      "/fsanitize=address",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/FIV:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan\\test_config.hpp",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\src\\native-core\\files",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\tests\\support",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\ckvision-sdk\\include",
+      "/FeV:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan\\ck-files-security-tests.exe",
+      "/FdV:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan\\compiler.pdb"
+    ],
+    "link": [
+      "/link",
+      "/DEBUG",
+      "/INCREMENTAL:NO",
+      "/PDB:V:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan\\security.pdb",
+      "ntdll.lib",
+      "kernel32.lib",
+      "advapi32.lib"
+    ],
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan\\ck-files-security-tests.exe",
+    "asanOptions": "halt_on_error=1"
+  },
+  "sanitizer_log_sha256": {
+    "macos": "523209138c8ec9bbdaf6ea1ce09068d21bce7efacf5e7fd6473fbe78b5f96b79",
+    "windows": "38ab6c104f3b231bf42a2be3bd71586790a1635c639efb404e2dacaa8cb50119"
+  },
+  "qualified_scope": {
+    "macos": "APFS; fstatx_np/filesec public ACL property and supported absence; extended ACL external bytes, ordered allow/deny, directory inheritance flags, final symlink, owned handle retained after rename/replacement/unlink",
+    "linux": "Lima ckdev Debian 13 arm64/ext4; Linux v2 access/default ACL xattr bytes, named uid, mask, absence, limits, final symlink, owned descriptor retained after rename/replacement/unlink",
+    "windows": "V: ReFS; owner/group/DACL and integrity descriptor observations; protected ordered two-ACE DACL, access denial, owned handle retained after rename/replacement/unlink; full-security open compared with independent native request, no privilege adjustments"
+  },
+  "limitations": [
+    "Structural bounds checks do not prove semantic ACL equivalence or safe security replay.",
+    "Linux POSIX ACLs, Darwin extended ACLs and Windows security descriptors are distinct native principal/permission models.",
+    "Full Windows audit/SACL content preservation is not qualified by these fixtures. Missing rights are reported without enabling privileges.",
+    "Source snapshots, security application, effective-access evaluation and destination security capabilities remain future work.",
+    "No Files mutation command or application GUI exists yet; WP-01 acceptance remains incomplete."
+  ],
+  "primary_contracts": [
+    "https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/posix_acl_xattr.h",
+    "https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_entry.3.html",
+    "https://raw.githubusercontent.com/apple-oss-distributions/Libc/main/gen/filesec.c",
+    "https://raw.githubusercontent.com/apple-oss-distributions/Libc/main/sys/statx_np.c",
+    "https://raw.githubusercontent.com/apple-oss-distributions/Libc/main/posix1e/acl_translate.c",
+    "https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-getkernelobjectsecurity",
+    "https://learn.microsoft.com/en-us/windows/win32/secauthz/security-information"
+  ],
+  "cleanup": {
+    "macos": {
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/security-sanitizer",
+      "exe_sha256": "08ff0333472c4d97be18c441eaeec2f52c78ac555f4df6f11460dda83638c0c6",
+      "active_owners": 0
+    },
+    "windows": {
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\security-asan",
+      "exeSha256": "7513b8ac86a122983e0c06d25de09623e5cef72b277c9f5094896ffd392f8931",
+      "nativeFilesystem": "ReFS",
+      "label": "DevBuild",
+      "activeOwners": 0
+    }
+  },
+  "checks": {
+    "ui_boundary_domain_sources": 46,
+    "ckvision_only_active_sources": 389,
+    "ckdocs_pages": 24
+  }
+}

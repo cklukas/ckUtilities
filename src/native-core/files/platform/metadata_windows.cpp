@@ -354,6 +354,38 @@ public:
         return Result::available({std::move(record.identifier), std::move(record.value), identity(handle_.get(), scope_),
             Observation<std::uint32_t>::available(record.flags)});
     }
+    Observation<NativeSecurityValue> read_security(SecurityPart part, InventoryLimits limits = {}) const override {
+        using Result = Observation<NativeSecurityValue>;
+        if (!valid_security_part(part) || !limits.valid())
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(!valid_security_part(part) ? AdapterError::InvalidIdentifier : AdapterError::InvalidLimit), "security.query"});
+        SECURITY_INFORMATION mask = 0;
+        switch (part) {
+        case SecurityPart::WindowsAccess: mask = OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION; break;
+        case SecurityPart::WindowsIntegrity: mask = LABEL_SECURITY_INFORMATION; break;
+        case SecurityPart::WindowsFullDescriptor: mask = BACKUP_SECURITY_INFORMATION; break;
+        default: return Result::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "security.model"});
+        }
+        // No named lookup and no privilege adjustment. Missing handle rights
+        // remain native denial, not an empty descriptor or silently weaker query.
+        auto bytes = detail::read_attribute_bytes([&](std::span<std::byte> buffer) -> detail::BufferReply {
+            DWORD needed = 0;
+            const bool success = GetKernelObjectSecurity(handle_.get(), mask,
+                buffer.empty() ? nullptr : buffer.data(), static_cast<DWORD>(buffer.size()), &needed) != 0;
+            const DWORD code = GetLastError();
+            if (success) return static_cast<std::size_t>(needed);
+            const NativeError error{ErrorDomain::Win32, code, "GetKernelObjectSecurity"};
+            if (code == ERROR_INSUFFICIENT_BUFFER)
+                return buffer.empty() ? detail::BufferReply{static_cast<std::size_t>(needed)} : detail::BufferReply{detail::BufferTooSmall{error}};
+            return UnavailableObservation{error_state(code), error};
+        }, limits);
+        if (!bytes.value()) { const auto& e = *bytes.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto checked = detail::validate_windows_descriptor(*bytes.value(), limits);
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({part, SecurityEncoding::WindowsRelativeDescriptor, SecurityPresence::Present,
+            std::move(bytes).take_value(), identity(handle_.get(), scope_), mask});
+    }
 private:
     Observation<detail::WindowsEaRecord> query_ea(void* names, ULONG names_size, PULONG index, InventoryLimits limits) const {
         using Result = Observation<detail::WindowsEaRecord>;
@@ -413,7 +445,9 @@ public:
         // Attributes=0 requests exact native spelling, not case-insensitive lookup.
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
-        const NTSTATUS status = NtCreateFile(&raw, FILE_READ_ATTRIBUTES | SYNCHRONIZE | (access == EntryAccess::MetadataAndAttributes ? FILE_READ_EA : 0), &attributes, &io, nullptr, 0,
+        const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_attributes(access) ? FILE_READ_EA : 0) |
+            (requests_security(access) ? READ_CONTROL : 0) | (requests_audit_security(access) ? ACCESS_SYSTEM_SECURITY : 0);
+        const NTSTATUS status = NtCreateFile(&raw, rights, &attributes, &io, nullptr, 0,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
             FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
         OwnedHandle opened(raw);

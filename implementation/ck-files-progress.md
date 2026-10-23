@@ -496,3 +496,90 @@ filename and stopped before compilation; correcting the launcher required no
 product change. Concise records survive cleanup of disposable sanitizer outputs;
 current normal builds remain at the recorded absolute paths. Boundary checks
 passed (44 domain files, 385 ckVision-only files), as did ckdocs (24 pages).
+
+
+## WP-01: native security observations (2026-10-23)
+
+Added explicit, bounded security queries on owned entries. Query scopes and
+native encodings distinguish Linux access/default POSIX ACLs, Darwin extended
+ACLs, Windows owner/group/DACL, mandatory integrity information and the native
+full-descriptor query. A default value means Unknown. Successful absence is a
+separate presence value; unavailable, unsupported and denied queries retain
+native diagnostics. Native bytes, ACE order, principal identifiers and control
+flags are retained without interpreting unlike ACL models as equivalent.
+Bounds validators check Linux versioned record framing and self-relative
+Windows descriptor/SID/ACL/ACE extents and entry limits. These checks do not
+perform semantic ACL validation, principal translation or effective-access
+calculation, and do not authorize replay on another filesystem or host.
+
+Linux reads the exact system.posix_acl_access/default values through its
+existing owned-object attribute boundary. Only ENODATA establishes absence;
+other native failures propagate. Native ext4 fixtures include a named uid and
+mask, directory default ACLs, limits, final symlinks and retention after
+rename/replacement/unlink. Basic owner/group/mode observations remain separate.
+
+macOS uses public fstatx_np/filesec APIs to distinguish a successfully queried
+missing ACL property from an unavailable object. Absence additionally requires
+native extended-security support via fpathconf(_PC_EXTENDED_SECURITY_NP).
+Working ACLs are owned/freed explicitly and exported with acl_copy_ext; entry
+counts and exported bytes are bounded. APFS fixtures qualify ordered deny/allow
+entries, UUID qualifiers, directory inheritance flags, absence, final symlinks,
+and owned-descriptor retention after rename/replacement/unlink. Public SDK
+interfaces are used; implementation-private filesec properties/syscalls are not.
+
+The symlink fixture exposed acl_get_fd_np's overloaded ENOENT when no ACL
+property exists. Treating that as object disappearance was incorrect; the
+explicit filesec query fixes the classification. An initial compile used an
+incorrect pathconf constant spelling; it was corrected to the SDK's public
+_NP spelling without warning suppression. A shell sequence then invoked old
+test output after that failed compile; that result is excluded from validation.
+The final driver stops immediately on build failure and all final tests ran
+only after successful builds from the recorded inputs.
+
+Windows requests READ_CONTROL explicitly for ordinary security inspection and
+ACCESS_SYSTEM_SECURITY only for the explicit full-security access mode.
+The backend never enables privileges, changes credentials, reopens by name or
+silently weakens a query after denial. GetKernelObjectSecurity fills bounded
+caller-owned buffers in self-relative form. Query masks remain attached to the
+result so an owner/group/DACL result cannot be mistaken for full SACL coverage.
+Native ReFS fixtures qualify a protected two-ACE DACL, integrity queries,
+metadata-only denial, retained owner identity after unlink, and explicit
+full-security access compared with an independent native open. Positive audit
+ACE/SACL preservation is not established by these fixtures. No security-write
+API is exposed by the product; native fixture writers modify only owned tests.
+
+Exact source fingerprints, commands, timing records and log digests are in
+[the security evidence](evidence/ck-files-security-20261023.json).
+
+| Host / Release toolchain | Final build interval (UTC) | Build / test elapsed | Files result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:21:15.254–01:21:24.790 | 9.536 / 0.693 s | 70 cases, twelve CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:21:11.538–01:21:23.380 | 11.842 / 0.180 s | 68 cases, twelve CTest entries passed |
+| Windows x64 / MSVC 19.44, static CRT | 01:21:14.656–01:21:30.823 | 16.167 / 1.599 s | 71 cases, twelve CTest entries passed |
+
+The final header change rebuilt all affected core/native test targets (18
+steps); logs and the verified 42-file manifest establish compiled inputs.
+These are increments without CMake regeneration, compared against earlier
+security builds including regeneration (14.851 s Mac and 15.543 s Linux).
+The earlier Windows attribute build took 26.065 s including CMake regeneration
+and 24 compile/link steps; this final Windows increment has 18 affected steps.
+Elapsed time alone was not used as freshness evidence. No Files GUI was launched.
+
+Final direct sanitizer builds compiled all 23 core/platform/test translation
+units. macOS ASan + UBSan, strict warnings, -O1 -g and frame pointers built from
+01:21:27.270–01:22:08.562 UTC in 41.293 s and ran 70 cases in 0.615 s.
+Windows MSVC ASan, /O1 /Zi /MT /W4 /WX built from
+01:21:35.898–01:22:18.231 UTC in 42.332 s and ran 71 cases in 0.993 s.
+Both passed with halt-on-error and no sanitizer diagnostics. Direct commands
+compiled the enumerated sources; no build-cache hit substitutes those inputs.
+The preceding 23-unit Mac sanitizer observation took 43.830 s. The earlier
+20-unit Windows attribute milestone took 31.628 s; this run adds the security
+implementation and fixtures, and its log shows all 23 units compiled. These
+observations are configuration-specific comparisons, not invented baselines.
+Disposable sanitizer outputs are removed after preserving concise evidence;
+current normal CMake outputs remain. All Windows project writes used V:.
+
+Boundary checks passed (46 domain files and 389 ckVision-only files). This
+milestone leaves storage/provider and driver-specific inventories, destination
+capabilities, injected filesystem/time services and pane semantics in WP-01.
+No package acceptance checkbox is closed by this security-read milestone.

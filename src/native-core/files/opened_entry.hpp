@@ -5,14 +5,25 @@
 #include "file_metadata.hpp"
 #include "data_channels.hpp"
 #include "attributes.hpp"
+#include "security.hpp"
 
 namespace ck::files {
 
 // Requested OS access only; never authority for mutation, loss or hydration.
-enum class EntryAccess { MetadataOnly, MetadataAndAttributes };
-constexpr bool valid_entry_access(EntryAccess access) noexcept {
-    return access == EntryAccess::MetadataOnly || access == EntryAccess::MetadataAndAttributes;
+enum class EntryAccess : unsigned {
+    MetadataOnly = 0, MetadataAndAttributes = 1, MetadataAndSecurity = 2,
+    MetadataAndFullSecurity = 6
+};
+constexpr EntryAccess operator|(EntryAccess left, EntryAccess right) noexcept {
+    return static_cast<EntryAccess>(static_cast<unsigned>(left) | static_cast<unsigned>(right));
 }
+constexpr bool valid_entry_access(EntryAccess access) noexcept {
+    const auto bits = static_cast<unsigned>(access);
+    return (bits & ~7U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
+}
+constexpr bool requests_attributes(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 1U) != 0; }
+constexpr bool requests_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 2U) != 0; }
+constexpr bool requests_audit_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 4U) != 0; }
 
 // Owns the opened object, independently of the original parent/name. Queries
 // use that object even if its entry is renamed, replaced or unlinked. This does
@@ -32,6 +43,7 @@ public:
     virtual Observation<DataChannelCatalog> inspect_data_channels(InventoryLimits limits = {}) const;
     virtual Observation<AttributeCatalog> inspect_attributes(InventoryLimits limits = {}) const;
     virtual Observation<AttributeValue> read_attribute(const NativeFeatureIdentifier& identifier, InventoryLimits limits = {}) const;
+    virtual Observation<NativeSecurityValue> read_security(SecurityPart part, InventoryLimits limits = {}) const;
 protected:
     OpenedEntry() = default;
 };

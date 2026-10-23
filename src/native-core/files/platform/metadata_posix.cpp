@@ -20,6 +20,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#if defined(__APPLE__)
+#include <sys/acl.h>
+#endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
 #include <sys/vfs.h>
@@ -275,6 +278,91 @@ public:
         if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return Result::available({id, std::move(bytes).take_value(), metadata.value()->identity,
             Observation<std::uint32_t>::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "attributes.flags"))});
+    }
+    Observation<NativeSecurityValue> read_security(SecurityPart part, InventoryLimits limits = {}) const override {
+        using Result = Observation<NativeSecurityValue>;
+        if (!valid_security_part(part) || !limits.valid())
+            return Result::unavailable(ObservationState::Failed, adapter_error(!valid_security_part(part) ? AdapterError::InvalidIdentifier : AdapterError::InvalidLimit, "security.query"));
+#if defined(__linux__)
+        if (part != SecurityPart::LinuxAccessAcl && part != SecurityPart::LinuxDefaultAcl)
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "security.model"));
+        const auto id = *NativeFeatureIdentifier::from_posix(part == SecurityPart::LinuxAccessAcl ? "system.posix_acl_access" : "system.posix_acl_default");
+        auto queried = read_attribute(id, limits);
+        if (!queried.value()) {
+            const auto& e = *queried.unavailable_detail();
+            if (e.error.domain == ErrorDomain::Posix && e.error.code == ENODATA) {
+                const auto metadata = inspect_basic();
+                if (!metadata.value()) { const auto& error = *metadata.unavailable_detail(); return Result::unavailable(error.state, error.error); }
+                return Result::available({part, SecurityEncoding::LinuxPosixAclXattrV2, SecurityPresence::Absent, {}, metadata.value()->identity, 0});
+            }
+            return Result::unavailable(e.state, e.error);
+        }
+        auto value = std::move(queried).take_value();
+        const auto checked = detail::validate_linux_acl(value.bytes, limits);
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({part, SecurityEncoding::LinuxPosixAclXattrV2, SecurityPresence::Present, std::move(value.bytes), std::move(value.owner), 0});
+#else
+        if (part != SecurityPart::DarwinExtendedAcl)
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "security.model"));
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto native_error = [](int code, const char* operation) {
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, operation});
+        };
+        struct FileSecurityOwner {
+            filesec_t value;
+            ~FileSecurityOwner() { if (value) filesec_free(value); }
+        } security{filesec_init()};
+        if (!security.value) return native_error(errno, "filesec_init");
+        struct stat native{};
+        if (fstatx_np(descriptor_.get(), &native, security.value) != 0) return native_error(errno, "fstatx_np.security");
+        int present = 0;
+        if (filesec_query_property(security.value, FILESEC_ACL, &present) != 0) return native_error(errno, "filesec_query_property.acl");
+        if (!present) {
+            // Unlike acl_get_fd_np's overloaded ENOENT, this is a successful
+            // object query with an explicitly missing ACL property. Qualify
+            // native extended-security support before calling it absent.
+            errno = 0;
+            const auto supported = fpathconf(descriptor_.get(), _PC_EXTENDED_SECURITY_NP);
+            if (supported < 0) {
+                const int code = errno;
+                if (code != 0) return native_error(code, "fpathconf.extended_security");
+                return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::UnsupportedQuery, "fpathconf.extended_security"));
+            }
+            if (supported == 0) return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, "security.extended_acl"));
+            return Result::available({part, SecurityEncoding::DarwinExternalAcl, SecurityPresence::Absent, {}, metadata.value()->identity, 0});
+        }
+        struct AclOwner {
+            acl_t value = nullptr;
+            ~AclOwner() { if (value) acl_free(value); }
+        } acl;
+        if (filesec_get_property(security.value, FILESEC_ACL, &acl.value) != 0) return native_error(errno, "filesec_get_property.acl");
+        if (!acl.value) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "filesec_get_property.null_acl"));
+        if (acl_valid(acl.value) != 0) return native_error(errno, "acl_valid");
+        std::size_t entries = 0;
+        acl_entry_t entry{};
+        int selector = ACL_FIRST_ENTRY;
+        for (;;) {
+            if (acl_get_entry(acl.value, selector, &entry) != 0) {
+                const int code = errno;
+                if (code != EINVAL) return native_error(code, "acl_get_entry");
+                break; // Darwin's documented end-of-working-ACL result.
+            }
+            if (entries == limits.max_records)
+                return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InventoryLimit, "security.records"));
+            ++entries;
+            selector = ACL_NEXT_ENTRY;
+        }
+        const auto size = acl_size(acl.value);
+        if (size < 0) return native_error(errno, "acl_size");
+        if (static_cast<std::uint64_t>(size) > limits.max_native_bytes)
+            return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InventoryLimit, "security.bytes"));
+        NativeBytes bytes(static_cast<std::size_t>(size));
+        const auto copied = acl_copy_ext(bytes.data(), acl.value, size);
+        if (copied < 0) return native_error(errno, "acl_copy_ext");
+        if (copied != size) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "acl_copy_ext.size"));
+        return Result::available({part, SecurityEncoding::DarwinExternalAcl, SecurityPresence::Present, std::move(bytes), metadata.value()->identity, 0});
+#endif
     }
 private:
     static detail::BufferReply attribute_reply(ssize_t count, const char* operation) {

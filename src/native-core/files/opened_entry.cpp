@@ -18,4 +18,11 @@ Observation<AttributeValue> OpenedEntry::read_attribute(const NativeFeatureIdent
     return Observation<AttributeValue>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "attributes.native_query"});
 }
+Observation<NativeSecurityValue> OpenedEntry::read_security(SecurityPart part, InventoryLimits limits) const {
+    if (!valid_security_part(part) || !limits.valid())
+        return Observation<NativeSecurityValue>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(!valid_security_part(part) ? AdapterError::InvalidIdentifier : AdapterError::InvalidLimit), "security.query"});
+    return Observation<NativeSecurityValue>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "security.native_query"});
+}
 } // namespace ck::files
