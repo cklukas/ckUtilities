@@ -51,8 +51,9 @@ PaneEntry PaneEntry::from_listed(ListedEntry entry, Observation<bool> hidden_sta
 PanePublish PaneModel::publish(const CompletedPaneListing& listing) {
     if (!current(listing.request())) return PanePublish::Stale;
     auto directory = listing.directory(); // allocate any error strings before row publication
+    auto issues = listing.binding_issues();
     const auto result = publish(listing.request(), listing.entries());
-    if (result == PanePublish::Applied) listing_directory_ = std::move(directory);
+    if (result == PanePublish::Applied) { listing_directory_ = std::move(directory); binding_issues_.swap(issues); }
     return result;
 }
 PaneListingRequest PaneModel::begin_listing(PaneListingPurpose purpose) {
@@ -130,7 +131,7 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
     next_row_ = next_row;
     indexes_.swap(indexes);
     rows_.swap(prepared); visible_.swap(projection.visible); positions_.swap(projection.positions); marks_.swap(marks);
-    focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset(); listing_directory_ = {};
+    focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset(); listing_directory_ = {}; binding_issues_.clear();
     return PanePublish::Applied;
 }
 bool PaneModel::fail_listing(PaneListingRequest request, UnavailableObservation failure) {
@@ -184,19 +185,24 @@ std::optional<std::size_t> PaneModel::index(PaneRowId id) const noexcept {
 const PaneRow* PaneModel::row(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? &rows_[*i] : nullptr; }
 const PaneRow* PaneModel::visible_row(std::size_t i) const noexcept { return i < visible_.size() ? &rows_[visible_[i]] : nullptr; }
 std::optional<std::size_t> PaneModel::visible_index(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? positions_[*i] : std::nullopt; }
-bool PaneModel::focus(PaneRowId id) noexcept { if (!visible_index(id)) return false; focus_ = std::move(id); invalidated_ = {}; return true; }
-bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; marks_[*i] = value; invalidated_ = {}; return true; }
+bool PaneModel::focus(PaneRowId id) noexcept { if (!visible_index(id)) return false; focus_ = std::move(id); invalidated_ = {}; binding_issues_.clear(); return true; }
+bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; marks_[*i] = value; invalidated_ = {}; binding_issues_.clear(); return true; }
 bool PaneModel::marked(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i && marks_[*i]; }
-void PaneModel::mark_visible(bool value) noexcept { for (auto i : visible_) marks_[i] = value; if (!visible_.empty()) invalidated_ = {}; }
-void PaneModel::invert_visible_marks() noexcept { for (auto i : visible_) marks_[i] = !marks_[i]; if (!visible_.empty()) invalidated_ = {}; }
+void PaneModel::mark_visible(bool value) noexcept { for (auto i : visible_) marks_[i] = value; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
+void PaneModel::invert_visible_marks() noexcept { for (auto i : visible_) marks_[i] = !marks_[i]; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
 bool PaneModel::mark_range(std::size_t first, std::size_t last, bool value) noexcept {
     if (first >= visible_.size() || last >= visible_.size()) return false;
     if (first > last) std::swap(first, last);
     for (auto i = first; i <= last; ++i) marks_[visible_[i]] = value;
-    invalidated_ = {};
+    invalidated_ = {}; binding_issues_.clear();
     return true;
 }
-void PaneModel::clear_marks() noexcept { std::fill(marks_.begin(), marks_.end(), false); invalidated_ = {}; }
+void PaneModel::clear_marks() noexcept { std::fill(marks_.begin(), marks_.end(), false); invalidated_ = {}; binding_issues_.clear(); }
+std::vector<HeldChild::Pointer> PaneModel::held_entries() const {
+    std::vector<HeldChild::Pointer> result;
+    for (const auto& row : rows_) if (row.entry.held_child()) result.push_back(row.entry.held_child());
+    return result;
+}
 PaneSources PaneModel::sources() const {
     PaneSources result;
     if (listing_pending()) { result.state = PaneSourcesState::ListingPending; return result; }

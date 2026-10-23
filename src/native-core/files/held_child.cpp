@@ -27,29 +27,36 @@ HeldChild::HeldChild(std::shared_ptr<const DirectoryCursor> parent, NativeName n
     std::shared_ptr<const Family> family, std::uint64_t revision, Observation<IdentityComparison> continuity)
     : parent_(std::move(parent)), name_(std::move(name)), child_(std::move(child)),
       metadata_(std::move(metadata)), family_(std::move(family)), revision_(revision), previous_continuity_(std::move(continuity)) {}
-Observation<HeldChild::Pointer> HeldChild::observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name) {
+Observation<HeldChild::Pointer> HeldChild::observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name, std::stop_token stop) {
     using Result = Observation<Pointer>;
     if (!parent || !name.is_valid()) return Result::unavailable(ObservationState::Failed,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "held_child.parent_or_name"});
+    const auto cancelled = [] { return Result::unavailable(ObservationState::Unknown,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "held_child.cancelled"}); };
+    if (stop.stop_requested()) return cancelled();
     auto opened = parent->open_child(name, EntryAccess::MetadataOnly);
+    if (stop.stop_requested()) return cancelled();
     if (!opened.value()) { const auto& e = *opened.unavailable_detail(); return Result::unavailable(e.state, e.error); }
     auto owned = std::move(opened).take_value();
     if (!owned) return Result::unavailable(ObservationState::Failed,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "held_child.null_child"});
     std::shared_ptr<const OpenedEntry> child(std::move(owned));
     auto metadata = child->inspect_basic();
+    if (stop.stop_requested()) return cancelled();
     if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
     return Result::available(Pointer(new const HeldChild(std::move(parent), std::move(name), std::move(child),
         std::move(metadata).take_value(), std::make_shared<const Family>(), 1)));
 }
-Observation<HeldChild::Pointer> HeldChild::refresh() const {
+Observation<HeldChild::Pointer> HeldChild::refresh(std::stop_token stop) const {
     using Result = Observation<Pointer>;
-    auto next = observe(parent_, name_);
+    auto next = observe(parent_, name_, stop);
     if (!next.value()) return next;
     auto fresh = std::move(next).take_value();
     // Both handles are alive while comparing. Inspect the old held object again
     // rather than trusting a cached ID if an adapter's identity/kind changed.
     const auto old_now = child_->inspect_basic();
+    if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "held_child.cancelled"});
     auto continuity = old_now.value() ? continuity_between(metadata_, *old_now.value()) :
         Observation<IdentityComparison>::unavailable(old_now.unavailable_detail()->state, old_now.unavailable_detail()->error);
     if (continuity.value() && *continuity.value() == IdentityComparison::Same)

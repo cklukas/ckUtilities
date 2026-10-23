@@ -13,8 +13,9 @@ public:
     using Pointer = std::shared_ptr<const HeldChild>;
     HeldChild(const HeldChild&) = delete;
     HeldChild& operator=(const HeldChild&) = delete;
-    static Observation<Pointer> observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name);
-    Observation<Pointer> refresh() const;
+    static Observation<Pointer> observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name, std::stop_token stop = {});
+    Observation<Pointer> refresh(std::stop_token stop = {}) const;
+    const Observation<ObjectIdentity>& parent_identity() const noexcept { return parent_->identity(); }
     const NativeName& name() const noexcept { return name_; }
     const BasicMetadata& metadata() const noexcept { return metadata_; }
     const Observation<IdentityComparison>& previous_continuity() const noexcept { return previous_continuity_; }

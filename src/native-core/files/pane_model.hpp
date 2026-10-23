@@ -36,6 +36,10 @@ private:
     HeldChild::Pointer held_;
     std::optional<UnavailableObservation> inspection_error_;
 };
+struct PaneBindingIssue {
+    NativeName name;
+    UnavailableObservation detail;
+};
 struct PaneRow {
     PaneRowId id;
     PaneEntry entry;
@@ -103,6 +107,9 @@ public:
     bool cancel_listing(PaneListingRequest request) noexcept;
     bool listing_pending() const noexcept { return pending_ != 0; }
     const std::optional<UnavailableObservation>& listing_error() const noexcept { return error_; }
+    const std::vector<PaneBindingIssue>& binding_issues() const noexcept { return binding_issues_; }
+    // Worker-side capture; no I/O. Includes hidden/unmarked held rows as well.
+    std::vector<HeldChild::Pointer> held_entries() const;
     const PaneInvalidatedSelection& invalidated_selection() const noexcept { return invalidated_; }
     const PaneView& view() const noexcept { return view_; }
     void set_view(PaneView view); // throws invalid_argument for invalid enum/oversize filter
@@ -141,5 +148,6 @@ private:
     PaneListingPurpose purpose_ = PaneListingPurpose::Navigate;
     PaneInvalidatedSelection invalidated_;
     Observation<ObjectIdentity> listing_directory_;
+    std::vector<PaneBindingIssue> binding_issues_;
 };
 } // namespace ck::files

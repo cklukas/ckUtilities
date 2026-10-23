@@ -1738,3 +1738,90 @@ source/SDK fingerprints, normal/sanitized results, compiler commands and cleanup
 Operation capabilities, planned-name collision grouping, alias/descendant checks,
 frozen inventories/loss consent, large indexes, selected-entry refresh integration
 and scheduling remain required. WP-01 acceptance remains open.
+
+## 2026-10-24 — WP-01 sealed bound-entry refresh preparation
+
+Added `PaneRefreshJob`, a worker phase between native-End discovery and pane
+publication. Discovery can explicitly retain its scanned directory; default
+release-at-End behavior stays intact. Preparation captures bounded prior held
+bindings, incrementally copies/matches rows and refreshes only through the same
+qualified directory context while both parent handles remain alive. Cached names
+or independently opened observations cannot bypass the publisher's sealed-family
+check. Successful continuity preserves row IDs, marks and focus with current
+metadata; replacements, unavailable continuity and parent changes invalidate
+selection rather than retarget it.
+
+Per-name binding issues distinguish failed checks and unlisted observations
+without claiming definitive absence. Hidden policy is recomputed; hidden marks
+still require review. Issues publish atomically with rows/directory context,
+survive failed/cancelled requests, and are acknowledged by valid explicit
+selection commands. Invalidation counts remain until acknowledgement even when
+a later successful refresh replaces the latest issue report.
+
+Preparation has a 256-step advance bound, injected cooperative clock slices
+(default 20 ms) and checked pane/component limits. Copies happen incrementally;
+no partial result publishes. Held-child cancellation now checks between native
+calls and releases private children. Paused jobs resume, slow completed binding
+checks do not repeat just because their time slice expired, and abandoned/failed
+jobs release staging. Native calls/individual allocation or encoding steps can
+outlast a slice. Native owners must retire on workers; a false scan-pin indicator
+does not mean rows contain no held handles.
+
+Seventeen new deterministic cases cover integrated continuity, replacement,
+root mismatch/unknown IDs, absent names, denials, independent families, clock and
+step yields, cancellation at three native query boundaries, abandonment, stale
+generations, resource/configuration refusal, hard-link/hidden mark semantics and
+bad_alloc poisoning. Three native cases per host verify retained focus/marks,
+current metadata, replacement while the old object is held, and cross-directory
+refusal.
+
+Final validation used the same 99-file source manifest. Build/test intervals
+below are UTC on 2026-10-23 (the milestone record uses the current local date):
+
+| Host | Final build interval UTC | Build / test seconds | Cases / suites |
+| --- | --- | --- | --- |
+| macOS arm64 | 21:41:03.575–21:41:05.123 | 1.549 / 0.843 | 264 / 37 |
+| Lima Debian 13 arm64 | 21:43:03.924–21:43:07.589 | 3.665 / 0.119 | 262 / 37 |
+| Windows x64, static CRT | 21:43:09.542–21:43:18.901 | 9.358 / 2.803 | 268 / 37 |
+
+The initial Mac change rebuilt 18 steps in 20.020 s, including CMake regeneration;
+review tests and scan-pin naming produced later two-/11-step increments. Final
+Mac repaired implementation/library/executable work used four remaining steps;
+unchanged test objects from the prior attempt were valid for the final source.
+Linux/Windows final updates used six steps. Actual inputs, links, source hashes
+and the newly added bad_alloc case in every LastTest log establish freshness.
+
+Review found that allocating diagnostic text in an exception catch could prevent
+poisoning during allocation failure. The catch now creates an empty-text error
+and emplaces a payload with statically nonthrowing movement/destruction, then
+releases staging. Two overstrong noexcept assumptions about optional wrapper
+operations failed compilation; the final implementation follows optional's
+specified emplace exception guarantee instead of weakening warnings. One CTest
+command accidentally ran after the first failed build and used the old binary.
+That stale run is explicitly excluded in the evidence. Subsequent validation
+required successful builds before running tests.
+
+Focused sanitizers include all 24 core units, platform, eight affected pane /
+continuity/listing/refresh fixtures and test host (34 units), with strict warnings
+and halt-on-error. Mac ASan+UBSan passed 87 cases after a 50.750 s build
+(21:43:05.683–21:43:56.433 UTC), testing in 0.499 s. Windows ASan passed 87 after
+88.656 s (21:44:49.234–21:46:17.890), testing in 1.266 s. The earlier same-scope
+Mac run took 51.641 s and passed 86 cases before the allocation-failure addition;
+previous 28-unit different-fixture builds took 44.833/64.181 s. Exact unit lists,
+flags, hashes and emitted Windows source names were checked.
+
+Linux ASan+UBSan adds the native-location fixture on a required casefold-enabled
+private 64 MiB ext4 image (35 units). All 92 cases passed: 121.538 s build
+(21:44:45.829–21:46:47.367 UTC), 0.373 s test. This broader fixture set has its
+own baseline; the preceding 29-unit different-fixture build was 87.946 s. The
+image was unmounted, loop audit empty, and image/diagnostic workspace removed.
+Mac/Windows diagnostics were hashed and zero-owner checks recorded before
+removal. Final fixture audits are empty; current normal builds remain. Windows
+writes/temp stayed on V:. No GUI or production mutation was added.
+
+[Refresh evidence](evidence/ck-files-pane-refresh-20261024.json) preserves final
+hashes, successful/failed validation records, the explicitly discarded stale run,
+compiler commands and cleanup. Boundaries (76 core sources / 446 active files),
+ckdocs (24 pages) and whitespace checks pass. Initial selection pinning, UI
+scheduling/ownership, large-view indexes, remaining inventories and full collision /
+capability planning still require implementation. WP-01 acceptance stays open.

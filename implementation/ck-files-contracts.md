@@ -133,16 +133,79 @@ simultaneously; these caps are not a global process-memory quota. Allocation
 failure remains explicit, without partial publication or unlimited-memory
 fallback. Disk-backed indexes remain required for larger views.
 
-A completed payload neither retains the source directory handle nor attests
-that an original pathname still resolves to it. Navigation labels/context need
-their separately qualified binding. These discovery rows are not sealed
-HeldChild refresh successors, so the existing invalidation policy applies to
-unproven selection continuity. Selected-entry refresh integration, scheduling,
-large indexes and UI ownership/publication remain unfinished. No snapshot,
+A default completed payload releases the source directory handle; refresh
+preparation can explicitly retain it. Neither mode attests that an original
+pathname still resolves to that directory. Navigation labels/context need
+their separately qualified binding. Raw discovery rows are not sealed HeldChild refresh successors. PaneRefreshJob
+can prepare successors for previously held entries; unproven continuity still
+invalidates selection. Initial pinning, scheduling, large indexes and UI
+ownership/publication remain unfinished. No snapshot,
 provider hydration or mutation guarantee is implied.
 
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
 publication/failure tests and native streaming-to-pane tests on all three hosts.
+
+## Sealed bound-entry refresh preparation
+
+`PaneListingJob` can opt into `ListingDirectoryRetention::RetainForRefresh`.
+Its completed native-End payload then retains the exact scanned directory cursor;
+`retains_scan_directory()` reports only that pin. Default ReleaseAtEnd behavior
+is unchanged. `DirectoryListing::pin_directory` shares lifetime without providing
+mutable enumeration. Every native owner, including retained scan pins and held
+row bindings, must retire on the worker. A false scan-pin indicator does not
+make a payload containing held entries safe for UI-thread destruction.
+
+`PaneRefreshJob` consumes this sealed, retained discovery result plus prior
+immutable HeldChild bindings (available through worker-side `PaneModel::held_entries`).
+Both parent handles remain alive during adapter-scoped native-ID comparison.
+Unknown/different parent observations decline old-child I/O and produce named
+issues. Only a live HeldChild refresh can produce a sealed successor; cached
+names/IDs or independently opened observations cannot preserve selection through
+the receiving pane's family check. These remain native identity observations,
+not pathname attestation, a content snapshot or mutation authority. Windows'
+[FILE_ID_INFO contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+describes its host-local ID comparison; no cross-host/durable identity is inferred.
+
+Preparation incrementally validates/copies rows and matches prior names, then
+refreshes bindings. Each advance performs at most 256 preparation/binding steps
+and checks a shared injected monotonic clock (20 ms default, positive through
+one second). Each component is capped at 1 MiB, with configured pane row/name /
+display/held-count limits. Previous bindings are bounded before capture; overflow,
+null/duplicate bindings, bad model transport and allocation failures cannot
+publish a partial listing. These are retained-state/count bounds, not a global
+memory quota. Scanned rows, old pane, staged rows and the result can coexist.
+
+A slow completed binding observation is committed privately before yielding, so
+resumption does not repeat it merely because its slice expired. Cancellation is
+checked during copying and between native calls in HeldChild observation/refresh;
+new private children close on cancellation. Paused jobs can resume; abandonment
+and fatal failures discard private state. Exceptions poison the job before
+rethrow. The poison descriptor uses empty diagnostic text and nonthrowing payload
+construction/destruction, avoiding allocation while handling bad_alloc. The
+[optional emplace contract](https://eel.is/c++draft/optional.assign#lib:emplace,optional)
+permits exceptions only from constructing its payload, whose move is statically
+checked here. Native calls and individual allocation/encoding steps can block or
+outlast the cooperative slice; no hard deadline is claimed.
+
+Fresh held metadata replaces a row only through its actual refresh result;
+hidden policy is recomputed. Replacements, failed/unqualified continuity,
+unlisted prior names and parent mismatches carry `PaneBindingIssue` details.
+An unlisted name means not observed in this scan, not definitive native absence.
+The final result requires the original generation gate and releases its own
+scan pin; externally retained input payloads keep their own pins. Successful
+publication applies rows, directory context and issue details together. It
+preserves marks/focus only through sealed families. Hidden marked rows still
+require review. Failed/cancelled/newer requests cannot overwrite the published
+state. Current issue details survive failure/cancellation; successful publication
+replaces the report, while unacknowledged selection invalidation counts persist.
+Explicit valid selection commands acknowledge/clear those diagnostics.
+
+This phase handles entries already bound before refresh. Initial selection
+pinning, UI ownership/scheduling, large-view indexes, operation planning and
+execution-time revalidation remain required work.
+[Refresh evidence](evidence/ck-files-pane-refresh-20261024.json) includes injected
+lifecycle/fault/resource tests and native bound-selection, replacement and
+cross-directory tests on all three platforms.
 
 ## Held-directory entry probes
 

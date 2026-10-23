@@ -4,35 +4,43 @@
 #include <stdexcept>
 
 namespace ck::files {
-namespace {
-Observation<bool> hidden(const ListedEntry& entry, StorageModel model) {
+Observation<bool> pane_hidden_state(const NativeName& name, const Observation<BasicMetadata>& metadata, StorageModel model) {
+    const bool windows = name.windows_units() != nullptr;
+    if (!name.is_valid() || (model != StorageModel::Unknown && model != StorageModel::LinuxStatx &&
+        model != StorageModel::DarwinStatFlags && model != StorageModel::WindowsHandleAttributes) ||
+        (model == StorageModel::WindowsHandleAttributes && !windows) ||
+        ((model == StorageModel::LinuxStatx || model == StorageModel::DarwinStatFlags) && windows))
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "pane.hidden_input"});
     if (model == StorageModel::Unknown) return {};
-    if (model != StorageModel::WindowsHandleAttributes && entry.name.posix_bytes()->front() == '.')
+    if (model != StorageModel::WindowsHandleAttributes && name.posix_bytes()->front() == '.')
         return Observation<bool>::available(true);
     if (model == StorageModel::LinuxStatx) return Observation<bool>::available(false);
-    if (!entry.metadata.value()) { const auto& e = *entry.metadata.unavailable_detail(); return Observation<bool>::unavailable(e.state, e.error); }
-    const auto storage = storage_from_basic(*entry.metadata.value(), model);
+    if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Observation<bool>::unavailable(e.state, e.error); }
+    const auto storage = storage_from_basic(*metadata.value(), model);
     if (!storage.value()) { const auto& e = *storage.unavailable_detail(); return Observation<bool>::unavailable(e.state, e.error); }
     const auto flag = reported_storage_flag(*storage.value(), StorageFeature::HiddenFlag);
     if (!flag.value()) { const auto& e = *flag.unavailable_detail(); return Observation<bool>::unavailable(e.state, e.error); }
     return Observation<bool>::available(*flag.value() == ReportedFlag::Set);
 }
-}
 PaneListingJob::PaneListingJob(PaneListingRequest request, std::unique_ptr<DirectoryListing> listing,
-    StorageModel model, PaneLimits limits)
+    StorageModel model, PaneLimits limits, ListingDirectoryRetention retention)
     : request_(std::move(request)), listing_(std::move(listing)), model_(model), limits_(limits) {
     validate_pane_limits(limits);
     if (!listing_ || !request_.scope.is_valid() || request_.number == 0 ||
         (model != StorageModel::Unknown && model != StorageModel::LinuxStatx && model != StorageModel::DarwinStatFlags && model != StorageModel::WindowsHandleAttributes))
         throw std::invalid_argument("invalid pane listing job");
+    if (retention != ListingDirectoryRetention::ReleaseAtEnd && retention != ListingDirectoryRetention::RetainForRefresh)
+        throw std::invalid_argument("invalid listing directory retention");
     directory_ = listing_->identity();
+    if (retention == ListingDirectoryRetention::RetainForRefresh) directory_pin_ = listing_->pin_directory();
 }
 void PaneListingJob::fail(UnavailableObservation failure) {
     failure_ = std::move(failure); state_ = PaneListingJobState::Failed;
     release_staging();
 }
 void PaneListingJob::release_staging() noexcept {
-    listing_.reset(); std::vector<PaneEntry>{}.swap(entries_); names_.clear();
+    listing_.reset(); directory_pin_.reset(); std::vector<PaneEntry>{}.swap(entries_); names_.clear();
     encoding_.reset(); directory_ = {}; native_bytes_ = display_bytes_ = 0;
 }
 bool PaneListingJob::abandon() noexcept {
@@ -70,11 +78,11 @@ PaneListingJobState PaneListingJob::advance(std::stop_token stop) {
                 fail({ObservationState::Failed, {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "pane_listing.duplicate"}}); return state_;
             }
             encoding_ = entry.name.encoding(); native_bytes_ += units * unit_size; display_bytes_ += display.size();
-            auto hidden_state = hidden(entry, model_);
+            auto hidden_state = pane_hidden_state(entry.name, entry.metadata, model_);
             entries_.push_back(PaneEntry::from_listed(std::move(entry), std::move(hidden_state)));
         }
         if (batch.state == DirectoryReadState::End) {
-            completed_ = Result(new const CompletedPaneListing(request_, directory_, std::move(entries_)));
+            completed_ = Result(new const CompletedPaneListing(request_, directory_, std::move(entries_), directory_pin_));
             release_staging(); state_ = PaneListingJobState::Complete;
         } else state_ = batch.state == DirectoryReadState::Cancelled ? PaneListingJobState::Paused : PaneListingJobState::Collecting;
         return state_;

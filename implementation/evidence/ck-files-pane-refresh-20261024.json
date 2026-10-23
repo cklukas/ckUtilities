@@ -1,0 +1,1189 @@
+{
+  "milestone": "WP-01 sealed held-entry refresh preparation (partial WP-01)",
+  "date": "2026-10-24",
+  "validation_utc_date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release C++20 strict warnings; installed SDK; Windows static CRT",
+  "manifest_sha256": "d654cf59608bdcaa146ec0db96fb270722ede7982fa57997b870596bcce0ce6e",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "2ec01d62e33cc9823b0404b44a6f7c9a188bc9f008059d870938d09626d8ebdb",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+    "src/native-core/files/child_lookup.hpp": "45d5cb758c08f7adfda72c088f41d4399e368466b1bafba7c65b08a79300562b",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+    "src/native-core/files/directory_cursor.hpp": "99a42fe0e693c1506b6e659c2be93948d02a703f5a265e3174a9e9263ede3a53",
+    "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+    "src/native-core/files/directory_entry_probe.hpp": "8474e16ccf9ca9c106a2e400708994688b9982a00098723cc04c08003865bf9f",
+    "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+    "src/native-core/files/directory_listing.hpp": "e6aa55c90c5aeab0834e71a501dfaab09eb27dff34798a34d009784830984dd6",
+    "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+    "src/native-core/files/held_child.hpp": "ccee6f376d8d926cb4c0458e473ea5bab2a750b848af319a81edf915209f5c6a",
+    "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+    "src/native-core/files/link_metadata.hpp": "a175d440938e665f0fb59aba7f9a5c65653728e9bbb7ad22eed4a9520a6f6ba3",
+    "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+    "src/native-core/files/location_info.hpp": "0210924f93ce1ac53c6355258ff9d9c3ec9a1f71c9c219500467aa730e62ceab",
+    "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+    "src/native-core/files/monotonic_clock.hpp": "03ac623fe5784391a577a15b0e5ab2d55efc8561f837b46e60cce766e22aa6a1",
+    "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+    "src/native-core/files/name_limits.hpp": "30e840e59d037d0749e03d88ad99fe80a64d05cd306f10b832d91ffc45c9994f",
+    "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+    "src/native-core/files/name_mapping.hpp": "c1503d5262931c414aef4038c7388d3eaf0b524baf610b05bcd3938838f62eba",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+    "src/native-core/files/native_name.hpp": "89464eb1ab53f82aeb79ee0413836bf0cfbafd1f185c6c7d5ec14dd37207037d",
+    "src/native-core/files/observation.hpp": "c95a706c369af6a3d61f3bda8e74477a39732f004dde5e043c34ea84b8c0ea5a",
+    "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+    "src/native-core/files/opened_entry.hpp": "a563b861a61edf634bec14458b8b955c8654ddfb06c2e63fcacb6485ba00aa3c",
+    "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+    "src/native-core/files/pane_listing_job.hpp": "dc51bf2db6b4b021483cba62e038f14a330ffabfc52ed909bdd5095f1197d142",
+    "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+    "src/native-core/files/pane_model.hpp": "413c9066e11fc643df8f9e54a3bac9e80943ae009844a707b358a5b5146ba516",
+    "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+    "src/native-core/files/pane_refresh_job.hpp": "d3ec9933fcf7799391025c7dfeb571bcf2bf6c543222333f5ca92b367f4fe919",
+    "src/native-core/files/platform/metadata_posix.cpp": "86e6b0652f92f5573decf3c9b12357268b44ad5f3ce16c2e7e9dbc32fb8714ce",
+    "src/native-core/files/platform/metadata_windows.cpp": "6e8e006c914d7a5d741d55d0b474f18f62b29a8ded3ff3f89c0ae59952cc6f18",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+    "src/native-core/files/storage_info.hpp": "1bf591b1649cf9ce08bf23a07f9925b0bfa695b0d7f885ce9dd246be0c22e1e7",
+    "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+    "src/native-core/files/unicode_scalar.hpp": "fd99c8044180edd11dc7de9107da873149dd03647cc9da7e6eec9f7210e8b204",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+    "src/native-core/files/windows_name.hpp": "a820aaddfd888e6b87226c165e4b5af83b9abe8a02b0b4658b3d0cea0efc5921",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "0ee028cc94ab95f47a0c35baccf305fad0fdac6befd87ef711beb11912cbf253",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_clock.cpp": "cbd7aa1277f7226fbabf863897f779343e22c43754ca2f2621f46537dbe9cfc3",
+    "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+    "tests/unit/ck_files/test_files_continuity_native.cpp": "3d9f0e45c215169a7aef750e42f9517e87be7d426c1535e5ac3e2ce1345ed463",
+    "tests/unit/ck_files/test_files_directory.cpp": "391689ff86bbbebc299ce89e004d703cd16fa9df18a525fed91166821f66769d",
+    "tests/unit/ck_files/test_files_directory_child_native.cpp": "dae7cef23cb396c2a581208a44dc939936b5b66c4290507d9464b477860c68ce",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_entry_probe.cpp": "63de7e4dad545f92010ad5a356c5759b286d2cbb47ba76993bcb97cf833a5e07",
+    "tests/unit/ck_files/test_files_entry_probe_native.cpp": "58682ee7881f01475e75ec56c6ca93f288b2bcf450abd571cf2784e50a02cacb",
+    "tests/unit/ck_files/test_files_links.cpp": "f0840756215662214400211492e6414b881aed3575ad6b110eada9e4b15a1dbc",
+    "tests/unit/ck_files/test_files_links_native.cpp": "20909416fa19858b20c036106462a1d6aa5fec9830e2ccf89da31a07002f48bd",
+    "tests/unit/ck_files/test_files_listing.cpp": "a8c17af7155da63b31325a2742a8bd1a2f29b291bf6431a3d532ea87cb80a35a",
+    "tests/unit/ck_files/test_files_listing_native.cpp": "b9ce83eac9d0393e7075c35fd0e6c72c01dd3d3b4962151c29104b717c7831b2",
+    "tests/unit/ck_files/test_files_location.cpp": "4b5d6d29bfca76aeebd4575fd7888505137a39afdb7ac4b0beb24ef8d6e60189",
+    "tests/unit/ck_files/test_files_location_native.cpp": "fe1f4c7cea6ef1e4bb6df37789dd20216ed448e6fd69c6d8fbd8d75cb7c101cb",
+    "tests/unit/ck_files/test_files_lookup.cpp": "cd78d77e2bf0fa199bdd3d358278b13a71c4a5e5a0ff5aa592a02ab73e8951db",
+    "tests/unit/ck_files/test_files_lookup_native.cpp": "37cd704e638b46bd619fc95286b54cc505f4bf20998392e52488c3e3fcb8bc86",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_name_limits.cpp": "98f0359315262be89265dd6b1bc6da4aa1c8a25f61c2660a1a77fa5db4f78a3e",
+    "tests/unit/ck_files/test_files_name_mapping.cpp": "764383d75f8b084dff4c4cbe328217cdb05a487984e6d97ce8775867ff766b3a",
+    "tests/unit/ck_files/test_files_name_mapping_native.cpp": "0efa60920c867adceeb8587803cf0a1b97c99c2d8618086f30372400725bbf6e",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_pane.cpp": "d9d45a9667e916b528ecdfff59c7bdee0dea25a66f0ee0cf3ca53ce99834918b",
+    "tests/unit/ck_files/test_files_pane_job.cpp": "8b478db7beb97ed018c7a3773fcac6d07aae316a62ccc86206f843f6e419398d",
+    "tests/unit/ck_files/test_files_pane_job_native.cpp": "c4bc918c98405cd44cff403e7263eb76761ad47825614f3c100e3c190cf0c1ea",
+    "tests/unit/ck_files/test_files_pane_refresh.cpp": "5aa7d7059d0a7eacb4c3f47ef9353a70e7db66586a86e86bbdb5ed4b20bd8c98",
+    "tests/unit/ck_files/test_files_pane_refresh_native.cpp": "863047f127350fc62ea0310937cdd74974a9f2543d5d026a626d1aeae2e40c11",
+    "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/unit/ck_files/test_files_simulated.cpp": "1ec896499bcd20c6aaadb6350257a4871af44c9cbc5e9ed7ccf0677c6227249b",
+    "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+    "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+    "tests/support/manual_monotonic_clock.hpp": "eb448c369f647f5f7303cc8cb0df9625d29849f3d6f893a2d638bd2144942ceb",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/simulated_filesystem.hpp": "8fb7f24d4f5af6510bae4459f8a48e483c8a72a20fe4c6932d8ff7fcc80195d7",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "1077e47a4fe20efba449026bc5bf67038653880050e67179ee6c3862788991b1",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-verified-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:41:03.575019+00:00",
+      "end": "2026-10-23T21:41:05.123833+00:00",
+      "elapsed_seconds": 1.549,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "1077e47a4fe20efba449026bc5bf67038653880050e67179ee6c3862788991b1",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-verified-mac-tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:41:05.475684+00:00",
+      "end": "2026-10-23T21:41:06.319027+00:00",
+      "elapsed_seconds": 0.843,
+      "exit_code": 0
+    },
+    "results": {
+      "ctest_entries": 37,
+      "cases": 264,
+      "last_test_log_sha256": "f8655644291438fbaa70c6621473aabb13d6d688a671f52d6241968c9bf5ee2f",
+      "commands": [
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_attributes.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_channels.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_clock.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_continuity.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_directory.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_entry_probe.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_links.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_listing.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_location.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_lookup.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_metadata.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_name_limits.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_name_mapping.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_names.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane_job.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane_refresh.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_security.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_simulated.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_storage.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_attributes_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_channels_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_child_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_continuity_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_directory_child_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_directory_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_entry_probe_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_links_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_listing_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_location_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_lookup_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_name_mapping_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_pane_job_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_pane_refresh_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_security_native.cpp\"",
+        "\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_storage_native.cpp\""
+      ]
+    },
+    "fixture_audit": {
+      "scope": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "patterns": [
+        "files-pane-refresh-*",
+        "files-panejob-*",
+        "files-listing-*"
+      ],
+      "remaining": []
+    },
+    "diagnostic_cleanup": {
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-verified-sanitizer",
+      "exe_sha256": "17b828a4b28fe4386eb5cd82db88e02395cfea04e3bf82f6d2e588e5efa31eb6",
+      "active_owners": 0
+    }
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T21:43:03.924666+00:00",
+        "end": "2026-10-23T21:43:07.589812+00:00",
+        "elapsed_seconds": 3.665,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T21:43:07.590126+00:00",
+        "end": "2026-10-23T21:43:07.709408+00:00",
+        "elapsed_seconds": 0.119,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "results": {
+      "ctest_entries": 37,
+      "cases": 262,
+      "last_test_log_sha256": "e109d0e6a1b3df6449caacfa90ea27e4dfa7afe61dba63e0783b60477b3140bc",
+      "commands": [
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_attributes.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_channels.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_clock.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_continuity.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_directory.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_entry_probe.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_links.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_listing.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_location.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_lookup.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_metadata.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_name_limits.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_name_mapping.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_names.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane_job.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_pane_refresh.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_security.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_simulated.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests\" \"--suite\" \"test_files_storage.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_attributes_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_channels_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_child_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_continuity_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_directory_child_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_directory_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_entry_probe_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_links_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_listing_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_location_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_lookup_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_name_mapping_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_pane_job_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_pane_refresh_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_security_native.cpp\"",
+        "\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests\" \"--suite\" \"test_files_storage_native.cpp\""
+      ]
+    },
+    "fixture_audit": {
+      "absent_workspace": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023",
+      "scope": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "patterns": [
+        "files-pane-refresh-*",
+        "files-panejob-*",
+        "files-listing-*"
+      ],
+      "remaining": [],
+      "active_test_owners": []
+    }
+  },
+  "windows": {
+    "start": "2026-10-23T21:43:09.5428281Z",
+    "buildEnd": "2026-10-23T21:43:18.9010882Z",
+    "end": "2026-10-23T21:43:21.7037472Z",
+    "buildSeconds": 9.358260099999999,
+    "testSeconds": 2.802659,
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe",
+    "results": {
+      "ctest_entries": 37,
+      "cases": 268,
+      "last_test_log_sha256": "e0316d1dceda8a0dc93b05b91b9d2efe7866e2b5716c2cbd0a78534fd29064ee",
+      "commands": [
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_attributes.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_channels.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_clock.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_continuity.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_directory.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_entry_probe.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_links.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_listing.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_location.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_lookup.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_metadata.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_name_limits.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_name_mapping.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_names.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_pane.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_pane_job.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_pane_refresh.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_security.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_simulated.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_core_tests.exe\" \"--suite\" \"test_files_storage.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_attributes_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_channels_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_child_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_continuity_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_directory_child_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_directory_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_entry_probe_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_links_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_listing_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_location_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_lookup_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_name_mapping_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_pane_job_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_pane_refresh_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_security_native.cpp\"",
+        "\"V:/tmp/ckutilities-files-20261023-01a165ae/work/build/tests/unit/ck_files/ck_files_native_tests.exe\" \"--suite\" \"test_files_storage_native.cpp\""
+      ]
+    },
+    "fixture_audit": {
+      "scope": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\test-scratch",
+      "activeOwners": 0,
+      "removedEmptyFailedFixtures": [],
+      "remaining": []
+    },
+    "diagnostic_cleanup": {
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan",
+      "exeSha256": "8d586b6edc0203402da720c97b5bf9e178aacaa3a4880584e74d88b25798c9f3",
+      "nativeFilesystem": "ReFS",
+      "label": "DevBuild",
+      "activeOwners": 0
+    }
+  },
+  "sanitizers": {
+    "scope": "Mac/Windows: all 24 core units + platform + eight pane/continuity/listing/refresh fixtures + host = 34 units, 87 cases. Linux adds native location fixture on required casefold image = 35 units, 92 cases. Focused coverage only.",
+    "macos": {
+      "build": {
+        "inputs": [
+          {
+            "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+            "tree_sha256": "1077e47a4fe20efba449026bc5bf67038653880050e67179ee6c3862788991b1",
+            "files": 572,
+            "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+          },
+          {
+            "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+            "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+            "files": 5124,
+            "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+          }
+        ],
+        "name": "wp01-refresh-verified-mac-sanitizer-build",
+        "command": [
+          "clang++",
+          "-std=c++20",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Wpedantic",
+          "-Wshadow-all",
+          "-Werror",
+          "-fsanitize=address,undefined",
+          "-fno-omit-frame-pointer",
+          "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+          "-I",
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+          "-I",
+          "src/native-core/files",
+          "-I",
+          "tests/support",
+          "src/native-core/files/attributes.cpp",
+          "src/native-core/files/child_lookup.cpp",
+          "src/native-core/files/data_channels.cpp",
+          "src/native-core/files/directory_cursor.cpp",
+          "src/native-core/files/directory_entry_probe.cpp",
+          "src/native-core/files/directory_listing.cpp",
+          "src/native-core/files/file_metadata.cpp",
+          "src/native-core/files/held_child.cpp",
+          "src/native-core/files/link_metadata.cpp",
+          "src/native-core/files/location_info.cpp",
+          "src/native-core/files/monotonic_clock.cpp",
+          "src/native-core/files/name_limits.cpp",
+          "src/native-core/files/name_mapping.cpp",
+          "src/native-core/files/native_name.cpp",
+          "src/native-core/files/opened_entry.cpp",
+          "src/native-core/files/pane_listing_job.cpp",
+          "src/native-core/files/pane_model.cpp",
+          "src/native-core/files/pane_refresh_job.cpp",
+          "src/native-core/files/security.cpp",
+          "src/native-core/files/storage_info.cpp",
+          "src/native-core/files/unicode_scalar.cpp",
+          "src/native-core/files/windows_directory_record.cpp",
+          "src/native-core/files/windows_name.cpp",
+          "src/native-core/files/windows_stream_records.cpp",
+          "src/native-core/files/platform/metadata_posix.cpp",
+          "tests/unit/ck_files/test_files_pane.cpp",
+          "tests/unit/ck_files/test_files_continuity.cpp",
+          "tests/unit/ck_files/test_files_listing.cpp",
+          "tests/unit/ck_files/test_files_pane_job.cpp",
+          "tests/unit/ck_files/test_files_pane_refresh.cpp",
+          "tests/unit/ck_files/test_files_listing_native.cpp",
+          "tests/unit/ck_files/test_files_pane_job_native.cpp",
+          "tests/unit/ck_files/test_files_pane_refresh_native.cpp",
+          "src/vision/host/cktest_main.cpp",
+          "-o",
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-verified-sanitizer/ck-files-refresh-verified-tests"
+        ],
+        "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+        "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+        "start": "2026-10-23T21:43:05.683384+00:00",
+        "end": "2026-10-23T21:43:56.433503+00:00",
+        "elapsed_seconds": 50.75,
+        "exit_code": 0
+      },
+      "test": {
+        "inputs": [
+          {
+            "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+            "tree_sha256": "1077e47a4fe20efba449026bc5bf67038653880050e67179ee6c3862788991b1",
+            "files": 572,
+            "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+          },
+          {
+            "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+            "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+            "files": 5124,
+            "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+          }
+        ],
+        "name": "wp01-refresh-verified-mac-sanitizer-test",
+        "command": [
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-verified-sanitizer/ck-files-refresh-verified-tests"
+        ],
+        "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+        "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+        "start": "2026-10-23T21:44:45.184756+00:00",
+        "end": "2026-10-23T21:44:45.683994+00:00",
+        "elapsed_seconds": 0.499,
+        "exit_code": 0
+      },
+      "units": {
+        "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+        "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+        "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+        "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+        "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+        "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+        "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+        "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+        "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+        "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+        "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+        "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+        "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+        "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+        "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+        "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+        "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+        "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+        "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+        "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+        "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+        "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+        "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+        "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+        "src/native-core/files/platform/metadata_posix.cpp": "86e6b0652f92f5573decf3c9b12357268b44ad5f3ce16c2e7e9dbc32fb8714ce",
+        "tests/unit/ck_files/test_files_pane.cpp": "d9d45a9667e916b528ecdfff59c7bdee0dea25a66f0ee0cf3ca53ce99834918b",
+        "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+        "tests/unit/ck_files/test_files_listing.cpp": "a8c17af7155da63b31325a2742a8bd1a2f29b291bf6431a3d532ea87cb80a35a",
+        "tests/unit/ck_files/test_files_pane_job.cpp": "8b478db7beb97ed018c7a3773fcac6d07aae316a62ccc86206f843f6e419398d",
+        "tests/unit/ck_files/test_files_pane_refresh.cpp": "5aa7d7059d0a7eacb4c3f47ef9353a70e7db66586a86e86bbdb5ed4b20bd8c98",
+        "tests/unit/ck_files/test_files_listing_native.cpp": "b9ce83eac9d0393e7075c35fd0e6c72c01dd3d3b4962151c29104b717c7831b2",
+        "tests/unit/ck_files/test_files_pane_job_native.cpp": "c4bc918c98405cd44cff403e7263eb76761ad47825614f3c100e3c190cf0c1ea",
+        "tests/unit/ck_files/test_files_pane_refresh_native.cpp": "863047f127350fc62ea0310937cdd74974a9f2543d5d026a626d1aeae2e40c11",
+        "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852"
+      },
+      "asan_options": "halt_on_error=1",
+      "ubsan_options": "halt_on_error=1"
+    },
+    "windows": {
+      "start": "2026-10-23T21:44:49.2346627Z",
+      "buildEnd": "2026-10-23T21:46:17.8901767Z",
+      "end": "2026-10-23T21:46:19.1557014Z",
+      "buildSeconds": 88.655514,
+      "testSeconds": 1.2655246999999998,
+      "units": {
+        "tests/unit/ck_files/test_files_pane_job_native.cpp": "c4bc918c98405cd44cff403e7263eb76761ad47825614f3c100e3c190cf0c1ea",
+        "tests/unit/ck_files/test_files_pane_refresh.cpp": "5aa7d7059d0a7eacb4c3f47ef9353a70e7db66586a86e86bbdb5ed4b20bd8c98",
+        "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+        "tests/unit/ck_files/test_files_pane.cpp": "d9d45a9667e916b528ecdfff59c7bdee0dea25a66f0ee0cf3ca53ce99834918b",
+        "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+        "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+        "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+        "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+        "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+        "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+        "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+        "tests/unit/ck_files/test_files_pane_job.cpp": "8b478db7beb97ed018c7a3773fcac6d07aae316a62ccc86206f843f6e419398d",
+        "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+        "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+        "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+        "tests/unit/ck_files/test_files_listing_native.cpp": "b9ce83eac9d0393e7075c35fd0e6c72c01dd3d3b4962151c29104b717c7831b2",
+        "tests/unit/ck_files/test_files_listing.cpp": "a8c17af7155da63b31325a2742a8bd1a2f29b291bf6431a3d532ea87cb80a35a",
+        "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+        "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+        "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+        "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+        "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+        "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+        "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+        "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+        "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+        "src/native-core/files/platform/metadata_windows.cpp": "6e8e006c914d7a5d741d55d0b474f18f62b29a8ded3ff3f89c0ae59952cc6f18",
+        "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+        "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+        "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+        "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+        "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+        "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+        "tests/unit/ck_files/test_files_pane_refresh_native.cpp": "863047f127350fc62ea0310937cdd74974a9f2543d5d026a626d1aeae2e40c11"
+      },
+      "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+      "flags": [
+        "/nologo",
+        "/std:c++20",
+        "/O1",
+        "/Zi",
+        "/MT",
+        "/DNDEBUG",
+        "/EHsc",
+        "/W4",
+        "/WX",
+        "/permissive-",
+        "/utf-8",
+        "/fsanitize=address",
+        "/D_CRT_SECURE_NO_WARNINGS",
+        "/FIV:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan\\test_config.hpp",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\src\\native-core\\files",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\tests\\support",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\ckvision-sdk\\include",
+        "/FeV:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan\\ck-files-refresh-verified-tests.exe",
+        "/FdV:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan\\compiler.pdb"
+      ],
+      "link": [
+        "/link",
+        "/DEBUG",
+        "/INCREMENTAL:NO",
+        "/PDB:V:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan\\entryprobe.pdb",
+        "ntdll.lib",
+        "kernel32.lib",
+        "advapi32.lib"
+      ],
+      "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\refresh-verified-asan\\ck-files-refresh-verified-tests.exe",
+      "asanOptions": "halt_on_error=1"
+    },
+    "linux": {
+      "workspace": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023",
+      "asan_options": "halt_on_error=1",
+      "ubsan_options": "halt_on_error=1",
+      "steps": [
+        {
+          "label": "format",
+          "command": [
+            "/usr/sbin/mkfs.ext4",
+            "-q",
+            "-O",
+            "casefold",
+            "-E",
+            "encoding=utf8",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/owned-ext4.img"
+          ],
+          "start": "2026-10-23T21:44:45.794559+00:00",
+          "end": "2026-10-23T21:44:45.803913+00:00",
+          "elapsed_seconds": 0.009,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "label": "mount",
+          "command": [
+            "sudo",
+            "-n",
+            "mount",
+            "-o",
+            "loop,nodev,nosuid,noexec",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/owned-ext4.img",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount"
+          ],
+          "start": "2026-10-23T21:44:45.803966+00:00",
+          "end": "2026-10-23T21:44:45.820013+00:00",
+          "elapsed_seconds": 0.016,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "label": "mount-identity",
+          "command": [
+            "findmnt",
+            "-rn",
+            "-M",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount",
+            "-o",
+            "TARGET,SOURCE,FSTYPE,OPTIONS"
+          ],
+          "start": "2026-10-23T21:44:45.820052+00:00",
+          "end": "2026-10-23T21:44:45.821846+00:00",
+          "elapsed_seconds": 0.002,
+          "exit_code": 0,
+          "log_sha256": "ca3c74513a4ca03d9c859b0148ecd368c332930f5dc18fe68e83cb46ec49b7d3"
+        },
+        {
+          "label": "owner",
+          "command": [
+            "sudo",
+            "-n",
+            "chown",
+            "501:1000",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount"
+          ],
+          "start": "2026-10-23T21:44:45.821888+00:00",
+          "end": "2026-10-23T21:44:45.827673+00:00",
+          "elapsed_seconds": 0.006,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "label": "build",
+          "command": [
+            "g++",
+            "-std=c++20",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Wshadow",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-DCK_FILES_REQUIRE_CASEFOLD=1",
+            "-DCKTOOLS_TEST_TEMP_ROOT=\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount\"",
+            "-I/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/sdk/include",
+            "-I/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files",
+            "-I/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/support",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/attributes.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/child_lookup.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/data_channels.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_cursor.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_entry_probe.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_listing.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/file_metadata.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/held_child.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/link_metadata.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/location_info.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/monotonic_clock.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/name_limits.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/name_mapping.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/native_name.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/opened_entry.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_listing_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_model.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_refresh_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/security.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/storage_info.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/unicode_scalar.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_directory_record.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_name.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_stream_records.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/platform/metadata_posix.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_pane.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_continuity.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_listing.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_pane_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_pane_refresh.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_listing_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_pane_job_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_pane_refresh_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_location_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/vision/host/cktest_main.cpp",
+            "-o",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/casefold-tests"
+          ],
+          "start": "2026-10-23T21:44:45.829750+00:00",
+          "end": "2026-10-23T21:46:47.367774+00:00",
+          "elapsed_seconds": 121.538,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "label": "test",
+          "command": [
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/casefold-tests"
+          ],
+          "start": "2026-10-23T21:46:47.418320+00:00",
+          "end": "2026-10-23T21:46:47.790830+00:00",
+          "elapsed_seconds": 0.373,
+          "exit_code": 0,
+          "log_sha256": "ec640745d6e4bb5c4340bbe1b6ab493ee11a43fa96e2aeb67897932dcd76b925"
+        },
+        {
+          "label": "unmount",
+          "command": [
+            "sudo",
+            "-n",
+            "umount",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount"
+          ],
+          "start": "2026-10-23T21:46:47.790941+00:00",
+          "end": "2026-10-23T21:46:47.835547+00:00",
+          "elapsed_seconds": 0.045,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "label": "loop-audit",
+          "command": [
+            "/usr/sbin/losetup",
+            "-j",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/owned-ext4.img"
+          ],
+          "start": "2026-10-23T21:46:47.835578+00:00",
+          "end": "2026-10-23T21:46:47.836678+00:00",
+          "elapsed_seconds": 0.001,
+          "exit_code": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "mount": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/tmp/refresh-verified-casefold-sanitized-20261023/mount /dev/loop0 ext4 rw,nosuid,nodev,noexec,relatime",
+      "units": {
+        "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+        "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+        "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+        "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+        "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+        "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+        "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+        "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+        "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+        "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+        "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+        "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+        "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+        "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+        "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+        "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+        "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+        "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+        "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+        "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+        "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+        "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+        "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+        "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+        "src/native-core/files/platform/metadata_posix.cpp": "86e6b0652f92f5573decf3c9b12357268b44ad5f3ce16c2e7e9dbc32fb8714ce",
+        "tests/unit/ck_files/test_files_pane.cpp": "d9d45a9667e916b528ecdfff59c7bdee0dea25a66f0ee0cf3ca53ce99834918b",
+        "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+        "tests/unit/ck_files/test_files_listing.cpp": "a8c17af7155da63b31325a2742a8bd1a2f29b291bf6431a3d532ea87cb80a35a",
+        "tests/unit/ck_files/test_files_pane_job.cpp": "8b478db7beb97ed018c7a3773fcac6d07aae316a62ccc86206f843f6e419398d",
+        "tests/unit/ck_files/test_files_pane_refresh.cpp": "5aa7d7059d0a7eacb4c3f47ef9353a70e7db66586a86e86bbdb5ed4b20bd8c98",
+        "tests/unit/ck_files/test_files_listing_native.cpp": "b9ce83eac9d0393e7075c35fd0e6c72c01dd3d3b4962151c29104b717c7831b2",
+        "tests/unit/ck_files/test_files_pane_job_native.cpp": "c4bc918c98405cd44cff403e7263eb76761ad47825614f3c100e3c190cf0c1ea",
+        "tests/unit/ck_files/test_files_pane_refresh_native.cpp": "863047f127350fc62ea0310937cdd74974a9f2543d5d026a626d1aeae2e40c11",
+        "tests/unit/ck_files/test_files_location_native.cpp": "fe1f4c7cea6ef1e4bb6df37789dd20216ed448e6fd69c6d8fbd8d75cb7c101cb",
+        "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852"
+      },
+      "exe_sha256": "f790ed109e65baf2c5f7e254c4d35223f6899f0a599d0dba93fea70f3198b710",
+      "result": "RUN test_files_pane.cpp:pane_rejects_stale_and_foreign_publications_without_changing_the_listing\nRUN test_files_pane.cpp:pane_scan_failure_preserves_focus_marks_and_native_error\nRUN test_files_pane.cpp:pane_name_order_is_unsigned_lossless_and_independent_of_arrival_order\nRUN test_files_pane.cpp:pane_windows_names_keep_surrogates_and_do_not_normalize_or_fold_native_names\nRUN test_files_pane.cpp:pane_folders_first_does_not_follow_junctions_or_symlinks\nRUN test_files_pane.cpp:pane_numeric_sort_is_numeric_and_unavailable_values_stay_last_both_directions\nRUN test_files_pane.cpp:pane_time_sort_handles_pre_epoch_nanoseconds_and_extreme_seconds_without_subtraction\nRUN test_files_pane.cpp:pane_kind_sort_uses_observed_kinds_and_lossless_name_ties\nRUN test_files_pane.cpp:pane_marks_and_focus_survive_sorting_and_filtering_without_index_retargeting\nRUN test_files_pane.cpp:pane_hidden_flags_do_not_hide_entries_with_unknown_or_denied_visibility\nRUN test_files_pane.cpp:pane_range_all_and_invert_only_change_visible_marks_and_invalid_ranges_are_atomic\nRUN test_files_pane.cpp:pane_filters_prepared_safe_text_without_parsing_display_back_into_native_names\nRUN test_files_pane.cpp:pane_duplicate_and_mixed_names_and_resource_limits_do_not_replace_existing_state\nRUN test_files_pane.cpp:pane_row_handles_never_recycle_or_cross_panes_and_hard_links_remain_distinct_names\nRUN test_files_pane.cpp:pane_invalid_settings_preserve_prepared_view_and_selection\nRUN test_files_pane.cpp:pane_large_projection_keeps_every_row_handle_and_mark_attached_to_its_native_name\nRUN test_files_pane.cpp:pane_refresh_invalidates_sources_explicitly_and_never_falls_back_to_a_replacement_cursor\nRUN test_files_pane.cpp:pane_failed_refresh_preserves_sources_and_explicit_navigation_starts_a_new_context\nRUN test_files_pane.cpp:pane_cancellation_revokes_only_the_current_generation_and_preserves_published_selection\nRUN test_files_pane.cpp:pane_cancellation_rejects_foreign_and_zero_requests_without_touching_the_current_scan\nRUN test_files_pane.cpp:pane_cancellation_does_not_clear_unproven_selection_invalidation\nRUN test_files_continuity.cpp:held_child_rejects_null_and_missing_objects_and_preserves_native_failures\nRUN test_files_continuity.cpp:held_child_continuity_requires_a_live_successor_not_cached_or_independent_id_matches\nRUN test_files_continuity.cpp:held_child_replacement_keeps_old_object_alive_and_starts_a_distinct_family\nRUN test_files_continuity.cpp:held_child_unknown_identity_and_changed_observation_never_claim_continuity\nRUN test_files_continuity.cpp:held_child_old_handle_query_failure_is_reported_without_discarding_the_fresh_observation\nRUN test_files_continuity.cpp:pane_refresh_retains_qualified_row_handles_marks_focus_and_current_metadata\nRUN test_files_continuity.cpp:pane_cached_or_independent_held_snapshots_cannot_retain_stale_sources\nRUN test_files_continuity.cpp:pane_same_name_replacement_invalidates_old_sources_even_while_other_rows_continue\nRUN test_files_continuity.cpp:pane_continued_hidden_marks_still_require_review_and_hard_link_names_stay_distinct\nRUN test_files_continuity.cpp:pane_held_binding_canonicalizes_metadata_rejects_name_substitution_and_checks_held_limit\nRUN test_files_continuity.cpp:all_zero_native_object_ids_are_unqualified_even_when_the_query_reports_success\nRUN test_files_listing.cpp:listing_streams_bounded_rows_and_releases_each_child_before_the_next\nRUN test_files_listing.cpp:listing_byte_budget_retains_the_consumed_component_without_skips_or_duplicates\nRUN test_files_listing.cpp:listing_keeps_per_entry_open_and_metadata_errors_attached_to_native_names\nRUN test_files_listing.cpp:listing_cancellation_between_each_native_stage_preserves_resume_position_and_ownership\nRUN test_files_listing.cpp:listing_enumeration_error_keeps_prior_rows_and_is_terminal_instead_of_end\nRUN test_files_listing.cpp:listing_rejects_oversize_components_in_native_storage_bytes_before_opening_children\nRUN test_files_listing.cpp:listing_exceptions_poison_the_stream_and_close_temporary_handles_before_rethrow\nRUN test_files_listing.cpp:listing_empty_bounded_skip_batch_does_not_spin_until_an_entry_arrives\nRUN test_files_listing.cpp:listing_factory_validates_limits_paths_and_null_results_without_unexpected_filesystem_calls\nRUN test_files_listing.cpp:listing_factory_preserves_root_failures_and_null_children_are_explicit_row_failures\nRUN test_files_listing.cpp:listing_time_slices_yield_after_each_slow_native_stage_without_reopening_prepared_children\nRUN test_files_listing.cpp:listing_cancellation_closes_a_prepared_handle_and_retains_its_pending_component\nRUN test_files_listing.cpp:listing_rejects_clock_reversal_across_slices_and_closes_prepared_handles\nRUN test_files_listing.cpp:listing_clock_exception_poisoning_closes_a_prepared_native_object\nRUN test_files_listing.cpp:listing_time_limit_and_clock_validation_precede_root_io\nRUN test_files_pane_job.cpp:pane_job_stages_until_end_and_publishes_directory_and_rows_together\nRUN test_files_pane_job.cpp:pane_job_completed_results_keep_scope_and_generation_and_reject_stale_publication\nRUN test_files_pane_job.cpp:pane_job_keeps_entry_inspection_errors_in_rows_and_source_candidates\nRUN test_files_pane_job.cpp:pane_job_enumeration_failure_discards_staging_and_preserves_published_selection\nRUN test_files_pane_job.cpp:pane_job_cancelled_batches_are_retained_but_cannot_be_published_before_resumption\nRUN test_files_pane_job.cpp:pane_job_resource_limits_duplicates_and_encoding_mismatch_fail_without_partial_publication\nRUN test_files_pane_job.cpp:pane_job_exceptions_poison_staging_release_cursor_and_rethrow\nRUN test_files_pane_job.cpp:pane_job_hidden_policy_uses_explicit_native_model_and_keeps_unknown_entries_visible\nRUN test_files_pane_job.cpp:pane_job_validates_ownership_limits_and_model_before_reading\nRUN test_files_pane_job.cpp:pane_job_abandonment_closes_a_prepared_child_and_cursor_and_never_resumes_io\nRUN test_files_pane_job.cpp:pane_generation_cancellation_rejects_an_already_issued_completion_after_job_abandonment\nRUN test_files_pane_job.cpp:pane_job_abandonment_preserves_existing_failures_for_review\nRUN test_files_pane_refresh.cpp:pane_refresh_integrates_sealed_successors_and_releases_the_scan_pin_after_preparation\nRUN test_files_pane_refresh.cpp:pane_refresh_replacement_publishes_new_metadata_but_invalidates_old_marks_and_focus\nRUN test_files_pane_refresh.cpp:pane_refresh_parent_mismatch_or_unknown_identity_never_queries_the_old_child\nRUN test_files_pane_refresh.cpp:pane_refresh_unlisted_bindings_report_uncertainty_without_claiming_native_absence\nRUN test_files_pane_refresh.cpp:pane_refresh_denials_remain_named_diagnostics_and_never_retain_unproven_sources\nRUN test_files_pane_refresh.cpp:pane_refresh_independent_observations_cannot_forge_predecessor_families\nRUN test_files_pane_refresh.cpp:pane_refresh_time_yield_retains_progress_without_repeating_a_slow_observation\nRUN test_files_pane_refresh.cpp:pane_refresh_staging_is_step_bounded_and_never_exposes_partial_rows\nRUN test_files_pane_refresh.cpp:pane_refresh_cancellation_releases_newly_opened_children_and_resumes_without_binding_loss\nRUN test_files_pane_refresh.cpp:pane_refresh_abandonment_discards_private_successors_and_generation_gate_rejects_late_results\nRUN test_files_pane_refresh.cpp:pane_refresh_clock_failure_and_exceptions_poison_staging_and_keep_old_pane\nRUN test_files_pane_refresh.cpp:pane_refresh_limits_and_invalid_previous_bindings_fail_before_native_revalidation\nRUN test_files_pane_refresh.cpp:pane_refresh_requires_explicit_scan_retention_and_valid_configuration\nRUN test_files_pane_refresh.cpp:pane_refresh_hidden_flags_and_hard_link_names_preserve_exact_mark_semantics\nRUN test_files_pane_refresh.cpp:pane_refresh_superseded_generations_do_not_publish_or_revoke_a_newer_request\nRUN test_files_pane_refresh.cpp:pane_listing_rejects_unknown_directory_retention_without_reading_or_leaking_the_cursor\nRUN test_files_pane_refresh.cpp:pane_refresh_allocation_failure_uses_a_nonallocating_poison_record_and_releases_staging\nRUN test_files_listing_native.cpp:native_listing_streams_bounded_batches_and_does_not_follow_final_entry_links\nRUN test_files_listing_native.cpp:native_listing_keeps_held_directory_after_original_path_is_replaced\nRUN test_files_listing_native.cpp:native_listing_cancellation_and_resume_preserve_all_entries_and_leave_cwd_unchanged\nRUN test_files_listing_native.cpp:native_listing_time_slices_resume_prepared_handles_with_an_injected_monotonic_clock\nRUN test_files_pane_job_native.cpp:native_pane_job_publishes_native_rows_identity_and_hidden_policy_after_end\nRUN test_files_pane_job_native.cpp:native_pane_job_keeps_held_directory_across_path_replacement_between_batches\nRUN test_files_pane_job_native.cpp:native_pane_job_capacity_failure_does_not_publish_a_partial_directory\nRUN test_files_pane_job_native.cpp:native_pane_job_can_be_abandoned_and_a_new_generation_can_scan_the_same_location\nRUN test_files_pane_refresh_native.cpp:native_pane_refresh_preserves_bound_focus_and_marks_with_live_current_metadata\nRUN test_files_pane_refresh_native.cpp:native_pane_refresh_detects_replacement_while_the_previous_object_remains_held\nRUN test_files_pane_refresh_native.cpp:native_pane_refresh_refuses_cross_directory_binding_despite_equal_component_names\nRUN test_files_location_native.cpp:native_location_queries_remain_attached_to_the_held_directory_after_rename_replacement_and_unlink\nRUN test_files_location_native.cpp:native_location_inspection_does_not_reset_or_consume_directory_enumeration\nRUN test_files_location_native.cpp:native_posix_location_queries_match_descriptor_mount_and_pathconf_results\nRUN test_files_location_native.cpp:native_directory_inode_flags_are_linux_scoped_and_match_an_independent_held_descriptor\nRUN test_files_location_native.cpp:native_linux_casefold_query_preserves_reported_flags_without_emulating_lookup_equivalence\nCASEFOLD_QUALIFIED flags=1074266112\ncktest: 92 tests, all passed\n",
+      "remaining_fixtures": [],
+      "cleanup": "owned image, diagnostic executable and workspace removed after unmount and empty loop audit"
+    }
+  },
+  "failed_compile_attempts": [
+    {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "6a95f84b45735f10eb1f0e3221925a206df218b9a1c63313b5e874703de1d6f6",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-oom-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:36:11.952128+00:00",
+      "end": "2026-10-23T21:36:14.629698+00:00",
+      "elapsed_seconds": 2.677,
+      "exit_code": 1
+    },
+    {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "4add89e35dc07a565c49888e492e4ea604992ea464931cffc855be2330efd178",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-safe-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:38:54.546757+00:00",
+      "end": "2026-10-23T21:38:55.808622+00:00",
+      "elapsed_seconds": 1.261,
+      "exit_code": 1
+    }
+  ],
+  "excluded_stale_test": {
+    "record": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "6a95f84b45735f10eb1f0e3221925a206df218b9a1c63313b5e874703de1d6f6",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-oom-mac-tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:36:15.020207+00:00",
+      "end": "2026-10-23T21:36:15.543555+00:00",
+      "elapsed_seconds": 0.523,
+      "exit_code": 0
+    },
+    "log_sha256": "fe593c31d0a723a87bdcf446d5117c1514cf88f4bc82a95556da9a9e8c0f3968",
+    "reason": "This command ran after a failed build without a fail-fast shell and used the prior executable; explicitly excluded from acceptance. Subsequent commands gated tests on successful build."
+  },
+  "earlier_validation": {
+    "initial_mac_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "63ee5c82a9d0a6633aa60d2c868ec4ba9185d217f7a21f7d46fa475ac9d64e32",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:23:12.054577+00:00",
+      "end": "2026-10-23T21:23:32.074581+00:00",
+      "elapsed_seconds": 20.02,
+      "exit_code": 0
+    },
+    "reviewed_mac_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "2263e3d45af464b562672fba50f7cd51ed65436d2dfe31e1cfb2cb6dbce0983f",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-reviewed-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:28:16.232077+00:00",
+      "end": "2026-10-23T21:28:20.505207+00:00",
+      "elapsed_seconds": 4.273,
+      "exit_code": 0
+    },
+    "getter_rename_mac_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "0780f0c97800d7ec99a3cafc81649c38b9474510c889ba84899e8c4254e6a3b6",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-final-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:30:42.006840+00:00",
+      "end": "2026-10-23T21:30:45.993541+00:00",
+      "elapsed_seconds": 3.987,
+      "exit_code": 0
+    },
+    "pre_oom_sanitizer_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "0780f0c97800d7ec99a3cafc81649c38b9474510c889ba84899e8c4254e6a3b6",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-mac-sanitizer-build",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/child_lookup.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/directory_entry_probe.cpp",
+        "src/native-core/files/directory_listing.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/held_child.cpp",
+        "src/native-core/files/link_metadata.cpp",
+        "src/native-core/files/location_info.cpp",
+        "src/native-core/files/monotonic_clock.cpp",
+        "src/native-core/files/name_limits.cpp",
+        "src/native-core/files/name_mapping.cpp",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/pane_listing_job.cpp",
+        "src/native-core/files/pane_model.cpp",
+        "src/native-core/files/pane_refresh_job.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/storage_info.cpp",
+        "src/native-core/files/unicode_scalar.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/windows_name.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_pane.cpp",
+        "tests/unit/ck_files/test_files_continuity.cpp",
+        "tests/unit/ck_files/test_files_listing.cpp",
+        "tests/unit/ck_files/test_files_pane_job.cpp",
+        "tests/unit/ck_files/test_files_pane_refresh.cpp",
+        "tests/unit/ck_files/test_files_listing_native.cpp",
+        "tests/unit/ck_files/test_files_pane_job_native.cpp",
+        "tests/unit/ck_files/test_files_pane_refresh_native.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-sanitizer/ck-files-refresh-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:32:59.282474+00:00",
+      "end": "2026-10-23T21:33:50.923688+00:00",
+      "elapsed_seconds": 51.641,
+      "exit_code": 0
+    },
+    "pre_oom_sanitizer_test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "0780f0c97800d7ec99a3cafc81649c38b9474510c889ba84899e8c4254e6a3b6",
+          "files": 572,
+          "git_head": "97d48a493619cbef6e7b2e61e7e43e01a0e14ec1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-refresh-mac-sanitizer-test",
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-sanitizer/ck-files-refresh-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T21:35:34.329431+00:00",
+      "end": "2026-10-23T21:35:34.852520+00:00",
+      "elapsed_seconds": 0.523,
+      "exit_code": 0
+    },
+    "pre_oom_sanitizer_cleanup": {
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/refresh-sanitizer",
+      "exe_sha256": "0d7ee3ac0cbc174eccc8a6833d734cce1766df2f12ba5a6a47c1fa5d15188b64",
+      "active_owners": 0
+    }
+  },
+  "logs": {
+    "wp01-refresh-mac-build.log": "4f73d5234200cf817e5c83336817b55e8cc299e8961151c6572bbb0e52ade8c4",
+    "wp01-refresh-reviewed-mac-build.log": "090d3d1749c13a005795fb75fed90175fdb4f0881739f04d618df4ae523e58ce",
+    "wp01-refresh-final-mac-build.log": "95e60469d2569fa8e103382de11986f6b503ec9cf3beb8074ef21341b415f80f",
+    "wp01-refresh-oom-mac-build.log": "d5c744448a8c24f3095eb6421a535ab156c5700a8d0ffe08a8d26f9bcd4ea90b",
+    "wp01-refresh-safe-mac-build.log": "308d32d7c162a0362759023a5719aff2416a37823c52de0c2cfb0a70881031ac",
+    "wp01-refresh-verified-mac-build.log": "3dfd9fa6a40152c81443f6d27a7ac72ffaeb41a841b5493bee78174863c826bc",
+    "wp01-refresh-verified-mac-tests.log": "5e8f725abbb09f50006c183778f8a427995973253577e0ac741a2cbc3dcea6a5",
+    "wp01-refresh-verified-linux.log": "2500dd29f1c3825424eb143eb150f1809ab96da85da8a1768a3bdbccfacd9b3e",
+    "wp01-refresh-verified-windows.log": "60b3fc2afec8998e756b55e9a0d7991a3ece5d260588fddb944aa33bdeac750a",
+    "wp01-refresh-verified-mac-sanitizer-test.log": "4af3fccb2ce8e1e1326228879cb0ac70c4af7c0afdd129637beabe01863b73a9",
+    "wp01-refresh-verified-windows-asan.log": "f0fcca011a27da1027529c87434d3c52161845159a78772bf0e229cd30762614"
+  },
+  "guarantees": [
+    "Explicit retained native-End scan pin prevents directory-owner retirement before refresh preparation; default release-at-End behavior remains. All native owners retire on workers.",
+    "Incremental preparation is bounded to 256 steps per advance and cooperative injected-clock slices; names capped at 1 MiB and pane limits checked before retained copies. No partial prepared payload is published.",
+    "Both parent handles are alive during scoped ID comparison. Unknown/different parents decline child I/O; only live immutable HeldChild successors can preserve row IDs, focus and marks at final publication.",
+    "Named binding issues distinguish replacements, failed/unqualified continuity and unlisted observations. Current metadata/hidden policy is refreshed, including hidden-mark review semantics.",
+    "Cancellation checks inside held-child native query sequences close private children. Paused work resumes; abandonment/fatal errors release staging; generation cancellation and supersession reject late payloads.",
+    "Exception poisoning uses empty diagnostic text and in-place nonthrowing payload movement with compile-time construction/destruction checks; bad_alloc leaves the old published pane and native owners intact."
+  ],
+  "limitations": [
+    "Only already-held entries receive qualified refresh continuity. Initial selection pinning, UI ownership/scheduling and large-view indexes remain required.",
+    "Native identity observations rely on adapter/native ID contracts and are not pathname attestation, a namespace/content snapshot or operation authority.",
+    "No hard deadline across blocking native calls, allocator/encoder work, or global process-memory quota; old pane, raw payload, staging and prepared projection can coexist.",
+    "Issue details describe the latest published refresh, not a persistent selection-event journal; invalidation counts persist until acknowledged.",
+    "No complete collision/capability planning, frozen inventories, user loss consent, mutation engine or GUI added; WP-01 remains open."
+  ],
+  "validation_notes": [
+    "Final common 99-file manifest verified on all hosts. All 37 Files suites passed: 264 Mac /262 Linux /268 Windows cases, including the new allocation-failure test marker in every LastTest log.",
+    "Initial 18-step Mac build took 20.020 seconds including CMake regeneration and affected/new fixtures. Review tests and scan-pin getter naming produced later 2-step/11-step increments. Final successful Mac build used four remaining compile/link steps (1.549 seconds); unchanged test objects from the failed attempt were valid for the final source, while the repaired implementation and both executables rebuilt.",
+    "Two compile-time noexcept assumptions about optional wrapper operations were rejected; no flags were weakened. Payload move/destruction traits plus the specified optional::emplace exception guarantee provide the final nonthrowing poison path. The first accidentally executed stale CTest result is recorded but explicitly excluded. Fail-fast validation then succeeded.",
+    "Final Linux/Windows incremental builds took 3.665/9.358 seconds and performed six intended steps. Source hashes, logs and the newly linked bad_alloc case establish freshness, not elapsed time alone.",
+    "Direct sanitizers use fresh directories and all listed units with strict warnings/halt-on-error: Mac 50.750 seconds build/.499 test, Windows 88.656/1.266. Pre-oom same-scope Mac build was 51.641 seconds with 86 cases; final adds the bad_alloc case. Previous narrower 28-unit builds were 44.833/64.181, not identical-scope baselines. Exact lists, flags, source hashes and emitted Windows units checked.",
+    "Linux 35-unit ASan+UBSan build took 121.538 seconds, test .373, on a private casefold-enabled ext4 image. It includes the full affected fixture set plus required native casefold qualification. Previous 29-unit different-fixture build was 87.946 seconds; this records the broader baseline.",
+    "Linux image unmounted, loop audit empty, diagnostic/image workspace removed; final remote audit finds it absent, fixtures empty and no owned tests live. Mac/Windows diagnostics hashed and zero owners recorded before disposal. Current normal builds retained; Windows development writes/temp stayed on V:."
+  ],
+  "references": [
+    "https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info",
+    "https://eel.is/c++draft/optional.assign#lib:emplace,optional"
+  ],
+  "repository_checks": {
+    "ui_boundary_domain_sources": 76,
+    "ckvision_only_active_files": 446,
+    "ckdocs_pages": 24,
+    "diff_check": "passed"
+  }
+}
