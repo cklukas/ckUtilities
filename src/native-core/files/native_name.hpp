@@ -51,4 +51,11 @@ private:
     std::variant<std::string, std::u16string> value_;
 };
 
+// Exact native-unit ordering only; no destination equivalence or case folding.
+int compare_native_names(const NativeName& left, const NativeName& right) noexcept;
+struct NativeNameLess {
+    bool operator()(const NativeName& left, const NativeName& right) const noexcept {
+        return compare_native_names(left, right) < 0;
+    }
+};
 } // namespace ck::files

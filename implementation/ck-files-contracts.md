@@ -99,6 +99,51 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Staged pane discovery and completed publication
+
+`PaneListingJob` owns discovery and private staging on one worker. Only an actual
+End creates an initial `CompletedPaneListing`, whose private construction binds
+immutable rows, the original pane scope/generation and the directory identity
+observation. The pane checks that generation before allocating publication
+context; stale and foreign completions cannot replace rows or consume a newer
+request. Directory observation and rows are applied together with all allocating
+work completed first. This is single-owner exception safety, not concurrent
+thread-safe access to a mutable pane.
+
+Cancelled batches can contain rows: they remain private and the job becomes
+Paused until explicitly resumed or discarded. Enumeration/resource failure,
+exact-name duplicates, mixed encodings and exceptions discard staging and close
+discovery. Exceptions mark the job failed before rethrow. None of those states
+can produce a completed payload or overwrite the published pane. The receiving
+pane also validates its own limits; it may be stricter than the staging job.
+
+`PaneEntry::from_listed` preserves whole-entry metadata errors separately from
+unknown basic fields. Rows and operation-source candidates retain that error;
+no permission denial or disappearance becomes a successful empty metadata value.
+Candidates remain review inputs and do not grant mutation authority. Hidden
+policy is explicit: Linux dot names; Darwin dot names plus observed UF_HIDDEN;
+Windows observed hidden attribute. Unknown/denied flag observations stay visible.
+This does not implement desktop-specific hidden-name lists. Exact native-unit
+ordering is shared with pane sorting and is not destination collision equivalence.
+
+Staging enforces the existing row, native-name and eventual-display-byte caps.
+The duplicate index keeps a second bounded name copy plus node overhead. A
+receiver can retain its old pane, completed payload and prepared projection
+simultaneously; these caps are not a global process-memory quota. Allocation
+failure remains explicit, without partial publication or unlimited-memory
+fallback. Disk-backed indexes remain required for larger views.
+
+A completed payload neither retains the source directory handle nor attests
+that an original pathname still resolves to it. Navigation labels/context need
+their separately qualified binding. These discovery rows are not sealed
+HeldChild refresh successors, so the existing invalidation policy applies to
+unproven selection continuity. Selected-entry refresh integration, scheduling,
+large indexes and UI ownership/publication remain unfinished. No snapshot,
+provider hydration or mutation guarantee is implied.
+
+[Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
+publication/failure tests and native streaming-to-pane tests on all three hosts.
+
 ## Injected monotonic time and cooperative slices
 
 `MonotonicClock` supplies process-local steady-clock readings through shared

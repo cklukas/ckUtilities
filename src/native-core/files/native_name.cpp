@@ -4,6 +4,8 @@
 #include "unicode_scalar.hpp"
 
 #include <cstddef>
+#include <algorithm>
+#include <type_traits>
 #include <cstdint>
 #include <string_view>
 #include <utility>
@@ -119,4 +121,16 @@ std::string NativeName::display_name() const {
     return display_native_text(std::u16string_view(*windows_units()));
 }
 
+int compare_native_names(const NativeName& left, const NativeName& right) noexcept {
+    if (left.encoding() != right.encoding()) return left.encoding() < right.encoding() ? -1 : 1;
+    const auto compare = [](const auto& a, const auto& b) {
+        const auto less = [](auto x, auto y) {
+            using Unit = std::make_unsigned_t<decltype(x)>;
+            return static_cast<Unit>(x) < static_cast<Unit>(y);
+        };
+        if (std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), less)) return -1;
+        return std::lexicographical_compare(b.begin(), b.end(), a.begin(), a.end(), less) ? 1 : 0;
+    };
+    return left.posix_bytes() ? compare(*left.posix_bytes(), *right.posix_bytes()) : compare(*left.windows_units(), *right.windows_units());
+}
 } // namespace ck::files

@@ -8,6 +8,9 @@
 #include <unordered_map>
 
 namespace ck::files {
+struct ListedEntry;
+class CompletedPaneListing;
+void validate_pane_limits(struct PaneLimits limits);
 // Pane handles name prepared rows, never native objects or mutation authority.
 // A scope prevents another pane's handle from accidentally selecting this pane.
 struct PaneRowId {
@@ -25,10 +28,13 @@ struct PaneEntry {
     Observation<bool> hidden; // unknown/denied entries remain visible
     PaneEntry(NativeName native_name, BasicMetadata observed, Observation<bool> hidden_state)
         : name(std::move(native_name)), metadata(std::move(observed)), hidden(std::move(hidden_state)) {}
+    static PaneEntry from_listed(ListedEntry entry, Observation<bool> hidden_state);
+    const std::optional<UnavailableObservation>& inspection_error() const noexcept { return inspection_error_; }
     static PaneEntry from_held(HeldChild::Pointer child, Observation<bool> hidden_state);
     const HeldChild::Pointer& held_child() const noexcept { return held_; }
 private:
     HeldChild::Pointer held_;
+    std::optional<UnavailableObservation> inspection_error_;
 };
 struct PaneRow {
     PaneRowId id;
@@ -64,6 +70,7 @@ struct PaneSource {
     PaneRowId row;
     NativeName name;
     Observation<ObjectIdentity> observed_identity;
+    std::optional<UnavailableObservation> inspection_error;
 };
 struct PaneSources {
     PaneSourcesState state = PaneSourcesState::Empty;
@@ -87,6 +94,8 @@ public:
     // older ones. Refresh retains only entries with sealed held-child successor
     // observations; other old selections are explicitly invalidated.
     PaneListingRequest begin_listing(PaneListingPurpose purpose);
+    PanePublish publish(const CompletedPaneListing& listing);
+    const Observation<ObjectIdentity>& listing_directory() const noexcept { return listing_directory_; }
     PanePublish publish(PaneListingRequest request, const std::vector<PaneEntry>& entries);
     bool fail_listing(PaneListingRequest request, UnavailableObservation failure);
     bool listing_pending() const noexcept { return pending_ != 0; }
@@ -128,5 +137,6 @@ private:
     PaneView view_;
     PaneListingPurpose purpose_ = PaneListingPurpose::Navigate;
     PaneInvalidatedSelection invalidated_;
+    Observation<ObjectIdentity> listing_directory_;
 };
 } // namespace ck::files

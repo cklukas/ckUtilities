@@ -1424,3 +1424,77 @@ This implements discovery time injection but leaves WP-01 open: full simulated
 filesystem, scheduling/large-view indexes, collision/path planning, remaining
 inventories/provider coordination and operation capabilities are unfinished.
 No package acceptance checkbox is closed and no production mutation was added.
+
+
+## WP-01 milestone — staged pane discovery publication (2026-10-23)
+
+Added a worker-owned `PaneListingJob` that privately accumulates bounded discovery
+batches and creates an immutable, generation-tagged completed payload only after
+actual enumeration End. Scope/generation and directory identity observation
+travel with the rows. The receiving pane rejects stale/foreign completions and
+applies rows/context with allocation work completed before publication. Raw
+manual publications explicitly clear directory context instead of retaining a
+previous location's observation.
+
+Entry metadata errors now survive conversion into pane rows and source candidates,
+instead of becoming indistinguishable empty basic metadata. Explicit hidden
+policy uses Linux dot names, Darwin dot/observed hidden flags and Windows observed
+hidden flags; unknown/denied hidden states stay visible. Shared exact unsigned
+native-name ordering supports sorting and duplicate detection without Unicode
+normalization or destination-alias inference.
+
+Cancelled partial batches remain private/resumable. Enumeration/resource errors,
+exact duplicate names, mixed encodings and exceptions fail staging and release
+its cursor; no partial completion is published. Existing validated PaneLimits
+bound rows/name/display bytes. The duplicate index holds an additional bounded
+name copy. Current staging and receiver projections are in-memory, and may
+coexist with prior rows; no global-memory-quota or large-view index claim is made.
+Disk-backed indexing remains mandatory unfinished work.
+
+Nine new deterministic domain cases cover End-only completion, old/new/foreign
+requests, row/candidate error preservation, failure selection retention, paused
+partial batches, resource/duplicate/encoding refusal, exception cleanup, native
+hidden policies and ownership/configuration validation. Three native cases per
+host exercise streaming publication, root identity/hidden filtering, held-root
+path replacement between batches and capacity refusal without partial rows.
+
+All 32 Files CTest entries passed against a common 89-file source manifest:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 05:05:30.301–05:05:55.635 | 25.334 / 1.432 | 209 |
+| Lima Debian 13 arm64 / GCC 14 | 05:06:08.937–05:06:33.365 | 24.428 / 0.139 | 206 |
+| Windows x64 / MSVC 19.44, static CRT | 05:06:12.476–05:07:26.404 | 73.927 / 2.816 | 213 |
+
+The shared native-name header change triggered a broad rebuild (52 Mac steps;
+remote logs include 53 planned steps with regeneration). Configuration/generation
+took 6.0/0.2 s Mac, 2.7/0.1 s Linux and 10.9/0.7 s Windows. The preceding clock
+increments took 10.550/9.192/20.626 s with only eight compile/link steps. Actual
+compiled inputs, link logs and matching final hashes were inspected to explain
+the broader duration; elapsed time alone was not used as freshness proof. No
+build or test failure required a correction in this milestone.
+
+Focused sanitizers instrument all 22 core units, the native platform adapter,
+existing pane tests, both new job fixtures and test host (27 translation units).
+Mac ASan+UBSan built 05:08:56.590–05:09:33.373 UTC in 36.783 seconds and passed
+all 30 focused cases in 0.625 seconds. Windows ASan built
+05:08:56.908–05:09:38.275 UTC in 41.367 seconds and passed in 0.893 seconds.
+Both use strict warnings and halt-on-error with no diagnostics. These are
+18 existing pane plus nine new domain and three new native cases, not complete
+Files-suite sanitizer coverage. Direct compiler source lists/hashes were checked;
+fixtures differ from the preceding 26-unit clock builds (48.249/38.096 seconds).
+
+Sanitizer executable hashes and zero owners were recorded before removing
+disposable outputs. No files-panejob-* fixture directories remain on any host;
+current normal builds remain. Windows writes stayed on V:. No GUI was created
+or launched. UI-free boundary (72 sources), ckVision-only boundary (436 files),
+documentation (24 pages) and whitespace checks pass.
+
+[Durable evidence](evidence/ck-files-pane-job-20261023.json) records hashes,
+normal/sanitized builds/tests, output paths, guarantees and cleanup. Directory
+IDs remain observations and do not attest the original pathname. Discovery
+rows do not seal held-child selection successors; selected-entry refresh
+integration remains required. WP-01 also retains full simulated filesystem,
+scheduling/large indexes, collision/path planning, remaining inventories/provider
+coordination and operation capability work. No package checkbox is closed and
+no production mutation was added.

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pane_model.hpp"
+#include "pane_listing_job.hpp"
 #include <algorithm>
 #include <set>
 #include <map>
@@ -8,18 +9,6 @@
 
 namespace ck::files {
 namespace {
-int name_compare(const NativeName& left, const NativeName& right) {
-    if (left.encoding() != right.encoding()) return left.encoding() < right.encoding() ? -1 : 1;
-    const auto compare = [](const auto& a, const auto& b) {
-        const auto less = [](auto x, auto y) {
-            using Unit = std::make_unsigned_t<decltype(x)>;
-            return static_cast<Unit>(x) < static_cast<Unit>(y);
-        };
-        if (std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), less)) return -1;
-        return std::lexicographical_compare(b.begin(), b.end(), a.begin(), a.end(), less) ? 1 : 0;
-    };
-    return left.posix_bytes() ? compare(*left.posix_bytes(), *right.posix_bytes()) : compare(*left.windows_units(), *right.windows_units());
-}
 template<class T, class Less> int observed_compare(const Observation<T>& a, const Observation<T>& b, bool descending, Less less) {
     // All unavailable states stay after available values in either direction.
     if (!a.value() || !b.value()) return a.value() ? -1 : b.value() ? 1 : 0;
@@ -47,10 +36,24 @@ PaneEntry PaneEntry::from_held(HeldChild::Pointer child, Observation<bool> hidde
     result.held_ = std::move(child);
     return result;
 }
-PaneModel::PaneModel(PaneLimits limits) : limits_(limits) {
+void validate_pane_limits(PaneLimits limits) {
     if (limits.rows == 0 || limits.rows > 1'000'000 || limits.native_name_bytes == 0 || limits.native_name_bytes > 64 * 1024 * 1024 ||
         limits.display_name_bytes == 0 || limits.display_name_bytes > 128 * 1024 * 1024 || limits.held_entries == 0 || limits.held_entries > 4096)
         throw std::invalid_argument("invalid pane resource limits");
+}
+PaneModel::PaneModel(PaneLimits limits) : limits_(limits) { validate_pane_limits(limits); }
+PaneEntry PaneEntry::from_listed(ListedEntry entry, Observation<bool> hidden_state) {
+    if (entry.metadata.value()) return PaneEntry(std::move(entry.name), std::move(entry.metadata).take_value(), std::move(hidden_state));
+    PaneEntry result(std::move(entry.name), {}, std::move(hidden_state));
+    result.inspection_error_ = *entry.metadata.unavailable_detail();
+    return result;
+}
+PanePublish PaneModel::publish(const CompletedPaneListing& listing) {
+    if (!current(listing.request())) return PanePublish::Stale;
+    auto directory = listing.directory(); // allocate any error strings before row publication
+    const auto result = publish(listing.request(), listing.entries());
+    if (result == PanePublish::Applied) listing_directory_ = std::move(directory);
+    return result;
 }
 PaneListingRequest PaneModel::begin_listing(PaneListingPurpose purpose) {
     if (purpose != PaneListingPurpose::Navigate && purpose != PaneListingPurpose::Refresh) throw std::invalid_argument("invalid pane listing purpose");
@@ -68,7 +71,7 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
     auto next_row = next_row_;
     std::vector<PaneRow> prepared;
     prepared.reserve(entries.size());
-    const auto less = [](const NativeName& a, const NativeName& b) { return name_compare(a, b) < 0; };
+    const auto less = [](const NativeName& a, const NativeName& b) { return compare_native_names(a, b) < 0; };
     std::set<NativeName, decltype(less)> names(less);
     std::map<NativeName, std::size_t, decltype(less)> old_by_name(less);
     if (purpose_ == PaneListingPurpose::Refresh)
@@ -127,7 +130,7 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
     next_row_ = next_row;
     indexes_.swap(indexes);
     rows_.swap(prepared); visible_.swap(projection.visible); positions_.swap(projection.positions); marks_.swap(marks);
-    focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset();
+    focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset(); listing_directory_ = {};
     return PanePublish::Applied;
 }
 bool PaneModel::fail_listing(PaneListingRequest request, UnavailableObservation failure) {
@@ -151,14 +154,14 @@ PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const
         if (view.folders_first && directory(left) != directory(right)) return directory(left);
         int order = 0;
         switch (view.sort) {
-        case PaneSortKey::Name: order = name_compare(left.entry.name, right.entry.name); if (view.descending) order = -order; break;
+        case PaneSortKey::Name: order = compare_native_names(left.entry.name, right.entry.name); if (view.descending) order = -order; break;
         case PaneSortKey::Kind: order = observed_compare(left.entry.metadata.kind, right.entry.metadata.kind, view.descending, std::less<ObjectKind>{}); break;
         case PaneSortKey::Size: order = observed_compare(left.entry.metadata.logical_size, right.entry.metadata.logical_size, view.descending, std::less<std::uint64_t>{}); break;
         case PaneSortKey::Modified: order = observed_compare(left.entry.metadata.modified, right.entry.metadata.modified, view.descending, [](const FileTimestamp& x, const FileTimestamp& y) {
             return x.seconds() < y.seconds() || (x.seconds() == y.seconds() && x.nanoseconds() < y.nanoseconds());
         }); break;
         }
-        return order != 0 ? order < 0 : name_compare(left.entry.name, right.entry.name) < 0;
+        return order != 0 ? order < 0 : compare_native_names(left.entry.name, right.entry.name) < 0;
     });
     for (std::size_t i = 0; i < result.visible.size(); ++i) result.positions[result.visible[i]] = i;
     return result;
@@ -195,7 +198,7 @@ PaneSources PaneModel::sources() const {
     if (invalidated_.marks != 0 || invalidated_.cursor) { result.state = PaneSourcesState::SelectionInvalidated; return result; }
     const auto append = [&](std::size_t i) {
         const auto& row = rows_[i];
-        result.candidates.push_back({row.id, row.entry.name, row.entry.metadata.identity});
+        result.candidates.push_back({row.id, row.entry.name, row.entry.metadata.identity, row.entry.inspection_error()});
         if (positions_[i]) ++result.visible_count; else ++result.hidden_count;
     };
     for (std::size_t i = 0; i < rows_.size(); ++i) if (marks_[i]) { result.origin = PaneSourcesOrigin::Marks; append(i); }
