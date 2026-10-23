@@ -144,6 +144,57 @@ provider hydration or mutation guarantee is implied.
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
 publication/failure tests and native streaming-to-pane tests on all three hosts.
 
+## Held-directory entry probes
+
+`DirectoryEntryProbe` integrates native child lookup, location observation,
+reported component length, generic Win32 spelling diagnostics and existing-child
+metadata. Its factory and refresh run on a worker. The record owns the held
+parent and any found final child; native-owner destruction also belongs on the
+worker. It is not an immutable UI projection. All fields are observations of
+individual calls, not a filesystem snapshot or mutation authority.
+
+The component byte budget (64 KiB default, 1 MiB hard maximum) is checked before
+copying/validating the name; UTF-16 storage counts two bytes per unit. Invalid
+parent/mode/limits/name fail before native queries. An oversized component gives
+Unknown/InventoryLimit without a prefix or inspection queries. No display decoding, native-name
+conversion, path joining or process-cwd change occurs. Reported filesystem length
+bounds and Win32 conventions remain separate diagnostics and never override
+actual read-only lookup behavior.
+
+An Available record does not mean an available destination name. Location errors
+remain visible while lookup can proceed independently. Lookup errors propagate
+to existing metadata; a found child's metadata can separately fail while its
+handle remains retained. Missing has explicit native lookup evidence and
+NotApplicable existing metadata. It neither reserves the name nor promises that
+creation will succeed. New files and permission/mount changes can invalidate an
+observation immediately.
+
+Lookup replies must carry the exact requested component/mode and matching parent
+observation context. Unknown/mismatched replies become Failed/InvalidNativeResult,
+never fabricated absence. Context consistency includes unqualified IDs and is
+not semantic identity proof. Native lookup policy remains explicit; the probe
+never emulates Unicode/case equivalence. Refresh uses the same held parent, even
+when its former path now names another directory, and produces a separate record
+while the old record/child remain independently owned.
+
+A stop token is checked before work and between native calls. Cancellation
+returns Unknown/InterruptedRead with operation `entry_probe.cancelled`, releases
+private owners and returns no partial record. It cannot interrupt a blocked
+native call. Exceptions unwind private owners without retries. Execution-time
+revalidation, alias/descendant checks, planned-name collision grouping,
+operation capabilities and user consent remain separate required work.
+
+The shared simulator now supplies exact-unit NativeDefault child lookup with an
+explicit Adapter-domain missing witness and configurable per-node location
+observations. WindowsIgnoreCase stays Unsupported; no native comparison algorithm
+is simulated. Unconfigured location queries retain Unsupported. These explicit
+query families support deterministic probe tests without changing host storage.
+
+[Entry-probe evidence](evidence/ck-files-entry-probe-20261023.json) includes native
+path replacement, final dangling-link inspection, encoding refusal and a required
+casefold-enabled Linux filesystem test. The latter qualifies ASCII native lookup,
+not a universal name-equivalence algorithm.
+
 ## Linux held-directory inode flag inventory
 
 `LocationInfo::linux_directory_inode_flags` retains the raw 32-bit result of
@@ -201,8 +252,9 @@ The fixture is single-owner. Nodes (4096 creations), path bindings (4096), child
 bindings (4096 per directory), queued actions (4096) and retained call records
 (100000) have explicit test limits. These counts are not a process-memory quota.
 It does not emulate case folding, normalization, native error witnesses, link
-traversal, provider behavior or mutation guarantees. Unimplemented inventory,
-lookup and location queries retain the boundary's Unsupported defaults. Full
+traversal, provider behavior or mutation guarantees. Unimplemented inventory queries and unconfigured location queries retain the
+boundary's Unsupported defaults. NativeDefault lookup uses exact simulated name
+units; WindowsIgnoreCase remains Unsupported. Full
 inventory/mutation simulation still requires explicit query-family extensions.
 
 [Simulation evidence](evidence/ck-files-simulation-20261023.json) covers the

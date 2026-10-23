@@ -1664,3 +1664,77 @@ timing investigation. Boundaries (72 core sources / 438 active files), ckdocs
 (24 pages) and whitespace checks pass. Other filesystem metadata APIs, complete
 collision/capability planning, large indexes, refresh/scheduling integration and
 operation work remain. No WP-01 acceptance box is closed.
+
+## 2026-10-23 — WP-01 integrated held-directory entry probes
+
+Added worker-owned `DirectoryEntryProbe` to combine native lookup, location,
+reported component bounds, Win32 spelling diagnostics and existing-entry
+metadata. Records retain the parent and found final child independently;
+refresh queries the same held parent after path replacement. Location errors,
+lookup errors and found-child inspection errors remain separate. Missing has
+native evidence and NotApplicable existing metadata, without name reservation
+or creation authority. Unknown/mismatched lookup contexts fail explicitly.
+Context-message consistency does not qualify native identity.
+
+Component storage is bounded before validation/copy (64 KiB default, 1 MiB hard,
+two bytes per UTF-16 unit). Native names are not normalized, converted, joined
+into paths or replaced by display text. Stop tokens are checked before and
+between native calls; cancellation returns no partial record and releases
+private handles. Exceptions unwind without retry. Native calls/owner retirement
+still belong on the worker and can block. This record is not a UI projection.
+
+Extended the shared simulator with exact-unit NativeDefault lookup and explicit
+Adapter missing evidence, plus configurable location observations. Unconfigured
+location and WindowsIgnoreCase remain Unsupported. Nine deterministic cases
+cover ownership, refresh, independent errors, budgets/configuration, malformed
+reply contexts, unknown IDs, exceptions, conventions and cancellation. Four
+native cases per host cover existing/missing entries, held-parent replacement,
+dangling links and encoding refusal.
+
+The final reviewed 95-file manifest passes all 35 Files suites:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 | 20:56:20.740–20:56:23.396 | 2.655 / 0.940 | 244 |
+| Lima Debian 13 arm64 | 20:57:29.717–20:57:35.424 | 5.707 / 0.336 | 242 |
+| Windows x64, static CRT | 20:57:39.850–20:57:52.831 | 12.981 / 3.429 | 248 |
+
+Initial seven-step builds included CMake regeneration; totals were
+6.222/7.075/26.657 s. Mac configure/generate was 3.5/0.1 s. Review changed the
+input parameter to const reference and moved budget checking before validation
+and the owned name copy. All host/sanitizer checks were repeated afterward.
+Final six-step builds compile the probe and its two fixtures, then link the core
+library and both executables. Logs and matching code hashes establish freshness;
+durations match the narrower dependency work rather than the preceding broad
+38-step inode-flag builds.
+
+Focused Mac ASan+UBSan and Windows ASan instrument all 23 core units, platform,
+three simulation/probe fixtures and test host (28 units). Each passes 25 cases
+with strict warnings and halt-on-error. Mac built 20:57:33.506–20:58:18.341 UTC
+in 44.833 s and tested in 0.297 s. Windows built
+20:58:19.804–20:59:23.985 in 64.181 s and tested in 0.201 s. Earlier same-scope
+runs passed before the input-copy review; exact units/flags/hashes and emitted
+Windows source names were checked. Both rounds' diagnostic hashes/zero owners
+were recorded before their output trees were removed.
+
+Linux ASan+UBSan uses a private 64 MiB casefold-enabled ext4 image, adding the
+existing native-location fixture (29 units). Its required-feature probe case
+activates casefold only on an exclusive empty fixture directory and verifies
+that native lookup of mixedcase identifies MixedCase. All 31 focused cases pass;
+no unavailable-feature fallback qualifies this run. The final build ran
+20:58:39.544–21:00:07.491 UTC in 87.946 s, testing in 0.034 s; the pre-review
+same-scope build took 87.782 s and tested in 0.032 s. This qualifies ASCII lookup
+on that volume, not universal Unicode collision semantics.
+
+Both Linux images were unmounted, their loop devices audited empty, and images /
+diagnostic workspaces removed. Final audits found no entry-probe fixtures,
+casefold workspaces or owned test processes. Current normal builds remain;
+Windows outputs/temp stayed on V:. No GUI was launched or mutation added.
+Boundaries (74 domain sources / 442 active files), ckdocs (24 pages) and whitespace
+checks pass.
+
+[Entry-probe evidence](evidence/ck-files-entry-probe-20261023.json) preserves
+source/SDK fingerprints, normal/sanitized results, compiler commands and cleanup.
+Operation capabilities, planned-name collision grouping, alias/descendant checks,
+frozen inventories/loss consent, large indexes, selected-entry refresh integration
+and scheduling remain required. WP-01 acceptance remains open.

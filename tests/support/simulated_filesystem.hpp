@@ -22,7 +22,7 @@ class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     using Kind = ck::files::ObjectKind;
     template<class T> using Observed = ck::files::Observation<T>;
 public:
-    enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle };
+    enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
@@ -40,6 +40,7 @@ public:
         std::uint64_t id_;
         Kind kind_;
         Metadata metadata_;
+        std::optional<Observed<ck::files::LocationInfo>> location_;
         std::vector<std::pair<Name, Pointer>> children_;
     public:
         std::uint64_t id() const noexcept { return id_; }
@@ -62,6 +63,9 @@ public:
         require(node); if (!valid_path(absolute)) throw std::invalid_argument("invalid simulated path");
         if (!state_->paths.contains(absolute) && state_->paths.size() == max_nodes) throw std::length_error("simulated path limit");
         state_->paths.insert_or_assign(absolute, std::move(node));
+    }
+    void set_location(const Pointer& node, Observed<ck::files::LocationInfo> location) {
+        require(node); node->location_ = std::move(location);
     }
     void unbind(const std::filesystem::path& absolute) { state_->paths.erase(absolute); }
     void put(const Pointer& parent, Name name, Pointer child) {
@@ -182,6 +186,27 @@ private:
             if (fault) return Result::unavailable(fault->state, fault->error);
             auto child = find(name);
             return child ? Result::available(std::make_unique<Entry>(state_, std::move(child))) : missing<Result>();
+        }
+        Observed<ck::files::LocationInfo> inspect_location() const override {
+            using Result = Observed<ck::files::LocationInfo>;
+            const auto fault = step(state_, Operation::InspectLocation, node_);
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            if (!node_->location_) return DirectoryCursor::inspect_location();
+            return *node_->location_;
+        }
+        Observed<ck::files::ChildLookup> lookup_child(const Name& name, ck::files::ChildLookupMode mode) const override {
+            using Result = Observed<ck::files::ChildLookup>;
+            if (!name.is_valid() || !ck::files::valid_child_lookup_mode(mode)) return failed<Result>("simulated.lookup_input");
+            if (mode != ck::files::ChildLookupMode::NativeDefault)
+                return Result::unavailable(ck::files::ObservationState::Unsupported,
+                    {ck::files::ErrorDomain::Adapter, 3, "simulated.lookup_mode"});
+            const auto fault = step(state_, Operation::LookupChild, node_, name);
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            auto child = find(name);
+            ck::files::ChildLookupContext context{name, mode, identity()};
+            if (child) return Result::available(ck::files::ChildLookup::found(std::move(context), std::make_unique<Entry>(state_, std::move(child))));
+            return Result::available(ck::files::ChildLookup::missing(std::move(context),
+                {ck::files::ErrorDomain::Adapter, 2, "simulated.missing"}));
         }
         Observed<std::unique_ptr<ck::files::DirectoryCursor>> open_directory_child(const Name& name) const override {
             using Result = Observed<std::unique_ptr<ck::files::DirectoryCursor>>;
