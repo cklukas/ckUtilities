@@ -258,6 +258,32 @@ public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
         : handle_(std::move(handle)), scope_(std::move(scope)) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<StorageInfo> inspect_storage() const override {
+        using Result = Observation<StorageInfo>;
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto decoded = storage_from_basic(*metadata.value(), StorageModel::WindowsHandleAttributes);
+        if (!decoded.value()) return decoded;
+        auto result = std::move(decoded).take_value();
+        if (const auto guarded = provider_guard(*metadata.value()))
+            result.windows_compression = Observation<WindowsCompressionDetails>::unavailable(guarded->state, guarded->error);
+        else if (metadata.value()->kind.value() && *metadata.value()->kind.value() == ObjectKind::RegularFile) {
+            FILE_COMPRESSION_INFO native{};
+            if (GetFileInformationByHandleEx(handle_.get(), FileCompressionInfo, &native, sizeof(native))) {
+                if (native.CompressedFileSize.QuadPart >= 0)
+                    result.windows_compression = Observation<WindowsCompressionDetails>::available({
+                        static_cast<std::uint64_t>(native.CompressedFileSize.QuadPart), native.CompressionFormat,
+                        native.CompressionUnitShift, native.ChunkShift, native.ClusterShift});
+                else result.windows_compression = Observation<WindowsCompressionDetails>::unavailable(ObservationState::Failed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "FileCompressionInfo.size"});
+            } else {
+                const DWORD code = GetLastError();
+                result.windows_compression = failure<WindowsCompressionDetails>(code, "FileCompressionInfo");
+            }
+        } else result.windows_compression = Observation<WindowsCompressionDetails>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "storage.regular_compression_details"});
+        return Result::available(std::move(result));
+    }
     Observation<DataChannelCatalog> inspect_data_channels(InventoryLimits limits = {}) const override {
         using Result = Observation<DataChannelCatalog>;
         static_assert(offsetof(FILE_STREAM_INFO, StreamName) == detail::windows_stream_name_offset);
@@ -267,6 +293,9 @@ public:
         if (!limits.valid())
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "channels.limits"});
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
         if (limits.max_native_bytes < sizeof(FILE_STREAM_INFO))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "FileStreamInfo.buffer_limit"});
@@ -307,6 +336,9 @@ public:
         using Result = Observation<AttributeCatalog>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "attributes.limits"});
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
         AttributeCatalog result;
         result.coverage = AttributeCoverage::WindowsExtendedAttributes;
         result.owner = identity(handle_.get(), scope_);
@@ -340,6 +372,9 @@ public:
         if (!name || !NativeFeatureIdentifier::from_windows_ea(*name))
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "attributes.identifier"});
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
         // FILE_GET_EA_INFORMATION: next offset, one-byte name length, name/NUL.
         std::vector<std::uint32_t> storage((6 + name->size() + 3) / 4, 0);
         auto request = std::as_writable_bytes(std::span(storage));
@@ -387,6 +422,13 @@ public:
             std::move(bytes).take_value(), identity(handle_.get(), scope_), mask});
     }
 private:
+    static std::optional<UnavailableObservation> provider_guard(const BasicMetadata& metadata) {
+        const auto review = provider_review_required(metadata, StorageModel::WindowsHandleAttributes);
+        if (!review.value()) return *review.unavailable_detail();
+        if (*review.value()) return UnavailableObservation{ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::ProviderReviewRequired), "storage.provider_review"}};
+        return std::nullopt;
+    }
     Observation<detail::WindowsEaRecord> query_ea(void* names, ULONG names_size, PULONG index, InventoryLimits limits) const {
         using Result = Observation<detail::WindowsEaRecord>;
         const auto api = query_ea_api();

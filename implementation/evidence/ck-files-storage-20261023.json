@@ -1,0 +1,429 @@
+{
+  "milestone": "WP-01 reported storage metadata and identified provider-read guards; WP-01 incomplete",
+  "date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release, warnings as errors",
+  "manifest_sha256": "70d013d238b5f6e7a75c10070009f723db056a33fe0d5637d27c8a8d3cab69b2",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "390dd77f998b741c5b47865dd41b6332358074c0ba27ae7d1ac4d500997e5387",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/directory_cursor.cpp": "0edd902553e1bd0490cf8b7bb4d16754b597b2c57359eda7f893afd86ae30229",
+    "src/native-core/files/directory_cursor.hpp": "641eb8a1080e769225778052f9901c16cf7b276110c67b8e808399e69c189bc3",
+    "src/native-core/files/file_metadata.cpp": "f44f8b2a44abd4e97167bb8ebfea886f2ba9d5da39188da12896a3089d6dfacc",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/location_info.cpp": "2fcf309e99a675dc064767f3f7c6acd3b86411d693dd8f4ed75ee480d088ae7f",
+    "src/native-core/files/location_info.hpp": "95ef42e22af01b4def84ee6811802e52f199daed891e821535881c6b1c4c90fd",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "5bb25dde8607165ffc62cf15493971c2044916372fcc9785a850dc1dc235aea8",
+    "src/native-core/files/native_name.hpp": "ca08f9251e9fabe014725a64c1370a63a59df987aa5f809e35bddeab50cbd6ee",
+    "src/native-core/files/observation.hpp": "43b37a20ff253688ed17e5124712ec791d99c8875aabd8689dae7459f48e90e5",
+    "src/native-core/files/opened_entry.cpp": "1e50cb8454d39a9cf6e5aa549dfb9b0d0c7b928a9b0e52108b12640997a56b2b",
+    "src/native-core/files/opened_entry.hpp": "1ab20315235369d508cb830449db923ec0b88475a43aecd1bf6f1cfb483e8316",
+    "src/native-core/files/platform/metadata_posix.cpp": "b5d39c7bc03546726b03bc614f1423f76764025bfa7765466cdc916f6ba59563",
+    "src/native-core/files/platform/metadata_windows.cpp": "0cef41f0a77aa35790b057f43714725d045eac11ed3de96815033e8bad100d2d",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+    "src/native-core/files/storage_info.hpp": "1bf591b1649cf9ce08bf23a07f9925b0bfa695b0d7f885ce9dd246be0c22e1e7",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "454e043b7eccfc8bfd67130ad7e7ae66e07affda16050ff2378d2fff3cda1fcd",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_location.cpp": "9e4e27d480e97bd8dbfb0214c8be049be045e493e8b5f6a3ce9165a3c90819dc",
+    "tests/unit/ck_files/test_files_location_native.cpp": "9b28ca760fa35aeeb4fe18eca8d979609ac361b89ed10135276e77c1087c515d",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+    "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "3de65a77800e4d70bc598f9e2226efd256ddb889a0dc4376f516b7fd4f28e452",
+          "files": 508,
+          "git_head": "5014c5f2d803d0306b3f97f7fcc604579dfaeb5c"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-storage-mac-final-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:56:26.216480+00:00",
+      "end": "2026-10-23T01:56:28.989089+00:00",
+      "elapsed_seconds": 2.768,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "3de65a77800e4d70bc598f9e2226efd256ddb889a0dc4376f516b7fd4f28e452",
+          "files": 508,
+          "git_head": "5014c5f2d803d0306b3f97f7fcc604579dfaeb5c"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-storage-mac-final-test",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:56:29.882525+00:00",
+      "end": "2026-10-23T01:56:30.778100+00:00",
+      "elapsed_seconds": 0.887,
+      "exit_code": 0
+    }
+  },
+  "macos_initial_build": {
+    "inputs": [
+      {
+        "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+        "tree_sha256": "2f8f39be15e6aeecb458d97da9f98b71907d17c2af515b73d96916ac34fc81c5",
+        "files": 508,
+        "git_head": "5014c5f2d803d0306b3f97f7fcc604579dfaeb5c"
+      },
+      {
+        "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+        "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+        "files": 5124,
+        "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+      }
+    ],
+    "name": "wp01-storage-native-build",
+    "command": [
+      "cmake",
+      "--build",
+      "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+      "--target",
+      "ck_files_core_tests",
+      "ck_files_native_tests",
+      "--parallel",
+      "4"
+    ],
+    "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+    "start": "2026-10-23T01:52:14.187982+00:00",
+    "end": "2026-10-23T01:52:51.736461+00:00",
+    "elapsed_seconds": 37.548,
+    "exit_code": 0
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T01:56:23.448001+00:00",
+        "end": "2026-10-23T01:56:26.782048+00:00",
+        "elapsed_seconds": 3.334,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T01:56:26.782489+00:00",
+        "end": "2026-10-23T01:56:26.961063+00:00",
+        "elapsed_seconds": 0.179,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ]
+  },
+  "windows": {
+    "start": "2026-10-23T01:56:26.3742390Z",
+    "buildEnd": "2026-10-23T01:56:30.6878315Z",
+    "end": "2026-10-23T01:56:31.7215437Z",
+    "buildSeconds": 4.3135924999999995,
+    "testSeconds": 1.0337121999999999,
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe"
+  },
+  "cases": {
+    "macos": 88,
+    "linux": 85,
+    "windows": 91
+  },
+  "ctest_log_sha256": {
+    "macos": "929a779c3b2cd9d4056e763b5b4af7c9cecfa27af94786c62a67dde16b7bd52e",
+    "linux": "e7a75c37b15fd4d48507c15b011a8afb86fdb3a4a3487bfc7b14781f0fdc98bc",
+    "windows": "8c1ba175e96a631f2e736e81ee96088223e0e15b7897359e39e155373cb818b8"
+  },
+  "macos_sanitizers": {
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "3de65a77800e4d70bc598f9e2226efd256ddb889a0dc4376f516b7fd4f28e452",
+          "files": 508,
+          "git_head": "5014c5f2d803d0306b3f97f7fcc604579dfaeb5c"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-storage-sanitizer-build",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/storage_info.cpp",
+        "src/native-core/files/location_info.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_names.cpp",
+        "tests/unit/ck_files/test_files_metadata.cpp",
+        "tests/unit/ck_files/test_files_directory.cpp",
+        "tests/unit/ck_files/test_files_native.cpp",
+        "tests/unit/ck_files/test_files_directory_native.cpp",
+        "tests/unit/ck_files/test_files_child_native.cpp",
+        "tests/unit/ck_files/test_files_channels.cpp",
+        "tests/unit/ck_files/test_files_channels_native.cpp",
+        "tests/unit/ck_files/test_files_attributes.cpp",
+        "tests/unit/ck_files/test_files_attributes_native.cpp",
+        "tests/unit/ck_files/test_files_security.cpp",
+        "tests/unit/ck_files/test_files_security_native.cpp",
+        "tests/unit/ck_files/test_files_location.cpp",
+        "tests/unit/ck_files/test_files_location_native.cpp",
+        "tests/unit/ck_files/test_files_storage.cpp",
+        "tests/unit/ck_files/test_files_storage_native.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/storage-sanitizer/ck-files-storage-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:56:31.836493+00:00",
+      "end": "2026-10-23T01:57:30.591171+00:00",
+      "elapsed_seconds": 58.75,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "3de65a77800e4d70bc598f9e2226efd256ddb889a0dc4376f516b7fd4f28e452",
+          "files": 508,
+          "git_head": "5014c5f2d803d0306b3f97f7fcc604579dfaeb5c"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-storage-sanitizer-test",
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/storage-sanitizer/ck-files-storage-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T01:57:33.375068+00:00",
+      "end": "2026-10-23T01:57:34.095475+00:00",
+      "elapsed_seconds": 0.715,
+      "exit_code": 0
+    }
+  },
+  "windows_asan": {
+    "start": "2026-10-23T01:56:34.9987333Z",
+    "buildEnd": "2026-10-23T01:57:24.1484624Z",
+    "end": "2026-10-23T01:57:25.0683690Z",
+    "buildSeconds": 49.149729099999995,
+    "testSeconds": 0.9199065999999999,
+    "units": {
+      "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+      "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+      "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+      "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+      "src/native-core/files/opened_entry.cpp": "1e50cb8454d39a9cf6e5aa549dfb9b0d0c7b928a9b0e52108b12640997a56b2b",
+      "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+      "src/native-core/files/location_info.cpp": "2fcf309e99a675dc064767f3f7c6acd3b86411d693dd8f4ed75ee480d088ae7f",
+      "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+      "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+      "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+      "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+      "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+      "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+      "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+      "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+      "tests/unit/ck_files/test_files_location_native.cpp": "9b28ca760fa35aeeb4fe18eca8d979609ac361b89ed10135276e77c1087c515d",
+      "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+      "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+      "tests/unit/ck_files/test_files_location.cpp": "9e4e27d480e97bd8dbfb0214c8be049be045e493e8b5f6a3ce9165a3c90819dc",
+      "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+      "src/native-core/files/file_metadata.cpp": "f44f8b2a44abd4e97167bb8ebfea886f2ba9d5da39188da12896a3089d6dfacc",
+      "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+      "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+      "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+      "src/native-core/files/directory_cursor.cpp": "0edd902553e1bd0490cf8b7bb4d16754b597b2c57359eda7f893afd86ae30229",
+      "src/native-core/files/platform/metadata_windows.cpp": "0cef41f0a77aa35790b057f43714725d045eac11ed3de96815033e8bad100d2d",
+      "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+      "src/native-core/files/native_name.cpp": "5bb25dde8607165ffc62cf15493971c2044916372fcc9785a850dc1dc235aea8",
+      "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43"
+    },
+    "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+    "flags": [
+      "/nologo",
+      "/std:c++20",
+      "/O1",
+      "/Zi",
+      "/MT",
+      "/DNDEBUG",
+      "/EHsc",
+      "/W4",
+      "/WX",
+      "/permissive-",
+      "/utf-8",
+      "/fsanitize=address",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/FIV:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan\\test_config.hpp",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\src\\native-core\\files",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\tests\\support",
+      "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\ckvision-sdk\\include",
+      "/FeV:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan\\ck-files-storage-tests.exe",
+      "/FdV:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan\\compiler.pdb"
+    ],
+    "link": [
+      "/link",
+      "/DEBUG",
+      "/INCREMENTAL:NO",
+      "/PDB:V:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan\\storage.pdb",
+      "ntdll.lib",
+      "kernel32.lib",
+      "advapi32.lib"
+    ],
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan\\ck-files-storage-tests.exe",
+    "asanOptions": "halt_on_error=1"
+  },
+  "sanitizer_log_sha256": {
+    "macos": "8a141e71e0f707ca01ce5b48c6770b4d6b42d107e249f6bbb9dcd67d2b679942",
+    "windows": "c1da61400773815d36f4e2071ab574d662478f5a852af1536bb19d6b5aaad96f"
+  },
+  "native_qualification": {
+    "macos": "APFS; native BSD flags and live hidden flag; retained owner after rename/replacement/unlink; final symlink identity and no target compression query; public SDK flag binding checks",
+    "linux": "Lima ckdev Debian 13 arm64/ext4; statx values/validity retained; final symlink identity, retained opened owner after rename/replacement/unlink; public SDK flag binding checks; no generic provider/locality query asserted",
+    "windows": "V: ReFS; attribute-only FileCompressionInfo independently compared; actual FSCTL_SET_SPARSE fixture; synthetic OFFLINE flag fixture proves provider guard before stream/EA catalog/value queries; junction retains its own identity; owner survives rename/replacement/unlink; public SDK flag bindings"
+  },
+  "limitations": [
+    "Clear native flags are not proof of physical representation or data locality. Allocated/logical size does not establish sparse extents or clone/dedup relationships.",
+    "Directory compression/encryption flags can describe child defaults. Windows FileCompressionInfo is not a complete representation inventory.",
+    "Recall-on-open is not interpreted from Windows handle attributes; its enumeration-only bit aliases internal EA metadata.",
+    "The synthetic Windows OFFLINE fixture is not a real cloud provider and does not qualify cloud callbacks, hydration races or downloads.",
+    "Darwin dataless and Windows cloud/WOF/virtualization classification are tested with model fixtures; real provider coordination/availability and EFS/positive compression fixtures remain unqualified.",
+    "Guards block identified states without a bypass/privilege change. They do not prove a universal no-hydration guarantee for unknown drivers or concurrent provider transitions.",
+    "No Files mutation command or GUI exists yet; extent/clone/encryption/provider-specific inventories and operation policy still require implementation and conformance."
+  ],
+  "primary_contracts": [
+    "https://man7.org/linux/man-pages/man2/statx.2.html",
+    "https://learn.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants",
+    "https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_compression_info",
+    "https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_set_sparse",
+    "https://developer.apple.com/documentation/technotes/tn3150-getting-ready-for-data-less-files"
+  ],
+  "cleanup": {
+    "macos": {
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/storage-sanitizer",
+      "exe_sha256": "bad63d43b148e17cec4f3a816b1f1ff7eead381a58efa20d0e541e5da1c7e10c",
+      "active_owners": 0
+    },
+    "windows": {
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\storage-asan",
+      "exeSha256": "b419481c5e8b7c6ca647971888278170397aaedd5cce7f48d0c065d7086fff74",
+      "nativeFilesystem": "ReFS",
+      "label": "DevBuild",
+      "activeOwners": 0
+    }
+  },
+  "checks": {
+    "ui_boundary_domain_sources": 50,
+    "ckvision_only_active_sources": 397,
+    "ckdocs_pages": 24
+  }
+}

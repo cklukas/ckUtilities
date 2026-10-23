@@ -669,3 +669,90 @@ This milestone does not complete operation-specific destination capabilities.
 Timestamp range/resolution, Unicode collision rules, per-object storage/provider
 inventory, driver-specific channels, injected filesystem/time services and pane
 semantics remain WP-01 work. No package acceptance checkbox is closed here.
+
+
+## WP-01: reported storage metadata and provider-read guards (2026-10-23)
+
+Added held-object storage observations with explicit Linux statx, Darwin stat
+flags and Windows handle-attribute domains. Raw values, native validity masks,
+owner, object kind and logical/allocation counts are retained. Queries expose
+reported compression/encryption, immutable/append-only, verity/DAX, dataless,
+offline/recall, pin/unpin intent, integrity/scrub, reparse and hidden flags only
+where the native model supplies them. Missing bits or mappings remain
+unavailable. A Clear flag is not a physical representation or locality claim.
+Directory compression/encryption bits can describe defaults for children.
+Allocation smaller than logical size does not establish sparse extents,
+cloning or deduplication; no such inference is implemented.
+
+Windows additionally queries FileCompressionInfo on ordinary file handles,
+retaining size, native format and shift fields without assuming that these
+fully describe compression (for example external backing). Links/reparse
+objects do not trigger target compression inspection. Native fixtures compare
+this query with an independently opened attribute-only handle, preserving
+native unsupported/error outcomes. A real FSCTL_SET_SPARSE fixture qualifies the
+sparse attribute and size observations on ReFS. Darwin's live hidden flag,
+statx validity masks, public SDK bit mappings, and held identity after
+rename/replacement/unlink are also tested. Final symlinks/junctions keep their
+own identity, with no regular-target size/compression claim.
+
+Provider hints distinguish reported recall from pin/unpin intent, cloud-family
+and known backing/virtualization tags, and unclassified reparse tags. NoRecall-
+FlagReported explicitly does not mean local content or read authorization.
+Windows RECALL_ON_OPEN is not interpreted from handle attributes: it is valid
+only in directory enumeration and aliases an internal EA bit in other contexts.
+All sixteen cloud tag variants and this alias distinction have model coverage.
+No generic Linux provider/locality equivalent is fabricated.
+
+Darwin's reported dataless state now defers resource-fork size, attribute-name
+and attribute-value queries for provider review. Windows identified provider
+states similarly defer stream/EA catalogs, EA values and compression details.
+Unavailable metadata retains its original diagnostic; positive hints report
+Unknown / ProviderReviewRequired without a bypass or privilege adjustment.
+The Windows conformance fixture sets/restores OFFLINE only on its own temporary
+file; it verifies review-required results before the missing-EA/stream queries
+could produce ordinary results. It is a synthetic flag fixture, not a real
+cloud provider, callback or download qualification. Darwin dataless and Windows
+cloud/backing classifiers are model-tested; real coordinated provider access
+and transitions remain unqualified. These checks do not establish a universal
+no-hydration guarantee for unknown drivers or concurrent provider changes.
+No user file was dehydrated or provider configuration changed.
+
+Exact source fingerprints, native scope, commands and log digests are in
+[the storage evidence](evidence/ck-files-storage-20261023.json).
+
+| Host / Release toolchain | Final build interval (UTC) | Build / test elapsed | Files result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:56:26.216–01:56:28.989 | 2.768 / 0.887 s | 88 cases, sixteen CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:56:23.448–01:56:26.782 | 3.334 / 0.179 s | 85 cases, sixteen CTest entries passed |
+| Windows x64 / MSVC 19.44, static CRT | 01:56:26.374–01:56:30.688 | 4.314 / 1.034 s | 91 cases, sixteen CTest entries passed |
+
+The same 50-file manifest was verified on all hosts. Final increments compiled
+the changed storage fixture and linked the native tests; preceding builds
+compiled all changed implementation and affected tests. The initial Mac build
+took 37.548 s: its log shows 12.3 s CMake configuration, 0.5 s generation and
+30 compile/link steps after the shared observation/header changes. The Linux
+implementation build took 34.683 s with CMake regeneration and the same broad
+recompilation. These are broader inputs than the preceding location builds
+(19 affected steps, 14.080 s Linux; 16 initial Mac steps, 15.661 s). The slower
+runs were checked against actual compiled inputs rather than assumed fresh
+from elapsed time. The final two-step increments are consistent with those
+inputs. No Files GUI was launched.
+
+Direct sanitizer builds compiled all 29 core/platform/test units. macOS ASan +
+UBSan, strict warnings, -O1 -g and frame pointers built from
+01:56:31.836–01:57:30.591 UTC in 58.750 s and ran 88 cases in 0.715 s.
+Windows MSVC ASan, /O1 /Zi /MT /W4 /WX built from
+01:56:34.999–01:57:24.148 UTC in 49.150 s and ran 91 cases in 0.920 s.
+Both passed with halt-on-error and no sanitizer diagnostics. Prior direct
+26-unit observations took 43.828 s Mac / 42.808 s Windows. These runs add the
+storage implementation and two fixture units plus shared storage/observation
+headers; direct compiler commands contain all inputs and no build-cache wrapper.
+Concise records survive cleanup of owned sanitizer output directories. Current
+normal CMake builds remain; Windows project writes stayed on V:.
+Boundary checks passed (50 domain sources, 397 ckVision-only sources).
+
+This is not complete storage/provider preservation. Extent and clone/dedup
+relationships, positive encryption/compression fixtures, provider coordination
+and race conformance, driver-specific inventories, operation-specific capability
+checks, filesystem/time fakes and pane semantics remain WP-01 work. No package
+acceptance checkbox is closed by this milestone; no mutation command exists.

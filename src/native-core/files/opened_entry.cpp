@@ -3,6 +3,10 @@
 #include "opened_entry.hpp"
 
 namespace ck::files {
+Observation<StorageInfo> OpenedEntry::inspect_storage() const {
+    return Observation<StorageInfo>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "storage.native_query"});
+}
 Observation<DataChannelCatalog> OpenedEntry::inspect_data_channels(InventoryLimits limits) const {
     if (!limits.valid())
         return Observation<DataChannelCatalog>::unavailable(ObservationState::Failed,

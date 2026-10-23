@@ -193,6 +193,15 @@ class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope)
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)) {}
+    Observation<StorageInfo> inspect_storage() const override {
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Observation<StorageInfo>::unavailable(e.state, e.error); }
+#if defined(__linux__)
+        return storage_from_basic(*metadata.value(), StorageModel::LinuxStatx);
+#else
+        return storage_from_basic(*metadata.value(), StorageModel::DarwinStatFlags);
+#endif
+    }
     Observation<BasicMetadata> inspect_basic() const override {
 #if defined(__linux__)
         return statx_metadata(descriptor_.get(), "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW, scope_);
@@ -211,6 +220,7 @@ public:
             return Result::unavailable(detail.state, detail.error);
         }
         DataChannelCatalog result;
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
         result.coverage = DataChannelCoverage::MacResourceFork;
         result.owner = metadata.value()->identity;
         constexpr const char* resource_fork = "com.apple.ResourceFork";
@@ -231,6 +241,9 @@ public:
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "attributes.limits"));
         const auto metadata = inspect_basic();
         if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__APPLE__)
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
+#endif
         const auto proxy = attribute_proxy();
         if (!proxy.value()) { const auto& e = *proxy.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         const auto bytes = detail::read_attribute_bytes([&](std::span<std::byte> buffer) {
@@ -266,6 +279,9 @@ public:
             return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidIdentifier, "attributes.identifier"));
         const auto metadata = inspect_basic();
         if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__APPLE__)
+        if (const auto guarded = provider_guard(*metadata.value())) return Result::unavailable(guarded->state, guarded->error);
+#endif
         const auto proxy = attribute_proxy();
         if (!proxy.value()) { const auto& e = *proxy.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         auto bytes = detail::read_attribute_bytes([&](std::span<std::byte> buffer) {
@@ -368,6 +384,15 @@ public:
 #endif
     }
 private:
+#if defined(__APPLE__)
+    static std::optional<UnavailableObservation> provider_guard(const BasicMetadata& metadata) {
+        const auto review = provider_review_required(metadata, StorageModel::DarwinStatFlags);
+        if (!review.value()) return *review.unavailable_detail();
+        if (*review.value()) return UnavailableObservation{ObservationState::Unknown,
+            adapter_error(AdapterError::ProviderReviewRequired, "attributes.provider_review")};
+        return std::nullopt;
+    }
+#endif
     static detail::BufferReply attribute_reply(ssize_t count, const char* operation) {
         if (count >= 0) return static_cast<std::size_t>(count);
         const int code = errno;

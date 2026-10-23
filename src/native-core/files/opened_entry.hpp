@@ -6,6 +6,7 @@
 #include "data_channels.hpp"
 #include "attributes.hpp"
 #include "security.hpp"
+#include "storage_info.hpp"
 
 namespace ck::files {
 
@@ -37,6 +38,7 @@ public:
     OpenedEntry(const OpenedEntry&) = delete;
     OpenedEntry& operator=(const OpenedEntry&) = delete;
     virtual Observation<BasicMetadata> inspect_basic() const = 0;
+    virtual Observation<StorageInfo> inspect_storage() const;
     // Native channel identifiers and sizes only; no channel content is read.
     // Coverage is explicit. Unsupported is not evidence that channels are absent.
     // This live query does not establish complete metadata or snapshot stability.
