@@ -1219,3 +1219,76 @@ WP-01 remains open, including full path/component enforcement in operation
 planning, collision equivalence, remaining inventories/provider coordination,
 operation capabilities, complete filesystem/time fakes and larger listing backing.
 No package acceptance checkbox is closed by this milestone.
+
+
+## WP-01 milestone — relative directory cursors (2026-10-23)
+
+Implemented `open_directory_child` through a held parent on all three platforms,
+providing real read-only traversal without absolute-path rebuilding or cwd
+changes. Child cursors independently own native enumeration state and adapter
+identity scope. POSIX uses directory-only non-following openat plus fstat and
+fdopendir ownership transfer; Windows uses counted relative NtCreateFile with
+reparse/no-recall flags and checks the opened handle's kind before enumeration.
+Final links/reparse points and non-directories are rejected. No write API,
+privilege enablement, fallback path or weaker retry was introduced.
+
+One new domain case qualifies default Unsupported behavior. Six native cases
+per host qualify held-parent path replacement, child rename/replacement after
+parent destruction, final link/junction/file/FIFO rejection, independent cursors,
+Unicode/wrong-encoding/stream boundaries, unusual native names and deep trees.
+Windows uses an actual unpaired UTF-16 directory component; Linux an invalid
+UTF-8 byte; macOS backslash/newline. Traversal succeeds through 48 components
+of 100 ASCII bytes, exceeding 4096 bytes in relative full-path spelling. Fixture
+creation and bottom-up cleanup are private, while production opens only one
+component each step.
+
+All 27 Files CTest entries passed against the final common 77-file manifest:
+
+| Host | Final verification build UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 04:32:34.084–04:32:34.172 | 0.088 / 0.846 | 174 |
+| Lima Debian 13 arm64 / GCC 14 | 04:32:31.975–04:32:32.004 | 0.029 / 0.147 | 171 |
+| Windows x64 / MSVC 19.44, static CRT | 04:32:36.149–04:32:43.416 | 7.267 / 1.406 | 178 |
+
+The final POSIX verification builds correctly reported no work: only the excluded
+Windows adapter changed after their successful native-fixture rebuilds. The Mac
+fixture increment compiled/linked two steps in 3.225 seconds; its initial broad
+implementation build took 35.462 seconds for 28 steps with CMake configuration
+8.3 seconds / generation 0.2 seconds. Other project compiler processes were
+observed concurrently and left untouched. This differed from the previous
+27-step 14.118-second lookup build; actual regenerated inputs, compiled targets
+and logs were investigated, rather than treating elapsed time as freshness proof.
+Final hashes match native tests and both remote source copies.
+
+Initial Linux/Windows compilation caught malformed Windows fixture path literals;
+changed to raw string literals without suppressing warnings. The first Windows
+native run then caught an incompatible FILE_DIRECTORY_FILE/options combination
+(STATUS_INVALID_PARAMETER). Corrected the single open protocol to retain reparse /
+no-recall flags and validate FileBasicInfo before exposing enumeration, matching
+the existing absolute-directory open pattern. The compatible public protocol
+passes all native cases and existing regressions. No error was hidden or retried
+with weaker protection.
+
+Native sanitizer builds instrument all 19 core units, their platform adapter,
+the six-case native fixture and test host (22 translation units). Mac ASan+UBSan
+built 04:32:46.312–04:33:16.960 UTC in 30.648 seconds and passed in 0.452 seconds.
+Windows ASan built 04:32:58.812–04:33:34.964 UTC in 36.152 seconds and passed in
+0.216 seconds. Both use strict warnings and halt-on-error with no diagnostics.
+This instruments the native implementation for these six cases, not every
+Files test. Direct compile commands and source hashes were checked; their scope
+is broader than the preceding nine-unit diagnostic builds. Sanitizer executables
+were hashed and disposable outputs removed after zero-owner checks.
+
+Verified the exact paths/content and absence of reparse points in the one
+aborted Windows owner fixture before removal. No files-dirchild-* fixture trees
+remain on any host. Current normal builds remain; all Windows project outputs
+stayed on V:. No Files GUI exists or was launched. Boundaries pass (66 core
+sources, 424 ckVision-only files), documentation checks 24 pages, whitespace clean.
+
+[Durable evidence](evidence/ck-files-directory-child-20261023.json) retains source
+hashes, normal/sanitized build/test records, deep-tree observations, diagnostics
+and cleanup audits. WP-01 remains open: full collision/path planning rules,
+remaining inventories/provider coordination, operation capabilities, complete
+filesystem/time fakes and larger listing backing remain required. This adds
+no recursive walker, confinement, provider no-hydration or mutation guarantee,
+and closes no package acceptance checkbox.

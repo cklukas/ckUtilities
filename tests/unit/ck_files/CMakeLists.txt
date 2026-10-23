@@ -8,10 +8,10 @@ foreach(suite names metadata directory channels attributes security location sto
   set_tests_properties(test_files_${suite} PROPERTIES LABELS "files;unit")
 endforeach()
 
-add_executable(ck_files_native_tests test_files_native.cpp test_files_directory_native.cpp test_files_child_native.cpp test_files_channels_native.cpp test_files_attributes_native.cpp test_files_security_native.cpp test_files_location_native.cpp test_files_storage_native.cpp test_files_links_native.cpp test_files_continuity_native.cpp test_files_name_mapping_native.cpp test_files_lookup_native.cpp)
+add_executable(ck_files_native_tests test_files_native.cpp test_files_directory_native.cpp test_files_child_native.cpp test_files_channels_native.cpp test_files_attributes_native.cpp test_files_security_native.cpp test_files_location_native.cpp test_files_storage_native.cpp test_files_links_native.cpp test_files_continuity_native.cpp test_files_name_mapping_native.cpp test_files_lookup_native.cpp test_files_directory_child_native.cpp)
 target_link_libraries(ck_files_native_tests PRIVATE ck_files_platform ck_vision_cktest_main)
 cktools_strict(ck_files_native_tests)
-foreach(suite native directory_native child_native channels_native attributes_native security_native location_native storage_native links_native continuity_native name_mapping_native lookup_native)
+foreach(suite native directory_native child_native channels_native attributes_native security_native location_native storage_native links_native continuity_native name_mapping_native lookup_native directory_child_native)
   add_test(NAME test_files_${suite} COMMAND ck_files_native_tests --suite test_files_${suite}.cpp)
   set_tests_properties(test_files_${suite} PROPERTIES LABELS "files;native" TIMEOUT 60)
 endforeach()

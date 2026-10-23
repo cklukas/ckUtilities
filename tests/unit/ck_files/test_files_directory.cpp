@@ -167,3 +167,12 @@ CK_TEST(directory_omitted_records_have_a_work_bound_and_are_cancellable) {
     CK_CHECK(cancelled.state == DirectoryReadState::Cancelled && cancelled.names.empty());
     CK_CHECK(cursor.calls == static_cast<int>(DirectoryCursor::max_batch_size));
 }
+
+CK_TEST(default_directory_child_open_is_explicitly_unsupported) {
+    class Cursor final : public ck::files::DirectoryCursor {
+        ck::files::Observation<ck::files::DirectoryStep> next_step() override {
+            return ck::files::Observation<ck::files::DirectoryStep>::available(ck::files::DirectoryEnd{});
+        }
+    } cursor;
+    CK_CHECK(cursor.open_directory_child(*ck::files::NativeName::from_posix("child")).state() == ck::files::ObservationState::Unsupported);
+}

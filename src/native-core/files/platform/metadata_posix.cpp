@@ -612,6 +612,38 @@ public:
         }
         return Observation<LocationInfo>::available(std::move(result));
     }
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+        const auto* spelling = name.posix_bytes();
+        if (!name.is_valid() || !spelling) return Result::unavailable(ObservationState::Failed,
+            adapter_error(AdapterError::InvalidIdentifier, "open_directory_child.name"));
+        OwnedDescriptor fd(openat(dirfd(directory_.get()), spelling->c_str(),
+            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC));
+        if (fd.get() < 0) {
+            const int code = errno;
+            return Result::unavailable(code == ENOTDIR ? ObservationState::Failed : errno_state(code),
+                {ErrorDomain::Posix, code, "openat.directory_child"});
+        }
+        struct stat native{};
+        if (fstat(fd.get(), &native) != 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fstat.directory_child"});
+        }
+        std::optional<std::uint64_t> generation;
+#if defined(__APPLE__)
+        generation = native.st_gen;
+#endif
+        auto observed = Observation<ObjectIdentity>::available({scope_, IdentityScheme::PosixDeviceInode,
+            NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_dev)),
+            NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_ino)), generation});
+        OwnedDirectory child(fdopendir(fd.get()));
+        if (!child) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fdopendir.child"});
+        }
+        fd.release();
+        return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(child), std::move(observed), scope_));
+    }
     Observation<ChildLookup> lookup_child(const NativeName& name, ChildLookupMode mode) const override {
         using Result=Observation<ChildLookup>;
         if(!name.is_valid()||!name.posix_bytes()||!valid_child_lookup_mode(mode))

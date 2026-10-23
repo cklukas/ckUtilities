@@ -57,6 +57,11 @@ public:
     // following. Only definitive name-not-found native codes establish Missing;
     // generic Gone/error states do not. No byte/case-fold enumeration fallback.
     virtual Observation<ChildLookup> lookup_child(const NativeName& name, ChildLookupMode mode) const;
+    // Open one child as an independently owning enumeration cursor. Always
+    // rejects a final link/reparse point, never joins an absolute path or changes
+    // cwd. Name resolution is native-default, not exact-spelling certification.
+    // No recursive traversal, mount confinement, provider or snapshot guarantee.
+    virtual Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName& name) const;
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;

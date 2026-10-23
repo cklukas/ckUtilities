@@ -589,6 +589,31 @@ public:
         }
         return Observation<LocationInfo>::available(std::move(result));
     }
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+        // As for the absolute Win32 directory open, retain reparse/no-recall
+        // options and validate kind on the returned handle before enumeration.
+        // FILE_DIRECTORY_FILE has a restricted compatible-option set; do not
+        // combine it here or retry an error with weaker no-follow protection.
+        auto result = open_native_component(name, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            ChildLookupMode::NativeDefault);
+        if (!result.value()) {
+            const auto& error = *result.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto child = std::move(result).take_value();
+        FILE_BASIC_INFO basic{};
+        if (!GetFileInformationByHandleEx(child.get(), FileBasicInfo, &basic, sizeof(basic)))
+            return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(), "FileBasicInfo.directory_child");
+        if ((basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::FinalLinkRejected), "open_directory_child.reparse"});
+        if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotDirectory), "open_directory_child.kind"});
+        auto observed = ck::files::identity(child.get(), scope_);
+        return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(child), std::move(observed), scope_));
+    }
     Observation<ChildLookup> lookup_child(const NativeName& name, ChildLookupMode mode) const override {
         using Result=Observation<ChildLookup>;
         if(!valid_child_lookup_mode(mode))return Result::unavailable(ObservationState::Failed,
@@ -614,7 +639,18 @@ private:
     Observation<std::unique_ptr<OpenedEntry>> open_component(const NativeName& name, EntryAccess access, ChildLookupMode mode) const {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
-        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_attributes(access) ? FILE_READ_EA : 0) |
+            (requests_security(access) ? READ_CONTROL : 0) | (requests_audit_security(access) ? ACCESS_SYSTEM_SECURITY : 0);
+        auto result = open_native_component(name, rights, mode);
+        if (!result.value()) {
+            const auto& error = *result.unavailable_detail();
+            return Observation<std::unique_ptr<OpenedEntry>>::unavailable(error.state, error.error);
+        }
+        return Observation<std::unique_ptr<OpenedEntry>>::available(
+            std::make_unique<WindowsOpenedEntry>(std::move(result).take_value(), scope_));
+    }
+    Observation<OwnedHandle> open_native_component(const NativeName& name, ACCESS_MASK rights, ChildLookupMode mode) const {
+        using Result = Observation<OwnedHandle>;
         const auto* units = name.windows_units();
         if (!units || !name.is_valid() || units->find(u':') != std::u16string::npos ||
             units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
@@ -639,8 +675,6 @@ private:
         attributes.Attributes=mode==ChildLookupMode::WindowsIgnoreCase?OBJ_CASE_INSENSITIVE:0;
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
-        const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_attributes(access) ? FILE_READ_EA : 0) |
-            (requests_security(access) ? READ_CONTROL : 0) | (requests_audit_security(access) ? ACCESS_SYSTEM_SECURITY : 0);
         const NTSTATUS status = NtCreateFile(&raw, rights, &attributes, &io, nullptr, 0,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
             FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
@@ -651,7 +685,7 @@ private:
         if (raw == nullptr || raw == INVALID_HANDLE_VALUE)
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "NtCreateFile.child_handle"});
-        return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_));
+        return Result::available(std::move(opened));
     }
 private:
     Observation<DirectoryStep> next_step() override {

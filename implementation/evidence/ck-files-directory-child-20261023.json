@@ -1,0 +1,512 @@
+{
+  "milestone": "WP-01 held-parent relative directory cursors (partial WP-01)",
+  "date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release C++20 strict warnings; installed SDK; Windows static CRT",
+  "manifest_sha256": "bc860852de50e3b6065ac70f37a8ee630672f762c02ba242a8d12f9849c20a41",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "3e83f9bcad8cc0b38db68b57a7aee1d28fd16bf1f3e19cde0103806b446b92c9",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+    "src/native-core/files/child_lookup.hpp": "45d5cb758c08f7adfda72c088f41d4399e368466b1bafba7c65b08a79300562b",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+    "src/native-core/files/directory_cursor.hpp": "99a42fe0e693c1506b6e659c2be93948d02a703f5a265e3174a9e9263ede3a53",
+    "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/held_child.cpp": "da3ecfabd4924fd5eafb5193d618b049f840aee47e897ec0731986bad82175b0",
+    "src/native-core/files/held_child.hpp": "2e7cbd7025fb5118f818f9c3c7b225812a87e93ae001112975d6f1c43d089d2f",
+    "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+    "src/native-core/files/link_metadata.hpp": "a175d440938e665f0fb59aba7f9a5c65653728e9bbb7ad22eed4a9520a6f6ba3",
+    "src/native-core/files/location_info.cpp": "2fcf309e99a675dc064767f3f7c6acd3b86411d693dd8f4ed75ee480d088ae7f",
+    "src/native-core/files/location_info.hpp": "95ef42e22af01b4def84ee6811802e52f199daed891e821535881c6b1c4c90fd",
+    "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+    "src/native-core/files/name_limits.hpp": "30e840e59d037d0749e03d88ad99fe80a64d05cd306f10b832d91ffc45c9994f",
+    "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+    "src/native-core/files/name_mapping.hpp": "c1503d5262931c414aef4038c7388d3eaf0b524baf610b05bcd3938838f62eba",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "e23c9293236e6d76d75793a2445dc76606fe05c85bba01539b86333383e76932",
+    "src/native-core/files/native_name.hpp": "689b3da2fb98a8fa8aff6d1d3c075ecba4b103bc5910d6c5a2f94298a3031b9f",
+    "src/native-core/files/observation.hpp": "c95a706c369af6a3d61f3bda8e74477a39732f004dde5e043c34ea84b8c0ea5a",
+    "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+    "src/native-core/files/opened_entry.hpp": "a563b861a61edf634bec14458b8b955c8654ddfb06c2e63fcacb6485ba00aa3c",
+    "src/native-core/files/pane_model.cpp": "658c94bea44688d3634f4034ba41cb0ad9cccc10e382b7fe9c25bc991fdcbbd4",
+    "src/native-core/files/pane_model.hpp": "e254fa4d9d4d5480fe0a3d6e73b1294c79e70bd47f534d034db386da54c5ccad",
+    "src/native-core/files/platform/metadata_posix.cpp": "2f50a6179e2b6029e9bfd637ab5dd29410f4b97cd298aa765d463412746205a8",
+    "src/native-core/files/platform/metadata_windows.cpp": "fdfc8158a8e699739ab5a7993fff2e560f14bf0ca27a196a5ca9cf19be661e2c",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+    "src/native-core/files/storage_info.hpp": "1bf591b1649cf9ce08bf23a07f9925b0bfa695b0d7f885ce9dd246be0c22e1e7",
+    "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+    "src/native-core/files/unicode_scalar.hpp": "fd99c8044180edd11dc7de9107da873149dd03647cc9da7e6eec9f7210e8b204",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+    "src/native-core/files/windows_name.hpp": "a820aaddfd888e6b87226c165e4b5af83b9abe8a02b0b4658b3d0cea0efc5921",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "799104a2b76b98cbbed87afd029dfccddffc7db969727eaba913bd1cb6017f3a",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+    "tests/unit/ck_files/test_files_continuity_native.cpp": "3d9f0e45c215169a7aef750e42f9517e87be7d426c1535e5ac3e2ce1345ed463",
+    "tests/unit/ck_files/test_files_directory.cpp": "391689ff86bbbebc299ce89e004d703cd16fa9df18a525fed91166821f66769d",
+    "tests/unit/ck_files/test_files_directory_child_native.cpp": "dae7cef23cb396c2a581208a44dc939936b5b66c4290507d9464b477860c68ce",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_links.cpp": "f0840756215662214400211492e6414b881aed3575ad6b110eada9e4b15a1dbc",
+    "tests/unit/ck_files/test_files_links_native.cpp": "20909416fa19858b20c036106462a1d6aa5fec9830e2ccf89da31a07002f48bd",
+    "tests/unit/ck_files/test_files_location.cpp": "9e4e27d480e97bd8dbfb0214c8be049be045e493e8b5f6a3ce9165a3c90819dc",
+    "tests/unit/ck_files/test_files_location_native.cpp": "9b28ca760fa35aeeb4fe18eca8d979609ac361b89ed10135276e77c1087c515d",
+    "tests/unit/ck_files/test_files_lookup.cpp": "cd78d77e2bf0fa199bdd3d358278b13a71c4a5e5a0ff5aa592a02ab73e8951db",
+    "tests/unit/ck_files/test_files_lookup_native.cpp": "37cd704e638b46bd619fc95286b54cc505f4bf20998392e52488c3e3fcb8bc86",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_name_limits.cpp": "98f0359315262be89265dd6b1bc6da4aa1c8a25f61c2660a1a77fa5db4f78a3e",
+    "tests/unit/ck_files/test_files_name_mapping.cpp": "764383d75f8b084dff4c4cbe328217cdb05a487984e6d97ce8775867ff766b3a",
+    "tests/unit/ck_files/test_files_name_mapping_native.cpp": "0efa60920c867adceeb8587803cf0a1b97c99c2d8618086f30372400725bbf6e",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_pane.cpp": "439206d2e523c6e5c8efb14f7ce420b67544cddc7f24d1c9eb487ea076f56860",
+    "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+    "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "implementation_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "aab08b802a8929aa2ab6fbdf6a431cf7db517c224448349f580e11c833a05fef",
+          "files": 542,
+          "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-dirchild-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:28:50.822241+00:00",
+      "end": "2026-10-23T04:29:26.285452+00:00",
+      "elapsed_seconds": 35.462,
+      "exit_code": 0
+    },
+    "native_fixture_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "3d42b464ea848519a0e40ef64b86a36300528a9f085da9bc6826f6cba70aaf5a",
+          "files": 542,
+          "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-dirchild-mac-final-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:30:54.215181+00:00",
+      "end": "2026-10-23T04:30:57.439905+00:00",
+      "elapsed_seconds": 3.225,
+      "exit_code": 0
+    },
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "ea34dccaa505c6a5bf4a7b95d6263663503547076163878389666b7e8de4dd1f",
+          "files": 542,
+          "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-dirchild-mac-qualified-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:32:34.084033+00:00",
+      "end": "2026-10-23T04:32:34.172259+00:00",
+      "elapsed_seconds": 0.088,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "ea34dccaa505c6a5bf4a7b95d6263663503547076163878389666b7e8de4dd1f",
+          "files": 542,
+          "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-dirchild-mac-qualified-test",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:32:45.085456+00:00",
+      "end": "2026-10-23T04:32:45.931795+00:00",
+      "elapsed_seconds": 0.846,
+      "exit_code": 0
+    },
+    "results": {
+      "ctest_entries": 27,
+      "cases": 174,
+      "last_test_log_sha256": "34ac31c39c014b9d080e304004807438b4056fdaebb07f9fb4fcbbbeb2fc5cf4",
+      "deep_tree_observation": [
+        "relative directory traversal depth 48 component bytes 100"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "remaining": []
+    },
+    "diagnostic_cleanup": {
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/dirchild-sanitizer",
+      "exe_sha256": "fd1b159f53afb51c8af0ef004ad37fa2c8adb33ce747de65c8005b10c7dcc234",
+      "active_owners": 0
+    }
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T04:32:31.975152+00:00",
+        "end": "2026-10-23T04:32:32.004258+00:00",
+        "elapsed_seconds": 0.029,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T04:32:32.004560+00:00",
+        "end": "2026-10-23T04:32:32.151450+00:00",
+        "elapsed_seconds": 0.147,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "results": {
+      "ctest_entries": 27,
+      "cases": 171,
+      "last_test_log_sha256": "9a439dc24d06ee5587da77f8d602c3fb769c8453ad34b464c4bf8e3c369bb23a",
+      "deep_tree_observation": [
+        "relative directory traversal depth 48 component bytes 100"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "remaining": []
+    }
+  },
+  "windows": {
+    "start": "2026-10-23T04:32:36.1491345Z",
+    "buildEnd": "2026-10-23T04:32:43.4165356Z",
+    "end": "2026-10-23T04:32:44.8222974Z",
+    "buildSeconds": 7.2674011,
+    "testSeconds": 1.4057617999999998,
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe",
+    "results": {
+      "ctest_entries": 27,
+      "cases": 178,
+      "last_test_log_sha256": "e66afe0ca09918a1916c214a5b17bb8617d2da55271e08fecdd006702850021f",
+      "deep_tree_observation": [
+        "relative directory traversal depth 48 component bytes 100"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\test-scratch",
+      "activeOwners": 0,
+      "removedVerifiedFailedFixtures": [
+        "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\test-scratch\\files-dirchild-owner-663501340-2544294083"
+      ],
+      "remaining": []
+    },
+    "diagnostic_cleanup": {
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan",
+      "exeSha256": "27efca2eaed52c4018671cd89ea52aa13bd472f1d2ec247aa67ec3b03a28d40b",
+      "nativeFilesystem": "ReFS",
+      "label": "DevBuild",
+      "activeOwners": 0
+    }
+  },
+  "native_sanitizers": {
+    "scope": "All 19 core units, corresponding platform adapter, new native fixture and test host (22 translation units); six new native cases. Does not claim complete Files-suite sanitizer coverage.",
+    "macos": {
+      "build": {
+        "inputs": [
+          {
+            "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+            "tree_sha256": "ea34dccaa505c6a5bf4a7b95d6263663503547076163878389666b7e8de4dd1f",
+            "files": 542,
+            "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+          },
+          {
+            "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+            "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+            "files": 5124,
+            "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+          }
+        ],
+        "name": "wp01-dirchild-mac-sanitizer-build",
+        "command": [
+          "clang++",
+          "-std=c++20",
+          "-O1",
+          "-g",
+          "-Wall",
+          "-Wextra",
+          "-Wpedantic",
+          "-Wshadow-all",
+          "-Werror",
+          "-fsanitize=address,undefined",
+          "-fno-omit-frame-pointer",
+          "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+          "-I",
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+          "-I",
+          "src/native-core/files",
+          "-I",
+          "tests/support",
+          "src/native-core/files/attributes.cpp",
+          "src/native-core/files/child_lookup.cpp",
+          "src/native-core/files/data_channels.cpp",
+          "src/native-core/files/directory_cursor.cpp",
+          "src/native-core/files/file_metadata.cpp",
+          "src/native-core/files/held_child.cpp",
+          "src/native-core/files/link_metadata.cpp",
+          "src/native-core/files/location_info.cpp",
+          "src/native-core/files/name_limits.cpp",
+          "src/native-core/files/name_mapping.cpp",
+          "src/native-core/files/native_name.cpp",
+          "src/native-core/files/opened_entry.cpp",
+          "src/native-core/files/pane_model.cpp",
+          "src/native-core/files/security.cpp",
+          "src/native-core/files/storage_info.cpp",
+          "src/native-core/files/unicode_scalar.cpp",
+          "src/native-core/files/windows_directory_record.cpp",
+          "src/native-core/files/windows_name.cpp",
+          "src/native-core/files/windows_stream_records.cpp",
+          "src/native-core/files/platform/metadata_posix.cpp",
+          "tests/unit/ck_files/test_files_directory_child_native.cpp",
+          "src/vision/host/cktest_main.cpp",
+          "-o",
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/dirchild-sanitizer/ck-files-dirchild-tests"
+        ],
+        "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+        "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+        "start": "2026-10-23T04:32:46.312292+00:00",
+        "end": "2026-10-23T04:33:16.960605+00:00",
+        "elapsed_seconds": 30.648,
+        "exit_code": 0
+      },
+      "test": {
+        "inputs": [
+          {
+            "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+            "tree_sha256": "ea34dccaa505c6a5bf4a7b95d6263663503547076163878389666b7e8de4dd1f",
+            "files": 542,
+            "git_head": "ff810c19c07dfb2cb0a324ab07717597229de917"
+          },
+          {
+            "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+            "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+            "files": 5124,
+            "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+          }
+        ],
+        "name": "wp01-dirchild-mac-sanitizer-test",
+        "command": [
+          "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/dirchild-sanitizer/ck-files-dirchild-tests"
+        ],
+        "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+        "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+        "start": "2026-10-23T04:33:56.347266+00:00",
+        "end": "2026-10-23T04:33:56.799562+00:00",
+        "elapsed_seconds": 0.452,
+        "exit_code": 0
+      },
+      "asan_options": "halt_on_error=1",
+      "ubsan_options": "halt_on_error=1"
+    },
+    "windows": {
+      "start": "2026-10-23T04:32:58.8123560Z",
+      "buildEnd": "2026-10-23T04:33:34.9646042Z",
+      "end": "2026-10-23T04:33:35.1805792Z",
+      "buildSeconds": 36.152248199999995,
+      "testSeconds": 0.215975,
+      "units": {
+        "src/native-core/files/native_name.cpp": "e23c9293236e6d76d75793a2445dc76606fe05c85bba01539b86333383e76932",
+        "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+        "src/native-core/files/platform/metadata_windows.cpp": "fdfc8158a8e699739ab5a7993fff2e560f14bf0ca27a196a5ca9cf19be661e2c",
+        "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+        "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+        "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+        "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+        "src/native-core/files/location_info.cpp": "2fcf309e99a675dc064767f3f7c6acd3b86411d693dd8f4ed75ee480d088ae7f",
+        "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+        "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+        "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+        "src/native-core/files/held_child.cpp": "da3ecfabd4924fd5eafb5193d618b049f840aee47e897ec0731986bad82175b0",
+        "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+        "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+        "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+        "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+        "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+        "tests/unit/ck_files/test_files_directory_child_native.cpp": "dae7cef23cb396c2a581208a44dc939936b5b66c4290507d9464b477860c68ce",
+        "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+        "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+        "src/native-core/files/pane_model.cpp": "658c94bea44688d3634f4034ba41cb0ad9cccc10e382b7fe9c25bc991fdcbbd4",
+        "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b"
+      },
+      "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+      "flags": [
+        "/nologo",
+        "/std:c++20",
+        "/O1",
+        "/Zi",
+        "/MT",
+        "/DNDEBUG",
+        "/EHsc",
+        "/W4",
+        "/WX",
+        "/permissive-",
+        "/utf-8",
+        "/fsanitize=address",
+        "/D_CRT_SECURE_NO_WARNINGS",
+        "/FIV:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan\\test_config.hpp",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\src\\native-core\\files",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\tests\\support",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\ckvision-sdk\\include",
+        "/FeV:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan\\ck-files-dirchild-tests.exe",
+        "/FdV:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan\\compiler.pdb"
+      ],
+      "link": [
+        "/link",
+        "/DEBUG",
+        "/INCREMENTAL:NO",
+        "/PDB:V:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan\\dirchild.pdb",
+        "ntdll.lib",
+        "kernel32.lib",
+        "advapi32.lib"
+      ],
+      "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\dirchild-asan\\ck-files-dirchild-tests.exe",
+      "asanOptions": "halt_on_error=1"
+    }
+  },
+  "diagnostics": {
+    "fixture_literal_correction": "Initial Linux/Windows compilation caught malformed Windows extended-path string literals; changed to C++ raw literals without suppressing warnings. Mac initial build compiled the excluded branch without reporting that lexical issue.",
+    "windows_option_correction": "Initial native directory request combined FILE_DIRECTORY_FILE with options outside its documented compatible set and returned STATUS_INVALID_PARAMETER. Corrected the single open protocol to retain reparse/no-recall options and inspect FileBasicInfo on the returned handle before exposing a directory cursor, matching the absolute-directory open pattern. No fallback or weaker retry.",
+    "failed_fixture_cleanup": "Verified exact private owner-fixture paths and file bytes, no reparse points and zero owned test processes before removing the one aborted Windows fixture."
+  },
+  "logs": {
+    "wp01-dirchild-mac-build.log": "df24d55fde5e196509e274c1af591b65bb2cbe7c87634ab3d20d2bf958ea8b4d",
+    "wp01-dirchild-mac-final-build.log": "25e2b41cda0f673cd238bf66b58b7ef8489ea1b74ba29c110220e51d025ea0e9",
+    "wp01-dirchild-mac-qualified-build.log": "8c35b1682f73592d30612d7b0fabdb384fcfff35cb5a076cb48b85b1368aa794",
+    "wp01-dirchild-linux-initial.log": "74b05d2df180ef14a6b59d13e737f102777c23ef93d81268ebd7b650ecde9e3f",
+    "wp01-dirchild-windows-initial.log": "b6a835336620a71df34c49e6d9ceb710a1e9968467c06fed9f6f27337cee2a92",
+    "wp01-dirchild-windows-options-diagnostic.log": "2ad5d95ba4889017e80f62d1120a76c4b89046b9d0747896673acf420654648d",
+    "wp01-dirchild-mac-sanitizer-test.log": "c1c80b92755dc6067a4fada07ef636785abffa37c3225ba917d28ea51f9fd067",
+    "wp01-dirchild-asan.log": "d228553b3e3f59d798a4e1b792c4ad30251e44e39b1aab7fa7e260abde6decf3"
+  },
+  "guarantees": [
+    "One lossless native component through held parent; native-default comparison, no absolute path joining, cwd change or final-link following.",
+    "POSIX uses read-only openat with O_DIRECTORY|O_NOFOLLOW|O_NONBLOCK|O_NOCTTY|O_CLOEXEC, fstat and fdopendir; errors retain native evidence, ENOTDIR is not Gone.",
+    "Windows uses counted relative NtCreateFile, FILE_OPEN, sharing R/W/Delete, reparse/no-recall flags and directory-list/attribute/synchronization access; FileBasicInfo rejects reparse and non-directory handles before enumeration.",
+    "Child cursors own independent enumeration state and survive parent destruction and namespace replacements; scope is retained for identity comparison.",
+    "Deep fixture traversal covers 48 components of 100 ASCII bytes (4847 relative pathname bytes including separators) on all three hosts."
+  ],
+  "limitations": [
+    "No recursive walker, parent-navigation stack, mount confinement, snapshot or future mutation authority.",
+    "No universal provider no-hydration guarantee: OS and provider calls may block; identified-provider policy remains separate.",
+    "Core default reports Unsupported rather than reopening through a path.",
+    "Full path/collision rules, remaining inventories/provider coordination, operation capabilities, complete filesystem/time fakes and larger listing backing remain WP-01 work. No GUI or production mutation added."
+  ],
+  "repository_checks": {
+    "ui_boundary_domain_sources": 66,
+    "ckvision_only_active_files": 424,
+    "ckdocs_pages": 24,
+    "diff_check": "passed"
+  }
+}

@@ -58,6 +58,14 @@ Observation<ChildLookup> DirectoryCursor::lookup_child(const NativeName& name, C
         {ErrorDomain::Adapter,static_cast<std::int64_t>(AdapterError::UnsupportedQuery),"lookup_child.native_query"});
 }
 
+Observation<std::unique_ptr<DirectoryCursor>> DirectoryCursor::open_directory_child(const NativeName& name) const {
+    using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+    if (!name.is_valid()) return Result::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "open_directory_child.name"});
+    return Result::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "open_directory_child.native_query"});
+}
+
 Observation<LocationInfo> DirectoryCursor::inspect_location() const {
     return Observation<LocationInfo>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "location.native_query"});

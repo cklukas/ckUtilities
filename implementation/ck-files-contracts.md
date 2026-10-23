@@ -99,6 +99,42 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Relative directory enumeration cursors
+
+`DirectoryCursor::open_directory_child` opens one lossless native component
+through its held parent and returns an independently owning enumeration cursor.
+It always rejects the final link/reparse point, uses native-default name
+resolution and never joins an absolute path or changes cwd. The default adapter
+reports Unsupported. No implicit follow, path fallback or weaker retry exists.
+The returned identity is in the same adapter scope; opening captures the object
+present then, without certifying an earlier listing or future mutation target.
+
+POSIX uses read-only `openat` with O_DIRECTORY, O_NOFOLLOW, O_NONBLOCK, O_NOCTTY
+and O_CLOEXEC, then fstat/fdopendir with explicit ownership transfer. ENOTDIR
+is a failed directory request, not evidence of absence. Windows uses counted
+relative NtCreateFile with FILE_OPEN, share-read/write/delete, list/attribute /
+synchronization rights, and reparse/no-recall options. It checks FileBasicInfo
+on the opened handle and rejects reparse/non-directory objects before exposing
+an enumeration cursor. FILE_DIRECTORY_FILE's restricted compatible-option set
+must not be combined with incompatible options. Neither platform grants write
+access or enables privileges.
+
+[Native evidence](evidence/ck-files-directory-child-20261023.json) covers held
+parent replacement, child rename/replacement after parent destruction, independent
+parent/child enumeration, Unicode and unusual raw names, final link/file/FIFO
+rejection, and traversal through 48 components of 100 bytes. That relative
+pathname exceeds 4096 bytes; production traversal supplies only each component.
+Private deep-tree fixtures create/clean through appropriate native mechanisms.
+
+This API does not implement recursive walking, mount confinement or parent
+navigation. A mount/provider call may block, and no universal no-hydration claim
+is made. Mount/location and provider-policy checks remain separate. Holding the
+child does not retain its parent or grant namespace mutation authority. All
+cursor I/O belongs on workers, with cancellation only between native calls.
+
+References: [POSIX openat semantics](https://man7.org/linux/man-pages/man2/open.2.html)
+and [public Windows NtCreateFile contract](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile).
+
 ## Reported native component lengths
 
 `assess_component_length` compares the exact native component storage length
