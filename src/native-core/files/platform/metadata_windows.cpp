@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#include "windows_name.hpp"
 #include "windows_directory_record.hpp"
 #include "windows_stream_records.hpp"
 
@@ -40,17 +41,6 @@ bool ascii_equal(std::wstring_view left, std::wstring_view right) noexcept {
     return true;
 }
 
-bool dos_device_component(std::wstring_view component) noexcept {
-    if (component == L"." || component == L"..") return false;
-    while (!component.empty() && (component.back() == L' ' || component.back() == L'.')) component.remove_suffix(1);
-    component = component.substr(0, component.find_first_of(L".:"));
-    while (!component.empty() && component.back() == L' ') component.remove_suffix(1);
-    if (ascii_equal(component, L"CON") || ascii_equal(component, L"PRN") || ascii_equal(component, L"AUX") ||
-        ascii_equal(component, L"NUL") || ascii_equal(component, L"CONIN$") || ascii_equal(component, L"CONOUT$")) return true;
-    if (component.size() != 4 || (!ascii_equal(component.substr(0, 3), L"COM") && !ascii_equal(component.substr(0, 3), L"LPT"))) return false;
-    const wchar_t number = component[3];
-    return (number >= L'1' && number <= L'9') || number == L'\u00B9' || number == L'\u00B2' || number == L'\u00B3';
-}
 
 bool filesystem_components(std::wstring_view tail, bool win32_rules) noexcept {
     // Object inspection is separate from future channel inventory. A stream
@@ -58,7 +48,7 @@ bool filesystem_components(std::wstring_view tail, bool win32_rules) noexcept {
     if (tail.find(L':') != std::wstring_view::npos) return false;
     while (!tail.empty()) {
         const auto separator = tail.find(L'\\');
-        if (win32_rules && dos_device_component(tail.substr(0, separator))) return false;
+        if (win32_rules && detail::win32_device_component(tail.substr(0, separator))) return false;
         if (separator == std::wstring_view::npos) break;
         tail.remove_prefix(separator + 1);
     }
@@ -604,7 +594,7 @@ public:
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
         const auto* units = name.windows_units();
-        if (!units || !NativeName::from_windows(*units) || units->find(u':') != std::u16string::npos ||
+        if (!units || !name.is_valid() || units->find(u':') != std::u16string::npos ||
             units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "open_child.name"});

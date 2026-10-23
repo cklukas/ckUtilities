@@ -1007,3 +1007,103 @@ integration. Arbitrary network/virtual filesystem and provider behavior is not
 qualified by APFS/ext4/ReFS fixtures. Larger page-backed listings, remaining
 inventories/provider coordination, destination collision/capability rules and
 full filesystem/time fakes remain WP-01 work. No package checkbox is closed.
+
+### WP-01 — strict filename transport and Win32 convention diagnostics (2026-10-23)
+
+Added `map_native_name` and strict scalar codecs shared with existing native
+name display preparation. Mapping within one native encoding preserves its
+bytes/units, including malformed Unicode. Mapping across encodings requires
+strict UTF-8/UTF-16 scalars; Windows-to-POSIX output is explicitly UTF-8 bytes.
+There is no locale conversion, normalization, case folding, BOM removal,
+replacement, WTF-8 or surrogate-escape fallback. Unrepresentable encodings or
+component boundaries return Unsupported, while byte-budget exhaustion returns
+Unknown. Neither returns a partially mapped basename. Invalid source/tag/limit
+input returns Failed. Resource budgets (64 KiB default, 1 MiB hard ceiling for
+each native representation) do not describe filesystem name/path limits.
+[Evidence](evidence/ck-files-names-20261023.json) records the 69-file final
+manifest, fingerprints, commands, timestamps, results and cleanup.
+
+`NativeName::is_valid` shares factory component predicates and distinguishes
+native component validity from Unicode validity. Moved-from objects can become
+invalid: mapping, pane publication, held-child acquisition and both native child
+lookup adapters reject that state before it can become a root/cwd lookup or an
+empty operation name. Tests cover the actual implementation's moved-from state
+without assuming the C++ standard requires strings to become empty after move.
+
+Added fixed-size Win32 convention diagnostics for empty/navigation spellings,
+forbidden/control characters and stream syntax, DOS/console device-alias risk
+(including superscript digits), and trailing dot/space rewriting. Device-risk
+recognition is shared with the Windows absolute-path metadata guard. The
+checker does not rewrite a component. Generic convention matches and successful
+transport do not establish destination acceptance, collision freedom or creation
+authority. The implementations were checked against
+[RFC 3629](https://www.rfc-editor.org/info/rfc3629/) and the
+[Windows naming documentation](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file).
+Per-directory case/normalization/alias behavior and actual operation/API limits
+still need native checks. No collision rule is inferred from display ordering,
+Unicode equivalence or an OS/filesystem label.
+
+Twelve new domain cases cover every Unicode scalar (1,112,064 values including
+zero and noncharacters), independent UTF-8/UTF-16 boundary vectors, malformed,
+truncated, overlong, surrogate and out-of-range sequences, exact budget limits,
+invalid tags, raw encoding preservation, BOM/normalization distinction, forbidden
+units, device aliases, trailing rewrites and separation of display/transport
+from Win32 compatibility. Existing display tests still pass after extraction of
+the shared codecs. Four new native cases per host exercise mapped BMP/astral
+names, unusual native components, colon handling and literal names flagged by
+Win32 conventions. Fresh bounded enumeration must reach End and return the exact
+native bytes/units, separately from successful lookup; display strings are not
+compared. Linux/ext4 qualifies an actual invalid-UTF-8 filename byte
+0xFF with backslash/newline; macOS/APFS qualifies backslash/newline without
+claiming arbitrary invalid-UTF-8 filename acceptance. Windows/ReFS qualifies a
+raw unpaired UTF-16 filename, rejects stream syntax in ordinary file lookup,
+and inspects actual literal CON/trailing-dot files through counted-relative
+names. Those private literal fixtures are created/deleted through explicit
+literal paths; no production write API was added.
+
+All twenty-three Files CTest entries passed:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 03:42:56.460–03:42:59.995 | 3.534 / 1.486 | 147 |
+| Lima Debian 13 arm64 / GCC 14 | 03:44:01.502–03:44:05.749 | 4.247 / 0.355 | 144 |
+| Windows x64 / MSVC 19.44, static CRT | 03:44:04.341–03:44:08.054 | 3.712 / 1.237 | 151 |
+
+Final read-back increments compiled the changed native fixture and linked its
+executable (two steps on each host). The preceding Mac test increment took
+1.886 s for five steps; its implementation/header rebuild compiled
+all affected domain/platform/test inputs (forty steps, 16.314 s); the initial
+staged build took 23.338 s with 43 steps and CMake configuration 7.0 s /
+generation 0.2 s. The initial
+Linux/Windows runs took 30.056 / 44.736 s for 46 steps, including regeneration
+2.5 s / 0.1 s and 10.5 s / 0.8 s respectively. These are broader inputs than the
+preceding held-child increments; actual compile/link logs and matching final
+code hashes were checked rather than inferring freshness from elapsed time.
+All successful test commands followed their matching builds. Project/ckVision
+SDK checkout fingerprints are recorded; the installed SDK remains 1.4.0. No
+Files GUI exists or was launched.
+
+Focused sanitizers compiled seven units: native names, strict scalar codecs,
+name mapping, Win32 diagnostics, old/new name tests and the ckVision test host.
+Mac ASan + UBSan (-O1 -g, strict warnings, frame pointers) built
+03:44:14.655–03:44:26.617 UTC in 11.948 s and passed all twenty cases in 0.382 s.
+Windows MSVC ASan (/O1 /Zi /MT /W4 /WX) built
+03:45:04.143–03:45:09.780 UTC in 5.638 s and passed the same twenty cases in
+0.334 s. Both ran halt-on-error with no sanitizer diagnostics, including the
+exhaustive scalar loop. The preceding seven-unit builds took 7.899 s Mac /
+6.771 s Windows. After the native read-back refinement the same focused units were rebuilt against the
+final source snapshot; direct commands and hashes were checked without a
+compiler-cache wrapper. The focused unit scope is unchanged. These checks do
+not claim another complete native-adapter sanitizer run. The full Files suite
+ran separately on all three hosts. Sanitizer outputs were removed after hashing
+executables and confirming zero active owners. Fixture audits found no remaining
+files-name-* scratch directories on any host; current normal builds remain.
+All Windows project outputs stayed on V:.
+
+Boundary checks passed (62 domain sources, 416 ckVision-only active files), and
+ckdocs checked 24 pages. Destination case/normalization/alias collision rules,
+filesystem restrictions and path/component length enforcement remain WP-01
+requirements. Remaining native inventories/provider coordination, operation
+capabilities, full filesystem/time fakes and page-backed larger listings are
+also unfinished. This milestone closes no package acceptance checkbox and adds
+no file mutation command.

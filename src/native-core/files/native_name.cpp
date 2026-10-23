@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_name.hpp"
+#include "unicode_scalar.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -10,6 +11,13 @@
 namespace ck::files {
 namespace {
 
+bool valid_component(std::string_view text) noexcept {
+    return !text.empty()&&text!="."&&text!=".."&&text.find('\0')==std::string_view::npos&&text.find('/')==std::string_view::npos;
+}
+bool valid_component(std::u16string_view text) noexcept {
+    return !text.empty()&&text!=u"."&&text!=u".."&&text.find(u'\0')==std::u16string_view::npos&&
+        text.find(u'/')==std::u16string_view::npos&&text.find(u'\\')==std::u16string_view::npos;
+}
 constexpr char hex_digits[] = "0123456789ABCDEF";
 
 void append_byte_escape(std::string& text, unsigned char byte) {
@@ -40,55 +48,11 @@ void append_scalar(std::string& text, std::uint32_t scalar) {
         text += "\\\\";
     } else if (unsafe_scalar(scalar)) {
         append_scalar_escape(text, scalar);
-    } else if (scalar < 0x80U) {
-        text += static_cast<char>(scalar);
-    } else if (scalar < 0x800U) {
-        text += static_cast<char>(0xC0U | (scalar >> 6U));
-        text += static_cast<char>(0x80U | (scalar & 0x3FU));
-    } else if (scalar < 0x10000U) {
-        text += static_cast<char>(0xE0U | (scalar >> 12U));
-        text += static_cast<char>(0x80U | ((scalar >> 6U) & 0x3FU));
-        text += static_cast<char>(0x80U | (scalar & 0x3FU));
     } else {
-        text += static_cast<char>(0xF0U | (scalar >> 18U));
-        text += static_cast<char>(0x80U | ((scalar >> 12U) & 0x3FU));
-        text += static_cast<char>(0x80U | ((scalar >> 6U) & 0x3FU));
-        text += static_cast<char>(0x80U | (scalar & 0x3FU));
+        const auto encoded=detail::encode_utf8_scalar(scalar);
+        if(encoded.units==0)append_scalar_escape(text,scalar);
+        else text.append(encoded.data.data(),encoded.units);
     }
-}
-
-struct DecodedScalar {
-    std::uint32_t value = 0;
-    std::size_t bytes = 0;
-};
-
-// RFC 3629: shortest encoding, at most U+10FFFF, no surrogate scalars.
-// A malformed sequence consumes no bytes; the caller escapes its first byte
-// and retries the remainder without dropping or replacing any source byte.
-DecodedScalar decode(std::string_view bytes) noexcept {
-    const auto first = static_cast<unsigned char>(bytes.front());
-    if (first < 0x80U) return {first, 1};
-    std::size_t count = 0;
-    std::uint32_t minimum = 0;
-    std::uint32_t value = 0;
-    if (first >= 0xC2U && first <= 0xDFU) {
-        count = 2; minimum = 0x80U; value = first & 0x1FU;
-    } else if (first >= 0xE0U && first <= 0xEFU) {
-        count = 3; minimum = 0x800U; value = first & 0x0FU;
-    } else if (first >= 0xF0U && first <= 0xF4U) {
-        count = 4; minimum = 0x10000U; value = first & 0x07U;
-    } else {
-        return {};
-    }
-    if (bytes.size() < count) return {};
-    for (std::size_t index = 1; index < count; ++index) {
-        const auto next = static_cast<unsigned char>(bytes[index]);
-        if ((next & 0xC0U) != 0x80U) return {};
-        value = (value << 6U) | (next & 0x3FU);
-    }
-    if (value < minimum || value > 0x10FFFFU || (value >= 0xD800U && value <= 0xDFFFU))
-        return {};
-    return {value, count};
 }
 
 } // namespace
@@ -97,18 +61,19 @@ NativeName::NativeName(std::string bytes) : value_(std::move(bytes)) {}
 NativeName::NativeName(std::u16string units) : value_(std::move(units)) {}
 
 std::optional<NativeName> NativeName::from_posix(std::string bytes) {
-    if (bytes.empty() || bytes == "." || bytes == ".." ||
-        bytes.find('\0') != std::string::npos || bytes.find('/') != std::string::npos)
-        return std::nullopt;
+    if (!valid_component(std::string_view(bytes))) return std::nullopt;
     return NativeName(std::move(bytes));
 }
 
 std::optional<NativeName> NativeName::from_windows(std::u16string units) {
-    if (units.empty() || units == u"." || units == u".." ||
-        units.find(u'\0') != std::u16string::npos || units.find(u'/') != std::u16string::npos ||
-        units.find(u'\\') != std::u16string::npos)
-        return std::nullopt;
+    if (!valid_component(std::u16string_view(units))) return std::nullopt;
     return NativeName(std::move(units));
+}
+
+bool NativeName::is_valid() const noexcept {
+    if(const auto* bytes=posix_bytes())return valid_component(std::string_view(*bytes));
+    if(const auto* units=windows_units())return valid_component(std::u16string_view(*units));
+    return false;
 }
 
 NameEncoding NativeName::encoding() const noexcept {
@@ -127,13 +92,13 @@ std::string display_native_text(std::string_view bytes) {
     std::string text;
     std::size_t offset = 0;
     while (offset < bytes.size()) {
-        const auto decoded = decode(bytes.substr(offset));
-        if (decoded.bytes == 0) {
+        const auto decoded = detail::decode_utf8_scalar(bytes.substr(offset));
+        if (decoded.units == 0) {
             append_byte_escape(text, static_cast<unsigned char>(bytes[offset]));
             ++offset;
         } else {
             append_scalar(text, decoded.value);
-            offset += decoded.bytes;
+            offset += decoded.units;
         }
     }
     return text;
@@ -141,19 +106,10 @@ std::string display_native_text(std::string_view bytes) {
 
 std::string display_native_text(std::u16string_view units) {
     std::string text;
-    for (std::size_t index = 0; index < units.size(); ++index) {
-        const std::uint32_t unit = units[index];
-        if (unit >= 0xD800U && unit <= 0xDBFFU && index + 1 < units.size() &&
-            units[index + 1] >= 0xDC00U && units[index + 1] <= 0xDFFFU) {
-            const std::uint32_t scalar = 0x10000U + ((unit - 0xD800U) << 10U) +
-                                         (static_cast<std::uint32_t>(units[index + 1]) - 0xDC00U);
-            append_scalar(text, scalar);
-            ++index;
-        } else if (unit >= 0xD800U && unit <= 0xDFFFU) {
-            append_scalar_escape(text, unit);
-        } else {
-            append_scalar(text, unit);
-        }
+    for (std::size_t index=0;index<units.size();) {
+        const auto decoded=detail::decode_utf16_scalar(units.substr(index));
+        if(decoded.units==0){append_scalar_escape(text,units[index]);++index;}
+        else {append_scalar(text,decoded.value);index+=decoded.units;}
     }
     return text;
 }

@@ -29,6 +29,9 @@ public:
     // unpaired surrogates; native names need not be well-formed Unicode text.
     static std::optional<NativeName> from_windows(std::u16string units);
 
+    // Moved-from objects may no longer contain a component; consumers must
+    // reject that state before lookup/publication, never treat it as cwd.
+    bool is_valid() const noexcept;
     NameEncoding encoding() const noexcept;
     const std::string* posix_bytes() const noexcept;
     const std::u16string* windows_units() const noexcept;

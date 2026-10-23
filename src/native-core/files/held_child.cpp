@@ -29,8 +29,8 @@ HeldChild::HeldChild(std::shared_ptr<const DirectoryCursor> parent, NativeName n
       metadata_(std::move(metadata)), family_(std::move(family)), revision_(revision), previous_continuity_(std::move(continuity)) {}
 Observation<HeldChild::Pointer> HeldChild::observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name) {
     using Result = Observation<Pointer>;
-    if (!parent) return Result::unavailable(ObservationState::Failed,
-        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "held_child.parent"});
+    if (!parent || !name.is_valid()) return Result::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "held_child.parent_or_name"});
     auto opened = parent->open_child(name, EntryAccess::MetadataOnly);
     if (!opened.value()) { const auto& e = *opened.unavailable_detail(); return Result::unavailable(e.state, e.error); }
     auto owned = std::move(opened).take_value();

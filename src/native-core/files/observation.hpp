@@ -18,7 +18,7 @@ enum class AdapterError : std::int64_t {
     UnsupportedQuery = 4, UnqualifiedIdentity = 5, InterruptedRead = 6,
     FinalLinkRejected = 7, NotDirectory = 8, InventoryLimit = 9, InvalidLimit = 10,
     InvalidIdentifier = 11, InvalidAccess = 12, AttributeAbsent = 13, ProviderReviewRequired = 14,
-    MetadataChanged = 15
+    MetadataChanged = 15, UnrepresentableName = 16
 };
 
 // Preserve native codes without translating them to a boolean or injecting a

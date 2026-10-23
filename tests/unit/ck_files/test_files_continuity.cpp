@@ -75,6 +75,8 @@ CK_TEST(held_child_rejects_null_and_missing_objects_and_preserves_native_failure
     const auto missing=HeldChild::observe(parent,name("a"));CK_CHECK(missing.state()==ObservationState::Gone&&missing.unavailable_detail()->error.code==2);
     auto object=parent->add("a",1);object->failure=UnavailableObservation{ObservationState::Denied,{ErrorDomain::Posix,13,"script.inspect"}};
     const auto denied=HeldChild::observe(parent,name("a"));CK_CHECK(denied.state()==ObservationState::Denied&&denied.unavailable_detail()->error==object->failure->error&&object->live_handles==0);
+    auto moving=name("a");const auto owned=std::move(moving);CK_CHECK(owned.is_valid());const int before=parent->opens;
+    if(!moving.is_valid())CK_CHECK(HeldChild::observe(parent,std::move(moving)).state()==ObservationState::Failed&&parent->opens==before);
     parent->null_child=true;CK_CHECK(HeldChild::observe(parent,name("a")).state()==ObservationState::Failed);
 }
 CK_TEST(held_child_continuity_requires_a_live_successor_not_cached_or_independent_id_matches) {

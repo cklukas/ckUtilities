@@ -79,6 +79,7 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
     std::unordered_map<std::uint64_t, std::size_t> indexes;
     indexes.reserve(entries.size());
     for (const auto& entry : entries) {
+        if (!entry.name.is_valid()) return PanePublish::InvalidListing;
         if (entry.name.encoding() != entries.front().name.encoding())
             return PanePublish::InvalidListing;
         if (entry.name.windows_units() && entry.name.windows_units()->size() > limits_.native_name_bytes / sizeof(char16_t)) return PanePublish::LimitExceeded;

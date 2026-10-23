@@ -67,6 +67,38 @@ by successful complete enumeration. An inaccessible ACL or stream list is
 unknown, not empty. Preserve native error codes separately from sanitized UI
 diagnostics. Never use a generic false boolean for these outcomes.
 
+## Filename transport and Win32 convention diagnostics
+
+`map_native_name` accepts a native basename, never display text. Same-encoding
+mapping preserves its exact representation, including malformed Unicode.
+Cross-encoding mapping requires strict Unicode scalars: POSIX input is UTF-8,
+Windows input is UTF-16, and Windows-to-POSIX output is UTF-8 bytes explicitly.
+No locale conversion, replacement, normalization, case folding, BOM removal,
+WTF-8 or surrogate-escape fallback occurs. Unrepresentable names/components
+return Unsupported; no partial name is returned. Native storage budgets apply
+independently to input and output (64 KiB default, 1 MiB hard ceiling), with
+Unknown on exhaustion and Failed for invalid configuration/source/tag input.
+Those resource budgets are not filesystem name/path limits.
+
+The strict scalar codecs are shared with native display preparation. Display
+still escapes malformed units and unsafe/control text injectively; this is not
+an encoding that operations parse back into names. Component factory predicates
+also serve `NativeName::is_valid`. Moved-from objects can lose their component;
+consumers reject invalid states before lookup, held-child observation, pane
+publication or mapping. Unicode validity and native component validity remain
+separate concepts.
+
+`check_win32_component` reports generic convention risks using bounded result
+fields: empty/navigation spellings, forbidden/control units including stream
+syntax, device aliases and trailing dot/space rewriting. Device recognition is
+shared with the existing Windows absolute-path inspection guard. A counted NT
+child name can identify a real literal file even when Win32 conventions flag it.
+Neither an ordinary-convention result nor successful name transport authorizes
+creation, establishes destination acceptance or proves collision freedom.
+Native filesystem, driver, directory case/normalization/alias semantics and the
+actual operation/API path limits still require independent checks. No helper
+silently sanitizes or renames a component to make a destination work.
+
 ## Held-child refresh continuity
 
 `HeldChild` owns one opened child and its held parent directory, and records the

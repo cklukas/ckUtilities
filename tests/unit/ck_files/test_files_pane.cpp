@@ -151,6 +151,8 @@ CK_TEST(pane_filters_prepared_safe_text_without_parsing_display_back_into_native
 }
 CK_TEST(pane_duplicate_and_mixed_names_and_resource_limits_do_not_replace_existing_state) {
     PaneModel pane({2,4,16});load(pane,{entry("old")});const auto old=id(pane,0);pane.set_mark(old,true);const auto request=pane.begin_listing(PaneListingPurpose::Navigate);
+    auto moving=entry("moving");const auto owned=std::move(moving.name);CK_CHECK(owned.is_valid());
+    if(!moving.name.is_valid())CK_CHECK(pane.publish(request,{moving})==PanePublish::InvalidListing);
     CK_CHECK(pane.publish(request,{entry("a"),entry("a")})==PanePublish::InvalidListing);
     auto windows=entry("b");windows.name=*NativeName::from_windows(u"b");
     CK_CHECK(pane.publish(request,{entry("a"),windows})==PanePublish::InvalidListing);

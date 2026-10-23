@@ -617,7 +617,7 @@ public:
             adapter_error(AdapterError::InvalidAccess, "open_child.access"));
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
         const auto* spelling = name.posix_bytes();
-        if (!spelling || !NativeName::from_posix(*spelling))
+        if (!spelling || !name.is_valid())
             return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "open_child.name"));
 #if defined(__linux__)
         constexpr int flags = O_PATH | O_NOFOLLOW | O_CLOEXEC;
