@@ -34,6 +34,7 @@ struct Fixture {
         Inventory result; const auto owner = fs.metadata(file).identity;
         StorageInfo storage; storage.owner = owner; storage.model = StorageModel::LinuxStatx;
         result.storage = Observation<StorageInfo>::available(std::move(storage));
+        result.layout = Observation<FileDataLayout>::available({DataLayoutFamily::PosixSeekDataHole, owner, 3, {{0, 3}}});
         result.link = Observation<LinkMetadata>::available({owner, PosixSymlinkData{"../target"}});
         DataChannelCatalog channels; channels.owner = owner; channels.coverage = DataChannelCoverage::WindowsFileStreamInfo;
         channels.channels.push_back({*NativeFeatureIdentifier::from_windows(u":a:$DATA"), DataChannelKind::NamedData,
@@ -52,7 +53,7 @@ struct Fixture {
     }
     void configure(std::size_t count = 1) { fs.set_inventory(file, replies(count)); }
     std::unique_ptr<OpenedEntry> open() {
-        return take(take(fs.open_directory(path()))->open_child(name(), EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity));
+        return take(take(fs.open_directory(path()))->open_child(name(), EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity | EntryAccess::MetadataAndLayout));
     }
     std::size_t calls(Op operation) const {
         return static_cast<std::size_t>(std::count_if(fs.calls().begin(), fs.calls().end(), [&](const auto& call) { return call.operation == operation; }));
@@ -66,7 +67,7 @@ ObjectInventoryJob::Result finish(ObjectInventoryJob& job) {
     }
     throw std::runtime_error("object inventory fixture exceeded advance bound");
 }
-constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::ReadLink, Op::InspectChannels,
+constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectLayout, Op::ReadLink, Op::InspectChannels,
     Op::InspectAttributes, Op::ReadAttribute, Op::ReadSecurity};
 }
 CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement) {
@@ -75,6 +76,7 @@ CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_
     CK_CHECK(take(data.before.value()->logical_size) == 3 && take(data.before.value()->kind) == ObjectKind::RegularFile);
     CK_CHECK(take(data.identity_continuity) == IdentityComparison::Same);
     CK_CHECK(data.storage.value() && data.link.value() && data.channels.value() && data.attributes.value());
+    CK_CHECK(data.layout.value() && data.layout.value()->ranges.size() == 1 && take(result->compare_owner(data.layout.value()->owner)) == IdentityComparison::Same);
     CK_CHECK(data.attribute_values.size() == 1 && data.attribute_values[0].catalog_index == 0);
     CK_CHECK(take(data.attribute_values[0].value).identifier == id() && take(data.attribute_values[0].value).bytes.size() == 2);
     for (std::size_t i = 0; i < data.security.size(); ++i) CK_CHECK(take(data.security[i]).part == inventory_security_parts[i]);
@@ -94,6 +96,7 @@ CK_TEST(object_inventory_preserves_all_query_failures_without_inventing_absent_f
         }
         ObjectInventoryJob job(f.open(), {}, f.fs.clock()); const auto result = finish(job); const auto& data = result->data();
         CK_CHECK(data.before.state() == state && data.after.state() == state && data.storage.state() == state);
+        CK_CHECK(data.layout.state() == state);
         CK_CHECK(data.link.state() == state && data.channels.state() == state && data.attributes.state() == state);
         CK_CHECK(data.attribute_values.empty() && f.calls(Op::ReadAttribute) == 0 && data.identity_continuity.state() == state);
         for (const auto& security : data.security) CK_CHECK(security.state() == state && security.unavailable_detail()->error == denied().error);
@@ -114,7 +117,8 @@ CK_TEST(object_inventory_cancellation_at_every_query_boundary_preserves_committe
         CK_CHECK(job.advance(stop.get_token()) == State::Paused && !job.completed().value() && f.fs.live_entries() == 1);
         const auto calls = f.fs.calls().size(); CK_CHECK(job.advance(stop.get_token()) == State::Paused && f.fs.calls().size() == calls);
         const auto result = finish(job); CK_CHECK(result->data().attribute_values.size() == 1);
-        for (const auto query : operations) CK_CHECK(f.calls(query) == (query == Op::InspectHandle ? 2 : query == Op::ReadSecurity ? 6 : 1));
+        for (const auto query : operations) CK_CHECK(f.calls(query) ==
+            (query == Op::InspectHandle ? 2 : query == Op::ReadSecurity ? 6 : query == Op::InspectLayout && operation == Op::InspectLayout ? 2 : 1));
     }
 }
 CK_TEST(object_inventory_slow_native_query_yields_after_committing_without_repeating_it) {

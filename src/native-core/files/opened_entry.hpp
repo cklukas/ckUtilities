@@ -8,24 +8,28 @@
 #include "security.hpp"
 #include "storage_info.hpp"
 #include "link_metadata.hpp"
+#include "data_layout.hpp"
 
 namespace ck::files {
 
 // Requested OS access only; never authority for mutation, loss or hydration.
+// Layout is an explicit regular-file query opt-in and can require data-read
+// permission on platforms that need an additional readable handle.
 enum class EntryAccess : unsigned {
     MetadataOnly = 0, MetadataAndAttributes = 1, MetadataAndSecurity = 2,
-    MetadataAndFullSecurity = 6
+    MetadataAndFullSecurity = 6, MetadataAndLayout = 8
 };
 constexpr EntryAccess operator|(EntryAccess left, EntryAccess right) noexcept {
     return static_cast<EntryAccess>(static_cast<unsigned>(left) | static_cast<unsigned>(right));
 }
 constexpr bool valid_entry_access(EntryAccess access) noexcept {
     const auto bits = static_cast<unsigned>(access);
-    return (bits & ~7U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
+    return (bits & ~15U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
 }
 constexpr bool requests_attributes(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 1U) != 0; }
 constexpr bool requests_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 2U) != 0; }
 constexpr bool requests_audit_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 4U) != 0; }
+constexpr bool requests_layout(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 8U) != 0; }
 
 // Owns the opened object, independently of the original parent/name. Queries
 // use that object even if its entry is renamed, replaced or unlinked. This does
@@ -40,6 +44,10 @@ public:
     OpenedEntry& operator=(const OpenedEntry&) = delete;
     virtual Observation<BasicMetadata> inspect_basic() const = 0;
     virtual Observation<StorageInfo> inspect_storage() const;
+    // Explicit opt-in layout access can require native data-read permission;
+    // this query seeks/queries metadata and never reads file content. Main data
+    // only, regular files only. No hydration consent or dense-file fallback.
+    virtual Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const;
     virtual Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const;
     // Native channel identifiers and sizes only; no channel content is read.
     // Coverage is explicit. Unsupported is not evidence that channels are absent.

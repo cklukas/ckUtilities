@@ -3,6 +3,11 @@
 #include "opened_entry.hpp"
 
 namespace ck::files {
+Observation<FileDataLayout> OpenedEntry::inspect_data_layout(InventoryLimits limits, std::stop_token stop) const {
+    const bool valid = limits.valid(), cancelled = stop.stop_requested();
+    return Observation<FileDataLayout>::unavailable(!valid ? ObservationState::Failed : cancelled ? ObservationState::Unknown : ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(!valid ? AdapterError::InvalidLimit : cancelled ? AdapterError::InterruptedRead : AdapterError::UnsupportedQuery), "layout.native_query"});
+}
 Observation<LinkMetadata> OpenedEntry::read_link_metadata(InventoryLimits limits) const {
     return Observation<LinkMetadata>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "link.native_query"});

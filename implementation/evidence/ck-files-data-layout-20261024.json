@@ -1,0 +1,1409 @@
+{
+  "milestone": "WP-01 reported file data ranges with explicit held-object access",
+  "date": "2026-10-24",
+  "validation_utc_date": "2026-10-23",
+  "base_commit": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1",
+  "sdk": {
+    "version": "1.4.0",
+    "source": {
+      "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+      "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+      "files": 5124,
+      "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+    }
+  },
+  "source_files": {
+    "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "75323c5ae3c322395215d25b2f52f59cbc7b60c0f09234131ae87b09c2bee06f",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+    "src/native-core/files/child_lookup.hpp": "45d5cb758c08f7adfda72c088f41d4399e368466b1bafba7c65b08a79300562b",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/data_layout.cpp": "8f10f925edd8c4226ae04992b78566ba4ca54d46c020d62af4901d69c0de8132",
+    "src/native-core/files/data_layout.hpp": "6cb02cefe53f3fcd5191dc89c98cf9ba0a3c049f4a190cc046b0417c90f4c70c",
+    "src/native-core/files/destination_batch_job.cpp": "530f71c8c86263e4027ad1d00e8605ffe17e6fc338a20fde4dd5941954982103",
+    "src/native-core/files/destination_batch_job.hpp": "64b893b13f3dd0677d0a8e4df2223cc27095c84fcbad89c51098c301cb29fa96",
+    "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+    "src/native-core/files/directory_cursor.hpp": "99a42fe0e693c1506b6e659c2be93948d02a703f5a265e3174a9e9263ede3a53",
+    "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+    "src/native-core/files/directory_entry_probe.hpp": "8474e16ccf9ca9c106a2e400708994688b9982a00098723cc04c08003865bf9f",
+    "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+    "src/native-core/files/directory_listing.hpp": "e6aa55c90c5aeab0834e71a501dfaab09eb27dff34798a34d009784830984dd6",
+    "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+    "src/native-core/files/held_child.hpp": "ccee6f376d8d926cb4c0458e473ea5bab2a750b848af319a81edf915209f5c6a",
+    "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+    "src/native-core/files/link_metadata.hpp": "a175d440938e665f0fb59aba7f9a5c65653728e9bbb7ad22eed4a9520a6f6ba3",
+    "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+    "src/native-core/files/location_info.hpp": "0210924f93ce1ac53c6355258ff9d9c3ec9a1f71c9c219500467aa730e62ceab",
+    "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+    "src/native-core/files/monotonic_clock.hpp": "03ac623fe5784391a577a15b0e5ab2d55efc8561f837b46e60cce766e22aa6a1",
+    "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+    "src/native-core/files/name_limits.hpp": "30e840e59d037d0749e03d88ad99fe80a64d05cd306f10b832d91ffc45c9994f",
+    "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+    "src/native-core/files/name_mapping.hpp": "c1503d5262931c414aef4038c7388d3eaf0b524baf610b05bcd3938838f62eba",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+    "src/native-core/files/native_name.hpp": "89464eb1ab53f82aeb79ee0413836bf0cfbafd1f185c6c7d5ec14dd37207037d",
+    "src/native-core/files/object_inventory_job.cpp": "6a6279afe899a82996512c97dcabd9e7497cc64c53c139626201622632f47def",
+    "src/native-core/files/object_inventory_job.hpp": "fc03dd85065872df1da92b1fd99ca4887f2edede0f8c3a032d7052a31a53bc91",
+    "src/native-core/files/observation.hpp": "c95a706c369af6a3d61f3bda8e74477a39732f004dde5e043c34ea84b8c0ea5a",
+    "src/native-core/files/opened_entry.cpp": "4bc589ca7fdc24a5724d4ffecc5ecb0a0ea11c11e865989b63a1279aff24a694",
+    "src/native-core/files/opened_entry.hpp": "d1413507b217391cdd28be570699ff82ae430b5b0ce70d8b4d930a10a1590d7c",
+    "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+    "src/native-core/files/pane_listing_job.hpp": "dc51bf2db6b4b021483cba62e038f14a330ffabfc52ed909bdd5095f1197d142",
+    "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+    "src/native-core/files/pane_model.hpp": "413c9066e11fc643df8f9e54a3bac9e80943ae009844a707b358a5b5146ba516",
+    "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+    "src/native-core/files/pane_refresh_job.hpp": "d3ec9933fcf7799391025c7dfeb571bcf2bf6c543222333f5ca92b367f4fe919",
+    "src/native-core/files/platform/metadata_posix.cpp": "05a96b71d0fdbfc5f99690ea3dd905ca6b135764f31c3bf26b17566dee7535e5",
+    "src/native-core/files/platform/metadata_windows.cpp": "b5d4261f1487932b4a43c752355f2b641f3c5d14ee6165a19743f21bfd419294",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+    "src/native-core/files/storage_info.hpp": "1bf591b1649cf9ce08bf23a07f9925b0bfa695b0d7f885ce9dd246be0c22e1e7",
+    "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+    "src/native-core/files/unicode_scalar.hpp": "fd99c8044180edd11dc7de9107da873149dd03647cc9da7e6eec9f7210e8b204",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+    "src/native-core/files/windows_name.hpp": "a820aaddfd888e6b87226c165e4b5af83b9abe8a02b0b4658b3d0cea0efc5921",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "f816c826b88ca26496a7b35f6a07b23c759b2be13e674dba61ce0f0cbb4cca24",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_clock.cpp": "cbd7aa1277f7226fbabf863897f779343e22c43754ca2f2621f46537dbe9cfc3",
+    "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+    "tests/unit/ck_files/test_files_continuity_native.cpp": "3d9f0e45c215169a7aef750e42f9517e87be7d426c1535e5ac3e2ce1345ed463",
+    "tests/unit/ck_files/test_files_destination_batch.cpp": "b4f70072dcaccb5133f57369f7d10deb5d40d157dec577d269ec382c50cc78ad",
+    "tests/unit/ck_files/test_files_destination_batch_native.cpp": "710e57233181c1d6c9a71e0097966d2bdf0e70f79efd6dfbac8289f2b681dbb1",
+    "tests/unit/ck_files/test_files_directory.cpp": "391689ff86bbbebc299ce89e004d703cd16fa9df18a525fed91166821f66769d",
+    "tests/unit/ck_files/test_files_directory_child_native.cpp": "dae7cef23cb396c2a581208a44dc939936b5b66c4290507d9464b477860c68ce",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_entry_probe.cpp": "63de7e4dad545f92010ad5a356c5759b286d2cbb47ba76993bcb97cf833a5e07",
+    "tests/unit/ck_files/test_files_entry_probe_native.cpp": "58682ee7881f01475e75ec56c6ca93f288b2bcf450abd571cf2784e50a02cacb",
+    "tests/unit/ck_files/test_files_layout.cpp": "07623b0f69cc34b6113f5ec20e54fa98c84c4ec99bd42b7f74cc207093432329",
+    "tests/unit/ck_files/test_files_layout_native.cpp": "3350ce1cfdce256a6b5a17c8c1d51884e789a464ae6c1a027ffcc8e3307a720e",
+    "tests/unit/ck_files/test_files_links.cpp": "f0840756215662214400211492e6414b881aed3575ad6b110eada9e4b15a1dbc",
+    "tests/unit/ck_files/test_files_links_native.cpp": "20909416fa19858b20c036106462a1d6aa5fec9830e2ccf89da31a07002f48bd",
+    "tests/unit/ck_files/test_files_listing.cpp": "a8c17af7155da63b31325a2742a8bd1a2f29b291bf6431a3d532ea87cb80a35a",
+    "tests/unit/ck_files/test_files_listing_native.cpp": "b9ce83eac9d0393e7075c35fd0e6c72c01dd3d3b4962151c29104b717c7831b2",
+    "tests/unit/ck_files/test_files_location.cpp": "4b5d6d29bfca76aeebd4575fd7888505137a39afdb7ac4b0beb24ef8d6e60189",
+    "tests/unit/ck_files/test_files_location_native.cpp": "fe1f4c7cea6ef1e4bb6df37789dd20216ed448e6fd69c6d8fbd8d75cb7c101cb",
+    "tests/unit/ck_files/test_files_lookup.cpp": "cd78d77e2bf0fa199bdd3d358278b13a71c4a5e5a0ff5aa592a02ab73e8951db",
+    "tests/unit/ck_files/test_files_lookup_native.cpp": "37cd704e638b46bd619fc95286b54cc505f4bf20998392e52488c3e3fcb8bc86",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_name_limits.cpp": "98f0359315262be89265dd6b1bc6da4aa1c8a25f61c2660a1a77fa5db4f78a3e",
+    "tests/unit/ck_files/test_files_name_mapping.cpp": "764383d75f8b084dff4c4cbe328217cdb05a487984e6d97ce8775867ff766b3a",
+    "tests/unit/ck_files/test_files_name_mapping_native.cpp": "0efa60920c867adceeb8587803cf0a1b97c99c2d8618086f30372400725bbf6e",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_object_inventory.cpp": "5869e6a6cb61ae45050ac403b0b66edf4c48f228b3c548cd83ce7b5fa5bba3b9",
+    "tests/unit/ck_files/test_files_object_inventory_native.cpp": "135d4a7f8948c354ca06ec349b5e2b99bcf3fcc7f4bf812f91284108cf3523d6",
+    "tests/unit/ck_files/test_files_pane.cpp": "d9d45a9667e916b528ecdfff59c7bdee0dea25a66f0ee0cf3ca53ce99834918b",
+    "tests/unit/ck_files/test_files_pane_job.cpp": "8b478db7beb97ed018c7a3773fcac6d07aae316a62ccc86206f843f6e419398d",
+    "tests/unit/ck_files/test_files_pane_job_native.cpp": "c4bc918c98405cd44cff403e7263eb76761ad47825614f3c100e3c190cf0c1ea",
+    "tests/unit/ck_files/test_files_pane_refresh.cpp": "5aa7d7059d0a7eacb4c3f47ef9353a70e7db66586a86e86bbdb5ed4b20bd8c98",
+    "tests/unit/ck_files/test_files_pane_refresh_native.cpp": "863047f127350fc62ea0310937cdd74974a9f2543d5d026a626d1aeae2e40c11",
+    "tests/unit/ck_files/test_files_security.cpp": "abb4d179778670317b1a2cd75a7549ef58f085871199703536051f9d23a45753",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/unit/ck_files/test_files_simulated.cpp": "67dce358fe7c8ad258cc11bb0b7417b453be53e5482e778b74d4e132840ea0c2",
+    "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+    "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+    "tests/support/manual_monotonic_clock.hpp": "eb448c369f647f5f7303cc8cb0df9625d29849f3d6f893a2d638bd2144942ceb",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/simulated_filesystem.hpp": "258abf4031cfe0f24545ca9a6cca3db4496e3c4fe6a390450224474138df1049",
+    "tests/support/simulated_inventory.hpp": "98e697edfb8eb1a1508ee50618e4eac165ffce1f79a0f6e022db21e24e4776b7",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "manifest_sha256": "77e7e12d76d940dbdb20a08e5f8af1d27b8a711e81ec38bb59214775a8ba7110",
+  "new_tests": {
+    "test_files_layout.cpp": [
+      "layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+      "layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+      "layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+      "layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+      "layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+      "layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+      "layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+      "layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+      "layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+      "layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+      "layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+      "layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+      "layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges"
+    ],
+    "test_files_layout_native.cpp": [
+      "native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+      "native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+      "native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+      "native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+      "native_layout_regular_file_access_refuses_final_links_and_directories",
+      "native_layout_empty_file_requires_a_successful_native_end_query",
+      "native_layout_linux_read_denial_is_not_bypassed_by_a_metadata_only_handle",
+      "native_layout_windows_offline_review_blocks_queries_and_access_upgrade"
+    ]
+  },
+  "normal_test_results": {
+    "macos": {
+      "suites": 43,
+      "cases": 346,
+      "last_test_sha256": "4e9323923b74900867709a8db9e56838a1cbe304e625c6d3fd2311650b5b9557",
+      "new_case_markers": [
+        "test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query"
+      ],
+      "qualification": [
+        "LAYOUT_QUALIFIED family=1 ranges=2 reported_bytes=3162112 allocated_bytes=3162112"
+      ]
+    },
+    "linux": {
+      "suites": 43,
+      "cases": 345,
+      "last_test_sha256": "d34e05200c95d5e6ff1204aba889b97542699d162cf3dc5e0a95d7dd1a8e4463",
+      "new_case_markers": [
+        "test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query",
+        "test_files_layout_native.cpp:native_layout_linux_read_denial_is_not_bypassed_by_a_metadata_only_handle"
+      ],
+      "qualification": [
+        "LAYOUT_QUALIFIED family=1 ranges=2 reported_bytes=8192 allocated_bytes=8192"
+      ]
+    },
+    "windows": {
+      "suites": 43,
+      "cases": 351,
+      "last_test_sha256": "18cf905ec10794a72e9c9b3974d997c071d874fc96e7f3d27ce96dbd03b38e0b",
+      "new_case_markers": [
+        "test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query",
+        "test_files_layout_native.cpp:native_layout_windows_offline_review_blocks_queries_and_access_upgrade"
+      ],
+      "qualification": [
+        "LAYOUT_QUALIFIED family=2 ranges=2 reported_bytes=8192 allocated_bytes=12288"
+      ]
+    }
+  },
+  "validation_records": {
+    "mac-final-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "069eb5593f57868960feb91fd144a2a21fd477628d65d65ac6ff9fbc898a0856",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-reviewed-mac-final-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:21:07.590592+00:00",
+      "end": "2026-10-23T23:21:10.966617+00:00",
+      "elapsed_seconds": 3.376,
+      "exit_code": 0
+    },
+    "mac-final-test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "069eb5593f57868960feb91fd144a2a21fd477628d65d65ac6ff9fbc898a0856",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-reviewed-mac-final-test",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:21:11.310914+00:00",
+      "end": "2026-10-23T23:21:12.131959+00:00",
+      "elapsed_seconds": 0.821,
+      "exit_code": 0
+    },
+    "mac-sanitizer-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "069eb5593f57868960feb91fd144a2a21fd477628d65d65ac6ff9fbc898a0856",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-reviewed-mac-sanitizer-build",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/child_lookup.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/data_layout.cpp",
+        "src/native-core/files/destination_batch_job.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/directory_entry_probe.cpp",
+        "src/native-core/files/directory_listing.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/held_child.cpp",
+        "src/native-core/files/link_metadata.cpp",
+        "src/native-core/files/location_info.cpp",
+        "src/native-core/files/monotonic_clock.cpp",
+        "src/native-core/files/name_limits.cpp",
+        "src/native-core/files/name_mapping.cpp",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/object_inventory_job.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/pane_listing_job.cpp",
+        "src/native-core/files/pane_model.cpp",
+        "src/native-core/files/pane_refresh_job.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/storage_info.cpp",
+        "src/native-core/files/unicode_scalar.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/windows_name.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_simulated.cpp",
+        "tests/unit/ck_files/test_files_layout.cpp",
+        "tests/unit/ck_files/test_files_layout_native.cpp",
+        "tests/unit/ck_files/test_files_object_inventory.cpp",
+        "tests/unit/ck_files/test_files_object_inventory_native.cpp",
+        "tests/unit/ck_files/test_files_security.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:21:12.555116+00:00",
+      "end": "2026-10-23T23:22:18.437541+00:00",
+      "elapsed_seconds": 65.882,
+      "exit_code": 0
+    },
+    "mac-sanitizer-test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "069eb5593f57868960feb91fd144a2a21fd477628d65d65ac6ff9fbc898a0856",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-reviewed-mac-sanitizer-test",
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:22:19.880054+00:00",
+      "end": "2026-10-23T23:22:20.333326+00:00",
+      "elapsed_seconds": 0.453,
+      "exit_code": 0
+    },
+    "linux-validation": {
+      "steps": [
+        {
+          "step": "build",
+          "start": "2026-10-23T23:21:07.714327+00:00",
+          "end": "2026-10-23T23:21:29.506369+00:00",
+          "elapsed_seconds": 21.792,
+          "command": [
+            "cmake",
+            "--build",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+            "--target",
+            "ck_files_core_tests",
+            "ck_files_native_tests",
+            "--parallel",
+            "4"
+          ],
+          "exit_code": 0
+        },
+        {
+          "step": "test",
+          "start": "2026-10-23T23:21:29.506682+00:00",
+          "end": "2026-10-23T23:21:29.650520+00:00",
+          "elapsed_seconds": 0.144,
+          "command": [
+            "ctest",
+            "--test-dir",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+            "-L",
+            "files",
+            "--output-on-failure"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    "linux-sanitizer-validation": {
+      "units": [
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/child_lookup.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/data_layout.cpp",
+        "src/native-core/files/destination_batch_job.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/directory_entry_probe.cpp",
+        "src/native-core/files/directory_listing.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/held_child.cpp",
+        "src/native-core/files/link_metadata.cpp",
+        "src/native-core/files/location_info.cpp",
+        "src/native-core/files/monotonic_clock.cpp",
+        "src/native-core/files/name_limits.cpp",
+        "src/native-core/files/name_mapping.cpp",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/object_inventory_job.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/pane_listing_job.cpp",
+        "src/native-core/files/pane_model.cpp",
+        "src/native-core/files/pane_refresh_job.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/storage_info.cpp",
+        "src/native-core/files/unicode_scalar.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/windows_name.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_simulated.cpp",
+        "tests/unit/ck_files/test_files_layout.cpp",
+        "tests/unit/ck_files/test_files_layout_native.cpp",
+        "tests/unit/ck_files/test_files_object_inventory.cpp",
+        "tests/unit/ck_files/test_files_object_inventory_native.cpp",
+        "tests/unit/ck_files/test_files_security.cpp",
+        "src/vision/host/cktest_main.cpp"
+      ],
+      "steps": [
+        {
+          "step": "sanitizer-build",
+          "start": "2026-10-23T23:21:29.651174+00:00",
+          "end": "2026-10-23T23:24:01.186344+00:00",
+          "elapsed_seconds": 151.535,
+          "command": [
+            "g++",
+            "-std=c++20",
+            "-O1",
+            "-g",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Wshadow",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-DCKTOOLS_TEST_TEMP_ROOT=\"/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+            "-I",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/sdk/include",
+            "-I",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files",
+            "-I",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/support",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/attributes.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/child_lookup.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/data_channels.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/data_layout.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/destination_batch_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_cursor.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_entry_probe.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/directory_listing.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/file_metadata.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/held_child.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/link_metadata.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/location_info.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/monotonic_clock.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/name_limits.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/name_mapping.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/native_name.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/object_inventory_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/opened_entry.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_listing_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_model.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/pane_refresh_job.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/security.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/storage_info.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/unicode_scalar.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_directory_record.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_name.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/windows_stream_records.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/native-core/files/platform/metadata_posix.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_simulated.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_layout.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_layout_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_object_inventory.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_object_inventory_native.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/tests/unit/ck_files/test_files_security.cpp",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/source/src/vision/host/cktest_main.cpp",
+            "-o",
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests"
+          ],
+          "exit_code": 0
+        },
+        {
+          "step": "sanitizer-test",
+          "start": "2026-10-23T23:24:01.186612+00:00",
+          "end": "2026-10-23T23:24:01.324797+00:00",
+          "elapsed_seconds": 0.138,
+          "command": [
+            "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests"
+          ],
+          "exit_code": 0
+        }
+      ]
+    },
+    "windows-validation": {
+      "start": "2026-10-23T23:23:30.0109219Z",
+      "buildEnd": "2026-10-23T23:23:38.7761424Z",
+      "end": "2026-10-23T23:23:41.4959365Z",
+      "buildSeconds": 8.7652205,
+      "testSeconds": 2.7197940999999997,
+      "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe"
+    },
+    "windows-asan-validation": {
+      "start": "2026-10-23T23:23:44.8118308Z",
+      "buildEnd": "2026-10-23T23:24:54.5056500Z",
+      "end": "2026-10-23T23:24:54.8147315Z",
+      "buildSeconds": 69.6938192,
+      "testSeconds": 0.3090815,
+      "units": {
+        "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+        "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+        "src/native-core/files/monotonic_clock.cpp": "144097f7abe7ad81ba222c7b0e1c23817e2b3cb80142da6f84165256af107097",
+        "tests/unit/ck_files/test_files_security.cpp": "abb4d179778670317b1a2cd75a7549ef58f085871199703536051f9d23a45753",
+        "src/native-core/files/opened_entry.cpp": "4bc589ca7fdc24a5724d4ffecc5ecb0a0ea11c11e865989b63a1279aff24a694",
+        "tests/unit/ck_files/test_files_object_inventory_native.cpp": "135d4a7f8948c354ca06ec349b5e2b99bcf3fcc7f4bf812f91284108cf3523d6",
+        "src/vision/host/cktest_main.cpp": "ca463bf0ef427b9da1340b065289d2e4ae55cd1f234481eb43fea172425bd852",
+        "src/native-core/files/location_info.cpp": "a988fc6f454233e93b56547bb06d0ef16ecd4d689d0b0f67bb98798d412dc4fc",
+        "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+        "src/native-core/files/data_layout.cpp": "8f10f925edd8c4226ae04992b78566ba4ca54d46c020d62af4901d69c0de8132",
+        "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+        "src/native-core/files/object_inventory_job.cpp": "6a6279afe899a82996512c97dcabd9e7497cc64c53c139626201622632f47def",
+        "tests/unit/ck_files/test_files_object_inventory.cpp": "5869e6a6cb61ae45050ac403b0b66edf4c48f228b3c548cd83ce7b5fa5bba3b9",
+        "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+        "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+        "src/native-core/files/native_name.cpp": "e9664ad5c086cec257dc80369bf9c7cce68b7942c3e65d294415026bc9ee8537",
+        "src/native-core/files/pane_model.cpp": "a25aeb17f6796cb7ee5e6025eec62a40df1884012e63cb03dc2fa6dd9c63c4d4",
+        "tests/unit/ck_files/test_files_layout_native.cpp": "3350ce1cfdce256a6b5a17c8c1d51884e789a464ae6c1a027ffcc8e3307a720e",
+        "tests/unit/ck_files/test_files_simulated.cpp": "67dce358fe7c8ad258cc11bb0b7417b453be53e5482e778b74d4e132840ea0c2",
+        "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+        "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+        "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+        "src/native-core/files/pane_listing_job.cpp": "e9537a7d5dc5c640276e1d3b474e602ae776863e1d890eb8d3386e5097d62391",
+        "src/native-core/files/directory_entry_probe.cpp": "6faa1051e4548490bdc666d9b110442bbbedc1f0099971f9f1b1af97bf1ad24d",
+        "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+        "src/native-core/files/directory_cursor.cpp": "7c36290dbb519e18cbdb9de76cc836d6c30c4775da63aae0cca2ab0a79d7026b",
+        "src/native-core/files/platform/metadata_windows.cpp": "b5d4261f1487932b4a43c752355f2b641f3c5d14ee6165a19743f21bfd419294",
+        "src/native-core/files/destination_batch_job.cpp": "530f71c8c86263e4027ad1d00e8605ffe17e6fc338a20fde4dd5941954982103",
+        "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+        "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+        "src/native-core/files/held_child.cpp": "fcb4aeffec0ab9506591e3b791da2a3a3c2ace75bd75821e1fee827afaa040a1",
+        "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+        "src/native-core/files/pane_refresh_job.cpp": "42d79bfc34f2d535329fe6f1f8f3763ee8da5a50d0deb4c2a341a79eed8245b9",
+        "src/native-core/files/directory_listing.cpp": "7c18fd945ddb3931ca0f666fca93a636a7568589c0e005bcbe359535b15490c3",
+        "tests/unit/ck_files/test_files_layout.cpp": "07623b0f69cc34b6113f5ec20e54fa98c84c4ec99bd42b7f74cc207093432329"
+      },
+      "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+      "flags": [
+        "/nologo",
+        "/std:c++20",
+        "/O1",
+        "/Zi",
+        "/MT",
+        "/DNDEBUG",
+        "/EHsc",
+        "/W4",
+        "/WX",
+        "/permissive-",
+        "/utf-8",
+        "/fsanitize=address",
+        "/D_CRT_SECURE_NO_WARNINGS",
+        "/FIV:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\test_config.hpp",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\src\\native-core\\files",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\source\\tests\\support",
+        "/IV:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\ckvision-sdk\\include",
+        "/FeV:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\ck-files-layout-tests.exe",
+        "/FdV:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\compiler.pdb"
+      ],
+      "link": [
+        "/link",
+        "/DEBUG",
+        "/INCREMENTAL:NO",
+        "/PDB:V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\entryprobe.pdb",
+        "ntdll.lib",
+        "kernel32.lib",
+        "advapi32.lib"
+      ],
+      "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\ck-files-layout-tests.exe",
+      "asanOptions": "halt_on_error=1"
+    }
+  },
+  "sanitizers": {
+    "macos": {
+      "cases": 72,
+      "instrumentation": "ASan+UBSan",
+      "log_sha256": "56ae064846e22a953c90914d58279b76dffa2ab0e4e058deb4d3f0f850c222d1",
+      "qualification": [
+        "LAYOUT_QUALIFIED family=1 ranges=2 reported_bytes=3162112 allocated_bytes=3162112"
+      ],
+      "case_markers": [
+        "RUN test_files_simulated.cpp:simulated_filesystem_streams_raw_posix_and_windows_names_into_panes_without_host_io",
+        "RUN test_files_simulated.cpp:simulated_path_replacement_keeps_old_cursor_and_child_handles_on_original_objects",
+        "RUN test_files_simulated.cpp:simulated_enumeration_names_and_live_membership_can_disagree_without_hiding_gone_rows",
+        "RUN test_files_simulated.cpp:simulated_faults_retain_unknown_denied_and_native_error_details",
+        "RUN test_files_simulated.cpp:simulated_mid_scan_failure_poisoning_discards_private_pane_rows_and_closes_handles",
+        "RUN test_files_simulated.cpp:simulated_side_effect_cancellation_closes_prepared_objects_and_can_resume_exact_name",
+        "RUN test_files_simulated.cpp:simulated_latency_time_slices_keep_prepared_handles_and_abandonment_releases_them",
+        "RUN test_files_simulated.cpp:simulated_exception_poisoning_releases_private_discovery_and_prevents_retries",
+        "RUN test_files_simulated.cpp:simulated_directory_children_own_independent_cursors_and_never_follow_link_nodes",
+        "RUN test_files_simulated.cpp:simulated_bindings_reject_foreign_nodes_relative_paths_and_directory_cycles",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_qualifies_continuity_and_preserves_pane_selection",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_detects_replacement_even_with_an_old_open_handle",
+        "RUN test_files_simulated.cpp:simulated_inventory_roundtrips_all_query_families_and_exact_native_data_without_host_assumptions",
+        "RUN test_files_simulated.cpp:simulated_inventory_unconfigured_queries_and_keys_are_unsupported_not_empty_or_absent",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_family_preserves_independent_failure_states_errors_and_actions",
+        "RUN test_files_simulated.cpp:simulated_inventory_configured_unavailable_and_partial_fields_are_not_rewritten",
+        "RUN test_files_simulated.cpp:simulated_inventory_access_requests_are_recorded_and_do_not_grant_unrequested_reads",
+        "RUN test_files_simulated.cpp:simulated_inventory_queries_apply_exact_byte_and_record_limits_without_partial_prefixes",
+        "RUN test_files_simulated.cpp:simulated_inventory_invalid_query_limits_do_not_consume_faults_or_make_calls",
+        "RUN test_files_simulated.cpp:simulated_inventory_feature_keys_preserve_namespace_and_invalid_encoding_and_trace_requested_key",
+        "RUN test_files_simulated.cpp:simulated_inventory_handle_replacement_and_query_effects_keep_object_ownership_and_current_replies",
+        "RUN test_files_simulated.cpp:simulated_inventory_configuration_rejects_cumulative_bytes_records_and_invalid_security_without_replacing_old_data",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_query_can_throw_without_leaking_or_rebinding_handles",
+        "RUN test_files_simulated.cpp:simulated_inventory_catalog_record_limits_are_independent_of_byte_limits",
+        "RUN test_files_simulated.cpp:simulated_inventory_windows_reparse_bytes_and_decoded_names_have_distinct_query_and_fixture_budgets",
+        "RUN test_files_simulated.cpp:simulated_inventory_oversize_query_keys_are_rejected_before_trace_copy_or_action_consumption",
+        "RUN test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "RUN test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "RUN test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "RUN test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "RUN test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "RUN test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "RUN test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "RUN test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "RUN test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "RUN test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "RUN test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "RUN test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "RUN test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "RUN test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "RUN test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "RUN test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "RUN test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "RUN test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "RUN test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query",
+        "RUN test_files_object_inventory.cpp:object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement",
+        "RUN test_files_object_inventory.cpp:object_inventory_preserves_all_query_failures_without_inventing_absent_features",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_value_denial_is_retained_independently_of_its_catalog",
+        "RUN test_files_object_inventory.cpp:object_inventory_cancellation_at_every_query_boundary_preserves_committed_private_work_without_retries",
+        "RUN test_files_object_inventory.cpp:object_inventory_slow_native_query_yields_after_committing_without_repeating_it",
+        "RUN test_files_object_inventory.cpp:object_inventory_large_catalog_validation_and_value_reads_are_step_bounded_without_partial_publication",
+        "RUN test_files_object_inventory.cpp:object_inventory_malformed_catalogs_values_security_and_link_replies_fail_without_a_result",
+        "RUN test_files_object_inventory.cpp:object_inventory_cumulative_limits_fail_before_unbounded_retention_and_leave_no_held_object",
+        "RUN test_files_object_inventory.cpp:object_inventory_decoded_windows_link_names_count_toward_retained_bytes_separately_from_raw_query_bytes",
+        "RUN test_files_object_inventory.cpp:object_inventory_owner_checks_and_identity_continuity_never_imply_a_snapshot",
+        "RUN test_files_object_inventory.cpp:object_inventory_changed_or_unknown_object_ids_remain_explicit_even_when_queries_finish",
+        "RUN test_files_object_inventory.cpp:object_inventory_exceptions_including_bad_alloc_poison_and_release_without_allocating_error_text",
+        "RUN test_files_object_inventory.cpp:object_inventory_clock_reversal_and_throwing_clocks_poison_instead_of_exposing_private_results",
+        "RUN test_files_object_inventory.cpp:object_inventory_abandonment_closes_private_work_and_already_stopped_calls_make_no_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_constructor_refuses_invalid_owners_clocks_limits_and_slices_before_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_native_query_limits_preserve_refusals_as_observations_without_returning_value_prefixes",
+        "RUN test_files_object_inventory.cpp:object_inventory_refuses_replies_that_violate_query_budgets_even_if_an_adapter_ignores_them",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_identifiers_keep_encoding_namespaces_and_raw_units_separate",
+        "RUN test_files_object_inventory.cpp:object_inventory_retained_identifier_budget_is_independent_of_each_native_query_buffer_budget",
+        "RUN test_files_object_inventory.cpp:object_inventory_keeps_additional_data_attribute_roles_and_bytes_explicit",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_collects_one_held_object_and_keeps_its_result_after_name_replacement",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_cancellation_before_queries_can_resume_or_release_the_held_entry",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_does_not_reopen_a_removed_name",
+        "RUN test_files_security.cpp:security_access_requests_are_explicit_and_never_infer_audit_rights",
+        "RUN test_files_security.cpp:linux_security_structure_requires_whole_versioned_records_and_bounds",
+        "RUN test_files_security.cpp:windows_security_structure_keeps_absent_null_and_empty_dacl_distinct",
+        "RUN test_files_security.cpp:windows_security_structure_bounds_sids_aces_and_entry_limits_without_casts"
+      ]
+    },
+    "linux": {
+      "cases": 73,
+      "instrumentation": "ASan+UBSan",
+      "log_sha256": "6e4e0768fb662c51ec75ae20a8d9b5d229959fc4fdd5a5e443495f67a059b7d5",
+      "qualification": [
+        "LAYOUT_QUALIFIED family=1 ranges=2 reported_bytes=8192 allocated_bytes=8192"
+      ],
+      "case_markers": [
+        "RUN test_files_simulated.cpp:simulated_filesystem_streams_raw_posix_and_windows_names_into_panes_without_host_io",
+        "RUN test_files_simulated.cpp:simulated_path_replacement_keeps_old_cursor_and_child_handles_on_original_objects",
+        "RUN test_files_simulated.cpp:simulated_enumeration_names_and_live_membership_can_disagree_without_hiding_gone_rows",
+        "RUN test_files_simulated.cpp:simulated_faults_retain_unknown_denied_and_native_error_details",
+        "RUN test_files_simulated.cpp:simulated_mid_scan_failure_poisoning_discards_private_pane_rows_and_closes_handles",
+        "RUN test_files_simulated.cpp:simulated_side_effect_cancellation_closes_prepared_objects_and_can_resume_exact_name",
+        "RUN test_files_simulated.cpp:simulated_latency_time_slices_keep_prepared_handles_and_abandonment_releases_them",
+        "RUN test_files_simulated.cpp:simulated_exception_poisoning_releases_private_discovery_and_prevents_retries",
+        "RUN test_files_simulated.cpp:simulated_directory_children_own_independent_cursors_and_never_follow_link_nodes",
+        "RUN test_files_simulated.cpp:simulated_bindings_reject_foreign_nodes_relative_paths_and_directory_cycles",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_qualifies_continuity_and_preserves_pane_selection",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_detects_replacement_even_with_an_old_open_handle",
+        "RUN test_files_simulated.cpp:simulated_inventory_roundtrips_all_query_families_and_exact_native_data_without_host_assumptions",
+        "RUN test_files_simulated.cpp:simulated_inventory_unconfigured_queries_and_keys_are_unsupported_not_empty_or_absent",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_family_preserves_independent_failure_states_errors_and_actions",
+        "RUN test_files_simulated.cpp:simulated_inventory_configured_unavailable_and_partial_fields_are_not_rewritten",
+        "RUN test_files_simulated.cpp:simulated_inventory_access_requests_are_recorded_and_do_not_grant_unrequested_reads",
+        "RUN test_files_simulated.cpp:simulated_inventory_queries_apply_exact_byte_and_record_limits_without_partial_prefixes",
+        "RUN test_files_simulated.cpp:simulated_inventory_invalid_query_limits_do_not_consume_faults_or_make_calls",
+        "RUN test_files_simulated.cpp:simulated_inventory_feature_keys_preserve_namespace_and_invalid_encoding_and_trace_requested_key",
+        "RUN test_files_simulated.cpp:simulated_inventory_handle_replacement_and_query_effects_keep_object_ownership_and_current_replies",
+        "RUN test_files_simulated.cpp:simulated_inventory_configuration_rejects_cumulative_bytes_records_and_invalid_security_without_replacing_old_data",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_query_can_throw_without_leaking_or_rebinding_handles",
+        "RUN test_files_simulated.cpp:simulated_inventory_catalog_record_limits_are_independent_of_byte_limits",
+        "RUN test_files_simulated.cpp:simulated_inventory_windows_reparse_bytes_and_decoded_names_have_distinct_query_and_fixture_budgets",
+        "RUN test_files_simulated.cpp:simulated_inventory_oversize_query_keys_are_rejected_before_trace_copy_or_action_consumption",
+        "RUN test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "RUN test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "RUN test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "RUN test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "RUN test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "RUN test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "RUN test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "RUN test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "RUN test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "RUN test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "RUN test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "RUN test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "RUN test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "RUN test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "RUN test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "RUN test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "RUN test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "RUN test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "RUN test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query",
+        "RUN test_files_layout_native.cpp:native_layout_linux_read_denial_is_not_bypassed_by_a_metadata_only_handle",
+        "RUN test_files_object_inventory.cpp:object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement",
+        "RUN test_files_object_inventory.cpp:object_inventory_preserves_all_query_failures_without_inventing_absent_features",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_value_denial_is_retained_independently_of_its_catalog",
+        "RUN test_files_object_inventory.cpp:object_inventory_cancellation_at_every_query_boundary_preserves_committed_private_work_without_retries",
+        "RUN test_files_object_inventory.cpp:object_inventory_slow_native_query_yields_after_committing_without_repeating_it",
+        "RUN test_files_object_inventory.cpp:object_inventory_large_catalog_validation_and_value_reads_are_step_bounded_without_partial_publication",
+        "RUN test_files_object_inventory.cpp:object_inventory_malformed_catalogs_values_security_and_link_replies_fail_without_a_result",
+        "RUN test_files_object_inventory.cpp:object_inventory_cumulative_limits_fail_before_unbounded_retention_and_leave_no_held_object",
+        "RUN test_files_object_inventory.cpp:object_inventory_decoded_windows_link_names_count_toward_retained_bytes_separately_from_raw_query_bytes",
+        "RUN test_files_object_inventory.cpp:object_inventory_owner_checks_and_identity_continuity_never_imply_a_snapshot",
+        "RUN test_files_object_inventory.cpp:object_inventory_changed_or_unknown_object_ids_remain_explicit_even_when_queries_finish",
+        "RUN test_files_object_inventory.cpp:object_inventory_exceptions_including_bad_alloc_poison_and_release_without_allocating_error_text",
+        "RUN test_files_object_inventory.cpp:object_inventory_clock_reversal_and_throwing_clocks_poison_instead_of_exposing_private_results",
+        "RUN test_files_object_inventory.cpp:object_inventory_abandonment_closes_private_work_and_already_stopped_calls_make_no_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_constructor_refuses_invalid_owners_clocks_limits_and_slices_before_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_native_query_limits_preserve_refusals_as_observations_without_returning_value_prefixes",
+        "RUN test_files_object_inventory.cpp:object_inventory_refuses_replies_that_violate_query_budgets_even_if_an_adapter_ignores_them",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_identifiers_keep_encoding_namespaces_and_raw_units_separate",
+        "RUN test_files_object_inventory.cpp:object_inventory_retained_identifier_budget_is_independent_of_each_native_query_buffer_budget",
+        "RUN test_files_object_inventory.cpp:object_inventory_keeps_additional_data_attribute_roles_and_bytes_explicit",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_collects_one_held_object_and_keeps_its_result_after_name_replacement",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_cancellation_before_queries_can_resume_or_release_the_held_entry",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_does_not_reopen_a_removed_name",
+        "RUN test_files_security.cpp:security_access_requests_are_explicit_and_never_infer_audit_rights",
+        "RUN test_files_security.cpp:linux_security_structure_requires_whole_versioned_records_and_bounds",
+        "RUN test_files_security.cpp:windows_security_structure_keeps_absent_null_and_empty_dacl_distinct",
+        "RUN test_files_security.cpp:windows_security_structure_bounds_sids_aces_and_entry_limits_without_casts"
+      ]
+    },
+    "windows": {
+      "cases": 73,
+      "instrumentation": "ASan",
+      "log_sha256": "a3df77a2838cc180c6a950ac47f796729d6a65bc789b2462dc033c3384717e52",
+      "qualification": [
+        "LAYOUT_QUALIFIED family=2 ranges=2 reported_bytes=8192 allocated_bytes=12288"
+      ],
+      "case_markers": [
+        "RUN test_files_simulated.cpp:simulated_filesystem_streams_raw_posix_and_windows_names_into_panes_without_host_io",
+        "RUN test_files_simulated.cpp:simulated_path_replacement_keeps_old_cursor_and_child_handles_on_original_objects",
+        "RUN test_files_simulated.cpp:simulated_enumeration_names_and_live_membership_can_disagree_without_hiding_gone_rows",
+        "RUN test_files_simulated.cpp:simulated_faults_retain_unknown_denied_and_native_error_details",
+        "RUN test_files_simulated.cpp:simulated_mid_scan_failure_poisoning_discards_private_pane_rows_and_closes_handles",
+        "RUN test_files_simulated.cpp:simulated_side_effect_cancellation_closes_prepared_objects_and_can_resume_exact_name",
+        "RUN test_files_simulated.cpp:simulated_latency_time_slices_keep_prepared_handles_and_abandonment_releases_them",
+        "RUN test_files_simulated.cpp:simulated_exception_poisoning_releases_private_discovery_and_prevents_retries",
+        "RUN test_files_simulated.cpp:simulated_directory_children_own_independent_cursors_and_never_follow_link_nodes",
+        "RUN test_files_simulated.cpp:simulated_bindings_reject_foreign_nodes_relative_paths_and_directory_cycles",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_qualifies_continuity_and_preserves_pane_selection",
+        "RUN test_files_simulated.cpp:simulated_held_refresh_detects_replacement_even_with_an_old_open_handle",
+        "RUN test_files_simulated.cpp:simulated_inventory_roundtrips_all_query_families_and_exact_native_data_without_host_assumptions",
+        "RUN test_files_simulated.cpp:simulated_inventory_unconfigured_queries_and_keys_are_unsupported_not_empty_or_absent",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_family_preserves_independent_failure_states_errors_and_actions",
+        "RUN test_files_simulated.cpp:simulated_inventory_configured_unavailable_and_partial_fields_are_not_rewritten",
+        "RUN test_files_simulated.cpp:simulated_inventory_access_requests_are_recorded_and_do_not_grant_unrequested_reads",
+        "RUN test_files_simulated.cpp:simulated_inventory_queries_apply_exact_byte_and_record_limits_without_partial_prefixes",
+        "RUN test_files_simulated.cpp:simulated_inventory_invalid_query_limits_do_not_consume_faults_or_make_calls",
+        "RUN test_files_simulated.cpp:simulated_inventory_feature_keys_preserve_namespace_and_invalid_encoding_and_trace_requested_key",
+        "RUN test_files_simulated.cpp:simulated_inventory_handle_replacement_and_query_effects_keep_object_ownership_and_current_replies",
+        "RUN test_files_simulated.cpp:simulated_inventory_configuration_rejects_cumulative_bytes_records_and_invalid_security_without_replacing_old_data",
+        "RUN test_files_simulated.cpp:simulated_inventory_every_query_can_throw_without_leaking_or_rebinding_handles",
+        "RUN test_files_simulated.cpp:simulated_inventory_catalog_record_limits_are_independent_of_byte_limits",
+        "RUN test_files_simulated.cpp:simulated_inventory_windows_reparse_bytes_and_decoded_names_have_distinct_query_and_fixture_budgets",
+        "RUN test_files_simulated.cpp:simulated_inventory_oversize_query_keys_are_rejected_before_trace_copy_or_action_consumption",
+        "RUN test_files_layout.cpp:layout_collects_reported_data_ranges_without_inferring_physical_extents_or_nonzero_bytes",
+        "RUN test_files_layout.cpp:layout_preserves_legitimate_whole_file_native_reports_and_never_fabricates_them_on_failure",
+        "RUN test_files_layout.cpp:layout_empty_file_still_requires_native_end_evidence_and_keeps_query_failure",
+        "RUN test_files_layout.cpp:layout_preserves_all_failure_states_and_discards_already_collected_prefixes",
+        "RUN test_files_layout.cpp:layout_record_and_byte_limits_allow_a_final_end_witness_without_allowing_a_prefix",
+        "RUN test_files_layout.cpp:layout_rejects_invalid_configuration_and_too_small_buffers_before_native_callbacks",
+        "RUN test_files_layout.cpp:layout_rejects_zero_overflow_nonprogress_and_outside_request_ranges",
+        "RUN test_files_layout.cpp:layout_clips_native_windows_rounding_but_rejects_backward_posix_reports",
+        "RUN test_files_layout.cpp:layout_cancellation_before_and_after_callbacks_discards_private_ranges",
+        "RUN test_files_layout.cpp:layout_callback_exceptions_are_not_translated_into_success_or_an_empty_layout",
+        "RUN test_files_layout.cpp:layout_metadata_checks_qualify_identity_kind_size_and_available_change_times_only",
+        "RUN test_files_layout.cpp:layout_access_guard_refuses_special_objects_and_identified_provider_recall_without_elevation",
+        "RUN test_files_layout.cpp:layout_collector_rejects_malformed_layout_envelopes_and_overlapping_ranges",
+        "RUN test_files_layout_native.cpp:native_layout_reports_ranges_covering_actual_sparse_file_data_without_claiming_exact_allocation",
+        "RUN test_files_layout_native.cpp:native_layout_access_is_opt_in_and_cancelled_queries_and_limits_never_return_prefixes",
+        "RUN test_files_layout_native.cpp:native_layout_keeps_the_opened_object_when_its_original_name_is_replaced",
+        "RUN test_files_layout_native.cpp:native_layout_collects_into_a_pinned_inventory_with_current_owner_checks",
+        "RUN test_files_layout_native.cpp:native_layout_regular_file_access_refuses_final_links_and_directories",
+        "RUN test_files_layout_native.cpp:native_layout_empty_file_requires_a_successful_native_end_query",
+        "RUN test_files_layout_native.cpp:native_layout_windows_offline_review_blocks_queries_and_access_upgrade",
+        "RUN test_files_object_inventory.cpp:object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement",
+        "RUN test_files_object_inventory.cpp:object_inventory_preserves_all_query_failures_without_inventing_absent_features",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_value_denial_is_retained_independently_of_its_catalog",
+        "RUN test_files_object_inventory.cpp:object_inventory_cancellation_at_every_query_boundary_preserves_committed_private_work_without_retries",
+        "RUN test_files_object_inventory.cpp:object_inventory_slow_native_query_yields_after_committing_without_repeating_it",
+        "RUN test_files_object_inventory.cpp:object_inventory_large_catalog_validation_and_value_reads_are_step_bounded_without_partial_publication",
+        "RUN test_files_object_inventory.cpp:object_inventory_malformed_catalogs_values_security_and_link_replies_fail_without_a_result",
+        "RUN test_files_object_inventory.cpp:object_inventory_cumulative_limits_fail_before_unbounded_retention_and_leave_no_held_object",
+        "RUN test_files_object_inventory.cpp:object_inventory_decoded_windows_link_names_count_toward_retained_bytes_separately_from_raw_query_bytes",
+        "RUN test_files_object_inventory.cpp:object_inventory_owner_checks_and_identity_continuity_never_imply_a_snapshot",
+        "RUN test_files_object_inventory.cpp:object_inventory_changed_or_unknown_object_ids_remain_explicit_even_when_queries_finish",
+        "RUN test_files_object_inventory.cpp:object_inventory_exceptions_including_bad_alloc_poison_and_release_without_allocating_error_text",
+        "RUN test_files_object_inventory.cpp:object_inventory_clock_reversal_and_throwing_clocks_poison_instead_of_exposing_private_results",
+        "RUN test_files_object_inventory.cpp:object_inventory_abandonment_closes_private_work_and_already_stopped_calls_make_no_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_constructor_refuses_invalid_owners_clocks_limits_and_slices_before_queries",
+        "RUN test_files_object_inventory.cpp:object_inventory_native_query_limits_preserve_refusals_as_observations_without_returning_value_prefixes",
+        "RUN test_files_object_inventory.cpp:object_inventory_refuses_replies_that_violate_query_budgets_even_if_an_adapter_ignores_them",
+        "RUN test_files_object_inventory.cpp:object_inventory_attribute_identifiers_keep_encoding_namespaces_and_raw_units_separate",
+        "RUN test_files_object_inventory.cpp:object_inventory_retained_identifier_budget_is_independent_of_each_native_query_buffer_budget",
+        "RUN test_files_object_inventory.cpp:object_inventory_keeps_additional_data_attribute_roles_and_bytes_explicit",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_collects_one_held_object_and_keeps_its_result_after_name_replacement",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_cancellation_before_queries_can_resume_or_release_the_held_entry",
+        "RUN test_files_object_inventory_native.cpp:native_object_inventory_does_not_reopen_a_removed_name",
+        "RUN test_files_security.cpp:security_access_requests_are_explicit_and_never_infer_audit_rights",
+        "RUN test_files_security.cpp:linux_security_structure_requires_whole_versioned_records_and_bounds",
+        "RUN test_files_security.cpp:windows_security_structure_keeps_absent_null_and_empty_dacl_distinct",
+        "RUN test_files_security.cpp:windows_security_structure_bounds_sids_aces_and_entry_limits_without_casts"
+      ]
+    }
+  },
+  "cleanup": {
+    "macos": {
+      "outputs": {
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests": {
+          "sha256": "1fffba88994f847c27ae5621202eb1e54c7601f4d5dd4b3001b603bffe64bb39",
+          "mtime_ns": 1792797737481406082
+        },
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests": {
+          "sha256": "c4350ef09f5b7931f603b9645b2bc4b15b134e7b1f4d588ff05a995122f20926",
+          "mtime_ns": 1792797670959265864
+        },
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests": {
+          "sha256": "1caeccfd729894f5a93f49bcbfeb79f382e958c2d64f0934725a757184e1d080",
+          "mtime_ns": 1792797478466711889
+        }
+      },
+      "owners": [],
+      "fixture_leftovers": [],
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer",
+      "exists_after": false
+    },
+    "linux": {
+      "outputs": {
+        "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer/ck-files-layout-tests": {
+          "sha256": "1f698dcce5a7c2c63382739866c5dcb7695f3bdf36d922878b0e38f6355c6e74",
+          "mtime_ns": 1792797841170462757
+        },
+        "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_core_tests": {
+          "sha256": "7d4aeb4098907349160e2091105208cd3c0a722bbc12b44576d824734500979b",
+          "mtime_ns": 1792797688387016133
+        },
+        "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/tests/unit/ck_files/ck_files_native_tests": {
+          "sha256": "519c28bde54805f3156c18920eeb329d8a74169c3c6823dbf410647d7b4b2500",
+          "mtime_ns": 1792797689499014902
+        }
+      },
+      "owners": [],
+      "fixture_leftovers": [],
+      "removed": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/layout-reviewed-sanitizer",
+      "exists_after": false
+    },
+    "windows": {
+      "outputs": [
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan\\ck-files-layout-tests.exe",
+          "sha256": "36261d1e7632464c15e5be1248730206f8b84a8010447df36517048a5ab39f51",
+          "mtime": "2026-10-23T23:24:54.3945099Z"
+        },
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe",
+          "sha256": "32b53018ca9e63c49e01e55eae2b1a2ca5f284155f8692685fa493615b0d7199",
+          "mtime": "2026-10-23T23:23:38.7247279Z"
+        },
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe",
+          "sha256": "0d5378a8405b41911ff3421083a2f2f46fc95d0473880dc08b4a0d98eae28f39",
+          "mtime": "2026-10-23T23:23:32.7707555Z"
+        }
+      ],
+      "owners": [],
+      "fixtureLeftovers": [],
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-reviewed-asan",
+      "existsAfter": false
+    }
+  },
+  "preliminary_cleanup": {
+    "macos": {
+      "output": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-sanitizer/ck-files-layout-tests",
+      "sha256": "773dddc4caf384803eefb62adcd3612ebd3c1ee5801aba2cbcf24704ba9329b0",
+      "owners": [],
+      "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-sanitizer",
+      "exists_after": false
+    },
+    "windows": {
+      "outputs": [
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-asan\\ck-files-layout-tests.exe",
+          "sha256": "8ce5f92cc67facf047b7e7352448cf3d1b5ae3092612bbfc10eaf9a233dbd2e4",
+          "mtime": "2026-10-23T23:19:05.4141926Z"
+        },
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe",
+          "sha256": "a7e7b3e28d0702e5d085ed754a8152b7139d2bf08876cbeea93ed22bae7a4830",
+          "mtime": "2026-10-23T23:17:43.6456850Z"
+        },
+        {
+          "path": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe",
+          "sha256": "75d4a8ae45c68a19b233ee7b5276297d1b7ff5141e619ba07df29cd953611b8c",
+          "mtime": "2026-10-23T23:17:47.9837622Z"
+        }
+      ],
+      "owners": [],
+      "fixtureLeftovers": [],
+      "removed": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\layout-asan",
+      "existsAfter": false
+    }
+  },
+  "native_research": {
+    "source_path": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research/probe.c",
+    "source_text": "#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <errno.h>\nint main(int argc, char** argv) {\n if(argc!=2)return 1;\n int out=open(argv[1],O_WRONLY|O_CREAT|O_EXCL,0600);if(out<0)return 2;\n if(ftruncate(out,1048576)||pwrite(out,\"x\",1,65536)!=1||fsync(out)||close(out))return 3;\n int fd=open(argv[1],O_EVTONLY|O_CLOEXEC|O_NOFOLLOW);if(fd<0)return 4;\n errno=0;long long data=(long long)lseek(fd,0,SEEK_DATA);int data_error=errno;\n errno=0;long long hole=(long long)lseek(fd,data>=0?data:0,SEEK_HOLE);int hole_error=errno;\n printf(\"{\\\"event_only_data\\\":%lld,\\\"data_errno\\\":%d,\\\"event_only_hole\\\":%lld,\\\"hole_errno\\\":%d}\\n\",data,data_error,hole,hole_error);\n if(close(fd)||unlink(argv[1]))return 5;return 0;\n}\n",
+    "source_sha256": "26796f5400decd89d9ede86d2576f3650ae92b1736709ff058c56227f6a728a4",
+    "executable_sha256": "6511e59224cb20ba941921a8323e0107a910910ade86633fe3de7c997837bc8a",
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "c3009ec06b8267e7d27ff231d8312fc6b6daeb7c3ed92b1c9c37878aac6cbb86",
+          "files": 587,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-research-mac-build",
+      "command": [
+        "clang",
+        "-std=c17",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research/probe.c",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research/probe"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T22:59:36.048582+00:00",
+      "end": "2026-10-23T22:59:36.144973+00:00",
+      "elapsed_seconds": 0.096,
+      "exit_code": 0
+    },
+    "run": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "c3009ec06b8267e7d27ff231d8312fc6b6daeb7c3ed92b1c9c37878aac6cbb86",
+          "files": 587,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-research-mac-run",
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research/probe",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research/fixture"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T22:59:36.473685+00:00",
+      "end": "2026-10-23T22:59:36.628893+00:00",
+      "elapsed_seconds": 0.155,
+      "exit_code": 0
+    },
+    "output": "{\"event_only_data\":0,\"data_errno\":0,\"event_only_hole\":1048576,\"hole_errno\":0}\n",
+    "owners": [],
+    "removed": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-research",
+    "exists_after": false
+  },
+  "build_baselines": {
+    "wp01-layout-initial-mac-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "6a8175e7d80c3c8d4196b5577bbd8766fd21cdc6b102ed5d9b68b7e72347b56f",
+          "files": 587,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-initial-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:02:28.013001+00:00",
+      "end": "2026-10-23T23:02:47.586452+00:00",
+      "elapsed_seconds": 19.573,
+      "exit_code": 0
+    },
+    "wp01-layout-final-mac-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "b75e6e62790422f2524fade6bb701f5ae18666561d3ba9456f20c7899679a9c4",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-final-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:13:56.152712+00:00",
+      "end": "2026-10-23T23:14:14.254880+00:00",
+      "elapsed_seconds": 18.102,
+      "exit_code": 0
+    },
+    "wp01-layout-reviewed-mac-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "a83c86c611f294dff74abc64190a43f03829b8c032cd4287917e163475515d15",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-reviewed-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:17:57.396262+00:00",
+      "end": "2026-10-23T23:17:58.474577+00:00",
+      "elapsed_seconds": 1.078,
+      "exit_code": 0
+    },
+    "wp01-layout-mac-sanitizer-build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "b75e6e62790422f2524fade6bb701f5ae18666561d3ba9456f20c7899679a9c4",
+          "files": 589,
+          "git_head": "15154c7b00ce81b2e25b3d7c8dfeda92dc9913b1"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-layout-mac-sanitizer-build",
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/attributes.cpp",
+        "src/native-core/files/child_lookup.cpp",
+        "src/native-core/files/data_channels.cpp",
+        "src/native-core/files/data_layout.cpp",
+        "src/native-core/files/destination_batch_job.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/directory_entry_probe.cpp",
+        "src/native-core/files/directory_listing.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/held_child.cpp",
+        "src/native-core/files/link_metadata.cpp",
+        "src/native-core/files/location_info.cpp",
+        "src/native-core/files/monotonic_clock.cpp",
+        "src/native-core/files/name_limits.cpp",
+        "src/native-core/files/name_mapping.cpp",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/object_inventory_job.cpp",
+        "src/native-core/files/opened_entry.cpp",
+        "src/native-core/files/pane_listing_job.cpp",
+        "src/native-core/files/pane_model.cpp",
+        "src/native-core/files/pane_refresh_job.cpp",
+        "src/native-core/files/security.cpp",
+        "src/native-core/files/storage_info.cpp",
+        "src/native-core/files/unicode_scalar.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/windows_name.cpp",
+        "src/native-core/files/windows_stream_records.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_simulated.cpp",
+        "tests/unit/ck_files/test_files_layout.cpp",
+        "tests/unit/ck_files/test_files_layout_native.cpp",
+        "tests/unit/ck_files/test_files_object_inventory.cpp",
+        "tests/unit/ck_files/test_files_object_inventory_native.cpp",
+        "tests/unit/ck_files/test_files_security.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/layout-sanitizer/ck-files-layout-tests"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T23:16:11.495999+00:00",
+      "end": "2026-10-23T23:17:16.758986+00:00",
+      "elapsed_seconds": 65.263,
+      "exit_code": 0
+    }
+  },
+  "build_interpretation": [
+    "Mac final 2-step fixture rebuild (3.376s) follows a 4-step core update (1.078s) and broad 54-step rebuild (18.102s); initial broad 52-step build took 19.573s. Inputs were hash-verified, not inferred from elapsed time.",
+    "Linux final build completed 43 remaining Ninja steps after GCC diagnosed a copied range-loop pair; changed to const reference. Failed driver stopped before CTest. Final current manifest and both executable hashes are recorded.",
+    "Windows final five-step rebuild (8.765s) follows a successful initial broad rebuild; current manifest verified before build. Native ReFS query passed on this workstation.",
+    "Focused builds compile all 27 core units, native platform adapter, six fixtures and host (35 units) without object caches. Mac comparable preliminary build: 65.263s; final 65.882s. Windows final: 69.694s. Linux first successful baseline for this fixture set: 151.535s; different fixture sets are not identical timing baselines."
+  ],
+  "rejected_attempts": [
+    {
+      "attempt": "wp01-layout-fixtures-mac-test",
+      "exit_code": 8,
+      "reason": "APFS ftruncate allocated the entire fixture. Sparse assertion failed; its printed qualification marker is excluded. Corrected fixture punches only known-zero test ranges with F_PUNCHHOLE, fsyncs, and retains sparse allocation assertion."
+    },
+    {
+      "attempt": "wp01-layout-linux-run",
+      "exit_code": 1,
+      "reason": "GCC -Werror=range-loop-construct rejected copied pointer pair. Changed to const reference; warnings remain errors. No tests from failed build accepted."
+    }
+  ],
+  "repository_checks": {
+    "ui_boundaries": {
+      "passed": true,
+      "domain_sources": 82
+    },
+    "ckvision_only": {
+      "passed": true,
+      "active_files": 459
+    },
+    "ckdocs": {
+      "passed": true,
+      "pages": 24
+    },
+    "git_diff_check": true
+  },
+  "guarantees": [
+    "Read-only range observation requires explicit MetadataAndLayout access; metadata-only calls remain denied.",
+    "Darwin seeks original event-only descriptor. Linux obtains permission-checked read handle via held descriptor in verified procfs. Windows uses native ID open while original handle is live; no basename fallback or elevation.",
+    "Reported family, held owner, logical size and bounded sorted ranges retained; failures/cancellation/limits never publish a prefix.",
+    "Queries inspect before/after identity/kind/size and available change times; provider guards and explicit permission failures remain visible.",
+    "Inventory collection accounts for layout records/bytes incrementally and resumes interrupted queries without repeating completed families."
+  ],
+  "limitations": [
+    "Potential-data ranges are not physical extents, exact allocation, actual nonzero bytes, a snapshot, clone/dedup relationships, sparse preservation or copy permission.",
+    "Linux lacks generic provider-locality proof; read-access opt-in does not promise universal no-hydration.",
+    "Native calls can block; cancellation is cooperative between calls.",
+    "Native filesystem qualification is case-sensitive APFS, Linux ext4 and Windows ReFS only; no universal filesystem claim.",
+    "WP-01 remains open; initial selection, self/descendant checks, native equivalence, operation capabilities, remaining inventories and pane/worker/large-view integration still required. No GUI or production mutations introduced."
+  ],
+  "logs": {
+    "wp01-layout-reviewed-mac-final-build": {
+      "sha256": "2dd42cfce18ad7e4b3b2a2feafffb0dcd97a7a504d500affe7c86ad7355aa5c7",
+      "bytes": 174,
+      "text": "[1/2] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_layout.cpp.o\n[2/2] Linking CXX executable tests/unit/ck_files/ck_files_core_tests\n"
+    },
+    "wp01-layout-reviewed-mac-final-test": {
+      "sha256": "9731055d36f5a889354189d8b07abcee573989547f21645a51f487485fa834fb",
+      "bytes": 5398,
+      "text": "Test project /Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build\n      Start  83: test_files_names\n 1/43 Test  #83: test_files_names ......................   Passed    0.23 sec\n      Start  84: test_files_metadata\n 2/43 Test  #84: test_files_metadata ...................   Passed    0.00 sec\n      Start  85: test_files_directory\n 3/43 Test  #85: test_files_directory ..................   Passed    0.00 sec\n      Start  86: test_files_channels\n 4/43 Test  #86: test_files_channels ...................   Passed    0.00 sec\n      Start  87: test_files_attributes\n 5/43 Test  #87: test_files_attributes .................   Passed    0.00 sec\n      Start  88: test_files_security\n 6/43 Test  #88: test_files_security ...................   Passed    0.00 sec\n      Start  89: test_files_location\n 7/43 Test  #89: test_files_location ...................   Passed    0.00 sec\n      Start  90: test_files_storage\n 8/43 Test  #90: test_files_storage ....................   Passed    0.00 sec\n      Start  91: test_files_links\n 9/43 Test  #91: test_files_links ......................   Passed    0.00 sec\n      Start  92: test_files_pane\n10/43 Test  #92: test_files_pane .......................   Passed    0.02 sec\n      Start  93: test_files_continuity\n11/43 Test  #93: test_files_continuity .................   Passed    0.00 sec\n      Start  94: test_files_name_mapping\n12/43 Test  #94: test_files_name_mapping ...............   Passed    0.01 sec\n      Start  95: test_files_lookup\n13/43 Test  #95: test_files_lookup .....................   Passed    0.00 sec\n      Start  96: test_files_name_limits\n14/43 Test  #96: test_files_name_limits ................   Passed    0.00 sec\n      Start  97: test_files_listing\n15/43 Test  #97: test_files_listing ....................   Passed    0.00 sec\n      Start  98: test_files_clock\n16/43 Test  #98: test_files_clock ......................   Passed    0.00 sec\n      Start  99: test_files_pane_job\n17/43 Test  #99: test_files_pane_job ...................   Passed    0.00 sec\n      Start 100: test_files_simulated\n18/43 Test #100: test_files_simulated ..................   Passed    0.01 sec\n      Start 101: test_files_entry_probe\n19/43 Test #101: test_files_entry_probe ................   Passed    0.00 sec\n      Start 102: test_files_pane_refresh\n20/43 Test #102: test_files_pane_refresh ...............   Passed    0.00 sec\n      Start 103: test_files_object_inventory\n21/43 Test #103: test_files_object_inventory ...........   Passed    0.00 sec\n      Start 104: test_files_destination_batch\n22/43 Test #104: test_files_destination_batch ..........   Passed    0.00 sec\n      Start 105: test_files_layout\n23/43 Test #105: test_files_layout .....................   Passed    0.00 sec\n      Start 106: test_files_native\n24/43 Test #106: test_files_native .....................   Passed    0.02 sec\n      Start 107: test_files_directory_native\n25/43 Test #107: test_files_directory_native ...........   Passed    0.12 sec\n      Start 108: test_files_child_native\n26/43 Test #108: test_files_child_native ...............   Passed    0.01 sec\n      Start 109: test_files_channels_native\n27/43 Test #109: test_files_channels_native ............   Passed    0.03 sec\n      Start 110: test_files_attributes_native\n28/43 Test #110: test_files_attributes_native ..........   Passed    0.01 sec\n      Start 111: test_files_security_native\n29/43 Test #111: test_files_security_native ............   Passed    0.01 sec\n      Start 112: test_files_location_native\n30/43 Test #112: test_files_location_native ............   Passed    0.01 sec\n      Start 113: test_files_storage_native\n31/43 Test #113: test_files_storage_native .............   Passed    0.00 sec\n      Start 114: test_files_links_native\n32/43 Test #114: test_files_links_native ...............   Passed    0.01 sec\n      Start 115: test_files_continuity_native\n33/43 Test #115: test_files_continuity_native ..........   Passed    0.01 sec\n      Start 116: test_files_name_mapping_native\n34/43 Test #116: test_files_name_mapping_native ........   Passed    0.01 sec\n      Start 117: test_files_lookup_native\n35/43 Test #117: test_files_lookup_native ..............   Passed    0.01 sec\n      Start 118: test_files_directory_child_native\n36/43 Test #118: test_files_directory_child_native .....   Passed    0.02 sec\n      Start 119: test_files_listing_native\n37/43 Test #119: test_files_listing_native .............   Passed    0.08 sec\n      Start 120: test_files_pane_job_native\n38/43 Test #120: test_files_pane_job_native ............   Passed    0.01 sec\n      Start 121: test_files_entry_probe_native\n39/43 Test #121: test_files_entry_probe_native .........   Passed    0.00 sec\n      Start 122: test_files_pane_refresh_native\n40/43 Test #122: test_files_pane_refresh_native ........   Passed    0.01 sec\n      Start 123: test_files_object_inventory_native\n41/43 Test #123: test_files_object_inventory_native ....   Passed    0.00 sec\n      Start 124: test_files_destination_batch_native\n42/43 Test #124: test_files_destination_batch_native ...   Passed    0.01 sec\n      Start 125: test_files_layout_native\n43/43 Test #125: test_files_layout_native ..............   Passed    0.06 sec\n\n100% tests passed out of 43\n\nLabel Time Summary:\nfiles     =   0.75 sec*proc (43 tests)\nnative    =   0.42 sec*proc (20 tests)\nunit      =   0.33 sec*proc (23 tests)\n\nTotal Test time (real) =   0.78 sec\n"
+    },
+    "wp01-layout-reviewed-mac-sanitizer-build": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "wp01-layout-reviewed-mac-sanitizer-test": {
+      "sha256": "56ae064846e22a953c90914d58279b76dffa2ab0e4e058deb4d3f0f850c222d1",
+      "bytes": 8396
+    },
+    "wp01-layout-reviewed-linux-run": {
+      "sha256": "addaf101d3a50e2afe3e94ab729bad199f082640c8a1eb7a9743d64d3710208f",
+      "bytes": 15985,
+      "build_steps": [
+        "[1/43] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/data_layout.cpp.o",
+        "[2/43] Linking CXX static library src/native-core/files/libck_files_core.a",
+        "[3/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_directory.cpp.o",
+        "[4/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_channels.cpp.o",
+        "[5/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_security.cpp.o",
+        "[6/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_attributes.cpp.o",
+        "[7/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_location.cpp.o",
+        "[8/43] Building CXX object src/native-core/files/CMakeFiles/ck_files_platform.dir/platform/metadata_posix.cpp.o",
+        "[9/43] Linking CXX static library src/native-core/files/libck_files_platform.a",
+        "[10/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_storage.cpp.o",
+        "[11/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_lookup.cpp.o",
+        "[12/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_continuity.cpp.o",
+        "[13/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_pane.cpp.o",
+        "[14/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_listing.cpp.o",
+        "[15/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_pane_job.cpp.o",
+        "[16/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_entry_probe.cpp.o",
+        "[17/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_pane_refresh.cpp.o",
+        "[18/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_simulated.cpp.o",
+        "[19/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_native.cpp.o",
+        "[20/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_object_inventory.cpp.o",
+        "[21/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_destination_batch.cpp.o",
+        "[22/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_directory_native.cpp.o",
+        "[23/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_child_native.cpp.o",
+        "[24/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_core_tests.dir/test_files_layout.cpp.o",
+        "[25/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_channels_native.cpp.o",
+        "[26/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_security_native.cpp.o",
+        "[27/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_attributes_native.cpp.o",
+        "[28/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_location_native.cpp.o",
+        "[29/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_storage_native.cpp.o",
+        "[30/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_links_native.cpp.o",
+        "[31/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_name_mapping_native.cpp.o",
+        "[32/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_continuity_native.cpp.o",
+        "[33/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_lookup_native.cpp.o",
+        "[34/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_directory_child_native.cpp.o",
+        "[35/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_pane_job_native.cpp.o",
+        "[36/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_listing_native.cpp.o",
+        "[37/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_entry_probe_native.cpp.o",
+        "[38/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_pane_refresh_native.cpp.o",
+        "[39/43] Linking CXX executable tests/unit/ck_files/ck_files_core_tests",
+        "[40/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_object_inventory_native.cpp.o",
+        "[41/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_destination_batch_native.cpp.o",
+        "[42/43] Building CXX object tests/unit/ck_files/CMakeFiles/ck_files_native_tests.dir/test_files_layout_native.cpp.o",
+        "[43/43] Linking CXX executable tests/unit/ck_files/ck_files_native_tests"
+      ]
+    },
+    "wp01-layout-reviewed-windows-run": {
+      "sha256": "bd443a0535629e1ad55e33dd2a43b2ac68bd007337abe3b740ec07b38ed2effd",
+      "bytes": 22504,
+      "build_steps": [
+        "[1/5] Building CXX object src\\native-core\\files\\CMakeFiles\\ck_files_core.dir\\data_layout.cpp.obj",
+        "[2/5] Linking CXX static library src\\native-core\\files\\ck_files_core.lib",
+        "[3/5] Linking CXX executable tests\\unit\\ck_files\\ck_files_native_tests.exe",
+        "[4/5] Building CXX object tests\\unit\\ck_files\\CMakeFiles\\ck_files_core_tests.dir\\test_files_layout.cpp.obj",
+        "[5/5] Linking CXX executable tests\\unit\\ck_files\\ck_files_core_tests.exe"
+      ]
+    },
+    "wp01-layout-reviewed-windows-asan-run": {
+      "sha256": "a3df77a2838cc180c6a950ac47f796729d6a65bc789b2462dc033c3384717e52",
+      "bytes": 31775
+    },
+    "wp01-layout-fixtures-mac-test": {
+      "sha256": "df1938067db785438a632776234ab63c667482dc200afa7a1767ea834f96a765",
+      "bytes": 6578
+    },
+    "wp01-layout-linux-run": {
+      "sha256": "f5294609505f7c9e7e8f1afcdcedb6faa8169a23b65c65bc2c05b1f919504850",
+      "bytes": 4124,
+      "build_steps": [
+        "[0/1] Re-running CMake...",
+        "[1/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/opened_entry.cpp.o",
+        "[2/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/directory_cursor.cpp.o",
+        "[3/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/held_child.cpp.o",
+        "[4/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/child_lookup.cpp.o",
+        "[5/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/directory_listing.cpp.o",
+        "[6/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/pane_model.cpp.o",
+        "[7/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/pane_listing_job.cpp.o",
+        "[8/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/directory_entry_probe.cpp.o",
+        "[9/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/data_layout.cpp.o",
+        "[10/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/destination_batch_job.cpp.o",
+        "[11/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/pane_refresh_job.cpp.o",
+        "[12/55] Building CXX object src/native-core/files/CMakeFiles/ck_files_core.dir/object_inventory_job.cpp.o"
+      ]
+    }
+  }
+}

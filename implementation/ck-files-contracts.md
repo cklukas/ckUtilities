@@ -791,11 +791,81 @@ covers deterministic and native validation. Self/descendant checks, operation
 capabilities, native equivalence for distinct planned names, conflict decisions,
 consent and publication protocols remain required before mutations.
 
+## Reported file data ranges
+
+`OpenedEntry::inspect_data_layout` returns `FileDataLayout`: the regular file's
+reported logical size, owner, native query family and ordered potential-data
+ranges. It covers main data only. Allocated ranges may contain zeros; a complete
+file range does not prove a dense file, and omitted ranges do not constitute a
+physical extent/clone/deduplication map. The native APIs' reporting precision and
+remote/mapped-file coherency limits still apply. See
+[POSIX/Linux seek semantics](https://man7.org/linux/man-pages/man2/lseek.2.html)
+and [Windows allocated-range semantics](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_query_allocated_ranges).
+
+Access is explicitly requested with `EntryAccess::MetadataAndLayout`. Default
+metadata opens keep their existing permissions and return Denied/InvalidAccess
+for this query. The opt-in can require native data-read access but does not
+authorize content reads, mutation, elevation or hydration.
+Only regular files pass the access guard; directories, final symlinks/reparse
+objects, FIFOs and devices are refused before access promotion. Identified
+Darwin dataless and Windows provider/recall cases require review before promotion
+or querying. Linux has no generic provider-locality query, so opt-in is not a
+universal no-hydration promise. No file-content read API is used.
+
+Native access remains bound to the original held object, not a second basename
+lookup. macOS seeks the existing event-only descriptor. Linux obtains read
+access via its held descriptor's kernel link in a verified procfs fd directory;
+it checks the filesystem type, retains the original descriptor, then verifies
+the readable handle's identity/kind/size/change witnesses. Missing or denied
+procfs access remains explicit; the original pathname is never a fallback. This
+uses the [documented procfs descriptor interface](https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html)
+and preserves native read-permission denial rather than duplicating O_PATH
+access as if it were a readable handle.
+
+Windows opens the reported native ID through
+[OpenFileById](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-openfilebyid),
+using the live original file as its volume/share hint. It requests FILE_READ_DATA,
+read/write/delete sharing, OPEN_REPARSE_POINT and OPEN_NO_RECALL; it does not
+enable backup privileges or fall back to a name. Both handles stay live while
+identity/kind/size/time observations and provider guards are checked. The
+[reported ID scheme](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_descriptor)
+selects the native descriptor type; unsupported identity opening is not weakened
+into another scheme or hidden by a path reopen.
+
+POSIX queries use SEEK_DATA/SEEK_HOLE; Windows uses
+FSCTL_QUERY_ALLOCATED_RANGES. Failures remain native states/codes. Unsupported
+queries never produce a fabricated whole-file range. Empty files still require
+a successful native end query. Windows rounding is clipped to the captured
+logical interval. Zero-length, overflowing, nonprogressing or malformed replies
+are refused; POSIX data beyond the initial size is treated as Changed. Required
+identity/kind/size and any available modification/change times are checked again
+after collection, without asserting a snapshot or unchanged contents.
+
+`InventoryLimits` bound retained records and range bytes. At most capacity+1
+native range callbacks run, permitting a final end witness at an exact limit.
+Cancellation is checked between callbacks (and between POSIX data/hole seeks),
+and errors/cancellation/limits return no prefix. A native callback or metadata
+query can still block. Native file offsets are private worker state; no stream
+reader shares these descriptors. Native signed offset limits are checked before
+conversion. This is neither an exact physical allocation inventory nor a copy
+or sparse-preservation guarantee.
+
+`ObjectInventoryJob` now collects this independent field and incrementally
+checks its envelope, family, ordering, logical bounds and aggregate budgets.
+Incomplete cancelled layout queries are retried on resume; completed layout
+observations are not repeated merely for yielding. The simulator has explicit
+layout replies, access requirements, limits and injectable layout failures.
+
+[Data layout evidence](evidence/ck-files-data-layout-20261024.json) records native
+range/permission/provider tests. Sparse test objects are exclusively created:
+APFS uses native hole punching, Linux sparse extension/writes, Windows sparse
+marking/writes. Hole punching exists only in the fixture, never the reader.
+
 ## Held-object inventory collection
 
 `ObjectInventoryJob` collects one already-open `OpenedEntry` on its owning worker.
 It never reopens a pathname, follows a link, elevates privileges or mutates the
-object. It requests basic metadata before/after collection, storage observations,
+object. It requests basic metadata before/after collection, storage and data-layout observations,
 link/reparse payloads, channel and attribute catalogs, each catalogued attribute
 value and all six explicit native security query parts. No main-data/named-stream
 content API is called. Attribute values are explicitly read and may themselves

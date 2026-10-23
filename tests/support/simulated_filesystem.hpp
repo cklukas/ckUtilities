@@ -24,7 +24,7 @@ class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     template<class T> using Observed = ck::files::Observation<T>;
 public:
     enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation,
-        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity };
+        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
@@ -188,6 +188,18 @@ private:
             const auto fault = step(state_, Operation::InspectStorage, node_, {}, {}, {}, {}, access_);
             if (fault) return Observed<ck::files::StorageInfo>::unavailable(fault->state, fault->error);
             return node_->inventory_.storage ? *node_->inventory_.storage : OpenedEntry::inspect_storage();
+        }
+        Observed<ck::files::FileDataLayout> inspect_data_layout(ck::files::InventoryLimits limits = {}, std::stop_token stop = {}) const override {
+            using Result = Observed<ck::files::FileDataLayout>;
+            const auto cancelled = [] { return Result::unavailable(ck::files::ObservationState::Unknown,
+                {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead), "layout.cancelled"}); };
+            if (!limits.valid()) return invalid_limits<Result>();
+            if (stop.stop_requested()) return cancelled();
+            const auto fault = step(state_, Operation::InspectLayout, node_, {}, {}, {}, limits, access_);
+            if (stop.stop_requested()) return cancelled();
+            if (fault) return Result::unavailable(fault->state, fault->error);
+            if (!ck::files::requests_layout(access_)) return access_denied<Result>();
+            return node_->inventory_.layout ? bounded(*node_->inventory_.layout, limits) : unsupported<Result>();
         }
         Observed<ck::files::LinkMetadata> read_link_metadata(ck::files::InventoryLimits limits = {}) const override {
             return query(Operation::ReadLink, node_->inventory_.link, limits);

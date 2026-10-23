@@ -21,6 +21,7 @@ struct SimulatedFeatureLess {
 struct SimulatedInventory {
     template<class T> using Reply = ck::files::Observation<T>;
     std::optional<Reply<ck::files::StorageInfo>> storage;
+    std::optional<Reply<ck::files::FileDataLayout>> layout;
     std::optional<Reply<ck::files::LinkMetadata>> link;
     std::optional<Reply<ck::files::DataChannelCatalog>> channels;
     std::optional<Reply<ck::files::AttributeCatalog>> attributes;
@@ -59,6 +60,9 @@ struct SimulatedInventory {
         // Query byte budgets constrain returned values, independently of the key.
         return value.bytes.size() <= limits.max_native_bytes;
     }
+    static bool fits(const ck::files::FileDataLayout& value, ck::files::InventoryLimits limits) noexcept {
+        return value.ranges.size() <= limits.max_records && value.ranges.size() <= limits.max_native_bytes / sizeof(ck::files::FileDataRange);
+    }
     static bool fits(const ck::files::NativeSecurityValue& value, ck::files::InventoryLimits limits) noexcept {
         return value.bytes.size() <= limits.max_native_bytes;
     }
@@ -77,6 +81,10 @@ struct SimulatedInventory {
             if (!budget.add(size, count, hard)) throw std::length_error("simulated inventory limit");
         };
         if (storage) add(0);
+        if (layout) {
+            add(0);
+            if (const auto* value = layout->value()) for (const auto& range : value->ranges) { (void)range; add(sizeof(FileDataRange)); }
+        }
         if (link) {
             add(0);
             if (const auto* value = link->value()) {

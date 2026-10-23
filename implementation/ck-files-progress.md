@@ -2011,3 +2011,74 @@ UI boundaries (80 domain sources), ckVision-only (455 active files), ckdocs
 and acceptance stay open: source self/descendant checks, native equivalence,
 operation capabilities, remaining inventories and pane/worker/large-view
 integration still need implementation. WP-02 has not started.
+
+## 2026-10-24 — WP-01 reported file data ranges
+
+Added bounded, cancellable inspection of native reported potential-data ranges
+for the regular file's main data. Results retain the native query family,
+scoped held-object identity and logical size. POSIX SEEK_DATA/SEEK_HOLE and
+Windows FSCTL_QUERY_ALLOCATED_RANGES remain distinct. Windows rounding is
+clipped; malformed, nonprogressing or overflowing replies fail. Empty files
+still require a native query. Unsupported queries never become fabricated
+whole-file results; failures, cancellation and exhausted limits discard prefixes.
+These reports do not establish physical extents, exact allocation, actual
+nonzero bytes, stable content, clone relationships or sparse-copy preservation.
+
+Layout inspection requires explicit `MetadataAndLayout` access. Metadata-only
+queries remain denied. Darwin seeks the original event-only descriptor. Linux
+obtains permission-checked read access through the held descriptor's kernel link
+in a verified procfs directory; Windows opens by native ID with the original
+handle live. Neither reopens the original basename, elevates privileges or
+reads file content. Identity, regular-file kind, size and available change times
+are checked when binding access and around queries. Identified provider/recall
+states retain review-required results. Linux has no generic provider-locality
+proof, and the opt-in cannot promise universal no-hydration. Native calls can
+block; cancellation remains cooperative.
+
+Object inventory now retains layout observations with incremental record/byte
+accounting. Cancellation retries only an incomplete query; completed families
+survive yields. Simulator access, limits and faults cover this query explicitly.
+Thirteen deterministic cases cover range validation, all failure states,
+budgets, cancellation, exceptions, provenance and inventory envelopes. Six native
+cases per host verify sparse fixtures, access opt-in, ownership after namespace
+replacement, pinned inventories, special-object refusal and empty-file evidence.
+Linux adds actual unprivileged read denial; Windows adds offline-provider guards
+for both existing handles and access acquisition.
+
+The same **113-file manifest** was verified on all hosts. All **43 Files suites**
+passed: **346 macOS / 345 Linux / 351 Windows cases**. Final normal build/test
+seconds were **3.376/0.821**, **21.792/0.144**, **8.765/2.720**. Mac's final two-step
+fixture rebuild follows the current core's four-step update (1.078 s) and broad
+54-step rebuild (18.102 s), comparable to the initial 52-step build (19.573 s).
+Linux completed 43 remaining steps after GCC rejected a copied range-loop pair;
+the fix uses a const reference and retains strict warnings. The failed driver
+stopped before tests. Windows rebuilt five steps against the verified manifest.
+Compiled inputs, hashes and output records establish freshness.
+
+Focused sanitizers rebuilt all 27 core units, the platform adapter, six fixtures
+and the test host (35 units), without cached objects. **72 macOS / 73 Linux /
+73 Windows cases** passed. ASan+UBSan build/test seconds were **65.882/0.453** on
+Mac and **151.535/0.138** on Linux; Windows ASan took **69.694/0.309**. Mac's
+comparable preliminary build took 65.263 s; Linux establishes the first successful
+baseline for this fixture set. All warnings remained errors. The initial APFS
+fixture exposed full allocation by ftruncate; it was corrected using native hole
+punching of known-zero test ranges, preserving the sparse assertion. That failed
+run and its printed range marker are excluded from successful qualification.
+
+Native qualification covers case-sensitive APFS, ext4 and ReFS. For an 8 MiB
+fixture, reported/allocated bytes were **3162112/3162112**, **8192/8192** and
+**8192/12288**, respectively, illustrating why ranges and allocation stay separate.
+Diagnostics and the small Darwin descriptor research probe were hashed, checked
+for live owners and removed; fixture roots were empty. Current normal builds
+remain. Windows development stayed on V:, Mac temporary work on S8T. No GUI was
+launched. Validation intervals were UTC on 2026-10-23; this milestone uses the
+current local date, 2026-10-24.
+
+[Data layout evidence](evidence/ck-files-data-layout-20261024.json) records source
+hashes, query qualification, test markers, commands, timings, output hashes,
+rejected attempts, research and cleanup. UI boundaries (82 domain sources),
+ckVision-only (459 active files), ckdocs (24 pages) and whitespace checks pass.
+WP-01's two remaining checklist items and acceptance stay open: initial selection,
+self/descendant checks, native equivalence, operation capabilities, remaining
+inventories and pane/worker/large-view integration still need implementation.
+WP-02 has not started.

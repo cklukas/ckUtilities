@@ -17,6 +17,7 @@ struct InventoryAttributeRead {
 struct ObjectInventoryData {
     Observation<BasicMetadata> before, after;
     Observation<StorageInfo> storage;
+    Observation<FileDataLayout> layout;
     Observation<LinkMetadata> link;
     Observation<DataChannelCatalog> channels;
     Observation<AttributeCatalog> attributes;
@@ -75,7 +76,7 @@ public:
     const std::optional<UnavailableObservation>& failure() const noexcept { return failure_; }
     Observation<Result> completed() const;
 private:
-    enum class Phase { Before, Storage, Link, Channels, CheckChannels, Attributes, CheckAttributes, Values, Security, After, Seal };
+    enum class Phase { Before, Storage, Layout, CheckLayout, Link, Channels, CheckChannels, Attributes, CheckAttributes, Values, Security, After, Seal };
     struct FeatureLess {
         bool operator()(const NativeFeatureIdentifier& a, const NativeFeatureIdentifier& b) const noexcept;
     };
@@ -84,7 +85,7 @@ private:
     bool invalid_reply();
     void fail(UnavailableObservation error) noexcept;
     void release_staging() noexcept;
-    void step();
+    void step(std::stop_token stop);
     std::shared_ptr<const OpenedEntry> object_;
     std::unique_ptr<ObjectInventoryData> data_;
     ObjectInventoryLimits limits_;

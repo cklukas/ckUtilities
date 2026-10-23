@@ -77,14 +77,33 @@ bool ObjectInventoryJob::retain_identifier(const NativeFeatureIdentifier& identi
     return true;
 }
 bool ObjectInventoryJob::invalid_reply() { fail(error(AdapterError::InvalidNativeResult, "object_inventory.reply")); return false; }
-void ObjectInventoryJob::step() {
+void ObjectInventoryJob::step(std::stop_token stop) {
     switch (phase_) {
     case Phase::Before:
         if (!retain(0, 1)) return;
         data_->before = object_->inspect_basic(); phase_ = Phase::Storage; break;
     case Phase::Storage:
         if (!retain(0, 1)) return;
-        data_->storage = object_->inspect_storage(); phase_ = Phase::Link; break;
+        data_->storage = object_->inspect_storage(); phase_ = Phase::Layout; break;
+    case Phase::Layout: {
+        if (records_ == limits_.retained.max_records) { fail(error(AdapterError::InventoryLimit, "object_inventory.retained_limit")); return; }
+        auto reply = object_->inspect_data_layout(limits_.query, stop);
+        if (!reply.value() && stop.stop_requested()) { state_ = ObjectInventoryJobState::Paused; return; }
+        if (!retain(0, 1)) return;
+        if (const auto* layout = reply.value(); layout && (layout->family == DataLayoutFamily::Unknown ||
+            layout->family > DataLayoutFamily::WindowsAllocatedRanges || layout->family < DataLayoutFamily::Unknown ||
+            layout->ranges.size() > limits_.query.max_records || layout->ranges.size() > limits_.query.max_native_bytes / sizeof(FileDataRange))) { invalid_reply(); return; }
+        data_->layout = std::move(reply); phase_ = Phase::CheckLayout; next_ = 0; break;
+    }
+    case Phase::CheckLayout:
+        if (const auto* layout = data_->layout.value(); layout && next_ < layout->ranges.size()) {
+            const auto& range = layout->ranges[next_];
+            if (range.length == 0 || range.offset >= layout->logical_size || range.length > layout->logical_size - range.offset ||
+                (next_ != 0 && range.offset < layout->ranges[next_ - 1].offset + layout->ranges[next_ - 1].length)) { invalid_reply(); return; }
+            if (!retain(sizeof(FileDataRange), 1)) return;
+            ++next_; break;
+        }
+        phase_ = Phase::Link; break;
     case Phase::Link: {
         if (!retain(0, 1)) return;
         auto reply = object_->read_link_metadata(limits_.query);
@@ -192,7 +211,7 @@ ObjectInventoryJobState ObjectInventoryJob::advance(std::stop_token stop) {
                 completed_ = Result(new const CompletedObjectInventory(std::move(object_), std::move(data_)));
                 release_staging(); state_ = ObjectInventoryJobState::Complete; return state_;
             }
-            step(); if (state_ == ObjectInventoryJobState::Failed) return state_;
+            step(stop); if (state_ != ObjectInventoryJobState::Collecting) return state_;
         }
         return state_;
     } catch (...) {

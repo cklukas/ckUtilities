@@ -249,9 +249,51 @@ Observation<T> ea_failure(std::uint32_t code, const char* operation) {
 
 class WindowsOpenedEntry final : public OpenedEntry {
 public:
-    WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
-        : handle_(std::move(handle)), scope_(std::move(scope)) {}
+    WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false)
+        : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const override {
+        using Result = Observation<FileDataLayout>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "layout.limits"});
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "layout.cancelled"});
+        if (!layout_access_) return Result::unavailable(ObservationState::Denied,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "layout.access_not_requested"});
+        const auto before = inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto guard = detail::data_layout_access_guard(*before.value(), StorageModel::WindowsHandleAttributes);
+        if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!before.value()->logical_size.value()) { const auto& e = *before.value()->logical_size.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto size = *before.value()->logical_size.value();
+        if (size > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max())) return Result::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "layout.offset_range"});
+        const auto query = [&](std::uint64_t at, std::uint64_t end) -> Observation<std::optional<FileDataRange>> {
+            using Reply = Observation<std::optional<FileDataRange>>;
+            FILE_ALLOCATED_RANGE_BUFFER input{}, output{};
+            input.FileOffset.QuadPart = static_cast<LONGLONG>(at); input.Length.QuadPart = static_cast<LONGLONG>(end - at);
+            DWORD bytes = 0;
+            const auto success = DeviceIoControl(handle_.get(), FSCTL_QUERY_ALLOCATED_RANGES, &input, sizeof(input), &output, sizeof(output), &bytes, nullptr);
+            const DWORD code = success ? ERROR_SUCCESS : GetLastError();
+            if (!success && code != ERROR_MORE_DATA) return failure<std::optional<FileDataRange>>(code, "FSCTL_QUERY_ALLOCATED_RANGES");
+            if (bytes == 0 && success) return Reply::available(std::nullopt);
+            if (bytes != sizeof(output) || output.FileOffset.QuadPart < 0 || output.Length.QuadPart <= 0)
+                return Reply::unavailable(ObservationState::Failed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "layout.windows_range"});
+            return Reply::available(FileDataRange{static_cast<std::uint64_t>(output.FileOffset.QuadPart), static_cast<std::uint64_t>(output.Length.QuadPart)});
+        };
+        auto result = detail::collect_data_layout(query, DataLayoutFamily::WindowsAllocatedRanges, before.value()->identity, size, limits, stop);
+        if (!result.value()) return result;
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "layout.cancelled"});
+        const auto after = inspect_basic();
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "layout.cancelled"});
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto unchanged = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
+        if (!unchanged.value()) { const auto& e = *unchanged.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return result;
+    }
     Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
         using Result = Observation<LinkMetadata>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
@@ -452,6 +494,7 @@ public:
             std::move(bytes).take_value(), identity(handle_.get(), scope_), mask});
     }
 private:
+    friend class WindowsDirectoryCursor;
     static std::optional<UnavailableObservation> provider_guard(const BasicMetadata& metadata) {
         const auto review = provider_review_required(metadata, StorageModel::WindowsHandleAttributes);
         if (!review.value()) return *review.unavailable_detail();
@@ -486,6 +529,7 @@ private:
     }
     OwnedHandle handle_;
     AdapterScope scope_;
+    bool layout_access_;
 };
 
 // Public FILE_FS_FULL_SIZE_INFORMATION wire layout. The desktop SDK does not
@@ -648,8 +692,37 @@ private:
             const auto& error = *result.unavailable_detail();
             return Observation<std::unique_ptr<OpenedEntry>>::unavailable(error.state, error.error);
         }
-        return Observation<std::unique_ptr<OpenedEntry>>::available(
-            std::make_unique<WindowsOpenedEntry>(std::move(result).take_value(), scope_));
+        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        auto original = std::make_unique<WindowsOpenedEntry>(std::move(result).take_value(), scope_);
+        if (!requests_layout(access)) return Result::available(std::move(original));
+        const auto before = original->inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto guard = detail::data_layout_access_guard(*before.value(), StorageModel::WindowsHandleAttributes);
+        if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto* id = before.value()->identity.value();
+        if (!id || compare_identity(*id, *id) != IdentityComparison::Same) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "layout.open_identity"});
+        FILE_ID_DESCRIPTOR descriptor{}; descriptor.dwSize = sizeof(descriptor);
+        if (id->scheme == IdentityScheme::WindowsFileId128) {
+            descriptor.Type = ExtendedFileIdType; std::memcpy(descriptor.ExtendedFileId.Identifier, id->object.bytes.data(), 16);
+        } else if (id->scheme == IdentityScheme::WindowsFileIndex64) {
+            descriptor.Type = FileIdType; std::memcpy(&descriptor.FileId.QuadPart, id->object.bytes.data(), 8);
+        } else return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "layout.open_scheme"});
+        // A live original handle supplies the volume/share hint and prevents ID
+        // reuse. Native identity open avoids a basename-replacement race. No
+        // backup privilege, elevation, name fallback or content read is used.
+        OwnedHandle readable(OpenFileById(original->handle_.get(), &descriptor, rights | FILE_READ_DATA,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
+        if (readable.get() == nullptr || readable.get() == INVALID_HANDLE_VALUE) return failure<std::unique_ptr<OpenedEntry>>(GetLastError(), "OpenFileById.layout");
+        auto opened = std::make_unique<WindowsOpenedEntry>(std::move(readable), scope_, true);
+        const auto after = opened->inspect_basic();
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto checked = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto final_guard = detail::data_layout_access_guard(*after.value(), StorageModel::WindowsHandleAttributes);
+        if (!final_guard.value()) { const auto& e = *final_guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available(std::move(opened));
     }
     Observation<OwnedHandle> open_native_component(const NativeName& name, ACCESS_MASK rights, ChildLookupMode mode) const {
         using Result = Observation<OwnedHandle>;

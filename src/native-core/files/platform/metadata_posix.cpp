@@ -193,8 +193,54 @@ private:
 
 class PosixOpenedEntry final : public OpenedEntry {
 public:
-    PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope)
-        : descriptor_(std::move(descriptor)), scope_(std::move(scope)) {}
+    PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false)
+        : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access) {}
+    Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const override {
+        using Result = Observation<FileDataLayout>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "layout.limits"));
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "layout.cancelled"));
+        if (!layout_access_) return Result::unavailable(ObservationState::Denied, adapter_error(AdapterError::InvalidAccess, "layout.access_not_requested"));
+        const auto before = inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__linux__)
+        constexpr auto model = StorageModel::LinuxStatx;
+#else
+        constexpr auto model = StorageModel::DarwinStatFlags;
+#endif
+        const auto guard = detail::data_layout_access_guard(*before.value(), model);
+        if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!before.value()->logical_size.value()) { const auto& e = *before.value()->logical_size.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto size = *before.value()->logical_size.value();
+        if (size > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()))
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, "layout.offset_range"));
+        const auto query = [&](std::uint64_t at, std::uint64_t) -> Observation<std::optional<FileDataRange>> {
+            using Reply = Observation<std::optional<FileDataRange>>;
+            const auto data = lseek(descriptor_.get(), static_cast<off_t>(at), SEEK_DATA);
+            if (data < 0) {
+                const int code = errno;
+                if (code == ENXIO) return Reply::available(std::nullopt);
+                return Reply::unavailable(code == EINVAL ? ObservationState::Unsupported : errno_state(code), {ErrorDomain::Posix, code, "lseek.data"});
+            }
+            if (stop.stop_requested()) return Reply::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "layout.cancelled"));
+            const auto hole = lseek(descriptor_.get(), data, SEEK_HOLE);
+            if (hole < 0) {
+                const int code = errno;
+                return Reply::unavailable(code == EINVAL ? ObservationState::Unsupported : code == ENXIO ? ObservationState::Changed : errno_state(code),
+                    {ErrorDomain::Posix, code, "lseek.hole"});
+            }
+            if (hole <= data) return Reply::unavailable(ObservationState::Changed, adapter_error(AdapterError::MetadataChanged, "lseek.progress"));
+            return Reply::available(FileDataRange{static_cast<std::uint64_t>(data), static_cast<std::uint64_t>(hole - data)});
+        };
+        auto result = detail::collect_data_layout(query, DataLayoutFamily::PosixSeekDataHole, before.value()->identity, size, limits, stop);
+        if (!result.value()) return result;
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "layout.cancelled"));
+        const auto after = inspect_basic();
+        if (stop.stop_requested()) return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "layout.cancelled"));
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto unchanged = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
+        if (!unchanged.value()) { const auto& e = *unchanged.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return result;
+    }
     Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
         using Result = Observation<LinkMetadata>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "link.limits"));
@@ -413,6 +459,7 @@ public:
 #endif
     }
 private:
+    friend class PosixDirectoryCursor;
 #if defined(__APPLE__)
     static std::optional<UnavailableObservation> provider_guard(const BasicMetadata& metadata) {
         const auto review = provider_review_required(metadata, StorageModel::DarwinStatFlags);
@@ -481,6 +528,7 @@ private:
     }
     OwnedDescriptor descriptor_;
     AdapterScope scope_;
+    bool layout_access_;
 };
 
 struct DirectoryCloser {
@@ -699,7 +747,48 @@ public:
             const int code = errno;
             return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.child"});
         }
-        return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_));
+        auto original = std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_);
+        if (!requests_layout(access)) return Result::available(std::move(original));
+        const auto before = original->inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__linux__)
+        constexpr auto model = StorageModel::LinuxStatx;
+#else
+        constexpr auto model = StorageModel::DarwinStatFlags;
+#endif
+        const auto guard = detail::data_layout_access_guard(*before.value(), model);
+        if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__APPLE__)
+        // SEEK_DATA/SEEK_HOLE operate on the existing event-only descriptor.
+        // No basename reopen or additional data-read handle is necessary.
+        original->layout_access_ = true;
+        return Result::available(std::move(original));
+#else
+        // O_PATH cannot seek. Obtain read access through a verified procfs fd
+        // directory and its kernel fd link, never the original basename. The
+        // original held regular object cannot be swapped for a device/link.
+        OwnedDescriptor proc(open("/proc/self/fd", O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (proc.get() < 0) {
+            const int code = errno;
+            return Result::unavailable(code == ENOENT || code == ENOTDIR ? ObservationState::Unsupported : errno_state(code),
+                {ErrorDomain::Posix, code, "layout.proc_directory"});
+        }
+        struct statfs filesystem{};
+        if (fstatfs(proc.get(), &filesystem) != 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "layout.proc_statfs"}); }
+        if (filesystem.f_type != PROC_SUPER_MAGIC) return Result::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "layout.proc_filesystem"));
+        const auto descriptor_name = std::to_string(original->descriptor_.get());
+        OwnedDescriptor readable(openat(proc.get(), descriptor_name.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC));
+        if (readable.get() < 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.layout_fd"}); }
+        auto opened = std::make_unique<PosixOpenedEntry>(std::move(readable), scope_, true);
+        const auto after = opened->inspect_basic();
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto checked = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto final_guard = detail::data_layout_access_guard(*after.value(), model);
+        if (!final_guard.value()) { const auto& e = *final_guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available(std::move(opened));
+#endif
     }
 private:
     Observation<DirectoryStep> next_step() override {
