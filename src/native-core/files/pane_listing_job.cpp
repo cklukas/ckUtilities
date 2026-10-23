@@ -29,8 +29,16 @@ PaneListingJob::PaneListingJob(PaneListingRequest request, std::unique_ptr<Direc
 }
 void PaneListingJob::fail(UnavailableObservation failure) {
     failure_ = std::move(failure); state_ = PaneListingJobState::Failed;
+    release_staging();
+}
+void PaneListingJob::release_staging() noexcept {
     listing_.reset(); std::vector<PaneEntry>{}.swap(entries_); names_.clear();
-    native_bytes_ = display_bytes_ = 0;
+    encoding_.reset(); directory_ = {}; native_bytes_ = display_bytes_ = 0;
+}
+bool PaneListingJob::abandon() noexcept {
+    if (state_ == PaneListingJobState::Abandoned || state_ == PaneListingJobState::Failed) return false;
+    completed_.reset(); release_staging(); state_ = PaneListingJobState::Abandoned;
+    return true;
 }
 Observation<PaneListingJob::Result> PaneListingJob::completed() const {
     if (completed_) return Observation<Result>::available(completed_);
@@ -38,7 +46,7 @@ Observation<PaneListingJob::Result> PaneListingJob::completed() const {
     return {};
 }
 PaneListingJobState PaneListingJob::advance(std::stop_token stop) {
-    if (state_ == PaneListingJobState::Complete || state_ == PaneListingJobState::Failed) return state_;
+    if (state_ == PaneListingJobState::Complete || state_ == PaneListingJobState::Failed || state_ == PaneListingJobState::Abandoned) return state_;
     try {
         auto batch = listing_->read(stop);
         if (batch.state == DirectoryReadState::Error) { fail(*batch.error); return state_; }
@@ -67,7 +75,7 @@ PaneListingJobState PaneListingJob::advance(std::stop_token stop) {
         }
         if (batch.state == DirectoryReadState::End) {
             completed_ = Result(new const CompletedPaneListing(request_, directory_, std::move(entries_)));
-            listing_.reset(); names_.clear(); state_ = PaneListingJobState::Complete;
+            release_staging(); state_ = PaneListingJobState::Complete;
         } else state_ = batch.state == DirectoryReadState::Cancelled ? PaneListingJobState::Paused : PaneListingJobState::Collecting;
         return state_;
     } catch (...) {

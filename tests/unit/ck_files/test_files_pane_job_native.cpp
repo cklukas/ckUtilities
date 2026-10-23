@@ -65,3 +65,15 @@ CK_TEST(native_pane_job_capacity_failure_does_not_publish_a_partial_directory) {
     if (!job.failure()) throw std::runtime_error("expected capacity failure");
     CK_CHECK(pane.fail_listing(job.request(), *job.failure()) && pane.size() == 0 && !job.completed().value());
 }
+
+CK_TEST(native_pane_job_can_be_abandoned_and_a_new_generation_can_scan_the_same_location) {
+    const ck::testing::ScratchDirectory scratch("files-panejob-abandon"); file(scratch.path() / "a"); file(scratch.path() / "b");
+    NativeFileSystem filesystem; PaneModel pane;
+    PaneListingJob old(pane.begin_listing(PaneListingPurpose::Navigate), listing(filesystem, scratch.path()), model);
+    CK_CHECK(old.advance() == PaneListingJobState::Collecting && old.abandon());
+    CK_CHECK(pane.cancel_listing(old.request()) && !pane.listing_pending() && pane.size() == 0);
+    CK_CHECK(old.advance() == PaneListingJobState::Abandoned && !old.completed().value());
+    PaneListingJob fresh(pane.begin_listing(PaneListingPurpose::Navigate), listing(filesystem, scratch.path()), model);
+    CK_CHECK(pane.publish(*finish(fresh)) == PanePublish::Applied && pane.size() == 2);
+    CK_CHECK(!pane.cancel_listing(old.request()) && pane.visible_row(0)->display_name == "a");
+}

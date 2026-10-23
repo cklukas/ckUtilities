@@ -216,3 +216,30 @@ CK_TEST(pane_failed_refresh_preserves_sources_and_explicit_navigation_starts_a_n
     pane.clear_marks();CK_CHECK(pane.sources().state==PaneSourcesState::Empty);
     load(pane,{entry("new-location")});CK_CHECK(pane.focused()==id(pane,0)&&pane.sources().state==PaneSourcesState::Ready);
 }
+
+CK_TEST(pane_cancellation_revokes_only_the_current_generation_and_preserves_published_selection) {
+    PaneModel pane; load(pane, {entry("old")}); const auto row = id(pane, 0); pane.set_mark(row, true);
+    const auto request = pane.begin_listing(PaneListingPurpose::Navigate);
+    CK_CHECK(pane.cancel_listing(request) && !pane.listing_pending() && !pane.listing_error());
+    CK_CHECK(pane.focused() == row && pane.marked(row) && pane.sources().state == PaneSourcesState::Ready);
+    CK_CHECK(!pane.cancel_listing(request) && pane.publish(request, {entry("late")}) == PanePublish::Stale);
+    CK_CHECK(!pane.fail_listing(request, {ObservationState::Denied, {ErrorDomain::Posix, 13, "late.error"}}));
+    const auto next = pane.begin_listing(PaneListingPurpose::Navigate); CK_CHECK(next.number != request.number);
+    CK_CHECK(!pane.cancel_listing(request) && pane.listing_pending());
+    CK_CHECK(pane.cancel_listing(next));
+}
+CK_TEST(pane_cancellation_rejects_foreign_and_zero_requests_without_touching_the_current_scan) {
+    PaneModel pane, other; load(pane, {entry("old")}); const auto request = pane.begin_listing(PaneListingPurpose::Refresh);
+    CK_CHECK(!pane.cancel_listing(other.begin_listing(PaneListingPurpose::Refresh)));
+    auto zero = request; zero.number = 0; CK_CHECK(!pane.cancel_listing(zero));
+    CK_CHECK(pane.listing_pending() && pane.sources().state == PaneSourcesState::ListingPending);
+    CK_CHECK(pane.cancel_listing(request) && pane.size() == 1);
+}
+CK_TEST(pane_cancellation_does_not_clear_unproven_selection_invalidation) {
+    PaneModel pane; load(pane, {entry("old")}); pane.mark_visible(true);
+    CK_CHECK(pane.publish(pane.begin_listing(PaneListingPurpose::Refresh), {entry("replacement")}) == PanePublish::Applied);
+    const auto before = pane.invalidated_selection(); CK_CHECK(before.marks != 0 && before.cursor);
+    const auto request = pane.begin_listing(PaneListingPurpose::Refresh); CK_CHECK(pane.cancel_listing(request));
+    CK_CHECK(pane.invalidated_selection().marks == before.marks && pane.invalidated_selection().cursor == before.cursor);
+    CK_CHECK(pane.sources().state == PaneSourcesState::SelectionInvalidated);
+}

@@ -144,6 +144,34 @@ provider hydration or mutation guarantee is implied.
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
 publication/failure tests and native streaming-to-pane tests on all three hosts.
 
+## Listing cancellation and worker resource ownership
+
+`PaneModel::cancel_listing` revokes only the current request from that pane.
+Foreign, stale and zero requests are rejected without changing the pending
+request. Revocation preserves published rows, directory context, focus, marks
+and selection invalidation diagnostics. A late success or failure cannot apply;
+a subsequent listing receives a new generation. This operation belongs to the
+pane owner and performs no native I/O.
+
+`PaneListingJob::abandon` belongs to its owning worker, after `advance` returns.
+It releases the cursor, any prepared child, staged rows, duplicate-name index,
+directory observation and the job's reference to a completed payload. Abandoned
+jobs cannot resume I/O or produce a completion. Repeated abandonment is a no-op;
+a failed job instead retains its original diagnostic. Failure and successful
+completion also release private staging and its accounting state.
+
+These are separate responsibilities: abandoning a job cannot revoke an
+immutable payload already handed to another owner. The receiver must revoke
+the generation to reject queued late results. A stop token only requests a
+cooperative pause; abandonment discards the private scan. Neither API permits
+concurrent access to a job, interrupts a blocked native call or makes immediate
+handle release possible during that call. Scheduling and owner-thread wiring
+remain future work.
+
+[Cancellation evidence](evidence/ck-files-cancellation-20261023.json) covers
+prepared-child cleanup, stale completion rejection, retained diagnostics and
+native restart on all three hosts.
+
 ## Injected monotonic time and cooperative slices
 
 `MonotonicClock` supplies process-local steady-clock readings through shared

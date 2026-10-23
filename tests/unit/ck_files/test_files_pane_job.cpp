@@ -12,7 +12,9 @@ static_assert(!std::is_default_constructible_v<CompletedPaneListing>);
 struct Script {
     std::vector<NativeName> names;
     std::vector<BasicMetadata> metadata;
-    int reads = 0, roots = 0, opens = 0, fail_read = -1, deny_open = -1;
+    int reads = 0, roots = 0, opens = 0, live = 0, fail_read = -1, deny_open = -1;
+    std::shared_ptr<ck::testing::ManualMonotonicClock> clock = std::make_shared<ck::testing::ManualMonotonicClock>();
+    MonotonicClock::Duration open_cost{};
     bool throw_open = false, cancel_inspection = false;
     std::stop_source stop;
     AdapterScope scope;
@@ -21,7 +23,8 @@ NativeError error(const char* operation) { return {ErrorDomain::Adapter, 99, ope
 ObjectIdentity test_identity(const Script& script) { return {script.scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(2), {}}; }
 class Entry final : public OpenedEntry {
 public:
-    Entry(std::shared_ptr<Script> source, std::size_t index) : source_(std::move(source)), index_(index) {}
+    Entry(std::shared_ptr<Script> source, std::size_t index) : source_(std::move(source)), index_(index) { ++source_->live; }
+    ~Entry() override { --source_->live; }
     Observation<BasicMetadata> inspect_basic() const override {
         if (source_->cancel_inspection) { source_->stop.request_stop(); source_->cancel_inspection = false; }
         if (index_ < source_->metadata.size()) return Observation<BasicMetadata>::available(source_->metadata[index_]);
@@ -35,7 +38,7 @@ public:
     ~Cursor() override { --source_->roots; }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access) const override {
         if (access != EntryAccess::MetadataOnly) throw std::runtime_error("unexpected access");
-        ++source_->opens; if (source_->throw_open) throw std::runtime_error("injected open exception");
+        ++source_->opens; source_->clock->advance(source_->open_cost); if (source_->throw_open) throw std::runtime_error("injected open exception");
         const auto found = std::find(source_->names.begin(), source_->names.end(), name);
         if (found == source_->names.end()) throw std::runtime_error("unexpected child");
         const auto index = static_cast<std::size_t>(found - source_->names.begin());
@@ -55,7 +58,8 @@ std::shared_ptr<Script> script(std::initializer_list<const char*> names) {
     auto result = std::make_shared<Script>(); for (auto name : names) result->names.push_back(*NativeName::from_posix(name)); return result;
 }
 std::unique_ptr<DirectoryListing> listing(std::shared_ptr<Script> source, std::size_t rows = 1) {
-    return std::make_unique<DirectoryListing>(std::make_unique<Cursor>(std::move(source)), DirectoryListingLimits{rows, 128, 128}, std::make_shared<ck::testing::ManualMonotonicClock>());
+    auto clock = source->clock;
+    return std::make_unique<DirectoryListing>(std::make_unique<Cursor>(std::move(source)), DirectoryListingLimits{rows, 128, 128}, std::move(clock));
 }
 PaneListingJob::Result finish(PaneListingJob& job) {
     for (int steps = 0; steps < 100; ++steps) {
@@ -164,4 +168,31 @@ CK_TEST(pane_job_validates_ownership_limits_and_model_before_reading) {
         catch (const std::invalid_argument&) { rejected = true; }
         CK_CHECK(rejected && source->reads == 0 && source->roots == 0);
     }
+}
+
+CK_TEST(pane_job_abandonment_closes_a_prepared_child_and_cursor_and_never_resumes_io) {
+    PaneModel pane; old_rows(pane); auto source = script({"a", "b"}); source->open_cost = std::chrono::milliseconds(20);
+    PaneListingJob job(pane.begin_listing(PaneListingPurpose::Navigate), listing(source), StorageModel::LinuxStatx);
+    CK_CHECK(job.advance() == PaneListingJobState::Collecting && source->roots == 1 && source->live == 1);
+    const int reads = source->reads, opens = source->opens;
+    CK_CHECK(job.abandon() && job.state() == PaneListingJobState::Abandoned && source->roots == 0 && source->live == 0);
+    CK_CHECK(!job.abandon() && !job.failure() && !job.completed().value());
+    CK_CHECK(job.advance() == PaneListingJobState::Abandoned && source->reads == reads && source->opens == opens);
+    CK_CHECK(pane.cancel_listing(job.request()) && pane.visible_row(0)->display_name == "old" && !pane.listing_pending());
+}
+CK_TEST(pane_generation_cancellation_rejects_an_already_issued_completion_after_job_abandonment) {
+    PaneModel pane; old_rows(pane); auto source = script({"late"});
+    PaneListingJob job(pane.begin_listing(PaneListingPurpose::Navigate), listing(source), StorageModel::LinuxStatx);
+    const auto issued = finish(job); CK_CHECK(job.abandon() && !job.completed().value());
+    CK_CHECK(pane.cancel_listing(job.request()) && pane.publish(*issued) == PanePublish::Stale);
+    CK_CHECK(pane.visible_row(0)->display_name == "old" && job.advance() == PaneListingJobState::Abandoned);
+    PaneListingJob fresh(pane.begin_listing(PaneListingPurpose::Navigate), listing(script({"new"})), StorageModel::LinuxStatx);
+    CK_CHECK(pane.publish(*finish(fresh)) == PanePublish::Applied && pane.publish(*issued) == PanePublish::Stale);
+}
+CK_TEST(pane_job_abandonment_preserves_existing_failures_for_review) {
+    PaneModel pane; auto source = script({"a"}); source->fail_read = 0;
+    PaneListingJob job(pane.begin_listing(PaneListingPurpose::Navigate), listing(source), StorageModel::LinuxStatx);
+    CK_CHECK(job.advance() == PaneListingJobState::Failed && !job.abandon() && job.state() == PaneListingJobState::Failed);
+    if (!job.failure()) throw std::runtime_error("failed job diagnostic lost");
+    CK_CHECK(job.failure()->error == error("fake.read") && source->roots == 0 && pane.fail_listing(job.request(), *job.failure()));
 }

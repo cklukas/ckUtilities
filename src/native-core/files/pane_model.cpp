@@ -141,6 +141,11 @@ bool PaneModel::fail_listing(PaneListingRequest request, UnavailableObservation 
     error_ = std::move(failure); pending_ = 0;
     return true;
 }
+bool PaneModel::cancel_listing(PaneListingRequest request) noexcept {
+    if (!current(request)) return false;
+    pending_ = 0; error_.reset();
+    return true;
+}
 PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const PaneView& view) {
     Projection result;
     result.positions.resize(rows.size()); result.visible.reserve(rows.size());

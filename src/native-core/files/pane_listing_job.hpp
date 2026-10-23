@@ -21,7 +21,7 @@ private:
     Observation<ObjectIdentity> directory_;
     std::vector<PaneEntry> entries_;
 };
-enum class PaneListingJobState { Collecting, Paused, Complete, Failed };
+enum class PaneListingJobState { Collecting, Paused, Complete, Failed, Abandoned };
 // Worker-only bounded staging for the current in-memory pane. Never publishes
 // partial scans; the immutable result is applied through the pane generation gate.
 // This is not the disk-backed index required for larger listings.
@@ -33,12 +33,18 @@ public:
     PaneListingJob(const PaneListingJob&) = delete;
     PaneListingJob& operator=(const PaneListingJob&) = delete;
     PaneListingJobState advance(std::stop_token stop = {});
+    // Owning worker only, after advance has returned. Releases discovery and
+    // private results; cannot interrupt a native call. Issued immutable payloads
+    // are revoked separately through the receiving pane's generation gate.
+    // A failed job retains its diagnostic; repeated abandonment is a no-op.
+    bool abandon() noexcept;
     PaneListingJobState state() const noexcept { return state_; }
     const PaneListingRequest& request() const noexcept { return request_; }
     const std::optional<UnavailableObservation>& failure() const noexcept { return failure_; }
     Observation<Result> completed() const;
 private:
     void fail(UnavailableObservation failure);
+    void release_staging() noexcept;
     PaneListingRequest request_;
     std::unique_ptr<DirectoryListing> listing_;
     Observation<ObjectIdentity> directory_;

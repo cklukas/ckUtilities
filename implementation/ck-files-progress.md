@@ -1498,3 +1498,51 @@ integration remains required. WP-01 also retains full simulated filesystem,
 scheduling/large indexes, collision/path planning, remaining inventories/provider
 coordination and operation capability work. No package checkbox is closed and
 no production mutation was added.
+
+## 2026-10-23 — WP-01 listing cancellation and resource release
+
+Added pane-owner cancellation of the current listing generation and worker-owned
+scan abandonment after `advance` returns. Cancelling preserves published rows,
+directory context, focus, marks and existing selection invalidation diagnostics;
+late results cannot apply. Foreign/stale/zero cancellation cannot revoke a newer
+request. Abandonment releases private staging, the native cursor and any prepared
+child, and permanently prevents further I/O. Failed jobs retain their diagnostic.
+An already-issued immutable result still requires receiver generation revocation.
+These APIs do not interrupt blocked native calls or permit concurrent job access.
+
+Seven added cases cover cancellation state/ownership, invalidation retention,
+prepared-child release, queued late completion, failure diagnostics and native
+abandon/restart. All 32 Files suites pass using the same 89-file source manifest:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 | 20:23:22.279–20:23:25.264 | 2.984 / 0.765 | 216 |
+| Lima Debian 13 arm64 | 20:25:47.010–20:25:52.569 | 5.559 / 0.121 | 213 |
+| Windows x64, static CRT | 20:26:29.556–20:26:41.445 | 11.888 / 2.536 | 220 |
+
+Each build performed ten compile/link steps: seven affected units, the core
+library and two executables. The narrower input dependency scope explains the
+shorter durations than the preceding broad 52/53-step rebuild. Logs and source
+hashes were inspected. The initial Windows attempt stopped before compilation:
+the inherited SSH PATH (7178 characters) exceeded cmd's developer-shell limit.
+Initializing the validation session from the system PATH, checking shell status
+and resetting temporary variables to V: resolved the environment failure.
+
+Focused sanitizers passed 37 cases (21 pane, 12 job-domain, four native-job),
+instrumenting the same 27 translation units as the previous milestone. Mac
+ASan+UBSan built 20:25:58.728–20:26:32.952 UTC in 34.224 s and tested in 0.377 s;
+Windows ASan built 20:26:54.281–20:27:35.009 in 40.727 s and tested in 0.795 s.
+Prior comparable builds were 36.783/41.367 s. Strict warnings and halt-on-error
+produced no diagnostics. This is focused coverage, not full-suite sanitization.
+
+Diagnostic executable hashes and zero owners were recorded before disposable
+sanitizer outputs were removed. No files-panejob-* fixtures remain on any host;
+current normal builds remain. Windows project writes stayed on V:. Boundaries
+(72 domain sources / 436 active files), ckdocs (24 pages) and whitespace checks
+pass. No GUI was launched or production mutation added.
+
+[Cancellation evidence](evidence/ck-files-cancellation-20261023.json) records
+source hashes, build/test intervals, output paths and cleanup. Scheduling and
+owner-thread wiring, large indexes, selected-child refresh integration, full
+filesystem simulation, collision/path planning and remaining inventories and
+operation capabilities remain WP-01 work. No package acceptance box is closed.

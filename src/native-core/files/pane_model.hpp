@@ -98,6 +98,9 @@ public:
     const Observation<ObjectIdentity>& listing_directory() const noexcept { return listing_directory_; }
     PanePublish publish(PaneListingRequest request, const std::vector<PaneEntry>& entries);
     bool fail_listing(PaneListingRequest request, UnavailableObservation failure);
+    // Revoke this pending generation, preserving published rows/context and
+    // selection diagnostics. Does not stop or free a worker's in-flight I/O.
+    bool cancel_listing(PaneListingRequest request) noexcept;
     bool listing_pending() const noexcept { return pending_ != 0; }
     const std::optional<UnavailableObservation>& listing_error() const noexcept { return error_; }
     const PaneInvalidatedSelection& invalidated_selection() const noexcept { return invalidated_; }
