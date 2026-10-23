@@ -99,6 +99,42 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Bounded directory discovery
+
+`DirectoryListing` owns one cursor and runs on one worker. Its root factory uses
+the injected `BasicFileSystem` with explicit final-link rejection; a caller can
+also transfer an already opened relative directory cursor. Reads use that
+cursor and metadata-only child opens, without absolute path reconstruction,
+cwd changes, content reads or privilege changes. Temporary child handles close
+after each inspection. Returned rows contain lossless names and explicit
+`Observation<BasicMetadata>`, retaining entry-specific denial, disappearance,
+unknown and other errors instead of dropping the names.
+
+Per-batch row and native-name-byte limits have hard ceilings, with one pending
+component bounded separately. UTF-16 storage is counted in bytes for this resource
+budget, not filesystem length units. A consumed component that cannot fit the
+remaining batch budget is retained for the next batch. An individually excessive
+component produces terminal Error, never a truncated name or completed listing.
+The scanner does not retain all batches; consumers must separately bound their
+projection/index storage. Disk-backed indexes remain required for large views.
+
+Cancellation is cooperative between cursor-read, child-open and inspection.
+A consumed but uninspected name remains pending, and a cancellation arriving
+during inspection can return completed rows with Cancelled. Consumers must
+process returned rows for every state. Enumeration/resource failures are sticky
+Error; only actual cursor exhaustion is End. Exceptions after consumption poison
+the stream before rethrow, so later reads cannot pretend a lost batch completed.
+A bounded native read containing only skipped records yields More immediately,
+without a loop waiting indefinitely for a visible name.
+
+End is not a snapshot or proof of complete preservation metadata. These rows do
+not retain child objects and cannot establish held-child selection continuity
+or authorize mutation. Native calls can block; there is no instant-cancel claim.
+[Discovery evidence](evidence/ck-files-listing-20261023.json) records injected
+fault/cancellation/ownership tests and actual native streaming on all three hosts.
+Clock injection, scheduling, large-view indexing and UI publication remain
+separate unfinished work.
+
 ## Relative directory enumeration cursors
 
 `DirectoryCursor::open_directory_child` opens one lossless native component

@@ -1292,3 +1292,69 @@ remaining inventories/provider coordination, operation capabilities, complete
 filesystem/time fakes and larger listing backing remain required. This adds
 no recursive walker, confinement, provider no-hydration or mutation guarantee,
 and closes no package acceptance checkbox.
+
+
+## WP-01 milestone — bounded injected directory discovery (2026-10-23)
+
+Added worker-side streaming `DirectoryListing` using the injected filesystem /
+owned cursor boundary. It opens roots with final-link rejection and inspects
+children through the held directory with metadata-only access. Batches retain
+lossless names and explicit metadata observations, including entry failures.
+Temporary child handles close after each inspection. Results do not retain
+children, freeze namespace/content or confer selection/mutation authority.
+
+Rows/native-name storage have configured limits and hard ceilings; only one
+consumed pending component is retained across batches/cancellation. No name is
+truncated or converted. Oversize components fail the stream explicitly. A byte
+budget boundary retains the next name without skipping or duplicate output.
+Cancellation between each native stage preserves resume position; completed
+rows may accompany Cancelled. Enumeration errors and exceptions after consumption
+are terminal, never a false End. Bounded skip-only reads yield More without
+spinning. Callers still need bounded retained pages/indexes and UI publication.
+
+Ten deterministic cases use an injected filesystem/cursor/opened-entry script.
+They cover row/byte limits, original per-entry errors, cancellation after read /
+open/inspect, handle live counts, sticky enumeration failure, UTF-16 storage
+budgets, injected exceptions, bounded skips, invalid limits/paths, root errors
+and null adapter results. Three native cases per host cover streamed batches,
+final link/junction classification, held-root rename/replacement, 257-entry
+cancellation/resume and unchanged process cwd.
+
+All 29 Files CTest entries passed against the same 81-file source manifest:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 04:40:42.838–04:40:53.338 | 10.500 / 1.155 | 187 |
+| Lima Debian 13 arm64 / GCC 14 | 04:41:21.085–04:41:29.313 | 8.229 / 0.214 | 184 |
+| Windows x64 / MSVC 19.44, static CRT | 04:41:25.062–04:41:43.830 | 18.768 / 2.655 | 191 |
+
+Each build compiled the new core/fixture sources and relinked the library and
+both test executables. CMake configuration/generation took 7.2/0.2 s Mac,
+4.0/0.1 s Linux and 11.2/0.6 s Windows. This scope includes regeneration,
+unlike the preceding two-step directory-fixture increment; actual inputs,
+compile/link logs and source hashes were verified, not elapsed time alone.
+No build or test failure required a correction in this milestone.
+
+Sanitizer builds instrument all 20 core units, their platform adapter, both
+listing fixtures and test host (24 translation units). Mac ASan+UBSan built
+04:42:20.062–04:43:02.703 UTC in 42.642 seconds and passed all 13 new cases in
+0.401 seconds. Windows ASan built 04:42:21.426–04:42:59.379 UTC in 37.953 seconds
+and passed the same 13 cases in 0.411 seconds. Both use strict warnings and
+halt-on-error with no sanitizer diagnostics. This is a broader source/test scope
+than the preceding 22-unit directory-cursor checks (30.648/36.152 seconds),
+using direct compiler commands without a compiler-cache wrapper. It does not
+claim full Files-suite sanitizer coverage.
+
+Source/unit hashes, output paths and executable/log digests were preserved.
+Disposable sanitizer outputs were removed after successful tests and zero-owner
+checks. No files-listing-* fixture directories remain on any host; current normal
+builds remain. All Windows project writes stayed on V:. No Files GUI exists or
+was launched. UI-free boundary (68 sources), ckVision-only boundary (428 files),
+documentation (24 pages) and whitespace checks pass.
+
+[Durable evidence](evidence/ck-files-listing-20261023.json) records limits,
+source fingerprints, builds/tests, sanitizer scope, output paths and cleanup.
+WP-01 remains in progress: full filesystem/time fakes, clock/scheduling, retained
+large-view indexes, collision/path planning rules, remaining inventories/provider
+coordination and operation capabilities are still required. No package checkbox
+is closed by this milestone and no production mutation was added.
