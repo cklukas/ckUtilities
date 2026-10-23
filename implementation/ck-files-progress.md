@@ -1946,3 +1946,68 @@ and pane/link/collision items remain open: initial selection acquisition,
 operation-specific capability and collision/equivalence rules, remaining native
 inventories and worker/UI/large-view integration still need implementation.
 WP-01 acceptance remains open; WP-02 has not started.
+
+## 2026-10-24 — WP-01 destination batch inspection
+
+Added worker-owned `DestinationBatchJob` and its sealed immutable result. It
+maps a bounded batch of source components losslessly, groups exact mapped names
+before lookup, and inspects each unique destination through the held parent.
+Every source row remains identifiable; unrepresentable names retain their raw
+units and mapping failure and make no native lookup. Exact duplicates share one
+probe and group count. Length reports, Win32 conventions, native lookup and
+existing metadata retain independent failure/coverage states.
+
+Positive reported-object groups use held targets and full scoped native IDs,
+including scheme, volume, object and generation. Index buckets never replace
+`compare_identity`; equal bytes from foreign scopes cannot match. Object groups
+stay separate from exact name groups: hard links do not prove name equivalence.
+An absent match does not prove difference or collision freedom. Native case,
+normalization and other alias rules for distinct missing names remain unproven;
+no filesystem-label or case-advertisement shortcut was introduced.
+
+Advances have a 256-step bound and injected cooperative clock slices, including
+bucket comparisons. Cancellation retries only an incomplete current probe;
+completed probes survive yields. Row/component/native-byte limits are checked
+before further copying, with explicit reservations for probe/context names and
+checked UTF-16 byte accounting. Exceptions/clock/resource failures poison and
+release staging; no partial result escapes. Issued results retain native owners
+independently of job abandonment. This is a read-only inspection boundary,
+without source binding, operation permission, namespace freezing or a UI job.
+
+Twenty-one deterministic cases cover duplicate mapping, raw encodings,
+unrepresentable names, all failure states, hard-link reports, identity scopes,
+generations/schemes/zero IDs, cancellation, 300 names, adversarial identity
+buckets, budget boundaries, exceptions, clocks and retirement. Five native cases
+per host qualify hard links versus duplicates, missing case variants, replaced
+parent paths, dangling final links, and old target ownership after replacement.
+
+The same **109-file manifest** was verified on all hosts. All **41 Files suites**
+passed: **327 macOS / 325 Linux / 331 Windows cases**. Final build/test seconds
+were **3.136/0.706**, **6.711/0.115**, **19.482/3.169**. Mac's final two-step
+test update followed the current core's initial four-step build (5.100 s) and
+both new fixtures' four-step update (6.531 s), each including CMake regeneration.
+Remote builds compiled all three new units, archived and linked both binaries,
+plus regeneration. Windows configuration/generation took 8.7/0.7 s; inspected
+Ninja timings show core, native fixture and domain fixture compiles of
+3.326/4.950/9.018 s, explaining its longer build. Current source hashes, compiled
+units, output timestamps and all 26 new case markers establish freshness.
+
+Focused sanitizers compiled all 26 core units, platform, simulator, domain/native
+batch fixtures and test host (31 units), without cached objects. **52 cases
+passed on each host**: Mac ASan+UBSan **48.940/0.289 s**, Linux ASan+UBSan
+**116.614/0.090**, Windows ASan **67.346/0.233**. This fixture set establishes a
+new baseline; prior different-fixture 30-unit builds took
+49.845/120.513/55.657 s. Strict warnings remained errors and successful sanitizer
+runs reported no diagnostics. Validation intervals were UTC on 2026-10-23;
+the milestone uses the current local date, 2026-10-24.
+
+Diagnostics were hashed, checked for live owners and removed; full fixture-root
+audits were empty. Current normal builds remain, Windows writes stayed on V:,
+Mac temporary work stayed on S8T, and no GUI was launched.
+[Destination batch evidence](evidence/ck-files-destination-batch-20261024.json)
+records hashes, commands, times, case markers, Ninja timings and cleanup.
+UI boundaries (80 domain sources), ckVision-only (455 active files), ckdocs
+(24 pages) and whitespace checks pass. WP-01's two remaining checklist items
+and acceptance stay open: source self/descendant checks, native equivalence,
+operation capabilities, remaining inventories and pane/worker/large-view
+integration still need implementation. WP-02 has not started.

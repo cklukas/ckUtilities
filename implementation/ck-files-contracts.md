@@ -720,6 +720,77 @@ becomes permanent deletion and that the OS facility can restore its result.
 The permanent-delete command requires independent explicit consent and a
 qualified non-following retirement protocol. A general Undo action is absent.
 
+## Destination batch inspection
+
+`DestinationBatchJob` maps an owned vector of source components to one explicit
+destination encoding, then inspects that batch through one retained directory.
+It has one owning worker; abandonment waits until an advance has returned.
+Mapping uses the lossless/strict `map_native_name` contract. There is no display
+conversion, normalization, case folding, truncation or automatic renaming.
+Unrepresentable names keep their original native units and per-row mapping
+failure and never reach lookup. The batch is read-only and supplies neither
+source-object binding nor mutation authority.
+
+All names are mapped before any native probe. Exact equal mapped components
+share their first row as `exact_name_leader`, an exact group count and one
+`DirectoryEntryProbe`; every original source row remains present. Getters resolve
+duplicates to their leader's probe/failure. Win32 naming diagnostics, reported
+component length, native lookup and existing metadata retain independent states.
+Missing needs the lookup adapter's native witness; a denial or unreadable object
+does not become absence. A failed individual probe remains row evidence rather
+than discarding other successfully inspected names.
+
+After lookup, the batch indexes available scoped object ID reports while all
+opened targets remain held. The index key contains scheme, volume, object and
+generation; scope is deliberately not sorted or hashed. Every positive match
+still passes `compare_identity`, including scope validity/nonzero-ID rules.
+Different scopes with identical index bytes cannot become a match. Bucket
+comparisons are individual cooperative steps, including adversarial collisions.
+
+`reported_object_leader` is set only for positive matches between distinct exact
+name groups (and their representative). It describes the same **reported scoped
+object ID**, not equivalent directory-entry names. Hard links and namespace
+aliases can both report one object. An absent match is not proof of different
+objects, different names under the filesystem's equivalence rules, or collision
+freedom. Distinct missing names remain unqualified for native case, normalization,
+short-name and other alias collisions, regardless of filesystem advertisements.
+The result does not resolve those remaining native-equivalence rules.
+
+Only a finished job can seal `CompletedDestinationBatch`. It retains the actual
+directory even for an empty/all-missing batch and owns each found target through
+its probe. An earlier result stays immutable when a later batch observes name
+replacement. The original parent pathname is never reopened. Neither pinned
+targets nor the parent freeze directory membership, metadata or names; all
+evidence requires operation-time revalidation. Final result retirement belongs
+on a worker. This is not a UI publication job or frozen operation plan.
+
+The default batch bounds are 256 rows, 4 MiB native name storage and 64 KiB per
+component, with hard bounds of 4096 rows, 16 MiB aggregate and 1 MiB per component.
+Source and mapped strings consume the aggregate budget; each unique mapped name
+also reserves an index key and both probe/context name copies once. Reservations
+are conservative when a probe has no lookup context. UTF-16 counts bytes with
+checked arithmetic. Resource failure is terminal and exposes no partial result;
+an excessive input row count fails before queries. The caller-owned input vector
+already exists before ownership transfer; mapping checks precede further copies.
+These bounds are not a process-memory quota, native handle-availability promise
+or disk-backed index for large operation inventories.
+
+Advances perform at most 256 map/probe/group steps with injected cooperative
+clock slices (20 ms default). A completed probe commits before time/cancellation
+yield and is never repeated merely for yielding. The nested entry probe discards
+an incomplete probe on cancellation; that name can be retried on resume without
+repeating earlier completed names. Already-stopped calls make no queries.
+Abandonment releases private ownership; issued results survive independently.
+Clock failure, aggregate limits and exceptions poison staging, release native
+owners and prevent retries. Exception error text is constructed without
+allocation. A native probe can make several syscalls; native calls, allocations,
+comparisons and destruction can overrun a slice and remain worker work.
+
+[Destination batch evidence](evidence/ck-files-destination-batch-20261024.json)
+covers deterministic and native validation. Self/descendant checks, operation
+capabilities, native equivalence for distinct planned names, conflict decisions,
+consent and publication protocols remain required before mutations.
+
 ## Held-object inventory collection
 
 `ObjectInventoryJob` collects one already-open `OpenedEntry` on its owning worker.
