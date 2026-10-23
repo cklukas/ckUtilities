@@ -1107,3 +1107,62 @@ requirements. Remaining native inventories/provider coordination, operation
 capabilities, full filesystem/time fakes and page-backed larger listings are
 also unfinished. This milestone closes no package acceptance checkbox and adds
 no file mutation command.
+
+
+## WP-01 milestone — native child lookup (2026-10-23)
+
+Added explicit, read-only lookup through held native directories. Found owns
+the non-followed final object; Missing retains a narrowly qualified native
+absence error. Both retain the requested name, comparison request and parent
+identity observation. The result does not retain the parent handle or authorize
+creation. Default adapters remain Unsupported; generic Gone is not absence.
+Windows comparison requests use public OBJ_CASE_INSENSITIVE explicitly; POSIX
+does not simulate it. NativeDefault follows actual native semantics, without
+claiming exact spelling. No mutation command was introduced.
+
+Eight new domain cases qualify ownership, move reset, invalid inputs, missing
+evidence and native absence error classification. Seven new native cases per
+host cover query-time absence versus later creation, held-parent path replacement,
+child lifetime after parent destruction/rename/unlink, dangling final links or
+junctions, distinct hard-link names, independent case/normalization queries and
+explicit policy/encoding/stream boundaries.
+
+All 25 Files CTest entries passed against the same 73-file source manifest:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 04:09:17.377–04:09:20.316 | 2.939 / 1.216 | 162 |
+| Lima Debian 13 arm64 / GCC 14 | 04:09:58.656–04:10:01.886 | 3.229 / 0.147 | 159 |
+| Windows x64 / MSVC 19.44, static CRT | 04:10:02.479–04:10:07.347 | 4.868 / 1.627 | 166 |
+
+The final increments compiled the revised native fixture and linked its test
+executable. The initial Mac implementation build took 14.118 seconds for 27
+steps including regeneration. Actual input hashes and compile/link logs were
+checked; the short final increments reflect their narrower inputs. Initial
+Linux fixture compilation caught misleading indentation under -Werror; the
+statements were split without suppressing warnings, then all hosts passed the
+matching final source snapshot. Test commands followed successful builds.
+
+Actual alternate-name observations differ: APFS NativeDefault missed the ASCII
+case variant and found the normalization variant; ext4 NativeDefault missed
+both; ReFS WindowsIgnoreCase found the case variant and missed the normalization
+variant. Independent native path queries agreed. These outcomes are local
+observations, not a filesystem-wide capability claim or an algorithm for
+comparing two uncreated candidate names.
+
+Focused sanitizers compiled nine translation units and passed eight domain
+cases: Mac ASan+UBSan built in 11.968 seconds (04:10:15.320–04:10:27.288 UTC),
+tests 0.238 seconds; Windows ASan built in 10.266 seconds
+(04:11:35.693–04:11:45.959 UTC), tests 0.129 seconds. Both used strict warnings
+and halt-on-error with no sanitizer diagnostics. This scope does not instrument
+the native adapters. Executable hashes and zero active owners were recorded
+before removing disposable sanitizer outputs. No private files-lookup-* fixture
+directories remain on any host; current normal builds are retained. All Windows
+project outputs remained on V:. No Files GUI exists or was launched.
+
+[Durable lookup evidence](evidence/ck-files-lookup-20261023.json) includes source
+hashes, build/test records, log digests, comparison observations and cleanup
+records. WP-01 remains in progress: full collision/alias semantics, path limits,
+remaining inventories/provider coordination, operation capabilities, complete
+filesystem/time fakes and larger listing backing are unfinished. No package
+acceptance checkbox is closed by this milestone.

@@ -612,6 +612,23 @@ public:
         }
         return Observation<LocationInfo>::available(std::move(result));
     }
+    Observation<ChildLookup> lookup_child(const NativeName& name, ChildLookupMode mode) const override {
+        using Result=Observation<ChildLookup>;
+        if(!name.is_valid()||!name.posix_bytes()||!valid_child_lookup_mode(mode))
+            return Result::unavailable(ObservationState::Failed,adapter_error(AdapterError::InvalidIdentifier,"lookup_child.input"));
+        if(mode!=ChildLookupMode::NativeDefault)
+            return Result::unavailable(ObservationState::Unsupported,adapter_error(AdapterError::UnsupportedQuery,"lookup_child.mode"));
+        auto opened=open_child(name,EntryAccess::MetadataOnly);
+        if(opened.value()) {
+            auto owned=std::move(opened).take_value();
+            if(!owned)return Result::unavailable(ObservationState::Failed,adapter_error(AdapterError::InvalidNativeResult,"lookup_child.null_entry"));
+            return Result::available(ChildLookup::found({name,mode,identity()},std::move(owned)));
+        }
+        const auto& e=*opened.unavailable_detail();
+        if(detail::definite_child_absence(e,detail::ChildLookupFamily::PosixAt))
+            return Result::available(ChildLookup::missing({name,mode,identity()},e.error));
+        return Result::unavailable(e.state,e.error);
+    }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             adapter_error(AdapterError::InvalidAccess, "open_child.access"));

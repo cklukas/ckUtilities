@@ -99,6 +99,38 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Native child lookup observations
+
+`DirectoryCursor::lookup_child` requires a native component and an explicit
+comparison request. `NativeDefault` delegates to native system/filesystem
+semantics; it does not guarantee exact stored spelling. `WindowsIgnoreCase`
+requests public `OBJ_CASE_INSENSITIVE` through counted-relative `NtCreateFile`.
+POSIX reports Unsupported for that request without Unicode folding or an
+enumeration fallback. Invalid components, encodings and enum tags fail explicitly.
+
+A Found result owns the final opened object, without following its final link
+or reparse target. It retains the requested native name, comparison request and
+parent identity observation. Missing retains the original native error and is
+produced only for Gone plus POSIX ENOENT or NT STATUS_OBJECT_NAME_NOT_FOUND /
+STATUS_NO_SUCH_FILE from the qualified relative query. Path-not-found, denial,
+delete-pending and generic Gone do not establish a missing child. The default
+adapter reports Unsupported rather than deriving absence from legacy queries.
+Moves leave the source Unknown without stale context or ownership.
+
+The parent identity in context does not pin the parent directory. Callers must
+retain and revalidate their parent authority. Neither result reserves a name,
+grants write permission, nor proves a future create succeeds. Future execution
+must use its separately qualified exclusive publication protocol. Found may
+outlive its parent cursor, rename and unlink. Equal IDs from distinct hard-link
+names do not prove namespace alias equivalence. The result records requested
+spelling, not canonical stored spelling. Collision equivalence for uncreated
+names, short aliases and complete path restrictions remain WP-01 work.
+
+[Native lookup evidence](evidence/ck-files-lookup-20261023.json) records real
+held-parent replacement, dangling links/junctions, owning-child lifetime and
+case/normalization observations on APFS, ext4 and ReFS. These observations are
+specific to the tested hosts and directories.
+
 ## Held-child refresh continuity
 
 `HeldChild` owns one opened child and its held parent directory, and records the

@@ -589,7 +589,29 @@ public:
         }
         return Observation<LocationInfo>::available(std::move(result));
     }
+    Observation<ChildLookup> lookup_child(const NativeName& name, ChildLookupMode mode) const override {
+        using Result=Observation<ChildLookup>;
+        if(!valid_child_lookup_mode(mode))return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter,static_cast<std::int64_t>(AdapterError::InvalidIdentifier),"lookup_child.mode"});
+        auto opened=open_component(name,EntryAccess::MetadataOnly,mode);
+        if(opened.value()) {
+            auto owned=std::move(opened).take_value();
+            if(!owned)return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter,static_cast<std::int64_t>(AdapterError::InvalidNativeResult),"lookup_child.null_entry"});
+            return Result::available(ChildLookup::found({name,mode,identity()},std::move(owned)));
+        }
+        const auto& e=*opened.unavailable_detail();
+        // STATUS_OBJECT_NAME_NOT_FOUND / STATUS_NO_SUCH_FILE. Never turn a
+        // path failure, delete-pending state or generic Gone into absence.
+        if(detail::definite_child_absence(e,detail::ChildLookupFamily::WindowsNt))
+            return Result::available(ChildLookup::missing({name,mode,identity()},e.error));
+        return Result::unavailable(e.state,e.error);
+    }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
+        return open_component(name,access,ChildLookupMode::NativeDefault);
+    }
+private:
+    Observation<std::unique_ptr<OpenedEntry>> open_component(const NativeName& name, EntryAccess access, ChildLookupMode mode) const {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
@@ -611,7 +633,10 @@ public:
         attributes.Length = sizeof(attributes);
         attributes.RootDirectory = handle_.get();
         attributes.ObjectName = &native_name;
-        // Attributes=0 requests exact native spelling, not case-insensitive lookup.
+        // Zero delegates comparison to native defaults. This is not a
+        // guarantee of byte-exact filesystem spelling or normalization.
+        static_assert(OBJ_CASE_INSENSITIVE==0x40);
+        attributes.Attributes=mode==ChildLookupMode::WindowsIgnoreCase?OBJ_CASE_INSENSITIVE:0;
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
         const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_attributes(access) ? FILE_READ_EA : 0) |
