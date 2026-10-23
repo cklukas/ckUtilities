@@ -1166,3 +1166,56 @@ records. WP-01 remains in progress: full collision/alias semantics, path limits,
 remaining inventories/provider coordination, operation capabilities, complete
 filesystem/time fakes and larger listing backing are unfinished. No package
 acceptance checkbox is closed by this milestone.
+
+
+## WP-01 milestone — reported component-length assessment (2026-10-23)
+
+Added unit-explicit comparison of a native component against its held-directory
+location's reported byte/UTF-16 component bound. Missing/denied query states
+retain their errors, zero bounds fail, and no conversion, normalization,
+truncation or allocation by native bound occurs. Parent identity is context,
+not a retained handle. Within-bound never establishes that creation is safe or
+possible; full path, character-count, alias and operation rules remain separate.
+
+Four domain cases cover exact boundaries, raw malformed Unicode, surrogate
+pairs versus units, UINT64_MAX without native-sized allocation, unknown/denied
+query propagation and invalid family/encoding/zero-bound rejection. A new native
+case per host exclusively creates a private ASCII name at the reported maximum,
+finds it through the held directory and verifies native rejection one unit over.
+All actual locations reported 255. macOS/ext4 return ENAMETOOLONG (63/36);
+ReFS returns STATUS_OBJECT_NAME_INVALID (0xC0000033), preserved unchanged.
+An independent extended-path Win32 query also rejects the overlong component.
+These are qualification observations for these locations, not universal rules.
+
+All 26 Files CTest entries passed against a common 76-file source manifest:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 04:24:33.606–04:24:37.586 | 3.978 / 0.702 | 167 |
+| Lima Debian 13 arm64 / GCC 14 | 04:24:30.858–04:24:35.807 | 4.949 / 0.330 | 164 |
+| Windows x64 / MSVC 19.44, static CRT | 04:24:34.793–04:24:40.311 | 5.518 / 1.679 | 171 |
+
+The final two-step increments compiled the revised native fixture and linked
+its executable; the preceding Mac six-step implementation build took 4.288 s.
+Actual compile/link logs and final hashes were checked, with no time-only
+freshness inference. The initial strict Mac compile caught an unnecessary loop
+copy; changed it to a const reference without suppressing warnings. The first
+Windows fixture failed because its full ordinary Win32 path exceeded MAX_PATH;
+explicit extended-path fixture creation separates that convention from native
+component length. The next run exposed the incorrect expected status assumption;
+final tests check documented native rejection alternatives and an independent
+Win32 query. No production error mapping was weakened.
+
+After confirming zero owned test processes, removed the one empty Windows
+scratch directory left by the aborted fixture. No files-name-limits-* directories
+remain on any host. Current normal builds remain; no disposable sanitizer build
+was added for this bounded pure comparison. No GUI was launched, and Windows
+outputs remained on V:. UI-free boundary (66 sources), ckVision-only boundary
+(423 files), documentation (24 pages) and whitespace checks passed.
+
+[Durable evidence](evidence/ck-files-limits-20261023.json) records inputs,
+builds/tests, native boundary results, diagnostic corrections and fixture cleanup.
+WP-01 remains open, including full path/component enforcement in operation
+planning, collision equivalence, remaining inventories/provider coordination,
+operation capabilities, complete filesystem/time fakes and larger listing backing.
+No package acceptance checkbox is closed by this milestone.

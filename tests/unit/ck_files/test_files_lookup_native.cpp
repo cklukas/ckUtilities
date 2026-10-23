@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "name_mapping.hpp"
+#include "name_limits.hpp"
 #include "cvision/testing/cktest.hpp"
 #include "scratch_directory.hpp"
 #include <iostream>
@@ -127,4 +128,56 @@ CK_TEST(native_lookup_checks_explicit_policy_encoding_and_stream_boundaries){
     CK_CHECK(directory->lookup_child(name(u"caseprobe"),ChildLookupMode::WindowsIgnoreCase).state()==ObservationState::Unsupported);
     CK_CHECK(directory->lookup_child(*NativeName::from_windows(u"CaseProbe"),ChildLookupMode::NativeDefault).state()==ObservationState::Failed);
 #endif
+}
+
+CK_TEST(native_component_length_boundary_matches_reported_ascii_limit_and_native_lookup_error) {
+    const ck::testing::ScratchDirectory scratch("files-name-limits"); NativeFileSystem filesystem;
+    auto directory = parent(filesystem, scratch.path()); const auto info = required(directory->inspect_location());
+#if defined(_WIN32)
+    const auto maximum = required(info.windows_component_utf16_max);
+#else
+    const auto maximum = required(info.posix_name_max);
+#endif
+    // Fixed fixture budget, never allocate an arbitrary native reported bound.
+    if (maximum == 0 || maximum > 4096) throw std::runtime_error("native limit outside qualified fixture budget");
+    const auto exact = name(std::u16string(static_cast<std::size_t>(maximum), u'x'));
+    const auto over = name(std::u16string(static_cast<std::size_t>(maximum + 1), u'x'));
+    CK_CHECK(!required(assess_component_length(exact, info)).exceeds_reported_maximum());
+    CK_CHECK(required(assess_component_length(over, info)).exceeds_reported_maximum());
+#if defined(_WIN32)
+    // Test the component bound independently of the Win32 full-path convention.
+    auto full_path = scratch.path() / path_component(exact); full_path.make_preferred();
+    const auto raw = full_path.native();
+    const auto literal = raw.starts_with(L"\\\\?\\") ? raw :
+        raw.starts_with(L"\\\\") ? std::wstring(L"\\\\?\\UNC\\") + raw.substr(2) : std::wstring(L"\\\\?\\") + raw;
+    create(fs::path(literal));
+#else
+    create(scratch.path() / path_component(exact));
+#endif
+    CK_CHECK(query(*directory, exact).state() == ChildLookupState::Found);
+    const auto rejected = directory->lookup_child(over, ChildLookupMode::NativeDefault);
+    CK_CHECK(!rejected.value() && rejected.state() != ObservationState::Gone);
+    if (!rejected.unavailable_detail()) throw std::runtime_error("overlong query unexpectedly succeeded");
+#if defined(_WIN32)
+    CK_CHECK(rejected.unavailable_detail()->error.domain == ErrorDomain::NtStatus);
+    const auto status = rejected.unavailable_detail()->error.code;
+    // ReFS reports STATUS_OBJECT_NAME_INVALID; other native filesystems may
+    // report STATUS_NAME_TOO_LONG. Neither is evidence of an available name.
+    CK_CHECK(status == 0xc0000033LL || status == 0xc0000106LL);
+    const auto over_literal = literal + L"x";
+    const auto independent = CreateFileW(over_literal.c_str(), FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    const auto independent_error = GetLastError();
+    if (independent != INVALID_HANDLE_VALUE) CloseHandle(independent);
+    CK_CHECK(independent == INVALID_HANDLE_VALUE);
+    CK_CHECK(independent_error == ERROR_INVALID_NAME || independent_error == ERROR_FILENAME_EXCED_RANGE);
+#else
+    CK_CHECK(rejected.unavailable_detail()->error.domain == ErrorDomain::Posix);
+    CK_CHECK(rejected.unavailable_detail()->error.code == ENAMETOOLONG);
+#endif
+#if defined(_WIN32)
+    if (!DeleteFileW(literal.c_str())) throw std::runtime_error("cannot remove private long-component fixture");
+#endif
+    std::cout << "native ASCII component limit " << maximum << " overlong error " << rejected.unavailable_detail()->error.code << std::endl;
 }

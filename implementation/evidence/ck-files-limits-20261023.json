@@ -1,0 +1,328 @@
+{
+  "milestone": "WP-01 reported native component-length assessment (partial WP-01)",
+  "date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release C++20 strict warnings; installed SDK; Windows static CRT",
+  "manifest_sha256": "8a92b0748b6cff6481ceca5111947678b4b02900764e2d0bc1c314f7055a629a",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "3e83f9bcad8cc0b38db68b57a7aee1d28fd16bf1f3e19cde0103806b446b92c9",
+    "src/native-core/files/attributes.cpp": "0b86397e306f56fd4b829b09557f876da2a7454b30b6246584dd5a135530f86f",
+    "src/native-core/files/attributes.hpp": "9aaa8d7f8a35d7000e5ede1758be4c5b58f0ffd63132c5c234f47435c2f96c29",
+    "src/native-core/files/child_lookup.cpp": "e1dc41209a1e80432d893f73308c0bf4c9a44adfd967c7f33937c314f2d96ac4",
+    "src/native-core/files/child_lookup.hpp": "45d5cb758c08f7adfda72c088f41d4399e368466b1bafba7c65b08a79300562b",
+    "src/native-core/files/data_channels.cpp": "dbac1fe9821944d1440676f263836546e5cccd88cb3ffe94c4f3448b3fd06d63",
+    "src/native-core/files/data_channels.hpp": "797752902dc1943acf49d4ff4d44d18fa5a45c3384c533acce582c36a6622c1a",
+    "src/native-core/files/directory_cursor.cpp": "8bbd90a7e1aae779bf87b5743bcc1a4e560918a201043112ce364486b847e9e7",
+    "src/native-core/files/directory_cursor.hpp": "f585d2a832f7dd62492c91130740dad0488a7dd65255690bce0dd144a5b881d0",
+    "src/native-core/files/file_metadata.cpp": "fd99e6d92ad2108d05246199af6d6bb6f9187d40d7b6fe4837bbbe4ce2b0922b",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/held_child.cpp": "da3ecfabd4924fd5eafb5193d618b049f840aee47e897ec0731986bad82175b0",
+    "src/native-core/files/held_child.hpp": "2e7cbd7025fb5118f818f9c3c7b225812a87e93ae001112975d6f1c43d089d2f",
+    "src/native-core/files/link_metadata.cpp": "21cebea30ae0a5b6ea263deb241131bf82ee967b1bc0ec2aacab2d1c729ca298",
+    "src/native-core/files/link_metadata.hpp": "a175d440938e665f0fb59aba7f9a5c65653728e9bbb7ad22eed4a9520a6f6ba3",
+    "src/native-core/files/location_info.cpp": "2fcf309e99a675dc064767f3f7c6acd3b86411d693dd8f4ed75ee480d088ae7f",
+    "src/native-core/files/location_info.hpp": "95ef42e22af01b4def84ee6811802e52f199daed891e821535881c6b1c4c90fd",
+    "src/native-core/files/name_limits.cpp": "070879a9cd0fbeab85518a10004261b8e12a3fa41e25ec01fa93aa77fdf119a7",
+    "src/native-core/files/name_limits.hpp": "30e840e59d037d0749e03d88ad99fe80a64d05cd306f10b832d91ffc45c9994f",
+    "src/native-core/files/name_mapping.cpp": "54ca9ddb929088577ff38bed4ce4232c039f25bde19499143180b0cb5140bff9",
+    "src/native-core/files/name_mapping.hpp": "c1503d5262931c414aef4038c7388d3eaf0b524baf610b05bcd3938838f62eba",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "e23c9293236e6d76d75793a2445dc76606fe05c85bba01539b86333383e76932",
+    "src/native-core/files/native_name.hpp": "689b3da2fb98a8fa8aff6d1d3c075ecba4b103bc5910d6c5a2f94298a3031b9f",
+    "src/native-core/files/observation.hpp": "c95a706c369af6a3d61f3bda8e74477a39732f004dde5e043c34ea84b8c0ea5a",
+    "src/native-core/files/opened_entry.cpp": "07610d4eb55d2b55b56d76164243bf2edc6242f1a0d8db844666203e57ed0ec8",
+    "src/native-core/files/opened_entry.hpp": "a563b861a61edf634bec14458b8b955c8654ddfb06c2e63fcacb6485ba00aa3c",
+    "src/native-core/files/pane_model.cpp": "658c94bea44688d3634f4034ba41cb0ad9cccc10e382b7fe9c25bc991fdcbbd4",
+    "src/native-core/files/pane_model.hpp": "e254fa4d9d4d5480fe0a3d6e73b1294c79e70bd47f534d034db386da54c5ccad",
+    "src/native-core/files/platform/metadata_posix.cpp": "a7f38b5805866d5ce94ad2f127ca06dcea9620aa58dd56603d598b1f8e864b24",
+    "src/native-core/files/platform/metadata_windows.cpp": "fb558044089a875810cda740b417a85d1961ec624f57f8214e7a9e53225e8070",
+    "src/native-core/files/security.cpp": "556f2f4abec8960a4ac98fbae09d855eae28af0144cb530f90323024634f7a67",
+    "src/native-core/files/security.hpp": "f74cafcc71ce96359d3d601021617123ecf8e46ee9f8295eb15a386d73f73433",
+    "src/native-core/files/storage_info.cpp": "a0abe4b8ad34013ab5332a8059f10d0fa914e134bf9da56ca41e7e9c3ec19a0b",
+    "src/native-core/files/storage_info.hpp": "1bf591b1649cf9ce08bf23a07f9925b0bfa695b0d7f885ce9dd246be0c22e1e7",
+    "src/native-core/files/unicode_scalar.cpp": "d6e7adb25eddb4fca3678f02d5b911e8a2aeab7e8eab2f3cbe068747ff937cfa",
+    "src/native-core/files/unicode_scalar.hpp": "fd99c8044180edd11dc7de9107da873149dd03647cc9da7e6eec9f7210e8b204",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "src/native-core/files/windows_name.cpp": "499239013ca0a5c699fc3ceeffdffa22bb6917389942ea02f2ad78b3772bbf6b",
+    "src/native-core/files/windows_name.hpp": "a820aaddfd888e6b87226c165e4b5af83b9abe8a02b0b4658b3d0cea0efc5921",
+    "src/native-core/files/windows_stream_records.cpp": "f3341023fbbdabb0deabab5a517e61ca0571539bbba3a7c414c38e0debbc1b87",
+    "src/native-core/files/windows_stream_records.hpp": "a0a35cb5b3ed94943297cbb0becdcc61e8b4191f3e778bf06df9516adb1e79cf",
+    "tests/unit/ck_files/CMakeLists.txt": "03fa7756c3c60ed0d3cd328dc8772a1c49967fb95303e55ad06d97485fb3934d",
+    "tests/unit/ck_files/test_files_attributes.cpp": "29cb8f7b472e06992e87e08e6de2dc0d5034dfb30810a7bd863896a5488ee8b5",
+    "tests/unit/ck_files/test_files_attributes_native.cpp": "f4572d4b9b6654b4ee8cd82de4d536fb92cb741855e4a468e4a001d3b85433f9",
+    "tests/unit/ck_files/test_files_channels.cpp": "bc930b8a6197996737f252ebf2d80dcee5db8e5883b654fdda01449547a63a43",
+    "tests/unit/ck_files/test_files_channels_native.cpp": "1a83436d27b3f6c18497ab93dfc34a6b9fe48bc2c70545df3b62f07ed608fefc",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_continuity.cpp": "f7c01334d08b5bda1974591df3fdee0e025e8e5ddaef7714f8c4f2f6c26562d9",
+    "tests/unit/ck_files/test_files_continuity_native.cpp": "3d9f0e45c215169a7aef750e42f9517e87be7d426c1535e5ac3e2ce1345ed463",
+    "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_links.cpp": "f0840756215662214400211492e6414b881aed3575ad6b110eada9e4b15a1dbc",
+    "tests/unit/ck_files/test_files_links_native.cpp": "20909416fa19858b20c036106462a1d6aa5fec9830e2ccf89da31a07002f48bd",
+    "tests/unit/ck_files/test_files_location.cpp": "9e4e27d480e97bd8dbfb0214c8be049be045e493e8b5f6a3ce9165a3c90819dc",
+    "tests/unit/ck_files/test_files_location_native.cpp": "9b28ca760fa35aeeb4fe18eca8d979609ac361b89ed10135276e77c1087c515d",
+    "tests/unit/ck_files/test_files_lookup.cpp": "cd78d77e2bf0fa199bdd3d358278b13a71c4a5e5a0ff5aa592a02ab73e8951db",
+    "tests/unit/ck_files/test_files_lookup_native.cpp": "37cd704e638b46bd619fc95286b54cc505f4bf20998392e52488c3e3fcb8bc86",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_name_limits.cpp": "98f0359315262be89265dd6b1bc6da4aa1c8a25f61c2660a1a77fa5db4f78a3e",
+    "tests/unit/ck_files/test_files_name_mapping.cpp": "764383d75f8b084dff4c4cbe328217cdb05a487984e6d97ce8775867ff766b3a",
+    "tests/unit/ck_files/test_files_name_mapping_native.cpp": "0efa60920c867adceeb8587803cf0a1b97c99c2d8618086f30372400725bbf6e",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/unit/ck_files/test_files_pane.cpp": "439206d2e523c6e5c8efb14f7ce420b67544cddc7f24d1c9eb487ea076f56860",
+    "tests/unit/ck_files/test_files_security.cpp": "d86efdf58709f608d18958ddf51a6eb3504d319c54c9da6bb39fd30cf849ffbe",
+    "tests/unit/ck_files/test_files_security_native.cpp": "8e34b1bb438230c06091e334b7c5a911f4ac4a01a06e69dad5521253e4c322b9",
+    "tests/unit/ck_files/test_files_storage.cpp": "b515d60b945ddc9e2793e9212e1dfdf1ea6f45d14805bfe116b24d8145abc8b4",
+    "tests/unit/ck_files/test_files_storage_native.cpp": "9662c75d036b80d4a44e46915ac8c2f3f446de8abf17b1ccf34ee4902278d1d5",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "initial_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "74c5f2c1facb7967288e325578fcf7f9017794b5dc6bdb43e4e471bb197ca375",
+          "files": 540,
+          "git_head": "3c76667d9acf2ef0a9fa2225f474e3aacd16e448"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-limits-mac-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:21:56.468739+00:00",
+      "end": "2026-10-23T04:22:09.461313+00:00",
+      "elapsed_seconds": 12.993,
+      "exit_code": 1
+    },
+    "implementation_build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "7a60a99d5bf83728108df1bfd3a33ec4f7c6efd92cf8746a1e2eddaa93550723",
+          "files": 540,
+          "git_head": "3c76667d9acf2ef0a9fa2225f474e3aacd16e448"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-limits-mac-final-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:23:51.149212+00:00",
+      "end": "2026-10-23T04:23:55.438647+00:00",
+      "elapsed_seconds": 4.288,
+      "exit_code": 0
+    },
+    "build": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "5405976e5e170114ebf98b44b9b71865f4e3b5cb09e426069f66ef0117c63b5a",
+          "files": 540,
+          "git_head": "3c76667d9acf2ef0a9fa2225f474e3aacd16e448"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-limits-mac-qualified2-build",
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:24:33.606910+00:00",
+      "end": "2026-10-23T04:24:37.586208+00:00",
+      "elapsed_seconds": 3.978,
+      "exit_code": 0
+    },
+    "test": {
+      "inputs": [
+        {
+          "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+          "tree_sha256": "5405976e5e170114ebf98b44b9b71865f4e3b5cb09e426069f66ef0117c63b5a",
+          "files": 540,
+          "git_head": "3c76667d9acf2ef0a9fa2225f474e3aacd16e448"
+        },
+        {
+          "source": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk-source",
+          "tree_sha256": "35a8e3dbdbe63c96d1dfffe459d3c15ea21c08e87d53cf98252e3f9a2cc5424b",
+          "files": 5124,
+          "git_head": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+        }
+      ],
+      "name": "wp01-limits-mac-qualified2-test",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "cwd": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/tmp",
+      "start": "2026-10-23T04:24:43.882379+00:00",
+      "end": "2026-10-23T04:24:44.584561+00:00",
+      "elapsed_seconds": 0.702,
+      "exit_code": 0
+    },
+    "results": {
+      "ctest_entries": 26,
+      "cases": 167,
+      "last_test_log_sha256": "b623c28043e6df2d34b9f12ac86d5bcf05fa29902e329a7c4af552f3470d52ae",
+      "boundary_observation": [
+        "native ASCII component limit 255 overlong error 63"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "remaining": []
+    }
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T04:24:30.858114+00:00",
+        "end": "2026-10-23T04:24:35.807229+00:00",
+        "elapsed_seconds": 4.949,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T04:24:35.807648+00:00",
+        "end": "2026-10-23T04:24:36.137160+00:00",
+        "elapsed_seconds": 0.33,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "results": {
+      "ctest_entries": 26,
+      "cases": 164,
+      "last_test_log_sha256": "6008c3bf25e7a2343a9ac0b56de2aec5ee35e92a449daaae67a6992ee0135dc7",
+      "boundary_observation": [
+        "native ASCII component limit 255 overlong error 36"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build/test-scratch",
+      "remaining": []
+    }
+  },
+  "windows": {
+    "start": "2026-10-23T04:24:34.7935576Z",
+    "buildEnd": "2026-10-23T04:24:40.3116749Z",
+    "end": "2026-10-23T04:24:41.9911146Z",
+    "buildSeconds": 5.5181173,
+    "testSeconds": 1.6794396999999999,
+    "output": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe",
+    "results": {
+      "ctest_entries": 26,
+      "cases": 171,
+      "last_test_log_sha256": "87646240264c1ba50b09277314aa4c51e9bc8ba1ae2cd34be5772de48e9ac0be",
+      "boundary_observation": [
+        "native ASCII component limit 255 overlong error 3221225523"
+      ]
+    },
+    "fixture_audit": {
+      "scope": "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\test-scratch",
+      "activeOwners": 0,
+      "removedEmptyFailedFixtures": [
+        "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build\\test-scratch\\files-name-limits-4194534444-3387868240"
+      ],
+      "remaining": []
+    }
+  },
+  "diagnostics": {
+    "macos": "Initial strict build caught a range-loop string copy; changed fixture loop to const reference without suppressing warnings.",
+    "windows": "Initial fixture exceeded ordinary Win32 full-path convention; qualified component creation uses explicit extended path. Next run established ReFS STATUS_OBJECT_NAME_INVALID for the overlong component, not assumed STATUS_NAME_TOO_LONG. Final test checks both documented native rejection alternatives and independent extended-path Win32 rejection. Production adapter preserves native error unchanged.",
+    "logs": {
+      "wp01-limits-mac-build.log": "25c94ac4d5fe2b2fe6bd054586fe2bcefe56369bb07cd406be513f71ea579656",
+      "wp01-limits-windows-initial.log": "53c2d3cd684f2fc433166c26d7b6ec524db30fc5302db19e13452457323c244d",
+      "wp01-limits-windows-status-diagnostic.log": "9ec9ec2f1d6cc7afa709f066793c9ab5bd6fef2f6f2f11c50549f116158065af"
+    }
+  },
+  "guarantees": [
+    "Exact native storage-unit counts: POSIX bytes or Windows UTF-16 units, never scalars or display width.",
+    "Zero native bounds fail; missing or denied limit queries retain their state and original errors. Unknown family is Unknown, invalid family or encoding is Failed.",
+    "No allocation sized by reported native bound, truncation, normalization, name conversion, filesystem probing or mutation in the assessment.",
+    "Parent identity retained as observation context, not handle authority or a creation grant."
+  ],
+  "limitations": [
+    "Comparison against one reported component bound only; within-bound does not prove native acceptance or permission.",
+    "Does not assess supplemental character-count rules, normalization, complete paths, API buffer bounds, aliases, collisions, quotas, provider coordination or operation capability.",
+    "ASCII boundary fixtures qualify the actual APFS/ext4/ReFS test locations; no universal filesystem behavior inferred.",
+    "WP-01 and later work packages remain incomplete; no GUI or production mutation added."
+  ],
+  "repository_checks": {
+    "ui_boundary_domain_sources": 66,
+    "ckvision_only_active_files": 423,
+    "ckdocs_pages": 24,
+    "diff_check": "passed"
+  }
+}

@@ -99,6 +99,34 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Reported native component lengths
+
+`assess_component_length` compares the exact native component storage length
+with the applicable reported bound from `LocationInfo`: POSIX bytes for Linux /
+Darwin, UTF-16 units for Windows. It returns the measured count, reported maximum,
+unit and parent identity observation. It performs no normalization, conversion,
+truncation or allocation sized by the reported bound. Invalid encoding/family
+and zero bounds fail; unavailable queries preserve their native error and state.
+
+An assessment within the reported maximum is not proof of native name acceptance
+or permission. Supplemental character-count restrictions, normalization, aliases,
+complete paths, native request-buffer limits and operation capability require
+separate checks. Directory identity context is not a retained parent handle.
+The operation planner must not treat this single comparison as authorization.
+
+[Component-length evidence](evidence/ck-files-limits-20261023.json) qualifies
+ASCII boundary fixtures on the actual APFS/ext4/ReFS locations. Each accepts the
+reported maximum of 255 and rejects the next length through native lookup.
+The Windows fixture uses explicit extended paths to avoid conflating the
+ordinary Win32 full-path convention with component length; independent Win32
+lookup also rejects the overlong name. ReFS returns STATUS_OBJECT_NAME_INVALID,
+while the tested POSIX hosts return ENAMETOOLONG. Neither is a Missing result.
+
+Native references: [Linux fpathconf](https://man7.org/linux/man-pages/man3/fpathconf.3.html),
+[Darwin pathconf](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/pathconf.2.html)
+and [Windows volume query](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationbyhandlew).
+Native reports do not establish all filesystem acceptance rules.
+
 ## Native child lookup observations
 
 `DirectoryCursor::lookup_child` requires a native component and an explicit
