@@ -2155,3 +2155,70 @@ of additional rows in one publication still requires orchestration. Self/
 descendant checks, native name equivalence, operation-specific capabilities,
 remaining inventories, large-view indexes and UI/worker integration also remain.
 WP-02 has not started.
+
+## 2026-10-24 — WP-01 combined refresh and acquisition
+
+`PaneRefreshJob` can now explicitly retain its exact scanned directory in its
+sealed result for a subsequent `PaneAcquireJob`. Default release behavior is
+unchanged, and invalid retention values fail before refresh I/O. Acquisition
+accepts the prepared held rows and diagnostics, then produces one final payload
+for the original pane generation. Existing held families/revisions pass through
+without reopening, including explicitly requested already-held rows. Their
+metadata is canonical from the held object; hidden policy is recomputed for the
+requested model. New acquisition still creates independent initial families.
+
+Capacity reserves the union of existing held rows and matched requested rows
+before any additional child opens. Requests for held rows do not double-count;
+hard-link names remain separate slots. Inherited diagnostics have count and
+native-name-byte bounds and are copied incrementally under the existing step/
+time limits before acquisition I/O. Old failures remain visible even if later
+initial acquisition succeeds: a new hold cannot repair failed continuity with
+a previous selection. At most the configured held-count of inherited issues
+plus the requested-count of new issues can be retained, with separate bounded
+name representations. These are not process-memory or OS handle guarantees.
+
+Only final pane publication preserves marks/focus through sealed families.
+Replacements, failed refreshes and previously unheld rows retain the existing
+invalidation rules. No stage publishes an intermediate pane. The sequence is
+live observation, not a simultaneous filesystem snapshot, frozen operation
+plan or execution permission. Native calls can outlast cooperative slices.
+All native-owner retirement remains worker-owned.
+
+Nine additional deterministic cases cover mixed publication, exact union
+budgets and no duplicate opens, inherited denials followed by successful initial
+binding, replacements plus new not-listed issues, inherited issue-byte refusal,
+cancellation/resume, invalid retention, 300 inherited issues across yields and
+hidden marks requiring review. Two native cases per host verify preserved marked
+families with new acquisition and replacement diagnostics alongside new rows.
+
+The same **117-file manifest** was verified on all hosts. All **45 Files suites**
+passed: **378 macOS / 377 Linux / 383 Windows cases**. Final build/test seconds
+were **4.597/1.119**, **7.627/0.272**, **13.819/2.459**. The final Mac five-step
+update follows its initial nine-step build (6.534 s); both tests passed. The
+final update adds canonical visibility preparation and expanded inherited-issue
+checks. Actual compiled units, source hashes, output timestamps/hashes and all
+32 acquisition-suite case markers establish freshness. No failed attempt was
+accepted and no warning checks were relaxed.
+
+Focused sanitizers rebuilt the same 35-unit acquisition/refresh set: all 28 core
+units, platform adapter, simulator, domain/native acquisition and refresh fixtures,
+and test host, without cached objects. **78 cases passed on each host**. Mac
+ASan+UBSan build/test took **73.088/0.326 s**, Linux ASan+UBSan
+**162.432/0.148**, Windows ASan **69.077/0.349**. Previous same-unit builds took
+151.455/159.675/68.533 s with 67 cases. The shorter Mac run was reviewed against
+its full compile command, current hashes, units, links and test markers; prior
+observed host load was about 80 on 10 CPUs, versus about 46 during this run.
+Load may contribute, but elapsed time and load alone do not prove freshness.
+
+Diagnostics were hashed, checked for live owners and removed. Fixture roots
+were empty; current normal builds remain. Mac temporary work stayed on S8T and
+Windows development stayed on V:. No GUI was launched. Validation intervals
+were UTC on 2026-10-23; this milestone uses the local date, 2026-10-24.
+[Mixed preparation evidence](evidence/ck-files-pane-mixed-20261024.json) records
+commands, source/output/log hashes, timings, case markers, checks and cleanup.
+UI boundaries (84 domain sources), ckVision-only (463 active files), ckdocs
+(24 pages) and whitespace checks pass.
+
+WP-01 remains open for self/descendant safety, native name equivalence,
+operation-specific capabilities, remaining inventories, large-view indexes and
+UI/worker integration. WP-02 has not started.

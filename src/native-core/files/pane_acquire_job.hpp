@@ -6,9 +6,11 @@
 
 namespace ck::files {
 // Initial binding stage between native End and publication. Requested names
-// refer to raw discovery rows, not previously held objects. Each successful
+// match discovery rows. Retained refresh output can carry existing sealed
+// bindings and issues through this stage. Existing bindings are never reopened.
+// Each newly successful
 // binding describes the object opened NOW, never continuity with cached IDs.
-// Publication therefore creates new row IDs and cannot preserve old selection.
+// New binding creates new row IDs and cannot preserve old unheld selection.
 // Use PaneRefreshJob for existing held families. Worker only; no mutation.
 class PaneAcquireJob final {
 public:
@@ -41,8 +43,8 @@ private:
     std::shared_ptr<const MonotonicClock> clock_;
     MonotonicClock::Duration time_slice_;
     std::optional<MonotonicClock::TimePoint> last_reading_;
-    std::size_t next_request_ = 0, next_row_ = 0, next_binding_ = 0;
-    std::size_t requested_bytes_ = 0, native_bytes_ = 0, display_bytes_ = 0;
+    std::size_t next_request_ = 0, next_row_ = 0, next_binding_ = 0, next_issue_ = 0;
+    std::size_t requested_bytes_ = 0, native_bytes_ = 0, display_bytes_ = 0, issue_bytes_ = 0, held_count_ = 0;
     PaneListingJobState state_ = PaneListingJobState::Collecting;
     std::optional<UnavailableObservation> failure_;
 };

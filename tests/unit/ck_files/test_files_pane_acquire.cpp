@@ -42,6 +42,17 @@ struct Fixture {
     }
 };
 std::size_t opens(const FileSystem& fs) { return static_cast<std::size_t>(std::count_if(fs.calls().begin(), fs.calls().end(), [](const auto& call) { return call.operation == Operation::OpenChild; })); }
+PaneListingJob::Result refresh_input(Fixture& f, const std::vector<HeldChild::Pointer>& previous) {
+    PaneListingJob scan(f.pane.begin_listing(PaneListingPurpose::Refresh), take(DirectoryListing::open(f.fs, path(), {}, f.fs.clock())),
+        StorageModel::LinuxStatx, {}, ListingDirectoryRetention::RetainForRefresh);
+    PaneRefreshJob refresh(finish(scan), previous, StorageModel::LinuxStatx, {}, f.fs.clock(), std::chrono::milliseconds(20), ListingDirectoryRetention::RetainForRefresh);
+    return finish(refresh);
+}
+PaneRowId seed(Fixture& f) {
+    PaneAcquireJob initial(f.scan(), {name("a")}, StorageModel::LinuxStatx, {}, f.fs.clock());
+    if (f.pane.publish(*finish(initial)) != PanePublish::Applied || !f.pane.focused()) throw std::runtime_error("cannot seed mixed fixture");
+    const auto id = *f.pane.focused(); f.pane.set_mark(id, true); return id;
+}
 }
 CK_TEST(pane_acquire_binds_requested_rows_with_fresh_metadata_and_sealed_refresh_continuity) {
     Fixture f; f.fs.put(f.root, name("b"), f.fs.make_node(ObjectKind::RegularFile)); auto raw = f.scan();
@@ -193,4 +204,84 @@ CK_TEST(pane_acquire_abandoning_a_paused_job_releases_its_retained_directory_wit
     CK_CHECK(job.advance(stop.get_token()) == PaneListingJobState::Paused && f.fs.live_cursors() == 1);
     CK_CHECK(job.abandon() && f.fs.live_cursors() == 0 && !job.completed().value() && !job.abandon());
     CK_CHECK(job.advance() == PaneListingJobState::Abandoned && f.fs.calls().size() == before && f.pane.cancel_listing(job.request()));
+}
+CK_TEST(pane_acquire_composes_refresh_and_new_binding_with_one_publication_and_no_duplicate_open) {
+    Fixture f; const auto id = seed(f); f.fs.put(f.root, name("b"), f.fs.make_node(ObjectKind::RegularFile));
+    auto refreshed = refresh_input(f, f.pane.held_entries()); CK_CHECK(refreshed->retains_scan_directory());
+    const auto before = opens(f.fs); PaneAcquireJob job(std::move(refreshed), {name("a"), name("b")}, StorageModel::LinuxStatx, {}, f.fs.clock());
+    const auto result = finish(job); CK_CHECK(opens(f.fs) == before + 1 && !result->retains_scan_directory() && result->binding_issues().empty());
+    CK_CHECK(f.pane.publish(*result) == PanePublish::Applied && f.pane.marked(id) && f.pane.focused() == id && f.pane.held_entries().size() == 2);
+    CK_CHECK(f.pane.visible_row(1)->id != id && !f.pane.row(f.pane.visible_row(1)->id)->entry.held_child()->previous_continuity().value());
+}
+CK_TEST(pane_acquire_union_handle_budget_counts_existing_and_new_rows_before_any_open) {
+    for (std::size_t count : {std::size_t{1}, std::size_t{2}}) {
+        Fixture f; const auto id = seed(f); f.fs.put(f.root, name("b"), f.file); auto refreshed = refresh_input(f, f.pane.held_entries());
+        const auto before = opens(f.fs); PaneLimits limits; limits.held_entries = count;
+        PaneAcquireJob job(std::move(refreshed), {name("b")}, StorageModel::LinuxStatx, limits, f.fs.clock());
+        if (count == 1) CK_CHECK(job.advance() == PaneListingJobState::Failed && opens(f.fs) == before && f.pane.marked(id));
+        else CK_CHECK(f.pane.publish(*finish(job)) == PanePublish::Applied && f.pane.marked(id) && opens(f.fs) == before + 1);
+    }
+    Fixture f; const auto id = seed(f); auto refreshed = refresh_input(f, f.pane.held_entries()); const auto before = opens(f.fs);
+    PaneLimits limits; limits.held_entries = 1; PaneAcquireJob job(std::move(refreshed), {name("a")}, StorageModel::LinuxStatx, limits, f.fs.clock());
+    CK_CHECK(f.pane.publish(*finish(job)) == PanePublish::Applied && f.pane.marked(id) && opens(f.fs) == before);
+}
+CK_TEST(pane_acquire_preserves_refresh_failures_even_when_a_later_initial_binding_succeeds) {
+    Fixture f; const auto id = seed(f); auto previous = f.pane.held_entries();
+    PaneListingJob scan(f.pane.begin_listing(PaneListingPurpose::Refresh), take(DirectoryListing::open(f.fs, path(), {}, f.fs.clock())), StorageModel::LinuxStatx, {}, ListingDirectoryRetention::RetainForRefresh);
+    const auto raw = finish(scan); const NativeError denied{ErrorDomain::Posix, 13, "mixed.denied"};
+    f.fs.enqueue(Operation::OpenChild, {UnavailableObservation{ObservationState::Denied, denied}, {}, {}, false});
+    PaneRefreshJob refresh(raw, previous, StorageModel::LinuxStatx, {}, f.fs.clock(), std::chrono::milliseconds(20), ListingDirectoryRetention::RetainForRefresh);
+    auto refreshed = finish(refresh); CK_CHECK(refreshed->binding_issues().size() == 1 && !refreshed->entries()[0].held_child());
+    PaneAcquireJob job(std::move(refreshed), {name("a")}, StorageModel::LinuxStatx, {}, f.fs.clock()); const auto result = finish(job);
+    CK_CHECK(result->entries()[0].held_child() && result->binding_issues().size() == 1 && result->binding_issues()[0].detail.error == denied);
+    CK_CHECK(f.pane.publish(*result) == PanePublish::Applied && !f.pane.row(id) && f.pane.sources().state == PaneSourcesState::SelectionInvalidated);
+}
+CK_TEST(pane_acquire_preserves_replacement_and_unlisted_issues_with_independent_new_failures) {
+    Fixture f; const auto id = seed(f); auto previous = f.pane.held_entries(); f.fs.put(f.root, name("a"), f.fs.make_node(ObjectKind::RegularFile));
+    auto refreshed = refresh_input(f, previous); const auto before = opens(f.fs);
+    PaneAcquireJob job(std::move(refreshed), {name("a"), name("missing")}, StorageModel::LinuxStatx, {}, f.fs.clock()); const auto result = finish(job);
+    CK_CHECK(opens(f.fs) == before && result->binding_issues().size() == 2 && result->binding_issues()[0].detail.state == ObservationState::Changed);
+    CK_CHECK(result->binding_issues()[1].detail.error.operation == "pane_acquire.not_listed");
+    CK_CHECK(f.pane.publish(*result) == PanePublish::Applied && !f.pane.row(id) && f.pane.invalidated_selection().marks == 1);
+}
+CK_TEST(pane_acquire_validates_inherited_issue_bytes_before_opening_new_children) {
+    Fixture f; f.fs.put(f.root, name("long"), f.file); auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
+    std::vector<HeldChild::Pointer> previous{take(HeldChild::observe(parent, name("long")))}; f.fs.erase(f.root, name("long"));
+    auto refreshed = refresh_input(f, previous); const auto before = opens(f.fs); PaneLimits limits; limits.native_name_bytes = 1;
+    PaneAcquireJob job(std::move(refreshed), {name("a")}, StorageModel::LinuxStatx, limits, f.fs.clock());
+    CK_CHECK(job.advance() == PaneListingJobState::Failed && opens(f.fs) == before && job.failure()->error.operation == "pane_acquire.issue_bytes");
+}
+CK_TEST(pane_acquire_cancellation_keeps_sealed_successors_and_inherited_issues_until_resume) {
+    Fixture f; const auto id = seed(f); auto previous = f.pane.held_entries(); f.fs.put(f.root, name("c"), f.file);
+    auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path()))); previous.push_back(take(HeldChild::observe(parent, name("c"))));
+    f.fs.erase(f.root, name("c")); f.fs.put(f.root, name("b"), f.file); auto refreshed = refresh_input(f, previous); std::stop_source stop;
+    f.fs.enqueue(Operation::OpenChild, {{}, {}, [&] { stop.request_stop(); }, false}); const auto before = opens(f.fs);
+    PaneAcquireJob job(std::move(refreshed), {name("b")}, StorageModel::LinuxStatx, {}, f.fs.clock());
+    CK_CHECK(job.advance(stop.get_token()) == PaneListingJobState::Paused && f.pane.marked(id));
+    const auto result = finish(job); CK_CHECK(result->binding_issues().size() == 1 && result->binding_issues()[0].name == name("c"));
+    CK_CHECK(f.pane.publish(*result) == PanePublish::Applied && f.pane.marked(id) && opens(f.fs) == before + 2 && f.pane.held_entries().size() == 2);
+}
+CK_TEST(pane_refresh_rejects_unknown_result_retention_before_refreshing_children) {
+    Fixture f; seed(f); const auto previous = f.pane.held_entries(); const auto raw = f.scan(); const auto before = opens(f.fs);
+    bool rejected = false; try { PaneRefreshJob job(raw, previous, StorageModel::LinuxStatx, {}, f.fs.clock(), std::chrono::milliseconds(20), static_cast<ListingDirectoryRetention>(999)); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    CK_CHECK(rejected && opens(f.fs) == before);
+}
+CK_TEST(pane_acquire_inherited_issue_copying_is_step_bounded_and_preserves_every_issue) {
+    Fixture f; std::vector<HeldChild::Pointer> previous; auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
+    for (int i = 0; i < 300; ++i) {
+        const auto n = name(("old" + std::to_string(i)).c_str()); f.fs.put(f.root, n, f.file); previous.push_back(take(HeldChild::observe(parent, n))); f.fs.erase(f.root, n);
+    }
+    auto refreshed = refresh_input(f, previous); const auto before = opens(f.fs);
+    PaneAcquireJob job(std::move(refreshed), {name("a")}, StorageModel::LinuxStatx, {}, f.fs.clock());
+    CK_CHECK(job.advance() == PaneListingJobState::Collecting && !job.completed().value() && opens(f.fs) == before);
+    const auto result = finish(job); CK_CHECK(result->binding_issues().size() == 300 && opens(f.fs) == before + 1);
+    for (std::size_t i = 0; i < previous.size(); ++i) CK_CHECK(result->binding_issues()[i].name == previous[i]->name());
+}
+CK_TEST(pane_acquire_recomputes_preserved_binding_visibility_for_the_requested_model) {
+    Fixture f; const auto id = seed(f); f.fs.metadata(f.file).bsd_flags = Observation<std::uint32_t>::available(0x8000);
+    auto refreshed = refresh_input(f, f.pane.held_entries()); CK_CHECK(!take(refreshed->entries()[0].hidden));
+    const auto before = opens(f.fs); PaneAcquireJob job(std::move(refreshed), {}, StorageModel::DarwinStatFlags, {}, f.fs.clock());
+    const auto result = finish(job); CK_CHECK(take(result->entries()[0].hidden) && opens(f.fs) == before);
+    CK_CHECK(f.pane.publish(*result) == PanePublish::Applied && f.pane.marked(id) && f.pane.visible_size() == 0 && f.pane.sources().state == PaneSourcesState::HiddenMarksNeedReview);
 }

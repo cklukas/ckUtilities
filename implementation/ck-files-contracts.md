@@ -191,8 +191,10 @@ Fresh held metadata replaces a row only through its actual refresh result;
 hidden policy is recomputed. Replacements, failed/unqualified continuity,
 unlisted prior names and parent mismatches carry `PaneBindingIssue` details.
 An unlisted name means not observed in this scan, not definitive native absence.
-The final result requires the original generation gate and releases its own
-scan pin; externally retained input payloads keep their own pins. Successful
+The final result requires the original generation gate. By default it releases
+its scan pin; the explicit result-retention option can retain the exact scanned
+directory for a subsequent acquisition stage. Externally retained input payloads
+keep their own pins. Successful
 publication applies rows, directory context and issue details together. It
 preserves marks/focus only through sealed families. Hidden marked rows still
 require review. Failed/cancelled/newer requests cannot overwrite the published
@@ -209,8 +211,8 @@ cross-directory tests on all three platforms.
 
 ## Initial held-entry acquisition
 
-`PaneAcquireJob` consumes a sealed native-End discovery payload with its exact
-scanned directory retained, plus ownership of a bounded vector of requested
+`PaneAcquireJob` consumes a sealed native-End discovery or prepared refresh
+payload with its exact scanned directory retained, plus ownership of a bounded vector of requested
 native names. The existing `RetainForRefresh` retention option supports both
 preparation stages. Requests are exact native-unit matches against this scan;
 there is no display decoding, case folding, normalized-name substitution or
@@ -221,17 +223,20 @@ vector transfers ownership without a constructor copy; indexed name copies are
 bounded before allocation. Requested/indexed names, copied rows, issue names and
 held objects have separate bounded counts/bytes, not a total memory quota.
 
-For every matched request, `HeldChild::observe` opens metadata-only through the
+For every matched request without an existing sealed binding, `HeldChild::observe`
+opens metadata-only through the
 retained parent without following a final link. Successful acquisition replaces
-the row's metadata and recomputes its hidden observation. Other rows stay as
-observed. A name absent from discovery produces Unknown/not-listed without a
+the row's metadata and recomputes its hidden observation. Existing sealed
+bindings pass through without reopening or changing their family/revision;
+their canonical held metadata and hidden policy are prepared for the requested
+model. Unbound, unrequested rows stay as observed. A name absent from discovery produces Unknown/not-listed without a
 native lookup or a claim of absence; native open/inspection failures remain
 named issues with their exact states/codes. A successfully completed payload
 can contain both held rows and unresolved named issues; it is not an entirely
 bound operation-source selection or permission to execute. Input metadata and
 identities never prove continuity with the newly opened object. Even equal
 reported IDs can have been recycled before acquisition; no such comparison is
-used to preserve old marks or focus. Pane publication allocates new row IDs,
+used to preserve old marks or focus. For new bindings, pane publication allocates new row IDs,
 and a refresh of previously unheld selections reports invalidation. The user
 must select/review the freshly represented objects. Subsequent refresh can use
 the acquired immutable held families through `PaneRefreshJob`.
@@ -249,8 +254,29 @@ revocation by the receiving pane. Successful preparation releases its scan pin;
 held rows retain their own parent ownership. All native-owner retirement belongs
 on the worker. No directory membership/content snapshot, pathname attestation,
 provider-hydration guarantee, operation plan, scheduler or UI integration is
-established by initial acquisition. Combining existing held-row refresh with
-new acquisition in one publication remains required orchestration work.
+established by acquisition.
+
+For a mixed preparation, run refresh with explicit `RetainForRefresh` result
+retention, pass its sealed output to acquisition, then publish only the final
+result through the original generation gate. The default refresh retention is
+still `ReleaseAtEnd`. Acquisition reserves the union of existing held rows and
+matched requested rows before any new child open; a request for an already-held
+row consumes no additional slot and issues no native call. Inherited issues are
+count/name-byte bounded and copied incrementally before acquisition I/O. Their
+states and codes survive even if a later initial acquisition of that name
+succeeds: that success cannot repair failed continuity with an old selection.
+At most the configured held-count of inherited issues plus the requested-count
+of new issues is retained. Issue names have their own configured native-byte
+budget, separate from requested/indexed names and row names. These are bounded
+representations, not a total process-memory quota. Neither stage publishes an
+intermediate pane. Existing marks/focus can survive only the family checks in
+the final pane publication; replacements and unproven continuity still invalidate
+old selections. The combined result is a sequence of live observations, not
+a simultaneous filesystem snapshot.
+
+[Mixed preparation evidence](evidence/ck-files-pane-mixed-20261024.json) covers
+union budgets, inherited errors, yields/cancellation, canonical hidden state and
+native mixed-publication/replacement fixtures on all three hosts.
 
 [Acquisition evidence](evidence/ck-files-pane-acquire-20261024.json) records
 simulated fault/resource/lifecycle tests and native acquisition/publication/

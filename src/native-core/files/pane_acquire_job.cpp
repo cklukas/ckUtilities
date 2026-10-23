@@ -29,14 +29,14 @@ PaneAcquireJob::PaneAcquireJob(Result listing, std::vector<NativeName>&& request
     if (!input_ || !input_->directory_pin_ || !clock_ || time_slice_ <= MonotonicClock::Duration::zero() || time_slice_ > std::chrono::seconds(1) ||
         (model != StorageModel::Unknown && model != StorageModel::LinuxStatx && model != StorageModel::DarwinStatFlags && model != StorageModel::WindowsHandleAttributes))
         throw std::invalid_argument("invalid pane acquisition preparation");
-    if (requested_.size() > limits_.held_entries || input_->entries().size() > limits_.rows)
+    if (requested_.size() > limits_.held_entries || input_->entries().size() > limits_.rows || input_->binding_issues().size() > limits_.held_entries)
         throw std::length_error("pane acquisition count limit");
-    request_ = input_->request(); matches_.resize(requested_.size()); issues_.reserve(requested_.size());
+    request_ = input_->request(); matches_.resize(requested_.size()); issues_.reserve(requested_.size() + input_->binding_issues().size());
 }
 void PaneAcquireJob::release_staging() noexcept {
     input_.reset(); std::vector<NativeName>{}.swap(requested_); std::vector<std::optional<std::size_t>>{}.swap(matches_);
     indexes_.clear(); std::vector<PaneEntry>{}.swap(entries_); std::vector<PaneBindingIssue>{}.swap(issues_);
-    next_request_ = next_row_ = next_binding_ = requested_bytes_ = native_bytes_ = display_bytes_ = 0;
+    next_request_ = next_row_ = next_binding_ = next_issue_ = requested_bytes_ = native_bytes_ = display_bytes_ = issue_bytes_ = held_count_ = 0;
 }
 void PaneAcquireJob::fail(UnavailableObservation failure) noexcept {
     failure_.emplace(std::move(failure)); state_ = PaneListingJobState::Failed; release_staging();
@@ -78,21 +78,38 @@ PaneListingJobState PaneAcquireJob::advance(std::stop_token stop) {
         while (next_row_ < input_->entries().size()) {
             if (yield()) return state_;
             const auto& entry = input_->entries()[next_row_];
-            if (entry.held_child() || !valid_name(entry.name, model_)) { fail(error(ObservationState::Failed, AdapterError::InvalidIdentifier, "pane_acquire.discovery_row")); return state_; }
+            if (!valid_name(entry.name, model_)) { fail(error(ObservationState::Failed, AdapterError::InvalidIdentifier, "pane_acquire.discovery_row")); return state_; }
             const auto bytes = bounded_bytes(entry.name, limits_.native_name_bytes - native_bytes_);
             if (!bytes) { fail(error(ObservationState::Failed, AdapterError::InventoryLimit, "pane_acquire.row_bytes")); return state_; }
             const auto display = entry.name.display_name();
             if (display.size() > limits_.display_name_bytes - display_bytes_) { fail(error(ObservationState::Failed, AdapterError::InventoryLimit, "pane_acquire.display_bytes")); return state_; }
             const auto found = indexes_.find(entry.name);
             if (found != indexes_.end()) matches_[found->second] = next_row_;
-            entries_.push_back(entry); native_bytes_ += *bytes; display_bytes_ += display.size(); ++next_row_; ++steps;
+            // Reserve the union, not the sum: requests for existing sealed
+            // bindings consume no extra handle and must not reopen them.
+            if (entry.held_child() || found != indexes_.end()) {
+                if (held_count_ == limits_.held_entries) { fail(error(ObservationState::Failed, AdapterError::InventoryLimit, "pane_acquire.held_limit")); return state_; }
+                ++held_count_;
+            }
+            if (entry.held_child()) entries_.push_back(PaneEntry::from_held(entry.held_child(),
+                pane_hidden_state(entry.name, Observation<BasicMetadata>::available(entry.held_child()->metadata()), model_)));
+            else entries_.push_back(entry);
+            native_bytes_ += *bytes; display_bytes_ += display.size(); ++next_row_; ++steps;
         }
         indexes_.clear();
+        while (next_issue_ < input_->binding_issues().size()) {
+            if (yield()) return state_;
+            const auto& issue = input_->binding_issues()[next_issue_];
+            if (!valid_name(issue.name, model_)) { fail(error(ObservationState::Failed, AdapterError::InvalidIdentifier, "pane_acquire.issue_name")); return state_; }
+            const auto bytes = bounded_bytes(issue.name, limits_.native_name_bytes - issue_bytes_);
+            if (!bytes) { fail(error(ObservationState::Failed, AdapterError::InventoryLimit, "pane_acquire.issue_bytes")); return state_; }
+            issues_.push_back(issue); issue_bytes_ += *bytes; ++next_issue_; ++steps;
+        }
         while (next_binding_ < requested_.size()) {
             if (yield()) return state_;
             const auto& name = requested_[next_binding_];
             if (!matches_[next_binding_]) issues_.push_back({name, error(ObservationState::Unknown, AdapterError::MetadataChanged, "pane_acquire.not_listed")});
-            else {
+            else if (!entries_[*matches_[next_binding_]].held_child()) {
                 auto reply = HeldChild::observe(input_->directory_pin_, name, stop);
                 if (!reply.value() && stop.stop_requested()) { state_ = PaneListingJobState::Paused; return state_; }
                 if (!reply.value()) issues_.push_back({name, *reply.unavailable_detail()});

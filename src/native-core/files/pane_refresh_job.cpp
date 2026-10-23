@@ -31,12 +31,14 @@ std::optional<UnavailableObservation> directory_difference(const Observation<Obj
 }
 }
 PaneRefreshJob::PaneRefreshJob(Result listing, std::span<const HeldChild::Pointer> previous, StorageModel model,
-    PaneLimits limits, std::shared_ptr<const MonotonicClock> clock, MonotonicClock::Duration time_slice)
-    : input_(std::move(listing)), model_(model), clock_(std::move(clock)), time_slice_(time_slice), limits_(limits) {
+    PaneLimits limits, std::shared_ptr<const MonotonicClock> clock, MonotonicClock::Duration time_slice, ListingDirectoryRetention retention)
+    : input_(std::move(listing)), model_(model), clock_(std::move(clock)), time_slice_(time_slice), limits_(limits), retention_(retention) {
     validate_pane_limits(limits);
     if (!input_ || !input_->directory_pin_ || !clock_ || time_slice_ <= MonotonicClock::Duration::zero() || time_slice_ > std::chrono::seconds(1) ||
         (model != StorageModel::Unknown && model != StorageModel::LinuxStatx && model != StorageModel::DarwinStatFlags && model != StorageModel::WindowsHandleAttributes))
         throw std::invalid_argument("invalid pane refresh preparation");
+    if (retention != ListingDirectoryRetention::ReleaseAtEnd && retention != ListingDirectoryRetention::RetainForRefresh)
+        throw std::invalid_argument("invalid refresh directory retention");
     if (previous.size() > limits.held_entries || input_->entries().size() > limits.rows)
         throw std::length_error("pane refresh count limit");
     request_ = input_->request();
@@ -132,7 +134,8 @@ PaneListingJobState PaneRefreshJob::advance(std::stop_token stop) {
             if (yield()) return state_;
         }
         if (yield()) return state_;
-        completed_ = Result(new const CompletedPaneListing(request_, input_->directory(), std::move(entries_), {}, std::move(issues_)));
+        completed_ = Result(new const CompletedPaneListing(request_, input_->directory(), std::move(entries_),
+            retention_ == ListingDirectoryRetention::RetainForRefresh ? input_->directory_pin_ : std::shared_ptr<const DirectoryCursor>{}, std::move(issues_)));
         release_staging(); state_ = PaneListingJobState::Complete; return state_;
     } catch (...) {
         // Do not allocate a diagnostic string while handling allocation failure.

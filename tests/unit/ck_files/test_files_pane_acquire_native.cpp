@@ -79,3 +79,25 @@ CK_TEST(native_pane_acquire_keeps_separate_hard_link_names_and_refuses_cached_se
     const auto held = pane.held_entries(); CK_CHECK(compare_identity(take(held[0]->metadata().identity), take(held[1]->metadata().identity)) == IdentityComparison::Same);
     CK_CHECK(held[0]->name() != held[1]->name() && pane.sources().state == PaneSourcesState::SelectionInvalidated && pane.invalidated_selection().marks == 2);
 }
+CK_TEST(native_pane_preparation_refreshes_marked_objects_and_acquires_new_rows_in_one_publication) {
+    const ck::testing::ScratchDirectory scratch("files-pane-prepare-mixed"); NativeFileSystem filesystem; PaneModel pane;
+    write(scratch.path() / "a", "old"); PaneAcquireJob initial(scan(filesystem, scratch.path(), pane.begin_listing(PaneListingPurpose::Navigate)), {name("a")}, model());
+    CK_CHECK(pane.publish(*finish(initial)) == PanePublish::Applied); const auto id = *pane.focused(); pane.set_mark(id, true);
+    write(scratch.path() / "b", "new"); const auto previous = pane.held_entries();
+    PaneRefreshJob refresh(scan(filesystem, scratch.path(), pane.begin_listing(PaneListingPurpose::Refresh)), previous, model(), {}, system_monotonic_clock(),
+        std::chrono::milliseconds(20), ListingDirectoryRetention::RetainForRefresh);
+    PaneAcquireJob acquire(finish(refresh), {name("a"), name("b")}, model()); const auto result = finish(acquire);
+    CK_CHECK(!result->retains_scan_directory() && result->binding_issues().empty() && pane.publish(*result) == PanePublish::Applied);
+    CK_CHECK(pane.marked(id) && pane.focused() == id && pane.held_entries().size() == 2 && pane.invalidated_selection().marks == 0);
+}
+CK_TEST(native_pane_preparation_preserves_replacement_diagnostics_while_acquiring_another_file) {
+    const ck::testing::ScratchDirectory scratch("files-pane-prepare-replace"); NativeFileSystem filesystem; PaneModel pane;
+    write(scratch.path() / "a", "old"); PaneAcquireJob initial(scan(filesystem, scratch.path(), pane.begin_listing(PaneListingPurpose::Navigate)), {name("a")}, model());
+    CK_CHECK(pane.publish(*finish(initial)) == PanePublish::Applied); const auto id = *pane.focused(); pane.set_mark(id, true); const auto previous = pane.held_entries();
+    fs::rename(scratch.path() / "a", scratch.path() / "retired"); write(scratch.path() / "a", "replacement"); write(scratch.path() / "b", "new");
+    PaneRefreshJob refresh(scan(filesystem, scratch.path(), pane.begin_listing(PaneListingPurpose::Refresh)), previous, model(), {}, system_monotonic_clock(),
+        std::chrono::milliseconds(20), ListingDirectoryRetention::RetainForRefresh);
+    PaneAcquireJob acquire(finish(refresh), {name("b")}, model()); const auto result = finish(acquire);
+    CK_CHECK(result->binding_issues().size() == 1 && result->binding_issues()[0].detail.state == ObservationState::Changed);
+    CK_CHECK(pane.publish(*result) == PanePublish::Applied && !pane.row(id) && pane.invalidated_selection().marks == 1 && pane.held_entries().size() == 2);
+}

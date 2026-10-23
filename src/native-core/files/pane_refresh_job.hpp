@@ -17,7 +17,8 @@ public:
     static constexpr std::size_t hard_component_bytes = 1024 * 1024;
     PaneRefreshJob(Result listing, std::span<const HeldChild::Pointer> previous, StorageModel model,
         PaneLimits limits = {}, std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock(),
-        MonotonicClock::Duration time_slice = std::chrono::milliseconds(20));
+        MonotonicClock::Duration time_slice = std::chrono::milliseconds(20),
+        ListingDirectoryRetention retention = ListingDirectoryRetention::ReleaseAtEnd);
     PaneRefreshJob(const PaneRefreshJob&) = delete;
     PaneRefreshJob& operator=(const PaneRefreshJob&) = delete;
     PaneListingJobState advance(std::stop_token stop = {});
@@ -47,6 +48,7 @@ private:
     std::size_t next_ = 0, next_previous_ = 0, next_row_ = 0;
     std::size_t previous_bytes_ = 0, native_bytes_ = 0, display_bytes_ = 0;
     PaneLimits limits_;
+    ListingDirectoryRetention retention_;
     PaneListingJobState state_ = PaneListingJobState::Collecting;
     std::optional<UnavailableObservation> failure_;
     Result completed_;
