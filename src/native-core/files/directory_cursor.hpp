@@ -5,6 +5,7 @@
 #include "file_metadata.hpp"
 #include "native_name.hpp"
 #include "opened_entry.hpp"
+#include "location_info.hpp"
 
 #include <memory>
 
@@ -51,6 +52,9 @@ public:
     // reparse point. This captures the object present at open time, not an
     // earlier enumeration snapshot. Revalidate identity before later actions.
     virtual Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const;
+    // Live, read-only queries against this held directory. Per-field failures
+    // remain explicit; successful advertisements do not authorize operations.
+    virtual Observation<LocationInfo> inspect_location() const;
     const Observation<ObjectIdentity>& identity() const noexcept { return identity_; }
 
 protected:

@@ -22,11 +22,14 @@
 #include <sys/xattr.h>
 #if defined(__APPLE__)
 #include <sys/acl.h>
+#include <sys/attr.h>
+#include <sys/mount.h>
 #endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
+#include <sys/statvfs.h>
 #endif
 
 namespace ck::files {
@@ -435,6 +438,128 @@ class PosixDirectoryCursor final : public DirectoryCursor {
 public:
     PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity, AdapterScope scope)
         : DirectoryCursor(std::move(identity)), directory_(std::move(directory)), scope_(std::move(scope)) {}
+    Observation<LocationInfo> inspect_location() const override {
+        LocationInfo result;
+        const auto fd = dirfd(directory_.get());
+        const auto metadata = stat_metadata(fd, nullptr, true, scope_);
+        if (!metadata.value()) {
+            const auto& e = *metadata.unavailable_detail();
+            return Observation<LocationInfo>::unavailable(e.state, e.error);
+        }
+        result.directory = metadata.value()->identity;
+        result.volume_query_serial = not_applicable<std::uint64_t>("volume.query_serial");
+        result.windows_component_utf16_max = not_applicable<std::uint64_t>("volume.windows_component_limit");
+        result.windows_directory_case_flags = not_applicable<std::uint32_t>("volume.windows_directory_case_flags");
+        const auto limit = [&](int name, const char* operation) {
+            errno = 0;
+            const auto value = fpathconf(fd, name);
+            const int code = errno;
+            if (value < 0) return Observation<std::uint64_t>::unavailable(code == 0 ? ObservationState::Unknown : errno_state(code),
+                {ErrorDomain::Posix, code, operation});
+            if (value == 0) return Observation<std::uint64_t>::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::InvalidNativeResult, operation));
+            return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(value));
+        };
+        result.posix_name_max = limit(_PC_NAME_MAX, "fpathconf.name_max");
+        result.posix_path_max = limit(_PC_PATH_MAX, "fpathconf.path_max");
+#if defined(__linux__)
+        result.family = LocationQueryFamily::LinuxDescriptor;
+        result.posix_name_chars_max = not_applicable<std::uint64_t>("volume.name_chars_max");
+        result.features = Observation<NativeVolumeFeatures>::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "volume.feature_advertisements"));
+        result.case_sensitive_directory = Observation<bool>::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "volume.directory_case"));
+        result.case_preserving_names = Observation<bool>::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "volume.case_preservation"));
+        result.filesystem_name = Observation<NativeFeatureIdentifier>::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "volume.filesystem_name"));
+        struct statvfs space{};
+        if (fstatvfs(fd, &space) == 0) {
+            result.native_mount_flags = Observation<std::uint64_t>::available(space.f_flag);
+            result.read_only_mount = Observation<bool>::available((space.f_flag & ST_RDONLY) != 0);
+            result.space_accounting_unit = detail::space_bytes(1, space.f_frsize);
+            result.total_bytes = detail::space_bytes(space.f_blocks, space.f_frsize);
+            result.free_bytes = detail::space_bytes(space.f_bfree, space.f_frsize);
+            result.available_bytes = detail::space_bytes(space.f_bavail, space.f_frsize);
+        } else {
+            const int code = errno;
+            const NativeError error{ErrorDomain::Posix, code, "fstatvfs"};
+            result.native_mount_flags = Observation<std::uint64_t>::unavailable(errno_state(code), error);
+            result.read_only_mount = Observation<bool>::unavailable(errno_state(code), error);
+            result.space_accounting_unit = result.total_bytes = result.free_bytes = result.available_bytes =
+                Observation<std::uint64_t>::unavailable(errno_state(code), error);
+        }
+        struct statfs native{};
+#else
+        result.family = LocationQueryFamily::DarwinDescriptor;
+        result.posix_name_chars_max = limit(_PC_NAME_CHARS_MAX, "fpathconf.name_chars_max");
+        const auto boolean = [&](int name, const char* operation) {
+            errno = 0;
+            const auto value = fpathconf(fd, name);
+            const int code = errno;
+            if (value < 0) return Observation<bool>::unavailable(code == 0 ? ObservationState::Unknown : errno_state(code),
+                {ErrorDomain::Posix, code, operation});
+            if (value > 1) return Observation<bool>::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, operation));
+            return Observation<bool>::available(value != 0);
+        };
+        result.case_sensitive_directory = boolean(_PC_CASE_SENSITIVE, "fpathconf.case_sensitive");
+        result.case_preserving_names = boolean(_PC_CASE_PRESERVING, "fpathconf.case_preserving");
+        struct CapabilityRecord { std::uint32_t length; vol_capabilities_attr_t caps; } capabilities{};
+        static_assert(offsetof(CapabilityRecord, caps) == 4 && sizeof(CapabilityRecord) == 36);
+        struct attrlist attributes{};
+        attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
+        attributes.volattr = ATTR_VOL_INFO | ATTR_VOL_CAPABILITIES;
+        if (fgetattrlist(fd, &attributes, &capabilities, sizeof(capabilities), 0) == 0) {
+            if (capabilities.length == sizeof(capabilities)) {
+                NativeVolumeFeatures features;
+                features.domain = VolumeFeatureDomain::DarwinVolumeCapabilities;
+                for (std::size_t group = 0; group < 4; ++group) {
+                    features.value[group] = capabilities.caps.capabilities[group];
+                    features.valid[group] = capabilities.caps.valid[group];
+                }
+                result.features = Observation<NativeVolumeFeatures>::available(features);
+            } else result.features = Observation<NativeVolumeFeatures>::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "fgetattrlist.volume_capabilities_size"));
+        } else {
+            const int code = errno;
+            result.features = Observation<NativeVolumeFeatures>::unavailable(code == EINVAL ? ObservationState::Unsupported : errno_state(code),
+                {ErrorDomain::Posix, code, "fgetattrlist.volume_capabilities"});
+        }
+        struct statfs native{};
+#endif
+        if (fstatfs(fd, &native) == 0) {
+            result.filesystem_type_code = Observation<std::uint64_t>::available(static_cast<std::uint64_t>(native.f_type));
+            NativeIdentifier id;
+            static_assert(sizeof(native.f_fsid) <= sizeof(id.bytes));
+            std::memcpy(id.bytes.data(), &native.f_fsid, sizeof(native.f_fsid));
+            result.filesystem_query_id = Observation<NativeIdentifier>::available(id);
+#if defined(__APPLE__)
+            result.native_mount_flags = Observation<std::uint64_t>::available(native.f_flags);
+            result.read_only_mount = Observation<bool>::available((native.f_flags & MNT_RDONLY) != 0);
+            result.space_accounting_unit = detail::space_bytes(1, native.f_bsize);
+            result.total_bytes = detail::space_bytes(native.f_blocks, native.f_bsize);
+            result.free_bytes = detail::space_bytes(native.f_bfree, native.f_bsize);
+            result.available_bytes = detail::space_bytes(native.f_bavail, native.f_bsize);
+            const auto length = strnlen(native.f_fstypename, sizeof(native.f_fstypename));
+            auto name = length < sizeof(native.f_fstypename) ? NativeFeatureIdentifier::from_posix(std::string(native.f_fstypename, length)) : std::nullopt;
+            result.filesystem_name = name ? Observation<NativeFeatureIdentifier>::available(std::move(*name)) :
+                Observation<NativeFeatureIdentifier>::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "fstatfs.filesystem_name"));
+#endif
+        } else {
+            const int code = errno;
+            const NativeError error{ErrorDomain::Posix, code, "fstatfs"};
+            result.filesystem_type_code = Observation<std::uint64_t>::unavailable(errno_state(code), error);
+            result.filesystem_query_id = Observation<NativeIdentifier>::unavailable(errno_state(code), error);
+#if defined(__APPLE__)
+            result.filesystem_name = Observation<NativeFeatureIdentifier>::unavailable(errno_state(code), error);
+            result.native_mount_flags = Observation<std::uint64_t>::unavailable(errno_state(code), error);
+            result.read_only_mount = Observation<bool>::unavailable(errno_state(code), error);
+            result.space_accounting_unit = result.total_bytes = result.free_bytes = result.available_bytes =
+                Observation<std::uint64_t>::unavailable(errno_state(code), error);
+#endif
+        }
+        return Observation<LocationInfo>::available(std::move(result));
+    }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             adapter_error(AdapterError::InvalidAccess, "open_child.access"));

@@ -583,3 +583,89 @@ Boundary checks passed (46 domain files and 389 ckVision-only files). This
 milestone leaves storage/provider and driver-specific inventories, destination
 capabilities, injected filesystem/time services and pane semantics in WP-01.
 No package acceptance checkbox is closed by this security-read milestone.
+
+
+## WP-01: held-directory location facts (2026-10-23)
+
+Added read-only location inspection on DirectoryCursor. Observations remain
+attached to its held directory and use no original-path fallback. The result
+keeps directory identity, native query family, filesystem query identifiers,
+raw mount flags, name-limit reports, directory case settings, native feature
+advertisements and space-counter results separate. Per-field native errors
+survive successful partial results. Default fields remain Unknown. Filesystem
+query IDs/serials are not durable/global volume identity or mutation authority.
+
+Feature advertisements are a distinct type, never a boolean operation promise.
+Darwin capabilities retain all four capability/validity groups and require
+both the mapped feature bit and its valid bit before reporting known support.
+Windows preserves its native volume flags; reparse support is not mapped to
+symbolic-link support, and block-refcounting is distinct from Darwin cloning.
+SDK-based single-bit checks qualify portable mappings independently of which
+features happen to be enabled on the test volume. A false advertisement does
+not become proof of unsupported operations; missing mappings remain unavailable.
+
+Linux uses fstatvfs/fstatfs/fpathconf on the owned directory. Generic volume
+feature advertisements and per-directory case comparison are explicitly
+unavailable; neither is guessed from Linux or the filesystem type code.
+macOS uses fstatfs, fpathconf and the public fgetattrlist volume-capability
+query. The current APFS conformance fixture accepts this query on a held
+non-root directory. Older documentation specifies volume-root restrictions;
+query failures stay explicit and do not trigger a pathname/root-reopen fallback.
+Raw POSIX name/path/character reports remain advisory native values, not a
+universal Unicode validation rule. No names are rewritten from these reports.
+
+Windows uses GetVolumeInformationByHandleW and FileCaseSensitiveInfo on the
+held directory. The case-sensitive-search volume flag is separate from the
+directory setting. NtQueryVolumeInformationFile's documented full-size query
+provides caller/actual/total allocation counters from that same handle. Its
+public WDK wire layout is declared locally because the desktop SDK does not
+provide it; the native API is resolved from loaded ntdll. No private query,
+syscall number, elevation, original-path query or shell fallback is used.
+Space arithmetic checks zero units, signed negatives and multiplication
+overflow; it never clamps an unknown capacity into a usable value. These are
+live native reports, not reserved space, physical-allocation proofs or write
+permission. A false read-only mount flag also does not grant write access.
+
+Native fixtures qualify retained directory identity and location queries after
+rename/replacement/unlink, unchanged enumeration progress, native mount/case
+and pathconf results, volume flags and allocation-counter units. Windows test
+reference queries resolve the actual fixture mount instead of assuming that
+its drive root is the filesystem root. Dynamic free-byte counters are not
+asserted equal across independent calls while other workloads run. Deterministic
+core checks cover arithmetic extremes, missing validity bits, denied/failed
+queries, unknown domains, and feature-family distinctions.
+
+Exact commands, fingerprints, native scope and log digests are in
+[the location evidence](evidence/ck-files-location-20261023.json).
+
+| Host / Release toolchain | Qualified build interval (UTC) | Build / test elapsed | Files result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:35:47.005–01:35:56.788 | 9.783 / 0.816 s | 78 cases, fourteen CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:36:51.200–01:37:05.279 | 14.080 / 0.101 s | 76 cases, fourteen CTest entries passed |
+| Windows x64 / MSVC 19.44, static CRT | 01:36:53.925–01:37:18.044 | 24.119 / 1.439 s | 79 cases, fourteen CTest entries passed |
+
+All hosts used the verified 46-file input manifest and warnings as errors.
+The Mac qualification increment regenerated CMake and compiled the two new
+fixture units; its earlier 15.661 s implementation build compiled the changed
+core/native code. Linux/Windows regeneration builds compiled all affected
+implementation/fixture targets. Their durations were compared with previous
+regeneration observations (security: 14.851 s Mac / 15.543 s Linux; attribute:
+26.065 s Windows), then checked against actual compile/link logs. No build
+time alone was treated as freshness evidence. No Files GUI was launched.
+
+Direct sanitizer builds compiled all 26 core/platform/test units. macOS ASan +
+UBSan, strict warnings, -O1 -g and frame pointers built from
+01:38:04.316–01:38:48.144 UTC in 43.828 s and ran 78 cases in 0.624 s.
+Windows MSVC ASan, /O1 /Zi /MT /W4 /WX built from
+01:38:04.901–01:38:47.708 UTC in 42.808 s and ran 79 cases in 0.991 s.
+Both passed with halt-on-error and no sanitizer diagnostics. Prior direct
+23-unit observations took 41.293 s Mac and 42.332 s Windows; logs confirm the
+additional implementation and two fixture units compiled in these runs.
+Owned sanitizer outputs are removed after preserving concise evidence, while
+current normal CMake builds remain. Windows project writes stayed on V:.
+Boundary checks passed (48 domain files and 393 ckVision-only files).
+
+This milestone does not complete operation-specific destination capabilities.
+Timestamp range/resolution, Unicode collision rules, per-object storage/provider
+inventory, driver-specific channels, injected filesystem/time services and pane
+semantics remain WP-01 work. No package acceptance checkbox is closed here.

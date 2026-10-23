@@ -50,4 +50,8 @@ Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::open_child(const Nati
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "open_child"});
 }
 
+Observation<LocationInfo> DirectoryCursor::inspect_location() const {
+    return Observation<LocationInfo>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "location.native_query"});
+}
 } // namespace ck::files

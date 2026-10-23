@@ -416,10 +416,107 @@ private:
     AdapterScope scope_;
 };
 
+// Public FILE_FS_FULL_SIZE_INFORMATION wire layout. The desktop SDK does not
+// declare this WDK structure; no private members or syscall numbers are used.
+struct alignas(8) VolumeSpaceCounters {
+    std::int64_t total;
+    std::int64_t caller_available;
+    std::int64_t actual_available;
+    std::uint32_t sectors_per_unit;
+    std::uint32_t bytes_per_sector;
+};
+static_assert(sizeof(VolumeSpaceCounters) == 32 && offsetof(VolumeSpaceCounters, sectors_per_unit) == 24);
+Observation<VolumeSpaceCounters> volume_space(HANDLE handle) {
+    using Result = Observation<VolumeSpaceCounters>;
+    using QueryVolume = NTSTATUS(NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
+    const auto address = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryVolumeInformationFile");
+    if (!address) return Result::unavailable(ObservationState::Unsupported, {ErrorDomain::Win32, GetLastError(), "NtQueryVolumeInformationFile.resolve"});
+    const auto query = std::bit_cast<QueryVolume>(address);
+    VolumeSpaceCounters counters{};
+    IO_STATUS_BLOCK io{};
+    // FileFsFullSizeInformation = 7 in the documented FS information classes.
+    // This directory's Win32 handle is synchronous (no OVERLAPPED flag).
+    const auto status = query(handle, &io, &counters, sizeof(counters), 7);
+    if (status != 0) return Result::unavailable(error_state(RtlNtStatusToDosError(status)),
+        {ErrorDomain::NtStatus, static_cast<std::uint32_t>(status), "NtQueryVolumeInformationFile.full_size"});
+    if (io.Information != sizeof(counters)) return Result::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "NtQueryVolumeInformationFile.full_size_length"});
+    return Result::available(counters);
+}
+
 class WindowsDirectoryCursor final : public DirectoryCursor {
 public:
     WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity, AdapterScope scope)
         : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
+    Observation<LocationInfo> inspect_location() const override {
+        LocationInfo result;
+        result.family = LocationQueryFamily::WindowsHandle;
+        result.directory = ck::files::identity(handle_.get(), scope_);
+        const auto not_applicable = [](const char* operation) {
+            return Observation<std::uint64_t>::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), operation});
+        };
+        result.filesystem_type_code = not_applicable("volume.filesystem_type_code");
+        result.filesystem_query_id = Observation<NativeIdentifier>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "volume.filesystem_query_id"});
+        result.posix_name_max = result.posix_name_chars_max = result.posix_path_max = not_applicable("volume.posix_limits");
+        result.native_mount_flags = not_applicable("volume.posix_mount_flags");
+        DWORD serial = 0, maximum = 0, flags = 0;
+        std::array<wchar_t, MAX_PATH + 1> name{};
+        if (GetVolumeInformationByHandleW(handle_.get(), nullptr, 0, &serial, &maximum, &flags, name.data(), static_cast<DWORD>(name.size()))) {
+            result.volume_query_serial = Observation<std::uint64_t>::available(serial);
+            result.windows_component_utf16_max = maximum != 0 ? Observation<std::uint64_t>::available(maximum) :
+                Observation<std::uint64_t>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "volume.component_limit"});
+            NativeVolumeFeatures features;
+            features.domain = VolumeFeatureDomain::WindowsVolumeFlags;
+            features.value[0] = flags;
+            features.valid[0] = std::numeric_limits<std::uint32_t>::max();
+            result.features = Observation<NativeVolumeFeatures>::available(features);
+            result.read_only_mount = Observation<bool>::available((flags & FILE_READ_ONLY_VOLUME) != 0);
+            result.case_preserving_names = Observation<bool>::available((flags & FILE_CASE_PRESERVED_NAMES) != 0);
+            const auto end = std::find(name.begin(), name.end(), L'\0');
+            std::u16string text;
+            for (auto at = name.begin(); at != end; ++at) text.push_back(static_cast<char16_t>(*at));
+            auto id = end != name.end() ? NativeFeatureIdentifier::from_windows(std::move(text)) : std::nullopt;
+            result.filesystem_name = id ? Observation<NativeFeatureIdentifier>::available(std::move(*id)) :
+                Observation<NativeFeatureIdentifier>::unavailable(ObservationState::Failed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "volume.filesystem_name"});
+        } else {
+            const DWORD code = GetLastError();
+            const NativeError error{ErrorDomain::Win32, code, "GetVolumeInformationByHandleW"};
+            result.volume_query_serial = result.windows_component_utf16_max = Observation<std::uint64_t>::unavailable(error_state(code), error);
+            result.features = Observation<NativeVolumeFeatures>::unavailable(error_state(code), error);
+            result.filesystem_name = Observation<NativeFeatureIdentifier>::unavailable(error_state(code), error);
+            result.read_only_mount = result.case_preserving_names = Observation<bool>::unavailable(error_state(code), error);
+        }
+        FILE_CASE_SENSITIVE_INFO case_info{};
+        if (GetFileInformationByHandleEx(handle_.get(), FileCaseSensitiveInfo, &case_info, sizeof(case_info))) {
+            result.windows_directory_case_flags = Observation<std::uint32_t>::available(case_info.Flags);
+            result.case_sensitive_directory = Observation<bool>::available((case_info.Flags & FILE_CS_FLAG_CASE_SENSITIVE_DIR) != 0);
+        } else {
+            const DWORD code = GetLastError();
+            const NativeError error{ErrorDomain::Win32, code, "FileCaseSensitiveInfo"};
+            result.windows_directory_case_flags = Observation<std::uint32_t>::unavailable(error_state(code), error);
+            result.case_sensitive_directory = Observation<bool>::unavailable(error_state(code), error);
+        }
+        const auto space = volume_space(handle_.get());
+        if (space.value()) {
+            const auto native_unit = static_cast<std::uint64_t>(space.value()->sectors_per_unit) * space.value()->bytes_per_sector;
+            const auto unit = detail::space_bytes(1, native_unit);
+            result.space_accounting_unit = unit;
+            if (unit.value()) {
+                result.total_bytes = detail::signed_space_bytes(space.value()->total, *unit.value());
+                result.free_bytes = detail::signed_space_bytes(space.value()->actual_available, *unit.value());
+                result.available_bytes = detail::signed_space_bytes(space.value()->caller_available, *unit.value());
+            } else result.total_bytes = result.free_bytes = result.available_bytes = unit;
+        } else {
+            const auto& e = *space.unavailable_detail();
+            result.space_accounting_unit = result.total_bytes = result.free_bytes = result.available_bytes =
+                Observation<std::uint64_t>::unavailable(e.state, e.error);
+        }
+        return Observation<LocationInfo>::available(std::move(result));
+    }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
