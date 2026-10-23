@@ -304,7 +304,7 @@ API is described as implemented. Record clean/incremental build baselines.
 
 ### WP-01 — model and native services
 
-- [ ] Add core/platform targets with strict warnings, injected filesystem/time,
+- [x] Add core/platform targets with strict warnings, injected filesystem/time,
   identities, fake adapters and explicit resource ownership.
 - [ ] Implement entry classification, lossless paths, metadata/stream inventory,
   native identity queries, permissions and destination capability inspection.

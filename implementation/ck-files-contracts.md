@@ -720,6 +720,77 @@ becomes permanent deletion and that the OS facility can restore its result.
 The permanent-delete command requires independent explicit consent and a
 qualified non-following retirement protocol. A general Undo action is absent.
 
+## Held-object inventory collection
+
+`ObjectInventoryJob` collects one already-open `OpenedEntry` on its owning worker.
+It never reopens a pathname, follows a link, elevates privileges or mutates the
+object. It requests basic metadata before/after collection, storage observations,
+link/reparse payloads, channel and attribute catalogs, each catalogued attribute
+value and all six explicit native security query parts. No main-data/named-stream
+content API is called. Attribute values are explicitly read and may themselves
+contain additional file data, quarantine/security markings or other opaque data.
+Native adapter provider guards and native access failures still apply; this job
+does not grant hydration consent or promise universal no-hydration behavior.
+
+A private factory seals `CompletedObjectInventory` only after all phases finish.
+The result retains the exact object handle and immutable observations; final
+retirement and further `object_for_worker()` queries belong on workers. This
+does not attest the original pathname or parent membership. Renaming, removing
+or replacing that name cannot retarget collection. Issued results can outlive
+job abandonment and retain their object until their last owner retires.
+
+Unsupported, Unknown, Denied, Gone, Changed and Failed native query replies stay
+independent fields. An unavailable attribute catalog has no value reads; an
+available catalog records an indexed reply for every descriptor, even when a
+value read is denied or hits its native limit. Security replies are indexed by
+`inventory_security_parts`; no descriptor is silently weakened and no failed
+query becomes empty/absent. Completion means the collection phases finished,
+not complete native feature coverage, preservation feasibility or permission to
+operate. Consumers must evaluate every field and its exact coverage.
+
+`identity_continuity` compares only before/after IDs while the object is pinned.
+Same does not mean stable data, sizes, times, flags, attributes, ACLs or catalog
+membership. `compare_owner()` separately compares a query payload's owner with
+the first object observation; unavailable/unqualified IDs stay unavailable,
+different IDs stay Different. Neither comparison proves snapshot consistency.
+Remaining recursive/frozen planning must qualify feature owners, concurrent
+changes, coverage and operation-specific capabilities before consent/execution.
+
+Catalogs are checked incrementally before attribute value reads: native record
+count limits, known coverage/kind/role enum values, exact namespace identifiers
+and duplicate identifiers. POSIX bytes, Windows UTF-16 and Windows EA bytes are
+distinct; no Unicode decoding, case folding or display conversion participates.
+Attribute replies must match the requested catalog identifier; security replies
+must match the requested part. Missing link payloads, invalid outer enums and
+native replies exceeding their value/payload bounds fail collection. This is
+envelope validation, not ACL semantics or native reparse-buffer parsing; native
+decoders retain their own contracts.
+
+Per-query `InventoryLimits` pass unchanged to native methods, whose wire buffer
+accounting differs by query family. Separate cumulative retained limits count
+query observations, catalog descriptors and attribute reads, plus native
+identifier bytes, binary values and link payload/decoded names. A long
+identifier is not rejected merely because a native value buffer budget is
+smaller. Checked addition/subtraction and UTF-16 multiplication refuse excess
+without returning a prefix. Limits bound these payloads/record counts, not total
+process memory, diagnostic strings, a native adapter's temporary allocations or
+caller-owned fixtures. A native reply can temporarily coexist with staging.
+
+Each advance performs at most 256 phase/descriptor steps with an injected
+cooperative time slice (20 ms default). Completed queries commit privately
+before time/cancellation yields, so resume does not repeat them. Already-stopped
+calls make no queries. Cancellation pauses and retains private state; explicit
+abandonment releases it. Clock reversal, malformed replies and aggregate limits
+are terminal; exceptions poison with nonallocating error text, release ownership
+and rethrow. Terminal advances make no I/O. Individual native methods (which
+may contain several syscalls), comparisons, allocations and retirement can
+outlast a time slice; this job neither preempts native I/O nor supplies a worker
+scheduler, UI publication gate or disk-backed large inventory store.
+
+[Object inventory evidence](evidence/ck-files-object-inventory-20261024.json)
+records deterministic and native validation on all three platforms. This is a
+read-only collection boundary, not a copy/move implementation or release gate.
+
 ## Test evidence required before mutation enablement
 
 Every feature category needs exact-preserve, accepted-loss, refused-loss,

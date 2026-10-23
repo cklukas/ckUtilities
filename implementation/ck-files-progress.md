@@ -1879,3 +1879,70 @@ and cleanup. UI boundaries (76 domain sources), ckVision-only (447 active files)
 ckdocs (24 pages) and whitespace checks pass. Initial selection pinning, remaining
 native inventories, operation capabilities, collision rules and worker/UI/large-view
 integration remain; WP-01 acceptance stays open and WP-02 has not started.
+
+## 2026-10-24 — WP-01 held-object inventory collection
+
+Added the worker-only `ObjectInventoryJob` and sealed immutable result. Through
+one retained native object it collects before/after basic metadata, storage,
+link/reparse data, channel/attribute catalogs, every listed attribute value and
+all six security query parts. It preserves independent native failures and
+coverage; completion does not imply a snapshot, complete feature inventory or
+operation capability. Attribute values can carry additional file data and retain
+that role and exact bytes. No main-data/named-stream content API, pathname
+reopening, link traversal, elevation or production mutation was added.
+
+The job incrementally checks catalog envelopes/duplicates, requested attribute
+and security keys, query record/value bounds and separate cumulative retained
+payload limits. Native wire-buffer budgets pass through unchanged; long feature
+names have independent storage accounting. A changed attribute identifier stops
+collection with Changed/MetadataChanged. Before/after identity continuity and
+individual payload-owner comparisons remain separate from content stability.
+
+Advances have a 256-step bound, injected cooperative clock slices and resumable
+cancellation. Completed native queries commit privately before yielding and do
+not repeat. No partial result publishes. Aggregate/malformed/clock failures and
+exceptions poison staging and close native ownership; allocation-failure error
+construction allocates no text. Abandonment releases private state, while issued
+results retain the object until their last worker owner retires. Native methods,
+allocation/comparison and destruction can still exceed a slice.
+
+Twenty deterministic cases cover all query families/failure states, per-value
+denial, cancellation at every query-family boundary, slow calls, 300 attributes,
+malformed/unbounded replies, resource/configuration refusal, exact namespaces,
+additional-data values, owner disagreement, changed/unknown IDs, changing sizes,
+clock reversal and bad_alloc. Three native cases on each host qualify result
+pinning after rename/replacement, cancellation/resume/abandonment, and collection
+through a removed name. Windows delete-pending names are treated according to
+their native lifetime rather than assuming immediate POSIX name reuse.
+
+Final validation used the same **105-file manifest**, including the test host.
+All **39 Files suites** passed: **301 macOS / 299 Linux / 305 Windows cases**.
+Final six-step build/test seconds were **3.729/0.766**, **5.663/0.120** and
+**9.782/2.334** respectively. UTC intervals are recorded in the evidence; the
+validation date was 2026-10-23 and the local milestone date is 2026-10-24.
+Recent comparable Mac six-step builds were 3.471/3.366 s. Actual compiled units,
+links, current hashes and all 23 new test markers prove freshness.
+
+Focused sanitizers compiled all 25 core units, platform adapter, simulator,
+domain/native inventory fixtures and test host (30 units), without cached
+objects. **49 cases passed per host**: Mac ASan+UBSan **49.845/0.360 s**;
+Linux ASan+UBSan **120.513/0.103**; Windows ASan **55.657/0.193**. Preliminary
+same-scope builds before the final additional-data/race checks were
+49.694/117.740/53.824 s and passed 48 cases. Final source inputs were rebuilt
+and rerun on all hosts after review; warnings remained errors and sanitizer
+runs reported no diagnostics.
+
+Both preliminary and final diagnostic outputs were hashed, checked for owners
+and removed. Full scratch-root audits were empty; current normal builds remain.
+Windows writes stayed on V: and Mac temporary work on S8T. No GUI was launched.
+[Object inventory evidence](evidence/ck-files-object-inventory-20261024.json)
+records source/output/log hashes, commands, times, case markers and cleanup.
+UI boundaries (78 domain sources), ckVision-only (451 active files), ckdocs
+(24 pages) and whitespace checks pass.
+
+WP-01's core/platform targets, injected filesystem/time, identities, fake
+adapters and explicit ownership item is now complete. Its inventory/capability
+and pane/link/collision items remain open: initial selection acquisition,
+operation-specific capability and collision/equivalence rules, remaining native
+inventories and worker/UI/large-view integration still need implementation.
+WP-01 acceptance remains open; WP-02 has not started.
