@@ -421,3 +421,78 @@ Remaining WP-01 work includes xattr/value and full metadata inventories,
 driver-specific channel coverage, destination capabilities, filesystem/time
 fakes and pane sorting/filter/selection semantics. No WP-01 checkbox is marked
 complete by these foundational milestones. No mutation command exists.
+
+
+## WP-01: binary extended-attribute observations (2026-10-23)
+
+Added bounded attribute catalogs and explicit binary value reads to owned entries.
+Identifiers distinguish POSIX raw bytes, UTF-16 channel identifiers, and Windows
+8-bit EA names; display escaping never changes the native identifier. Catalogs
+carry owner observations and exact coverage, with individual size/flag errors.
+Known security, resource-fork, compression-representation and required-EA roles
+are classified without asserting cross-platform equivalence or safe replay.
+
+POSIX list/value readers confirm even zero-length values with a real read,
+retry only size-growth races up to three attempts, and reject malformed or
+incomplete lists without returning a successful prefix. Limits report Unknown;
+access denial and native I/O failures retain their native codes. macOS uses
+owned-descriptor flistxattr/fgetxattr with public XATTR_SHOWCOMPRESSION so hidden
+compression attributes are not deliberately omitted. Linux O_PATH observations
+use the kernel /proc/self/fd namespace, verify procfs and the held object's
+identity before/after queries, and never reopen the original name or acquire a
+data-read descriptor. If that namespace or identity cannot be established, the
+query remains unavailable. This requires a usable procfs; it is not a generic
+promise for every Linux namespace. Successful coverage is explicitly limited
+to attributes visible to current credentials; inaccessible namespaces are not
+claimed absent. These live reads do not establish a filesystem snapshot.
+
+Windows uses the documented native EA query contract through the exported
+NtQueryEaFile service, one complete record at an explicit one-based index.
+Bounded retries repeat that index, avoiding partial-prefix/cursor assumptions.
+FILE_READ_EA is requested explicitly with MetadataAndAttributes; metadata-only
+handles retain their narrower rights. Missing filtered results and zero-length
+EA deletion witnesses are Gone, distinct from valid empty POSIX values. Native
+flags are preserved; FILE_NEED_EA is identified as requiring interpretation.
+Native tests actually wrote and queried feature-bearing EAs on V:'s ReFS volume;
+no NTFS or other filesystem was substituted to obtain passing results.
+
+New conformance tests cover binary and empty values, native raw/Unicode names,
+large values, limits, owner identity after rename/replacement/unlink, live
+updates, directories, and final symlinks/junctions with attributes on targets.
+Linux mode-zero denial preserves permissions; Windows metadata-only access
+cannot read EAs. Portable tests cover malformed/truncated lists/records,
+namespace separation, exact binary bytes, size races and retry limits.
+
+Validation results and exact fingerprints are recorded in
+[evidence](evidence/ck-files-attributes-20261023.json). No mutation API, automatic
+elevation, hydration consent or metadata-preservation claim is introduced.
+Full security/ACL and storage/provider inventories, driver-specific channel
+coverage, destination capabilities, filesystem/time fakes and pane semantics
+remain WP-01 work. The package's acceptance checkboxes remain open.
+
+
+| Host / Release configuration | Final build interval (UTC) | Build / test elapsed | Result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 01:07:22.462–01:07:24.075 | 1.613 / 0.598 s | 63 cases, ten CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 01:06:35.352–01:06:37.231 | 1.879 / 0.083 s | 62 cases, ten CTest entries passed |
+| Windows x64 / MSVC 19.44, static CRT | 01:06:37.959–01:06:40.463 | 2.504 / 1.407 s | 64 cases, ten CTest entries passed |
+
+The final build logs show attributes.cpp and its decoder tests recompiled and
+both test executables linked. Earlier native implementation/fixture builds are
+also recorded in task logs; the same final 38-file source manifest was checked
+on Linux and Windows. The short final increments match those actual inputs;
+they are not clean full-application build observations. No Files app was launched.
+
+Direct sanitizer builds compiled all 20 core/platform/test translation units.
+macOS ASan + UBSan (-O1 -g, strict warnings, halt-on-error) built from
+01:06:25.894–01:06:58.858 UTC in 32.964 s and ran 63 cases in 0.612 s.
+Windows MSVC ASan (/O1 /Zi /MT /W4 /WX, halt-on-error) built from
+01:07:09.226–01:07:40.853 UTC in 31.628 s and ran 64 cases in 0.789 s.
+Both passed without sanitizer diagnostics. Their timings were compared with
+prior direct 17-unit observations (38.983 s Mac, 24.427 s Windows); logs confirm
+all listed units compiled, and no cache substitutes those direct inputs.
+The Windows diagnostic launcher initially used an incorrect renamed source
+filename and stopped before compilation; correcting the launcher required no
+product change. Concise records survive cleanup of disposable sanitizer outputs;
+current normal builds remain at the recorded absolute paths. Boundary checks
+passed (44 domain files, 385 ckVision-only files), as did ckdocs (24 pages).

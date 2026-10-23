@@ -10,6 +10,8 @@
 #include <windows.h>
 #include <winternl.h>
 
+#include <bit>
+#include <set>
 #include <algorithm>
 #include <array>
 #include <span>
@@ -224,6 +226,33 @@ Observation<BasicMetadata> handle_metadata(HANDLE handle, const AdapterScope& sc
 }
 
 using OwnedHandle = std::unique_ptr<void, HandleCloser>;
+// Public native-system-service ABI: ZwQueryEaFile contract, Nt user-mode
+// entry point. No private information class or hard-coded syscall number.
+using QueryEa = NTSTATUS (NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, BOOLEAN, PVOID, ULONG, PULONG, BOOLEAN);
+Observation<QueryEa> query_ea_api() {
+    const auto module = GetModuleHandleW(L"ntdll.dll");
+    const auto address = module ? GetProcAddress(module, "NtQueryEaFile") : nullptr;
+    if (!address) {
+        const DWORD code = GetLastError();
+        return Observation<QueryEa>::unavailable(ObservationState::Unsupported, {ErrorDomain::Win32, code, "NtQueryEaFile.resolve"});
+    }
+    static_assert(sizeof(QueryEa) == sizeof(address));
+    return Observation<QueryEa>::available(std::bit_cast<QueryEa>(address));
+}
+constexpr std::uint32_t no_eas = 0xC0000052U;
+constexpr std::uint32_t no_more_eas = 0x80000012U;
+constexpr std::uint32_t nonexistent_ea = 0xC0000051U;
+constexpr std::uint32_t buffer_overflow = 0x80000005U;
+constexpr std::uint32_t buffer_too_small = 0xC0000023U;
+
+template <class T>
+Observation<T> ea_failure(std::uint32_t code, const char* operation) {
+    auto state = error_state(RtlNtStatusToDosError(static_cast<NTSTATUS>(code)));
+    if (code == no_eas || code == no_more_eas || code == nonexistent_ea) state = ObservationState::Gone;
+    if (code == 0xC000004FU || code == 0xC0000010U) state = ObservationState::Unsupported;
+    return Observation<T>::unavailable(state, {ErrorDomain::NtStatus, code, operation});
+}
+
 class WindowsOpenedEntry final : public OpenedEntry {
 public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
@@ -274,7 +303,83 @@ public:
             // unsuccessful/truncated prefix. Denial and I/O errors are not retried.
         }
     }
+    Observation<AttributeCatalog> inspect_attributes(InventoryLimits limits = {}) const override {
+        using Result = Observation<AttributeCatalog>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "attributes.limits"});
+        AttributeCatalog result;
+        result.coverage = AttributeCoverage::WindowsExtendedAttributes;
+        result.owner = identity(handle_.get(), scope_);
+        std::set<std::string> seen;
+        for (ULONG index = 1; ; ++index) {
+            auto queried = query_ea(nullptr, 0, &index, limits);
+            if (!queried.value()) {
+                const auto& e = *queried.unavailable_detail();
+                if (e.error.domain == ErrorDomain::NtStatus &&
+                    (e.error.code == no_eas || e.error.code == no_more_eas || e.error.code == nonexistent_ea))
+                    return Result::available(std::move(result));
+                return Result::unavailable(e.state, e.error);
+            }
+            auto record = std::move(queried).take_value();
+            if (record.value.empty() || !seen.insert(*record.identifier.windows_ea_bytes()).second)
+                return Result::unavailable(ObservationState::Failed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "attributes.ea_enumeration"});
+            if (result.attributes.size() == limits.max_records)
+                return Result::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "attributes.record_limit"});
+            const auto role = attribute_role(record.identifier, record.flags);
+            result.attributes.push_back({std::move(record.identifier), role,
+                Observation<std::uint64_t>::available(record.value.size()), Observation<std::uint32_t>::available(record.flags)});
+        }
+    }
+    Observation<AttributeValue> read_attribute(const NativeFeatureIdentifier& id, InventoryLimits limits = {}) const override {
+        using Result = Observation<AttributeValue>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "attributes.limits"});
+        const auto* name = id.windows_ea_bytes();
+        if (!name || !NativeFeatureIdentifier::from_windows_ea(*name))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "attributes.identifier"});
+        // FILE_GET_EA_INFORMATION: next offset, one-byte name length, name/NUL.
+        std::vector<std::uint32_t> storage((6 + name->size() + 3) / 4, 0);
+        auto request = std::as_writable_bytes(std::span(storage));
+        request[4] = static_cast<std::byte>(name->size());
+        std::memcpy(request.data() + 5, name->data(), name->size());
+        auto queried = query_ea(request.data(), static_cast<ULONG>(6 + name->size()), nullptr, limits);
+        if (!queried.value()) { const auto& e = *queried.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto record = std::move(queried).take_value();
+        if (record.value.empty()) // Native filtered-query witness: zero deletes an EA.
+            return Result::unavailable(ObservationState::Gone,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::AttributeAbsent), "attributes.ea_absent"});
+        return Result::available({std::move(record.identifier), std::move(record.value), identity(handle_.get(), scope_),
+            Observation<std::uint32_t>::available(record.flags)});
+    }
 private:
+    Observation<detail::WindowsEaRecord> query_ea(void* names, ULONG names_size, PULONG index, InventoryLimits limits) const {
+        using Result = Observation<detail::WindowsEaRecord>;
+        const auto api = query_ea_api();
+        if (!api.value()) { const auto& e = *api.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto capacity = std::min<std::size_t>(4096, limits.max_native_bytes);
+        for (;;) {
+            std::vector<std::uint32_t> buffer((capacity + 3) / 4, 0);
+            IO_STATUS_BLOCK io{};
+            // Explicit one-based index makes retries independent of the handle's
+            // EA enumeration cursor. A name list, when present, selects the key.
+            const NTSTATUS status = (*api.value())(handle_.get(), &io, buffer.data(), static_cast<ULONG>(capacity),
+                TRUE, names, names_size, index, FALSE);
+            const auto code = static_cast<std::uint32_t>(status);
+            if (code == 0 || (code == buffer_overflow && io.Information != 0)) {
+                if (io.Information > capacity)
+                    return Result::unavailable(ObservationState::Failed,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "attributes.ea_count"});
+                return detail::decode_windows_ea_record(std::as_bytes(std::span(buffer)).first(static_cast<std::size_t>(io.Information)));
+            }
+            if (code != buffer_too_small && code != buffer_overflow) return ea_failure<detail::WindowsEaRecord>(code, "NtQueryEaFile");
+            if (capacity == limits.max_native_bytes)
+                return Result::unavailable(ObservationState::Unknown, {ErrorDomain::NtStatus, code, "NtQueryEaFile.buffer_limit"});
+            capacity = capacity > limits.max_native_bytes / 2 ? limits.max_native_bytes : capacity * 2;
+        }
+    }
     OwnedHandle handle_;
     AdapterScope scope_;
 };
@@ -283,7 +388,9 @@ class WindowsDirectoryCursor final : public DirectoryCursor {
 public:
     WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity, AdapterScope scope)
         : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
-    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const override {
+    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
+        if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
         const auto* units = name.windows_units();
         if (!units || !NativeName::from_windows(*units) || units->find(u':') != std::u16string::npos ||
@@ -306,7 +413,7 @@ public:
         // Attributes=0 requests exact native spelling, not case-insensitive lookup.
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
-        const NTSTATUS status = NtCreateFile(&raw, FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &io, nullptr, 0,
+        const NTSTATUS status = NtCreateFile(&raw, FILE_READ_ATTRIBUTES | SYNCHRONIZE | (access == EntryAccess::MetadataAndAttributes ? FILE_READ_EA : 0), &attributes, &io, nullptr, 0,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
             FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
         OwnedHandle opened(raw);

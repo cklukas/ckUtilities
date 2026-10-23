@@ -43,7 +43,9 @@ DirectoryRead DirectoryCursor::read(std::size_t limit, std::stop_token stop) {
     }
 }
 
-Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::open_child(const NativeName&) const {
+Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::open_child(const NativeName&, EntryAccess access) const {
+    if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
     return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "open_child"});
 }

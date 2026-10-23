@@ -9,7 +9,7 @@
 
 namespace ck::files {
 
-enum class NameEncoding { PosixBytes, WindowsUtf16 };
+enum class NameEncoding { PosixBytes, WindowsUtf16, WindowsEaBytes };
 
 // Presentation only, including for non-path native identifiers. Never parse
 // these escaped UTF-8 strings back into operation names.

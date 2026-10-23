@@ -10,4 +10,12 @@ Observation<DataChannelCatalog> OpenedEntry::inspect_data_channels(InventoryLimi
     return Observation<DataChannelCatalog>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "channels.native_query"});
 }
+Observation<AttributeCatalog> OpenedEntry::inspect_attributes(InventoryLimits limits) const {
+    return Observation<AttributeCatalog>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "attributes.native_query"});
+}
+Observation<AttributeValue> OpenedEntry::read_attribute(const NativeFeatureIdentifier&, InventoryLimits limits) const {
+    return Observation<AttributeValue>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "attributes.native_query"});
+}
 } // namespace ck::files

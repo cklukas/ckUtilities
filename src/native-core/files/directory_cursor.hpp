@@ -50,7 +50,7 @@ public:
     // One native component only, opened without following the final link or
     // reparse point. This captures the object present at open time, not an
     // earlier enumeration snapshot. Revalidate identity before later actions.
-    virtual Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const;
+    virtual Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const;
     const Observation<ObjectIdentity>& identity() const noexcept { return identity_; }
 
 protected:

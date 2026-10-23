@@ -19,11 +19,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#if defined(__APPLE__)
 #include <sys/xattr.h>
-#endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 #endif
 
 namespace ck::files {
@@ -68,9 +68,9 @@ void platform_fields(BasicMetadata& result) {
     result.reparse_tag = not_applicable<std::uint32_t>("reparse_tag");
 }
 
-Observation<BasicMetadata> stat_metadata(int descriptor, const char* path, bool from_handle, const AdapterScope& scope) {
+Observation<BasicMetadata> stat_metadata(int descriptor, const char* path, bool from_handle, const AdapterScope& scope, int path_flags = AT_SYMLINK_NOFOLLOW) {
     struct stat native{};
-    if ((from_handle ? fstat(descriptor, &native) : fstatat(descriptor, path, &native, AT_SYMLINK_NOFOLLOW)) != 0) {
+    if ((from_handle ? fstat(descriptor, &native) : fstatat(descriptor, path, &native, path_flags)) != 0) {
         const int code = errno;
         return Observation<BasicMetadata>::unavailable(errno_state(code), {ErrorDomain::Posix, code, from_handle ? "fstat" : "fstatat"});
     }
@@ -129,7 +129,7 @@ Observation<BasicMetadata> statx_metadata(int descriptor, const char* path, int 
         // The older stat interface is a separate documented query, not a claim
         // that omitted statx-only fields were observed. Do not retry denial or
         // I/O failures through a different API and conceal the original error.
-        if (code == ENOSYS) return stat_metadata(descriptor, path, (flags & AT_EMPTY_PATH) != 0, scope);
+        if (code == ENOSYS) return stat_metadata(descriptor, path, (flags & AT_EMPTY_PATH) != 0, scope, flags & AT_SYMLINK_NOFOLLOW);
         return Observation<BasicMetadata>::unavailable(errno_state(code), {ErrorDomain::Posix, code, "statx"});
     }
     BasicMetadata result;
@@ -220,7 +220,120 @@ public:
         return Result::available(std::move(result));
     }
 #endif
+    Observation<AttributeCatalog> inspect_attributes(InventoryLimits limits = {}) const override {
+        using Result = Observation<AttributeCatalog>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "attributes.limits"));
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto proxy = attribute_proxy();
+        if (!proxy.value()) { const auto& e = *proxy.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto bytes = detail::read_attribute_bytes([&](std::span<std::byte> buffer) {
+#if defined(__linux__)
+            const auto count = listxattr(proxy.value()->c_str(), reinterpret_cast<char*>(buffer.data()), buffer.size());
+#else
+            const auto count = flistxattr(descriptor_.get(), reinterpret_cast<char*>(buffer.data()), buffer.size(), XATTR_SHOWCOMPRESSION);
+#endif
+            return attribute_reply(count, "listxattr.names");
+        }, limits);
+        if (!bytes.value()) { const auto& e = *bytes.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto decoded = detail::decode_posix_attribute_names(*bytes.value(), limits);
+        if (!decoded.value()) { const auto& e = *decoded.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        AttributeCatalog result;
+        result.owner = metadata.value()->identity;
+        result.coverage = AttributeCoverage::CredentialsVisiblePosix;
+        auto names = std::move(decoded).take_value();
+        for (auto& id : names) {
+            const auto size = attribute_size(*id.posix_bytes(), *proxy.value());
+            result.attributes.push_back({std::move(id), AttributeRole::Opaque, size,
+                Observation<std::uint32_t>::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "attributes.flags"))});
+            result.attributes.back().role = attribute_role(result.attributes.back().identifier);
+        }
+        const auto checked = attribute_proxy();
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available(std::move(result));
+    }
+    Observation<AttributeValue> read_attribute(const NativeFeatureIdentifier& id, InventoryLimits limits = {}) const override {
+        using Result = Observation<AttributeValue>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "attributes.limits"));
+        const auto* name = id.posix_bytes();
+        if (!name || !NativeFeatureIdentifier::from_posix(*name))
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidIdentifier, "attributes.identifier"));
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) { const auto& e = *metadata.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto proxy = attribute_proxy();
+        if (!proxy.value()) { const auto& e = *proxy.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto bytes = detail::read_attribute_bytes([&](std::span<std::byte> buffer) {
+#if defined(__linux__)
+            const auto count = getxattr(proxy.value()->c_str(), name->c_str(), buffer.data(), buffer.size());
+#else
+            const auto count = fgetxattr(descriptor_.get(), name->c_str(), buffer.data(), buffer.size(), 0, XATTR_SHOWCOMPRESSION);
+#endif
+            return attribute_reply(count, "getxattr.value");
+        }, limits);
+        if (!bytes.value()) { const auto& e = *bytes.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto checked = attribute_proxy();
+        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({id, std::move(bytes).take_value(), metadata.value()->identity,
+            Observation<std::uint32_t>::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "attributes.flags"))});
+    }
 private:
+    static detail::BufferReply attribute_reply(ssize_t count, const char* operation) {
+        if (count >= 0) return static_cast<std::size_t>(count);
+        const int code = errno;
+        const NativeError error{ErrorDomain::Posix, code, operation};
+        if (code == ERANGE) return detail::BufferTooSmall{error};
+#if defined(__linux__)
+        const auto state = code == ENODATA ? ObservationState::Gone : errno_state(code);
+#else
+        const auto state = code == ENOATTR ? ObservationState::Gone : errno_state(code);
+#endif
+        return UnavailableObservation{state, error};
+    }
+    Observation<std::uint64_t> attribute_size(const std::string& name, const std::string& proxy) const {
+#if defined(__linux__)
+        const auto count = getxattr(proxy.c_str(), name.c_str(), nullptr, 0);
+#else
+        (void)proxy;
+        const auto count = fgetxattr(descriptor_.get(), name.c_str(), nullptr, 0, 0, XATTR_SHOWCOMPRESSION);
+#endif
+        auto reply = attribute_reply(count, "getxattr.size");
+        if (const auto* size = std::get_if<std::size_t>(&reply)) return Observation<std::uint64_t>::available(*size);
+        if (const auto* error = std::get_if<UnavailableObservation>(&reply))
+            return Observation<std::uint64_t>::unavailable(error->state, error->error);
+        return Observation<std::uint64_t>::unavailable(ObservationState::Changed, std::get<detail::BufferTooSmall>(reply).error);
+    }
+    Observation<std::string> attribute_proxy() const {
+        using Result = Observation<std::string>;
+#if defined(__linux__)
+        // The kernel's descriptor namespace refers to the held object, including
+        // after rename/unlink. No source pathname or data-read fd is opened.
+        struct statfs native{};
+        if (statfs("/proc/self/fd", &native) != 0) {
+            const int code = errno;
+            return Result::unavailable(code == ENOENT || code == ENOTDIR ? ObservationState::Unknown : errno_state(code),
+                {ErrorDomain::Posix, code, "attributes.proc_namespace"});
+        }
+        if (static_cast<unsigned long>(native.f_type) != static_cast<unsigned long>(PROC_SUPER_MAGIC))
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, "attributes.proc_namespace"));
+        const auto path = std::string("/proc/self/fd/") + std::to_string(descriptor_.get());
+        const auto original = inspect_basic();
+        const auto via_proxy = statx_metadata(AT_FDCWD, path.c_str(), 0, scope_);
+        if (!original.value()) { const auto& e = *original.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!via_proxy.value()) {
+            const auto& e = *via_proxy.unavailable_detail();
+            return Result::unavailable(e.state == ObservationState::Gone ? ObservationState::Unknown : e.state, e.error);
+        }
+        const auto* expected = original.value()->identity.value();
+        const auto* actual = via_proxy.value()->identity.value();
+        const auto comparison = expected && actual ? compare_identity(*expected, *actual) : IdentityComparison::Unknown;
+        if (comparison != IdentityComparison::Same)
+            return Result::unavailable(comparison == IdentityComparison::Different ? ObservationState::Changed : ObservationState::Unknown,
+                adapter_error(AdapterError::UnqualifiedIdentity, "attributes.descriptor_identity"));
+        return Result::available(path);
+#else
+        return Result::available({}); // Darwin uses only the owned fd.
+#endif
+    }
     OwnedDescriptor descriptor_;
     AdapterScope scope_;
 };
@@ -234,7 +347,9 @@ class PosixDirectoryCursor final : public DirectoryCursor {
 public:
     PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity, AdapterScope scope)
         : DirectoryCursor(std::move(identity)), directory_(std::move(directory)), scope_(std::move(scope)) {}
-    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const override {
+    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
+        if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
+            adapter_error(AdapterError::InvalidAccess, "open_child.access"));
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
         const auto* spelling = name.posix_bytes();
         if (!spelling || !NativeName::from_posix(*spelling))

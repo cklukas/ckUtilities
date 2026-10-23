@@ -19,6 +19,8 @@ class NativeFeatureIdentifier final {
 public:
     static std::optional<NativeFeatureIdentifier> from_posix(std::string bytes);
     static std::optional<NativeFeatureIdentifier> from_windows(std::u16string units);
+    static std::optional<NativeFeatureIdentifier> from_windows_ea(std::string bytes);
+    const std::string* windows_ea_bytes() const noexcept;
     NameEncoding encoding() const noexcept;
     const std::string* posix_bytes() const noexcept;
     const std::u16string* windows_units() const noexcept;
@@ -27,7 +29,9 @@ public:
 private:
     explicit NativeFeatureIdentifier(std::string bytes) : value_(std::move(bytes)) {}
     explicit NativeFeatureIdentifier(std::u16string units) : value_(std::move(units)) {}
-    std::variant<std::string, std::u16string> value_;
+    struct EaBytes { std::string value; friend bool operator==(const EaBytes&, const EaBytes&) = default; };
+    explicit NativeFeatureIdentifier(EaBytes bytes) : value_(std::move(bytes)) {}
+    std::variant<std::string, std::u16string, EaBytes> value_;
 };
 
 struct InventoryLimits {
