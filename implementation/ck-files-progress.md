@@ -1546,3 +1546,56 @@ source hashes, build/test intervals, output paths and cleanup. Scheduling and
 owner-thread wiring, large indexes, selected-child refresh integration, full
 filesystem simulation, collision/path planning and remaining inventories and
 operation capabilities remain WP-01 work. No package acceptance box is closed.
+
+## 2026-10-23 — WP-01 reusable discovery filesystem simulation
+
+Added a shared, test-only `SimulatedFileSystem` implementing `BasicFileSystem`
+without host filesystem I/O. It separates path/child bindings from held objects,
+models independent directory cursors, exact native names, live metadata and
+adapter-scoped identities, and reports live cursor/entry counts. Queued actions
+inject typed failures, delays through the manual clock, side effects and
+exceptions. Call records expose unintended retries. Foreign nodes, relative
+bindings and directory cycles are refused. Count limits and single-owner use
+are explicit; this is not a process-memory quota or native behavior emulator.
+
+Twelve integration cases exercise production listing, pane-job, held-child and
+pane code: invalid Unicode in both native encodings, path replacement/unbinding,
+removed membership, unknown/denied diagnostics, failed scan disposal,
+cancellation/resumption, slow-open resource cleanup, exception poisoning,
+independent child cursors/link refusal, invalid binding refusal, retained
+selection and replacement detection while old handles remain open.
+
+Final reviewed source passes all 33 Files suites against a shared 91-file manifest:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 | 20:35:29.300–20:35:31.679 | 2.378 / 0.944 | 228 |
+| Lima Debian 13 arm64 | 20:35:57.123–20:36:00.116 | 2.993 / 0.097 | 225 |
+| Windows x64, static CRT | 20:36:02.047–20:36:10.406 | 8.359 / 3.024 | 232 |
+
+Initial builds regenerated CMake projects (3.3/0.1 s Mac, 2.2/0.1 s Linux,
+14.0/1.2 s Windows configure/generate), with total times 5.495/5.363/24.353 s.
+Final review hardened assertions so missing results produce diagnostics rather
+than invalid dereferences; validation was repeated after that change. Final
+logs show one fixture compilation and core-test link, with no production source
+change. The existing native executable correctly required no rebuild. Durations
+were checked against actual dependency work and previous records.
+
+Fresh sanitizer builds instrument all 22 core units, the new fixture and test
+host (24 translation units), without the native platform adapter. All 12 focused
+cases pass with strict warnings and halt-on-error. Mac ASan+UBSan built
+20:35:57.402–20:36:24.762 UTC in 27.360 s, testing in 0.204 s; Windows ASan built
+20:36:26.232–20:37:12.682 in 46.450 s, testing in 0.140 s. Pre-review same-scope
+builds took 30.066/46.454 s. Source lists/hashes and emitted Windows unit names
+were checked. Both rounds' diagnostic hashes and zero owners were recorded
+before removing their output trees. Current normal builds remain; Windows
+writes stayed on V:. No GUI was launched.
+
+[Simulation evidence](evidence/ck-files-simulation-20261023.json) records final
+source hashes, tests, direct sanitizer commands and cleanup. Boundaries (72
+core sources / 438 active files), ckdocs (24 pages) and whitespace checks pass.
+The simulator uses deterministic open-time enumeration names and live child
+lookup, not a native snapshot guarantee. Other query families remain explicitly
+Unsupported. Inventory/mutation simulation, remaining native queries,
+collision/path planning, large indexes, refresh integration and scheduling remain
+unfinished. No WP-01 acceptance box is closed and no production mutation added.

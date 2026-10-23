@@ -144,6 +144,40 @@ provider hydration or mutation guarantee is implied.
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
 publication/failure tests and native streaming-to-pane tests on all three hosts.
 
+## Deterministic discovery simulation
+
+`tests/support/simulated_filesystem.hpp` implements the injected `BasicFileSystem`
+discovery boundary without host filesystem access. A simulator owns an adapter
+scope; object IDs increase without reuse. Absolute path bindings and directory
+membership are independent of held objects. Rebinding/removing a path or child
+cannot retarget an existing cursor/entry handle. File aliases may share an
+object. Directory cycles and foreign simulator nodes are refused.
+
+Each cursor captures a deterministic sequence of names on open; child opens
+resolve live membership. This deliberately permits enumerated names to become
+Gone and later additions to be absent from that cursor. It models one possible
+scan interleaving, not universal native enumeration behavior or a filesystem
+snapshot. Child directory cursors own independent iteration positions. Final
+link nodes are inspectable as links and cannot become directory cursors.
+
+Per-operation queued actions inject typed failures, manual-clock elapsed time,
+side effects and exceptions. Call records and live cursor/entry counts allow
+assertions about retries, cleanup and excessive work. Default metadata is
+minimal; unknown fields remain unknown. Native POSIX bytes and Windows UTF-16
+components are compared exactly and may be exercised on any host. Absolute
+fixture paths are keys only; opening them performs no host I/O.
+
+The fixture is single-owner. Nodes (4096 creations), path bindings (4096), child
+bindings (4096 per directory), queued actions (4096) and retained call records
+(100000) have explicit test limits. These counts are not a process-memory quota.
+It does not emulate case folding, normalization, native error witnesses, link
+traversal, provider behavior or mutation guarantees. Unimplemented inventory,
+lookup and location queries retain the boundary's Unsupported defaults. Full
+inventory/mutation simulation still requires explicit query-family extensions.
+
+[Simulation evidence](evidence/ck-files-simulation-20261023.json) covers the
+fixture with the production discovery, pane and held-child code on all hosts.
+
 ## Listing cancellation and worker resource ownership
 
 `PaneModel::cancel_listing` revokes only the current request from that pane.
