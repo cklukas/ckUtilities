@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "directory_listing.hpp"
 #include "scratch_directory.hpp"
+#include "manual_monotonic_clock.hpp"
 #include "cvision/testing/cktest.hpp"
 #include <fstream>
 #include <set>
@@ -73,4 +74,17 @@ CK_TEST(native_listing_cancellation_and_resume_preserve_all_entries_and_leave_cw
     const auto entries = all(*source, 7, 64); std::set<std::string> seen;
     for (const auto& entry : entries) { CK_CHECK(seen.insert(entry.name.display_name()).second); (void)required(entry.metadata); }
     CK_CHECK(entries.size() == 257 && source->read().state == DirectoryReadState::End && fs::current_path() == before);
+}
+
+CK_TEST(native_listing_time_slices_resume_prepared_handles_with_an_injected_monotonic_clock) {
+    const ck::testing::ScratchDirectory scratch("files-listing-clock");
+    for (int index = 0; index < 4; ++index) write(scratch.path() / ("entry-" + std::to_string(index)));
+    NativeFileSystem filesystem; auto clock = std::make_shared<ck::testing::ManualMonotonicClock>();
+    clock->per_read = MonotonicClock::Duration(1);
+    auto opened = DirectoryListing::open(filesystem, scratch.path(), {3, 64, 64, MonotonicClock::Duration(3)}, clock);
+    (void)required(opened); auto source = std::move(opened).take_value();
+    const auto first = source->read(); CK_CHECK(first.state == DirectoryReadState::More && first.time_slice_exhausted && first.entries.empty());
+    const auto entries = all(*source, 3, 64); std::set<std::string> seen;
+    for (const auto& entry : entries) { CK_CHECK(seen.insert(entry.name.display_name()).second); (void)required(entry.metadata); }
+    CK_CHECK(entries.size() == 4 && seen.size() == 4);
 }

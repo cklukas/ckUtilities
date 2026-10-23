@@ -1,9 +1,9 @@
 # Copyright (c) 2026 C. Klukas. All rights reserved.
 # SPDX-License-Identifier: GPL-3.0-or-later
-add_executable(ck_files_core_tests test_files_names.cpp test_files_metadata.cpp test_files_directory.cpp test_files_channels.cpp test_files_attributes.cpp test_files_security.cpp test_files_location.cpp test_files_storage.cpp test_files_links.cpp test_files_pane.cpp test_files_continuity.cpp test_files_name_mapping.cpp test_files_lookup.cpp test_files_name_limits.cpp test_files_listing.cpp)
+add_executable(ck_files_core_tests test_files_names.cpp test_files_metadata.cpp test_files_directory.cpp test_files_channels.cpp test_files_attributes.cpp test_files_security.cpp test_files_location.cpp test_files_storage.cpp test_files_links.cpp test_files_pane.cpp test_files_continuity.cpp test_files_name_mapping.cpp test_files_lookup.cpp test_files_name_limits.cpp test_files_listing.cpp test_files_clock.cpp)
 target_link_libraries(ck_files_core_tests PRIVATE ck_files_core ck_vision_cktest_main)
 cktools_strict(ck_files_core_tests)
-foreach(suite names metadata directory channels attributes security location storage links pane continuity name_mapping lookup name_limits listing)
+foreach(suite names metadata directory channels attributes security location storage links pane continuity name_mapping lookup name_limits listing clock)
   add_test(NAME test_files_${suite} COMMAND ck_files_core_tests --suite test_files_${suite}.cpp)
   set_tests_properties(test_files_${suite} PROPERTIES LABELS "files;unit")
 endforeach()

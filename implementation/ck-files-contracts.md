@@ -99,6 +99,40 @@ Native filesystem, driver, directory case/normalization/alias semantics and the
 actual operation/API path limits still require independent checks. No helper
 silently sanitizes or renames a component to make a destination work.
 
+## Injected monotonic time and cooperative slices
+
+`MonotonicClock` supplies process-local steady-clock readings through shared
+ownership; the native implementation uses `std::chrono::steady_clock`. Readings
+are nondecreasing, with an arbitrary epoch, not UTC, file timestamps or durable
+journal values. `CooperativeTimeSlice` accepts a positive native clock duration.
+It checks chronological order before unsigned elapsed subtraction, avoiding
+signed range overflow and deadline addition. Negative epochs are valid. Observed
+backwards readings fail permanently, including when discovery begins its next
+slice. Clock exceptions poison discovery before being rethrown.
+
+Directory discovery accepts a positive slice up to one second, default 20 ms.
+The injected clock is checked between bounded cursor-read/open/inspection stages.
+More with `time_slice_exhausted` indicates a detected time yield. This is not a
+hard deadline: cursor reads can include bounded skipped-record loops, and any
+native/provider call can block beyond the slice. Root opening is a separate
+worker call. No process interruption or automatic scheduling is implemented.
+
+A successful slow open may yield with at most one privately prepared child
+handle, allowing the next slice to inspect that same object rather than repeatedly
+reopening without progress. A completed inspection closes the handle before its
+row is published. Cancellation closes it and retains the uninspected component;
+explicit resumption reopens the component as a fresh observation. Clock failures,
+exceptions and destruction also release it. Results expose no child handle or
+mutation authority. Prepared handles can restrict ancestor renames on Windows;
+future worker/mutation coordination must respect those restrictions without
+silently dropping qualified identity pins or weakening sharing protection.
+
+[Clock and slice evidence](evidence/ck-files-clock-20261023.json) covers exact
+boundaries, negative epochs, extreme signed-representation ranges, reversal
+within/across slices, injected exceptions, slow stage progress, cancellation and
+native directory resumption. Existing fake discovery tests use manual time;
+no sleeps or mutation of the host clock are required.
+
 ## Bounded directory discovery
 
 `DirectoryListing` owns one cursor and runs on one worker. Its root factory uses
@@ -111,7 +145,7 @@ after each inspection. Returned rows contain lossless names and explicit
 unknown and other errors instead of dropping the names.
 
 Per-batch row and native-name-byte limits have hard ceilings, with one pending
-component bounded separately. UTF-16 storage is counted in bytes for this resource
+component bounded separately and at most one prepared child across time yields. UTF-16 storage is counted in bytes for this resource
 budget, not filesystem length units. A consumed component that cannot fit the
 remaining batch budget is retained for the next batch. An individually excessive
 component produces terminal Error, never a truncated name or completed listing.
@@ -132,8 +166,8 @@ not retain child objects and cannot establish held-child selection continuity
 or authorize mutation. Native calls can block; there is no instant-cancel claim.
 [Discovery evidence](evidence/ck-files-listing-20261023.json) records injected
 fault/cancellation/ownership tests and actual native streaming on all three hosts.
-Clock injection, scheduling, large-view indexing and UI publication remain
-separate unfinished work.
+Worker scheduling, large-view indexing and UI publication remain separate
+unfinished work; discovery time injection is specified above.
 
 ## Relative directory enumeration cursors
 

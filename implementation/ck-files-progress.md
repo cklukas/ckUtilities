@@ -1358,3 +1358,69 @@ WP-01 remains in progress: full filesystem/time fakes, clock/scheduling, retaine
 large-view indexes, collision/path planning rules, remaining inventories/provider
 coordination and operation capabilities are still required. No package checkbox
 is closed by this milestone and no production mutation was added.
+
+
+## WP-01 milestone — injected monotonic discovery slices (2026-10-23)
+
+Added an owned injectable monotonic-clock boundary and a checked cooperative
+elapsed-time slice. Native steady readings have arbitrary epochs and are not
+UTC or persistent timestamps. Chronological ordering plus unsigned subtraction
+avoids signed elapsed/deadline overflow, including negative epochs and the full
+signed-representation range. Observed backwards readings within or across
+slices fail explicitly; injected clock exceptions poison discovery.
+
+Discovery now has positive slices up to one second, default 20 ms, and reports
+a detected time yield as More plus `time_slice_exhausted`. It checks between
+bounded cursor-read/open/inspection stages; this does not interrupt blocking
+calls or impose a hard OS timeout. A slow successful open retains one prepared
+child so the following slice can inspect it, preventing repeated reopen
+starvation. Cancellation closes the prepared handle and retains its name;
+explicit resume reopens. Inspections, clock failures, exceptions and destruction
+release handles correctly. Published rows never retain these child objects.
+Worker scheduling and UI publication are still separate unfinished work.
+
+Four clock cases cover exact boundaries, negative epochs/extreme spans, sticky
+reversal and cross-slice ordering, invalid durations, exceptions and the native
+nondecreasing clock without sleeps. Five additional listing cases cover slow
+read/open/inspection progress, prepared-handle cancellation, reversal/exception
+cleanup and configuration validation before root I/O. Existing ten fake listing
+cases now use injected deterministic time. A fourth native listing case drives
+time yields and real prepared-handle resumption with a manual clock on each OS.
+
+All 30 Files CTest entries passed against the same 85-file source manifest:
+
+| Host | Build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 04:50:42.710–04:50:53.260 | 10.550 / 1.103 | 197 |
+| Lima Debian 13 arm64 / GCC 14 | 04:51:49.418–04:51:58.609 | 9.192 / 0.211 | 194 |
+| Windows x64 / MSVC 19.44, static CRT | 04:51:53.744–04:52:14.370 | 20.626 / 2.498 | 201 |
+
+Builds compiled changed core/fixture sources and relinked the core library and
+both executables, with configuration/generation 6.8/0.2 s Mac, 3.5/0.1 s Linux
+and 11.0/0.7 s Windows. The preceding discovery builds took 10.500/8.229/18.768 s
+with a smaller compile set; actual inputs, compile/link logs and final source
+hashes were checked rather than inferring freshness from time. No build or test
+failure required a correction in this milestone.
+
+Sanitizers instrument all 21 core units, their platform adapter, three fixtures
+and test host (26 translation units). Mac ASan+UBSan built
+04:53:23.071–04:54:11.320 UTC in 48.249 seconds and passed all 23 clock/listing
+cases in 0.993 seconds. Windows ASan built 04:53:23.537–04:54:01.632 UTC in
+38.096 seconds and passed the same cases in 0.517 seconds. Both use strict
+warnings and halt-on-error, with no sanitizer diagnostics, including extreme
+elapsed arithmetic. This is broader than the preceding 24-unit checks
+(42.642/37.953 seconds) and uses direct compiler commands without compiler-cache
+wrappers. It is not complete Files-suite sanitizer coverage.
+
+Diagnostic executable hashes and zero owners were recorded before removing
+disposable sanitizer outputs. No files-listing-* fixture directories remain on
+any host; current normal builds remain. All Windows project writes stayed on
+V:. No GUI was created or launched. UI-free boundary (70 sources), ckVision-only
+boundary (432 files), documentation (24 pages) and whitespace checks pass.
+
+[Durable evidence](evidence/ck-files-clock-20261023.json) includes normal/sanitized
+builds/tests, source hashes, output paths, limits, clock guarantees and cleanup.
+This implements discovery time injection but leaves WP-01 open: full simulated
+filesystem, scheduling/large-view indexes, collision/path planning, remaining
+inventories/provider coordination and operation capabilities are unfinished.
+No package acceptance checkbox is closed and no production mutation was added.
