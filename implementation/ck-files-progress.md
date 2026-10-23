@@ -319,7 +319,105 @@ matches the final CMake build and test records. Disposable sanitizer output and
 identified abandoned failed-fixture directories are removed after preserving
 this evidence. Source, current CMake test builds and concise logs remain.
 
-Remaining WP-01 work includes complete metadata/stream inventories, destination
-capability inspection, fake filesystem/time services and pane sorting/filter/
-selection behavior, including entry revalidation semantics. No WP-01 checkbox
-is marked complete by these foundational milestones. No mutation command exists.
+### Native data-channel catalog and explicit coverage
+
+`OpenedEntry::inspect_data_channels` now reports native identifiers, main/named/
+resource-fork/opaque classification, logical size, native
+allocation size when available and the held owner's identity. It reads no channel contents.
+Coverage names the exact native query family; an unavailable query is never an
+empty collection, and a successful family query is not complete metadata.
+These live observations do not establish content equality, snapshot stability,
+continued pathname membership or authority for file operations.
+
+Feature identifiers have their own lossless namespace, with POSIX-byte or
+Windows-UTF-16 tags. They reject empty/NUL identifiers but preserve separators,
+colon syntax, unpaired units and original spelling. They cannot be used as
+validated basenames. Filename and feature presentation now share the existing
+strict UTF-8/control escape implementation; operation identifiers remain raw.
+All original filename boundary/encoding tests continue to pass.
+
+Windows uses handle-based
+[FileStreamInfo](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_stream_info)
+queries with 8-byte-aligned buffers. The portable decoder checks SDK-confirmed
+offsets, counted UTF-16, forward/aligned record links, signed sizes, duplicates,
+truncation and resource bounds. Empty named streams are retained; unfamiliar
+native types remain opaque. Failed short-buffer queries restart the entire
+read-only query with bounded growth; no truncated prefix becomes a catalog.
+Denied/I/O errors do not retry through another path. The documented HANDLE_EOF
+no-stream outcome is tested independently using FindFirstStreamW on an empty
+directory. Stream enumeration on directories and ownership after rename,
+replacement and unlink are qualified on the workstation test volume.
+
+The default native buffer limit is 1 MiB, adjustable within an 8 MiB hard bound;
+record limits default to 16384 within a 65536 hard bound. Invalid limits fail
+before querying. Exceeding a valid limit returns Unknown with an explicit
+limit diagnostic and no falsely complete prefix. These are catalog-memory
+limits, not channel-content-size limits. The future index/planner must preserve
+this failure and complete discovery or refuse unsafe operations.
+
+macOS queries `com.apple.ResourceFork` size through
+[fgetxattr](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fgetxattr.2.html)
+on the owned descriptor. ENOATTR establishes absence for that exact native
+feature at query time; allocation remains Unknown. Coverage is explicitly
+MacResourceFork, not all attributes or provider channels. Independent named-fork
+writes qualify a binary resource fork, changes to its size, a 10 MiB fork with a
+one-byte native-query-buffer budget, retention after rename/replacement/unlink,
+and non-following inspection of a final symlink whose target has a fork.
+
+The generic Linux channel query remains UnsupportedQuery. This is a limitation
+of the current backend query, not proof that a Linux-mounted filesystem has no
+additional channels. Driver-specific/xattr discovery, binary attribute values,
+security descriptors/ACLs and provider/storage features remain WP-01 work.
+No mutation is enabled while that inventory/capability work is incomplete.
+
+The first Windows native catalog test aborted with 0xc0000409. Its helper used
+`for (... : path.filename().native())`: under C++20 the native string reference
+outlived the temporary path. Keeping a named filename object corrected the
+lifetime. Query exceptions now print diagnostics and still fail the test. An
+added independent directory-stream fixture also had a local-name collision,
+corrected before execution. Production catalog checks/expectations were not
+relaxed. Native suites and an additional Windows AddressSanitizer build passed
+with the corrected helper. Abandoned fixtures are identified by exact task paths
+and removed only after the owning processes are terminal.
+
+Final validation on 2026-10-23 used warnings as errors and the same 34-file
+SHA-256 manifest across all hosts. Exact commands, source hashes, CTest-log
+digests and sanitizer inputs are in
+[the channel-catalog evidence](evidence/ck-files-channels-20261023.json).
+
+| Host / Release toolchain | Final incremental build interval (Europe/Berlin) | Elapsed | Files test result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 02:28:17.745–02:28:24.151 | 6.406 s | 53 cases, eight CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 02:28:09.735–02:28:17.228 | 7.493 s | 51 cases, eight CTest entries passed |
+| Windows workstation x64 / MSVC 19.44, static CRT | 02:26:54.635–02:26:58.793 | 4.158 s | 54 cases, eight CTest entries passed |
+
+Test commands took 1.088 s, 0.456 s and 0.920 s respectively. Final logs show
+the changed native fixture compiled and native tests linked; earlier builds
+compiled the new core/native queries and all affected targets. Initial macOS
+CMake regeneration/build took 20.366 s. Timing differences from previous
+incremental/regeneration observations were checked against actual compiled
+inputs; elapsed time was not used alone to establish freshness. Current
+CMake test executables remain in the same exact active paths recorded above.
+No Files application was launched.
+
+Direct sanitizer builds compiled all 17 core/platform/test translation units:
+
+| Host / sanitizer configuration | Build interval (Europe/Berlin) | Build / test elapsed | Result |
+| --- | --- | --- | --- |
+| macOS arm64, ASan + UBSan, strict warnings, -O1 -g, frame pointers | 02:30:11.025–02:30:50.007 | 38.983 / 0.539 s | 53 cases passed |
+| Windows x64, MSVC ASan, /O1 /Zi /MT /W4 /WX, halt_on_error=1 | 02:30:07.333–02:30:31.760 | 24.427 / 0.804 s | 54 cases passed |
+
+Neither reported sanitizer violations or suppressed product warnings. The
+macOS input-tree fingerprints match the final CMake build/test records. Windows
+verified the shared source manifest plus every directly compiled translation
+unit (including the shared cktest main). The Windows ASan runtime was already
+installed; all project sources, objects, PDBs, executables, temporary writes and logs used
+V:. These are the first direct 17-unit observations for this module/configuration;
+commands compile the listed inputs without a build cache. Disposable sanitizer
+outputs are removed after retaining concise evidence and the current normal
+CMake test builds are preserved.
+
+Remaining WP-01 work includes xattr/value and full metadata inventories,
+driver-specific channel coverage, destination capabilities, filesystem/time
+fakes and pane sorting/filter/selection semantics. No WP-01 checkbox is marked
+complete by these foundational milestones. No mutation command exists.

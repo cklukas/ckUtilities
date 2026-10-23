@@ -4,11 +4,17 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 
 namespace ck::files {
 
 enum class NameEncoding { PosixBytes, WindowsUtf16 };
+
+// Presentation only, including for non-path native identifiers. Never parse
+// these escaped UTF-8 strings back into operation names.
+std::string display_native_text(std::string_view bytes);
+std::string display_native_text(std::u16string_view units);
 
 // One native directory-entry basename, never a path or display string.
 // Both representations are supported on every host, including in fake adapters.

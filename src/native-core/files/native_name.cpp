@@ -123,38 +123,44 @@ const std::u16string* NativeName::windows_units() const noexcept {
     return std::get_if<std::u16string>(&value_);
 }
 
-std::string NativeName::display_name() const {
+std::string display_native_text(std::string_view bytes) {
     std::string text;
-    if (const auto* bytes = posix_bytes()) {
-        std::size_t offset = 0;
-        while (offset < bytes->size()) {
-            const auto decoded = decode(std::string_view(*bytes).substr(offset));
-            if (decoded.bytes == 0) {
-                append_byte_escape(text, static_cast<unsigned char>((*bytes)[offset]));
-                ++offset;
-            } else {
-                append_scalar(text, decoded.value);
-                offset += decoded.bytes;
-            }
-        }
-    } else {
-        const auto& units = *windows_units();
-        for (std::size_t index = 0; index < units.size(); ++index) {
-            const std::uint32_t unit = units[index];
-            if (unit >= 0xD800U && unit <= 0xDBFFU && index + 1 < units.size() &&
-                units[index + 1] >= 0xDC00U && units[index + 1] <= 0xDFFFU) {
-                const std::uint32_t scalar = 0x10000U + ((unit - 0xD800U) << 10U) +
-                                             (static_cast<std::uint32_t>(units[index + 1]) - 0xDC00U);
-                append_scalar(text, scalar);
-                ++index;
-            } else if (unit >= 0xD800U && unit <= 0xDFFFU) {
-                append_scalar_escape(text, unit);
-            } else {
-                append_scalar(text, unit);
-            }
+    std::size_t offset = 0;
+    while (offset < bytes.size()) {
+        const auto decoded = decode(bytes.substr(offset));
+        if (decoded.bytes == 0) {
+            append_byte_escape(text, static_cast<unsigned char>(bytes[offset]));
+            ++offset;
+        } else {
+            append_scalar(text, decoded.value);
+            offset += decoded.bytes;
         }
     }
     return text;
+}
+
+std::string display_native_text(std::u16string_view units) {
+    std::string text;
+    for (std::size_t index = 0; index < units.size(); ++index) {
+        const std::uint32_t unit = units[index];
+        if (unit >= 0xD800U && unit <= 0xDBFFU && index + 1 < units.size() &&
+            units[index + 1] >= 0xDC00U && units[index + 1] <= 0xDFFFU) {
+            const std::uint32_t scalar = 0x10000U + ((unit - 0xD800U) << 10U) +
+                                         (static_cast<std::uint32_t>(units[index + 1]) - 0xDC00U);
+            append_scalar(text, scalar);
+            ++index;
+        } else if (unit >= 0xD800U && unit <= 0xDFFFU) {
+            append_scalar_escape(text, unit);
+        } else {
+            append_scalar(text, unit);
+        }
+    }
+    return text;
+}
+
+std::string NativeName::display_name() const {
+    if (const auto* bytes = posix_bytes()) return display_native_text(std::string_view(*bytes));
+    return display_native_text(std::u16string_view(*windows_units()));
 }
 
 } // namespace ck::files

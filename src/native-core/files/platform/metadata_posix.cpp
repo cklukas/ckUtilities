@@ -19,6 +19,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#if defined(__APPLE__)
+#include <sys/xattr.h>
+#endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
 #endif
@@ -191,6 +194,32 @@ public:
         return stat_metadata(descriptor_.get(), nullptr, true, scope_);
 #endif
     }
+#if defined(__APPLE__)
+    Observation<DataChannelCatalog> inspect_data_channels(InventoryLimits limits = {}) const override {
+        using Result = Observation<DataChannelCatalog>;
+        if (!limits.valid())
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "channels.limits"));
+        const auto metadata = inspect_basic();
+        if (!metadata.value()) {
+            const auto& detail = *metadata.unavailable_detail();
+            return Result::unavailable(detail.state, detail.error);
+        }
+        DataChannelCatalog result;
+        result.coverage = DataChannelCoverage::MacResourceFork;
+        result.owner = metadata.value()->identity;
+        constexpr const char* resource_fork = "com.apple.ResourceFork";
+        const auto size = fgetxattr(descriptor_.get(), resource_fork, nullptr, 0, 0, 0);
+        if (size < 0) {
+            const int code = errno;
+            if (code != ENOATTR)
+                return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fgetxattr.resource_fork_size"});
+        } else {
+            result.channels.push_back({*NativeFeatureIdentifier::from_posix(resource_fork), DataChannelKind::ResourceFork,
+                Observation<std::uint64_t>::available(static_cast<std::uint64_t>(size)), {}});
+        }
+        return Result::available(std::move(result));
+    }
+#endif
 private:
     OwnedDescriptor descriptor_;
     AdapterScope scope_;

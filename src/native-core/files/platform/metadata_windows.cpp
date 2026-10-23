@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "windows_directory_record.hpp"
+#include "windows_stream_records.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -9,7 +10,10 @@
 #include <windows.h>
 #include <winternl.h>
 
+#include <algorithm>
 #include <array>
+#include <span>
+#include <vector>
 #include <cstddef>
 #include <cstring>
 #include <optional>
@@ -225,6 +229,51 @@ public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
         : handle_(std::move(handle)), scope_(std::move(scope)) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<DataChannelCatalog> inspect_data_channels(InventoryLimits limits = {}) const override {
+        using Result = Observation<DataChannelCatalog>;
+        static_assert(offsetof(FILE_STREAM_INFO, StreamName) == detail::windows_stream_name_offset);
+        static_assert(offsetof(FILE_STREAM_INFO, StreamNameLength) == 4);
+        static_assert(offsetof(FILE_STREAM_INFO, StreamSize) == 8);
+        static_assert(offsetof(FILE_STREAM_INFO, StreamAllocationSize) == 16);
+        if (!limits.valid())
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "channels.limits"});
+        if (limits.max_native_bytes < sizeof(FILE_STREAM_INFO))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "FileStreamInfo.buffer_limit"});
+        auto capacity = std::min<std::size_t>(4096, limits.max_native_bytes);
+        for (;;) {
+            // uint64_t storage provides the SDK-required 8-byte alignment. The
+            // supplied byte count is exact; rounding storage costs at most 7 bytes.
+            std::vector<std::uint64_t> buffer((capacity + 7) / 8, 0);
+            SetLastError(ERROR_SUCCESS);
+            const bool success = GetFileInformationByHandleEx(handle_.get(), FileStreamInfo,
+                buffer.data(), static_cast<DWORD>(capacity)) != 0;
+            const DWORD code = GetLastError();
+            // FileStreamInfo documents HANDLE_EOF when no streams are returned,
+            // including its special success/no-streams outcome.
+            if (code == ERROR_HANDLE_EOF) {
+                DataChannelCatalog empty;
+                empty.coverage = DataChannelCoverage::WindowsFileStreamInfo;
+                empty.owner = identity(handle_.get(), scope_);
+                return Result::available(std::move(empty));
+            }
+            if (success) {
+                auto decoded = detail::decode_windows_stream_records(std::as_bytes(std::span(buffer)).first(capacity), limits);
+                if (!decoded.value()) return decoded;
+                auto result = std::move(decoded).take_value();
+                result.owner = identity(handle_.get(), scope_);
+                return Result::available(std::move(result));
+            }
+            if (code != ERROR_MORE_DATA && code != ERROR_INSUFFICIENT_BUFFER && code != ERROR_BAD_LENGTH)
+                return failure<DataChannelCatalog>(code, "FileStreamInfo");
+            if (capacity == limits.max_native_bytes)
+                return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Win32, code, "FileStreamInfo.buffer_limit"});
+            capacity = capacity > limits.max_native_bytes / 2 ? limits.max_native_bytes : capacity * 2;
+            // Retry this whole read-only query, never a continuation from an
+            // unsuccessful/truncated prefix. Denial and I/O errors are not retried.
+        }
+    }
 private:
     OwnedHandle handle_;
     AdapterScope scope_;

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "file_metadata.hpp"
+#include "data_channels.hpp"
 
 namespace ck::files {
 
@@ -17,6 +18,10 @@ public:
     OpenedEntry(const OpenedEntry&) = delete;
     OpenedEntry& operator=(const OpenedEntry&) = delete;
     virtual Observation<BasicMetadata> inspect_basic() const = 0;
+    // Native channel identifiers and sizes only; no channel content is read.
+    // Coverage is explicit. Unsupported is not evidence that channels are absent.
+    // This live query does not establish complete metadata or snapshot stability.
+    virtual Observation<DataChannelCatalog> inspect_data_channels(InventoryLimits limits = {}) const;
 protected:
     OpenedEntry() = default;
 };
