@@ -67,6 +67,45 @@ by successful complete enumeration. An inaccessible ACL or stream list is
 unknown, not empty. Preserve native error codes separately from sanitized UI
 diagnostics. Never use a generic false boolean for these outcomes.
 
+## Held-child refresh continuity
+
+`HeldChild` owns one opened child and its held parent directory, and records the
+exact native basename and immutable basic-metadata observation. Factory objects
+are allocated const; copy/move construction and assignment are disabled so a
+caller cannot introduce a mutable alias through a public special member. Creation always
+starts an independent family, even if another observation has matching numeric
+IDs. Refresh reacquires the same basename through the same held directory with
+MetadataOnly access and without following the final link. It keeps old and new
+handles alive together, re-inspects the old object, and compares the original,
+current-old and fresh identity/kind observations. Only qualified Same identities
+and unchanged observed kinds create a later sealed family revision. Reusing a
+cached snapshot is not a successor. Unknown/denied/errors and observed changes
+remain explicit; zero native object IDs never establish equality. Refresh does
+not retain an unbounded chain of prior handles.
+
+Pane publication consumes these observations without filesystem I/O. A proven
+successor with the same basename can retain its row handle, mark and cursor;
+other old sources remain explicitly invalidated. Metadata for a bound pane row
+comes from its immutable held observation. A caller cannot substitute another
+basename or independently open a matching-ID object to forge continuity.
+Retained hidden marks still require review. Row lookup uses full integer keys
+with equality checks; hash collisions are not treated as identity. This is
+selection continuity under the native identity contract, not content stability,
+a frozen pathname-membership snapshot or mutation authority. Operations must
+still freeze and revalidate sources through their own engine.
+
+The pane bounds retained observations separately from listing rows (default
+1024, configurable up to 4096). Actual native handle/resource errors may occur
+earlier and must stay explicit. A caller must not silently discard/reopen pins
+to bypass a resource or mutation restriction. On the qualified Windows/ReFS
+fixture, holding a child prevents classic parent-directory rename with
+ERROR_ACCESS_DENIED even with delete sharing. Mutation packages must account for
+this limit in their plan/review and recovery semantics; they cannot claim POSIX
+rename behavior or automatically release safety holds and retry. macOS/APFS and
+Linux/ext4 qualify parent rename while the child is held; all three hosts
+qualify refresh through a held parent whose path was already replaced. This
+qualification does not establish arbitrary remote/virtual filesystem behavior.
+
 ## Inventory and preservation decisions
 
 Inventory every selected object, including directories, additional streams,

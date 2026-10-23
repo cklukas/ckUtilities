@@ -3,6 +3,7 @@
 #include "pane_model.hpp"
 #include <algorithm>
 #include <set>
+#include <map>
 #include <stdexcept>
 
 namespace ck::files {
@@ -40,9 +41,15 @@ void validate_view(const PaneView& view) {
     if (view.display_substring.size() > 4096) throw std::invalid_argument("pane filter exceeds limit");
 }
 }
+PaneEntry PaneEntry::from_held(HeldChild::Pointer child, Observation<bool> hidden_state) {
+    if (!child) throw std::invalid_argument("null held child");
+    PaneEntry result(child->name(), child->metadata(), std::move(hidden_state));
+    result.held_ = std::move(child);
+    return result;
+}
 PaneModel::PaneModel(PaneLimits limits) : limits_(limits) {
     if (limits.rows == 0 || limits.rows > 1'000'000 || limits.native_name_bytes == 0 || limits.native_name_bytes > 64 * 1024 * 1024 ||
-        limits.display_name_bytes == 0 || limits.display_name_bytes > 128 * 1024 * 1024)
+        limits.display_name_bytes == 0 || limits.display_name_bytes > 128 * 1024 * 1024 || limits.held_entries == 0 || limits.held_entries > 4096)
         throw std::invalid_argument("invalid pane resource limits");
 }
 PaneListingRequest PaneModel::begin_listing(PaneListingPurpose purpose) {
@@ -57,12 +64,20 @@ bool PaneModel::current(PaneListingRequest request) const noexcept { return pend
 PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<PaneEntry>& entries) {
     if (!current(request)) return PanePublish::Stale;
     if (entries.size() > limits_.rows) return PanePublish::LimitExceeded;
-    if (entries.size() > std::numeric_limits<std::uint64_t>::max() - next_row_) return PanePublish::Exhausted;
-    std::size_t native_bytes = 0, display_bytes = 0;
+    std::size_t native_bytes = 0, display_bytes = 0, held_count = 0;
+    auto next_row = next_row_;
     std::vector<PaneRow> prepared;
     prepared.reserve(entries.size());
     const auto less = [](const NativeName& a, const NativeName& b) { return name_compare(a, b) < 0; };
     std::set<NativeName, decltype(less)> names(less);
+    std::map<NativeName, std::size_t, decltype(less)> old_by_name(less);
+    if (purpose_ == PaneListingPurpose::Refresh)
+        for (std::size_t i = 0; i < rows_.size(); ++i)
+            if (rows_[i].entry.held_child()) old_by_name.emplace(rows_[i].entry.name, i);
+    std::vector<std::optional<std::size_t>> predecessors;
+    predecessors.reserve(entries.size());
+    std::unordered_map<std::uint64_t, std::size_t> indexes;
+    indexes.reserve(entries.size());
     for (const auto& entry : entries) {
         if (entry.name.encoding() != entries.front().name.encoding())
             return PanePublish::InvalidListing;
@@ -71,27 +86,45 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
         if (bytes > limits_.native_name_bytes - native_bytes) return PanePublish::LimitExceeded;
         native_bytes += bytes;
         if (!names.insert(entry.name).second) return PanePublish::InvalidListing;
+        if (entry.held_child() && (++held_count > limits_.held_entries)) return PanePublish::LimitExceeded;
+        if (entry.held_child() && entry.name != entry.held_child()->name()) return PanePublish::InvalidListing;
         auto display = entry.name.display_name();
         if (display.size() > limits_.display_name_bytes - display_bytes) return PanePublish::LimitExceeded;
         display_bytes += display.size();
-        prepared.push_back({{scope_, next_row_ + prepared.size()}, entry, std::move(display)});
+        std::optional<std::size_t> predecessor;
+        const auto old = old_by_name.find(entry.name);
+        if (entry.held_child() && old != old_by_name.end() && entry.held_child()->continues(*rows_[old->second].entry.held_child())) predecessor = old->second;
+        PaneRowId handle{scope_, 0};
+        if (predecessor) handle = rows_[*predecessor].id;
+        else {
+            if (next_row == std::numeric_limits<std::uint64_t>::max()) return PanePublish::Exhausted;
+            handle.number = next_row++;
+        }
+        auto canonical = entry;
+        if (entry.held_child()) canonical.metadata = entry.held_child()->metadata();
+        indexes.emplace(handle.number, prepared.size());
+        predecessors.push_back(predecessor);
+        prepared.push_back({std::move(handle), std::move(canonical), std::move(display)});
     }
     auto projection = project(prepared, view_);
     std::vector<bool> marks(prepared.size(), false);
     std::optional<PaneRowId> focus;
     PaneInvalidatedSelection invalidated;
     if (purpose_ == PaneListingPurpose::Refresh) {
-        invalidated.marks = static_cast<std::size_t>(std::count(marks_.begin(), marks_.end(), true));
-        invalidated.cursor = focus_.has_value();
-        // Carry unresolved invalidation across repeated refreshes.
-        invalidated.marks += invalidated_.marks;
-        invalidated.cursor = invalidated.cursor || invalidated_.cursor;
+        std::size_t retained_marks = 0;
+        for (std::size_t i = 0; i < predecessors.size(); ++i) if (predecessors[i]) {
+            const auto old = *predecessors[i];
+            marks[i] = marks_[old];
+            if (marks[i]) ++retained_marks;
+            if (focus_ && rows_[old].id == *focus_) focus = prepared[i].id;
+        }
+        invalidated.marks = static_cast<std::size_t>(std::count(marks_.begin(), marks_.end(), true)) - retained_marks + invalidated_.marks;
+        invalidated.cursor = (focus_.has_value() && !focus.has_value()) || invalidated_.cursor;
     } else if (!projection.visible.empty()) focus = prepared[projection.visible.front()].id;
-    // Commit only after all allocating work succeeded. New listing handles are
-    // never recycled. Refresh continuity requires a separate held-object proof;
-    // name/ID resemblance alone must not transfer marks to a replacement.
-    base_ = next_row_;
-    next_row_ += prepared.size();
+    // Every allocating step is complete before publication. Old IDs survive
+    // only through a sealed live successor; newly allocated IDs never recycle.
+    next_row_ = next_row;
+    indexes_.swap(indexes);
     rows_.swap(prepared); visible_.swap(projection.visible); positions_.swap(projection.positions); marks_.swap(marks);
     focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset();
     return PanePublish::Applied;
@@ -135,8 +168,9 @@ void PaneModel::set_view(PaneView view) {
     view_ = std::move(view); visible_.swap(projection.visible); positions_.swap(projection.positions);
 }
 std::optional<std::size_t> PaneModel::index(PaneRowId id) const noexcept {
-    if (id.scope != scope_ || id.number < base_ || id.number - base_ >= rows_.size()) return std::nullopt;
-    return static_cast<std::size_t>(id.number - base_);
+    if (id.scope != scope_) return std::nullopt;
+    const auto found = indexes_.find(id.number);
+    return found == indexes_.end() ? std::nullopt : std::optional<std::size_t>(found->second);
 }
 const PaneRow* PaneModel::row(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? &rows_[*i] : nullptr; }
 const PaneRow* PaneModel::visible_row(std::size_t i) const noexcept { return i < visible_.size() ? &rows_[visible_[i]] : nullptr; }

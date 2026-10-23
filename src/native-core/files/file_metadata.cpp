@@ -24,6 +24,9 @@ IdentityComparison compare_identity(const ObjectIdentity& left, const ObjectIden
     default:
         return IdentityComparison::Unknown;
     }
+    // Some filesystems report a successful query with an unavailable all-zero
+    // object ID. Never equate two such sentinels, even in the same scope.
+    if (left.object == NativeIdentifier{} || right.object == NativeIdentifier{}) return IdentityComparison::Unknown;
     if (left.volume != right.volume || left.object != right.object) return IdentityComparison::Different;
     if (left.generation.has_value() != right.generation.has_value()) return IdentityComparison::Unknown;
     return left.generation == right.generation ? IdentityComparison::Same : IdentityComparison::Different;

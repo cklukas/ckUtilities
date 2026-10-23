@@ -904,3 +904,106 @@ Page-backed larger listings, held-object refresh continuity, destination
 collision/capability semantics, remaining native inventories/provider
 coordination and filesystem/time fakes remain WP-01 work. None of its package
 acceptance boxes is closed by this milestone.
+
+### WP-01 — qualified held-child refresh continuity (2026-10-23)
+
+Added `HeldChild`, an immutable factory-only observation that owns its opened
+child and parent directory, exact native basename and basic metadata. A refresh
+opens that basename through the same held directory with MetadataOnly access,
+retains both child handles while checking identities, and re-inspects the old
+object rather than trusting only cached IDs. Qualified matching identities and
+unchanged observed kinds yield a later sealed family revision. A cached snapshot
+or unrelated matching-ID observation does not establish continuity. Objects are
+allocated const and public copy/move construction and assignment are disabled;
+compile-time assertions prevent mutable aliases through those special members.
+No chain of historical child handles is retained.
+
+Pane refresh now preserves row handles, marks and cursor for these qualified
+successors. Unbound, unknown, replaced or changed entries remain explicitly
+invalidated; partial retention never silently falls back to another source.
+Hidden retained marks still require review. Bound metadata is canonicalized
+from the immutable held observation, and a substituted basename is rejected.
+Full integer-key indexing supports noncontiguous retained/new row handles with
+ordinary equality checks; hash collisions cannot become source identity.
+Per-field/query errors remain explicit in continuity observations. The pane
+bounds held entries separately (1024 default, maximum configuration 4096);
+actual OS resource errors can occur earlier. Publication itself performs no I/O.
+The contracts now distinguish this selection continuity from a content or
+pathname-membership snapshot, operation consent and mutation authority.
+
+Zero native object IDs no longer establish equality in any supported identity
+scheme. A successful Windows FileIdInfo query with an all-zero object ID yields
+Unknown without falling back to a narrower legacy ID. The documented
+[open-handle identity contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+and [zero-ID rule](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-file_id_information)
+were checked against the implementation. [Evidence](evidence/ck-files-continuity-20261023.json)
+contains the shared 61-file manifest, fingerprints, commands, timestamps,
+diagnostic findings, final results and cleanup.
+
+Eleven injected domain cases exercise handle lifetime, missing/null/denied
+objects, successors versus cached/independent observations, replacement,
+unqualified identity, kind change, old-handle query failure, canonical metadata,
+held-resource limits, partial retention, hidden marks and separate hard-link
+names. Five native cases per host qualify stable-file refresh with changed size,
+same-name replacement while the old object stays held, held-parent path
+replacement, separate hard-link names and final link handling. macOS/APFS and
+Linux/ext4 additionally qualify parent rename while the child is held. Windows
+uses a distinct refusal test: the classic parent rename returns
+ERROR_ACCESS_DENIED (5) while a child is open, continuity remains intact, and a
+controlled fixture proves rename succeeds after child observations leave scope.
+This matches the documented
+[Windows rename restriction](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fsa/87f86c9b-6c2a-4803-84b7-131a74a434fa).
+All hosts separately qualify refresh when the parent path was replaced before
+child observation. No production code releases a hold to retry a mutation.
+
+The initial Windows fixture incorrectly expected POSIX-style ancestor rename
+while a child was open; diagnostic output established native error 5. That
+expectation was replaced with explicit refusal conformance rather than bypassing
+the restriction. A separate junction fixture was corrected to create the link
+directory required by its helper. The initial standalone sanitizer link command
+omitted data_channels.cpp (InventoryLimits::valid); its dependency was added.
+The failed diagnostics are retained as hashes/records in the evidence. Three
+orphaned private Windows fixture directories from aborted diagnostic tests were
+inventoried and removed after verifying zero native-test owners and no reparse
+points. No unrelated data or processes were changed.
+
+All twenty-one Files CTest entries passed on the final immutable API:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 02:55:27.175–02:55:30.092 | 2.916 / 1.026 | 131 |
+| Lima Debian 13 arm64 / GCC 14 | 02:56:35.056–02:56:41.512 | 6.456 / 0.180 | 128 |
+| Windows x64 / MSVC 19.44, static CRT | 02:56:39.093–02:56:47.881 | 8.788 / 1.720 | 135 |
+
+Final increments recompiled held-child/pane implementation and affected domain
+and native tests, rebuilt the core library and linked both executables (eight
+steps). The initial Mac eight-step build took 12.153 s including configuration
+8.2 s / generation 0.3 s; the final build needed no regeneration. Intermediate
+two-step native-fixture builds and their logs were checked against actual input
+changes. Successful test commands ran after their matching builds; code hashes
+in the same final 61-file manifest were verified on every host. Fingerprints for the project and
+ckVision SDK checkout are recorded; the installed SDK remains ckVision 1.4.0. No
+Files GUI exists or was launched.
+
+Focused sanitizer builds compiled ten domain/test/dependency units, including
+the real directory/opened-entry default boundaries and injected held-object
+fixtures. Mac ASan + UBSan (-O1 -g, strict warnings, frame pointers) built
+02:56:55.459–02:57:11.093 UTC in 15.634 s and passed all 29 pane/continuity
+cases in 0.364 s. Windows MSVC ASan (/O1 /Zi /MT /W4 /WX) built
+02:58:12.135–02:58:25.070 UTC in 12.935 s and passed the same 29 cases in
+0.631 s. Both ran halt-on-error with no sanitizer diagnostics. The preceding
+comparable ten-unit builds took 23.529 / 13.581 s Mac / Windows; final direct
+compiler commands, all listed inputs and hashes were checked, without a compiler
+cache wrapper. These focused checks are not a complete native-adapter sanitizer
+rerun; the native suite passed separately on all hosts. Sanitizer outputs were
+removed after executable hashing and zero-owner checks, retaining current normal
+builds and concise evidence. Windows development outputs stayed on V:.
+
+Boundary checks passed (56 domain sources, 408 ckVision-only active files), and
+ckdocs checked 24 pages. This implements qualified refresh continuity at the
+domain/native seam; worker scheduling, binding acquisition/release policy,
+resource-limit UI and mutation review for held-handle restrictions still require
+integration. Arbitrary network/virtual filesystem and provider behavior is not
+qualified by APFS/ext4/ReFS fixtures. Larger page-backed listings, remaining
+inventories/provider coordination, destination collision/capability rules and
+full filesystem/time fakes remain WP-01 work. No package checkbox is closed.

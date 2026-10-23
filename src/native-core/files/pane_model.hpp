@@ -1,10 +1,11 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
-#include "file_metadata.hpp"
+#include "held_child.hpp"
 #include "native_name.hpp"
 #include <limits>
 #include <vector>
+#include <unordered_map>
 
 namespace ck::files {
 // Pane handles name prepared rows, never native objects or mutation authority.
@@ -22,6 +23,12 @@ struct PaneEntry {
     NativeName name;
     BasicMetadata metadata;
     Observation<bool> hidden; // unknown/denied entries remain visible
+    PaneEntry(NativeName native_name, BasicMetadata observed, Observation<bool> hidden_state)
+        : name(std::move(native_name)), metadata(std::move(observed)), hidden(std::move(hidden_state)) {}
+    static PaneEntry from_held(HeldChild::Pointer child, Observation<bool> hidden_state);
+    const HeldChild::Pointer& held_child() const noexcept { return held_; }
+private:
+    HeldChild::Pointer held_;
 };
 struct PaneRow {
     PaneRowId id;
@@ -43,6 +50,7 @@ struct PaneLimits {
     std::size_t rows = 1'000'000;
     std::size_t native_name_bytes = 64 * 1024 * 1024;
     std::size_t display_name_bytes = 128 * 1024 * 1024;
+    std::size_t held_entries = 1024; // model bound, not a promise about OS handle limits
 };
 enum class PaneListingPurpose { Navigate, Refresh };
 struct PaneInvalidatedSelection {
@@ -76,8 +84,8 @@ public:
     PaneModel(const PaneModel&) = delete;
     PaneModel& operator=(const PaneModel&) = delete;
     // Caller must distinguish navigation from refresh. Newer requests supersede
-    // older ones. A refresh currently invalidates selection explicitly; held-
-    // object continuity/reconciliation is a separate, still-required layer.
+    // older ones. Refresh retains only entries with sealed held-child successor
+    // observations; other old selections are explicitly invalidated.
     PaneListingRequest begin_listing(PaneListingPurpose purpose);
     PanePublish publish(PaneListingRequest request, const std::vector<PaneEntry>& entries);
     bool fail_listing(PaneListingRequest request, UnavailableObservation failure);
@@ -110,7 +118,7 @@ private:
     std::uint64_t next_row_ = 1;
     std::uint64_t next_request_ = 1;
     std::uint64_t pending_ = 0;
-    std::uint64_t base_ = 0;
+    std::unordered_map<std::uint64_t, std::size_t> indexes_;
     std::vector<PaneRow> rows_;
     std::vector<std::size_t> visible_;
     std::vector<std::optional<std::size_t>> positions_;

@@ -145,6 +145,9 @@ Observation<ObjectIdentity> identity(HANDLE handle, const AdapterScope& scope) {
         NativeIdentifier object;
         static_assert(sizeof(native.FileId.Identifier) == sizeof(object.bytes));
         std::memcpy(object.bytes.data(), native.FileId.Identifier, sizeof(native.FileId.Identifier));
+        if (object == NativeIdentifier{})
+            return Observation<ObjectIdentity>::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "FileIdInfo.zero"});
         return Observation<ObjectIdentity>::available({scope, IdentityScheme::WindowsFileId128,
             NativeIdentifier::from_u64(native.VolumeSerialNumber), object, std::nullopt});
     }
