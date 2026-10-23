@@ -824,3 +824,83 @@ operation-specific destination capabilities, filesystem/time fakes, pane state
 and collision semantics remain WP-01 work. Unknown provider behavior and
 hydration races are not qualified by these metadata fixtures. No package
 acceptance checkbox is closed and no mutation command exists.
+
+### WP-01 — bounded pane state and explicit source selection (2026-10-23)
+
+Added a UI-free `PaneModel` with prepared escaped display names, lossless native
+names, basic metadata observations and scoped nonzero row handles. Handles are
+monotonic within the pane and cannot be reused to retarget an old source or
+cross into another pane. Hard-link names remain distinct entries. Sorting and
+filtering retain row handles, marks and cursor association; reverse visible-index
+lookup is constant-time. [Validation evidence](evidence/ck-files-pane-20261023.json)
+records the final 57-file manifest, commands, timestamps, hashes and cleanup.
+
+The model implements name/kind/size/modified sorting, descending order and an
+optional folders-first group. Only an observed Directory enters that group;
+symlinks/junctions are not followed. Native names use deterministic unsigned
+byte/code-unit ordering; secondary name order breaks metadata ties. Unavailable
+metadata sorts after available values in either direction. Timestamp ordering
+uses seconds/nanoseconds comparisons without overflowing subtraction. Filename
+filtering matches prepared escaped display text, with exact UTF-8 bytes and
+optional ASCII-only case folding; it does not normalize Unicode or become a
+native-name comparison. Unknown/denied hidden flags remain visible.
+
+Marking supports individual visible rows, inclusive/reversed ranges, visible
+select-all, invert and explicit clear. Marked sources take precedence over the
+cursor, with exact native names/observed identities and visible/hidden counts.
+Hidden marked entries yield HiddenMarksNeedReview; pending scans yield
+ListingPending. These states do not permit direct operation execution. No source
+list is a frozen inventory, preservation consent or native mutation authority.
+
+Listing publication is bounded and commits only after preparing the replacement
+state. Duplicate native names, mixed name encodings and resource-limit failures
+leave the prior state intact. Request tokens reject stale and foreign success or
+failure callbacks. A failed scan retains the old listing, marks, cursor and
+original native error. Callers must explicitly distinguish navigation from
+refresh. Refresh currently invalidates old source handles, reports the lost mark
+count/cursor state and returns SelectionInvalidated until an explicit new
+selection; it never falls back automatically to a same-name replacement cursor.
+Repeated refreshes retain that unresolved notice. Proven same-object refresh
+continuity still needs a held-object reconciliation layer; clearing selection is
+not claimed to finish that requirement. Navigation starts a new context.
+
+All nineteen Files CTest entries passed on each platform, including eighteen
+new pane cases and a 5000-entry projection test that repeatedly verifies unique
+handles, reverse lookup and marks/native-name association across every sort key
+and direction:
+
+| Host | Final build interval UTC | Build / test seconds | Cases |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 02:34:38.179–02:34:42.165 | 3.985 / 0.803 | 115 |
+| Lima Debian 13 arm64 / GCC 14 | 02:34:52.025–02:34:58.123 | 6.098 / 0.177 | 112 |
+| Windows x64 / MSVC 19.44, static CRT | 02:34:55.962–02:35:01.920 | 5.959 / 2.034 | 119 |
+
+Final increments compiled the changed pane implementation and tests, rebuilt the
+core library and linked both test executables (five steps). The initial Mac
+build took 13.396 s including CMake configuration 8.2 s / generation 0.2 s and
+the same five affected steps. Initial Linux/Windows builds took 11.613 / 15.147 s
+including regeneration. These are narrower inputs than the preceding link
+milestone's broad header rebuild; the shorter duration is consistent with the
+logged inputs. No Files GUI exists or was launched.
+
+Focused sanitizer builds compiled five units: native names, basic metadata,
+pane model, pane tests and the installed ckVision test host. Mac ASan + UBSan
+(-O1 -g, strict warnings, frame pointers) built 02:35:12.514–02:35:25.587 UTC
+in 13.073 s and passed all eighteen pane cases in 0.466 s. Windows MSVC ASan
+(/O1 /Zi /MT /W4 /WX) built 02:35:49.497–02:35:56.309 UTC in 6.811 s and
+passed the same eighteen cases in 0.629 s. Both ran halt-on-error without
+sanitizer diagnostics. The initial five-unit Mac sanitizer build took 7.026 s
+before adding refresh invalidation and its two tests; the final direct compiler
+command, source fingerprints and executed test list were checked, with no
+compiler-cache wrapper. These focused checks are not represented as another
+full native-adapter sanitizer run. The full Files suite ran separately on each
+host. Disposable sanitizer outputs were removed after recording executable
+hashes and confirming no active owners; current normal builds remain.
+
+Boundary checks passed (54 domain sources, 404 ckVision-only active files), and
+ckdocs checked 24 pages. Limits are explicit (up to one million in-memory rows,
+bounded aggregate native/display names); no truncated listing is accepted.
+Page-backed larger listings, held-object refresh continuity, destination
+collision/capability semantics, remaining native inventories/provider
+coordination and filesystem/time fakes remain WP-01 work. None of its package
+acceptance boxes is closed by this milestone.
