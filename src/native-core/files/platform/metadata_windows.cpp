@@ -7,11 +7,13 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <winternl.h>
 
 #include <array>
 #include <cstddef>
 #include <cstring>
 #include <optional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -44,6 +46,9 @@ bool dos_device_component(std::wstring_view component) noexcept {
 }
 
 bool filesystem_components(std::wstring_view tail, bool win32_rules) noexcept {
+    // Object inspection is separate from future channel inventory. A stream
+    // path has its owner's file ID but different data; never conflate the two.
+    if (tail.find(L':') != std::wstring_view::npos) return false;
     while (!tail.empty()) {
         const auto separator = tail.find(L'\\');
         if (win32_rules && dos_device_component(tail.substr(0, separator))) return false;
@@ -79,7 +84,7 @@ bool volume_guid_path(std::wstring_view tail) noexcept {
             if (unit != L'-') return false;
         } else if (!((unit >= L'0' && unit <= L'9') || (unit >= L'A' && unit <= L'F'))) return false;
     }
-    return true;
+    return filesystem_components(tail.substr(45), false);
 }
 
 // A metadata query must not connect to a named pipe or open a console/device
@@ -101,7 +106,7 @@ bool filesystem_path(const std::filesystem::path& path) {
 
 struct HandleCloser {
     void operator()(void* handle) const noexcept {
-        if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
+        if (handle != nullptr && handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
     }
 };
 
@@ -163,11 +168,107 @@ Observation<std::uint64_t> nonnegative(LONGLONG value, const char* operation) {
     return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(value));
 }
 
+Observation<BasicMetadata> handle_metadata(HANDLE handle, const AdapterScope& scope) {
+    FILE_BASIC_INFO native{};
+    if (!GetFileInformationByHandleEx(handle, FileBasicInfo, &native, sizeof(native)))
+        return failure<BasicMetadata>(GetLastError(), "FileBasicInfo");
+    BasicMetadata result;
+    result.identity = identity(handle, scope);
+    result.windows_attributes = Observation<std::uint32_t>::available(native.FileAttributes);
+    result.accessed = timestamp(native.LastAccessTime);
+    result.modified = timestamp(native.LastWriteTime);
+    result.changed = timestamp(native.ChangeTime);
+    result.created = timestamp(native.CreationTime);
+    result.kind = Observation<ObjectKind>::available((native.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? ObjectKind::Directory : ObjectKind::RegularFile);
+    if ((native.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        result.kind = Observation<ObjectKind>::available(ObjectKind::ReparsePoint);
+        FILE_ATTRIBUTE_TAG_INFO tag{};
+        if (GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &tag, sizeof(tag))) {
+            result.reparse_tag = Observation<std::uint32_t>::available(tag.ReparseTag);
+            if (tag.ReparseTag == IO_REPARSE_TAG_SYMLINK) result.kind = Observation<ObjectKind>::available(ObjectKind::SymbolicLink);
+            if (tag.ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) result.kind = Observation<ObjectKind>::available(ObjectKind::Junction);
+        } else {
+            result.reparse_tag = failure<std::uint32_t>(GetLastError(), "FileAttributeTagInfo");
+        }
+    } else {
+        result.reparse_tag = not_applicable<std::uint32_t>("reparse_tag");
+    }
+    if (GetFileType(handle) == FILE_TYPE_CHAR) result.kind = Observation<ObjectKind>::available(ObjectKind::CharacterDevice);
+    result.posix_uid = not_applicable<std::uint64_t>("posix_uid");
+    result.posix_gid = not_applicable<std::uint64_t>("posix_gid");
+    result.posix_permissions = not_applicable<std::uint32_t>("posix_permissions");
+    result.bsd_flags = not_applicable<std::uint32_t>("bsd_flags");
+    result.linux_attributes = not_applicable<LinuxFileAttributes>("linux_attributes");
+
+    FILE_STANDARD_INFO standard{};
+    if (GetFileInformationByHandleEx(handle, FileStandardInfo, &standard, sizeof(standard))) {
+        result.link_count = Observation<std::uint64_t>::available(standard.NumberOfLinks);
+        if (*result.kind.value() == ObjectKind::RegularFile) {
+            result.logical_size = nonnegative(standard.EndOfFile.QuadPart, "FileStandardInfo.size");
+            result.allocated_size = nonnegative(standard.AllocationSize.QuadPart, "FileStandardInfo.allocation");
+        } else {
+            result.logical_size = not_applicable<std::uint64_t>("regular_file.size");
+            result.allocated_size = not_applicable<std::uint64_t>("regular_file.allocation");
+        }
+    } else {
+        const DWORD code = GetLastError();
+        result.link_count = failure<std::uint64_t>(code, "FileStandardInfo");
+        result.logical_size = failure<std::uint64_t>(code, "FileStandardInfo");
+        result.allocated_size = failure<std::uint64_t>(code, "FileStandardInfo");
+    }
+    return Observation<BasicMetadata>::available(std::move(result));
+}
+
 using OwnedHandle = std::unique_ptr<void, HandleCloser>;
+class WindowsOpenedEntry final : public OpenedEntry {
+public:
+    WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope)
+        : handle_(std::move(handle)), scope_(std::move(scope)) {}
+    Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+private:
+    OwnedHandle handle_;
+    AdapterScope scope_;
+};
+
 class WindowsDirectoryCursor final : public DirectoryCursor {
 public:
-    WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity)
-        : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)) {}
+    WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity, AdapterScope scope)
+        : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
+    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        const auto* units = name.windows_units();
+        if (!units || !NativeName::from_windows(*units) || units->find(u':') != std::u16string::npos ||
+            units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "open_child.name"});
+        // A counted, single relative component has no Win32 DOS-device aliasing
+        // or trailing-dot/space rewriting. Stream syntax is refused above.
+        std::wstring spelling;
+        spelling.reserve(units->size());
+        for (const auto unit : *units) spelling.push_back(static_cast<wchar_t>(unit));
+        UNICODE_STRING native_name{};
+        native_name.Length = static_cast<USHORT>(spelling.size() * sizeof(WCHAR));
+        native_name.MaximumLength = native_name.Length;
+        native_name.Buffer = spelling.data();
+        OBJECT_ATTRIBUTES attributes{};
+        attributes.Length = sizeof(attributes);
+        attributes.RootDirectory = handle_.get();
+        attributes.ObjectName = &native_name;
+        // Attributes=0 requests exact native spelling, not case-insensitive lookup.
+        IO_STATUS_BLOCK io{};
+        HANDLE raw = nullptr;
+        const NTSTATUS status = NtCreateFile(&raw, FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &io, nullptr, 0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
+            FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
+        OwnedHandle opened(raw);
+        if (status < 0 || status == 0x00000103L)
+            return Result::unavailable(status < 0 ? error_state(RtlNtStatusToDosError(status)) : ObservationState::Failed,
+                {ErrorDomain::NtStatus, static_cast<std::uint32_t>(status), "NtCreateFile.child"});
+        if (raw == nullptr || raw == INVALID_HANDLE_VALUE)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "NtCreateFile.child_handle"});
+        return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_));
+    }
 private:
     Observation<DirectoryStep> next_step() override {
         using Result = Observation<DirectoryStep>;
@@ -195,6 +296,7 @@ private:
         return Result::available(std::move(*record.name));
     }
     OwnedHandle handle_;
+    AdapterScope scope_;
     // Fixed bound, sufficient for a full native UTF-16 component plus header.
     // A provider rejecting the query reports an error; never reopen by path.
     alignas(8) std::array<std::byte, 128 * 1024> buffer_{};
@@ -213,54 +315,7 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL, nullptr));
     if (handle.get() == INVALID_HANDLE_VALUE) return failure<BasicMetadata>(GetLastError(), "CreateFileW.metadata");
 
-    FILE_BASIC_INFO native{};
-    if (!GetFileInformationByHandleEx(handle.get(), FileBasicInfo, &native, sizeof(native)))
-        return failure<BasicMetadata>(GetLastError(), "FileBasicInfo");
-    BasicMetadata result;
-    result.identity = identity(handle.get(), scope_);
-    result.windows_attributes = Observation<std::uint32_t>::available(native.FileAttributes);
-    result.accessed = timestamp(native.LastAccessTime);
-    result.modified = timestamp(native.LastWriteTime);
-    result.changed = timestamp(native.ChangeTime);
-    result.created = timestamp(native.CreationTime);
-    result.kind = Observation<ObjectKind>::available((native.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? ObjectKind::Directory : ObjectKind::RegularFile);
-    if ((native.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-        result.kind = Observation<ObjectKind>::available(ObjectKind::ReparsePoint);
-        FILE_ATTRIBUTE_TAG_INFO tag{};
-        if (GetFileInformationByHandleEx(handle.get(), FileAttributeTagInfo, &tag, sizeof(tag))) {
-            result.reparse_tag = Observation<std::uint32_t>::available(tag.ReparseTag);
-            if (tag.ReparseTag == IO_REPARSE_TAG_SYMLINK) result.kind = Observation<ObjectKind>::available(ObjectKind::SymbolicLink);
-            if (tag.ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) result.kind = Observation<ObjectKind>::available(ObjectKind::Junction);
-        } else {
-            result.reparse_tag = failure<std::uint32_t>(GetLastError(), "FileAttributeTagInfo");
-        }
-    } else {
-        result.reparse_tag = not_applicable<std::uint32_t>("reparse_tag");
-    }
-    if (GetFileType(handle.get()) == FILE_TYPE_CHAR) result.kind = Observation<ObjectKind>::available(ObjectKind::CharacterDevice);
-    result.posix_uid = not_applicable<std::uint64_t>("posix_uid");
-    result.posix_gid = not_applicable<std::uint64_t>("posix_gid");
-    result.posix_permissions = not_applicable<std::uint32_t>("posix_permissions");
-    result.bsd_flags = not_applicable<std::uint32_t>("bsd_flags");
-    result.linux_attributes = not_applicable<LinuxFileAttributes>("linux_attributes");
-
-    FILE_STANDARD_INFO standard{};
-    if (GetFileInformationByHandleEx(handle.get(), FileStandardInfo, &standard, sizeof(standard))) {
-        result.link_count = Observation<std::uint64_t>::available(standard.NumberOfLinks);
-        if (*result.kind.value() == ObjectKind::RegularFile) {
-            result.logical_size = nonnegative(standard.EndOfFile.QuadPart, "FileStandardInfo.size");
-            result.allocated_size = nonnegative(standard.AllocationSize.QuadPart, "FileStandardInfo.allocation");
-        } else {
-            result.logical_size = not_applicable<std::uint64_t>("regular_file.size");
-            result.allocated_size = not_applicable<std::uint64_t>("regular_file.allocation");
-        }
-    } else {
-        const DWORD code = GetLastError();
-        result.link_count = failure<std::uint64_t>(code, "FileStandardInfo");
-        result.logical_size = failure<std::uint64_t>(code, "FileStandardInfo");
-        result.allocated_size = failure<std::uint64_t>(code, "FileStandardInfo");
-    }
-    return Observation<BasicMetadata>::available(std::move(result));
+    return handle_metadata(handle.get(), scope_);
 }
 
 Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
@@ -285,6 +340,6 @@ Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
         return Result::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotDirectory), "open_directory.kind"});
     auto native_identity = identity(handle.get(), scope_);
-    return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(handle), std::move(native_identity)));
+    return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(handle), std::move(native_identity), scope_));
 }
 } // namespace ck::files

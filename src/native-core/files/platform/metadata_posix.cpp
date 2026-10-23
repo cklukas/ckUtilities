@@ -65,11 +65,11 @@ void platform_fields(BasicMetadata& result) {
     result.reparse_tag = not_applicable<std::uint32_t>("reparse_tag");
 }
 
-Observation<BasicMetadata> stat_metadata(const std::filesystem::path& path, const AdapterScope& scope) {
+Observation<BasicMetadata> stat_metadata(int descriptor, const char* path, bool from_handle, const AdapterScope& scope) {
     struct stat native{};
-    if (lstat(path.c_str(), &native) != 0) {
+    if ((from_handle ? fstat(descriptor, &native) : fstatat(descriptor, path, &native, AT_SYMLINK_NOFOLLOW)) != 0) {
         const int code = errno;
-        return Observation<BasicMetadata>::unavailable(errno_state(code), {ErrorDomain::Posix, code, "lstat"});
+        return Observation<BasicMetadata>::unavailable(errno_state(code), {ErrorDomain::Posix, code, from_handle ? "fstat" : "fstatat"});
     }
     BasicMetadata result;
     platform_fields(result);
@@ -85,7 +85,7 @@ Observation<BasicMetadata> stat_metadata(const std::filesystem::path& path, cons
 #else
     result.bsd_flags = not_applicable<std::uint32_t>("bsd_flags");
     result.created = Observation<FileTimestamp>::unavailable(ObservationState::Unsupported,
-        adapter_error(AdapterError::UnsupportedQuery, "lstat.birth_time"));
+        adapter_error(AdapterError::UnsupportedQuery, "stat.birth_time"));
     result.accessed = timestamp(native.st_atim.tv_sec, native.st_atim.tv_nsec, "stat.access_time");
     result.modified = timestamp(native.st_mtim.tv_sec, native.st_mtim.tv_nsec, "stat.modified_time");
     result.changed = timestamp(native.st_ctim.tv_sec, native.st_ctim.tv_nsec, "stat.changed_time");
@@ -115,18 +115,18 @@ Observation<BasicMetadata> stat_metadata(const std::filesystem::path& path, cons
 }
 
 #if defined(__linux__)
-Observation<BasicMetadata> statx_metadata(const std::filesystem::path& path, const AdapterScope& scope) {
+Observation<BasicMetadata> statx_metadata(int descriptor, const char* path, int flags, const AdapterScope& scope) {
     struct statx native{};
     unsigned int requested = STATX_BASIC_STATS | STATX_BTIME;
 #ifdef STATX_MNT_ID
     requested |= STATX_MNT_ID;
 #endif
-    if (statx(AT_FDCWD, path.c_str(), AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT, requested, &native) != 0) {
+    if (statx(descriptor, path, flags | AT_NO_AUTOMOUNT, requested, &native) != 0) {
         const int code = errno;
         // The older stat interface is a separate documented query, not a claim
         // that omitted statx-only fields were observed. Do not retry denial or
         // I/O failures through a different API and conceal the original error.
-        if (code == ENOSYS) return stat_metadata(path, scope);
+        if (code == ENOSYS) return stat_metadata(descriptor, path, (flags & AT_EMPTY_PATH) != 0, scope);
         return Observation<BasicMetadata>::unavailable(errno_state(code), {ErrorDomain::Posix, code, "statx"});
     }
     BasicMetadata result;
@@ -167,6 +167,35 @@ Observation<BasicMetadata> statx_metadata(const std::filesystem::path& path, con
     return Observation<BasicMetadata>::available(std::move(result));
 }
 #endif
+class OwnedDescriptor final {
+public:
+    explicit OwnedDescriptor(int descriptor) : descriptor_(descriptor) {}
+    ~OwnedDescriptor() { if (descriptor_ >= 0) close(descriptor_); }
+    OwnedDescriptor(const OwnedDescriptor&) = delete;
+    OwnedDescriptor& operator=(const OwnedDescriptor&) = delete;
+    OwnedDescriptor(OwnedDescriptor&& other) noexcept : descriptor_(std::exchange(other.descriptor_, -1)) {}
+    int get() const noexcept { return descriptor_; }
+    void release() noexcept { descriptor_ = -1; }
+private:
+    int descriptor_;
+};
+
+class PosixOpenedEntry final : public OpenedEntry {
+public:
+    PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope)
+        : descriptor_(std::move(descriptor)), scope_(std::move(scope)) {}
+    Observation<BasicMetadata> inspect_basic() const override {
+#if defined(__linux__)
+        return statx_metadata(descriptor_.get(), "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW, scope_);
+#else
+        return stat_metadata(descriptor_.get(), nullptr, true, scope_);
+#endif
+    }
+private:
+    OwnedDescriptor descriptor_;
+    AdapterScope scope_;
+};
+
 struct DirectoryCloser {
     void operator()(DIR* directory) const noexcept { closedir(directory); }
 };
@@ -174,8 +203,29 @@ using OwnedDirectory = std::unique_ptr<DIR, DirectoryCloser>;
 
 class PosixDirectoryCursor final : public DirectoryCursor {
 public:
-    PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity)
-        : DirectoryCursor(std::move(identity)), directory_(std::move(directory)) {}
+    PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity, AdapterScope scope)
+        : DirectoryCursor(std::move(identity)), directory_(std::move(directory)), scope_(std::move(scope)) {}
+    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        const auto* spelling = name.posix_bytes();
+        if (!spelling || !NativeName::from_posix(*spelling))
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "open_child.name"));
+#if defined(__linux__)
+        constexpr int flags = O_PATH | O_NOFOLLOW | O_CLOEXEC;
+#else
+        // A public event-only descriptor observes identity/metadata; it is not a
+        // data-read API and does not prevent volume unmount. The open can still
+        // require read permission: preserve Denied rather than bypassing it. O_SYMLINK
+        // opens the final symlink itself, including a dangling link.
+        constexpr int flags = O_EVTONLY | O_SYMLINK | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
+#endif
+        OwnedDescriptor descriptor(openat(dirfd(directory_.get()), spelling->c_str(), flags));
+        if (descriptor.get() < 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.child"});
+        }
+        return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_));
+    }
 private:
     Observation<DirectoryStep> next_step() override {
         using Result = Observation<DirectoryStep>;
@@ -204,6 +254,7 @@ private:
         return Result::available(std::move(*name));
     }
     OwnedDirectory directory_;
+    AdapterScope scope_;
 };
 
 } // namespace
@@ -212,9 +263,9 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
     if (!path.is_absolute() || path.native().find('\0') != std::string::npos)
         return Observation<BasicMetadata>::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "inspect_basic"));
 #if defined(__linux__)
-    return statx_metadata(path, scope_);
+    return statx_metadata(AT_FDCWD, path.c_str(), AT_SYMLINK_NOFOLLOW, scope_);
 #else
-    return stat_metadata(path, scope_);
+    return stat_metadata(AT_FDCWD, path.c_str(), false, scope_);
 #endif
 }
 
@@ -229,12 +280,9 @@ Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
     // a followed parent component. Preserve all-slash root spellings verbatim.
     if (spelling.find_first_not_of('/') != std::string::npos)
         while (spelling.size() > 1 && spelling.back() == '/') spelling.pop_back();
-    struct OwnedFd {
-        int value;
-        ~OwnedFd() { if (value >= 0) close(value); }
-    } fd{open(spelling.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC |
-        (policy == DirectoryLinkPolicy::RejectFinalLink ? O_NOFOLLOW : 0))};
-    if (fd.value < 0) {
+    OwnedDescriptor fd(open(spelling.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC |
+        (policy == DirectoryLinkPolicy::RejectFinalLink ? O_NOFOLLOW : 0)));
+    if (fd.get() < 0) {
         const int code = errno;
         // The requested directory can instead be an existing non-directory
         // (or a refused final link). ENOTDIR here does not prove it vanished.
@@ -242,7 +290,7 @@ Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
         return Result::unavailable(state, {ErrorDomain::Posix, code, "open.directory"});
     }
     struct stat native{};
-    if (fstat(fd.value, &native) != 0) {
+    if (fstat(fd.get(), &native) != 0) {
         const int code = errno;
         return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fstat.directory"});
     }
@@ -253,12 +301,12 @@ Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
     auto identity = Observation<ObjectIdentity>::available({scope_, IdentityScheme::PosixDeviceInode,
         NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_dev)),
         NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_ino)), generation});
-    OwnedDirectory directory(fdopendir(fd.value));
+    OwnedDirectory directory(fdopendir(fd.get()));
     if (!directory) {
         const int code = errno;
         return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "fdopendir"});
     }
-    fd.value = -1; // fdopendir now owns the descriptor, including CLOEXEC.
-    return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(directory), std::move(identity)));
+    fd.release(); // fdopendir now owns the descriptor, including CLOEXEC.
+    return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(directory), std::move(identity), scope_));
 }
 } // namespace ck::files

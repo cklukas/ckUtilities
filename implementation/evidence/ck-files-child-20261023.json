@@ -1,0 +1,198 @@
+{
+  "milestone": "WP-01 pinned child object observation; WP-01 remains incomplete",
+  "date": "2026-10-23",
+  "sdk": "ckVision 1.4.0",
+  "configuration": "Release; strict warnings as errors",
+  "manifest_sha256": "4a6403fd98b7b7f695077b8c0425ba52e9dcda52ee17861f5249909fff4855d2",
+  "source_files": {
+    "src/native-core/CMakeLists.txt": "470dc9a8a6070bfcefb759eebcd660ce78d1089594b955c1f6c79d1d228a0129",
+    "tests/unit/CMakeLists.txt": "83022c0582f4ba03775dda562e1c99e83dbe4524e1a30612494ee03932329cb9",
+    "tools/check_ui_boundaries.py": "5c74f43f201ef0d630a2860874e2f05a2c7436fcbd63adf910d4108d67c859d6",
+    "src/native-core/files/CMakeLists.txt": "a8b0d9b5e8c5280d93206607c2582cd3dc8af8882a352e491f5ed70f65fe4bdd",
+    "src/native-core/files/directory_cursor.cpp": "1fa9d1ddf030f318df123c0e17eea82a88aec365d97d008691313acc3c5bd7e4",
+    "src/native-core/files/directory_cursor.hpp": "bc2da850f03687e93adc4c955aecae9f59dca6a4af0ec9fe39a5a153263f5d27",
+    "src/native-core/files/file_metadata.cpp": "f44f8b2a44abd4e97167bb8ebfea886f2ba9d5da39188da12896a3089d6dfacc",
+    "src/native-core/files/file_metadata.hpp": "8fa86b6ccf4654b99c8ae8e5ef005be01ab8d6191da64da854ba00e1c2fc2483",
+    "src/native-core/files/native_filesystem.hpp": "1d4c5d3c04f418fe86be26f76636b1f833b0ec1e22eccfb513c0a5f27af166ee",
+    "src/native-core/files/native_name.cpp": "3391edb2f26c06b4c35871b684e2c95602ca65571d679814d49fa92587e1b983",
+    "src/native-core/files/native_name.hpp": "ee0023056a46eb72e2943759fd874cbc93c826adc6ad7ce601529acb388a29e1",
+    "src/native-core/files/observation.hpp": "c7f254844ca937d42ecc3a7c6c9678530c3aeea2b78d2f2b813d27b2c571c0f5",
+    "src/native-core/files/opened_entry.hpp": "e50d3adcfb778a19ae32e26cd89019cfc6d07a1e6f563dc59f696adabd4ce781",
+    "src/native-core/files/platform/metadata_posix.cpp": "575cb370c994e59c3a789df46fa51352384675239788868abd52a88aa1a6c1a2",
+    "src/native-core/files/platform/metadata_windows.cpp": "dd99200611bfc0fcbba98ba58d60ad1ed4d236427fc5ed5fb48115120126cf24",
+    "src/native-core/files/windows_directory_record.cpp": "8fa7c3282eb050e07d9530ca882c738ec9602527d743084e145cb06d7ceb672d",
+    "src/native-core/files/windows_directory_record.hpp": "d581dee19aa6bcbb5a666bb0e5e475f8b1c5b147e92c5c7b620e41a4f89a4c8e",
+    "tests/unit/ck_files/CMakeLists.txt": "d18af0826888c2b9e6fe9f46757d43f75248860a2ada758657f1b39f84106f83",
+    "tests/unit/ck_files/test_files_child_native.cpp": "757e0495670bb8e9f9298f8a2f8fd301646c99f654495cc1101fa32886af262d",
+    "tests/unit/ck_files/test_files_directory.cpp": "c104554001e1720d6e93a2aee19268f347d58626f055f13b7bdf8953db85d5a8",
+    "tests/unit/ck_files/test_files_directory_native.cpp": "e26f5980d41e94389988ffaac28b8537671faaeade9700210149d2fb22b3c9bd",
+    "tests/unit/ck_files/test_files_metadata.cpp": "52f2e54f39ba878532558a665f1dc26b33b4a3151f4e99ee17b31ae1e04a85db",
+    "tests/unit/ck_files/test_files_names.cpp": "51c6542c3e37d787eda81043e2e164662ce72011f47457fd5c4952bb6a28347b",
+    "tests/unit/ck_files/test_files_native.cpp": "e53773e7c3174a8eae146ff42c88553f5173d1877df11fbbc50890cfa4d218da",
+    "tests/support/scratch_directory.hpp": "c11b9ef553bd81fb623b2ead2cb2b1ee8611e6c0969e26457215067bafdcaf4a",
+    "tests/support/test_environment.hpp": "b3d99409307e32e969ce6d4424a891abcd3acf0b32f829049f6b9384210236a0",
+    "tests/support/windows_junction.hpp": "d506144e737ff07e2fdea67ca284129a05d5367e1ccca69d61ca2bf4ed77a04b"
+  },
+  "macos": {
+    "build": {
+      "command": [
+        "cmake",
+        "--build",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "--target",
+        "ck_files_core_tests",
+        "ck_files_native_tests",
+        "--parallel",
+        "4"
+      ],
+      "start": "2026-10-23T00:01:26.659052+00:00",
+      "end": "2026-10-23T00:01:29.336751+00:00",
+      "elapsed_seconds": 2.677,
+      "exit_code": 0
+    },
+    "test": {
+      "command": [
+        "ctest",
+        "--test-dir",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build",
+        "-L",
+        "files",
+        "--output-on-failure"
+      ],
+      "start": "2026-10-23T00:01:30.055918+00:00",
+      "end": "2026-10-23T00:01:30.562991+00:00",
+      "elapsed_seconds": 0.507,
+      "exit_code": 0
+    },
+    "cases": 43,
+    "ctest_log_sha256": "58eb869ca9721849f7d7b0a14388cbefee9e6a30148d3c6f4b81d1e122f270d0"
+  },
+  "linux": {
+    "steps": [
+      {
+        "step": "build",
+        "start": "2026-10-23T00:02:16.126109+00:00",
+        "end": "2026-10-23T00:02:19.748596+00:00",
+        "elapsed_seconds": 3.623,
+        "command": [
+          "cmake",
+          "--build",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "--target",
+          "ck_files_core_tests",
+          "ck_files_native_tests",
+          "--parallel",
+          "4"
+        ],
+        "exit_code": 0
+      },
+      {
+        "step": "test",
+        "start": "2026-10-23T00:02:19.748887+00:00",
+        "end": "2026-10-23T00:02:19.821860+00:00",
+        "elapsed_seconds": 0.073,
+        "command": [
+          "ctest",
+          "--test-dir",
+          "/home/klukas.guest/build/ckutilities-files-20261023-01a165ae/build",
+          "-L",
+          "files",
+          "--output-on-failure"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "cases": 44,
+    "ctest_log_sha256": "e8500f365efdd241b3ef11a45a645c9ddd85bbd71007c635d231f8dcd9fe9d15"
+  },
+  "windows": {
+    "start": "2026-10-23T00:02:19.5952975Z",
+    "buildEnd": "2026-10-23T00:02:27.1777475Z",
+    "end": "2026-10-23T00:02:28.4470536Z",
+    "buildSeconds": 7.58245,
+    "testSeconds": 1.2693060999999999,
+    "cases": 44,
+    "build_command": [
+      "cmake",
+      "--build",
+      "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build",
+      "--target",
+      "ck_files_core_tests",
+      "ck_files_native_tests",
+      "--parallel",
+      "4"
+    ],
+    "test_command": [
+      "ctest",
+      "--test-dir",
+      "V:\\tmp\\ckutilities-files-20261023-01a165ae\\work\\build",
+      "-L",
+      "files",
+      "--output-on-failure"
+    ],
+    "ctest_log_sha256": "09a1ad43b80b6063c740836baaf98dbb2eaad61749039c864e995c697666dcab"
+  },
+  "sanitizers": {
+    "platform": "macOS arm64; portable core and POSIX backend",
+    "cases": 43,
+    "build": {
+      "command": [
+        "clang++",
+        "-std=c++20",
+        "-O1",
+        "-g",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wshadow-all",
+        "-Werror",
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-DCKTOOLS_TEST_TEMP_ROOT=\"/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/build/test-scratch\"",
+        "-I",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/sdk/include",
+        "-I",
+        "src/native-core/files",
+        "-I",
+        "tests/support",
+        "src/native-core/files/native_name.cpp",
+        "src/native-core/files/file_metadata.cpp",
+        "src/native-core/files/directory_cursor.cpp",
+        "src/native-core/files/windows_directory_record.cpp",
+        "src/native-core/files/platform/metadata_posix.cpp",
+        "tests/unit/ck_files/test_files_names.cpp",
+        "tests/unit/ck_files/test_files_metadata.cpp",
+        "tests/unit/ck_files/test_files_directory.cpp",
+        "tests/unit/ck_files/test_files_native.cpp",
+        "tests/unit/ck_files/test_files_directory_native.cpp",
+        "tests/unit/ck_files/test_files_child_native.cpp",
+        "src/vision/host/cktest_main.cpp",
+        "-o",
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/child-sanitizer/ck-files-child-tests"
+      ],
+      "start": "2026-10-23T00:02:42.665026+00:00",
+      "end": "2026-10-23T00:03:02.402492+00:00",
+      "elapsed_seconds": 19.737,
+      "exit_code": 0
+    },
+    "test": {
+      "command": [
+        "/Volumes/S8T/tmp/ckutilities-files-20261023-01a165ae/child-sanitizer/ck-files-child-tests"
+      ],
+      "start": "2026-10-23T00:03:04.757174+00:00",
+      "end": "2026-10-23T00:03:05.316875+00:00",
+      "elapsed_seconds": 0.56,
+      "exit_code": 0
+    }
+  },
+  "qualified_limits": [
+    "Opened handles do not freeze content or prove continued membership at a former name.",
+    "Darwin event-only child observation returned EACCES for the mode-zero fixture; Linux O_PATH permitted observation. No permission bypass is implemented.",
+    "Full channel/xattr/ACL/provider inventories and mutation are not implemented.",
+    "Qualification here covers the selected task volumes, not the complete release filesystem matrix."
+  ],
+  "investigation": {
+    "macos_fifo": "Initial event-only open blocked in openat. A process sample confirmed the FIFO case, then the exact owned test PID was terminated. O_NONBLOCK and O_NOCTTY were added, and the unchanged FIFO fixture passed.",
+    "macos_mode_zero": "A subsequent native EACCES exposed an overly broad cross-platform test expectation. The test now verifies denial on Darwin and O_PATH access on Linux; the production denial remains intact."
+  }
+}

@@ -232,7 +232,94 @@ host contention made earlier timing observations unusually variable. Disposable
 sanitizer output and known abandoned failed-fixture directories are cleaned
 after retaining evidence; source, current test builds and logs are preserved.
 
-Remaining WP-01 work includes pinned child-entry access/revalidation, complete
-metadata/stream inventories, destination capability inspection, fake filesystem
-services and pane sorting/filter/selection behavior. No WP-01 checkbox is marked
-complete by these foundational milestones. No file mutation command exists yet.
+### Pinned child object observation
+
+`DirectoryCursor::open_child` now opens exactly one native basename relative
+to the owned parent handle, without following the final link/reparse point.
+The returned `OpenedEntry` owns that object independently of the cursor and
+filesystem adapter. `inspect_basic()` queries the held object, including after
+its name is renamed, replaced or unlinked. A repeated query observes changes;
+it is not cached metadata or a content snapshot. Comparing these observations
+still does not prove that a former pathname names the held object or authorize
+mutation. Full plan revalidation and retirement protocols remain outstanding.
+
+Linux uses `openat(O_PATH | O_NOFOLLOW | O_CLOEXEC)` and empty-path `statx`, with
+`fstat` as the documented older query when statx is unavailable. macOS uses
+`openat` with public event-only/symlink/nonblocking/no-controlling-terminal and
+close-on-exec flags, followed by `fstat`. These event-only handles do not prevent
+volume unmount. Native errors and permission failures remain explicit.
+Absolute POSIX observations now use the same conversion via `fstatat`; they
+retain no-follow and absolute-path semantics.
+
+Windows uses the documented user-mode
+[NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
+interface, linked through the SDK's `ntdll.lib`. The owned directory is the
+`RootDirectory`; the counted UTF-16 name is one component, with exact-spelling
+lookup, reparse/no-recall flags, metadata/synchronization rights, shared access
+and FILE_OPEN disposition. No absolute pathname is reconstructed and no create,
+overwrite or privilege-bypass flag is used. Native NTSTATUS values are retained
+in their own error domain; conversion to Win32 errors only classifies the
+observation state. Unsupported or denied opens do not retry through a path.
+
+Foreign name encodings, malformed/moved-from components, excessive Windows
+counted-string lengths and stream syntax are refused before native lookup.
+Windows absolute-object inspection also refuses stream syntax: a stream handle
+can have its owner's ID with different data, so it must not masquerade as an
+ordinary main-data object. Additional channels will be inventoried separately.
+Literal reserved names and trailing dots/spaces use native relative lookup;
+they are not stripped, rewritten or interpreted as DOS devices.
+
+Eight new native cases on each host prove parent-handle binding after pathname
+replacement; child-handle survival after rename, replacement, unlink and parent
+closure; live metadata changes; missing/foreign-name errors; directory and
+hard-link identities; and unusual native name units. POSIX cases include final
+and dangling symlinks, FIFOs and the mode-zero access contract. Windows cases
+include real reserved/trailing-name files, a real additional data stream, stream
+path refusal, literal-name cleanup and a junction whose handle differs from its
+target. The junction fixture is shared with the earlier directory tests.
+
+The initial macOS event-only FIFO open waited for a peer. A one-second process
+sample confirmed the stack in the FIFO case at `PosixDirectoryCursor::open_child`
+→ `openat`. The exact task-owned test PID was verified and stopped; the failed
+CTest command recorded 56.473 s. Adding O_NONBLOCK/O_NOCTTY corrected the native
+open protocol; the original FIFO fixture then passed. The next test reported
+EACCES for a mode-zero child. This established a platform access limit rather
+than an adapter fallback opportunity: Linux's O_PATH observation succeeds;
+the macOS test explicitly verifies Denied/native EACCES and unchanged mode bits.
+The earlier broad expectation was corrected; no chmod, elevation or unpinned
+production query was introduced. See Apple's public
+[open flags](https://github.com/apple/darwin-xnu/blob/main/bsd/man/man2/open.2)
+and Linux's [O_PATH/openat contract](https://man7.org/linux/man-pages/man2/open.2.html).
+
+Final validation on 2026-10-23 used ckVision 1.4.0, warnings as errors and the
+same 27-file source manifest on all three hosts. The full manifest, native test
+log digests, commands and timing records are in
+[the child-observation evidence](evidence/ck-files-child-20261023.json).
+
+| Host / Release toolchain | Final incremental build interval (Europe/Berlin) | Elapsed | Files test result |
+| --- | --- | --- | --- |
+| macOS arm64 / Apple Clang 21 | 02:01:26.659–02:01:29.337 | 2.677 s | 43 cases, six CTest entries passed |
+| Lima Debian 13 arm64 / GCC 14 | 02:02:16.126–02:02:19.749 | 3.623 s | 44 cases, six CTest entries passed |
+| Windows workstation x64 / MSVC 19.44, static CRT | 02:02:19.595–02:02:27.178 | 7.582 s | 44 cases, six CTest entries passed |
+
+Test commands took 0.507 s, 0.073 s and 1.269 s respectively. Logs show the
+changed native sources/tests compiled and native tests linked. Earlier builds
+compiled the new core boundary and regenerated CMake (initial macOS build:
+26.674 s, later regeneration: 20.232 s); the final builds were incremental.
+The existing comparable incremental observations and actual compiled inputs
+were checked, rather than using duration as freshness proof. Current binaries
+remain in the same active build directories and exact test executable paths
+recorded above; no Files application has been launched.
+
+A direct macOS AddressSanitizer/UndefinedBehaviorSanitizer build compiled all
+12 core/POSIX/test translation units, strict warnings, `-O1 -g` and frame
+pointers. Build interval: 02:02:42.665–02:03:02.402 Berlin (19.737 s); all 43
+cases passed in 0.560 s without reported violations. Its input tree fingerprint
+matches the final CMake build and test records. Disposable sanitizer output and
+identified abandoned failed-fixture directories are removed after preserving
+this evidence. Source, current CMake test builds and concise logs remain.
+
+Remaining WP-01 work includes complete metadata/stream inventories, destination
+capability inspection, fake filesystem/time services and pane sorting/filter/
+selection behavior, including entry revalidation semantics. No WP-01 checkbox
+is marked complete by these foundational milestones. No mutation command exists.

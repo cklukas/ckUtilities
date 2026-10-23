@@ -12,7 +12,7 @@
 namespace ck::files {
 
 enum class ObservationState { Available, Unsupported, Unknown, Denied, Gone, Changed, Failed };
-enum class ErrorDomain { None, Posix, Win32, Adapter };
+enum class ErrorDomain { None, Posix, Win32, Adapter, NtStatus };
 enum class AdapterError : std::int64_t {
     InvalidPath = 1, InvalidNativeResult = 2, NotApplicable = 3,
     UnsupportedQuery = 4, UnqualifiedIdentity = 5, InterruptedRead = 6,

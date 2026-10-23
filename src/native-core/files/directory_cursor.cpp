@@ -43,4 +43,9 @@ DirectoryRead DirectoryCursor::read(std::size_t limit, std::stop_token stop) {
     }
 }
 
+Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::open_child(const NativeName&) const {
+    return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "open_child"});
+}
+
 } // namespace ck::files

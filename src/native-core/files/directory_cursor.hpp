@@ -4,6 +4,9 @@
 
 #include "file_metadata.hpp"
 #include "native_name.hpp"
+#include "opened_entry.hpp"
+
+#include <memory>
 
 #include <cstddef>
 #include <optional>
@@ -44,6 +47,10 @@ public:
     // At most max_batch_size native steps per read, including omitted entries;
     // a More batch may therefore contain fewer names than the requested limit.
     DirectoryRead read(std::size_t limit, std::stop_token stop = {});
+    // One native component only, opened without following the final link or
+    // reparse point. This captures the object present at open time, not an
+    // earlier enumeration snapshot. Revalidate identity before later actions.
+    virtual Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name) const;
     const Observation<ObjectIdentity>& identity() const noexcept { return identity_; }
 
 protected:

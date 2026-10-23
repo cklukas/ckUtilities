@@ -31,6 +31,7 @@ public:
     // Windows accepts filesystem drive/UNC/volume-GUID namespaces only. Device
     // names are refused before opening; literal reserved basenames require an
     // extended filesystem path rather than ambiguous Win32 device spelling.
+    // Explicit stream paths are refused: channel inventory is a separate query.
     Observation<BasicMetadata> inspect_basic(const std::filesystem::path& absolute_path) const override;
     // Owns a native directory stream, never reopens a path while reading. The
     // policy concerns the final component; parents retain host navigation rules.
