@@ -134,12 +134,12 @@ failure remains explicit, without partial publication or unlimited-memory
 fallback. Disk-backed indexes remain required for larger views.
 
 A default completed payload releases the source directory handle; refresh
-preparation can explicitly retain it. Neither mode attests that an original
+or initial acquisition preparation can explicitly retain it. Neither mode attests that an original
 pathname still resolves to that directory. Navigation labels/context need
 their separately qualified binding. Raw discovery rows are not sealed HeldChild refresh successors. PaneRefreshJob
 can prepare successors for previously held entries; unproven continuity still
-invalidates selection. Initial pinning, scheduling, large indexes and UI
-ownership/publication remain unfinished. No snapshot,
+invalidates selection. PaneAcquireJob can initially bind requested discovery rows.
+Scheduling, large indexes and UI ownership/publication remain unfinished. No snapshot,
 provider hydration or mutation guarantee is implied.
 
 [Pane-job evidence](evidence/ck-files-pane-job-20261023.json) includes injected
@@ -200,12 +200,61 @@ state. Current issue details survive failure/cancellation; successful publicatio
 replaces the report, while unacknowledged selection invalidation counts persist.
 Explicit valid selection commands acknowledge/clear those diagnostics.
 
-This phase handles entries already bound before refresh. Initial selection
-pinning, UI ownership/scheduling, large-view indexes, operation planning and
-execution-time revalidation remain required work.
+This phase handles entries already bound before refresh. Initial binding uses
+PaneAcquireJob below. UI ownership/scheduling, large-view indexes, operation
+planning and execution-time revalidation remain required work.
 [Refresh evidence](evidence/ck-files-pane-refresh-20261024.json) includes injected
 lifecycle/fault/resource tests and native bound-selection, replacement and
 cross-directory tests on all three platforms.
+
+## Initial held-entry acquisition
+
+`PaneAcquireJob` consumes a sealed native-End discovery payload with its exact
+scanned directory retained, plus ownership of a bounded vector of requested
+native names. The existing `RetainForRefresh` retention option supports both
+preparation stages. Requests are exact native-unit matches against this scan;
+there is no display decoding, case folding, normalized-name substitution or
+path reopening. Every request and discovery row is validated before any child
+open. Duplicate requests, platform/encoding mismatch, invalid configuration and
+count/name/display limits fail without publishing partial results. The requested
+vector transfers ownership without a constructor copy; indexed name copies are
+bounded before allocation. Requested/indexed names, copied rows, issue names and
+held objects have separate bounded counts/bytes, not a total memory quota.
+
+For every matched request, `HeldChild::observe` opens metadata-only through the
+retained parent without following a final link. Successful acquisition replaces
+the row's metadata and recomputes its hidden observation. Other rows stay as
+observed. A name absent from discovery produces Unknown/not-listed without a
+native lookup or a claim of absence; native open/inspection failures remain
+named issues with their exact states/codes. A successfully completed payload
+can contain both held rows and unresolved named issues; it is not an entirely
+bound operation-source selection or permission to execute. Input metadata and
+identities never prove continuity with the newly opened object. Even equal
+reported IDs can have been recycled before acquisition; no such comparison is
+used to preserve old marks or focus. Pane publication allocates new row IDs,
+and a refresh of previously unheld selections reports invalidation. The user
+must select/review the freshly represented objects. Subsequent refresh can use
+the acquired immutable held families through `PaneRefreshJob`.
+
+Each advance performs at most 256 preparation/acquisition steps and observes
+an injected monotonic slice (20 ms default, positive through one second).
+Components have a 1 MiB hard cap; pane row, request/held-count, native-byte and
+display-byte limits apply. Native calls and individual allocation/encoding steps
+may exceed the cooperative slice. Cancellation discards incomplete native
+observations and can resume at that request; completed requests survive yields.
+Clock/resource failures poison and release staging. Exceptions preserve a
+nonallocating poison record before rethrow. Abandonment releases private state;
+issued immutable results remain independently owned and require generation
+revocation by the receiving pane. Successful preparation releases its scan pin;
+held rows retain their own parent ownership. All native-owner retirement belongs
+on the worker. No directory membership/content snapshot, pathname attestation,
+provider-hydration guarantee, operation plan, scheduler or UI integration is
+established by initial acquisition. Combining existing held-row refresh with
+new acquisition in one publication remains required orchestration work.
+
+[Acquisition evidence](evidence/ck-files-pane-acquire-20261024.json) records
+simulated fault/resource/lifecycle tests and native acquisition/publication/
+refresh, parent-path replacement, removed-name and hard-link fixtures.
 
 ## Held-directory entry probes
 

@@ -2082,3 +2082,76 @@ WP-01's two remaining checklist items and acceptance stay open: initial selectio
 self/descendant checks, native equivalence, operation capabilities, remaining
 inventories and pane/worker/large-view integration still need implementation.
 WP-02 has not started.
+
+## 2026-10-24 — WP-01 initial held-entry acquisition
+
+Added `PaneAcquireJob`, a worker stage between sealed native-End discovery and
+pane publication. It consumes the retained scanned directory and ownership of
+bounded requested native names. Requests match raw discovery components exactly;
+no path reopening, display decoding, normalization or case substitution occurs.
+All request/row validation precedes child opens. Duplicate requests fail; names
+not observed in the scan produce explicit uncertainty without guessed lookups.
+Native open/inspection failures retain their exact states/codes and named issues.
+Unresolved discovery rows remain identifiable alongside successfully bound rows.
+
+Successful metadata-only acquisition replaces metadata and recomputes hidden
+state from the object opened now. Cached discovery IDs never establish
+continuity: even equal IDs may have been recycled before acquisition. Initial
+binding creates new held families and cannot preserve previously unheld pane row
+IDs, marks or focus. Refresh publication reports that invalidation; the user must
+select/review freshly represented objects. Acquired families can subsequently
+use the existing sealed refresh stage. Native owners retire on the worker.
+
+Preparation has 256-step and injected cooperative time-slice bounds, per-component
+hard caps and pane row/name/display/held-count limits. Request ownership transfers
+without a constructor copy. Index/row/issue copies have separate bounded storage;
+these are not process-memory quotas. Cancellation discards incomplete observations
+and retries only that request; completed acquisitions survive yields. Exceptions
+poison and release staging before rethrow. Abandonment releases private state;
+issued results remain independently owned and require receiver generation
+revocation. No snapshot, provider guarantee or mutation authority is introduced.
+
+Seventeen deterministic cases cover fresh metadata, held-family refresh,
+replacement, parent rebinding, separate hard-link names, not-listed requests,
+all failure states, cancellation, slow calls, 300 rows, duplicate/byte/count
+limits, UTF-16 byte accounting, configuration, clock reversal, exceptions,
+retirement, stale publication, selection invalidation and hidden/unknown fields.
+Four native cases per host qualify acquisition-to-refresh publication, replaced
+parent paths, removed names and hard links with old unheld-selection invalidation.
+
+The same **117-file manifest** was verified on all hosts. All **45 Files suites**
+passed: **367 macOS / 366 Linux / 372 Windows cases**. Final normal build/test
+seconds were **5.914/1.104**, **14.372/0.311**, **33.973/2.928**. Mac's final six-step
+build compiled the new core and both fixtures, archived and linked both binaries;
+remote header-dependent builds also regenerated projects and rebuilt affected
+existing units. Current hashes, compiled inputs and executable records establish
+freshness. The initial Mac fixture compile error was fixed with an explicit
+optional payload initializer. Its following test run exposed counters that
+included discovery opens; corrected assertions capture the baseline and require
+exact acquisition-only counts. Neither failed attempt is accepted as validation.
+
+Focused sanitizers compiled all 28 core units, platform adapter, simulator,
+acquisition/refresh domain and native fixtures, and test host (35 units), without
+cached objects. **67 cases passed on each host**. Mac ASan+UBSan build/test took
+**151.455/0.308 s**, Linux ASan+UBSan **159.675/0.152**, Windows ASan
+**68.533/0.328**. This establishes a new fixture-set baseline. The prior different
+35-unit layout set took 65.882/151.535/69.694 s. Mac's longer wall time was
+investigated while the original compiler continued progressing: host load was
+about 80 on 10 CPUs. Contention may contribute, but causation is not established.
+Strict warnings stayed enabled as errors; no diagnostic run was restarted or
+replaced with stale results.
+
+Diagnostic executables were hashed, verified owner-free and removed; all fixture
+roots were empty. Current normal builds remain. Windows work stayed on V: and
+Mac temporary work on S8T. No GUI was launched. Validation intervals were UTC on
+2026-10-23; the milestone uses the local date, 2026-10-24.
+[Acquisition evidence](evidence/ck-files-pane-acquire-20261024.json) retains source
+and output hashes, commands, timings, case markers, rejected attempts, load
+observation and cleanup. UI boundaries (84 domain sources), ckVision-only
+(463 active files), ckdocs (24 pages) and whitespace checks pass.
+
+WP-01 remains open. Combining refresh of existing held families with acquisition
+of additional rows in one publication still requires orchestration. Self/
+descendant checks, native name equivalence, operation-specific capabilities,
+remaining inventories, large-view indexes and UI/worker integration also remain.
+WP-02 has not started.

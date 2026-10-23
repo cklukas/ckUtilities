@@ -9,6 +9,7 @@ namespace ck::files {
 // Only a job that reached native End can construct this immutable result.
 // Generation and directory observations travel with the rows, not separately.
 class PaneRefreshJob;
+class PaneAcquireJob;
 Observation<bool> pane_hidden_state(const NativeName& name, const Observation<BasicMetadata>& metadata, StorageModel model);
 enum class ListingDirectoryRetention { ReleaseAtEnd, RetainForRefresh };
 class CompletedPaneListing final {
@@ -21,6 +22,7 @@ public:
 private:
     friend class PaneListingJob;
     friend class PaneRefreshJob;
+    friend class PaneAcquireJob;
     CompletedPaneListing(PaneListingRequest request, Observation<ObjectIdentity> directory, std::vector<PaneEntry> entries,
         std::shared_ptr<const DirectoryCursor> pin = {}, std::vector<PaneBindingIssue> issues = {})
         : request_(std::move(request)), directory_(std::move(directory)), entries_(std::move(entries)),
