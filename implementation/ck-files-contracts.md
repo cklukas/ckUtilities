@@ -2263,3 +2263,72 @@ result/pin/storage retirement. A second native case changes the directory's
 modification time after enumeration and requires Changed with no result.
 This is integration coverage, not the planned 100,000-real-entry throughput,
 RSS or full-application responsiveness qualification.
+
+
+### Disk row-position and original-ID lookup
+
+`DirectoryIndexLookupJob` builds a same-lifetime bidirectional lookup for one
+sealed complete index. It accepts ingestion or sorted projections whose original
+ID bound equals their row count. The builder proves a permutation of IDs 1..N
+using initialized on-disk ID slots: every observed ID must be in range and its
+slot still zero before insertion; exactly N rows must reach source End. No
+in-memory set or array proportional to the directory is used.
+
+The private file contains N position entries followed by N original-ID entries,
+64 bytes each (128*N total). Position is zero-based; original IDs are one-based.
+The fixed little-endian `CKFLOC01` entry layout is: schema8, generation16, rank8,
+original ID8, source offset8, source wire length4, role4, reserved-zero4, CRC32C4.
+Roles distinguish the two halves, and the checksum covers the preceding 60 bytes.
+Every query checks schema/generation/role/reserved bytes/CRC, expected slot,
+source bounds and the matching entry in the opposite half. The live owner pins
+the exact source store and its factory/context. This is not a restart format or
+an authenticated structure; private ownership and existing CRC trust limits apply.
+
+A private shared quota reservation now covers one file and optionally its known
+logical bytes before factory invocation. Existing variable-record stores reserve
+zero initial bytes and continue charging each attempted append. The lookup
+reserves its full 128*N bytes and file slot before native creation. Creation
+failure/cancellation/exception rolls those reservations back; successfully
+adopted or partially written owners keep them until closure. Lifetime high-water
+counters include temporary reservations even if creation subsequently fails.
+Factory directory handles remain outside the byte-file slot count.
+
+Initialization writes every byte explicitly in at most 64 KiB per advance; it
+never relies on sparse holes or unwritten ID-slot contents. Later advances
+consume one bounded source page, check the ID slots and write both fixed entries.
+Partial transfers, zero/overcount progress, errors, cancellation and exceptions
+cannot publish a partial lookup. Native End, complete permutation and exact table
+size precede Ready. Empty source verifies native cache End without another file
+or reservation. Invalid limits, quota exhaustion and an already requested stop
+are checked before creation; arithmetic is bounded before multiplication.
+
+`DirectoryIndexLookup::read_page(first_rank, limits)` reads two fixed entries to
+locate the requested start, then one bounded sequential source page, including
+normal source codec/CRC/address checks. It does not scan from the first row or
+retain every source address. Page results preserve original IDs and observations.
+An inadequate first-record wire budget can retry without revoking either healthy
+owner. End checks native source size; each lookup query checks table size. Other
+source pages retain the store's existing validation scope rather than asserting
+a snapshot or rehashing the complete source on every request.
+
+`find_row(IndexRowKey)` validates the original dataset's row namespace and ID,
+then returns the zero-based cached position after checking both table entries.
+It checks the source's current store state, not all source bytes or any native
+directory. Foreign/moved/zero/out-of-range keys and out-of-range positions do no
+I/O and do not revoke a healthy lookup. Re-sorting retains the row namespace;
+a fresh dataset/refresh has another namespace even if its ordinal numbers match.
+
+Lookup I/O/corruption/cancellation revokes that lookup. Source reads finish one
+bounded page before observing projection cancellation, preserving an otherwise
+healthy source; actual source I/O/corruption still revokes the source and lookup.
+Exceptions revoke before propagation. Issued lookup owners keep their file and
+source pin after builder abandonment, with reservations held until closure.
+They must be used and retired on a worker. Cached keys, offsets and positions
+are not native acquisition or mutation authority and require the later pane
+request/generation gate before UI use.
+
+The native 100,000-record sorted-cache test now builds a 12,800,000-byte lookup,
+queries positions in nonsequential order, verifies original IDs and metadata,
+resolves original row keys back to positions, and checks End and retirement.
+Its bounded cache measurement is separate from real-directory or UI latency/RSS
+qualification. The collector's 259-entry real-directory integration remains in the same run.

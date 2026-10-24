@@ -52,6 +52,8 @@ class IndexStorageBudget final {
 
   private:
     friend class DirectoryIndexStore;
+    friend class DirectoryIndexLookup;
+    friend class DirectoryIndexLookupJob;
     class FileSlot;
     const std::uint64_t max_bytes_;
     const std::size_t max_files_;
@@ -77,6 +79,8 @@ class IndexRecordAddress final {
 
   private:
     friend class DirectoryIndexStore;
+    friend class DirectoryIndexLookup;
+    friend class DirectoryIndexLookupJob;
     IndexRecordAddress(AdapterScope owner, std::uint64_t row, std::uint64_t offset, std::size_t bytes)
         : owner_(std::move(owner)), row_(row), offset_(offset), bytes_(bytes) {
     }
@@ -102,6 +106,7 @@ class IndexScanCursor final {
 
   private:
     friend class DirectoryIndexStore;
+    friend class DirectoryIndexLookup;
     IndexScanCursor(AdapterScope owner, std::uint64_t position, std::uint64_t offset)
         : owner_(std::move(owner)), position_(position), offset_(offset) {
     }
@@ -165,6 +170,8 @@ class DirectoryIndexStore final {
 
   private:
     friend class DirectoryIndexSortJob;
+    friend class DirectoryIndexLookup;
+    friend class DirectoryIndexLookupJob;
     DirectoryIndexStore(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
                         DirectoryIndexContext context, DirectoryIndexStoreLimits limits,
                         std::shared_ptr<IndexFileFactory> factory);

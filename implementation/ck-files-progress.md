@@ -3353,3 +3353,49 @@ Disk rank/ID addressing, indexed pane providers and generation/selection/acquisi
 integration, remaining destination preservation/collision capabilities and broader
 native qualification remain required. WP-01 remains in progress; WP-02–08 remain
 unstarted.
+
+
+## 2026-10-24 — disk position and original-row lookup
+
+WP-01 now builds a private bidirectional disk lookup for a sealed complete index.
+It maps zero-based positions to source records and scoped original row IDs back
+to positions. Each query checks two matching fixed-width entries, including
+schema, generation, role, checksum and source bounds. Bounded source pages start
+at the requested position, without scanning earlier rows or keeping every
+address in RAM. Cached data and row keys remain observations, not native authority.
+
+The full 128*N logical-byte and file reservation precedes native creation.
+Initialization explicitly writes at most 64 KiB per advance; later advances
+check one bounded source page and both lookup entries per row. Initialized disk
+ID slots detect duplicates and establish a complete original-ID permutation.
+Empty input checks source End without another file. Failure/cancellation and
+exceptions publish no partial lookup; healthy source caches survive projection
+cancellation. Issued owners retain storage and source lifetime after builder
+abandonment and must be retired on their worker.
+
+Fifteen unit cases cover deterministic reordered positions, exact payloads,
+scoped keys, quotas before creation, initialization, partial/invalid I/O,
+corruption and valid-checksum field substitution, cancellation at each build
+advance and during reads, unavailable native states, exceptions, source failures,
+duplicate original IDs and owner retirement. The injected file fixture now
+preserves existing bytes on overwrite, matching the native write-at contract.
+
+The native 100,000-record sorted-cache test now builds a 12,800,000-byte lookup
+in 588 advances. It checks nonsequential pages, 233 returned rows, reverse ID
+queries and End/cleanup. Normal build times for this lookup were 818 ms on Mac,
+523 ms on Linux and 1,747 ms on Windows; these are private-cache measurements,
+not real-directory throughput, process RSS or application latency qualification.
+The existing 259-real-entry collector integration remains exercised separately.
+
+All 79 Files suites pass: 681 cases on macOS, 684 on Linux and 680 on Windows.
+Fresh 60-unit sanitizer builds pass 109/107/106 focused cases, using ASan+UBSan
+on Mac/Linux and ASan on Windows. UI-boundary, ckVision-only and strict docs
+checks pass. See [the lookup evidence](evidence/ck-files-index-lookup-20261024.json)
+for 199 source fingerprints, commands, timings, output hashes and native markers.
+Diagnostic builds and documentation scratch were removed after hashing; fixture
+roots are empty. Current verified normal builds and SDK remain for active work.
+Windows work stays on V:. No GUI application was launched.
+
+Indexed pane providers, generation/filter/selection/acquisition integration,
+remaining destination preservation/collision capabilities and broader native
+qualification remain required. WP-01 remains in progress; WP-02–08 remain unstarted.

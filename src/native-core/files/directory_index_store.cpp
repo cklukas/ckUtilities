@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "directory_index_store.hpp"
+#include "index_storage_slot.hpp"
 #include <algorithm>
 #include <limits>
 
@@ -26,32 +27,7 @@ IndexStorageBudget::IndexStorageBudget(std::uint64_t bytes, std::size_t files) :
     if (!bytes || bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) || !files)
         throw std::invalid_argument("invalid index storage budget");
 }
-class IndexStorageBudget::FileSlot final {
-  public:
-    explicit FileSlot(std::shared_ptr<IndexStorageBudget> budget) : budget_(std::move(budget)) {
-        if (budget_->used_files_ != budget_->max_files_) {
-            ++budget_->used_files_;
-            budget_->peak_files_ = std::max(budget_->peak_files_, budget_->used_files_);
-            owned_ = true;
-        }
-    }
-    ~FileSlot() {
-        if (owned_)
-            --budget_->used_files_;
-    }
-    FileSlot(const FileSlot &) = delete;
-    FileSlot &operator=(const FileSlot &) = delete;
-    bool acquired() const noexcept {
-        return owned_;
-    }
-    void transfer() noexcept {
-        owned_ = false;
-    }
 
-  private:
-    std::shared_ptr<IndexStorageBudget> budget_;
-    bool owned_ = false;
-};
 namespace {
 Observation<bool> configuration(const DirectoryIndexContext &context, DirectoryIndexStoreLimits limits) {
     const auto &r = limits.record;

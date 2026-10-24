@@ -3,6 +3,7 @@
 #include "native_index_file.hpp"
 #include "directory_index_sort_job.hpp"
 #include "directory_index_listing_job.hpp"
+#include "directory_index_lookup.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -575,6 +576,40 @@ CK_TEST(index_sort_native_external_merges_100000_records_and_preserves_stable_so
     std::cout << "index-sort-native-100000-qualified rows=" << seen << " bytes=" << source_bytes
               << " advances=" << advances << " peak_files=" << peak_files << " peak_bytes=" << peak_bytes
               << " sort_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished - start).count() << '\n';
+    const auto lookup_start = std::chrono::steady_clock::now();
+    DirectoryIndexLookupJob lookup_job(output, {256, 4 * 1024 * 1024});
+    std::size_t lookup_advances = 0;
+    while (lookup_job.state() == DirectoryIndexLookupJobState::Initializing ||
+           lookup_job.state() == DirectoryIndexLookupJobState::Building) {
+        if (++lookup_advances > 10000)
+            throw std::runtime_error("native lookup budget");
+        lookup_job.advance();
+    }
+    auto lookup = take(lookup_job.completed());
+    const auto lookup_built = std::chrono::steady_clock::now();
+    CK_CHECK(lookup->bytes() == 12800000 && lookup->rows() == 100000 && lookup->row_scope() == namespace_before);
+    std::size_t queried = 0;
+    for (const std::uint64_t rank : {99999ULL, 0ULL, 50000ULL, 99890ULL, 1ULL}) {
+        const auto page = take(lookup->read_page(rank, {64, 16 * 1024}));
+        CK_CHECK(page.rows.size() <= 64 && page.wire_bytes <= 16 * 1024 && !page.rows.empty());
+        for (std::size_t i = 0; i < page.rows.size(); ++i) {
+            const auto expected = 100000 - rank - i;
+            CK_CHECK(page.rows[i].record.row_id == expected &&
+                     *page.rows[i].record.metadata.value()->logical_size.value() == expected * 3);
+            ++queried;
+        }
+        CK_CHECK(take(lookup->find_row({namespace_before, 100000 - rank})) == rank);
+    }
+    const auto end_page = take(lookup->read_page(100000));
+    CK_CHECK(end_page.end && end_page.rows.empty());
+    const auto lookup_done = std::chrono::steady_clock::now();
+    std::cout << "index-lookup-native-100000-qualified rows=" << lookup->rows() << " bytes=" << lookup->bytes()
+              << " advances=" << lookup_advances << " queried=" << queried << " build_ms="
+              << std::chrono::duration_cast<std::chrono::milliseconds>(lookup_built - lookup_start).count()
+              << " query_ms="
+              << std::chrono::duration_cast<std::chrono::milliseconds>(lookup_done - lookup_built).count() << '\n';
+    lookup_job.abandon();
+    lookup.reset();
     output.reset();
     job.abandon();
     CK_CHECK(budget->charged_files() == 1 && budget->charged_bytes() == source_bytes);
