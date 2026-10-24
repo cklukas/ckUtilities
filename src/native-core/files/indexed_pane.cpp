@@ -55,9 +55,9 @@ IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryI
 }
 IndexedPaneDataJob::IndexedPaneDataJob(Result data, PaneListingRequest target, PaneOrder order,
                                        DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
-                                       std::uint64_t lookup_bytes)
+                                       std::uint64_t lookup_bytes, std::shared_ptr<DirectoryIndexMarks> marks)
     : IndexedPaneDataJob(data, std::move(target), data ? with_order(data->view_, order) : unfiltered(order),
-                         sort_limits, lookup_limits, lookup_bytes) {
+                         sort_limits, lookup_limits, lookup_bytes, std::move(marks)) {
 }
 IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryIndex> listing, const PaneView &view,
                                        DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
@@ -81,9 +81,9 @@ IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryI
 }
 IndexedPaneDataJob::IndexedPaneDataJob(Result data, PaneListingRequest target, const PaneView &view,
                                        DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
-                                       std::uint64_t lookup_bytes)
+                                       std::uint64_t lookup_bytes, std::shared_ptr<DirectoryIndexMarks> marks)
     : request_(std::move(target)), order_(order_of(view)), origin_(IndexedPaneDataOrigin::Reorder),
-      lookup_limits_(lookup_limits), lookup_bytes_(lookup_bytes) {
+      lookup_limits_(lookup_limits), lookup_bytes_(lookup_bytes), marks_(std::move(marks)) {
     validate_view(view);
     view_ = view;
     PaneOrder current = order_;
@@ -119,6 +119,8 @@ void IndexedPaneDataJob::initialize(PaneOrder current, DirectoryIndexSortLimits 
         sort_ = std::make_unique<DirectoryIndexSortJob>(store_, order_, limits);
 }
 void IndexedPaneDataJob::release() noexcept {
+    recount_.reset();
+    marks_.reset();
     sort_.reset();
     lookup_.reset();
     store_.reset();
@@ -151,7 +153,8 @@ bool IndexedPaneDataJob::abandon() noexcept {
     return true;
 }
 IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
-    if (state_ != IndexedPaneDataJobState::Sorting && state_ != IndexedPaneDataJobState::Indexing)
+    if (state_ != IndexedPaneDataJobState::Sorting && state_ != IndexedPaneDataJobState::Indexing &&
+        state_ != IndexedPaneDataJobState::CountingMarks)
         return state_;
     try {
         if (stop.stop_requested()) {
@@ -176,11 +179,11 @@ IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
             }
             return state_;
         }
-        if (!lookup_)
+        if (state_ == IndexedPaneDataJobState::Indexing && !lookup_)
             lookup_ = std::make_unique<DirectoryIndexLookupJob>(
                 store_, lookup_limits_, lookup_bytes_, stop,
                 PaneFilter{view_.show_hidden, view_.display_substring, view_.ascii_case_sensitive});
-        else
+        else if (state_ == IndexedPaneDataJobState::Indexing)
             lookup_->advance(stop);
         const auto state = lookup_->state();
         if (state == DirectoryIndexLookupJobState::Cancelled) {
@@ -194,6 +197,24 @@ IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
         if (state != DirectoryIndexLookupJobState::Complete)
             return state_;
         auto lookup = *lookup_->completed().value();
+        if (marks_) {
+            if (!recount_) {
+                recount_ = std::make_unique<DirectoryMarksRecountJob>(marks_, lookup, lookup_limits_.rows);
+                state_ = IndexedPaneDataJobState::CountingMarks;
+            }
+            const auto counted = recount_->advance(stop);
+            if (counted == MarksRecountState::Cancelled) {
+                cancel();
+                return state_;
+            }
+            if (counted == MarksRecountState::Failed) {
+                fail(*recount_->completed().unavailable_detail(), stop.stop_requested());
+                return state_;
+            }
+            if (counted != MarksRecountState::Complete)
+                return state_;
+            counted_visible_ = recount_->completed().value()->visible;
+        }
         auto scope = pin_->source_scope();
         if (!scope.value()) {
             fail(*scope.unavailable_detail());
@@ -215,9 +236,10 @@ IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
             cancel();
             return state_;
         }
-        result_ = Result(new const CompletedIndexedPaneData(request_, order_, view_, origin_, source_scope_,
-                                                            predecessor_, directory_, before_, std::move(after),
-                                                            baseline_, pin_, store_, std::move(lookup)));
+        result_ = Result(new const CompletedIndexedPaneData(
+            request_, order_, view_, origin_, source_scope_, predecessor_, directory_, before_, std::move(after),
+            baseline_, pin_, store_, std::move(lookup),
+            marks_ ? std::optional<AdapterScope>(marks_->revision()) : std::nullopt, counted_visible_));
         state_ = IndexedPaneDataJobState::Complete;
         release();
         return state_;
@@ -237,6 +259,7 @@ Observation<IndexedPaneDataJob::Result> IndexedPaneDataJob::completed() const {
 }
 IndexedPane::~IndexedPane() {
     invalidate();
+    mark_pending_ = false;
 }
 void IndexedPane::invalidate() noexcept {
     if (stamp_)
@@ -266,6 +289,7 @@ PaneListingRequest IndexedPane::begin(IndexedPaneDataOrigin kind, const PaneView
     pending_kind_ = kind;
     pending_order_ = order_of(view);
     pending_view_ = std::move(prepared_view);
+    mark_pending_ = false;
     error_.reset();
     if (kind == IndexedPaneDataOrigin::Reorder) {
         pending_dataset_ = data_->row_scope();
@@ -324,6 +348,9 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
         return IndexedPanePublish::Stale;
     if (data->origin_ != pending_kind_ || !same_view(data->view_, pending_view_) ||
         (pending_dataset_ && *pending_dataset_ != data->row_scope()) || data->predecessor_ != pending_revision_)
+        return IndexedPanePublish::InvalidData;
+    if (pending_kind_ == IndexedPaneDataOrigin::Reorder &&
+        data->marks_revision_ != (marks_ ? std::optional<AdapterScope>(marks_->revision()) : std::nullopt))
         return IndexedPanePublish::InvalidData;
     if (stop.stop_requested())
         return IndexedPanePublish::Cancelled;
@@ -389,6 +416,11 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
     if (!current(data->request_))
         return IndexedPanePublish::Stale;
     invalidate();
+    if (pending_kind_ == IndexedPaneDataOrigin::Listing) {
+        marks_.reset();
+        mark_error_.reset();
+    }
+    visible_marks_ = data->visible_marks_;
     data_ = std::move(data);
     if (have_focus)
         focus_.emplace(std::move(next_focus));
@@ -419,6 +451,7 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
     std::size_t used = 0;
     const auto &view = data_ ? data_->view_ : pending_view_;
     if (!detail::charge(view.display_substring.size(), used, limits.display.text_bytes) ||
+        !detail::charge(mark_error_, used, limits.display.text_bytes) ||
         !detail::charge(error_, used, limits.display.text_bytes))
         return {IndexedPaneCaptureState::LimitExceeded, {}};
     auto page = std::shared_ptr<IndexedPanePage>(new IndexedPanePage);
@@ -428,6 +461,9 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
     page->view_ = view;
     page->focused_position_ = focus_position_;
     page->pending_ = listing_pending();
+    page->marking_pending_ = mark_pending_;
+    page->selection_ = selection();
+    page->mark_error_ = mark_error_;
     page->error_ = error_;
     const auto data = data_; // retain the exact dataset through this bounded request
     page->order_ = data ? data->order_ : pending_order_;
@@ -472,8 +508,32 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
                 !detail::charge(inspected, used, limits.display.text_bytes))
                 return {IndexedPaneCaptureState::LimitExceeded, {}};
             PaneRowId id{data->row_scope(), row.record.row_id};
+            bool marked = false;
+            if (marks_) {
+                const auto marks = marks_;
+                auto checked = [&] {
+                    try {
+                        return marks->contains({id.scope, id.number});
+                    } catch (...) {
+                        if (accepts(stamp))
+                            invalidate();
+                        throw;
+                    }
+                }();
+                if (!accepts(stamp))
+                    return {IndexedPaneCaptureState::Stale, {}};
+                if (!checked.value()) {
+                    auto detail = *checked.unavailable_detail();
+                    invalidate();
+                    mark_error_ = std::move(detail);
+                    return {IndexedPaneCaptureState::Failed, {}};
+                }
+                marked = *checked.value();
+                if (stop.stop_requested())
+                    return {IndexedPaneCaptureState::Cancelled, {}};
+            }
             page->rows_.push_back({id, std::move(name), std::move(metadata), std::move(row.record.hidden),
-                                   std::move(inspected), false, focus_ && *focus_ == id});
+                                   std::move(inspected), marked, focus_ && *focus_ == id});
         }
     }
     if (!accepts(stamp))
@@ -485,7 +545,7 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
 IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop) {
     if (!accepts(stamp))
         return IndexedPaneFocus::Stale;
-    if (pending_ || !data_)
+    if (pending_ || mark_pending_ || !data_)
         return IndexedPaneFocus::Unavailable;
     if (row.scope != data_->row_scope() || !row.number || row.number > data_->rows())
         return IndexedPaneFocus::InvalidTarget;
@@ -519,5 +579,116 @@ IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, 
     focus_ = std::move(row);
     focus_position_ = **found.value();
     return IndexedPaneFocus::Applied;
+}
+Observation<std::unique_ptr<IndexedPaneMarkJob>>
+IndexedPane::begin_mark_change(const PaneStateStamp &stamp, const IndexedMarkCommand &command,
+                               std::size_t rows_per_step, std::uint64_t max_bytes, std::stop_token stop) {
+    using Result = Observation<std::unique_ptr<IndexedPaneMarkJob>>;
+    const auto rejected = [](const UnavailableObservation &e) { return Result::unavailable(e.state, e.error); };
+    if (!accepts(stamp) || !data_ || pending_ || mark_pending_)
+        return rejected(error(AdapterError::InvalidAccess, "indexed_pane.mark_state"));
+    if (!rows_per_step || rows_per_step > 4096 || !max_bytes ||
+        max_bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+        throw std::invalid_argument("invalid mark limits");
+    if (stop.stop_requested())
+        return rejected(error(AdapterError::InterruptedRead, "indexed_pane.mark_cancelled", ObservationState::Unknown));
+    const bool clear = std::holds_alternative<IndexedClearMarks>(command);
+    if (!clear && (data_->lookup_->state() != DirectoryIndexLookupState::Ready ||
+                   data_->store_->state() != DirectoryIndexStoreState::Sealed))
+        return rejected(data_->lookup_->failure().value_or(
+            data_->store_->failure().value_or(error(AdapterError::InvalidAccess, "indexed_pane.mark_data"))));
+    auto token = std::make_shared<PaneStateStamp::Token>();
+    PaneStateStamp next;
+    next.token_ = token;
+    const auto data = data_;
+    const auto marks = marks_;
+    auto prepared = [&] {
+        try {
+            return std::unique_ptr<IndexedPaneMarkJob>(
+                new IndexedPaneMarkJob(data, marks, visible_marks_, next, command, rows_per_step, max_bytes));
+        } catch (...) {
+            if (accepts(stamp))
+                invalidate();
+            throw;
+        }
+    }();
+    if (!accepts(stamp))
+        return rejected(error(AdapterError::InvalidAccess, "indexed_pane.mark_stale"));
+    if (prepared->state() != IndexedMarkJobState::Running) {
+        if (data->lookup_->state() != DirectoryIndexLookupState::Ready ||
+            (marks && marks->state() != DirectoryIndexMarksState::Ready))
+            invalidate();
+        return rejected(*prepared->failure());
+    }
+    if (stop.stop_requested())
+        return rejected(error(AdapterError::InterruptedRead, "indexed_pane.mark_cancelled", ObservationState::Unknown));
+    invalidate();
+    stamp_ = std::move(token);
+    mark_pending_ = true;
+    mark_error_.reset();
+    return Result::available(std::move(prepared));
+}
+IndexedPanePublish IndexedPane::publish_marks(IndexedPaneMarkJob::Result result) {
+    if (!result)
+        return IndexedPanePublish::InvalidData;
+    if (!accepts(result->stamp_) || !mark_pending_)
+        return IndexedPanePublish::Stale;
+    if (!data_ || result->dataset_ != data_->revision_ ||
+        result->base_ != (marks_ ? std::optional<AdapterScope>(marks_->revision()) : std::nullopt))
+        return IndexedPanePublish::InvalidData;
+    const auto &target = result->target_;
+    const auto &counts = result->counts_;
+    if ((target && (target->state() != DirectoryIndexMarksState::Ready || target->row_scope() != data_->row_scope() ||
+                    target->rows() != data_->rows() || target->marked() != counts.total)) ||
+        (!target && counts.total) || counts.visible > counts.total || counts.visible > data_->visible_rows() ||
+        counts.hidden != counts.total - counts.visible)
+        return IndexedPanePublish::InvalidData;
+    invalidate();
+    marks_ = target;
+    visible_marks_ = counts.visible;
+    mark_pending_ = false;
+    mark_error_.reset();
+    return IndexedPanePublish::Applied;
+}
+bool IndexedPane::fail_marks(const PaneStateStamp &stamp, UnavailableObservation failure) {
+    if (!accepts(stamp) || !mark_pending_)
+        return false;
+    (void)Observation<int>::unavailable(failure.state, failure.error);
+    invalidate();
+    mark_pending_ = false;
+    mark_error_ = std::move(failure);
+    return true;
+}
+bool IndexedPane::cancel_marks(const PaneStateStamp &stamp) noexcept {
+    if (!accepts(stamp) || !mark_pending_)
+        return false;
+    invalidate();
+    mark_pending_ = false;
+    mark_error_.reset();
+    return true;
+}
+IndexedPaneSelection IndexedPane::selection() const noexcept {
+    IndexedPaneSelection result;
+    if ((data_ && (data_->lookup_->state() != DirectoryIndexLookupState::Ready ||
+                   data_->store_->state() != DirectoryIndexStoreState::Sealed)) ||
+        (marks_ && marks_->state() != DirectoryIndexMarksState::Ready)) {
+        result.state = PaneSourcesState::SelectionInvalidated;
+        return result;
+    }
+    const auto total = marks_ ? marks_->marked() : 0;
+    result.marks = IndexedPaneMarkCounts{total, visible_marks_, total - visible_marks_};
+    if (total)
+        result.origin = PaneSourcesOrigin::Marks;
+    if (pending_ || mark_pending_)
+        result.state = PaneSourcesState::ListingPending;
+    else if (total) {
+        result.state = total > visible_marks_ ? PaneSourcesState::HiddenMarksNeedReview : PaneSourcesState::Ready;
+        if (result.state == PaneSourcesState::Ready)
+            result.candidates = total;
+    } else if (focus_ && focus_position_) {
+        result.state = PaneSourcesState::Ready;
+        result.candidates = 1;
+    }
+    return result;
 }
 } // namespace ck::files

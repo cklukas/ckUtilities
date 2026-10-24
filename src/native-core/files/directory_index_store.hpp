@@ -54,6 +54,8 @@ class IndexStorageBudget final {
     friend class DirectoryIndexStore;
     friend class DirectoryIndexLookup;
     friend class DirectoryIndexLookupJob;
+    friend class DirectoryIndexMarks;
+    friend class IndexedPaneMarkJob;
     class FileSlot;
     const std::uint64_t max_bytes_;
     const std::size_t max_files_;
@@ -172,6 +174,7 @@ class DirectoryIndexStore final {
     friend class DirectoryIndexSortJob;
     friend class DirectoryIndexLookup;
     friend class DirectoryIndexLookupJob;
+    friend class IndexedPaneMarkJob;
     DirectoryIndexStore(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
                         DirectoryIndexContext context, DirectoryIndexStoreLimits limits,
                         std::shared_ptr<IndexFileFactory> factory);

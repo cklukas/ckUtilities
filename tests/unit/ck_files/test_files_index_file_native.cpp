@@ -753,7 +753,8 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     IndexedPaneDataJob prepared(result, order, {{16, 16 * 1024}, 8}, {16, 16 * 1024});
     std::size_t prepared_steps = 0;
     while (prepared.state() == IndexedPaneDataJobState::Sorting ||
-           prepared.state() == IndexedPaneDataJobState::Indexing) {
+           prepared.state() == IndexedPaneDataJobState::Indexing ||
+           prepared.state() == IndexedPaneDataJobState::CountingMarks) {
         if (++prepared_steps > 10000)
             throw std::runtime_error("native pane preparation budget");
         prepared.advance();
@@ -768,14 +769,28 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
         CK_CHECK(row.metadata.identity.value() && row.metadata.identity.value()->scope == scope);
     std::cout << "indexed-pane-native-qualified rows=" << captured.page->total_rows()
               << " page_rows=" << captured.page->rows().size() << " prepared_advances=" << prepared_steps << '\n';
+    std::size_t marking_advances = 0;
+    const auto mark = [&](const IndexedMarkCommand &command) {
+        auto change = take(pane->begin_mark_change(pane->state_stamp(), command, 16));
+        while (change->state() == IndexedMarkJobState::Running) {
+            if (++marking_advances > 10000)
+                throw std::runtime_error("native marking budget");
+            change->advance();
+        }
+        CK_CHECK(pane->publish_marks(take(change->completed())) == IndexedPanePublish::Applied);
+    };
+    mark(IndexedMarkVisible{true});
+    CK_CHECK(pane->selection().marks->total == 259 && pane->selection().candidates == 259);
     auto view = pane->data()->view();
     view.show_hidden = false;
     view.display_substring = "ENTRY-1";
     const auto view_request = take(pane->begin_view_change(pane->state_stamp(), view));
-    IndexedPaneDataJob view_job(pane->data(), view_request, view, {{16, 16 * 1024}, 8}, {16, 16 * 1024});
+    IndexedPaneDataJob view_job(pane->data(), view_request, view, {{16, 16 * 1024}, 8}, {16, 16 * 1024},
+                                256ULL * 1024 * 1024, pane->marks());
     std::size_t view_advances = 0;
     while (view_job.state() == IndexedPaneDataJobState::Sorting ||
-           view_job.state() == IndexedPaneDataJobState::Indexing) {
+           view_job.state() == IndexedPaneDataJobState::Indexing ||
+           view_job.state() == IndexedPaneDataJobState::CountingMarks) {
         if (++view_advances > 10000)
             throw std::runtime_error("native view budget");
         view_job.advance();
@@ -787,11 +802,23 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
              filtered_page.page->visible_rows() == 111);
     CK_CHECK(!pane->focused_position() && !captured.page->stamp().current());
     for (const auto &row : filtered_page.page->rows())
-        CK_CHECK(row.display_name.starts_with("entry-1") && row.id.scope == result->store()->row_scope() &&
-                 row.metadata.identity.value()->scope == scope);
+        CK_CHECK(row.marked && row.display_name.starts_with("entry-1") &&
+                 row.id.scope == result->store()->row_scope() && row.metadata.identity.value()->scope == scope);
     std::cout << "indexed-pane-filter-native-qualified rows=" << filtered_page.page->total_rows()
               << " visible=" << filtered_page.page->visible_rows() << " page_rows=" << filtered_page.page->rows().size()
               << " advances=" << view_advances << '\n';
+    CK_CHECK(pane->selection().marks->total == 259 && pane->selection().marks->visible == 111 &&
+             pane->selection().marks->hidden == 148 && pane->selection().candidates == 0 &&
+             pane->selection().state == PaneSourcesState::HiddenMarksNeedReview);
+    mark(IndexedInvertVisible{});
+    CK_CHECK(pane->selection().marks->total == 148 && pane->selection().marks->visible == 0);
+    mark(IndexedMarkRange{filtered_page.page->rows().front().id, filtered_page.page->rows().back().id, true});
+    CK_CHECK(pane->selection().marks->total == 159 && pane->selection().marks->visible == 11 &&
+             pane->selection().marks->hidden == 148);
+    std::cout
+        << "indexed-pane-marks-native-qualified rows=259 total=159 visible=11 hidden=148 bitmap_bytes=576 advances="
+        << marking_advances << '\n';
+    mark(IndexedClearMarks{});
     job.reset();
     result.reset();
     workspace.reset();

@@ -3502,3 +3502,50 @@ destination preservation/collision capabilities and broader qualification remain
 required. The real-directory integration and synthetic cache measurements do not
 establish full-app latency/RSS or 100,000-real-entry acceptance. WP-01 remains in
 progress; WP-02–08 remain unstarted.
+
+## 2026-10-24 — transactional indexed marks and hidden-selection review
+
+WP-01 now supports disk-backed single-row, inclusive visible-range,
+mark/unmark-visible, invert-visible and explicit clear-all commands. Original
+row IDs survive sorting/filtering. Bulk commands preserve excluded marks;
+hidden selections expose exact total/visible/hidden counts and block operation
+candidates until reviewed. Pending changes also block candidates and focus.
+
+Each immutable snapshot uses 576 checked bytes per 4,096 original IDs, with
+schema, generation, block/row/valid-bit counts, reserved bytes, CRC32C, exact
+native size and zero tail-padding checks. New files reserve their full shared
+quota before creation. Worker advances retain one bitmap block, with bounded
+row work. Publication binds the pending stamp, exact dataset revision and prior
+mark revision, performs no I/O, and cannot apply superseded results. Failed or
+cancelled jobs discard staged files and preserve the published snapshot.
+Corrupt marks invalidate selection instead of inventing zero counts; explicit
+clear-all recovers marks without reading the damaged file.
+
+View preparation recounts marks against its new disk lookup before final native
+directory-continuity validation. Its certificate retains only a revision/count,
+avoiding ownership of obsolete mark files. Reorder publication rejects a missing
+or wrong mark snapshot. Bounded owner-free pages carry mark flags, copied counts,
+pending state and charged diagnostics. They reject the whole page on mark I/O
+failure and discard replies superseded during reads.
+
+Fourteen new deterministic cases exercise command semantics, hidden counts,
+range endpoints, invalid input/quota, cancellation boundaries, write/read errors,
+short and zero I/O, corruption and CRC-valid tail padding, factory exceptions,
+stale replies, recount cancellation, popcount inconsistency during changes and
+recounts, and the 4,096/4,097 boundary in 4,101 records.
+The real-directory pipeline marks 259 entries, filters to 111 visible/148 hidden,
+inverts visible marks, marks an 11-row range, then clears and retires all native
+and cache owners while copied pages remain readable.
+
+All 81 Files suites pass: 720 cases on macOS, 723 on Linux and 719 on Windows.
+Fresh 67-unit sanitizer builds pass 156/154/153 focused cases, with ASan+UBSan
+on Mac/Linux and ASan on Windows. The final regression also verifies that an
+aggregate popcount mismatch invalidates the snapshot itself during both changes
+and view recounts. See [the marking evidence](evidence/ck-files-indexed-marks-20261024.json)
+for exact source/unit fingerprints, commands, timings, native markers and cleanup.
+
+Indexed native source acquisition/selection inventories, remaining destination
+preservation/collision capabilities and broader qualification remain required.
+The native/core cases do not establish a rendered Files UI, full-app latency/RSS
+or 100,000-real-entry directory acceptance. WP-01 remains in progress; WP-02–08
+remain unstarted. No production copy/move/delete API is introduced.

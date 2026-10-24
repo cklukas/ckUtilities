@@ -17,6 +17,7 @@ struct File {
     Bytes data;
     bool closed = false;
     std::optional<UnavailableObservation> read_error, write_error;
+    std::optional<std::size_t> read_max, write_max;
     std::function<void()> on_read, on_write;
 };
 struct Control {
@@ -36,8 +37,13 @@ class ByteFile final : public IndexByteFile {
         return Observation<std::uint64_t>::available(f->data.size());
     }
     Observation<std::size_t> write_at(std::uint64_t offset, std::span<const std::byte> bytes) override {
-        if (f->write_error)
+        if (f->write_error) {
+            if (f->on_write)
+                f->on_write();
             return Observation<std::size_t>::unavailable(f->write_error->state, f->write_error->error);
+        }
+        if (f->write_max)
+            bytes = bytes.first(std::min(bytes.size(), *f->write_max));
         const auto at = static_cast<std::size_t>(offset);
         if (at + bytes.size() > f->data.size())
             f->data.resize(at + bytes.size());
@@ -50,7 +56,9 @@ class ByteFile final : public IndexByteFile {
         if (f->read_error)
             return Observation<std::size_t>::unavailable(f->read_error->state, f->read_error->error);
         const auto at = static_cast<std::size_t>(offset);
-        const auto n = at < f->data.size() ? std::min(bytes.size(), f->data.size() - at) : 0;
+        auto n = at < f->data.size() ? std::min(bytes.size(), f->data.size() - at) : 0;
+        if (f->read_max)
+            n = std::min(n, *f->read_max);
         if (n)
             std::copy_n(f->data.begin() + static_cast<std::ptrdiff_t>(at), n, bytes.begin());
         if (f->on_read)
@@ -170,6 +178,7 @@ struct Fixture {
     std::shared_ptr<ck::testing::ManualMonotonicClock> clock = std::make_shared<ck::testing::ManualMonotonicClock>();
     PaneListingRequest request{AdapterScope{}, 42};
     std::array<std::byte, 16> generation{};
+    DirectoryIndexSortLimits sort_limits{{1, 4096}, 1};
     Fixture(std::initializer_list<const char *> names = {"z", ".a", "b"}) {
         generation[0] = std::byte{7};
         for (auto name : names)
@@ -181,7 +190,7 @@ struct Fixture {
             request,
             std::make_unique<DirectoryListing>(std::make_unique<Cursor>(s), DirectoryListingLimits{1, 4096, 4096},
                                                clock),
-            model, factory, budget, generation, limits, DirectoryIndexSortLimits{{1, 4096}, 1});
+            model, factory, budget, generation, limits, sort_limits);
     }
     void released() {
         CK_CHECK(s->live == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
@@ -207,7 +216,8 @@ std::shared_ptr<const CompletedDirectoryIndex> collect(Fixture &f, PaneListingRe
 }
 void finish(IndexedPaneDataJob &job) {
     std::size_t steps = 0;
-    while (job.state() == IndexedPaneDataJobState::Sorting || job.state() == IndexedPaneDataJobState::Indexing) {
+    while (job.state() == IndexedPaneDataJobState::Sorting || job.state() == IndexedPaneDataJobState::Indexing ||
+           job.state() == IndexedPaneDataJobState::CountingMarks) {
         if (++steps > 10000)
             throw std::runtime_error("pane data step budget");
         job.advance();
@@ -646,4 +656,378 @@ CK_TEST(indexed_pane_view_result_binds_every_filter_flag_and_charges_filter_text
         threw = true;
     }
     CK_CHECK(threw && pane.accepts(stamp));
+}
+
+namespace {
+void initialize(IndexedPane &pane, Fixture &f) {
+    CK_CHECK(pane.publish(prepare(collect(f, pane.begin_listing(ascending)), ascending)) ==
+             IndexedPanePublish::Applied);
+}
+void finish(IndexedPaneMarkJob &job) {
+    std::size_t steps = 0;
+    while (job.state() == IndexedMarkJobState::Running) {
+        if (++steps > 20000)
+            throw std::runtime_error("mark step budget");
+        job.advance();
+    }
+}
+void mark(IndexedPane &pane, const IndexedMarkCommand &command) {
+    auto job = take(pane.begin_mark_change(pane.state_stamp(), command, 1));
+    finish(*job);
+    CK_CHECK(pane.publish_marks(take(job->completed())) == IndexedPanePublish::Applied);
+}
+void view_change(IndexedPane &pane, const PaneView &view) {
+    auto request = take(pane.begin_view_change(pane.state_stamp(), view));
+    IndexedPaneDataJob job(pane.data(), request, view, {}, {1, 4096}, 1024 * 1024, pane.marks());
+    finish(job);
+    CK_CHECK(pane.publish(take(job.completed())) == IndexedPanePublish::Applied);
+}
+} // namespace
+CK_TEST(indexed_marks_single_range_visible_invert_clear_are_atomic_and_owner_free) {
+    Fixture f;
+    std::shared_ptr<const IndexedPanePage> saved;
+    {
+        IndexedPane pane;
+        initialize(pane, f);
+        auto original = page(pane);
+        const auto first = original->rows()[0].id, last = original->rows()[2].id;
+        auto job = take(pane.begin_mark_change(original->stamp(), IndexedMarkRow{first, true}, 1));
+        CK_CHECK(!original->stamp().current() && pane.marking_pending());
+        auto during = page(pane);
+        CK_CHECK(during->marking_pending() && !during->rows()[0].marked && during->selection().candidates == 0);
+        CK_CHECK(pane.focus(during->stamp(), last) == IndexedPaneFocus::Unavailable);
+        finish(*job);
+        CK_CHECK(!page(pane)->rows()[0].marked);
+        CK_CHECK(pane.publish_marks(take(job->completed())) == IndexedPanePublish::Applied);
+        CK_CHECK(pane.selection().marks->total == 1 && pane.selection().candidates == 1);
+        CK_CHECK(pane.selection().origin == PaneSourcesOrigin::Marks && page(pane)->rows()[0].marked);
+        job.reset();
+        mark(pane, IndexedMarkRange{last, first, true});
+        CK_CHECK(pane.selection().marks->total == 3);
+        mark(pane, IndexedInvertVisible{});
+        CK_CHECK(!pane.marks() && pane.selection().origin == PaneSourcesOrigin::Cursor);
+        mark(pane, IndexedMarkVisible{true});
+        saved = page(pane);
+        CK_CHECK(saved->selection().marks->total == 3 && saved->rows()[2].marked);
+        mark(pane, IndexedClearMarks{});
+        CK_CHECK(!pane.marks() && !page(pane)->rows()[0].marked && !saved->stamp().current());
+    }
+    f.released();
+    CK_CHECK(saved->rows()[2].marked && saved->selection().marks->total == 3);
+}
+CK_TEST(indexed_marks_filtering_counts_hidden_marks_blocks_candidates_and_restores_ids) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto before = page(pane);
+    mark(pane, IndexedMarkVisible{true});
+    const auto revision = pane.marks()->revision();
+    auto view = pane.data()->view();
+    view.display_substring = "B";
+    view_change(pane, view);
+    const auto counts = pane.selection();
+    CK_CHECK(counts.marks->total == 3 && counts.marks->visible == 1 && counts.marks->hidden == 2);
+    CK_CHECK(counts.state == PaneSourcesState::HiddenMarksNeedReview && counts.candidates == 0);
+    CK_CHECK(pane.marks()->revision() == revision && page(pane)->rows()[0].marked);
+    mark(pane, IndexedMarkVisible{false});
+    CK_CHECK(pane.selection().marks->total == 2 && pane.selection().marks->visible == 0);
+    mark(pane, IndexedInvertVisible{});
+    CK_CHECK(pane.selection().marks->total == 3 && pane.selection().marks->visible == 1);
+    view.display_substring = "none";
+    view_change(pane, view);
+    CK_CHECK(page(pane)->end() && pane.selection().marks->hidden == 3 && pane.selection().candidates == 0);
+    view.display_substring.clear();
+    view.descending = true;
+    view_change(pane, view);
+    auto restored = page(pane);
+    CK_CHECK(restored->rows()[2].id == before->rows()[0].id && restored->rows()[2].marked);
+    CK_CHECK(pane.selection().marks->hidden == 0 && pane.selection().candidates == 3);
+}
+CK_TEST(indexed_marks_invalid_targets_and_quota_reject_without_changing_valid_state) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto before = page(pane);
+    const auto bytes = f.budget->charged_bytes();
+    const auto files = f.budget->charged_files();
+    CK_CHECK(!pane.begin_mark_change(before->stamp(), IndexedMarkRow{{AdapterScope{}, 1}, true}).value());
+    CK_CHECK(!pane.begin_mark_change(before->stamp(), IndexedMarkRow{{before->rows()[0].id.scope, 0}, true}).value());
+    CK_CHECK(!pane.begin_mark_change(before->stamp(), IndexedMarkVisible{true}, 1, 575).value());
+    bool threw = false;
+    try {
+        pane.begin_mark_change(before->stamp(), IndexedMarkVisible{true}, 0);
+    } catch (const std::invalid_argument &) {
+        threw = true;
+    }
+    CK_CHECK(threw && pane.accepts(before->stamp()));
+    CK_CHECK(pane.accepts(before->stamp()) && !pane.marking_pending() && !pane.marks());
+    CK_CHECK(f.budget->charged_bytes() == bytes && f.budget->charged_files() == files);
+    auto view = pane.data()->view();
+    view.display_substring = "b";
+    view_change(pane, view);
+    auto stamp = pane.state_stamp();
+    CK_CHECK(
+        !pane.begin_mark_change(stamp, IndexedMarkRange{before->rows()[0].id, before->rows()[1].id, true}).value());
+    CK_CHECK(pane.accepts(stamp) && !pane.marking_pending());
+}
+CK_TEST(indexed_marks_cancel_failure_and_stale_completion_preserve_published_snapshot) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    const auto revision = pane.marks()->revision();
+    const auto bytes = f.budget->charged_bytes();
+    const auto files = f.budget->charged_files();
+    auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}, 1));
+    job->advance();
+    std::stop_source stop;
+    stop.request_stop();
+    CK_CHECK(job->advance(stop.get_token()) == IndexedMarkJobState::Cancelled);
+    CK_CHECK(pane.cancel_marks(job->stamp()) && !pane.cancel_marks(job->stamp()));
+    CK_CHECK(pane.marks()->revision() == revision && pane.selection().marks->total == 3);
+    CK_CHECK(f.budget->charged_bytes() == bytes && f.budget->charged_files() == files);
+    f.c->write_error = UnavailableObservation{ObservationState::Failed, {ErrorDomain::Posix, 28, "mark ENOSPC"}};
+    job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}));
+    finish(*job);
+    CK_CHECK(job->state() == IndexedMarkJobState::Failed && job->failure()->error.code == 28);
+    CK_CHECK(pane.fail_marks(job->stamp(), *job->failure()));
+    CK_CHECK(page(pane)->mark_error()->error.operation == "mark ENOSPC" && pane.marks()->revision() == revision);
+    auto full = page(pane);
+    CK_CHECK(pane.capture_page(full->stamp(), 0, {{3, full->text_bytes() - 1}, 4096}).state ==
+             IndexedPaneCaptureState::LimitExceeded);
+    f.c->write_error.reset();
+    job = take(pane.begin_mark_change(pane.state_stamp(), IndexedClearMarks{}));
+    finish(*job);
+    auto request = pane.begin_listing(ascending);
+    CK_CHECK(!pane.marking_pending() && pane.publish_marks(take(job->completed())) == IndexedPanePublish::Stale);
+    CK_CHECK(pane.cancel_listing(request) && pane.marks()->revision() == revision);
+    initialize(pane, f);
+    CK_CHECK(!pane.marks() && pane.selection().marks->total == 0);
+}
+CK_TEST(indexed_marks_corruption_is_never_treated_as_clear_and_explicit_clear_recovers) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    auto file = f.c->files.back();
+    CK_CHECK(file->data.size() == 576);
+    file->data[60] ^= std::byte{1};
+    auto stamp = pane.state_stamp();
+    auto failed = pane.capture_page(stamp, 0);
+    CK_CHECK(failed.state == IndexedPaneCaptureState::Failed && !failed.page && !stamp.current());
+    CK_CHECK(pane.selection().state == PaneSourcesState::SelectionInvalidated && !pane.selection().marks);
+    CK_CHECK(!pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}).value());
+    mark(pane, IndexedClearMarks{});
+    CK_CHECK(!pane.marks() && page(pane)->selection().origin == PaneSourcesOrigin::Cursor);
+}
+CK_TEST(indexed_marks_prepare_and_capture_discard_replies_superseded_during_IO) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    const auto id = page(pane)->rows()[0].id;
+    bool triggered = false;
+    PaneListingRequest request;
+    for (auto &file : f.c->files)
+        if (!file->closed)
+            file->on_read = [&] {
+                if (!triggered) {
+                    triggered = true;
+                    request = pane.begin_listing(descending);
+                }
+            };
+    CK_CHECK(!pane.begin_mark_change(pane.state_stamp(), IndexedMarkRow{id, true}).value());
+    CK_CHECK(pane.listing_pending() && !pane.marking_pending() && !pane.marks());
+    for (auto &file : f.c->files)
+        file->on_read = {};
+    pane.cancel_listing(request);
+    mark(pane, IndexedMarkVisible{true});
+    triggered = false;
+    f.c->files.back()->on_read = [&] {
+        if (!triggered) {
+            triggered = true;
+            request = pane.begin_listing(descending);
+        }
+    };
+    const auto captured = pane.capture_page(pane.state_stamp(), 0);
+    CK_CHECK(captured.state == IndexedPaneCaptureState::Stale && !captured.page && pane.listing_pending());
+}
+CK_TEST(indexed_marks_multiblock_boundaries_tail_bits_and_copy_on_write_quota) {
+    Fixture f({});
+    f.sort_limits = {{128, 64 * 1024}, 64};
+    f.budget = std::make_shared<IndexStorageBudget>(16 * 1024 * 1024, 32);
+    for (std::size_t n = 0; n < 4101; ++n)
+        f.s->names.push_back(*NativeName::from_posix("entry" + std::to_string(n)));
+    IndexedPane pane;
+    initialize(pane, f);
+    const auto scope = pane.data()->row_scope();
+    mark(pane, IndexedMarkRow{{scope, 4096}, true});
+    const auto bytes = f.budget->charged_bytes();
+    auto old = pane.marks();
+    CK_CHECK(take(old->contains({scope, 4096})) && !take(old->contains({scope, 4097})));
+    mark(pane, IndexedMarkRow{{scope, 4097}, true});
+    CK_CHECK(pane.selection().marks->total == 2 && f.budget->charged_bytes() == bytes + 1152);
+    CK_CHECK(!take(old->contains({scope, 4097})) && take(pane.marks()->contains({scope, 4097})));
+    old.reset();
+    CK_CHECK(f.budget->charged_bytes() == bytes);
+    mark(pane, IndexedMarkVisible{true});
+    CK_CHECK(pane.selection().marks->total == 4101 && f.c->files.back()->data.size() == 1152);
+    mark(pane, IndexedInvertVisible{});
+    CK_CHECK(!pane.marks() && f.budget->charged_bytes() == bytes - 1152);
+}
+CK_TEST(indexed_marks_recount_cancellation_and_wrong_revision_cannot_publish_new_view) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    auto view = pane.data()->view();
+    view.display_substring = "b";
+    auto request = take(pane.begin_view_change(pane.state_stamp(), view));
+    IndexedPaneDataJob missing(pane.data(), request, view);
+    finish(missing);
+    CK_CHECK(pane.publish(take(missing.completed())) == IndexedPanePublish::InvalidData);
+    IndexedPaneDataJob job(pane.data(), request, view, {}, {1, 4096}, 1024 * 1024, pane.marks());
+    std::size_t steps = 0;
+    while (job.state() == IndexedPaneDataJobState::Sorting || job.state() == IndexedPaneDataJobState::Indexing) {
+        CK_CHECK(++steps < 1000);
+        job.advance();
+    }
+    CK_CHECK(job.state() == IndexedPaneDataJobState::CountingMarks);
+    std::stop_source stop;
+    stop.request_stop();
+    CK_CHECK(job.advance(stop.get_token()) == IndexedPaneDataJobState::Cancelled);
+    CK_CHECK(pane.cancel_listing(request) && pane.selection().marks->visible == 3);
+    CK_CHECK(page(pane)->rows().size() == 3);
+}
+CK_TEST(indexed_marks_short_transfers_and_zero_progress_never_publish_partial_bitmap) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedMarkVisible{true}));
+    auto file = f.c->files.back();
+    file->write_max = 7;
+    finish(*job);
+    CK_CHECK(pane.publish_marks(take(job->completed())) == IndexedPanePublish::Applied);
+    file->read_max = 5;
+    CK_CHECK(page(pane)->rows()[2].marked);
+    job.reset();
+    auto next = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}));
+    f.c->files.back()->write_max = 0;
+    finish(*next);
+    CK_CHECK(next->state() == IndexedMarkJobState::Failed && next->failure()->error.operation == "marks.write_count");
+    pane.fail_marks(next->stamp(), *next->failure());
+    CK_CHECK(pane.selection().marks->total == 3 && page(pane)->rows()[0].marked);
+    file->read_max = 0;
+    auto bad = pane.capture_page(pane.state_stamp(), 0);
+    CK_CHECK(bad.state == IndexedPaneCaptureState::Failed &&
+             pane.selection().state == PaneSourcesState::SelectionInvalidated);
+}
+CK_TEST(indexed_marks_real_write_error_wins_over_simultaneous_cancellation) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedMarkVisible{true}));
+    std::stop_source stop;
+    auto file = f.c->files.back();
+    file->write_error = UnavailableObservation{ObservationState::Failed, {ErrorDomain::Win32, 112, "disk full"}};
+    file->on_write = [&] { stop.request_stop(); };
+    CK_CHECK(job->advance(stop.get_token()) == IndexedMarkJobState::Failed);
+    CK_CHECK(job->failure()->error.domain == ErrorDomain::Win32 && job->failure()->error.code == 112);
+    CK_CHECK(pane.fail_marks(job->stamp(), *job->failure()) && !pane.marks());
+}
+CK_TEST(indexed_marks_cancel_each_boundary_preserves_previous_counts_and_releases_charges) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkRow{page(pane)->rows()[0].id, true});
+    const auto bytes = f.budget->charged_bytes();
+    const auto files = f.budget->charged_files();
+    for (std::size_t boundary = 0; boundary < 3; ++boundary) {
+        auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}, 1));
+        for (std::size_t n = 0; n < boundary; ++n)
+            CK_CHECK(job->advance() == IndexedMarkJobState::Running);
+        std::stop_source stop;
+        stop.request_stop();
+        CK_CHECK(job->advance(stop.get_token()) == IndexedMarkJobState::Cancelled);
+        CK_CHECK(pane.cancel_marks(job->stamp()) && pane.selection().marks->total == 1);
+        CK_CHECK(f.budget->charged_bytes() == bytes && f.budget->charged_files() == files);
+    }
+    auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}));
+    CK_CHECK(job->abandon() && !job->abandon());
+    CK_CHECK(pane.cancel_marks(job->stamp()) && pane.selection().marks->total == 1);
+}
+CK_TEST(indexed_marks_factory_failures_and_exceptions_release_reservations) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    const auto bytes = f.budget->charged_bytes();
+    const auto files = f.budget->charged_files();
+    auto stamp = pane.state_stamp();
+    f.c->create_error = UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "mark create"}};
+    auto denied = pane.begin_mark_change(stamp, IndexedMarkVisible{true});
+    CK_CHECK(!denied.value() && denied.unavailable_detail()->error.code == 13 && pane.accepts(stamp));
+    f.c->create_error.reset();
+    f.c->throw_create = true;
+    bool threw = false;
+    try {
+        pane.begin_mark_change(stamp, IndexedMarkVisible{true});
+    } catch (const std::runtime_error &) {
+        threw = true;
+    }
+    CK_CHECK(threw && !stamp.current() && !pane.marking_pending() && !pane.marks());
+    CK_CHECK(f.budget->charged_bytes() == bytes && f.budget->charged_files() == files);
+}
+CK_TEST(indexed_marks_detect_crc_valid_nonzero_tail_padding_and_preserve_native_read_error) {
+    for (const bool native_error : {false, true}) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        mark(pane, IndexedMarkVisible{true});
+        auto file = f.c->files.back();
+        if (native_error)
+            file->read_error = UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "mark read"}};
+        else {
+            file->data[571] = std::byte{1};
+            const auto crc = detail::directory_index_crc32c(std::span<const std::byte>(file->data).first(572));
+            for (std::size_t n = 0; n < 4; ++n)
+                file->data[572 + n] = static_cast<std::byte>((crc >> (8 * n)) & 255);
+        }
+        auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}));
+        finish(*job);
+        CK_CHECK(job->state() == IndexedMarkJobState::Failed);
+        CK_CHECK(job->failure()->error.operation == (native_error ? "mark read" : "marks.padding"));
+        CK_CHECK(pane.fail_marks(job->stamp(), *job->failure()));
+        CK_CHECK(pane.selection().state == PaneSourcesState::SelectionInvalidated && !pane.selection().marks);
+    }
+}
+CK_TEST(indexed_marks_inconsistent_popcount_invalidates_snapshot_during_change_and_recount) {
+    for (const bool recount : {false, true}) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        mark(pane, IndexedMarkVisible{true});
+        auto file = f.c->files.back();
+        file->data[60] ^= std::byte{1};
+        const auto crc = detail::directory_index_crc32c(std::span<const std::byte>(file->data).first(572));
+        for (std::size_t n = 0; n < 4; ++n)
+            file->data[572 + n] = static_cast<std::byte>((crc >> (8 * n)) & 255);
+        if (recount) {
+            auto view = pane.data()->view();
+            view.display_substring = "b";
+            auto request = take(pane.begin_view_change(pane.state_stamp(), view));
+            IndexedPaneDataJob job(pane.data(), request, view, {}, {1, 4096}, 1024 * 1024, pane.marks());
+            finish(job);
+            CK_CHECK(job.state() == IndexedPaneDataJobState::Failed &&
+                     job.failure()->error.operation == "marks.recount_total");
+            CK_CHECK(pane.fail_listing(request, *job.failure()));
+        } else {
+            auto job = take(pane.begin_mark_change(pane.state_stamp(), IndexedInvertVisible{}));
+            finish(*job);
+            CK_CHECK(job->state() == IndexedMarkJobState::Failed && job->failure()->error.operation == "marks.counts");
+            CK_CHECK(pane.fail_marks(job->stamp(), *job->failure()));
+        }
+        CK_CHECK(pane.marks()->state() == DirectoryIndexMarksState::Failed);
+        CK_CHECK(pane.selection().state == PaneSourcesState::SelectionInvalidated && !pane.selection().marks);
+        mark(pane, IndexedClearMarks{});
+        CK_CHECK(!pane.marks() && page(pane)->rows().size() == 3);
+    }
 }

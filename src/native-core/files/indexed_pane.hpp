@@ -4,6 +4,7 @@
 #include "directory_index_listing_job.hpp"
 #include "directory_index_lookup.hpp"
 #include "pane_page.hpp"
+#include "indexed_pane_marks.hpp"
 namespace ck::files {
 enum class IndexedPaneDataOrigin { Listing, Reorder };
 class IndexedPaneDataJob;
@@ -41,16 +42,19 @@ class CompletedIndexedPaneData final {
   private:
     friend class IndexedPaneDataJob;
     friend class IndexedPane;
+    friend class IndexedPaneMarkJob;
     CompletedIndexedPaneData(PaneListingRequest request, PaneOrder order, PaneView view, IndexedPaneDataOrigin origin,
                              AdapterScope scope, std::optional<AdapterScope> predecessor,
                              Observation<ObjectIdentity> directory, Observation<BasicMetadata> before,
                              Observation<BasicMetadata> after, BasicMetadata baseline,
                              std::shared_ptr<const DirectoryCursor> pin, std::shared_ptr<DirectoryIndexStore> store,
-                             std::shared_ptr<DirectoryIndexLookup> lookup)
+                             std::shared_ptr<DirectoryIndexLookup> lookup, std::optional<AdapterScope> marks_revision,
+                             std::uint64_t visible_marks)
         : request_(std::move(request)), order_(order), view_(std::move(view)), origin_(origin),
           source_scope_(std::move(scope)), predecessor_(std::move(predecessor)), directory_(std::move(directory)),
           before_(std::move(before)), after_(std::move(after)), baseline_(std::move(baseline)), pin_(std::move(pin)),
-          store_(std::move(store)), lookup_(std::move(lookup)) {
+          store_(std::move(store)), lookup_(std::move(lookup)), marks_revision_(std::move(marks_revision)),
+          visible_marks_(visible_marks) {
     }
     PaneListingRequest request_;
     PaneOrder order_;
@@ -65,8 +69,10 @@ class CompletedIndexedPaneData final {
     std::shared_ptr<const DirectoryCursor> pin_;
     std::shared_ptr<DirectoryIndexStore> store_;
     std::shared_ptr<DirectoryIndexLookup> lookup_;
+    std::optional<AdapterScope> marks_revision_;
+    std::uint64_t visible_marks_ = 0;
 };
-enum class IndexedPaneDataJobState { Sorting, Indexing, Complete, Failed, Cancelled, Abandoned };
+enum class IndexedPaneDataJobState { Sorting, Indexing, CountingMarks, Complete, Failed, Cancelled, Abandoned };
 class IndexedPaneDataJob final {
   public:
     using Result = std::shared_ptr<const CompletedIndexedPaneData>;
@@ -77,13 +83,15 @@ class IndexedPaneDataJob final {
     // Target must be a later request in the same pane namespace.
     IndexedPaneDataJob(Result data, PaneListingRequest target, PaneOrder order,
                        DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
-                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
+                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024,
+                       std::shared_ptr<DirectoryIndexMarks> marks = {});
     IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryIndex> listing, const PaneView &view,
                        DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
                        std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
     IndexedPaneDataJob(Result data, PaneListingRequest target, const PaneView &view,
                        DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
-                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
+                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024,
+                       std::shared_ptr<DirectoryIndexMarks> marks = {});
     IndexedPaneDataJob(const IndexedPaneDataJob &) = delete;
     IndexedPaneDataJob &operator=(const IndexedPaneDataJob &) = delete;
     IndexedPaneDataJobState advance(std::stop_token stop = {});
@@ -116,6 +124,9 @@ class IndexedPaneDataJob final {
     std::uint64_t lookup_bytes_;
     std::unique_ptr<DirectoryIndexSortJob> sort_;
     std::unique_ptr<DirectoryIndexLookupJob> lookup_;
+    std::shared_ptr<DirectoryIndexMarks> marks_;
+    std::unique_ptr<DirectoryMarksRecountJob> recount_;
+    std::uint64_t counted_visible_ = 0;
     IndexedPaneDataJobState state_ = IndexedPaneDataJobState::Sorting;
     std::optional<UnavailableObservation> failure_;
     Result result_;
@@ -159,6 +170,15 @@ class IndexedPanePage final {
     PaneOrder order() const noexcept {
         return order_;
     }
+    const IndexedPaneSelection &selection() const noexcept {
+        return selection_;
+    }
+    bool marking_pending() const noexcept {
+        return marking_pending_;
+    }
+    const std::optional<UnavailableObservation> &mark_error() const noexcept {
+        return mark_error_;
+    }
     bool listing_pending() const noexcept {
         return pending_;
     }
@@ -176,7 +196,9 @@ class IndexedPanePage final {
     PaneOrder order_;
     PaneView view_;
     std::optional<std::uint64_t> focused_position_;
-    bool pending_ = false;
+    bool pending_ = false, marking_pending_ = false;
+    IndexedPaneSelection selection_;
+    std::optional<UnavailableObservation> mark_error_;
     std::optional<UnavailableObservation> error_;
 };
 enum class IndexedPaneCaptureState { Ready, Stale, OutOfRange, LimitExceeded, Failed, Cancelled };
@@ -189,7 +211,8 @@ enum class IndexedPaneFocus { Applied, Stale, Unavailable, InvalidTarget, Failed
 // Serialized worker state. Navigation/reorder requests and all successful state
 // changes revoke previously issued stamps. Existing data survives navigation
 // failures. Capture returns only bounded owner-free immutable display payloads.
-// Filtering uses the disk view; marking/acquisition remain subsequent services.
+// Filtering and marks use bounded disk views; native acquisition remains a
+// separate service. Hidden marks block operation candidates until reviewed.
 // No directory-sized RAM fallback or partially accepted unsupported commands.
 class IndexedPane final {
   public:
@@ -212,6 +235,19 @@ class IndexedPane final {
     IndexedPaneCapture capture_page(const PaneStateStamp &stamp, std::uint64_t first, IndexedPanePageLimits limits = {},
                                     std::stop_token stop = {});
     IndexedPaneFocus focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop = {});
+    Observation<std::unique_ptr<IndexedPaneMarkJob>>
+    begin_mark_change(const PaneStateStamp &stamp, const IndexedMarkCommand &command, std::size_t rows_per_step = 256,
+                      std::uint64_t max_bytes = 64ULL * 1024 * 1024, std::stop_token stop = {});
+    IndexedPanePublish publish_marks(IndexedPaneMarkJob::Result result);
+    bool fail_marks(const PaneStateStamp &stamp, UnavailableObservation failure);
+    bool cancel_marks(const PaneStateStamp &stamp) noexcept;
+    IndexedPaneSelection selection() const noexcept;
+    const std::shared_ptr<DirectoryIndexMarks> &marks() const noexcept {
+        return marks_;
+    } // worker only
+    bool marking_pending() const noexcept {
+        return mark_pending_;
+    }
     bool listing_pending() const noexcept {
         return pending_ != 0;
     }
@@ -250,5 +286,9 @@ class IndexedPane final {
     std::optional<PaneRowId> focus_;
     std::optional<std::uint64_t> focus_position_;
     std::optional<UnavailableObservation> error_;
+    std::shared_ptr<DirectoryIndexMarks> marks_;
+    std::uint64_t visible_marks_ = 0;
+    bool mark_pending_ = false;
+    std::optional<UnavailableObservation> mark_error_;
 };
 } // namespace ck::files

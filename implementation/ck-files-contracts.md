@@ -2465,3 +2465,64 @@ exclusions, reverse lookup and End. The 259-entry real-directory integration add
 applies an ASCII-folded entry-name filter, obtains 111 visible rows, and keeps
 metadata namespaces/original IDs intact. These are cache/native-core integration
 measurements, not full-application or 100,000-real-directory qualification.
+
+### Transactional indexed marks and hidden-selection review
+
+`IndexedPane` prepares single-row, visible-rank range, mark/unmark-visible,
+invert-visible and clear-all changes through `IndexedPaneMarkJob`. Single and
+range endpoints must be visible original IDs in the current dataset. Reversed
+range endpoints select the same inclusive visible interval. Bulk commands change
+only visible rows; excluded marks survive until an explicit clear or successful
+new navigation. Invalid limits/targets and quota rejection leave the published
+selection intact.
+
+Marks are immutable worker-owned disk snapshots. A null snapshot is the exact
+all-clear state. Each 576-byte block contains a 512-byte bitmap for 4,096 original
+IDs plus schema, source generation, block number, original row count, valid-bit
+count, reserved bytes and CRC32C. Reads check exact file size, all header fields,
+checksum and zero tail padding. Foreign/out-of-range IDs reject before file I/O.
+Corrupt or unavailable snapshots produce an invalid selection, never an invented
+zero count. A popcount mismatch found during a change or view recount revokes
+the snapshot itself, so subsequent summaries cannot reuse inconsistent counts.
+Explicit clear-all can recover the selection without reading a
+damaged bitmap; it cannot repair a damaged dataset or authorize native access.
+This is a private lifetime-bound cache format, without restart or authentication
+guarantees.
+
+Changes reserve the entire new file against the shared disk/file quota before
+creation. The previous snapshot is retained until completion. Each advance owns
+at most one fixed bitmap block, copying one block for a single-row command or
+examining at most the configured 1–4,096 original rows for bulk/range commands.
+Short transfers are completed with progress checks. Zero progress, malformed
+counts, exceptions, cancellation and native errors discard staged output. Native
+write failures retain their domain/code even when cancellation is requested in
+the same call. All-clear results discard their empty staged bitmap. There is no
+directory-sized in-memory bitset or partially published change.
+
+The pane supplies the current exact visible-mark count to the private job, which
+updates it by visible bit changes and checks total popcount before completion.
+A result binds the pending state stamp, exact dataset revision and previous mark
+revision. Publication performs no file I/O and rejects superseded results. Focus
+and further mark requests are blocked during a pending mark change. Navigation
+or view requests revoke the old pending stamp; their controller must abandon/drop
+the superseded worker. Failure/cancellation preserves the published snapshot.
+
+Sorting/filtering prepares a bounded recount against the new lookup, followed by
+directory-continuity revalidation. Its completed certificate retains only the
+mark revision and visible count, avoiding ownership of obsolete mark files.
+Reorder publication rejects missing/wrong mark revisions. Controllers must pass
+the current worker snapshot to the reorder constructor. New navigation clears
+marks only when its new dataset publishes successfully.
+
+Selection summaries expose total, visible and hidden counts. Hidden marks yield
+`HiddenMarksNeedReview` and zero operation candidates; pending changes also yield
+zero candidates. A failed mark/dataset produces `SelectionInvalidated` with no
+claimed counts. With no marks, only a visible focus yields a cursor candidate.
+These summaries and IDs are display/planning state; acquiring native operation
+sources still requires the independent identity/continuity checks.
+
+Display pages carry copied mark flags, counts, pending state and charged error
+text. They own neither bitmap/native handles nor dataset stores, and remain
+readable after worker retirement with their stamps revoked. Bounded page reads
+reject the entire page on mark I/O failure; generation checks discard replies
+superseded during I/O.
