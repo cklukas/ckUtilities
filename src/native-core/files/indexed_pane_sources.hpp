@@ -11,6 +11,8 @@ struct IndexedSourceLimits {
     std::size_t diagnostic_bytes = 4 * 1024 * 1024;
     std::size_t scan_rows = 256;
     std::size_t wire_bytes = DirectoryIndexScanLimits::hard_wire_bytes;
+    // Explicit requested native access, never mutation/hydration permission.
+    EntryAccess access = EntryAccess::MetadataOnly;
 };
 class IndexedPaneSourceJob;
 // Worker-only fresh binding. Discovery keys/metadata remain observations, never

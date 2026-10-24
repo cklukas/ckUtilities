@@ -431,3 +431,161 @@ CK_TEST(object_inventory_inode_flags_refuses_malformed_or_over_budget_replies_wi
         }
     }
 }
+namespace {
+constexpr auto inventory_access = EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity |
+    EntryAccess::MetadataAndLayout | EntryAccess::MetadataAndInodeFlags;
+HeldChild::Pointer held(Fixture& f, EntryAccess access = inventory_access) {
+    auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
+    return take(HeldChild::observe_with_access(std::move(parent), name(), access));
+}
+}
+CK_TEST(object_inventory_held_factory_keeps_exact_binding_and_never_reopens_a_replaced_name) {
+    Fixture f;
+    auto source = held(f);
+    const auto* exact = source.get();
+    const auto opens = f.calls(Op::OpenChild), calls = f.fs.calls().size();
+    auto job = ObjectInventoryJob::for_held_source(source, {}, f.fs.clock());
+    CK_CHECK(f.fs.calls().size() == calls);
+    auto replacement = f.fs.make_node(ObjectKind::RegularFile);
+    f.fs.put(f.root, name(), replacement);
+    source.reset();
+    auto result = finish(*job);
+    CK_CHECK(result->held_source_for_worker().get() == exact && result->held_source_for_worker()->access() == inventory_access);
+    CK_CHECK(take(result->held_identity_continuity()) == IdentityComparison::Same);
+    CK_CHECK(compare_identity(take(result->data().before.value()->identity), take(f.fs.metadata(f.file).identity)) == IdentityComparison::Same);
+    CK_CHECK(result->data().attribute_values.size() == 1 && result->data().channels.value());
+    CK_CHECK(f.calls(Op::OpenChild) == opens && f.fs.live_entries() == 1 && f.fs.live_cursors() == 1);
+    CK_CHECK(job->abandon() && f.fs.live_entries() == 1);
+    result.reset();
+    CK_CHECK(f.fs.live_entries() == 0 && f.fs.live_cursors() == 0);
+}
+CK_TEST(object_inventory_held_factory_cannot_implicitly_upgrade_metadata_only_access) {
+    Fixture f;
+    auto source = held(f, EntryAccess::MetadataOnly);
+    const auto opens = f.calls(Op::OpenChild);
+    auto job = ObjectInventoryJob::for_held_source(source, {}, f.fs.clock());
+    auto result = finish(*job);
+    CK_CHECK(result->held_source_for_worker() == source && source->access() == EntryAccess::MetadataOnly);
+    CK_CHECK(!result->data().attributes.value() && result->data().attribute_values.empty());
+    CK_CHECK(!result->data().layout.value() && !result->data().inode_flags.value());
+    for (const auto& security : result->data().security) CK_CHECK(!security.value());
+    CK_CHECK(f.calls(Op::OpenChild) == opens && f.calls(Op::ReadAttribute) == 0);
+}
+CK_TEST(object_inventory_held_anchor_identity_uncertainty_and_changes_remain_distinct_from_query_continuity) {
+    for (int fault = 0; fault < 5; ++fault) {
+        Fixture f;
+        const auto original = f.fs.metadata(f.file).identity;
+        if (fault == 3) f.fs.metadata(f.file).identity = {};
+        auto source = held(f);
+        f.fs.metadata(f.file).identity = original;
+        if (fault == 0) f.fs.metadata(f.file).identity = f.fs.metadata(f.root).identity;
+        if (fault == 1) f.fs.metadata(f.file).identity = Observation<ObjectIdentity>::unavailable(denied().state, denied().error);
+        if (fault == 2 || fault == 4) f.fs.enqueue(Op::InspectHandle, {denied(), {}, {}, false});
+        if (fault == 4) f.fs.enqueue(Op::InspectHandle, {{}, {}, [&] { f.fs.metadata(f.file).identity = f.fs.metadata(f.root).identity; }, false});
+        auto job = ObjectInventoryJob::for_held_source(source, {}, f.fs.clock());
+        auto result = finish(*job);
+        const auto comparison = result->held_identity_continuity();
+        if (fault == 0 || fault == 4) CK_CHECK(take(comparison) == IdentityComparison::Different);
+        else if (fault == 3) CK_CHECK(comparison.state() == ObservationState::Unknown);
+        else CK_CHECK(comparison.state() == ObservationState::Denied && comparison.unavailable_detail()->error == denied().error);
+        if (fault == 0 || fault == 3) CK_CHECK(take(result->data().identity_continuity) == IdentityComparison::Same);
+    }
+}
+CK_TEST(object_inventory_held_identity_does_not_qualify_independently_mismatched_payload_owners) {
+    Fixture f; auto replies = f.replies(); auto storage = take(*replies.storage);
+    storage.owner = f.fs.metadata(f.root).identity; replies.storage = Observation<StorageInfo>::available(std::move(storage));
+    f.fs.set_inventory(f.file, std::move(replies));
+    auto source = held(f);
+    auto job = ObjectInventoryJob::for_held_source(source, {}, f.fs.clock()); auto result = finish(*job);
+    CK_CHECK(take(result->held_identity_continuity()) == IdentityComparison::Same);
+    CK_CHECK(take(result->compare_owner(result->data().storage.value()->owner)) == IdentityComparison::Different);
+    ObjectInventoryJob raw(f.open(), {}, f.fs.clock());
+    const auto no_anchor = finish(raw)->held_identity_continuity();
+    CK_CHECK(no_anchor.state() == ObservationState::Unsupported && no_anchor.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::NotApplicable));
+}
+CK_TEST(object_inventory_held_job_pause_failure_exception_and_abandon_release_anchor_without_reopening) {
+    for (int fault = 0; fault < 4; ++fault) {
+        Fixture f; auto source = held(f); const auto opens = f.calls(Op::OpenChild);
+        ObjectInventoryLimits limits;
+        if (fault == 1) limits.retained.max_records = 1;
+        if (fault == 2) f.fs.enqueue(Op::InspectStorage, {{}, {}, [] { throw std::bad_alloc{}; }, false});
+        auto job = ObjectInventoryJob::for_held_source(source, limits, f.fs.clock()); source.reset();
+        if (fault == 0) {
+            std::stop_source stop; stop.request_stop();
+            CK_CHECK(job->advance(stop.get_token()) == State::Paused && f.fs.live_entries() == 1);
+            auto result = finish(*job);
+            CK_CHECK(result->held_source_for_worker() && take(result->held_identity_continuity()) == IdentityComparison::Same);
+            job->abandon(); result.reset();
+        } else if (fault == 1) CK_CHECK(job->advance() == State::Failed);
+        else if (fault == 2) {
+            bool threw = false; try { job->advance(); } catch (const std::bad_alloc&) { threw = true; }
+            CK_CHECK(threw && job->state() == State::Failed);
+        } else CK_CHECK(job->abandon());
+        CK_CHECK(f.fs.live_entries() == 0 && f.fs.live_cursors() == 0 && f.calls(Op::OpenChild) == opens);
+    }
+    bool threw = false;
+    try { ObjectInventoryJob::for_held_source({}); } catch (const std::invalid_argument&) { threw = true; }
+    CK_CHECK(threw);
+}
+CK_TEST(object_inventory_layout_real_failure_is_committed_before_cancel_yield_and_not_retried) {
+    class Entry final : public OpenedEntry {
+    public:
+        Entry(std::stop_source& stop, int& calls, bool interrupted) : stop_(stop), calls_(calls), interrupted_(interrupted) {}
+        Observation<BasicMetadata> inspect_basic() const override { return Observation<BasicMetadata>::available({}); }
+        Observation<FileDataLayout> inspect_data_layout(InventoryLimits, std::stop_token) const override {
+            ++calls_;
+            if (calls_ == 1) {
+                stop_.request_stop();
+                return interrupted_ ? Observation<FileDataLayout>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "interrupted"}) :
+                    Observation<FileDataLayout>::unavailable(ObservationState::Denied, {ErrorDomain::Posix, 13, "layout.denied"});
+            }
+            return Observation<FileDataLayout>::unavailable(ObservationState::Unsupported, {});
+        }
+    private: std::stop_source& stop_; int& calls_; bool interrupted_;
+    };
+    for (const bool interrupted : {false, true}) {
+        std::stop_source stop; int calls = 0;
+        ObjectInventoryJob job(std::make_unique<Entry>(stop, calls, interrupted));
+        CK_CHECK(job.advance(stop.get_token()) == State::Paused && !job.completed().value());
+        auto result = finish(job);
+        CK_CHECK(calls == (interrupted ? 2 : 1));
+        if (!interrupted) CK_CHECK(result->data().layout.state() == ObservationState::Denied && result->data().layout.unavailable_detail()->error.code == 13);
+    }
+}
+CK_TEST(held_child_explicit_access_is_preserved_by_qualified_refresh_without_downgrade) {
+    Fixture f;
+    auto source = held(f);
+    auto refreshed = take(source->refresh());
+    CK_CHECK(source->access() == inventory_access && refreshed->access() == inventory_access && refreshed->continues(*source));
+    std::size_t opens = 0;
+    for (const auto& call : f.fs.calls()) if (call.operation == Op::OpenChild) { CK_CHECK(call.access == inventory_access); ++opens; }
+    CK_CHECK(opens == 2);
+    f.fs.enqueue(Op::OpenChild, {denied(), {}, {}, false});
+    CK_CHECK(!source->refresh().value() && source->access() == inventory_access);
+    CK_CHECK(f.fs.live_entries() == 2); // both existing pins survive refusal
+}
+CK_TEST(held_child_bad_access_rejects_before_IO_and_native_open_or_metadata_error_wins_over_stop) {
+    Fixture f;
+    auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
+    const auto opens = f.calls(Op::OpenChild);
+    for (const auto access : {static_cast<EntryAccess>(32), static_cast<EntryAccess>(4)}) {
+        const auto reply = HeldChild::observe_with_access(parent, name(), access);
+        CK_CHECK(!reply.value() && reply.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidAccess));
+    }
+    CK_CHECK(f.calls(Op::OpenChild) == opens);
+    for (const auto operation : {Op::OpenChild, Op::InspectHandle}) {
+        std::stop_source stop;
+        f.fs.enqueue(operation, {denied(), {}, [&] { stop.request_stop(); }, false});
+        const auto reply = HeldChild::observe_with_access(parent, name(), inventory_access, stop.get_token());
+        CK_CHECK(!reply.value() && reply.state() == ObservationState::Denied && reply.unavailable_detail()->error == denied().error);
+        CK_CHECK(f.fs.live_entries() == 0);
+    }
+    auto source = held(f);
+    std::stop_source stop;
+    f.fs.enqueue(Op::InspectHandle, {}); // fresh handle observation succeeds
+    f.fs.enqueue(Op::InspectHandle, {denied(), {}, [&] { stop.request_stop(); }, false});
+    const auto refused = source->refresh(stop.get_token());
+    CK_CHECK(!refused.value() && refused.unavailable_detail()->error == denied().error);
+    CK_CHECK(f.fs.live_entries() == 1 && source->access() == inventory_access);
+}

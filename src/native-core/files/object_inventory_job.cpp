@@ -35,6 +35,23 @@ Observation<IdentityComparison> CompletedObjectInventory::compare_owner(const Ob
     }
     return identities(data_->before.value()->identity, owner);
 }
+Observation<IdentityComparison> CompletedObjectInventory::held_identity_continuity() const {
+    using Result = Observation<IdentityComparison>;
+    if (!held_source_)
+        return Result::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "object_inventory.no_held_source"});
+    const auto compare = [&](const Observation<BasicMetadata>& observed) {
+        if (!observed.value()) {
+            const auto& e = *observed.unavailable_detail(); return Result::unavailable(e.state, e.error);
+        }
+        return identities(held_source_->metadata().identity, observed.value()->identity);
+    };
+    auto before = compare(data_->before), after = compare(data_->after);
+    if ((before.value() && *before.value() == IdentityComparison::Different) ||
+        (after.value() && *after.value() == IdentityComparison::Different))
+        return Result::available(IdentityComparison::Different);
+    return before.value() ? after : before;
+}
 bool ObjectInventoryJob::FeatureLess::operator()(const NativeFeatureIdentifier& a, const NativeFeatureIdentifier& b) const noexcept {
     if (a.encoding() != b.encoding()) return a.encoding() < b.encoding();
     if (a.posix_bytes()) return *a.posix_bytes() < *b.posix_bytes();
@@ -44,12 +61,24 @@ bool ObjectInventoryJob::FeatureLess::operator()(const NativeFeatureIdentifier& 
 ObjectInventoryJob::ObjectInventoryJob(std::unique_ptr<OpenedEntry> object, ObjectInventoryLimits limits,
     std::shared_ptr<const MonotonicClock> clock)
     : object_(std::move(object)), limits_(limits), clock_(std::move(clock)) {
-    if (!object_ || !clock_ || !limits.query.valid() || !limits.retained.valid() ||
-        limits.time_slice <= MonotonicClock::Duration::zero() || limits.time_slice > std::chrono::seconds(1))
+    initialize();
+}
+ObjectInventoryJob::ObjectInventoryJob(HeldChild::Pointer source, ObjectInventoryLimits limits,
+    std::shared_ptr<const MonotonicClock> clock, HeldSourceTag)
+    : object_(source ? source->child_ : nullptr), held_source_(std::move(source)), limits_(limits), clock_(std::move(clock)) {
+    initialize();
+}
+std::unique_ptr<ObjectInventoryJob> ObjectInventoryJob::for_held_source(HeldChild::Pointer source,
+    ObjectInventoryLimits limits, std::shared_ptr<const MonotonicClock> clock) {
+    return std::unique_ptr<ObjectInventoryJob>(new ObjectInventoryJob(std::move(source), limits, std::move(clock), HeldSourceTag{}));
+}
+void ObjectInventoryJob::initialize() {
+    if (!object_ || !clock_ || !limits_.query.valid() || !limits_.retained.valid() ||
+        limits_.time_slice <= MonotonicClock::Duration::zero() || limits_.time_slice > std::chrono::seconds(1))
         throw std::invalid_argument("invalid object inventory job");
     data_ = std::make_unique<ObjectInventoryData>();
 }
-void ObjectInventoryJob::release_staging() noexcept { data_.reset(); object_.reset(); identifiers_.clear(); }
+void ObjectInventoryJob::release_staging() noexcept { data_.reset(); object_.reset(); held_source_.reset(); identifiers_.clear(); }
 void ObjectInventoryJob::fail(UnavailableObservation detail) noexcept {
     static_assert(std::is_nothrow_move_constructible_v<UnavailableObservation>);
     static_assert(noexcept(UnavailableObservation{ObservationState::Failed, {ErrorDomain::Adapter, 0, {}}}));
@@ -109,7 +138,10 @@ void ObjectInventoryJob::step(std::stop_token stop) {
     case Phase::Layout: {
         if (records_ == limits_.retained.max_records) { fail(error(AdapterError::InventoryLimit, "object_inventory.retained_limit")); return; }
         auto reply = object_->inspect_data_layout(limits_.query, stop);
-        if (!reply.value() && stop.stop_requested()) { state_ = ObjectInventoryJobState::Paused; return; }
+        if (!reply.value() && stop.stop_requested() && reply.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
+            reply.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InterruptedRead)) {
+            state_ = ObjectInventoryJobState::Paused; return;
+        }
         if (!retain(0, 1)) return;
         if (const auto* layout = reply.value(); layout && (layout->family == DataLayoutFamily::Unknown ||
             layout->family > DataLayoutFamily::WindowsAllocatedRanges || layout->family < DataLayoutFamily::Unknown ||
@@ -236,7 +268,7 @@ ObjectInventoryJobState ObjectInventoryJob::advance(std::stop_token stop) {
             state_ = ObjectInventoryJobState::Collecting;
             if (*expired.value()) return state_;
             if (phase_ == Phase::Seal) {
-                completed_ = Result(new const CompletedObjectInventory(std::move(object_), std::move(data_)));
+                completed_ = Result(new const CompletedObjectInventory(std::move(object_), std::move(data_), std::move(held_source_)));
                 release_staging(); state_ = ObjectInventoryJobState::Complete; return state_;
             }
             step(stop); if (state_ != ObjectInventoryJobState::Collecting) return state_;

@@ -103,6 +103,7 @@ struct Script {
     std::string child_extra_error;
     std::optional<UnavailableObservation> child_identity_error, child_kind_error;
     std::function<void()> on_child_inspect;
+    EntryAccess expected_access = EntryAccess::MetadataOnly;
     int child_live = 0;
     int reads = 0, inspections = 0, live = 0, opened = 0;
 };
@@ -180,7 +181,7 @@ class Cursor final : public DirectoryCursor {
         return Observation<BasicMetadata>::available(std::move(m));
     }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName &, EntryAccess access) const override {
-        CK_CHECK(access == EntryAccess::MetadataOnly);
+        CK_CHECK(access == s_->expected_access);
         ++s_->opened;
         return Observation<std::unique_ptr<OpenedEntry>>::available(std::make_unique<Entry>(s_));
     }
@@ -1344,4 +1345,24 @@ CK_TEST(indexed_sources_excluded_mark_contradiction_invalidates_snapshot_instead
              pane.selection().state == PaneSourcesState::SelectionInvalidated);
     mark(pane, IndexedClearMarks{});
     CK_CHECK(!pane.marks() && pane.selection().candidates == 0);
+}
+CK_TEST(indexed_sources_explicit_query_access_reaches_held_binding_and_invalid_flags_do_no_IO) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto stamp = pane.state_stamp();
+    IndexedSourceLimits limits;
+    limits.access = static_cast<EntryAccess>(4);
+    const auto opens = f.s->opened;
+    bool threw = false;
+    try { pane.begin_source_acquisition(stamp, limits); } catch (const std::invalid_argument&) { threw = true; }
+    CK_CHECK(threw && pane.accepts(stamp) && f.s->opened == opens);
+    limits.access = EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndSecurity;
+    f.s->expected_access = limits.access;
+    auto job = take(pane.begin_source_acquisition(stamp, limits));
+    finish(*job);
+    auto acquired = take(job->completed());
+    CK_CHECK(acquired->review_required() && acquired->sources()[0].held()->access() == limits.access);
+    auto refresh = take(acquired->sources()[0].held()->refresh());
+    CK_CHECK(refresh->access() == limits.access && refresh->continues(*acquired->sources()[0].held()));
 }

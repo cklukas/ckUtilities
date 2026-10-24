@@ -14,10 +14,13 @@ public:
     HeldChild(const HeldChild&) = delete;
     HeldChild& operator=(const HeldChild&) = delete;
     static Observation<Pointer> observe(std::shared_ptr<const DirectoryCursor> parent, NativeName name, std::stop_token stop = {});
+    static Observation<Pointer> observe_with_access(std::shared_ptr<const DirectoryCursor> parent, NativeName name,
+        EntryAccess access, std::stop_token stop = {});
     Observation<Pointer> refresh(std::stop_token stop = {}) const;
     const Observation<ObjectIdentity>& parent_identity() const noexcept { return parent_->identity(); }
     const NativeName& name() const noexcept { return name_; }
     const BasicMetadata& metadata() const noexcept { return metadata_; }
+    EntryAccess access() const noexcept { return access_; }
     // Fresh metadata from the retained child, never a name reopen. Worker only;
     // this observes the held object, not current membership of parent/name.
     Observation<BasicMetadata> inspect_basic() const;
@@ -26,16 +29,19 @@ public:
     // the same parent/basename. Reusing a cached snapshot is never a refresh.
     bool continues(const HeldChild& previous) const noexcept;
 private:
+    friend class ObjectInventoryJob;
     struct Family {};
     HeldChild(std::shared_ptr<const DirectoryCursor> parent, NativeName name,
         std::shared_ptr<const OpenedEntry> child, BasicMetadata metadata,
-        std::shared_ptr<const Family> family, std::uint64_t revision, Observation<IdentityComparison> continuity = {});
+        std::shared_ptr<const Family> family, std::uint64_t revision, EntryAccess access,
+        Observation<IdentityComparison> continuity = {});
     std::shared_ptr<const DirectoryCursor> parent_;
     NativeName name_;
     std::shared_ptr<const OpenedEntry> child_;
     BasicMetadata metadata_;
     std::shared_ptr<const Family> family_;
     std::uint64_t revision_;
+    EntryAccess access_;
     Observation<IdentityComparison> previous_continuity_;
 };
 } // namespace ck::files

@@ -3603,3 +3603,53 @@ be bounded. Larger operation batching belongs to its engine and review policy.
 No rendered Files UI, full-app latency/RSS, filesystem snapshot or
 100,000-real-entry directory qualification is claimed. WP-01 remains in progress;
 WP-02–08 remain unstarted.
+
+## 2026-10-24 — object inventories anchored to acquired indexed sources
+
+WP-01 now creates `ObjectInventoryJob` through the exact retained `HeldChild`,
+without opening the basename again, changing access or creating an independent
+matching-ID binding. The job/result retain that source and parent; retirement
+of a batch or index does not detach the inventory from its original object.
+The legacy independently-owned entry constructor remains available.
+
+Requested access is explicit through `observe_with_access` and indexed source
+limits. MetadataOnly remains the default. Invalid flags reject before opening;
+qualified refresh preserves the requested mask, and denial does not trigger a
+downgrade/reopen workaround. Queries may use existing native rights; additional
+rights must be requested at acquisition. Unsupported/Denied query states remain
+visible, including full audit-security coverage when it was not requested.
+
+Inventory results expose their exact held anchor and compare its snapshot IDs
+with both fresh inventory observations. Unknown/denied identities never become
+Same, and a known difference is not hidden by another unavailable observation.
+This comparison does not qualify independent payload owners, unchanged kinds,
+contents or basename membership. Query owners still require their own checks;
+the batch's source review and operation-specific validation remain mandatory.
+
+Real layout failures are committed as field observations before a concurrent
+cancellation yield, so resume does not silently repeat them. Only an explicit
+interrupted layout query retries. Native open/basic failures also remain visible
+during cancellation, including the old-handle observation in a refresh.
+
+Eight new inventory/held-access cases and one indexed-access case exercise exact
+anchor retention through replacement, no implicit upgrade, identity uncertainty/
+differences, mismatched query owners, pause/resume, limits, exceptions, abandonment,
+explicit access preservation/refusal, invalid flags and native failure priority.
+The native indexed pipeline adds an explicit-access regular-file binding, then
+inventories the original object after renaming/replacing its basename. It checks
+the binary xattr on Mac/Linux or alternate-stream catalog on Windows, preserves
+the original identity/size, and keeps the inventory readable after index/cache
+retirement.
+
+All 81 Files suites pass: 741 cases on macOS, 744 on Linux and 740 on Windows.
+Fresh 69-unit sanitizer builds, now including the 33-case object-inventory suite,
+pass 202/200/199 focused cases with ASan+UBSan on Mac/Linux and ASan on Windows.
+See [the held inventory evidence](evidence/ck-files-held-inventory-20261024.json)
+for 214 source fingerprints, actual compiler inputs, native feature markers,
+timings, output hashes and cleanup.
+
+Destination preservation/collision capabilities, remaining composition and broader
+filesystem qualification remain required. These are bounded query observations,
+not complete preservation coverage, a filesystem snapshot, metadata-loss consent
+or copy/move/delete authority. Global worker/result retention still needs bounds
+in the application. WP-01 remains in progress; WP-02–08 remain unstarted.

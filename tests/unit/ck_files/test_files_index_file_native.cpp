@@ -5,6 +5,7 @@
 #include "directory_index_listing_job.hpp"
 #include "directory_index_lookup.hpp"
 #include "indexed_pane.hpp"
+#include "object_inventory_job.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -23,6 +24,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 #ifdef __APPLE__
 #include <membership.h>
@@ -672,6 +674,21 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
         if (!file)
             throw std::runtime_error("write listing fixture");
     }
+    constexpr std::array feature_bytes{std::byte{0}, std::byte{1}, std::byte{2}};
+#ifdef _WIN32
+    {
+        std::ofstream stream(source.path() / "entry-0:ckInventory", std::ios::binary);
+        stream.write(reinterpret_cast<const char*>(feature_bytes.data()), feature_bytes.size());
+        stream.close();
+        if (!stream) throw std::runtime_error("write native held inventory stream");
+    }
+#elif defined(__APPLE__)
+    if (setxattr((source.path() / "entry-0").c_str(), "com.ckutilities.bound", feature_bytes.data(), feature_bytes.size(), 0, 0) != 0)
+        throw std::runtime_error("write native held inventory xattr");
+#else
+    if (setxattr((source.path() / "entry-0").c_str(), "user.ckutilities.bound", feature_bytes.data(), feature_bytes.size(), 0) != 0)
+        throw std::runtime_error("write native held inventory xattr");
+#endif
     fs::create_directory(source.path() / "directory");
     {
         std::ofstream file(source.path() / "directory" / "nested");
@@ -856,6 +873,71 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
               << " diagnostics=" << acquired->diagnostic_bytes() << '\n';
     acquisition->abandon();
     mark(IndexedClearMarks{});
+    const auto wanted = std::find_if(acquired->sources().begin(), acquired->sources().end(), [](const auto& entry) {
+        return entry.held()->name().display_name() == "entry-0";
+    });
+    CK_CHECK(wanted != acquired->sources().end());
+    CK_CHECK(pane->focus(pane->state_stamp(), wanted->discovery_row()) == IndexedPaneFocus::Applied);
+    IndexedSourceLimits full_limits;
+    full_limits.access = EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndSecurity |
+        EntryAccess::MetadataAndLayout | EntryAccess::MetadataAndInodeFlags;
+    auto full_acquisition = take(pane->begin_source_acquisition(pane->state_stamp(), full_limits));
+    std::size_t full_steps = 0;
+    while (full_acquisition->state() == IndexedSourceJobState::Running) {
+        if (++full_steps > 100) throw std::runtime_error("native full access acquisition budget");
+        full_acquisition->advance();
+    }
+    auto full_source = take(full_acquisition->completed());
+    CK_CHECK(full_source->sources().size() == 1 && full_source->sources()[0].held()->access() == full_limits.access);
+    auto inventory_job = ObjectInventoryJob::for_held_source(full_source->sources()[0].held());
+    fs::rename(source.path() / "entry-0", source.path() / "retired-0");
+    {
+        std::ofstream replacement(source.path() / "entry-0", std::ios::binary);
+        replacement << "replacement";
+        if (!replacement) throw std::runtime_error("write native inventory replacement");
+    }
+    std::size_t inventory_steps = 0;
+    while (inventory_job->state() == ObjectInventoryJobState::Collecting || inventory_job->state() == ObjectInventoryJobState::Paused) {
+        if (++inventory_steps > 100) throw std::runtime_error("native held inventory budget");
+        inventory_job->advance();
+    }
+    auto inventory = take(inventory_job->completed());
+    CK_CHECK(inventory->held_source_for_worker() == full_source->sources()[0].held());
+    CK_CHECK(take(inventory->held_identity_continuity()) == IdentityComparison::Same);
+    CK_CHECK(take(inventory->data().before.value()->logical_size) == 7 && take(inventory->data().after.value()->logical_size) == 7);
+    const auto replacement = take(filesystem.inspect_basic(source.path() / "entry-0"));
+    CK_CHECK(compare_identity(take(replacement.identity), take(inventory->data().before.value()->identity)) == IdentityComparison::Different);
+    bool found_feature = false;
+#ifdef _WIN32
+    const auto& channels = take(inventory->data().channels);
+    CK_CHECK(take(inventory->compare_owner(channels.owner)) == IdentityComparison::Same);
+    for (const auto& channel : channels.channels)
+        if (channel.identifier.windows_units() && *channel.identifier.windows_units() == u":ckInventory:$DATA") {
+            CK_CHECK(take(channel.logical_size) == feature_bytes.size()); found_feature = true;
+        }
+#else
+    const auto& attributes = take(inventory->data().attributes);
+    CK_CHECK(take(inventory->compare_owner(attributes.owner)) == IdentityComparison::Same);
+    for (const auto& read : inventory->data().attribute_values) {
+        const auto& descriptor = attributes.attributes[read.catalog_index];
+#ifdef __APPLE__
+        constexpr auto feature_name = "com.ckutilities.bound";
+#else
+        constexpr auto feature_name = "user.ckutilities.bound";
+#endif
+        if (descriptor.identifier.posix_bytes() && *descriptor.identifier.posix_bytes() == feature_name) {
+            const auto& value = take(read.value);
+            CK_CHECK(value.bytes == std::vector<std::byte>(feature_bytes.begin(), feature_bytes.end()));
+            CK_CHECK(take(inventory->compare_owner(value.owner)) == IdentityComparison::Same); found_feature = true;
+        }
+    }
+#endif
+    CK_CHECK(found_feature);
+    std::cout << "indexed-held-inventory-native-qualified rows=259 acquired=1 feature=1 identity_same=1 advances="
+              << inventory_steps << '\n';
+    inventory_job->abandon();
+    full_acquisition->abandon();
+    full_source.reset();
     job.reset();
     result.reset();
     workspace.reset();
@@ -865,6 +947,8 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
     CK_CHECK(!acquired->stamp().current() && acquired->sources().front().held()->inspect_basic().value());
     acquired.reset();
+    CK_CHECK(take(inventory->object_for_worker().inspect_basic().value()->logical_size) == 7);
+    inventory.reset();
 }
 CK_TEST(index_listing_native_rejects_observed_directory_changes_after_enumeration) {
     const ck::testing::ScratchDirectory source("files-index-listing-change");

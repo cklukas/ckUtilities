@@ -27,7 +27,8 @@ IndexedPaneSourceJob::IndexedPaneSourceJob(std::shared_ptr<const CompletedIndexe
     if (!limits.held_entries || limits.held_entries > 4096 || !limits.native_name_bytes ||
         limits.native_name_bytes > 64 * 1024 * 1024 || !limits.diagnostic_bytes ||
         limits.diagnostic_bytes > 16 * 1024 * 1024 || !limits.scan_rows || limits.scan_rows > 4096 ||
-        limits.wire_bytes < 16 || limits.wire_bytes > DirectoryIndexScanLimits::hard_wire_bytes)
+        limits.wire_bytes < 16 || limits.wire_bytes > DirectoryIndexScanLimits::hard_wire_bytes ||
+        !valid_entry_access(limits.access))
         throw std::invalid_argument("invalid indexed source limits");
     if (!expected_ || expected_ > limits.held_entries) {
         fail(error(AdapterError::InventoryLimit, "indexed_sources.held_limit"));
@@ -211,7 +212,7 @@ void IndexedPaneSourceJob::acquire(std::stop_token stop) {
     names_ += units * width;
     // No stop token passed into the native helper: inspect its real failure
     // before honoring a concurrent stop. Never mask EACCES/other native errors.
-    auto opened = HeldChild::observe(data_->pin_, std::move(row.name));
+    auto opened = HeldChild::observe_with_access(data_->pin_, std::move(row.name), limits_.access);
     if (!boundary({}))
         return;
     if (!opened.value()) {

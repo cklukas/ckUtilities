@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "opened_entry.hpp"
+#include "held_child.hpp"
 #include "monotonic_clock.hpp"
 #include <array>
 #include <set>
@@ -49,11 +50,19 @@ public:
     // Worker-only query access. The immutable result pins this exact object;
     // retiring its last owner can close native handles and belongs on a worker.
     const OpenedEntry& object_for_worker() const noexcept { return *object_; }
+    // Present only for for_held_source. The exact sealed observation and parent
+    // stay pinned; no independently reopened matching-ID object can replace it.
+    const HeldChild::Pointer& held_source_for_worker() const noexcept { return held_source_; }
+    // Native IDs of the held snapshot and both inventory observations only.
+    // Same does not qualify payload owners or prove stable kind/content/membership.
+    Observation<IdentityComparison> held_identity_continuity() const;
 private:
     friend class ObjectInventoryJob;
-    CompletedObjectInventory(std::shared_ptr<const OpenedEntry> object, std::unique_ptr<ObjectInventoryData> data) noexcept
-        : object_(std::move(object)), data_(std::move(data)) {}
+    CompletedObjectInventory(std::shared_ptr<const OpenedEntry> object, std::unique_ptr<ObjectInventoryData> data,
+        HeldChild::Pointer source) noexcept
+        : object_(std::move(object)), held_source_(std::move(source)), data_(std::move(data)) {}
     std::shared_ptr<const OpenedEntry> object_;
+    HeldChild::Pointer held_source_;
     std::unique_ptr<const ObjectInventoryData> data_;
 };
 enum class ObjectInventoryJobState { Collecting, Paused, Complete, Failed, Abandoned };
@@ -69,6 +78,12 @@ public:
     static constexpr std::size_t steps_per_advance = 256;
     ObjectInventoryJob(std::unique_ptr<OpenedEntry> object, ObjectInventoryLimits limits = {},
         std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
+    // Captures the exact held object without I/O, pathname reopening, access
+    // upgrades or new held families. Additional native rights must have been
+    // requested explicitly at acquisition; queries may use rights already held.
+    // Unsupported/denied observations remain explicit.
+    static std::unique_ptr<ObjectInventoryJob> for_held_source(HeldChild::Pointer source,
+        ObjectInventoryLimits limits = {}, std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
     ObjectInventoryJob(const ObjectInventoryJob&) = delete;
     ObjectInventoryJob& operator=(const ObjectInventoryJob&) = delete;
     ObjectInventoryJobState advance(std::stop_token stop = {});
@@ -79,6 +94,10 @@ public:
     const std::optional<UnavailableObservation>& failure() const noexcept { return failure_; }
     Observation<Result> completed() const;
 private:
+    struct HeldSourceTag {};
+    ObjectInventoryJob(HeldChild::Pointer source, ObjectInventoryLimits limits,
+        std::shared_ptr<const MonotonicClock> clock, HeldSourceTag);
+    void initialize();
     enum class Phase { Before, Storage, Integrity, InodeFlags, Layout, CheckLayout, Link, LinkLimits, Channels, CheckChannels, Attributes, CheckAttributes, Values, Security, After, Seal };
     struct FeatureLess {
         bool operator()(const NativeFeatureIdentifier& a, const NativeFeatureIdentifier& b) const noexcept;
@@ -90,6 +109,7 @@ private:
     void release_staging() noexcept;
     void step(std::stop_token stop);
     std::shared_ptr<const OpenedEntry> object_;
+    HeldChild::Pointer held_source_;
     std::unique_ptr<ObjectInventoryData> data_;
     ObjectInventoryLimits limits_;
     std::shared_ptr<const MonotonicClock> clock_;

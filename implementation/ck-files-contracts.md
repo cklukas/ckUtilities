@@ -2581,3 +2581,53 @@ selection/view/navigation change revokes delivery; saved observations remain
 readable through their held objects. Neither this gate nor the result authorizes
 copy, move, deletion, a metadata-loss waiver or native mutation. Full preservation
 inventory, fresh operation-specific validation and consent remain required.
+
+### Object inventories anchored to retained source bindings
+
+`ObjectInventoryJob::for_held_source` captures the exact sealed `HeldChild` and
+its existing `OpenedEntry`, without I/O, pathname reopening, independent ID
+matching, a replacement family or implicit access changes. The job and completed
+result retain that observation and its parent. An indexed source can therefore
+be inventoried after its basename is renamed/replaced, with the result still
+reading the originally held object. The result owns one selected binding rather
+than the entire indexed batch or cache.
+
+`HeldChild::observe_with_access` and `IndexedSourceLimits::access` make requested
+native access explicit. Existing observation/acquisition defaults remain
+MetadataOnly. Invalid flags reject before opening; requesting additional rights
+does not imply mutation or hydration consent. A qualified refresh requests the
+same access mask and does not downgrade/release an existing pin and retry after
+denial. The inventory factory never opens an upgraded handle. Actual query
+support remains platform-specific: existing native rights may permit a query,
+while missing opt-ins or native permissions remain Unsupported/Denied rather
+than becoming absent features. Full Windows audit-security access remains a
+separate explicit flag; ordinary security access does not promise SACL coverage.
+
+The original independently-owned entry constructor remains supported.
+`held_source_for_worker` exposes the exact retained observation for worker
+association. `held_identity_continuity` compares the held snapshot with both
+inventory before/after IDs, returning Same only for qualified agreement. A known
+Different result remains visible even when the other comparison is unavailable.
+Unavailable observations preserve their state and diagnostic. A result without
+a held anchor returns Unsupported/Adapter::NotApplicable for this comparison.
+This is native-ID evidence only: kind, contents, metadata and basename membership
+are not frozen. Each available query payload still needs its own `compare_owner`
+check; an anchored inventory does not automatically qualify every query owner.
+
+All existing query families and cooperative limits remain in use. Completion
+means the queries were attempted, not that every feature was readable or that
+preservation/operation capabilities are complete. Native open/basic failures
+remain visible when cancellation arrives during observation or old-handle
+refresh. In the inventory's cancellable layout query, only an explicit
+Adapter::InterruptedRead pauses before commitment for retry; a real native
+failure commits as its field observation before a cancellation yield and is not
+silently repeated on resume.
+
+Pause/resume preserves the same binding. Failure, exception and abandonment
+release the job's references; an externally retained source/result keeps its
+own pin until worker retirement. Existing retained query quotas do not re-charge
+already-owned source names/metadata, and are not a total process-memory or global
+queue limit. Callers must bound active jobs and retained inventories, associate
+results with the current request and honor indexed source review. No copy/move/
+delete API, preservation-loss waiver, access elevation or mutation authority is
+introduced by this bridge.
