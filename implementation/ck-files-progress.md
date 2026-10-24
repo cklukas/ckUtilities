@@ -4249,3 +4249,48 @@ WP-02 remains open for bounded asynchronous completion, history/bookmarks,
 qualified refresh, properties/preview and production executable/interactive
 acceptance. No filesystem mutation command or production GUI launch is
 introduced.
+
+
+## 2026-10-24 — WP-02 native completion-query values
+
+Added a value-only boundary for asynchronous location completion: a typed
+prefix resolves to an exact parent route and native byte/UTF-16 prefix.
+Path requires an absolute parent; ExactNames retains a complete anchor and
+separate literal parents, with an open/closed final component or empty prefix.
+Incomplete escapes, invalid encoding, NUL/separator injection and every
+text/native/depth limit refuse before any future directory discovery.
+
+Matching uses exact native units. Proposals preserve typed escape spelling,
+including byte and UTF-16 prefixes which end within a Unicode scalar's native
+representation. Every proposal reparses as a complete bounded location;
+ExactNames additionally checks exact route equality. Path proposals append a
+separator for the next segment and refuse unrepresentable/ambiguous names
+without changing format. Native directory classification remains the future
+worker's responsibility; these values carry no object identity or authority.
+
+Twelve new cases cover both modes and encodings, namespaces/separators, no
+fallback, empty/dot prefixes, open/closed literals, malformed escapes/UTF-8,
+raw units and split scalars, controls/bidi safety, quota boundaries, invalid
+configuration/moved values, every valid POSIX name byte and Windows UTF-16
+name unit, and a 4096-component parent/proposal round trip. All 83 Files suites
+pass on macOS/Linux/Windows (905/908/904 cases), plus keymap; the actual
+UI/service/value suite now has 139 cases. Focused ASan+UBSan on macOS/Linux
+and ASan on Windows pass all 28 codec/draft/query cases. All ten units of that
+UI-free value harness compile with instrumentation; it links no ckVision UI
+binary and uses only the pinned SDK's dependency-free test header. This does
+not claim new UI or worker race qualification. No thread or I/O code changed.
+Diagnostic trees are retired and normal builds remain. Architecture checks and
+strict documentation pass. See
+[qualification evidence](evidence/ck-files-completion-query-20261024.json).
+
+The first deep-route fixture called a round-trip helper with its default
+1024-component bound while constructing a 4096-component query. The test now
+passes its explicit bound to the complete decoder; the failed run is excluded
+from final qualification. Product source was unchanged by that correction.
+
+WP-02 remains open. Native directory/index matching, asynchronous revision and
+lifetime gating, the InputLine provider and Right-to-accept integration are
+still pending, followed by history/bookmarks, qualified refresh, properties/
+preview and production executable/interactive acceptance. No completion
+provider, filesystem mutation command or production GUI launch is enabled by
+this value-layer milestone.

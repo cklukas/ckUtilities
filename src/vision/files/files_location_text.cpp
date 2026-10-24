@@ -100,6 +100,7 @@ class Reader {
             reject(AdapterError::InvalidPath, "location_text.syntax");
     }
     bool end() const noexcept { return at_ == text_.size(); }
+    std::size_t position() const noexcept { return at_; }
     std::uint32_t hex_value(std::size_t count) {
         std::uint32_t value = 0;
         for (std::size_t i = 0; i < count; ++i) {
@@ -109,12 +110,23 @@ class Reader {
         }
         return value;
     }
-    NativeText quoted(NativePathLimits budget) {
+    NativeText quoted(NativePathLimits budget, bool allow_open = false, bool *closed = nullptr) {
         expect('"');
         NativeText value{encoding_, budget, {}, {}};
-        while (!consume('"')) {
-            if (end())
+        for (;;) {
+            if (consume('"')) {
+                if (closed)
+                    *closed = true;
+                return value;
+            }
+            if (end()) {
+                if (allow_open) {
+                    if (closed)
+                        *closed = false;
+                    return value;
+                }
                 reject(AdapterError::InvalidPath, "location_text.quote");
+            }
             if (consume('\\')) {
                 if (end())
                     reject(AdapterError::InvalidPath, "location_text.escape");
@@ -155,7 +167,6 @@ class Reader {
                 value.scalar(decoded.value);
             }
         }
-        return value;
     }
 };
 // No automatic Win32 trimming/device interpretation in an ordinary editor path.
@@ -339,6 +350,191 @@ ck::files::Observation<std::string> format_files_exact_location(const FilesPaneL
         }
         writer.add("]");
         return Result::available(std::move(writer).take());
+    } catch (const Rejected &error) {
+        return Result::unavailable(error.detail.state, error.detail.error);
+    }
+}
+ck::files::Observation<FilesLocationCompletionQuery> parse_files_location_completion(std::string_view text,
+                                                                                     FilesLocationTextSyntax syntax,
+                                                                                     ck::files::NameEncoding encoding,
+                                                                                     FilesLocationTextLimits limits) {
+    using Result = ck::files::Observation<FilesLocationCompletionQuery>;
+    try {
+        validate(limits);
+        if (encoding != NameEncoding::PosixBytes && encoding != NameEncoding::WindowsUtf16)
+            reject(AdapterError::InvalidIdentifier, "location_completion.encoding");
+        if (text.size() > limits.text_bytes)
+            reject(AdapterError::InventoryLimit, "location_completion.text_bytes");
+        if (syntax != FilesLocationTextSyntax::Path && syntax != FilesLocationTextSyntax::ExactNames)
+            reject(AdapterError::InvalidIdentifier, "location_completion.syntax");
+        const auto build = [&](FilesPaneLocation parent, NativeText prefix, std::string leading, char separator) {
+            if (parent.components().size() == limits.components)
+                reject(AdapterError::InventoryLimit, "location_completion.depth");
+            // Partial navigation names are legal prefixes, but separators and
+            // NUL are not. A completed proposal must pass NativeName validation.
+            if (encoding == NameEncoding::PosixBytes) {
+                if (prefix.bytes.find_first_of(std::string_view("\0/", 2)) != prefix.bytes.npos)
+                    reject(AdapterError::InvalidPath, "location_completion.prefix");
+                return Result::available(FilesLocationCompletionQuery(std::move(parent), std::move(prefix.bytes),
+                                                                      std::move(leading), syntax, separator, limits));
+            }
+            if (prefix.units.find_first_of(std::u16string_view(u"\0/\\", 3)) != prefix.units.npos)
+                reject(AdapterError::InvalidPath, "location_completion.prefix");
+            return Result::available(FilesLocationCompletionQuery(std::move(parent), std::move(prefix.units),
+                                                                  std::move(leading), syntax, separator, limits));
+        };
+        const auto remaining = [&](const FilesPaneLocation &parent) {
+            const auto &root = parent.root_address();
+            const auto width = encoding == NameEncoding::PosixBytes ? std::size_t{1} : sizeof(char16_t);
+            const bool separator =
+                !parent.components().empty() ||
+                (root.posix_bytes() ? root.posix_bytes()->back() != '/'
+                                    : root.windows_units()->back() != u'/' && root.windows_units()->back() != u'\\');
+            const auto extra = separator ? width : 0;
+            if (extra > limits.path.max_native_bytes - parent.native_bytes())
+                reject(AdapterError::InventoryLimit, "location_completion.native_bytes");
+            return NativePathLimits{limits.path.max_native_bytes - parent.native_bytes() - extra};
+        };
+        if (syntax == FilesLocationTextSyntax::Path) {
+            const auto split = text.find_last_of(encoding == NameEncoding::PosixBytes ? "/" : "/\\");
+            if (split == text.npos)
+                reject(AdapterError::InvalidPath, "location_completion.absolute_parent");
+            auto parent = parse_files_location_text(text.substr(0, split + 1), syntax, encoding, limits);
+            if (!parent.value())
+                return Result::unavailable(parent.unavailable_detail()->state, parent.unavailable_detail()->error);
+            NativeText prefix{encoding, remaining(*parent.value()), {}, {}};
+            for (auto at = split + 1; at < text.size();) {
+                const auto decoded = detail::decode_utf8_scalar(text.substr(at));
+                if (!decoded.units || !safe_scalar(decoded.value))
+                    reject(AdapterError::InvalidPath, "location_completion.utf8");
+                prefix.scalar(decoded.value);
+                at += decoded.units;
+            }
+            return build(std::move(parent).take_value(), std::move(prefix), std::string(text), text[split]);
+        }
+        Reader reader(text, encoding);
+        reader.space();
+        reader.expect('[');
+        reader.space();
+        auto root = std::move(reader.quoted(limits.path)).address();
+        if (!root.value())
+            return Result::unavailable(root.unavailable_detail()->state, root.unavailable_detail()->error);
+        auto parent = FilesPaneLocation(std::move(root).take_value());
+        // Preserve the user's complete anchor lexeme; a closing list marker
+        // is replaced only by an explicit completion edit, never during parsing.
+        const auto root_end = reader.position();
+        reader.space();
+        if (!reader.consume(',')) {
+            if (!reader.end()) {
+                reader.expect(']');
+                reader.space();
+                if (!reader.end())
+                    reject(AdapterError::InvalidPath, "location_completion.trailing_text");
+            }
+            NativeText prefix{encoding, remaining(parent), {}, {}};
+            return build(std::move(parent), std::move(prefix), std::string(text.substr(0, root_end)) + ", \"", '/');
+        }
+        // Gather complete parents once. Avoid repeated route-vector copies for
+        // deeply nested literal routes; the complete factory adopts at the end.
+        std::vector<NativeName> names;
+        auto used = parent.native_bytes();
+        for (;;) {
+            if (names.size() == limits.components)
+                reject(AdapterError::InventoryLimit, "location_completion.depth");
+            reader.space();
+            const auto &address = parent.root_address();
+            const auto width = encoding == NameEncoding::PosixBytes ? std::size_t{1} : sizeof(char16_t);
+            const bool separator =
+                !names.empty() || (address.posix_bytes() ? address.posix_bytes()->back() != '/'
+                                                         : address.windows_units()->back() != u'/' &&
+                                                               address.windows_units()->back() != u'\\');
+            const auto extra = separator ? width : 0;
+            if (extra > limits.path.max_native_bytes - used)
+                reject(AdapterError::InventoryLimit, "location_completion.native_bytes");
+            const NativePathLimits budget{limits.path.max_native_bytes - used - extra};
+            const bool empty = reader.end();
+            bool closed = false;
+            auto prefix = empty ? NativeText{encoding, budget, {}, {}} : reader.quoted(budget, true, &closed);
+            const auto content_end = reader.position() - (closed ? 1 : 0);
+            reader.space();
+            if (closed && reader.consume(',')) {
+                auto name = std::move(prefix).name();
+                if (!name)
+                    reject(AdapterError::InvalidIdentifier, "location_completion.parent_component");
+                used +=
+                    extra + (name->posix_bytes() ? name->posix_bytes()->size() : name->windows_units()->size() * width);
+                names.push_back(std::move(*name));
+                continue;
+            }
+            if (closed && !reader.end()) {
+                reader.expect(']');
+                reader.space();
+            }
+            if (!reader.end())
+                reject(AdapterError::InvalidPath, "location_completion.trailing_text");
+            auto route = FilesPaneLocation::from_components(parent.root_address(), std::move(names), limits.path,
+                                                            limits.components);
+            if (!route.value())
+                return Result::unavailable(route.unavailable_detail()->state, route.unavailable_detail()->error);
+            auto leading = std::string(text.substr(0, content_end));
+            if (empty)
+                leading += '"';
+            return build(std::move(route).take_value(), std::move(prefix), std::move(leading), '/');
+        }
+    } catch (const Rejected &error) {
+        return Result::unavailable(error.detail.state, error.detail.error);
+    }
+}
+bool FilesLocationCompletionQuery::matches(const ck::files::NativeName &name) const noexcept {
+    if (!parent_.root_address().is_valid() || !name.is_valid())
+        return false;
+    if (const auto *bytes = posix_prefix())
+        return name.posix_bytes() && name.posix_bytes()->starts_with(*bytes);
+    return name.windows_units() && name.windows_units()->starts_with(*windows_prefix());
+}
+ck::files::Observation<FilesLocationProposal>
+FilesLocationCompletionQuery::propose_directory(const ck::files::NativeName &name) const {
+    using Result = ck::files::Observation<FilesLocationProposal>;
+    try {
+        if (!matches(name))
+            reject(AdapterError::InvalidIdentifier, "location_completion.candidate");
+        auto location = parent_.descend(name, limits_.path, limits_.components);
+        if (!location.value())
+            return Result::unavailable(location.unavailable_detail()->state, location.unavailable_detail()->error);
+        Writer writer(limits_.text_bytes);
+        writer.add(leading_);
+        if (syntax_ == FilesLocationTextSyntax::ExactNames) {
+            Writer suffix(limits_.text_bytes);
+            if (const auto *bytes = posix_prefix())
+                suffix.quoted(std::string_view(*name.posix_bytes()).substr(bytes->size()));
+            else
+                suffix.quoted(std::u16string_view(*name.windows_units()).substr(windows_prefix()->size()));
+            const auto quoted = std::move(suffix).take();
+            writer.add(std::string_view(quoted).substr(1, quoted.size() - 2));
+            writer.add("\"]");
+        } else {
+            if (const auto *bytes = posix_prefix())
+                writer.add(std::string_view(*name.posix_bytes()).substr(bytes->size()));
+            else {
+                const auto tail = std::u16string_view(*name.windows_units()).substr(windows_prefix()->size());
+                for (std::size_t at = 0; at < tail.size();) {
+                    const auto scalar = detail::decode_utf16_scalar(tail.substr(at));
+                    if (!scalar.units)
+                        reject(AdapterError::UnrepresentableName, "location_completion.utf16");
+                    const auto encoded = detail::encode_utf8_scalar(scalar.value);
+                    writer.add(std::string_view(encoded.data.data(), encoded.units));
+                    at += scalar.units;
+                }
+            }
+            writer.add(std::string_view(&separator_, 1));
+        }
+        auto text = std::move(writer).take();
+        auto parsed = parse_files_location_text(text, syntax_, parent_.root_address().encoding(), limits_);
+        if (!parsed.value())
+            return Result::unavailable(parsed.unavailable_detail()->state, parsed.unavailable_detail()->error);
+        if (syntax_ == FilesLocationTextSyntax::ExactNames && *parsed.value() != *location.value())
+            reject(AdapterError::InvalidIdentifier, "location_completion.roundtrip");
+        return Result::available({std::move(text), std::move(location).take_value()});
     } catch (const Rejected &error) {
         return Result::unavailable(error.detail.state, error.detail.error);
     }

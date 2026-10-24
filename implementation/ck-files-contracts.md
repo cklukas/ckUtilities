@@ -3048,3 +3048,38 @@ Asynchronous completion is still pending. It must publish bounded
 revision-tagged candidates on the UI thread, retain exact native route values
 and preserve ckVision's Right-to-accept behavior. The location editor currently
 has no filesystem completion provider.
+
+
+### Native location-completion query boundary
+
+`parse_files_location_completion` is a value-only preparation step, with the
+same explicit syntax/encoding and text/native/depth limits as the complete
+location codec. Path queries require an absolute parent through the last native
+separator; the final segment becomes an exact native-unit prefix. Relative,
+drive-relative, incomplete UNC/share roots, tilde/environment guesses, malformed
+UTF-8 and raw terminal/bidi controls refuse before discovery.
+
+ExactNames queries require a complete absolute anchor. Complete preceding
+components remain separate literal route elements. The final quoted component
+may be open or closed; a trailing comma starts an empty prefix. An anchor-only
+query asks for its literal children. Incomplete escapes, NUL or separators in
+a literal prefix refuse. Empty, dot and dot-dot prefixes are allowed for
+matching longer basenames; a proposed complete NativeName must still reject
+navigation entries. Parent-route collection is linear, including a 4096-level
+route. A query grants no held-directory identity or operation authority.
+
+Matching is exact, case-sensitive native-unit prefix matching, without Unicode
+normalization. POSIX raw bytes and Windows unpaired UTF-16 units are retained.
+`propose_directory` requires an actual matching NativeName; the caller must
+first discover/classify it on a worker. It constructs and reparses a complete
+bounded editor value, then checks ExactNames route equality. Typed escape
+spelling remains intact even when a prefix ends between native units of a
+Unicode scalar. ExactNames closes the quoted component/list; a comma begins
+the next component. Path proposals append a separator for further completion
+and refuse raw/unrepresentable names or ambiguous ordinary Win32 spellings;
+there is no automatic format switch, trimming or replacement.
+
+This boundary has no native I/O, index scan, provider callback or thread.
+Directory discovery/index matching, revision-gated publication and binding to
+ckVision InputLine remain pending. Candidate limits, unavailable classifications
+and non-unique partial results must remain explicit in that integration.

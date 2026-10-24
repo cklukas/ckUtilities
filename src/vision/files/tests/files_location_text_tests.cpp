@@ -31,7 +31,236 @@ template <class T> void limited(const Observation<T> &result) {
     CK_CHECK(!result.value() && result.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
              result.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit));
 }
+FilesLocationCompletionQuery query(std::string_view text,
+                                   FilesLocationTextSyntax syntax = FilesLocationTextSyntax::Path,
+                                   NameEncoding encoding = NameEncoding::PosixBytes,
+                                   FilesLocationTextLimits limits = {}) {
+    return take(parse_files_location_completion(text, syntax, encoding, limits));
+}
+void exact_proposal(const FilesLocationCompletionQuery &value, const NativeName &name) {
+    const auto proposed = take(value.propose_directory(name));
+    CK_CHECK(decode(proposed.text, name.encoding()) == proposed.location);
+    CK_CHECK(proposed.location.components().back() == name);
+}
 } // namespace
+CK_TEST(files_location_completion_path_uses_exact_absolute_parent_and_preserves_typed_spelling) {
+    for (const auto text : {"/base/../root/pa", "//root/pa", "/pa", "/root/"}) {
+        const auto q = query(text);
+        const auto split = std::string_view(text).find_last_of('/');
+        CK_CHECK(q.parent() == posix(std::string_view(text).substr(0, split + 1)));
+        CK_CHECK(*q.posix_prefix() == std::string_view(text).substr(split + 1));
+        const auto name = *NativeName::from_posix("parent");
+        const auto p = take(q.propose_directory(name));
+        CK_CHECK(p.text == std::string(text).substr(0, split + 1) + "parent/");
+        CK_CHECK(p.location.components().size() == 1 && p.location.components()[0] == name);
+        CK_CHECK(parse_files_location_text(p.text, FilesLocationTextSyntax::Path, NameEncoding::PosixBytes).value());
+    }
+    CK_CHECK(!query("/root/P").matches(*NativeName::from_posix("parent")));
+    const auto literal = take(query("/root/back\\").propose_directory(*NativeName::from_posix("back\\slash")));
+    CK_CHECK(literal.text == "/root/back\\slash/");
+}
+CK_TEST(files_location_completion_windows_paths_preserve_native_units_separators_and_namespaces) {
+    for (const auto text :
+         {"V:/root/pa", "v:\\root\\pa", "\\\\host\\share\\pa", "\\\\?\\V:\\root\\pa", "\\\\?\\UNC\\host\\share\\pa"}) {
+        const auto q = query(text, FilesLocationTextSyntax::Path, NameEncoding::WindowsUtf16);
+        CK_CHECK(*q.windows_prefix() == u"pa");
+        const auto p = take(q.propose_directory(*NativeName::from_windows(u"parent")));
+        CK_CHECK(p.text == std::string(text) + "rent" + text[std::string_view(text).find_last_of("/\\")]);
+        CK_CHECK(p.location.root_address() == q.parent().root_address());
+        CK_CHECK(p.location.components().back() == *NativeName::from_windows(u"parent"));
+    }
+    const auto unicode =
+        query("V:/\xc3\xa9/\xf0\x9f\x98\x80", FilesLocationTextSyntax::Path, NameEncoding::WindowsUtf16);
+    const auto p = take(unicode.propose_directory(*NativeName::from_windows(u"\U0001F600next")));
+    CK_CHECK(p.text == "V:/\xc3\xa9/\xf0\x9f\x98\x80next/");
+}
+CK_TEST(files_location_completion_requires_a_complete_absolute_anchor_without_fallback) {
+    for (const auto text : {"", "relative", "relative/pa", "~/pa", "$HOME/pa", "../pa"})
+        CK_CHECK(
+            !parse_files_location_completion(text, FilesLocationTextSyntax::Path, NameEncoding::PosixBytes).value());
+    for (const auto text : {"V:pa", "V:root\\pa", "\\root\\pa", "\\\\host\\pa", "\\\\?\\"})
+        CK_CHECK(
+            !parse_files_location_completion(text, FilesLocationTextSyntax::Path, NameEncoding::WindowsUtf16).value());
+    for (const auto text : {"[", "[\"/root", "[\"relative\", \"pa", "[\"/root\"] junk"})
+        CK_CHECK(!parse_files_location_completion(text, FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes)
+                      .value());
+}
+CK_TEST(files_location_completion_exact_queries_accept_open_closed_and_empty_final_components) {
+    for (const auto text :
+         {"[\"/root\", \"pa", "[\"/root\", \"pa\"", "[\"/root\", \"pa\"]", "  [ \"/root\" , \"pa\" ]   "}) {
+        const auto q = query(text, FilesLocationTextSyntax::ExactNames);
+        CK_CHECK(q.parent() == posix("/root") && *q.posix_prefix() == "pa");
+        exact_proposal(q, *NativeName::from_posix("parent"));
+    }
+    for (const auto text : {"[\"/root\"", "[\"/root\"]", "[\"/root\",", "[\"/root\",   ", "[\"/root\", \""}) {
+        const auto q = query(text, FilesLocationTextSyntax::ExactNames);
+        CK_CHECK(q.parent() == posix("/root") && q.posix_prefix()->empty());
+        exact_proposal(q, *NativeName::from_posix("child"));
+    }
+    const auto q = query("[\"/root\", \"literal\\\\parent\", \"pa", FilesLocationTextSyntax::ExactNames);
+    CK_CHECK(q.parent().components().size() == 1 && *q.parent().components()[0].posix_bytes() == "literal\\parent");
+    exact_proposal(q, *NativeName::from_posix("parent"));
+}
+CK_TEST(files_location_completion_exact_prefixes_preserve_raw_bytes_and_split_native_scalars) {
+    const auto q = query("[\"/root\", \"raw\\xC3", FilesLocationTextSyntax::ExactNames);
+    CK_CHECK(*q.posix_prefix() == "raw\xc3");
+    const auto p = take(q.propose_directory(*NativeName::from_posix("raw\xc3\xa9\xff")));
+    const std::string expected = R"(["/root", "raw\xC3\xA9\xFF"])";
+    CK_CHECK(p.text == expected);
+    exact_proposal(q, *NativeName::from_posix("raw\xc3\xa9\xff"));
+    const auto w =
+        query("[\"V:\\\\root\", \"\\u{D83D}", FilesLocationTextSyntax::ExactNames, NameEncoding::WindowsUtf16);
+    CK_CHECK(*w.windows_prefix() == std::u16string(1, char16_t{0xD83D}));
+    exact_proposal(w, *NativeName::from_windows(u"\U0001F600next"));
+    const auto raw =
+        query("[\"V:\\\\root\", \"\\u{D800}", FilesLocationTextSyntax::ExactNames, NameEncoding::WindowsUtf16);
+    exact_proposal(raw, *NativeName::from_windows(std::u16string(1, char16_t{0xD800}) + u"tail. "));
+}
+CK_TEST(files_location_completion_exact_proposals_preserve_typed_escape_spelling_and_controls) {
+    const std::string input = "[\"/root\", \"a\\u{62}\\\\";
+    const auto q = query(input, FilesLocationTextSyntax::ExactNames);
+    const auto name = *NativeName::from_posix("ab\\\"\n\x01\xe2\x80\xae");
+    const auto p = take(q.propose_directory(name));
+    CK_CHECK(p.text.starts_with(input));
+    for (const auto c : p.text)
+        CK_CHECK(static_cast<unsigned char>(c) >= 0x20 && static_cast<unsigned char>(c) <= 0x7E);
+    exact_proposal(q, name);
+}
+CK_TEST(files_location_completion_incomplete_escapes_and_invalid_literal_prefixes_refuse_before_discovery) {
+    for (const auto tail : {"\\", "\\x", "\\xA", "\\xGG", "\\u", "\\u{", "\\u{1", "\\u{110000}", "\\q", "a/b", "a\\x00",
+                            "a\n", "\xc0\xaf", "\xed\xa0\x80", "\xe2\x80\xae"}) {
+        const auto text = std::string("[\"/root\", \"") + tail;
+        CK_CHECK(!parse_files_location_completion(text, FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes)
+                      .value());
+    }
+    for (const auto tail : {"a\\\\", "\\x41", "a\\u{0000}", "a/b", "a\\u{005C}"}) {
+        const auto text = std::string("[\"V:\\\\root\", \"") + tail;
+        CK_CHECK(!parse_files_location_completion(text, FilesLocationTextSyntax::ExactNames, NameEncoding::WindowsUtf16)
+                      .value());
+    }
+    for (const auto text : {"/root/a\n", "/root/\xc0\xaf", "/root/\xf0\x9f", "/root/\xe2\x80\xae"})
+        CK_CHECK(
+            !parse_files_location_completion(text, FilesLocationTextSyntax::Path, NameEncoding::PosixBytes).value());
+    for (const auto text : {"[\"/root\", \"\", \"a", "[\"/root\", \".\", \"a", "[\"/root\", \"..\", \"a",
+                            "[\"/root\", \"a\" garbage", "[\"/root\", \"a\"] junk"})
+        CK_CHECK(!parse_files_location_completion(text, FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes)
+                      .value());
+}
+CK_TEST(files_location_completion_prefix_navigation_fragments_never_become_navigation_components) {
+    for (const auto prefix : {"", ".", ".."}) {
+        const auto q = query(std::string("/root/") + prefix);
+        const auto name = *NativeName::from_posix(std::string(prefix) + "folder");
+        CK_CHECK(q.matches(name));
+        CK_CHECK(q.propose_directory(name).value());
+        const auto exact = query(std::string("[\"/root\", \"") + prefix, FilesLocationTextSyntax::ExactNames);
+        exact_proposal(exact, name);
+    }
+    const auto q = query("/root/a");
+    CK_CHECK(!q.matches(*NativeName::from_posix("A")) && !q.matches(*NativeName::from_windows(u"a")));
+    CK_CHECK(!q.propose_directory(*NativeName::from_posix("other")).value());
+    auto moved = *NativeName::from_posix("a");
+    const auto retained = std::move(moved);
+    (void)retained;
+    CK_CHECK(!q.matches(moved) && !q.propose_directory(moved).value());
+}
+CK_TEST(files_location_completion_path_refuses_raw_or_ambiguous_proposals_without_format_switching) {
+    const auto q = query("/root/");
+    for (const auto name : {"raw\xff", "control\n", "bidi\xe2\x80\xae"}) {
+        const auto native = *NativeName::from_posix(name);
+        CK_CHECK(q.matches(native) && !q.propose_directory(native).value());
+        exact_proposal(query("[\"/root\", \"", FilesLocationTextSyntax::ExactNames), native);
+    }
+    const auto w = query("V:\\root\\", FilesLocationTextSyntax::Path, NameEncoding::WindowsUtf16);
+    for (const auto name : {u"literal. ", u"NUL", u"stream:name"})
+        CK_CHECK(w.matches(*NativeName::from_windows(name)) &&
+                 !w.propose_directory(*NativeName::from_windows(name)).value());
+    const auto unpaired = *NativeName::from_windows(std::u16string(1, char16_t{0xD800}));
+    CK_CHECK(!w.propose_directory(unpaired).value());
+    const auto extended = query("\\\\?\\V:\\root\\", FilesLocationTextSyntax::Path, NameEncoding::WindowsUtf16);
+    CK_CHECK(extended.propose_directory(*NativeName::from_windows(u"literal. ")).value());
+}
+CK_TEST(files_location_completion_native_text_and_depth_budgets_include_prefix_and_proposal) {
+    FilesLocationTextLimits limits;
+    limits.path.max_native_bytes = 4;
+    auto q = query("/ab/", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits);
+    limited(q.propose_directory(*NativeName::from_posix("x")));
+    limited(parse_files_location_completion("/ab/x", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits));
+    limits.path.max_native_bytes = 5;
+    q = query("/ab/x", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits);
+    // The complete directory separator counts too; a prefix fitting exactly
+    // does not justify publishing an over-budget next-segment proposal.
+    limited(q.propose_directory(*NativeName::from_posix("x")));
+    limits = {};
+    limits.text_bytes = 7;
+    q = query("/root/a", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits);
+    limited(q.propose_directory(*NativeName::from_posix("abcd")));
+    limited(
+        parse_files_location_completion("/root/ab", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits));
+    limits = {};
+    limits.components = 1;
+    const auto deep = "[\"/root\", \"parent\", \"a";
+    limited(
+        parse_files_location_completion(deep, FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes, limits));
+    q = query("[\"/root\", \"a", FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes, limits);
+    CK_CHECK(q.propose_directory(*NativeName::from_posix("a")).value());
+    limits = {};
+    limits.path.max_native_bytes = 10;
+    limited(parse_files_location_completion("[\"V:\\\\r\", \"ab", FilesLocationTextSyntax::ExactNames,
+                                            NameEncoding::WindowsUtf16, limits));
+}
+CK_TEST(files_location_completion_invalid_configuration_and_moved_queries_have_no_proposals) {
+    for (int fault = 0; fault < 6; ++fault) {
+        FilesLocationTextLimits limits;
+        if (fault == 0)
+            limits.path.max_native_bytes = 0;
+        if (fault == 1)
+            limits.path.max_native_bytes = NativePathLimits::hard_native_bytes + 1;
+        if (fault == 2)
+            limits.components = 0;
+        if (fault == 3)
+            limits.components = FilesPaneLocation::hard_components + 1;
+        if (fault == 4)
+            limits.text_bytes = 0;
+        if (fault == 5)
+            limits.text_bytes = FilesLocationTextLimits::hard_text_bytes + 1;
+        CK_CHECK(
+            !parse_files_location_completion("/root/a", FilesLocationTextSyntax::Path, NameEncoding::PosixBytes, limits)
+                 .value());
+    }
+    CK_CHECK(
+        !parse_files_location_completion("/root/a", static_cast<FilesLocationTextSyntax>(-1), NameEncoding::PosixBytes)
+             .value());
+    CK_CHECK(!parse_files_location_completion("/root/a", FilesLocationTextSyntax::Path, NameEncoding::WindowsEaBytes)
+                  .value());
+    auto q = query("/root/a");
+    const auto retained = std::move(q);
+    CK_CHECK(retained.matches(*NativeName::from_posix("a")) && !q.matches(*NativeName::from_posix("a")));
+    CK_CHECK(!q.propose_directory(*NativeName::from_posix("a")).value());
+}
+CK_TEST(files_location_completion_exact_proposals_roundtrip_every_native_unit_and_deep_parent) {
+    const auto q = query("[\"/root\", \"n", FilesLocationTextSyntax::ExactNames);
+    for (unsigned value = 1; value <= 255; ++value)
+        if (value != '/')
+            exact_proposal(q, *NativeName::from_posix(std::string("n") + static_cast<char>(value)));
+    const auto w = query("[\"V:\\\\root\", \"n", FilesLocationTextSyntax::ExactNames, NameEncoding::WindowsUtf16);
+    for (unsigned first = 1; first <= 65535; first += 128) {
+        std::u16string name = u"n";
+        for (unsigned value = first; value <= 65535 && value < first + 128; ++value)
+            if (value != '/' && value != '\\')
+                name.push_back(static_cast<char16_t>(value));
+        exact_proposal(w, *NativeName::from_windows(name));
+    }
+    FilesLocationTextLimits limits;
+    limits.components = FilesPaneLocation::hard_components;
+    std::string text = "[\"/\"";
+    for (std::size_t i = 1; i < limits.components; ++i)
+        text += ", \"x\"";
+    text += ", \"tail";
+    const auto deep = query(text, FilesLocationTextSyntax::ExactNames, NameEncoding::PosixBytes, limits);
+    CK_CHECK(deep.parent().components().size() == limits.components - 1);
+    const auto proposed = take(deep.propose_directory(*NativeName::from_posix("tail")));
+    CK_CHECK(decode(proposed.text, NameEncoding::PosixBytes, limits) == proposed.location);
+}
 CK_TEST(files_location_exact_codec_preserves_anchor_spelling_and_separate_literal_components) {
     const auto root = posix("//root/../base/");
     const auto route = take(root.descend(*NativeName::from_posix("back\\slash\n\xff\""), {}, 10));
