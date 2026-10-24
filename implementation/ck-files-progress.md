@@ -3762,3 +3762,46 @@ The full Files application, async service/controller, bounded request/result
 queues, navigation/completion, properties/preview, histories/bookmarks, large-view
 refresh and interactive terminal acceptance remain WP-02 work. No production
 Files executable or mutation command is introduced by this component.
+
+## 2026-10-24 — WP-02 asynchronous pane worker
+
+`FilesPaneService` now runs native discovery, indexing and display-page capture on
+one serialized worker per pane. Latest navigation/page slots and one unread reply
+bound the transport. Exact opaque tickets reject foreign and stale work; a new
+navigation cancels/coalesces older requests without joining the worker. Wakeups
+are coalesced until the receiver takes the reply.
+
+Navigation stages a separate pane and its entire requested first viewport before
+committing. Failure, cancellation or page-resource limits preserve the previous
+pane and active address. The requested address stays separately available for an
+error message. Native errors take priority over concurrent cancellation, and
+short wire-budget reads become explicit limit failures rather than partial UI
+success. All native handles, scratch files and final owner retirement stay on
+the worker. Shutdown requests remain nonblocking while an OS call is blocked;
+joining belongs outside UI dispatch.
+
+Seventeen new tests cover real native source/cache integration, exact worker
+thread ownership, blocked-call supersession (100 queued navigations), page-read
+coalescing, retained old views, native-error/cancellation priority, foreign
+service/stamp/range rejection, coalesced wakeups, stop/join, allocation/exception
+poisoning, failed notification, workspace refusal and path/page/text/wire/error
+limits. The new wire-budget regression requires a complete requested viewport.
+
+All 83 Files suites pass: 778 cases on Mac, 781 on Linux and 777 on Windows.
+Fresh matching sanitizer configurations compile 65 product units and the installed
+instrumented ckVision 1.4.0 SDK (124/124/128 SDK units). All 28 pane cases pass
+under ASan+UBSan on Mac/Linux and ASan on Windows. Separate UI-free 62-unit
+ThreadSanitizer builds pass the 17 service cases three times on both Mac/Linux
+(51 executions per host). This checks the service, not a complete application.
+
+See [the pane-service evidence](evidence/ck-files-pane-service-20261024.json) for
+230 current source/config fingerprints, exact compiler sets/flags, SDK/output
+hashes, timing, barrier-controlled concurrency results and diagnostic cleanup.
+Earlier preliminary runs predate the wire-budget regression and are excluded
+from the final qualification. All superseded diagnostic builds and SDKs are
+retired; the current verified normal builds remain available for active work.
+
+WP-02 remains in progress. The two-pane application controller, bounded UI
+publication, focus/mark/view commands, navigation/completion, properties/preview,
+histories/bookmarks, qualified refresh and interactive terminal acceptance are
+still required. No production Files executable or mutation command is enabled.

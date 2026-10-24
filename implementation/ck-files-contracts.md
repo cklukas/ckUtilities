@@ -2709,3 +2709,61 @@ indexed display page stays readable after its entire worker/index retires, while
 its stamp revokes targets. This component is not yet the Files application or a
 production worker adapter; navigation/completion, app lifecycle, asynchronous
 request/result bounds, properties, preview and refresh remain WP-02 work.
+
+## Asynchronous file-pane service
+
+`FilesPaneService` owns one serialized worker. Its value-only backend factories
+create the source adapter and private index workspace lazily on that worker.
+`native_files_pane_backend` requires an explicit existing cache address, uses the
+platform's native query namespace and never chooses a temporary-directory or
+filesystem-label fallback. Source cursors, indexes, factories and their final
+retirement remain on the worker. Replies contain owner-free immutable pages,
+revocation stamps and exact navigation-address values, not native handles.
+
+There is one latest navigation slot, one latest page-read slot and one unread
+reply. A new navigation replaces pending work, clears obsolete replies and
+cooperatively stops active work. Exact opaque request identities gate delivery;
+equal numeric request counters from another service are not matching tickets.
+Page requests require the current navigation ticket, cannot interrupt navigation
+or overwrite an unread reply, and coalesce with older pending page reads. They
+also require a worker-validated pane stamp before any cache read.
+
+Navigation prepares a separate indexed pane and its complete requested first
+page. Only then does a short commit exchange replace the active pane. Native I/O
+and retirement happen outside the submission mutex. Failed or cancelled work
+before commitment preserves the previous model, selection and active address.
+A reply identifies the active and requested locations separately. A cancellation
+request can race completed work; a committed result wins and its reply describes
+the actual outcome. Newer navigation always suppresses an older result.
+
+Path/filter, directory-row, disk-byte/file, page-row/text/wire and diagnostic
+bounds are explicit. Defaults include 64 KiB native paths, 4096 page rows, 1 MiB
+page text, 4 MiB wire reads, 64 KiB diagnostic text, one million indexed entries
+and a shared 1 GiB/128-file scratch ledger per service. The ledger includes the
+old view and new staging together. Oversized or short wire-budget pages are
+LimitExceeded, never a partially populated requested viewport. Native failures
+retain their exact state/domain/code/operation; a diagnostic too large to retain
+becomes an explicit limit failure rather than a truncated native success.
+
+`take` consumes the reply and acknowledges its coalesced wake. The wake carries
+no payload and must marshal lifetime-checked work to the UI without waiting for
+UI dispatch or joining the worker. A callback exception
+poisons the worker and makes one final fault-notification attempt. Allocation or
+other worker exceptions retire all native state and publish an allocation-free
+terminal fault record; `fault` and `running` remain queryable if notification
+itself fails. No exception escapes the worker entry and consumed native work is
+not retried after a fault.
+
+Submission, polling and stop requests neither perform native I/O nor join a
+thread. Native calls can block beyond cancellation, so `running` stays true
+until the worker has actually retired. `join` and destruction request stop and
+wait; the composition root must invoke them serially outside UI dispatch after
+withdrawing the view/controller callback. Clients must bound retained replies
+and validate both service tickets and page stamps. A current model stamp is not
+a filesystem snapshot, live content guarantee or mutation permission.
+
+This service currently supplies navigation and bounded page reads. Application
+focus/mark/reorder/refresh policies, child navigation/completion, properties,
+preview and the actual two-pane controller/lifecycle remain WP-02 work. A fresh
+navigation is not a substitute for the required selection-preserving refresh
+semantics. No copy/move/delete or preservation-loss consent is introduced.

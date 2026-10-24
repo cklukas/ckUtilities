@@ -1,9 +1,10 @@
 # Copyright (c) 2026 C. Klukas. All rights reserved.
 # SPDX-License-Identifier: GPL-3.0-or-later
-add_library(ck_vision_files STATIC files_pane_grid.cpp)
+find_package(Threads REQUIRED)
+add_library(ck_vision_files STATIC files_pane_grid.cpp files_pane_service.cpp)
 target_compile_features(ck_vision_files PUBLIC cxx_std_20)
 target_include_directories(ck_vision_files PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ck_vision_files PUBLIC ck_files_core ckvision::cvision)
+target_link_libraries(ck_vision_files PUBLIC ck_files_core ckvision::cvision Threads::Threads PRIVATE ck_files_platform)
 cktools_strict(ck_vision_files)
 if(BUILD_TESTING)
   set(CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT "${PROJECT_BINARY_DIR}/test-scratch" CACHE PATH
@@ -12,7 +13,7 @@ if(BUILD_TESTING)
     message(FATAL_ERROR "CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT must be absolute")
   endif()
   file(MAKE_DIRECTORY "${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}")
-  add_executable(ck_vision_files_tests tests/files_pane_grid_tests.cpp)
+  add_executable(ck_vision_files_tests tests/files_pane_grid_tests.cpp tests/files_pane_service_tests.cpp)
   target_link_libraries(ck_vision_files_tests PRIVATE ck_vision_files ck_vision_shell ck_files_platform ck_vision_cktest_main)
   target_compile_definitions(ck_vision_files_tests PRIVATE CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}")
   cktools_strict(ck_vision_files_tests)
