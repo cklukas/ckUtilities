@@ -3077,3 +3077,40 @@ index-backed view. The private workspace/backing store, aggregate disk quotas,
 external sorting and page/model integration remain required work, together with
 the remaining capability/preservation and cross-platform collision rules.
 WP-01 remains in progress; WP-02–08 remain unstarted.
+
+## 2026-10-24 — bounded worker-side index record store
+
+The directory-index codec is committed as `cacc5f7`. WP-01 now also has an
+append/seal/read store over an injected exclusive scratch-file boundary. It
+keeps counters and one bounded record instead of a per-row RAM offset table.
+Contiguous row IDs and scoped opaque addresses prevent accidental cross-store
+reads. Sealing checks exact scratch size and gates reads; it does not prove
+enumeration completion or native object authority.
+
+A noncopyable shared ledger accounts for logical wire bytes and adopted files
+across live stores, including future sort runs. Per-store row/byte limits and
+record limits are independent. Preflight rejection performs no data writes.
+Short positive I/O advances exactly; zero progress, excessive counts, native
+failures, corruption, exceptions and cancellation revoke the complete store.
+Attempted write reservations remain charged after partial failure until the
+backend is destroyed, before quota release. Disk allocation and physical free
+space remain separate from this logical quota.
+
+All 75 Files suites pass on macOS, Linux and Windows: 603, 608 and 605 cases.
+The 17 new store cases pass under ASan+UBSan on macOS/Linux and ASan on Windows.
+Review caught cancellation arriving during the final I/O call; post-call
+checks and a regression case now prevent publishing that result. Final-source
+full and focused runs include the correction. Tests cover shared exhaustion,
+short/partial I/O, all native failure states, scoped addresses, CRC/truncation
+and valid alternate-row corruption, quota release order, exceptions and lifecycle.
+
+See [the store evidence](evidence/ck-files-index-store-20261024.json) for all
+183 exported source fingerprints, exact build/test commands, SDK fingerprints,
+output hashes, timings and cleanup. Diagnostic builds and documentation scratch
+were removed; current verified normal test builds remain. No GUI app was launched.
+
+The new tests use a fault-controllable byte backend. Native private scratch-file
+creation, privacy/permission qualification, external sorting and its address
+format, indexed pane integration and large-directory performance remain pending.
+The source read-only adapter gains no mutation methods. WP-01 remains in progress;
+WP-02–08 remain unstarted.

@@ -1896,3 +1896,51 @@ resource quotas and cleanup. This is a same-lifetime scratch-cache format,
 not a journal/recovery identity format or a way to resume native ownership
 across restarts. Selection and operations still require native acquisition,
 identity/edge revalidation and the later planning/consent rules.
+
+### Worker-side index record store
+
+`DirectoryIndexStore` owns one injected `IndexByteFile` exclusively. The byte
+backend is separate from the read-only source adapter: it must create an empty
+private scratch file under an explicit root, prevent external access and
+close/remove its file at destruction. This interface and its deterministic
+backend tests do not yet implement or qualify native private-file creation.
+No source mutation is added. All store methods and shared-budget access are
+serialized on the owning worker; none belongs in UI dispatch or paint.
+
+The store advances from Writing to Sealed or Failed. It appends versioned
+records with contiguous nonzero row IDs beginning at one, issues opaque
+same-lifetime addresses and reads them only after seal. Addresses are scoped
+to the specific store, even when two stores have identical source contexts.
+The store keeps only counters and at most a bounded encoded record: no table
+of all row offsets, unbounded buffering or RAM fallback. External sorting and
+address persistence require a separate bounded format and implementation.
+Sealing checks the backend's exact logical size; it proves neither discovery
+reached native End nor that the directory was a snapshot. The listing job must
+separately prove completion before publishing a pane generation.
+
+`IndexStorageBudget` is a noncopyable shared ledger for adopted live stores,
+including future sort runs. Callers explicitly select positive aggregate byte
+and file bounds. Byte bounds cannot exceed INT64_MAX. Default per-store bounds
+are one million rows and one GiB; record limits remain independently enforced.
+The ledger charges complete wire bytes including envelopes and checksums, not
+filesystem allocation, filesystem metadata or other processes' disk usage.
+Physical disk exhaustion remains an independent native error. The future native
+factory must also bound files during creation, before successful adoption.
+
+Input, state, address and budget rejection perform no data I/O and leave prior
+records usable. Encoding completes before reservation. Before the first write,
+the entire requested record is charged. Short positive I/O counts are advanced
+exactly; zero progress or a count exceeding the remaining span fails. A failure
+after reservation may leave a partial file, so the complete charge remains
+until the backend is destroyed. Backend destruction precedes quota release.
+There is no rollback or successful-prefix claim. Counts, offsets and additions
+are checked through subtraction against the configured limits before use.
+
+Native error state/domain/code/operation remain intact. I/O failure, malformed
+readback, cancellation and backend exceptions revoke the complete store, and
+later operations do no data I/O. Exceptions propagate; the Failed state remains
+even when no diagnostic could be allocated. Cancellation is cooperative between
+native calls and checked after the final call before publication. It cannot
+interrupt a blocked OS call. A read returns a record only after a complete
+bounded read, codec verification and matching row ID. Scratch seal is not an
+fsync, crash-recovery record, native acquisition proof or operation permission.
