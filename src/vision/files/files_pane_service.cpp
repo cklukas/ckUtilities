@@ -13,11 +13,70 @@
 namespace ck::vision {
 static_assert(std::is_nothrow_move_constructible_v<FilesPaneReply> &&
               std::is_nothrow_move_assignable_v<FilesPaneReply>);
+FilesPaneLocation::FilesPaneLocation(ck::files::NativeAbsolutePath root)
+    : root_(std::move(root)),
+      bytes_(root_.posix_bytes() ? root_.posix_bytes()->size() : root_.windows_units()->size() * sizeof(char16_t)) {
+    if (!root_.is_valid())
+        throw std::invalid_argument("invalid Files location root");
+}
+ck::files::Observation<FilesPaneLocation> FilesPaneLocation::descend(const ck::files::NativeName &name,
+                                                                     ck::files::NativePathLimits limits,
+                                                                     std::size_t max_components) const {
+    using namespace ck::files;
+    using Result = Observation<FilesPaneLocation>;
+    const auto fail = [](AdapterError code, const char *op) {
+        return Result::unavailable(ObservationState::Failed,
+                                   {ErrorDomain::Adapter, static_cast<std::int64_t>(code), op});
+    };
+    if (!limits.max_native_bytes || limits.max_native_bytes > NativePathLimits::hard_native_bytes || !max_components ||
+        max_components > hard_components)
+        return fail(AdapterError::InvalidLimit, "pane_location.limits");
+    if (!root_.is_valid() || !name.is_valid() || root_.encoding() != name.encoding())
+        return fail(AdapterError::InvalidIdentifier, "pane_location.encoding_or_name");
+    const auto width = name.posix_bytes() ? std::size_t{1} : sizeof(char16_t);
+    const auto units = name.posix_bytes() ? name.posix_bytes()->size() : name.windows_units()->size();
+    const bool separator = !components_.empty() || (root_.posix_bytes() ? root_.posix_bytes()->back() != '/'
+                                                                        : root_.windows_units()->back() != u'\\' &&
+                                                                              root_.windows_units()->back() != u'/');
+    const auto extra = separator ? width : 0;
+    if (components_.size() >= max_components || bytes_ > limits.max_native_bytes ||
+        extra > limits.max_native_bytes - bytes_ || units > (limits.max_native_bytes - bytes_ - extra) / width)
+        return fail(AdapterError::InventoryLimit, "pane_location.bytes_or_depth");
+    auto next = *this;
+    next.components_.push_back(name);
+    next.bytes_ += extra + units * width;
+    return Result::available(std::move(next));
+}
+std::string FilesPaneLocation::display_text() const {
+    if (!root_.is_valid())
+        return root_.display_text();
+    if (root_.posix_bytes()) {
+        auto bytes = *root_.posix_bytes();
+        for (const auto &name : components_) {
+            if (bytes.back() != '/')
+                bytes.push_back('/');
+            bytes += *name.posix_bytes();
+        }
+        return ck::files::display_native_text(bytes);
+    }
+    auto units = *root_.windows_units();
+    for (const auto &name : components_) {
+        if (units.back() != u'\\' && units.back() != u'/')
+            units.push_back(u'\\');
+        units += *name.windows_units();
+    }
+    return ck::files::display_native_text(units);
+}
 namespace {
 using namespace ck::files;
+struct ChildNavigation {
+    FilesPaneTicket navigation;
+    PaneStateStamp stamp;
+    PaneRowId row;
+};
 struct Navigate {
     FilesPaneTicket ticket;
-    NativeAbsolutePath path;
+    std::variant<NativeAbsolutePath, ChildNavigation> destination;
     PaneView view;
     std::size_t rows;
 };
@@ -35,7 +94,8 @@ bool valid(FilesPaneServiceLimits l) {
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
            l.page_wire_bytes <= DirectoryIndexScanLimits::hard_wire_bytes && l.diagnostic_bytes &&
            l.diagnostic_bytes <= 1024 * 1024 && l.directory_rows && l.directory_rows <= 1'000'000 && l.cache_bytes &&
-           l.cache_bytes <= 8ULL * 1024 * 1024 * 1024 && l.cache_files && l.cache_files <= 256;
+           l.cache_bytes <= 8ULL * 1024 * 1024 * 1024 && l.cache_files && l.cache_files <= 256 &&
+           l.location_components && l.location_components <= FilesPaneLocation::hard_components;
 }
 } // namespace
 struct FilesPaneService::State {
@@ -133,7 +193,8 @@ struct FilesPaneService::State {
         std::unique_ptr<BasicFileSystem> filesystem;
         std::shared_ptr<IndexFileFactory> factory;
         auto budget = std::make_shared<IndexStorageBudget>(limits.cache_bytes, limits.cache_files);
-        std::shared_ptr<const NativeAbsolutePath> active;
+        std::shared_ptr<const FilesPaneLocation> active;
+        FilesPaneTicket active_epoch;
         for (;;) {
             std::optional<Navigate> nav;
             std::optional<Read> page;
@@ -161,7 +222,10 @@ struct FilesPaneService::State {
                     stop.request_stop();
             }
             if (nav) {
-                auto requested = std::make_shared<const NativeAbsolutePath>(std::move(nav->path));
+                const auto *absolute = std::get_if<NativeAbsolutePath>(&nav->destination);
+                std::shared_ptr<const FilesPaneLocation> requested;
+                if (absolute)
+                    requested = std::make_shared<const FilesPaneLocation>(*absolute);
                 FilesPaneReply result;
                 result.kind = FilesPaneReplyKind::Navigation;
                 result.request = result.navigation = nav->ticket;
@@ -170,12 +234,18 @@ struct FilesPaneService::State {
                 auto candidate = std::make_unique<IndexedPane>();
                 bool committed = false;
                 auto request = candidate->begin_listing(nav->view);
-                const auto fail = [&](const UnavailableObservation &error) {
+                const auto fail = [&](const UnavailableObservation &error,
+                                      FilesPaneReplyState state = FilesPaneReplyState::Failed) {
                     candidate->fail_listing(request, error);
-                    result.state = FilesPaneReplyState::Failed;
+                    result.state = state;
                     result.error = error;
                 };
-                if (!stop.stop_requested()) {
+                const auto *origin = std::get_if<ChildNavigation>(&nav->destination);
+                const bool origin_ready =
+                    !origin || (active && origin->navigation == active_epoch && pane->accepts(origin->stamp));
+                if (!origin_ready)
+                    result.state = FilesPaneReplyState::Stale;
+                if (!stop.stop_requested() && origin_ready) {
                     if (!filesystem) {
                         filesystem = backend.filesystem();
                         if (!filesystem)
@@ -192,11 +262,52 @@ struct FilesPaneService::State {
                         }
                     }
                     if (factory && !result.error && !stop.stop_requested()) {
-                        auto opened = filesystem->open_native_directory(*requested);
-                        if (!opened.value())
-                            fail(*opened.unavailable_detail());
-                        else if (!stop.stop_requested()) {
-                            auto listing = std::make_unique<DirectoryListing>(std::move(opened).take_value(),
+                        std::unique_ptr<DirectoryCursor> directory;
+                        if (absolute) {
+                            auto opened = filesystem->open_native_directory(*absolute);
+                            if (!opened.value())
+                                fail(*opened.unavailable_detail());
+                            else
+                                directory = std::move(opened).take_value();
+                        } else {
+                            const auto &child = std::get<ChildNavigation>(nav->destination);
+                            if (!active || child.navigation != active_epoch || !pane->accepts(child.stamp))
+                                result.state = FilesPaneReplyState::Stale;
+                            else {
+                                auto opened = pane->open_directory_row(
+                                    child.stamp, child.row,
+                                    {limits.page_wire_bytes, limits.path_bytes, limits.diagnostic_bytes},
+                                    stop.get_token());
+                                if (!opened.value()) {
+                                    const auto &e = *opened.unavailable_detail();
+                                    const auto state =
+                                        !pane->accepts(child.stamp) ? FilesPaneReplyState::Stale
+                                        : e.error.domain == ErrorDomain::Adapter &&
+                                                e.error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit)
+                                            ? FilesPaneReplyState::LimitExceeded
+                                            : FilesPaneReplyState::Failed;
+                                    fail(e, state);
+                                } else {
+                                    auto bound = std::move(opened).take_value();
+                                    auto route =
+                                        active->descend(bound.name, {limits.path_bytes}, limits.location_components);
+                                    if (!route.value())
+                                        fail(*route.unavailable_detail(),
+                                             route.unavailable_detail()->error.code ==
+                                                     static_cast<std::int64_t>(AdapterError::InventoryLimit)
+                                                 ? FilesPaneReplyState::LimitExceeded
+                                                 : FilesPaneReplyState::Failed);
+                                    else {
+                                        requested =
+                                            std::make_shared<const FilesPaneLocation>(std::move(route).take_value());
+                                        result.requested_location = requested;
+                                        directory = std::move(bound.directory);
+                                    }
+                                }
+                            }
+                        }
+                        if (directory && !stop.stop_requested()) {
+                            auto listing = std::make_unique<DirectoryListing>(std::move(directory),
                                                                               DirectoryListingLimits{}, backend.clock);
                             std::array<std::byte, 16> generation{};
                             auto number = nav->ticket.number();
@@ -260,12 +371,20 @@ struct FilesPaneService::State {
                         }
                     }
                 }
-                if (!committed && stop.stop_requested() && !result.error) {
+                if (!committed && stop.stop_requested() &&
+                    (!result.error ||
+                     (result.error->error.domain == ErrorDomain::Adapter &&
+                      result.error->error.code == static_cast<std::int64_t>(AdapterError::InterruptedRead)))) {
                     candidate->cancel_listing(request);
                     result.state = FilesPaneReplyState::Cancelled;
                     result.page.reset();
                 }
+                // Retirement may block in native close/unlink. Complete it on
+                // the worker, outside the commit lock, before acknowledging a
+                // replacement (including revocation of old display stamps).
+                candidate.reset();
                 result.stamp = pane->state_stamp();
+                active_epoch = nav->ticket;
                 emit(std::move(result), true);
             } else if (edit) {
                 FilesPaneReply result;
@@ -502,6 +621,34 @@ FilesPaneSubmitted FilesPaneService::navigate(NativeAbsolutePath location, PaneV
     }
     if (stop)
         stop->request_stop();
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
+FilesPaneSubmitted FilesPaneService::enter_directory(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
+                                                     PaneView view, std::size_t first_page_rows) {
+    if (!navigation.valid() || !row.scope.is_valid() || !row.number ||
+        !valid_pane_order({view.sort, view.descending, view.folders_first}))
+        return {FilesPaneSubmission::Invalid, {}};
+    if (!first_page_rows || first_page_rows > state_->limits.page_rows || view.display_substring.size() > 4096)
+        return {FilesPaneSubmission::LimitExceeded, {}};
+    FilesPaneTicket request;
+    {
+        std::lock_guard lock(state_->mutex);
+        if (state_->stopping || !state_->alive.load())
+            return {FilesPaneSubmission::Stopped, {}};
+        if (navigation != state_->latest_navigation)
+            return {FilesPaneSubmission::Invalid, {}};
+        if (state_->busy || state_->navigation || state_->read || state_->change || state_->reply)
+            return {FilesPaneSubmission::Busy, {}};
+        if (!state_->next)
+            return {FilesPaneSubmission::Exhausted, {}};
+        request = ticket(state_->next++);
+        state_->navigation.emplace(Navigate{request, ChildNavigation{navigation, std::move(stamp), std::move(row)},
+                                            std::move(view), first_page_rows});
+        state_->latest_navigation = state_->latest_request = request;
+        state_->cancelled = {};
+        state_->navigation_busy = true;
+    }
     state_->condition.notify_one();
     return {FilesPaneSubmission::Accepted, request};
 }

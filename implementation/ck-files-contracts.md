@@ -2801,6 +2801,53 @@ The method changes neither pane selection nor published data and does not
 enumerate the returned cursor. Wire/name/metadata-diagnostic bounds fail explicitly;
 individual native failure diagnostics retain their full state/domain/code/operation
 for the service’s bounded error-publication policy. Corrupt or failed index
-storage revokes issued pane stamps. Service submission,
-child address/history presentation and application commands remain separate
-integration work.
+storage revokes issued pane stamps. Application commands and history policy
+remain separate integration work.
+
+
+### Child navigation through the pane service
+
+`FilesPaneService::enter_directory` submits one explicit visible row together
+with the exact current navigation ticket and pane stamp. Submission performs
+no native I/O. It is exclusive while work or an unread result exists; it cannot
+retarget to marks, replace another local-state change or silently coalesce.
+Absolute navigation can supersede it. The worker checks the originating epoch
+and current stamp before any lazy backend startup, obtains the live child cursor through `open_directory_row`,
+then uses that same cursor for collection, ordering, indexing and first-page
+capture. It never joins an absolute child pathname or calls an absolute open
+as a fallback.
+
+The complete candidate and requested page must be ready before the usual
+short commit exchanges the panes. Source/workspace calls, child handles,
+cursors and old/new index retirement remain outside the submission mutex and
+on the worker. Old/staged pane retirement and old-stamp revocation finish
+before the reply is published, outside the commit mutex. Failed, stale,
+cancelled, oversized or unrenderable candidates
+retain the previous pane, marks and active route. The reply's new navigation
+epoch addresses the retained pane after a refusal. An old ticket cannot be
+reused; clients use the acknowledged navigation ticket and stamp. Superseded
+results never overwrite newer navigation. Native failures keep their exact
+details rather than becoming apparent cancellation; the helper's explicit
+cooperative interruption is reported as cancellation. Stop remains nonblocking,
+with joining and retirement outside UI dispatch.
+
+`FilesPaneLocation` is owner-free requested-route data: one exact absolute root
+address plus an ordered bounded sequence of exact native child components.
+It deliberately has no flat-host-path conversion. Ordinary Windows roots can
+have host path semantics while descendants retain literal trailing spaces,
+dots, reserved-looking spellings or unpaired surrogates; flattening and reopening
+such a route could select something else. POSIX bytes and backslashes likewise
+remain unchanged. Components must share the root encoding. Rendering may join
+and escape those values for presentation, but nobody may parse that display
+back into a target. A requested route is not proof that its name still refers
+to the held directory after concurrent renames.
+
+The existing path-byte budget includes root, components and necessary
+separators. Default depth is 1024 child components, with a hard bound of 4096;
+invalid configurations and over-budget routes refuse explicitly. Requested
+child-route data remains absent until the scoped row has actually been bound.
+It may be present for a candidate whose subsequent listing/page fails; the
+active route still identifies the retained pane. The controller consumes these
+structured routes for existing location labels; entering a child from an
+application command, history/bookmark behavior and editable path completion
+remain WP-02 integration work.

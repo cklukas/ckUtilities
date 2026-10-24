@@ -6,6 +6,7 @@
 #include "simulated_filesystem.hpp"
 #include <cvision/testing/cktest.hpp>
 #include <atomic>
+#include <algorithm>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -54,10 +55,14 @@ struct Trace {
     std::atomic<int> startup_fault{0}, open_fault{0};
     std::atomic<unsigned> reads{0};
     std::atomic<bool> read_error{false};
-    Gate open_gate, read_gate;
+    std::atomic<bool> block_child{false}, block_retire{false};
+    std::atomic<int> child_fault{0};
+    std::atomic<unsigned> child_opens{0}, cursors_closed{0}, entries_closed{0};
+    bool replace_child = false, long_child_name = false;
+    Gate open_gate, read_gate, child_gate, retire_gate;
     std::mutex mutex;
     std::condition_variable changed;
-    std::optional<UnavailableObservation> open_error, workspace_error;
+    std::optional<UnavailableObservation> open_error, workspace_error, child_error;
     std::thread::id worker;
     void check() {
         std::lock_guard lock(mutex);
@@ -112,6 +117,145 @@ class Source final : public BasicFileSystem {
             }
         }
         return fs_.open_directory(path, policy);
+    }
+    Observation<BasicMetadata> inspect_basic(const std::filesystem::path &path) const override {
+        trace_->check();
+        return fs_.inspect_basic(path);
+    }
+};
+NativeName child_name(std::string_view text) {
+#ifdef _WIN32
+    std::u16string units(text.begin(), text.end());
+    return *NativeName::from_windows(std::move(units));
+#else
+    return *NativeName::from_posix(std::string(text));
+#endif
+}
+class TracedEntry final : public OpenedEntry {
+    std::unique_ptr<OpenedEntry> entry_;
+    std::shared_ptr<Trace> trace_;
+
+  public:
+    TracedEntry(std::unique_ptr<OpenedEntry> entry, std::shared_ptr<Trace> trace)
+        : entry_(std::move(entry)), trace_(std::move(trace)) {
+        trace_->check();
+    }
+    ~TracedEntry() override {
+        trace_->check();
+        ++trace_->entries_closed;
+    }
+    Observation<BasicMetadata> inspect_basic() const override {
+        trace_->check();
+        return entry_->inspect_basic();
+    }
+};
+class TracedCursor final : public DirectoryCursor {
+    std::unique_ptr<DirectoryCursor> cursor_;
+    std::shared_ptr<Trace> trace_;
+
+  public:
+    TracedCursor(std::unique_ptr<DirectoryCursor> cursor, std::shared_ptr<Trace> trace)
+        : DirectoryCursor(cursor->identity()), cursor_(std::move(cursor)), trace_(std::move(trace)) {
+        trace_->check();
+    }
+    ~TracedCursor() override {
+        trace_->check();
+        if (trace_->block_retire.exchange(false))
+            trace_->retire_gate.block();
+        ++trace_->cursors_closed;
+    }
+    Observation<AdapterScope> source_scope() const override {
+        trace_->check();
+        return cursor_->source_scope();
+    }
+    Observation<BasicMetadata> inspect_basic() const override {
+        trace_->check();
+        return cursor_->inspect_basic();
+    }
+    Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName &name, EntryAccess access) const override {
+        trace_->check();
+        auto result = cursor_->open_child(name, access);
+        if (!result.value())
+            return result;
+        return Observation<std::unique_ptr<OpenedEntry>>::available(
+            std::make_unique<TracedEntry>(std::move(result).take_value(), trace_));
+    }
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName &name) const override {
+        trace_->check();
+        ++trace_->child_opens;
+        if (trace_->block_child.exchange(false))
+            trace_->child_gate.block();
+        if (trace_->child_fault == 1)
+            throw std::bad_alloc();
+        if (trace_->child_fault == 2)
+            throw std::runtime_error("child navigation fault");
+        {
+            std::lock_guard lock(trace_->mutex);
+            if (trace_->child_error) {
+                const auto &e = *trace_->child_error;
+                return Observation<std::unique_ptr<DirectoryCursor>>::unavailable(e.state, e.error);
+            }
+        }
+        auto result = cursor_->open_directory_child(name);
+        if (!result.value())
+            return result;
+        return Observation<std::unique_ptr<DirectoryCursor>>::available(
+            std::make_unique<TracedCursor>(std::move(result).take_value(), trace_));
+    }
+
+  private:
+    Observation<DirectoryStep> next_step() override {
+        trace_->check();
+        auto read = cursor_->read(1);
+        if (read.error)
+            return Observation<DirectoryStep>::unavailable(read.error->state, read.error->error);
+        if (!read.names.empty())
+            return Observation<DirectoryStep>::available(std::move(read.names.front()));
+        if (read.state == DirectoryReadState::End)
+            return Observation<DirectoryStep>::available(DirectoryEnd{});
+        if (read.state == DirectoryReadState::More)
+            return Observation<DirectoryStep>::available(DirectorySkip{});
+        throw std::logic_error("unexpected traced cursor cancellation");
+    }
+};
+class ChildSource final : public BasicFileSystem {
+    std::shared_ptr<Trace> trace_;
+    ck::testing::SimulatedFileSystem fs_;
+
+  public:
+    explicit ChildSource(std::shared_ptr<Trace> trace) : trace_(std::move(trace)) {
+        trace_->check();
+        for (const auto root_name : {"one", "two"}) {
+            auto root = fs_.make_node(ObjectKind::Directory);
+            fs_.bind(take(address(root_name).host_path()), root);
+            auto folder = fs_.make_node(ObjectKind::Directory);
+            auto inner = fs_.make_node(ObjectKind::Directory);
+            fs_.put(inner, child_name("leaf"), fs_.make_node(ObjectKind::RegularFile));
+            fs_.put(folder, child_name(trace_->long_child_name ? std::string(200, 'x') : "inner"), inner);
+            fs_.put(root, child_name("folder"), folder);
+            fs_.put(root, child_name("file"), fs_.make_node(ObjectKind::RegularFile));
+            fs_.put(root, child_name("link"), fs_.make_node(ObjectKind::SymbolicLink));
+            if (trace_->replace_child && root_name == std::string_view("one")) {
+                auto replacement = fs_.make_node(ObjectKind::Directory);
+                fs_.enqueue(
+                    ck::testing::SimulatedFileSystem::Operation::OpenDirectoryChild,
+                    {.effect = [this, root, replacement] { fs_.put(root, child_name("folder"), replacement); }});
+            }
+        }
+    }
+    ~ChildSource() override {
+        trace_->check();
+        ++trace_->fs_closed;
+    }
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory(const std::filesystem::path &path,
+                                                                 DirectoryLinkPolicy policy) const override {
+        trace_->check();
+        ++trace_->opens;
+        auto result = fs_.open_directory(path, policy);
+        if (!result.value())
+            return result;
+        return Observation<std::unique_ptr<DirectoryCursor>>::available(
+            std::make_unique<TracedCursor>(std::move(result).take_value(), trace_));
     }
     Observation<BasicMetadata> inspect_basic(const std::filesystem::path &path) const override {
         trace_->check();
@@ -181,6 +325,8 @@ struct Fixture {
     ~Fixture() {
         trace->open_gate.release();
         trace->read_gate.release();
+        trace->child_gate.release();
+        trace->retire_gate.release();
         if (service)
             service->join();
     }
@@ -216,6 +362,14 @@ struct Fixture {
     }
     void start(FilesPaneServiceLimits limits = {}) {
         service = std::make_unique<FilesPaneService>(backend(), limits, [t = trace] { t->notify(); });
+    }
+    void start_children(FilesPaneServiceLimits limits = {}) {
+        auto b = backend();
+        b.filesystem = [t = trace] { return std::make_unique<ChildSource>(t); };
+#ifdef _WIN32
+        b.storage_model = StorageModel::WindowsHandleAttributes;
+#endif
+        service = std::make_unique<FilesPaneService>(std::move(b), limits, [t = trace] { t->notify(); });
     }
     FilesPaneReply reply() {
         std::optional<FilesPaneReply> value;
@@ -409,7 +563,7 @@ CK_TEST(files_service_navigation_supersedes_a_blocked_state_change_without_repla
     f.trace->read_gate.release();
     auto current = f.reply();
     CK_CHECK(current.request == next.ticket && current.kind == FilesPaneReplyKind::Navigation);
-    CK_CHECK(*current.active_location == address("two") && current.page->selection().marks->total == 0);
+    CK_CHECK(current.active_location->root_address() == address("two") && current.page->selection().marks->total == 0);
     CK_CHECK(
         f.service->change(next.ticket, current.stamp, FilesPaneChangeMarks{IndexedInvertVisible{}}, {0, 5}).state ==
         FilesPaneSubmission::Accepted);
@@ -525,7 +679,7 @@ CK_TEST(files_service_native_index_navigation_and_pages_keep_all_native_io_on_wo
     CK_CHECK(first.request == nav.ticket && first.navigation == nav.ticket &&
              first.state == FilesPaneReplyState::Ready);
     CK_CHECK(first.page && first.page->rows().size() == 5 && first.page->visible_rows() == 20 &&
-             *first.active_location == address("one"));
+             first.active_location->root_address() == address("one"));
     auto read = f.service->read_page(nav.ticket, first.stamp, {10, 3});
     CK_CHECK(read.state == FilesPaneSubmission::Accepted);
     auto second = f.reply();
@@ -549,7 +703,7 @@ CK_TEST(files_service_latest_navigation_supersedes_blocked_work_without_joining_
     f.trace->open_gate.release();
     auto result = f.reply();
     CK_CHECK(result.request == latest.ticket && result.state == FilesPaneReplyState::Ready &&
-             *result.active_location == address("two"));
+             result.active_location->root_address() == address("two"));
     CK_CHECK(f.trace->opens == 2);
     f.stopped();
 }
@@ -566,8 +720,8 @@ CK_TEST(files_service_failed_and_cancelled_navigation_preserve_active_location_a
     auto refusal = f.reply();
     CK_CHECK(refusal.request == failed.ticket && refusal.state == FilesPaneReplyState::Failed &&
              refusal.error->error.code == 13);
-    CK_CHECK(*refusal.active_location == address("one") && *refusal.requested_location == address("two") &&
-             first.stamp.current());
+    CK_CHECK(refusal.active_location->root_address() == address("one") &&
+             refusal.requested_location->root_address() == address("two") && first.stamp.current());
     auto read = f.service->read_page(failed.ticket, refusal.stamp, {0, 2});
     CK_CHECK(read.state == FilesPaneSubmission::Accepted && f.reply().page);
     {
@@ -580,8 +734,8 @@ CK_TEST(files_service_failed_and_cancelled_navigation_preserve_active_location_a
     CK_CHECK(f.service->cancel(cancelled.ticket));
     f.trace->open_gate.release();
     auto stopped = f.reply();
-    CK_CHECK(stopped.state == FilesPaneReplyState::Cancelled && *stopped.active_location == address("one") &&
-             first.stamp.current());
+    CK_CHECK(stopped.state == FilesPaneReplyState::Cancelled &&
+             stopped.active_location->root_address() == address("one") && first.stamp.current());
     f.stopped();
     (void)initial;
 }
@@ -753,7 +907,7 @@ CK_TEST(files_service_first_page_limit_does_not_commit_an_unrenderable_navigatio
     auto two = f.service->navigate(address("two"), {}, 20);
     auto result = f.reply();
     CK_CHECK(result.request == two.ticket && result.state == FilesPaneReplyState::LimitExceeded && !result.page);
-    CK_CHECK(*result.active_location == address("one") && first.stamp.current());
+    CK_CHECK(result.active_location->root_address() == address("one") && first.stamp.current());
     auto read = f.service->read_page(two.ticket, result.stamp, {0, 1});
     CK_CHECK(read.state == FilesPaneSubmission::Accepted && f.reply().state == FilesPaneReplyState::Ready);
     f.stopped();
@@ -810,6 +964,18 @@ CK_TEST(files_service_production_native_backend_reads_real_source_without_exposi
             directory = row.metadata.kind.value() && *row.metadata.kind.value() == ObjectKind::Directory;
     }
     CK_CHECK(regular && directory);
+    const auto folder = std::find_if(result.page->rows().begin(), result.page->rows().end(),
+                                     [](const auto &row) { return row.display_name == "folder"; });
+    if (folder == result.page->rows().end())
+        throw std::runtime_error("missing native folder row");
+    auto entered = f.service->enter_directory(result.navigation, result.stamp, folder->id);
+    CK_CHECK(entered.state == FilesPaneSubmission::Accepted);
+    auto child = f.reply();
+    CK_CHECK(child.state == FilesPaneReplyState::Ready && child.page->rows().empty());
+    CK_CHECK(child.active_location->root_address() == take(NativeAbsolutePath::from_host(source.path())) &&
+             child.active_location->components().size() == 1 &&
+             child.active_location->components()[0] == child_name("folder"));
+    CK_CHECK(!result.stamp.current());
     f.stopped();
     CK_CHECK(!result.page->stamp().current() && result.page->rows().size() == 2);
 }
@@ -824,7 +990,7 @@ CK_TEST(files_service_short_wire_budget_never_publishes_an_incomplete_requested_
     auto next = f.service->navigate(address("two"), {}, 20);
     auto limited = f.reply();
     CK_CHECK(limited.request == next.ticket && limited.state == FilesPaneReplyState::LimitExceeded && !limited.page);
-    CK_CHECK(*limited.active_location == address("one") && first.stamp.current());
+    CK_CHECK(limited.active_location->root_address() == address("one") && first.stamp.current());
     f.service->read_page(next.ticket, limited.stamp, {0, 20});
     auto read = f.reply();
     CK_CHECK(read.state == FilesPaneReplyState::LimitExceeded && !read.page);
@@ -832,4 +998,293 @@ CK_TEST(files_service_short_wire_budget_never_publishes_an_incomplete_requested_
     CK_CHECK(f.reply().state == FilesPaneReplyState::Ready);
     f.stopped();
     (void)first_request;
+}
+
+namespace {
+PaneRowId row_named(const FilesPaneReply &reply, const char *name) {
+    for (const auto &row : reply.page->rows())
+        if (row.display_name == name)
+            return row.id;
+    throw std::runtime_error("missing child navigation fixture row");
+}
+FilesPaneReply open_children(Fixture &f) {
+    f.start_children();
+    CK_CHECK(f.service->navigate(address("one"), {}, 3).state == FilesPaneSubmission::Accepted);
+    auto result = f.reply();
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.active_location->components().empty());
+    return result;
+}
+} // namespace
+CK_TEST(files_location_retains_exact_native_components_with_explicit_byte_and_depth_limits) {
+    const auto root = FilesPaneLocation(take(NativeAbsolutePath::from_posix("/root/..")));
+    const auto name = *NativeName::from_posix(std::string("literal\\\n\xFF"));
+    const auto bytes = root.native_bytes() + 1 + name.posix_bytes()->size();
+    auto next = take(root.descend(name, {bytes}, 1));
+    CK_CHECK(next.root_address() == root.root_address() && next.components().size() == 1 &&
+             next.components()[0] == name);
+    CK_CHECK(next.native_bytes() == bytes &&
+             next.display_text() ==
+                 display_native_text(*root.root_address().posix_bytes() + "/" + *name.posix_bytes()));
+    CK_CHECK(!root.descend(name, {bytes - 1}, 1).value() && !next.descend(name, {65536}, 1).value());
+    CK_CHECK(!root.descend(name, {0}, 1).value() && !root.descend(name, {65536}, 0).value());
+    const auto windows = FilesPaneLocation(take(NativeAbsolutePath::from_windows(u"V:\\root\\..")));
+    const auto literal = *NativeName::from_windows(std::u16string{u'N', u'U', u'L', u'.', u' ', char16_t{0xD800}});
+    auto wn = take(windows.descend(literal, {65536}, 1));
+    CK_CHECK(wn.root_address() == windows.root_address() && wn.components()[0] == literal);
+    CK_CHECK(!windows.descend(name, {65536}, 1).value() && !root.descend(literal, {65536}, 1).value());
+    auto moved = std::move(next);
+    CK_CHECK(!next.descend(name, {65536}, 1).value() && next.display_text().empty());
+    CK_CHECK(moved.components()[0] == name);
+}
+CK_TEST(files_service_enters_nested_children_by_scoped_row_without_absolute_reopening) {
+    Fixture f;
+    auto first = open_children(f);
+    const auto folder = row_named(first, "folder");
+    auto marking =
+        f.service->change(first.navigation, first.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 3});
+    CK_CHECK(marking.state == FilesPaneSubmission::Accepted);
+    auto marked = f.reply();
+    CK_CHECK(marked.page->selection().marks->total == 3);
+    auto entered = f.service->enter_directory(marked.navigation, marked.stamp, folder, {}, 3);
+    CK_CHECK(entered.state == FilesPaneSubmission::Accepted);
+    auto second = f.reply();
+    CK_CHECK(second.request == entered.ticket && second.navigation == entered.ticket &&
+             second.state == FilesPaneReplyState::Ready);
+    CK_CHECK(second.page->rows().size() == 1 && second.page->rows()[0].display_name == "inner" &&
+             second.page->selection().marks->total == 0);
+    CK_CHECK(second.active_location->root_address() == address("one") &&
+             second.active_location->components().size() == 1);
+    CK_CHECK(second.active_location->components()[0] == child_name("folder") &&
+             second.requested_location == second.active_location);
+    CK_CHECK(!marked.stamp.current() && f.trace->opens == 1 && f.trace->child_opens == 1);
+    auto deeper = f.service->enter_directory(second.navigation, second.stamp, row_named(second, "inner"), {}, 3);
+    CK_CHECK(deeper.state == FilesPaneSubmission::Accepted);
+    auto third = f.reply();
+    CK_CHECK(third.state == FilesPaneReplyState::Ready && third.page->rows()[0].display_name == "leaf");
+    CK_CHECK(third.active_location->components().size() == 2 &&
+             third.active_location->components()[1] == child_name("inner"));
+    CK_CHECK(f.trace->opens == 1 && f.trace->child_opens == 2);
+    f.stopped();
+    CK_CHECK(f.trace->cursors_closed == 3 && f.trace->entries_closed > 2);
+}
+CK_TEST(files_service_child_refusals_retain_pane_marks_route_and_exact_native_errors) {
+    Fixture f;
+    auto current = open_children(f);
+    const auto folder = row_named(current, "folder");
+    CK_CHECK(
+        f.service->change(current.navigation, current.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 3})
+            .state == FilesPaneSubmission::Accepted);
+    current = f.reply();
+    for (int mode = 0; mode < 4; ++mode) {
+        const auto row = mode == 0   ? row_named(current, "file")
+                         : mode == 1 ? row_named(current, "link")
+                         : mode == 2 ? PaneRowId{AdapterScope{}, folder.number}
+                                     : folder;
+        if (mode == 3) {
+            std::lock_guard lock(f.trace->mutex);
+            f.trace->child_error =
+                UnavailableObservation{ObservationState::Denied, {ErrorDomain::NtStatus, -1073741790, "child denied"}};
+        }
+        auto submitted = f.service->enter_directory(current.navigation, current.stamp, row, {}, 3);
+        CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+        auto result = f.reply();
+        CK_CHECK(result.state == FilesPaneReplyState::Failed && !result.page && current.stamp.current());
+        CK_CHECK(result.active_location == current.active_location && !result.requested_location);
+        if (mode == 3)
+            CK_CHECK(result.error->state == ObservationState::Denied &&
+                     result.error->error.domain == ErrorDomain::NtStatus &&
+                     result.error->error.operation == "child denied");
+        current.navigation = result.navigation;
+    }
+    CK_CHECK(f.trace->opens == 1 && f.trace->child_opens == 1);
+    CK_CHECK(f.service->read_page(current.navigation, current.stamp, {0, 3}).state == FilesPaneSubmission::Accepted);
+    CK_CHECK(f.reply().page->selection().marks->total == 3);
+    f.stopped();
+}
+CK_TEST(files_service_child_cancellation_and_native_failure_precedence_preserve_active_pane) {
+    for (const bool denied : {false, true}) {
+        Fixture f;
+        auto current = open_children(f);
+        f.trace->block_child = true;
+        auto submitted =
+            f.service->enter_directory(current.navigation, current.stamp, row_named(current, "folder"), {}, 3);
+        CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+        f.trace->child_gate.wait();
+        CK_CHECK(f.service->working() && f.service->cancel(submitted.ticket));
+        if (denied) {
+            std::lock_guard lock(f.trace->mutex);
+            f.trace->child_error =
+                UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "child EACCES"}};
+        }
+        f.trace->child_gate.release();
+        auto result = f.reply();
+        CK_CHECK(result.state == (denied ? FilesPaneReplyState::Failed : FilesPaneReplyState::Cancelled));
+        CK_CHECK(!result.page && result.active_location == current.active_location && current.stamp.current());
+        if (denied)
+            CK_CHECK(result.error->error.operation == "child EACCES");
+        f.stopped();
+    }
+}
+CK_TEST(files_service_absolute_navigation_supersedes_blocked_child_without_old_publication) {
+    Fixture f;
+    auto first = open_children(f);
+    f.trace->block_child = true;
+    auto entered = f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3);
+    CK_CHECK(entered.state == FilesPaneSubmission::Accepted);
+    f.trace->child_gate.wait();
+    auto latest = f.service->navigate(address("two"), {}, 3);
+    CK_CHECK(latest.state == FilesPaneSubmission::Accepted);
+    f.trace->child_gate.release();
+    auto result = f.reply();
+    CK_CHECK(result.request == latest.ticket && result.state == FilesPaneReplyState::Ready);
+    CK_CHECK(result.active_location->root_address() == address("two") && result.active_location->components().empty());
+    CK_CHECK(f.trace->opens == 2 && !first.stamp.current() && !f.service->take());
+    f.stopped();
+}
+CK_TEST(files_service_child_submission_is_exclusive_and_requires_exact_ticket_and_current_stamp) {
+    Fixture f;
+    auto first = open_children(f);
+    const auto row = row_named(first, "folder");
+    CK_CHECK(f.service->enter_directory({}, first.stamp, row, {}, 3).state == FilesPaneSubmission::Invalid);
+    CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, {row.scope, 0}, {}, 3).state ==
+             FilesPaneSubmission::Invalid);
+    CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, row, {}, 0).state ==
+             FilesPaneSubmission::LimitExceeded);
+    f.trace->block_child = true;
+    auto entered = f.service->enter_directory(first.navigation, first.stamp, row, {}, 3);
+    f.trace->child_gate.wait();
+    CK_CHECK(f.service->enter_directory(entered.ticket, first.stamp, row, {}, 3).state == FilesPaneSubmission::Busy);
+    CK_CHECK(f.service->read_page(entered.ticket, first.stamp, {0, 3}).state == FilesPaneSubmission::Busy);
+    f.trace->child_gate.release();
+    f.idle();
+    CK_CHECK(f.service->enter_directory(entered.ticket, first.stamp, row, {}, 3).state == FilesPaneSubmission::Busy);
+    auto second = f.reply();
+    CK_CHECK(f.service->enter_directory(first.navigation, second.stamp, row, {}, 3).state ==
+             FilesPaneSubmission::Invalid);
+    auto stale = f.service->enter_directory(second.navigation, first.stamp, row, {}, 3);
+    CK_CHECK(stale.state == FilesPaneSubmission::Accepted);
+    auto refused = f.reply();
+    CK_CHECK(refused.state == FilesPaneReplyState::Stale && refused.active_location == second.active_location &&
+             second.stamp.current());
+    f.stopped();
+}
+CK_TEST(files_service_child_path_and_depth_limits_never_commit_partial_listing) {
+    for (const bool depth : {false, true}) {
+        Fixture f;
+        FilesPaneServiceLimits limits;
+        if (depth)
+            limits.location_components = 1;
+        else
+            limits.path_bytes = address("one").posix_bytes() ? address("one").posix_bytes()->size() + 6
+                                                             : (address("one").windows_units()->size() + 6) * 2;
+        f.start_children(limits);
+        CK_CHECK(f.service->navigate(address("one"), {}, 3).state == FilesPaneSubmission::Accepted);
+        auto first = f.reply();
+        auto entered = f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3);
+        CK_CHECK(entered.state == FilesPaneSubmission::Accepted);
+        auto second = f.reply();
+        if (depth) {
+            CK_CHECK(second.state == FilesPaneReplyState::Ready);
+            CK_CHECK(
+                f.service->enter_directory(second.navigation, second.stamp, row_named(second, "inner"), {}, 3).state ==
+                FilesPaneSubmission::Accepted);
+            auto refused = f.reply();
+            CK_CHECK(refused.state == FilesPaneReplyState::LimitExceeded &&
+                     refused.active_location == second.active_location && second.stamp.current());
+        } else
+            CK_CHECK(second.state == FilesPaneReplyState::LimitExceeded &&
+                     second.active_location == first.active_location && first.stamp.current());
+        f.stopped();
+    }
+}
+CK_TEST(files_service_child_replacement_and_worker_fault_never_publish_staged_directory) {
+    for (int fault = 0; fault < 3; ++fault) {
+        Fixture f;
+        f.trace->replace_child = fault == 0;
+        auto first = open_children(f);
+        f.trace->child_fault = fault;
+        CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3).state ==
+                 FilesPaneSubmission::Accepted);
+        auto result = f.reply();
+        if (!fault)
+            CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error->state == ObservationState::Changed &&
+                     result.active_location == first.active_location);
+        else
+            CK_CHECK(result.state == FilesPaneReplyState::WorkerFault &&
+                     result.change_outcome == FilesPaneChangeOutcome::Unknown);
+        CK_CHECK(!result.page);
+        f.stopped();
+    }
+}
+
+CK_TEST(files_service_child_first_page_budget_keeps_previous_page_and_route) {
+    Fixture f;
+    f.trace->long_child_name = true;
+    FilesPaneServiceLimits limits;
+    limits.page_text_bytes = 80;
+    f.start_children(limits);
+    CK_CHECK(f.service->navigate(address("one"), {}, 3).state == FilesPaneSubmission::Accepted);
+    auto first = f.reply();
+    CK_CHECK(first.state == FilesPaneReplyState::Ready);
+    CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3).state ==
+             FilesPaneSubmission::Accepted);
+    auto refusal = f.reply();
+    CK_CHECK(refusal.state == FilesPaneReplyState::LimitExceeded && !refusal.page &&
+             refusal.active_location == first.active_location);
+    CK_CHECK(refusal.requested_location->components().size() == 1 && first.stamp.current());
+    CK_CHECK(f.service->read_page(refusal.navigation, refusal.stamp, {0, 3}).state == FilesPaneSubmission::Accepted);
+    CK_CHECK(f.reply().page->rows().size() == 3 && f.trace->opens == 1);
+    f.stopped();
+}
+CK_TEST(files_service_stop_during_child_open_is_nonblocking_and_retires_on_worker) {
+    Fixture f;
+    auto first = open_children(f);
+    f.trace->block_child = true;
+    CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3).state ==
+             FilesPaneSubmission::Accepted);
+    f.trace->child_gate.wait();
+    f.service->request_stop();
+    CK_CHECK(f.service->running() && !f.service->take());
+    CK_CHECK(f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3).state ==
+             FilesPaneSubmission::Stopped);
+    f.trace->child_gate.release();
+    f.stopped();
+    CK_CHECK(f.trace->cursors_closed >= 2 && f.trace->entries_closed >= 4);
+}
+
+CK_TEST(files_service_replacement_acknowledgment_waits_for_old_pane_revocation_and_native_retirement) {
+    Fixture f;
+    auto first = open_children(f);
+    f.trace->block_retire = true;
+    auto submitted = f.service->enter_directory(first.navigation, first.stamp, row_named(first, "folder"), {}, 3);
+    CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+    f.trace->retire_gate.wait();
+    CK_CHECK(!first.stamp.current() && f.service->working());
+    auto early = f.service->take();
+    CK_CHECK(!early);
+    f.trace->retire_gate.release();
+    auto result = early ? std::move(*early) : f.reply();
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.stamp.current() && !first.stamp.current());
+    CK_CHECK(f.trace->cursors_closed == 1);
+    f.stopped();
+}
+
+CK_TEST(files_service_child_without_active_pane_never_retries_native_backend_startup) {
+    Fixture f;
+    {
+        std::lock_guard lock(f.trace->mutex);
+        f.trace->workspace_error =
+            UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "initial workspace denied"}};
+    }
+    f.start_children();
+    CK_CHECK(f.service->navigate(address("one"), {}, 3).state == FilesPaneSubmission::Accepted);
+    auto first = f.reply();
+    CK_CHECK(first.state == FilesPaneReplyState::Failed && !first.active_location && f.trace->workspaces == 1 &&
+             f.trace->opens == 0);
+    auto child = f.service->enter_directory(first.navigation, first.stamp, {AdapterScope{}, 1}, {}, 3);
+    CK_CHECK(child.state == FilesPaneSubmission::Accepted);
+    auto refusal = f.reply();
+    CK_CHECK(refusal.state == FilesPaneReplyState::Stale && !refusal.active_location && !refusal.requested_location);
+    CK_CHECK(f.trace->workspaces == 1 && f.trace->opens == 0 && f.trace->child_opens == 0);
+    f.stopped();
 }

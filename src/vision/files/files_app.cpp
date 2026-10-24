@@ -87,7 +87,7 @@ struct FilesApp::State {
         FilesPaneGridModel model;
         FilesPaneTicket navigation, request;
         ck::files::PaneStateStamp stamp;
-        std::shared_ptr<const ck::files::NativeAbsolutePath> active, requested;
+        std::shared_ptr<const FilesPaneLocation> active, requested;
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false;
@@ -392,12 +392,12 @@ struct FilesApp::State {
                                    : "Left and right locations are independent");
     }
     bool navigate(std::size_t i, ck::files::NativeAbsolutePath location) {
-        if (i >= 2 || closing)
+        if (i >= 2 || closing || !location.is_valid())
             return false;
-        auto requested = std::make_shared<const ck::files::NativeAbsolutePath>(std::move(location));
+        auto requested = std::make_shared<const FilesPaneLocation>(std::move(location));
         auto &p = panes[i];
         auto range = p.model.viewport();
-        auto submitted = services[i]->navigate(*requested, {}, range.rows);
+        auto submitted = services[i]->navigate(requested->root_address(), {}, range.rows);
         if (submitted.state != FilesPaneSubmission::Accepted) {
             p.error = "Navigation request rejected";
             labels();

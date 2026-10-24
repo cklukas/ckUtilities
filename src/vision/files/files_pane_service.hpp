@@ -4,7 +4,30 @@
 #include "indexed_pane.hpp"
 #include "native_filesystem.hpp"
 #include <functional>
+#include <span>
+#include <vector>
 namespace ck::vision {
+// Owner-free requested route: an absolute root address followed by exact native
+// components. The root may have normal host path semantics; each descendant is
+// resolved through a held cursor. This is neither an object identity nor a flat
+// pathname suitable for reopening. In particular, Windows literal components
+// must never be appended to an ordinary Win32 path and reopened.
+class FilesPaneLocation final {
+  public:
+    explicit FilesPaneLocation(ck::files::NativeAbsolutePath root);
+    const ck::files::NativeAbsolutePath &root_address() const noexcept { return root_; }
+    std::span<const ck::files::NativeName> components() const noexcept { return components_; }
+    std::size_t native_bytes() const noexcept { return bytes_; }
+    std::string display_text() const; // escaped presentation only, never parse back
+    ck::files::Observation<FilesPaneLocation>
+    descend(const ck::files::NativeName &name, ck::files::NativePathLimits limits, std::size_t max_components) const;
+    static constexpr std::size_t hard_components = 4096;
+
+  private:
+    ck::files::NativeAbsolutePath root_;
+    std::vector<ck::files::NativeName> components_;
+    std::size_t bytes_;
+};
 class FilesPaneService;
 // Process-local request identity, not native identity or operation authority.
 class FilesPaneTicket final {
@@ -50,9 +73,10 @@ struct FilesPaneReply {
     FilesPaneReplyState state = FilesPaneReplyState::Failed;
     ck::files::PaneStateStamp stamp;
     std::shared_ptr<const ck::files::IndexedPanePage> page;
-    // Exact navigation addresses, never held objects or mutable-entry targets.
-    // Failed/cancelled navigation retains the previously active address.
-    std::shared_ptr<const ck::files::NativeAbsolutePath> active_location, requested_location;
+    // Exact requested routes, never held objects or mutable-entry targets.
+    // Failed/cancelled navigation retains the active route. A child request's
+    // requested route stays absent until its scoped row is actually resolved.
+    std::shared_ptr<const FilesPaneLocation> active_location, requested_location;
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
     FilesPaneReplyKind kind = FilesPaneReplyKind::Page;
@@ -70,6 +94,7 @@ struct FilesPaneServiceLimits {
     std::uint64_t directory_rows = 1'000'000;
     std::uint64_t cache_bytes = 1024ULL * 1024 * 1024;
     std::size_t cache_files = 128;
+    std::size_t location_components = 1024;
 };
 struct FilesPaneBackend {
     // Called lazily on the pane's worker. Capture value configuration only;
@@ -102,6 +127,13 @@ class FilesPaneService final {
     FilesPaneService &operator=(const FilesPaneService &) = delete;
     FilesPaneSubmitted navigate(ck::files::NativeAbsolutePath location, ck::files::PaneView view = {},
                                 std::size_t first_page_rows = 256);
+    // Exclusive navigation from one visible scoped row of the current pane.
+    // No I/O at submission, no mark/cursor retargeting or absolute path reopen.
+    // Busy while work or an unread reply exists. Absolute navigation may
+    // supersede it. Failure/cancellation preserves the previous pane and route.
+    FilesPaneSubmitted enter_directory(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                       ck::files::PaneRowId row, ck::files::PaneView view = {},
+                                       std::size_t first_page_rows = 256);
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
     // One acknowledged local-state command; Busy while any work/result is
     // outstanding. It is never coalesced with another change or page request.

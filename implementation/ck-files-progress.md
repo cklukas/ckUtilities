@@ -3986,3 +3986,58 @@ acknowledgment through the pane service, exact address/history presentation and
 application commands remain to be integrated. WP-02 remains open, including
 completion, qualified refresh, properties/preview, histories/bookmarks and
 production executable/interactive acceptance. No GUI application was launched.
+
+
+## 2026-10-24 — WP-02 child navigation service
+
+The pane service now accepts an exclusive child-directory request tied to an
+exact navigation ticket, current pane stamp and explicit visible row ID.
+The worker binds the live directory relative to its held parent, then retains
+that same cursor through listing, sort/index preparation and first-page capture.
+Only a complete renderable candidate commits. Marks cannot retarget a child
+request; failure/cancellation retains the previous pane, marks and route.
+Absolute navigation supersedes blocked child work without publishing an old
+result. Native errors take precedence over concurrent cancellation, and stop
+remains nonblocking while a native call is blocked.
+
+Location replies now carry an exact absolute root plus native child components.
+This keeps POSIX bytes and Windows literal components separate from flat path
+interpretation. Presentation stays escaped and owner-free; it never becomes an
+operation target or proof of continuing pathname membership. Byte/depth limits
+are explicit, and child-route data is supplied only after resolving the scoped
+row. Existing application location labels consume this structured value.
+
+Twelve new service/location tests cover exact native route values, nested entry,
+marks and failure retention, exclusivity, stale contexts, first-page and route
+limits, replacement races, cancellation/error precedence, supersession, faults,
+blocked stopping and worker-thread native-owner retirement. A Windows run
+exposed an acknowledgment race: old pane stamps were revoked only after the
+new reply could be consumed. Old/staged pane retirement now finishes outside
+the commit mutex before publication; a gated regression proves that a reply
+cannot escape while old native-owner retirement is blocked. A failed initial
+navigation also cannot cause a child request to retry native backend startup:
+the origin is now checked first, and the new regression requires zero additional
+workspace/source queries. The existing native
+backend test also enters a real child directory. All 83 Files suites pass:
+832 cases on macOS, 835 on Linux and 831 on Windows, plus keymap on each.
+Matched ASan+UBSan macOS/Linux and ASan Windows runs pass 142/140/139 cases:
+72 UI/service, 53 indexed-pane and 17/15/14 platform-specific native-index cases.
+All 73 product units and installed instrumented ckVision 1.4.0 SDK units
+(124/124/128) match the final fingerprints. UI-free TSan runs all 40 service
+cases three times on each macOS/Linux host (120 executions each), without findings.
+
+See [the child-navigation service evidence](evidence/ck-files-child-service-20261024.json)
+for exact inputs, compiler/SDK/output identities, tests, timings and cleanup.
+The first Windows instrumented native stress run exceeded its 180-second
+harness guard during the unchanged 100000-row external sort. Its process exit,
+empty orphan and diagnostic retirement were verified; full fresh qualification
+uses a 600-second native-suite guard without skipping cases or weakening data,
+wire, storage or advance bounds. The final native suite completes in about
+213 seconds. Pre-fix service runs are excluded from final qualification.
+Diagnostic builds and fixture data have been retired; current normal builds
+remain for active work. Both architecture gates and strict documentation pass.
+
+The application still needs its child-entry command, navigation input/completion,
+qualified refresh, properties/preview, histories/bookmarks and production
+executable/interactive acceptance. WP-02 remains open. No source filesystem
+mutation or GUI application launch is introduced by this milestone.
