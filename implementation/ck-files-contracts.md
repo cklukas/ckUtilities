@@ -1207,3 +1207,77 @@ behavior and concurrent changes. No delete/replace/rename/ownership/ACL replay
 capability is inferred from Add access. In particular POSIX write/search checks
 do not waive sticky-directory rules. Filesystem advertisements and permission
 observations remain separate inputs to later operation-specific planning.
+
+## Qualified directory name-rule observations
+
+`DirectoryNameRulesProbe` inspects a held directory on a worker, retaining it
+independently of its original pathname. A potentially usable rule requires two
+independent live location reports qualified against the cursor's cached native
+identity. Unavailable/unqualified first reports are not retried; `after` then
+records Unknown/`name_rules.after_not_attempted`. The probe preserves both
+attempted reports and the rule's explicit unavailable state/diagnostic.
+Available(probe) means collection finished, not that a usable rule exists.
+`refresh` produces independent observations through the same retained directory;
+it neither reopens a pathname nor rewrites the old report.
+
+The initial qualified rule is `LinuxExtendedFsBytewise`: the native Linux
+location-query family, extended-filesystem type code `0xef53`, qualified POSIX
+device/inode identity, and successful `FS_IOC_GETFLAGS` reports with both
+`FS_CASEFOLD_FL` and `FS_ENCRYPT_FL` clear. The type code is shared by the Linux
+extended-filesystem family; it is not a filesystem label or a unique volume ID.
+Type code and relevant bits must agree between reports. Changed/unqualified
+identities, changed families/types/bits, contradictory case reports and required
+field/query errors prevent a qualified rule. Unrelated inode-flag changes are
+retained without pretending that they change name matching. Native-header
+assertions check the constants used by this qualification.
+
+This follows the native extended-filesystem matching contract for directories
+without case folding or filename encryption. Encrypted or casefold directories
+remain unqualified here, including when an encryption key happens to be loaded.
+Other Linux filesystems, Darwin and Windows also remain unqualified. Neither
+per-directory case sensitivity nor volume feature advertisements alone supply
+a complete name-equivalence algorithm. There is no locale conversion, Unicode
+normalizer, OS case-conversion fallback or assumption that all POSIX names use
+bytewise comparison. Further native policies and the operation-level conflict
+flow remain required; this does not complete cross-platform collision handling.
+
+`compare` returns one of two available relations, or an explicit unavailable
+result:
+
+- `IdenticalNativeUnits` is a lexical witness only, available for identical valid
+  components in the same encoding even if native rules are unavailable. Its
+  directory context retains any unavailable native identity/query diagnostic.
+- `DistinctUnderReportedRules` requires a qualified rule and its applicable
+  encoding. For the initial rule, distinct POSIX byte sequences remain distinct
+  names, including case-only differences, different Unicode normalization forms
+  and invalid UTF-8. No display conversion participates.
+
+Names must share an encoding; mapping belongs to the separate lossless mapping
+boundary. Each component has a configurable native-byte budget (default 64 KiB,
+hard maximum 1 MiB), checked before scanning/copying its units. UTF-16 budgets
+count two bytes per unit, not characters. Invalid/moved-from components and
+invalid limits fail; no truncated or rewritten name is returned. These are
+comparison resource bounds, not filesystem name/path limits or a process-memory
+quota. No additional native queries occur during comparison.
+
+Distinct names can be hard links to the same object. These reports do not prove
+object inequality, absence, name acceptance, creation capability, permissions,
+mount confinement, current name membership, a stable namespace or execution-time
+collision freedom. Identical units do not establish native acceptance either.
+Later planning/execution must retain and requalify the exact parent and rules,
+inspect current occupants and use the required native exclusive/publication
+primitives. The repeated observations cannot rule out intermediate or later
+changes. No source/destination mutation or private probe creation is performed.
+
+Inspection/refresh and final native-owner retirement belong on workers. There
+are at most two native location calls, with cancellation checked around them;
+OS calls can block beyond cancellation. Cancellation exposes no partial probe,
+and exceptions release private staging. Comparison values retain identity
+context only and do not extend native handle ownership.
+
+Native validation on the Linux scratch filesystem independently creates case,
+normalization and invalid-byte pairs using exclusive creation and checks distinct
+native IDs. A hard-link fixture verifies that name distinction does not become
+object distinction. All hosts verify enumeration independence, lexical evidence,
+held-directory refresh after pathname replacement and owner retirement. Other
+filesystem policies remain explicit limitations rather than presumed passes.

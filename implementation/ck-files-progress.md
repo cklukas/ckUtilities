@@ -2446,3 +2446,81 @@ Ninja timings and cleanup. UI boundaries (92 domain sources), ckVision-only
 WP-01 remains open for complete operation-specific capability/preservation
 assessment, native name equivalence, remaining inventories, large-view indexes,
 UI/worker integration and execution safety. WP-02 has not started.
+
+## 2026-10-24 — WP-01 qualified directory name rules
+
+Added `DirectoryNameRulesProbe` with retained directory ownership and independent
+refresh through that object after pathname replacement. A potentially usable
+rule needs two live location reports qualified against the cursor's native
+identity. Unavailable/unqualified first reports are not retried; attempted
+reports and exact diagnostics remain visible. Cancellation returns no partial
+probe and query exceptions release private staging. All native queries and
+final owner retirement belong on workers; calls can block.
+
+The initial rule is `LinuxExtendedFsBytewise`: native Linux query family,
+extended-filesystem type code `0xef53`, qualified POSIX identity and successful
+inode flags with casefold and fscrypt filename-encryption bits clear. Identity,
+type and relevant bits must remain qualified across observations; contradictory
+case reports and required-field failures block a rule. Unrelated flag changes
+are retained without inventing a name-policy change. Native-header assertions
+check the constants. No filesystem-label, OS-wide, locale or Unicode case-table
+inference is used.
+
+Component comparison distinguishes exact native units (a lexical witness even
+when native rules fail) from distinct names under a qualified reported rule.
+Unavailable directory context is preserved for lexical results. Comparison
+bounds each input in native bytes before scanning, requires one encoding and
+never maps, normalizes, truncates or rewrites names. Distinct names can still
+be hard links. These reports do not establish acceptance, absence, object
+inequality, a stable namespace, creation capability or execution-time collision
+freedom. Parent/rule/occupant revalidation remains mandatory for execution.
+
+Eleven deterministic cases cover qualification, all required-field error states,
+changed identities/families/types/flags, unknown policies, casefold/encryption
+refusal, byte/UTF-16 budgets, invalid inputs, cancellation, exceptions, lifetime,
+refresh and second-query failure. All hosts test lexical evidence, enumeration
+independence and retained-directory refresh/retirement after path replacement.
+Linux additionally uses exclusive creation to verify case-only, composed versus
+decomposed Unicode and invalid-UTF-8 pairs with distinct native IDs, then verifies
+that distinct hard-link names share an object ID. Native qualification markers
+prove these positive branches ran on the actual ext4 scratch mount, with kernel
+`6.12.113+deb13-cloud-arm64`.
+
+The **134 exported input hashes plus unchanged test-host hash** match validated
+sources. All **53 Files suites** pass: **450 macOS / 450 Linux / 453 Windows
+cases**. Final build/test took **2.129/1.074**, **2.718/0.188**, **5.700/3.130 s**.
+Compiled input/link records include the successful preceding core/native builds;
+final updates compile corrected fixtures rather than treating old executables
+as current. Source/output hashes and individual case markers establish freshness,
+not elapsed time. Normal targets use Ninja/Release on all three hosts.
+
+Focused diagnostics compiled all 33 configured core units, platform adapter,
+two new fixtures and test host (37 units) directly from source, without object
+cache inputs. **13 Mac / 14 Linux / 13 Windows cases** passed. ASan+UBSan
+build/test took **52.305/0.268 s** on Mac and **118.198/0.036 s** on Linux;
+Windows ASan took **67.413/0.118 s**. The preceding different 36-unit access
+fixture set took 58.369/108.857/63.985 s to build. This new fixture set establishes
+its own baseline; Mac LeakSanitizer coverage is not claimed.
+
+An initial Mac native fixture incorrectly used a const cursor for non-const
+enumeration; its ownership type was corrected while probe ownership remains
+const. GCC then rejected a copied range-loop pair in the Linux-only fixture;
+the loop now uses a const reference. Strict warnings and every assertion stayed
+intact. Both failed builds stopped before CTest and are excluded from passing
+validation. Final corrected inputs passed normal and sanitizer runs on all hosts.
+
+Diagnostics were hashed, checked for live owners and removed; fixture roots are
+empty and current normal builds remain. Mac temporary work stayed on mounted S8T
+and Windows development on V:. No GUI was launched.
+[Name-rule evidence](evidence/ck-files-name-rules-20261024.json) records source,
+output/log hashes, commands, configuration, times, native qualification markers,
+rejected builds, cleanup and primary native contracts. UI boundaries (94 domain
+sources), ckVision-only (481 active files), ckdocs (24 pages) and whitespace
+checks pass.
+
+Darwin, Windows, other Linux filesystems and encrypted/casefold directory policies
+remain unqualified here. Native positive coverage is ext4; no native ext2/ext3,
+encrypted/casefold or other-driver qualification is claimed. WP-01 remains open
+for complete cross-platform names/collisions, operation capabilities and
+preservation assessment, remaining inventories, large-view indexes, UI/worker
+ownership and execution safety. WP-02 has not started.

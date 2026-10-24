@@ -640,7 +640,8 @@ public:
         // The ioctl ABI takes int*, despite its historical long-sized request
         // encoding. No SETFLAGS, path reopen, synchronization or retry occurs.
         static_assert(sizeof(int) == sizeof(std::uint32_t));
-        static_assert(FS_CASEFOLD_FL == 0x40000000U && FS_NOCOW_FL == 0x00800000U && FS_PROJINHERIT_FL == 0x20000000U);
+        static_assert(FS_CASEFOLD_FL == 0x40000000U && FS_ENCRYPT_FL == 0x800U && EXT4_SUPER_MAGIC == 0xef53U);
+        static_assert(FS_NOCOW_FL == 0x00800000U && FS_PROJINHERIT_FL == 0x20000000U);
         int inode_flags = 0;
         if (ioctl(fd, FS_IOC_GETFLAGS, &inode_flags) == 0)
             result.linux_directory_inode_flags = Observation<std::uint32_t>::available(static_cast<std::uint32_t>(inode_flags));
