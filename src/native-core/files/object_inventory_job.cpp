@@ -84,7 +84,18 @@ void ObjectInventoryJob::step(std::stop_token stop) {
         data_->before = object_->inspect_basic(); phase_ = Phase::Storage; break;
     case Phase::Storage:
         if (!retain(0, 1)) return;
-        data_->storage = object_->inspect_storage(); phase_ = Phase::Layout; break;
+        data_->storage = object_->inspect_storage(); phase_ = Phase::Integrity; break;
+    case Phase::Integrity: {
+        if (!retain(0, 1)) return;
+        auto reply = object_->inspect_integrity(limits_.query);
+        if (reply.value()) {
+            if (reply.value()->family != IntegrityQueryFamily::WindowsFsctl ||
+                (reply.value()->kind != ObjectKind::RegularFile && reply.value()->kind != ObjectKind::Directory)) { invalid_reply(); return; }
+            if (WindowsIntegrityData::wire_bytes > limits_.query.max_native_bytes) { invalid_reply(); return; }
+            if (!retain(WindowsIntegrityData::wire_bytes, 0)) return;
+        }
+        data_->integrity = std::move(reply); phase_ = Phase::Layout; break;
+    }
     case Phase::Layout: {
         if (records_ == limits_.retained.max_records) { fail(error(AdapterError::InventoryLimit, "object_inventory.retained_limit")); return; }
         auto reply = object_->inspect_data_layout(limits_.query, stop);

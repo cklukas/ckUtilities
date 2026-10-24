@@ -2859,3 +2859,42 @@ now records failures in `finally`. All 160 current inputs, output hashes,
 per-target build provenance, logs, scope/timing differences and cleanup audits
 are retained in the evidence. Diagnostic builds are removed; current normal
 tests remain. No application was launched.
+
+
+## 2026-10-24 — held-object Windows integrity configuration
+
+WP-01 now collects checksum configuration through the retained Windows handle
+with `FSCTL_GET_INTEGRITY_INFORMATION`. The query uses metadata rights and never
+reads contents, reopens the path, changes settings or elevates. Before/after
+checks require qualified equal Windows identities, regular-file/directory kind,
+stable integrity attribute and no known reparse/provider condition.
+
+The fixed-size decoder retains all 16 bytes, including reserved bytes, unknown
+algorithm codes and flag bits. Helpers report None/CRC32/CRC64 and the literal
+enforcement-off bit; they do not certify content, enforcement, geometry or
+preservation support. macOS/Linux return Unsupported for this Windows query.
+`ObjectInventoryJob` adds an independent bounded phase with explicit owner
+qualification, query/retention accounting and existing cancellation/failure
+semantics. Simulation supports the same observation without inventing a native
+filesystem capability.
+
+Validation uses all 67 Files suites on macOS, Linux and Windows, plus a focused
+46-unit sanitizer build covering the decoder/guards, native query and object
+collector. Windows native tests compare against an independent metadata-only
+handle for files/directories and a held object after rename/path replacement.
+Successful ReFS qualification markers are required in this workstation's
+normal and sanitizer evidence. Other Windows volumes may return a native
+refusal, which the tests compare independently rather than assuming ReFS.
+No native NTFS or all-checksum-mode qualification is claimed.
+
+The first reviewed Windows incremental build reported no work after source
+extraction: the revised fixture timestamp preceded its earlier object build.
+That result was rejected as final-source evidence. Its exact native fixture
+object/executable were removed and rebuilt before final validation; unchanged
+core inputs were verified by hashes. See the
+[integrity-query evidence](evidence/ck-files-integrity-20261024.json) for results,
+source/SDK fingerprints, timing, output hashes and diagnostic cleanup.
+
+WP-01 remains in progress. Destination integrity application, full preservation
+capabilities and operation-specific consent remain outstanding, as do the
+remaining cross-platform name policies. WP-02–08 remain unstarted.

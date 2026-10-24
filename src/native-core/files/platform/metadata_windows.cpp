@@ -253,6 +253,36 @@ public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false)
         : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const override {
+        using Result = Observation<FileIntegrityInfo>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "integrity.limits"});
+        if (limits.max_native_bytes < WindowsIntegrityData::wire_bytes) return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "integrity.buffer_limit"});
+        static_assert(sizeof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER) == WindowsIntegrityData::wire_bytes);
+        static_assert(offsetof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER, ChecksumAlgorithm) == 0 && offsetof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER, Reserved) == 2);
+        static_assert(offsetof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER, Flags) == 4 && offsetof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER, ChecksumChunkSizeInBytes) == 8 && offsetof(FSCTL_GET_INTEGRITY_INFORMATION_BUFFER, ClusterSizeInBytes) == 12);
+        static_assert(CHECKSUM_TYPE_NONE == 0 && CHECKSUM_TYPE_CRC64 == 2 && FSCTL_INTEGRITY_FLAG_CHECKSUM_ENFORCEMENT_OFF == 1);
+        static_assert(FILE_ATTRIBUTE_INTEGRITY_STREAM == 0x8000 && FILE_ATTRIBUTE_REPARSE_POINT == 0x400);
+        static_assert(((FSCTL_GET_INTEGRITY_INFORMATION >> 14) & 3U) == FILE_ANY_ACCESS);
+        const auto before = inspect_basic();
+        const auto valid = detail::qualify_integrity_subject(before, before);
+        if (!valid.value()) { const auto& e = *valid.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        FSCTL_GET_INTEGRITY_INFORMATION_BUFFER native{}; DWORD returned = 0;
+        if (!DeviceIoControl(handle_.get(), FSCTL_GET_INTEGRITY_INFORMATION, nullptr, 0, &native, sizeof(native), &returned, nullptr)) {
+            const DWORD code = GetLastError();
+            return Result::unavailable(code == ERROR_INVALID_PARAMETER || code == ERROR_MORE_DATA ? ObservationState::Unknown : error_state(code),
+                {ErrorDomain::Win32, code, "FSCTL_GET_INTEGRITY_INFORMATION"});
+        }
+        if (returned != sizeof(native)) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "integrity.returned_count"});
+        auto decoded = WindowsIntegrityData::decode(std::as_bytes(std::span(&native, 1)));
+        if (!decoded.value()) { const auto& e = *decoded.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto after = inspect_basic(); const auto owner = detail::qualify_integrity_subject(before, after);
+        if (!owner.value()) { const auto& e = *owner.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({IntegrityQueryFamily::WindowsFsctl, Observation<ObjectIdentity>::available(*owner.value()), *before.value()->kind.value(),
+            *before.value()->windows_attributes.value(), *after.value()->windows_attributes.value(), std::move(decoded).take_value()});
+    }
     Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const override {
         using Result = Observation<FileDataLayout>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed,

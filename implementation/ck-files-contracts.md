@@ -1640,3 +1640,41 @@ constants. Existing component/path-limit queries use the same decoder. All
 observations remain worker queries, not mutation permission or user consent.
 The held-directory collector's variable-byte accounting now includes all 22
 location observation fields.
+
+
+## Held-object Windows integrity configuration
+
+`OpenedEntry::inspect_integrity` collects `FSCTL_GET_INTEGRITY_INFORMATION`
+through the retained Windows handle, with no input buffer and an exact 16-byte
+output. It uses metadata rights, never opens a data reader, reopens the pathname,
+changes integrity settings or escalates privileges. The
+[Windows control contract](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_get_integrity_information)
+describes a file/directory configuration query on ReFS. Other filesystems retain
+the actual native refusal; macOS/Linux return Unsupported for this query.
+
+`WindowsIntegrityData` owns every response byte. Exact length is required;
+reserved bytes, unfamiliar algorithms and unknown flag bits survive decoding.
+The [MS-FSCC reply specification](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/72640484-66fb-4b8f-aec6-6ab56d63831b)
+defines algorithm codes 0 (None), 1 (CRC32, ReFS v2) and 2 (CRC64), the
+checksum-enforcement-off bit, and chunk/cluster sizes. The pure helpers interpret
+only those codes and that bit. An unfamiliar algorithm remains Unsupported with
+its raw value retained. A clear off bit does not establish enabled checksums,
+effective enforcement, verified content or data health. Geometry is reported,
+not certified or adopted as a destination constraint.
+
+The native adapter checks basic metadata before/after the control. It requires
+a regular file/directory, qualified equal Windows IDs and unchanged kind/integrity
+attribute. Reparse and known offline/recall/pin/provider states are refused for
+provider review. Unavailable observations preserve their state and error.
+Other attribute changes do not imply an integrity configuration change. These
+bookends cannot freeze concurrent changes or detect changes reversed between
+observations. No snapshot, preservation/replay capability or mutation authority
+is inferred from a successful report.
+
+`ObjectInventoryJob` collects this family independently, preserves refusals,
+validates family/kind and charges the full 16 raw bytes against both query and
+retention limits. Owner qualification against the inventory remains explicit;
+a completed inventory cannot turn mismatched or unavailable ownership into
+permission. Cancellation and exceptions follow the existing staged collector
+contract. Integrity configuration application, destination capability and
+operation-specific loss/confirmation planning remain outstanding work.

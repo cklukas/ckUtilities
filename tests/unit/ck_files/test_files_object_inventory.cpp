@@ -69,7 +69,7 @@ ObjectInventoryJob::Result finish(ObjectInventoryJob& job) {
     }
     throw std::runtime_error("object inventory fixture exceeded advance bound");
 }
-constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectLayout, Op::ReadLink, Op::InspectLinkLimits, Op::InspectChannels,
+constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectIntegrity, Op::InspectLayout, Op::ReadLink, Op::InspectLinkLimits, Op::InspectChannels,
     Op::InspectAttributes, Op::ReadAttribute, Op::ReadSecurity};
 }
 CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement) {
@@ -100,7 +100,7 @@ CK_TEST(object_inventory_preserves_all_query_failures_without_inventing_absent_f
         }
         ObjectInventoryJob job(f.open(), {}, f.fs.clock()); const auto result = finish(job); const auto& data = result->data();
         CK_CHECK(data.before.state() == state && data.after.state() == state && data.storage.state() == state);
-        CK_CHECK(data.layout.state() == state && data.link_limits.state() == state);
+        CK_CHECK(data.layout.state() == state && data.link_limits.state() == state && data.integrity.state() == state);
         CK_CHECK(data.link.state() == state && data.channels.state() == state && data.attributes.state() == state);
         CK_CHECK(data.attribute_values.empty() && f.calls(Op::ReadAttribute) == 0 && data.identity_continuity.state() == state);
         for (const auto& security : data.security) CK_CHECK(security.state() == state && security.unavailable_detail()->error == denied().error);
@@ -351,5 +351,46 @@ CK_TEST(object_inventory_rejects_malformed_link_limit_families_and_preserves_own
         ObjectInventoryJob job(f.open(), {}, f.fs.clock());
         if (mode < 2) CK_CHECK(job.advance() == State::Failed && !job.completed().value());
         else { const auto result = finish(job); CK_CHECK(take(result->compare_owner(Observation<ObjectIdentity>::available(result->data().link_limits.value()->owner))) == IdentityComparison::Different); }
+    }
+}
+
+CK_TEST(object_inventory_integrity_retains_raw_configuration_and_independent_owner_qualification) {
+    for (const bool mismatched : {false, true}) {
+        Fixture f; auto replies = f.replies(); std::array<std::byte, 16> bytes{};
+        bytes[0] = std::byte{0xff}; bytes[3] = std::byte{0x81}; bytes[15] = std::byte{0xfe};
+        const auto owner = f.fs.metadata(mismatched ? f.root : f.file).identity;
+        replies.integrity = Observation<FileIntegrityInfo>::available({IntegrityQueryFamily::WindowsFsctl, owner,
+            ObjectKind::RegularFile, 0, 0, take(WindowsIntegrityData::decode(bytes))});
+        f.fs.set_inventory(f.file, std::move(replies)); ObjectInventoryJob job(f.open(), {}, f.fs.clock());
+        const auto result = finish(job); const auto& report = take(result->data().integrity);
+        CK_CHECK(std::equal(bytes.begin(), bytes.end(), report.data.raw().begin(), report.data.raw().end()));
+        CK_CHECK(take(result->compare_owner(report.owner)) == (mismatched ? IdentityComparison::Different : IdentityComparison::Same));
+        CK_CHECK(reported_integrity_algorithm(report.data).state() == ObservationState::Unsupported);
+        CK_CHECK(f.calls(Op::InspectIntegrity) == 1);
+    }
+}
+CK_TEST(object_inventory_integrity_rejects_invalid_family_kind_and_query_budget_even_with_unchecked_adapter) {
+    class Entry final : public OpenedEntry {
+    public:
+        explicit Entry(int mode) : mode_(mode) {}
+        Observation<BasicMetadata> inspect_basic() const override { return Observation<BasicMetadata>::available({}); }
+        Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits) const override {
+            std::array<std::byte, 16> bytes{};
+            return Observation<FileIntegrityInfo>::available({mode_ == 0 ? IntegrityQueryFamily::Unknown : IntegrityQueryFamily::WindowsFsctl,
+                {}, mode_ == 1 ? ObjectKind::SymbolicLink : ObjectKind::RegularFile, 0, 0, take(WindowsIntegrityData::decode(bytes))});
+        }
+    private: int mode_;
+    };
+    for (int mode = 0; mode < 5; ++mode) {
+        ObjectInventoryLimits limits;
+        if (mode == 2) limits.query.max_native_bytes = 15;
+        if (mode == 3) limits.retained.max_native_bytes = 15;
+        if (mode == 4) limits.retained.max_native_bytes = 16;
+        ObjectInventoryJob job(std::make_unique<Entry>(mode), limits);
+        if (mode == 4) CK_CHECK(finish(job)->data().integrity.value());
+        else {
+            CK_CHECK(job.advance() == State::Failed && !job.completed().value());
+            CK_CHECK(job.failure()->error.code == static_cast<std::int64_t>(mode == 3 ? AdapterError::InventoryLimit : AdapterError::InvalidNativeResult));
+        }
     }
 }

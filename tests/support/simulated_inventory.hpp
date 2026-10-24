@@ -21,6 +21,7 @@ struct SimulatedFeatureLess {
 struct SimulatedInventory {
     template<class T> using Reply = ck::files::Observation<T>;
     std::optional<Reply<ck::files::StorageInfo>> storage;
+    std::optional<Reply<ck::files::FileIntegrityInfo>> integrity;
     std::optional<Reply<ck::files::FileDataLayout>> layout;
     std::optional<Reply<ck::files::LinkMetadata>> link;
     std::optional<Reply<ck::files::FileLinkLimits>> link_limits;
@@ -60,6 +61,9 @@ struct SimulatedInventory {
     static bool fits(const ck::files::AttributeValue& value, ck::files::InventoryLimits limits) noexcept {
         // Query byte budgets constrain returned values, independently of the key.
         return value.bytes.size() <= limits.max_native_bytes;
+    }
+    static bool fits(const ck::files::FileIntegrityInfo&, ck::files::InventoryLimits limits) noexcept {
+        return limits.max_records >= 1 && limits.max_native_bytes >= ck::files::WindowsIntegrityData::wire_bytes;
     }
     static bool fits(const ck::files::FileDataLayout& value, ck::files::InventoryLimits limits) noexcept {
         return value.ranges.size() <= limits.max_records && value.ranges.size() <= limits.max_native_bytes / sizeof(ck::files::FileDataRange);

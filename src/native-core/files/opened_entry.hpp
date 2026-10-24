@@ -10,6 +10,7 @@
 #include "link_metadata.hpp"
 #include "data_layout.hpp"
 #include "file_limits.hpp"
+#include "integrity_info.hpp"
 
 namespace ck::files {
 
@@ -51,6 +52,9 @@ public:
     // Bound for this held inode only. On a directory this concerns the
     // directory itself, never prospective child files. No content access.
     virtual Observation<FileLinkLimits> inspect_link_limits() const;
+    // Fixed read-only integrity configuration query through the retained
+    // object. Does not enable/disable integrity or read/verify any content.
+    virtual Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const;
     virtual Observation<StorageInfo> inspect_storage() const;
     // Explicit opt-in layout access can require native data-read permission;
     // this query seeks/queries metadata and never reads file content. Main data
