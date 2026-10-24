@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "files_completion_service.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
 #include "ck/vision/suite_shell.hpp"
@@ -36,7 +37,8 @@ class FilesApp final {
   public:
     FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
              std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
-             ThemeScheme theme = ThemeScheme::Classic);
+             ThemeScheme theme = ThemeScheme::Classic,
+             std::array<FilesCompletionService *, 2> completion_services = {});
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

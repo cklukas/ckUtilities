@@ -16,6 +16,8 @@ class FilesLocationDraft final {
                                                                    FilesLocationTextLimits limits = {});
     const std::string &text() const noexcept { return text_; }
     FilesLocationTextSyntax syntax() const noexcept { return syntax_; }
+    ck::files::NameEncoding encoding() const noexcept { return encoding_; }
+    const FilesLocationTextLimits &limits() const noexcept { return limits_; }
     ck::files::Observation<FilesPaneLocation> resolve(std::string_view text) const;
     ck::files::Observation<FilesLocationDraft> reformat(std::string_view text, FilesLocationTextSyntax syntax) const;
 

@@ -3,6 +3,31 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## WP-02 — worker-backed location completion checkpoint
+
+This checkpoint records the completion integration milestone. The
+read-only Files application now injects one serialized `FilesCompletionService`
+per pane into the location editor. Its ckVision `CompletionProvider` parses
+the lossless Path or ExactNames grammar before submitting a query, publishes
+only matching ticket/revision replies, exposes bounded directory candidates,
+and preserves ckVision's plain-Right preview acceptance. Provider retirement
+cancels the current request and detaches from the InputLine before the dialog
+is destroyed; format changes retire the old grammar context first. No native
+I/O runs from dialog callbacks or `InputLine::request`.
+
+Mac qualification on 2026-10-24 used the pinned ckVision 1.4.0 package and a
+fresh Release build at
+`/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build`.
+The native private-index test root was explicitly placed at
+`/Volumes/PRO-BLADE/tmp/ckutilities-wp02-completion-20261024-01-test-scratch`
+because S8T has APFS ownership disabled; the adapter correctly refused the
+unqualified S8T root rather than weakening its private-workspace check.
+`ck_vision_files_tests` passed all 85 registered Files tests, including the
+worker completion/Right acceptance case. Build output fingerprint:
+`9641d2d2dd400fb0a1ce0a77ad286eebb8faf46966ed83a38db1b7e8ab04d9c1`.
+Sanitizer, Linux/Windows, production executable integration, history/bookmark,
+properties/preview and remaining WP-02 interactive acceptance are still open.
+
 ## WP-00 — complete
 
 Commit `3dd2034` upgrades the installed SDK baseline to ckVision 1.4.0 and

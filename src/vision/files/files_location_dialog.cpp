@@ -1,6 +1,8 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_location_dialog.hpp"
+#include <cvision/core/text.hpp>
+#include <cvision/widgets/completion.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/label.hpp>
 #include <stdexcept>
@@ -14,6 +16,69 @@ std::string location_error(const ck::files::UnavailableObservation &error) {
         return "These native names require the exact format.";
     return "Enter a valid absolute path or a complete exact-name location. Nothing has been changed.";
 }
+
+class FilesLocationCompletionProvider final : public ckv::widgets::CompletionProvider {
+  public:
+    FilesLocationCompletionProvider(FilesCompletionService &service, ck::files::NameEncoding encoding,
+                                    FilesLocationTextSyntax syntax, FilesLocationTextLimits limits)
+        : service_(service), encoding_(encoding), syntax_(syntax), limits_(limits) {}
+
+    void request(const ckv::widgets::CompletionRequest &request) override {
+        query_ = request;
+        ticket_ = {};
+        snapshot_ = {request.revision, ckv::widgets::CompletionState::Pending, {}};
+        if (!request.revision || request.has_selection || request.cursor != ckv::text::split_graphemes(request.text).size()) {
+            snapshot_.state = ckv::widgets::CompletionState::Ready;
+            return;
+        }
+        auto parsed = parse_files_location_completion(request.text, syntax_, encoding_, limits_);
+        if (!parsed.value()) {
+            snapshot_.state = ckv::widgets::CompletionState::Failed;
+            return;
+        }
+        const auto submitted = service_.request(std::move(parsed).take_value(), request.revision, true);
+        if (submitted.state != FilesCompletionSubmission::Accepted) {
+            snapshot_.state = ckv::widgets::CompletionState::Failed;
+            return;
+        }
+        ticket_ = submitted.ticket;
+    }
+
+    const ckv::widgets::CompletionSnapshot &snapshot() const noexcept override { return snapshot_; }
+
+    void publish(FilesCompletionReply reply) {
+        if (!ticket_.valid() || reply.request != ticket_ || reply.revision != query_.revision)
+            return;
+        ticket_ = {};
+        snapshot_ = {query_.revision, ckv::widgets::CompletionState::Failed, {}};
+        if (reply.state != FilesCompletionReplyState::Ready || !reply.page)
+            return;
+        const auto graphemes = ckv::text::split_graphemes(query_.text);
+        snapshot_.candidates.reserve(reply.page->entries.size());
+        for (const auto &entry : reply.page->entries) {
+            if (!entry.row || entry.text.empty())
+                continue;
+            snapshot_.candidates.push_back({entry.row, 0, graphemes.size(), entry.text});
+        }
+        snapshot_.state = reply.page->next || !reply.page->complete() ? ckv::widgets::CompletionState::Partial
+                                                                        : ckv::widgets::CompletionState::Ready;
+    }
+
+    void cancel() {
+        if (ticket_.valid())
+            service_.cancel(ticket_);
+        ticket_ = {};
+    }
+
+  private:
+    FilesCompletionService &service_;
+    ck::files::NameEncoding encoding_;
+    FilesLocationTextSyntax syntax_;
+    FilesLocationTextLimits limits_;
+    ckv::widgets::CompletionRequest query_;
+    FilesCompletionTicket ticket_;
+    ckv::widgets::CompletionSnapshot snapshot_;
+};
 } // namespace
 struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
     ckv::ui::Application &app;
@@ -25,11 +90,21 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
     ckv::widgets::InputLine *field = nullptr;
     ckv::widgets::Label *feedback = nullptr;
     ckv::widgets::Button *switch_button = nullptr;
+    std::shared_ptr<FilesLocationCompletionProvider> completion_provider;
+    FilesCompletionService *completion_service = nullptr;
     std::optional<FilesPaneLocation> candidate, selected;
     bool accepting = false, finished = false, delivered = false;
-    State(ckv::ui::Application &application, FilesLocationDraft value, Completion handler)
-        : app(application), draft(std::move(value)), completion(std::move(handler)) {}
+    State(ckv::ui::Application &application, FilesLocationDraft value, FilesCompletionService *service,
+          Completion handler)
+        : app(application), draft(std::move(value)), completion(std::move(handler)), completion_service(service) {}
     bool exact() const noexcept { return draft.syntax() == FilesLocationTextSyntax::ExactNames; }
+    void install_completion_provider() {
+        if (!completion_service || !field)
+            return;
+        completion_provider = std::make_shared<FilesLocationCompletionProvider>(
+            *completion_service, draft.encoding(), draft.syntax(), draft.limits());
+        field->set_completion_provider(completion_provider);
+    }
     void mode_labels() {
         if (feedback)
             feedback->set_text(exact() ? "Exact names: anchor, then children" : "Path: a new absolute location");
@@ -52,7 +127,13 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
         }
         draft = std::move(converted).take_value();
         candidate.reset();
+        if (completion_provider) {
+            completion_provider->cancel();
+            completion_provider.reset();
+            field->set_completion_provider(nullptr);
+        }
         field->set_text(draft.text());
+        install_completion_provider();
         field->set_valid(true);
         mode_labels();
         app.set_focus(field);
@@ -95,6 +176,7 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
         field = form.inputs.at(0);
         feedback = form.labels.at(1);
         switch_button = form.buttons.at(1);
+        install_completion_provider();
         auto *initial = form.initial_focus;
         auto owner = std::make_unique<Window>(descriptor.title);
         window = owner.get();
@@ -137,6 +219,11 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
         if (finished)
             return;
         finished = true;
+        if (completion_provider)
+            completion_provider->cancel();
+        if (field)
+            field->set_completion_provider(nullptr);
+        completion_provider.reset();
         window = nullptr;
         field = nullptr;
         feedback = nullptr;
@@ -153,14 +240,22 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
         });
     }
     void close() {
+        if (completion_provider)
+            completion_provider->cancel();
         if (window && !window_lifetime.expired())
             window->close();
+    }
+    void publish_completion(FilesCompletionReply reply) {
+        if (finished || !completion_provider || !field)
+            return;
+        completion_provider->publish(std::move(reply));
+        field->completion_changed();
     }
 };
 FilesLocationDialog::FilesLocationDialog(ckv::ui::Application &app, ckv::widgets::Desktop &desktop,
                                          const ckv::ui::StandardRoles &roles, FilesLocationDraft draft,
-                                         Completion completion)
-    : state_(std::make_shared<State>(app, std::move(draft), std::move(completion))) {
+                                         FilesCompletionService *completion_service, Completion completion)
+    : state_(std::make_shared<State>(app, std::move(draft), completion_service, std::move(completion))) {
     state_->present(desktop, roles);
 }
 FilesLocationDialog::~FilesLocationDialog() {
@@ -176,4 +271,5 @@ void FilesLocationDialog::close() {
 ckv::widgets::InputLine *FilesLocationDialog::input() const noexcept {
     return state_->finished || state_->window_lifetime.expired() ? nullptr : state_->field;
 }
+void FilesLocationDialog::publish_completion(FilesCompletionReply reply) { state_->publish_completion(std::move(reply)); }
 } // namespace ck::vision

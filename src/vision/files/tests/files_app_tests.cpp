@@ -98,6 +98,7 @@ struct Fixture {
     std::shared_ptr<std::atomic<bool>> block_home = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<std::atomic<bool>> fail_home = std::make_shared<std::atomic<bool>>(false);
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
+    std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
@@ -172,6 +173,15 @@ struct Fixture {
                     signal();
                 };
             services[i] = std::make_unique<FilesPaneService>(std::move(backend), limits, std::move(notify));
+            const auto completion_cache = scratch.path() / (i == 0 ? "completion-cache-left" : "completion-cache-right");
+            std::filesystem::create_directory(completion_cache);
+#ifndef _WIN32
+            std::filesystem::permissions(completion_cache, std::filesystem::perms::owner_all,
+                                         std::filesystem::perm_options::replace);
+#endif
+            completion_services[i] =
+                std::make_unique<FilesCompletionService>(native_files_pane_backend(address(completion_cache)),
+                                                         FilesCompletionServiceLimits{}, wake.callback());
         }
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
@@ -179,7 +189,8 @@ struct Fixture {
                 address(scratch.path() / (rejected_initial ? std::string(1536, 'x')
                                                            : std::string(missing_initial ? "missing" : "left"))),
                 address(scratch.path() / "right")},
-            [this] { ++exits; }, theme);
+            [this] { ++exits; }, theme,
+            std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()});
     }
     ~Fixture() {
         app.reset();
@@ -188,6 +199,8 @@ struct Fixture {
         directory_gate->release();
         home_gate->release();
         for (auto &service : services)
+            service->join();
+        for (auto &service : completion_services)
             service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
@@ -1105,6 +1118,29 @@ CK_TEST(files_app_location_editor_ctrl_l_changes_only_its_pane_and_preserves_vie
         CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.mark_range"));
         CK_CHECK(f.application.focused() == f.app->grid(0));
     }
+}
+CK_TEST(files_app_location_editor_uses_worker_completion_and_right_accepts_the_exact_directory_proposal) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.location_key());
+    auto *field = f.editor_input();
+    const auto prefix = f.path_text(f.scratch.path() / "left") + "/left-item-";
+    field->set_text(prefix);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!field->completion_candidate() && std::chrono::steady_clock::now() < deadline) {
+        f.application.step(f.clock.now_nanos());
+        f.clock.advance(1'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(field->completion_candidate() && field->has_completion_preview());
+    if (field->completion_candidate()) {
+        CK_CHECK(field->completion_candidate()->text == prefix + "0/");
+        CK_CHECK(f.key(ckv::Key::Right));
+        CK_CHECK(field->text() == prefix + "0/");
+    }
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0)->components().empty());
 }
 CK_TEST(files_app_location_editor_unchanged_accept_and_format_switches_preserve_exact_route_marks_and_range) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);

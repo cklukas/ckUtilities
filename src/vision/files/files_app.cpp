@@ -120,6 +120,7 @@ struct FilesApp::State {
     };
     ckv::ui::Application &application;
     std::array<FilesPaneService *, 2> services;
+    std::array<FilesCompletionService *, 2> completion_services;
     FilesAppWake &wake;
     std::function<void()> host_quit;
     std::array<Pane, 2> panes;
@@ -143,8 +144,10 @@ struct FilesApp::State {
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
-          std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme)
-        : application(app), services(supplied), wake(signal), host_quit(std::move(quit)), commands(app.commands()) {
+          std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
+          std::array<FilesCompletionService *, 2> supplied_completion)
+        : application(app), services(supplied), completion_services(supplied_completion), wake(signal),
+          host_quit(std::move(quit)), commands(app.commands()) {
         if (!services[0] || !services[1] || services[0] == services[1] || !host_quit)
             throw std::invalid_argument("invalid Files host");
         try {
@@ -318,6 +321,9 @@ struct FilesApp::State {
                 surface->grid->on_bounds_changed = {};
             }
         for (auto *service : services)
+            if (service)
+                service->request_stop();
+        for (auto *service : completion_services)
             if (service)
                 service->request_stop();
     }
@@ -633,7 +639,7 @@ struct FilesApp::State {
             return;
         }
         location_dialog = std::make_unique<FilesLocationDialog>(
-            application, shell->desktop(), shell->roles(), std::move(draft).take_value(),
+            application, shell->desktop(), shell->roles(), std::move(draft).take_value(), completion_services[pane],
             [this, weak = std::weak_ptr<void>(lifetime), pane, navigation](std::optional<FilesPaneLocation> location) {
                 if (weak.expired())
                     return;
@@ -850,6 +856,9 @@ struct FilesApp::State {
             for (std::size_t i = 0; i < 2; ++i) {
                 if (auto reply = services[i]->take())
                     consume(i, std::move(*reply));
+                if (auto completion = completion_services[i] ? completion_services[i]->take() : std::nullopt)
+                    if (location_dialog)
+                        location_dialog->publish_completion(std::move(*completion));
                 if (!services[i]->running() && pending(panes[i])) {
                     const bool changing = panes[i].changing.has_value();
                     panes[i].navigating = panes[i].reading = false;
@@ -898,6 +907,9 @@ struct FilesApp::State {
         }
         for (auto *service : services)
             service->request_stop();
+        for (auto *service : completion_services)
+            if (service)
+                service->request_stop();
         host_quit(); // No join in dispatch; the composition owner joins afterwards.
     }
     void request_close() {
@@ -940,8 +952,9 @@ struct FilesApp::State {
 };
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
                    std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
-                   ThemeScheme theme)
-    : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme)) {}
+                   ThemeScheme theme, std::array<FilesCompletionService *, 2> completion_services)
+    : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
+                                     completion_services)) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));
