@@ -4,6 +4,7 @@
 #include "directory_index_sort_job.hpp"
 #include "directory_index_listing_job.hpp"
 #include "directory_index_lookup.hpp"
+#include "indexed_pane.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -656,9 +657,12 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     auto budget = std::make_shared<IndexStorageBudget>(8 * 1024 * 1024, 16);
     std::array<std::byte, 16> generation{};
     generation[0] = std::byte{5};
-    auto job = std::make_unique<DirectoryIndexListingJob>(
-        PaneListingRequest{AdapterScope{}, 1}, std::move(listing), model, workspace, budget, generation,
-        DirectoryIndexStoreLimits{}, DirectoryIndexSortLimits{{16, 16 * 1024}, 8});
+    auto pane = std::make_unique<IndexedPane>();
+    const PaneOrder order{PaneSortKey::Name, false, false};
+    const auto request = pane->begin_listing(order);
+    auto job = std::make_unique<DirectoryIndexListingJob>(request, std::move(listing), model, workspace, budget,
+                                                          generation, DirectoryIndexStoreLimits{},
+                                                          DirectoryIndexSortLimits{{16, 16 * 1024}, 8});
     std::size_t advances = 0;
     while (job->state() == DirectoryIndexListingState::Collecting ||
            job->state() == DirectoryIndexListingState::SortingNames ||
@@ -703,10 +707,30 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
              IdentityComparison::Same);
     std::cout << "index-listing-native-qualified rows=" << seen << " advances=" << advances
               << " bytes=" << result->store()->bytes() << '\n';
+    IndexedPaneDataJob prepared(result, order, {{16, 16 * 1024}, 8}, {16, 16 * 1024});
+    std::size_t prepared_steps = 0;
+    while (prepared.state() == IndexedPaneDataJobState::Sorting ||
+           prepared.state() == IndexedPaneDataJobState::Indexing) {
+        if (++prepared_steps > 10000)
+            throw std::runtime_error("native pane preparation budget");
+        prepared.advance();
+    }
+    CK_CHECK(pane->publish(take(prepared.completed())) == IndexedPanePublish::Applied);
+    prepared.abandon();
+    auto captured = pane->capture_page(pane->state_stamp(), 0, {{11, 16 * 1024}, 16 * 1024});
+    CK_CHECK(captured.state == IndexedPaneCaptureState::Ready && captured.page->rows().size() == 11 &&
+             captured.page->total_rows() == 259);
+    CK_CHECK(captured.page->rows()[0].focused && captured.page->rows()[0].id.scope == result->store()->row_scope());
+    for (const auto &row : captured.page->rows())
+        CK_CHECK(row.metadata.identity.value() && row.metadata.identity.value()->scope == scope);
+    std::cout << "indexed-pane-native-qualified rows=" << captured.page->total_rows()
+              << " page_rows=" << captured.page->rows().size() << " prepared_advances=" << prepared_steps << '\n';
     job.reset();
-    CK_CHECK(budget->charged_files() == 1);
     result.reset();
     workspace.reset();
+    CK_CHECK(budget->charged_files() == 2);
+    pane.reset();
+    CK_CHECK(!captured.page->stamp().current() && captured.page->rows().size() == 11);
     CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
 }
 CK_TEST(index_listing_native_rejects_observed_directory_changes_after_enumeration) {

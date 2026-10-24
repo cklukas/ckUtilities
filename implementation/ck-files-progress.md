@@ -3399,3 +3399,58 @@ Windows work stays on V:. No GUI application was launched.
 Indexed pane providers, generation/filter/selection/acquisition integration,
 remaining destination preservation/collision capabilities and broader native
 qualification remain required. WP-01 remains in progress; WP-02–08 remain unstarted.
+
+
+## 2026-10-24 — generation-bound indexed pane preparation and pages
+
+WP-01 now prepares ordered indexed datasets and publishes bounded display pages
+through worker-owned pane state. A private completed result binds collection,
+sort order, disk lookup, request, original row namespace and held directory.
+Reorders retain original row keys and focus; new listings use fresh namespaces.
+No directory-sized pane row/address vector is materialized.
+
+Navigation/reorder requests and stamps reject stale, foreign, wrong-order and
+wrong-predecessor results. Each reorder binds the exact current dataset revision,
+so an older preparation for the same rows cannot discard newer continuity
+evidence. Available directory identity/time evidence survives later denied or
+unknown queries. The held directory is checked again before completion; matching
+observations remain weaker than a snapshot or source-operation authority.
+
+Page and focus requests check freshness before and after bounded I/O. Old replies
+and old failures cannot replace newer request status. Failed/cancelled navigation
+retains the previous dataset. Capture/focus cancellation discards its payload
+without revoking healthy data; current I/O exceptions revoke before propagation.
+The initialized focus candidate is committed only after successful validation;
+GCC14 strict warnings remain enabled.
+
+Immutable display pages contain escaped names, scoped IDs, metadata/error
+observations, order, focus and pending/error status. They contain no native name,
+cursor, lookup, store or model owner and remain readable after worker retirement,
+with revoked stamps preventing later actions. Independent row/wire/text bounds
+charge every retained diagnostic through the shared existing pane-page helper.
+Budget failures publish no prefix, truncation or RAM fallback.
+
+Fourteen new unit cases cover publication, stale/foreign/order/revision gates,
+failed/cancelled navigation, focus across reorders, escaping and budgets,
+cancellation and I/O failures, denied continuity evidence, resource retirement,
+invalid inputs, empty state and request changes during I/O. The native 259-entry
+case now collects, prepares, publishes and captures an 11-row page, then retires
+native owners while keeping the readable revoked page. This is backend/native
+integration, not a rendered Files window or responsiveness qualification.
+
+All 80 Files suites pass: 695 cases on macOS, 698 on Linux and 694 on Windows.
+Fresh 63-unit sanitizer builds pass 131/129/128 focused cases, including eight
+existing pane-page cases, with ASan+UBSan on Mac/Linux and ASan on Windows.
+UI-boundary, ckVision-only and strict docs checks pass. See
+[the indexed pane evidence](evidence/ck-files-indexed-pane-20261024.json) for 204
+source fingerprints, commands, timings, native markers, output hashes and cleanup.
+Initial diagnostic builds were retired before final reruns; final sanitizer/docs
+scratch was removed after hashing. Fixture roots are empty. Current verified
+normal builds and SDK remain; Windows project work stays on V:. No GUI app was
+launched or visual result claimed.
+
+Indexed filtering, marking/selection inventories and native acquisition remain
+required, together with remaining destination preservation/collision capabilities
+and broader native qualification. Those commands are absent from this backend
+API rather than partially accepted. WP-01 remains in progress; WP-02–08 remain
+unstarted.

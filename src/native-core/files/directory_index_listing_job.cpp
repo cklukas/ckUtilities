@@ -1,15 +1,13 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "directory_index_listing_job.hpp"
+#include "directory_index_observation.hpp"
 #include <stdexcept>
 namespace ck::files {
 namespace {
 UnavailableObservation error(AdapterError code, const char *operation,
                              ObservationState state = ObservationState::Failed) {
     return {state, {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
-}
-bool differs(const Observation<FileTimestamp> &a, const Observation<FileTimestamp> &b) {
-    return a.value() && b.value() && *a.value() != *b.value();
 }
 } // namespace
 DirectoryIndexListingJob::DirectoryIndexListingJob(
@@ -81,36 +79,11 @@ bool DirectoryIndexListingJob::abandon() noexcept {
     return true;
 }
 bool DirectoryIndexListingJob::check_directory(const Observation<BasicMetadata> &value) {
-    if (value.state() == ObservationState::Gone || value.state() == ObservationState::Changed) {
-        fail(*value.unavailable_detail());
-        return false;
-    }
-    if (directory_.value() && directory_.value()->scope != source_scope_) {
-        fail(error(AdapterError::InvalidIdentifier, "index_listing.directory_scope"));
-        return false;
-    }
-    if (!value.value())
-        return true; // uncertainty retained, never converted into snapshot stability
-    const auto &m = *value.value();
-    if (m.kind.value() && *m.kind.value() != ObjectKind::Directory) {
-        fail(error(AdapterError::NotDirectory, "index_listing.directory_kind"));
-        return false;
-    }
-    if (m.identity.value() && m.identity.value()->scope != source_scope_) {
-        fail(error(AdapterError::InvalidIdentifier, "index_listing.metadata_scope"));
-        return false;
-    }
-    if ((directory_.value() && m.identity.value() &&
-         compare_identity(*directory_.value(), *m.identity.value()) == IdentityComparison::Different) ||
-        (before_.value() && before_.value()->identity.value() && m.identity.value() &&
-         compare_identity(*before_.value()->identity.value(), *m.identity.value()) == IdentityComparison::Different) ||
-        (before_.value() &&
-         (differs(before_.value()->modified, m.modified) || differs(before_.value()->changed, m.changed)))) {
-        fail(error(AdapterError::MetadataChanged, "index_listing.directory_changed", ObservationState::Changed));
-        return false;
-    }
+    const auto checked = detail::check_index_directory(source_scope_,directory_,before_,value);
+    if (!checked.value()) { fail(*checked.unavailable_detail()); return false; }
     return true;
 }
+
 void DirectoryIndexListingJob::collect(std::stop_token stop) {
     auto batch = listing_->read(stop);
     if (batch.state == DirectoryReadState::Error) {

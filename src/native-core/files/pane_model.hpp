@@ -20,6 +20,7 @@ private:
     struct Token { std::atomic<bool> current{true}; };
     std::shared_ptr<Token> token_;
     friend class PaneModel;
+    friend class IndexedPane;
 };
 struct ListedEntry;
 class CompletedPaneListing;

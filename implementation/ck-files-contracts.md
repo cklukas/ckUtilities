@@ -2332,3 +2332,74 @@ queries positions in nonsequential order, verifies original IDs and metadata,
 resolves original row keys back to positions, and checks End and retirement.
 Its bounded cache measurement is separate from real-directory or UI latency/RSS
 qualification. The collector's 259-entry real-directory integration remains in the same run.
+
+
+### Worker-side indexed pane preparation and pages
+
+`IndexedPaneDataJob` privately constructs `CompletedIndexedPaneData` from a
+completed directory index or an existing prepared dataset plus a later pane
+request. It prepares the requested native sort order and a disk lookup through
+bounded sorter/lookup advances. An already matching source order can reuse that
+sealed record store; each preparation builds its own lookup and owns its
+reservations. No directory-sized row/address vector is materialized.
+
+Preparation retains the exact source namespace, original row namespace, request,
+held directory and native before/after observations. Before completion it checks
+the held directory namespace and metadata again. The shared pure directory-check
+helper preserves the collector's contradiction/error semantics. Internally,
+available directory identity/kind/modification/change-time evidence is retained
+across reorders, including when subsequent queries are denied or unknown. This
+composite baseline is private continuity evidence, not a point-in-time native
+observation or a snapshot. Public before/after observations remain actual query
+results, with unavailable states intact.
+
+Each completed dataset has a distinct private revision token. Reorder requests
+bind both the original row namespace and the exact current dataset revision.
+An older preparation for the same rows cannot discard newer continuity evidence.
+Listing and reorder origins are distinct, and requested order must match before
+publication. Failed/cancelled/exceptional preparation releases its private work
+without publishing a partial result; earlier datasets remain independently owned.
+
+`IndexedPane` is serialized worker state. Navigation and reorder issue monotonic
+pane-scoped request numbers, revoke old stamps and retain the previous dataset
+until successful publication. Stale, foreign, wrong-order, wrong-origin or wrong
+predecessor replies cannot replace current data. Native/cache failures preserve
+their diagnostics. Failed or cancelled navigation preserves the displayed dataset;
+while a listing is pending, focus commands are unavailable. Fresh navigation
+initializes focus through one bounded lookup read. Reordering preserves the
+original scoped focus key, independently of changed positions.
+
+Page and focus requests require a current `PaneStateStamp`, including a freshness
+check after bounded I/O. Older successful replies and older failures are discarded
+without altering newer request status. Native I/O exceptions revoke the affected
+current stamp before propagation; stale exceptions do not revoke a newer stamp.
+Request cancellation finishes the bounded lookup operation and discards its
+payload, leaving a healthy current dataset usable. This does not interrupt OS
+calls or permit concurrent model access; all state changes remain on one worker.
+
+`IndexedPanePage` is immutable and contains escaped display names, scoped row IDs,
+basic metadata/error observations, focus, ordering, counts and pending/error
+status. It contains no native name, cursor, lookup, store, model or native owner.
+A page remains readable after the worker retires every data/native owner; its
+revoked stamp prevents later actions. `end()` describes displayed cached rows,
+including an empty/pending pane, not native enumeration or a snapshot guarantee.
+
+Capture bounds rows (1..4096), encoded source wire bytes (16..64 MiB), and all
+copied dynamic text (1..16 MiB). The shared payload-budget helper charges escaped
+names, every basic-metadata diagnostic, hidden/outer inspection diagnostics and
+listing errors; existing in-memory pane pages use the same accounting. A failed
+budget returns no prefix, truncation or RAM fallback. Page construction/decoding
+and all native/index I/O occur on the worker, never in UI paint/provider/event
+callbacks. UI integration must pass only these owner-free payloads across threads.
+
+This milestone implements ordered indexed datasets, generation gates, focus and
+bounded display capture. Indexed filtering, marking, selection inventories and
+native acquisition remain subsequent services; the API does not accept those
+commands and silently ignore them. No Files application/view graph or mutation
+commands are enabled by this backend milestone.
+
+The native 259-entry integration now prepares the canonical dataset and lookup,
+publishes it into indexed pane state, captures an 11-row display page, checks
+native identity namespaces and original row IDs, and retires the worker/native
+owners while retaining the readable revoked page. This is end-to-end native/core
+integration, not a rendered-window or full-application responsiveness result.
