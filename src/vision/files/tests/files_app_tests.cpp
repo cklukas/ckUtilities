@@ -460,6 +460,17 @@ CK_TEST(files_app_refresh_is_an_async_reopen_and_properties_use_acknowledged_row
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->properties_pending());
 }
+CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::RegularFile);
+    CK_CHECK(f.command("ck.files.preview"));
+    CK_CHECK(f.app->pending(0) && f.app->preview_pending());
+    f.until([&] { return !f.app->pending(0) && f.app->preview_pending(); });
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->preview_pending());
+}
 CK_TEST(files_app_view_options_materialize_typed_controls_and_accept_via_mouse_after_narrow_resize) {
     Fixture f;
     f.loaded();

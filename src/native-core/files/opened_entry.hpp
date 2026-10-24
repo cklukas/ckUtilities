@@ -13,6 +13,11 @@
 #include "integrity_info.hpp"
 #include "inode_flags.hpp"
 
+#include <cstddef>
+#include <cstdint>
+#include <stop_token>
+#include <vector>
+
 namespace ck::files {
 
 // Requested OS access only; never authority for mutation, loss or hydration.
@@ -21,20 +26,31 @@ namespace ck::files {
 // InodeFlags independently requests a Linux regular-file readable handle.
 enum class EntryAccess : unsigned {
     MetadataOnly = 0, MetadataAndAttributes = 1, MetadataAndSecurity = 2,
-    MetadataAndFullSecurity = 6, MetadataAndLayout = 8, MetadataAndInodeFlags = 16
+    MetadataAndFullSecurity = 6, MetadataAndLayout = 8, MetadataAndInodeFlags = 16, ContentRead = 32
 };
 constexpr EntryAccess operator|(EntryAccess left, EntryAccess right) noexcept {
     return static_cast<EntryAccess>(static_cast<unsigned>(left) | static_cast<unsigned>(right));
 }
 constexpr bool valid_entry_access(EntryAccess access) noexcept {
     const auto bits = static_cast<unsigned>(access);
-    return (bits & ~31U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
+    return (bits & ~63U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
 }
 constexpr bool requests_attributes(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 1U) != 0; }
 constexpr bool requests_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 2U) != 0; }
 constexpr bool requests_audit_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 4U) != 0; }
 constexpr bool requests_inode_flags(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 16U) != 0; }
+constexpr bool requests_content_read(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 32U) != 0; }
 constexpr bool requests_layout(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 8U) != 0; }
+
+struct ContentReadLimits {
+    std::size_t max_bytes = 64 * 1024;
+    static constexpr std::size_t hard_max_bytes = 4 * 1024 * 1024;
+    bool valid() const noexcept { return max_bytes > 0 && max_bytes <= hard_max_bytes; }
+};
+struct ContentRead {
+    std::vector<std::byte> bytes;
+    bool complete = false;
+};
 
 // Owns the opened object, independently of the original parent/name. Queries
 // use that object even if its entry is renamed, replaced or unlinked. This does
@@ -74,6 +90,8 @@ public:
     virtual Observation<AttributeCatalog> inspect_attributes(InventoryLimits limits = {}) const;
     virtual Observation<AttributeValue> read_attribute(const NativeFeatureIdentifier& identifier, InventoryLimits limits = {}) const;
     virtual Observation<NativeSecurityValue> read_security(SecurityPart part, InventoryLimits limits = {}) const;
+    virtual Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
+                                                   std::stop_token stop = {}) const;
 protected:
     OpenedEntry() = default;
 };

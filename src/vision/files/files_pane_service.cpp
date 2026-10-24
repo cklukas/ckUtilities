@@ -37,6 +37,12 @@ struct Change {
     Read request;
     FilesPaneChange command;
 };
+struct Preview {
+    FilesPaneTicket ticket, navigation;
+    PaneStateStamp stamp;
+    PaneRowId row;
+    FilesPanePreviewLimits limits;
+};
 bool valid(FilesPaneServiceLimits l) {
     return l.path_bytes && l.path_bytes <= NativePathLimits::hard_native_bytes && l.page_rows && l.page_rows <= 4096 &&
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
@@ -55,6 +61,7 @@ struct FilesPaneService::State {
     std::optional<Navigate> navigation;
     std::optional<Read> read;
     std::optional<Change> change;
+    std::optional<Preview> preview;
     std::optional<FilesPaneReply> reply;
     FilesPaneTicket latest_navigation, latest_request, cancelled;
     std::optional<std::stop_source> active_stop;
@@ -79,6 +86,7 @@ struct FilesPaneService::State {
             navigation.emplace(Navigate{request, std::move(destination), std::move(view), first_page_rows});
             read.reset();
             change.reset();
+            preview.reset();
             change_busy = false;
             reply.reset();
             cancelled = {};
@@ -128,6 +136,7 @@ struct FilesPaneService::State {
             navigation.reset();
             read.reset();
             change.reset();
+            preview.reset();
             active_stop.reset();
             if (!stopping && reason != FilesPaneWorkerFault::None) {
                 // This path allocates nothing, even after std::bad_alloc.
@@ -173,10 +182,11 @@ struct FilesPaneService::State {
             std::optional<Navigate> nav;
             std::optional<Read> page;
             std::optional<Change> edit;
+            std::optional<Preview> inspection;
             std::stop_source stop;
             {
                 std::unique_lock lock(mutex);
-                condition.wait(lock, [&] { return stopping || navigation || change || read; });
+                condition.wait(lock, [&] { return stopping || navigation || change || read || preview; });
                 if (stopping)
                     return;
                 if (navigation) {
@@ -185,13 +195,17 @@ struct FilesPaneService::State {
                 } else if (change) {
                     edit = std::move(change);
                     change.reset();
+                } else if (preview) {
+                    inspection = std::move(preview);
+                    preview.reset();
                 } else {
                     page = std::move(read);
                     read.reset();
                 }
                 busy = true;
                 active_stop = stop;
-                const auto &current = nav ? nav->ticket : edit ? edit->request.ticket : page->ticket;
+                const auto &current = nav ? nav->ticket : edit ? edit->request.ticket
+                    : inspection ? inspection->ticket : page->ticket;
                 if (current == cancelled)
                     stop.request_stop();
             }
@@ -416,6 +430,38 @@ struct FilesPaneService::State {
                 apply(*pane, *edit, stop.get_token(), result);
                 result.stamp = pane->state_stamp();
                 emit(std::move(result), false, true);
+            } else if (inspection) {
+                FilesPaneReply result;
+                result.request = inspection->ticket;
+                result.navigation = inspection->navigation;
+                result.active_location = result.requested_location = active;
+                result.kind = FilesPaneReplyKind::Preview;
+                if (!pane->data() || !pane->accepts(inspection->stamp)) {
+                    result.state = FilesPaneReplyState::Stale;
+                } else if (stop.stop_requested()) {
+                    result.state = FilesPaneReplyState::Cancelled;
+                } else {
+                    auto opened = pane->open_row(inspection->stamp, inspection->row, ck::files::EntryAccess::ContentRead,
+                                                 {limits.page_wire_bytes, limits.path_bytes, limits.diagnostic_bytes},
+                                                 stop.get_token());
+                    if (!opened.value()) {
+                        result.state = FilesPaneReplyState::Failed;
+                        result.error = *opened.unavailable_detail();
+                    } else {
+                        auto content = (*opened.value()).child->read_content({inspection->limits.bytes}, 0, stop.get_token());
+                        if (!content.value()) {
+                            result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled : FilesPaneReplyState::Failed;
+                            result.error = *content.unavailable_detail();
+                        } else {
+                            result.state = FilesPaneReplyState::Ready;
+                            auto value = std::move(content).take_value();
+                            result.preview = std::make_shared<const FilesPanePreview>(
+                                FilesPanePreview{std::move(value.bytes), value.complete});
+                        }
+                    }
+                }
+                result.stamp = pane->state_stamp();
+                emit(std::move(result), false);
             } else {
                 FilesPaneReply result;
                 result.request = page->ticket;
@@ -651,7 +697,7 @@ FilesPaneSubmitted FilesPaneService::enter_directory(FilesPaneTicket navigation,
             return {FilesPaneSubmission::Stopped, {}};
         if (navigation != state_->latest_navigation)
             return {FilesPaneSubmission::Invalid, {}};
-        if (state_->busy || state_->navigation || state_->read || state_->change || state_->reply)
+        if (state_->busy || state_->navigation || state_->read || state_->change || state_->preview || state_->reply)
             return {FilesPaneSubmission::Busy, {}};
         if (!state_->next)
             return {FilesPaneSubmission::Exhausted, {}};
@@ -694,6 +740,30 @@ FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneS
     state_->condition.notify_one();
     return {FilesPaneSubmission::Accepted, request};
 }
+FilesPaneSubmitted FilesPaneService::preview(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
+                                             FilesPanePreviewLimits limits) {
+    if (!navigation.valid() || !row.scope.is_valid() || !row.number || !limits.valid())
+        return {FilesPaneSubmission::Invalid, {}};
+    FilesPaneTicket request;
+    {
+        std::lock_guard lock(state_->mutex);
+        if (state_->stopping || !state_->alive.load())
+            return {FilesPaneSubmission::Stopped, {}};
+        if (navigation != state_->latest_navigation)
+            return {FilesPaneSubmission::Invalid, {}};
+        if (state_->navigation_busy || state_->change_busy || state_->busy || state_->navigation || state_->read ||
+            state_->change || state_->preview || state_->reply)
+            return {FilesPaneSubmission::Busy, {}};
+        if (!state_->next)
+            return {FilesPaneSubmission::Exhausted, {}};
+        request = ticket(state_->next++);
+        state_->preview = Preview{request, navigation, std::move(stamp), std::move(row), limits};
+        state_->latest_request = request;
+        state_->cancelled = {};
+    }
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
 FilesPaneSubmitted FilesPaneService::change(FilesPaneTicket navigation, PaneStateStamp stamp, FilesPaneChange command,
                                             FilesPaneReadRange range) {
     if (!navigation.valid() || command.valueless_by_exception())
@@ -731,7 +801,7 @@ bool FilesPaneService::cancel(const FilesPaneTicket &request) {
     {
         std::lock_guard lock(state_->mutex);
         if (!request.valid() || request != state_->latest_request || state_->stopping ||
-            (!state_->navigation && !state_->read && !state_->change && !state_->busy))
+            (!state_->navigation && !state_->read && !state_->change && !state_->preview && !state_->busy))
             return false;
         state_->cancelled = request;
         stop = state_->active_stop;
@@ -756,6 +826,7 @@ void FilesPaneService::request_stop() noexcept {
         state_->navigation.reset();
         state_->read.reset();
         state_->change.reset();
+        state_->preview.reset();
         state_->reply.reset();
         stop = state_->active_stop;
     }
@@ -774,7 +845,7 @@ void FilesPaneService::join() {
 bool FilesPaneService::running() const noexcept { return state_->alive.load(std::memory_order_acquire); }
 bool FilesPaneService::working() const {
     std::lock_guard lock(state_->mutex);
-    return state_->busy || state_->navigation || state_->change || state_->read;
+    return state_->busy || state_->navigation || state_->change || state_->read || state_->preview;
 }
 FilesPaneWorkerFault FilesPaneService::fault() const noexcept {
     return state_->worker_fault.load(std::memory_order_acquire);

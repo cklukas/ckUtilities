@@ -54,4 +54,14 @@ Observation<NativeSecurityValue> OpenedEntry::read_security(SecurityPart part, I
     return Observation<NativeSecurityValue>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "security.native_query"});
 }
+Observation<ContentRead> OpenedEntry::read_content(ContentReadLimits limits, std::uint64_t, std::stop_token stop) const {
+    if (!limits.valid())
+        return Observation<ContentRead>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "content.limits"});
+    return Observation<ContentRead>::unavailable(
+        stop.stop_requested() ? ObservationState::Unknown : ObservationState::Unsupported,
+        {ErrorDomain::Adapter,
+         static_cast<std::int64_t>(stop.stop_requested() ? AdapterError::InterruptedRead : AdapterError::UnsupportedQuery),
+         "content.native_query"});
+}
 } // namespace ck::files

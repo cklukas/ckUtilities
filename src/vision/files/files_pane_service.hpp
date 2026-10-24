@@ -44,13 +44,22 @@ struct FilesPaneChangeView {
     ck::files::PaneView view;
 };
 using FilesPaneChange = std::variant<FilesPaneFocusRow, FilesPaneChangeMarks, FilesPaneChangeView>;
-enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Fault };
+struct FilesPanePreviewLimits {
+    std::size_t bytes = 64 * 1024;
+    bool valid() const noexcept { return bytes > 0 && bytes <= ck::files::ContentReadLimits::hard_max_bytes; }
+};
+struct FilesPanePreview {
+    std::vector<std::byte> bytes;
+    bool complete = false;
+};
+enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Fault };
 enum class FilesPaneChangeOutcome { NotRequested, NotApplied, Applied, Unknown };
 struct FilesPaneReply {
     FilesPaneTicket request, navigation;
     FilesPaneReplyState state = FilesPaneReplyState::Failed;
     ck::files::PaneStateStamp stamp;
     std::shared_ptr<const ck::files::IndexedPanePage> page;
+    std::shared_ptr<const FilesPanePreview> preview;
     // Exact requested routes, never held objects or mutable-entry targets.
     // Failed/cancelled navigation retains the active route. A child request's
     // requested route stays absent until its scoped row is actually resolved.
@@ -124,6 +133,8 @@ class FilesPaneService final {
                                        ck::files::PaneRowId row, ck::files::PaneView view = {},
                                        std::size_t first_page_rows = 256);
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
+    FilesPaneSubmitted preview(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, ck::files::PaneRowId row,
+                               FilesPanePreviewLimits limits = {});
     // One acknowledged local-state command; Busy while any work/result is
     // outstanding. It is never coalesced with another change or page request.
     // Navigation may supersede it; cancellation cannot undo a committed change.

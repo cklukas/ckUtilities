@@ -24,6 +24,8 @@ public:
     // Fresh metadata from the retained child, never a name reopen. Worker only;
     // this observes the held object, not current membership of parent/name.
     Observation<BasicMetadata> inspect_basic() const;
+    Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
+                                          std::stop_token stop = {}) const;
     const Observation<IdentityComparison>& previous_continuity() const noexcept { return previous_continuity_; }
     // A later live observation in the same unbroken held-object family, with
     // the same parent/basename. Reusing a cached snapshot is never a refresh.

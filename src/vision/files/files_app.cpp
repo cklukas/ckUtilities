@@ -8,6 +8,8 @@
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
 #include <vector>
 #include <stdexcept>
 namespace ck::vision {
@@ -99,6 +101,33 @@ std::string failure(const FilesPaneReply &reply) {
     }
     return "Read failed";
 }
+std::string preview_text(const FilesPanePreview &preview) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
+    for (std::size_t first = 0; first < preview.bytes.size(); first += 16) {
+        out << std::setw(8) << first << "  ";
+        const auto count = std::min<std::size_t>(16, preview.bytes.size() - first);
+        for (std::size_t i = 0; i < 16; ++i) {
+            if (i < count) {
+                const auto byte = std::to_integer<unsigned char>(preview.bytes[first + i]);
+                out << digits[byte >> 4] << digits[byte & 0x0f] << ' ';
+            } else
+                out << "   ";
+            if (i == 7)
+                out << ' ';
+        }
+        out << " | ";
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto byte = std::to_integer<unsigned char>(preview.bytes[first + i]);
+            out << ((byte >= 0x20 && byte <= 0x7e) ? static_cast<char>(byte) : '.');
+        }
+        out << '\n';
+    }
+    if (!preview.complete)
+        out << "[Preview limited to the configured byte bound.]\n";
+    return out.str();
+}
 } // namespace
 struct FilesApp::State {
     struct Pane {
@@ -117,6 +146,8 @@ struct FilesApp::State {
         std::size_t history_position = 0;
         std::optional<std::size_t> history_target;
         std::vector<std::shared_ptr<const FilesPaneLocation>> bookmarks;
+        std::optional<FilesPaneTicket> preview_request;
+        bool previewing = false;
         ck::files::NameEncoding encoding = ck::files::NameEncoding::PosixBytes;
         ck::files::IndexedPaneSelection selection;
         std::optional<std::uint64_t> worker_focus;
@@ -141,6 +172,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -148,6 +180,8 @@ struct FilesApp::State {
     bool close_after_view = false;
     ckv::widgets::Window *properties_dialog_window = nullptr;
     std::weak_ptr<void> properties_dialog_lifetime;
+    ckv::widgets::Window *preview_dialog_window = nullptr;
+    std::weak_ptr<void> preview_dialog_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
@@ -156,6 +190,7 @@ struct FilesApp::State {
     ckv::ui::CommandId bookmark_remove_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId refresh_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId properties_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId preview_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
@@ -223,6 +258,9 @@ struct FilesApp::State {
             properties_id = own("ck.files.properties", [this] { show_properties(); }, [this] {
                 return ready(active) && panes[active].model.cursor_row();
             });
+            preview_id = own("ck.files.preview", [this] { show_preview(); }, [this] {
+                return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile;
+            });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] {
@@ -284,7 +322,7 @@ struct FilesApp::State {
                      item(home_id, "&Home location"), item(history_back_id, "Go &back"),
                      item(history_forward_id, "Go &forward"), item(bookmark_add_id, "Add &bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
-                     item(properties_id, "&Properties..."),
+                     item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -353,6 +391,7 @@ struct FilesApp::State {
         location_dialog.reset();
         view_dialog.reset();
         properties_dialog.reset();
+        preview_dialog.reset();
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
@@ -426,12 +465,13 @@ struct FilesApp::State {
     bool modal_pending() const {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
+               (preview_dialog && !preview_dialog->completed()) ||
                (location_dialog && !location_dialog->completed());
     }
     bool can_edit_location(std::size_t i) const {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
-    static bool pending(const Pane &p) { return p.navigating || p.reading || p.changing || p.queued_view; }
+    static bool pending(const Pane &p) { return p.navigating || p.reading || p.changing || p.queued_view || p.previewing; }
     bool ready(std::size_t i, bool continuation = false) const {
         return i < 2 && !closing && (continuation || !modal_pending()) && !pending(panes[i]) && panes[i].active &&
                panes[i].model.current() && services[i]->running();
@@ -445,6 +485,8 @@ struct FilesApp::State {
             text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
         else if (p.preparing_cursor)
             text = "Reading current row for view change...";
+        else if (p.previewing)
+            text = "Reading preview...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
@@ -887,6 +929,23 @@ struct FilesApp::State {
                 properties_dialog_window = nullptr;
             });
     }
+    void show_preview() {
+        if (!ready(active) || panes[active].model.cursor_kind() != ck::files::ObjectKind::RegularFile)
+            return;
+        const auto pane = active;
+        const auto target = panes[pane].model.target();
+        if (!target)
+            return;
+        const auto submitted = services[pane]->preview(panes[pane].navigation, target->stamp, target->row);
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            panes[pane].error = "Preview request rejected";
+            labels();
+            return;
+        }
+        panes[pane].preview_request = submitted.ticket;
+        panes[pane].previewing = true;
+        labels();
+    }
     void watch() {
         const bool pending = std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
         if (pending && !watchdog)
@@ -903,8 +962,44 @@ struct FilesApp::State {
         const auto offset = range.first - p.cache->first;
         return offset <= p.cache->rows && count <= p.cache->rows - offset;
     }
+    void consume_preview(std::size_t i, FilesPaneReply reply) {
+        auto &p = panes[i];
+        if (!p.preview_request || reply.request != *p.preview_request)
+            return;
+        p.preview_request.reset();
+        p.previewing = false;
+        p.cancelling = false;
+        if (reply.state != FilesPaneReplyState::Ready || !reply.preview) {
+            p.error = failure(reply);
+            labels();
+            return;
+        }
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Preview";
+        descriptor.resizable = true;
+        descriptor.fields = {
+            {.label = "Bounded hexadecimal preview; display only. No execution or write operation is available.",
+             .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Bytes", .initial_text = preview_text(*reply.preview), .kind = ckv::widgets::FieldKind::Memo},
+        };
+        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
+        preview_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        preview_dialog_window = shell->desktop().active_window();
+        preview_dialog_lifetime = preview_dialog_window->lifetime_token();
+        preview_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
+                if (!weak.expired())
+                    preview_dialog_window = nullptr;
+            });
+        labels();
+    }
     void consume(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
+        if (p.preview_request && reply.request == *p.preview_request) {
+            consume_preview(i, std::move(reply));
+            return;
+        }
         if (reply.navigation != p.navigation || reply.request != p.request)
             return;
         const bool navigation = reply.request == reply.navigation;
@@ -997,7 +1092,7 @@ struct FilesApp::State {
     }
     void page(std::size_t i) {
         auto &p = panes[i];
-        if (p.navigating || p.changing || p.queued_view || !p.active || !surfaces[i]->visible() || !p.stamp.current() ||
+        if (p.navigating || p.changing || p.queued_view || p.previewing || !p.active || !surfaces[i]->visible() || !p.stamp.current() ||
             !services[i]->running())
             return;
         auto range = p.model.viewport();
@@ -1028,6 +1123,8 @@ struct FilesApp::State {
                 if (!services[i]->running() && pending(panes[i])) {
                     const bool changing = panes[i].changing.has_value();
                     panes[i].navigating = panes[i].reading = false;
+                    panes[i].previewing = false;
+                    panes[i].preview_request.reset();
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
                     panes[i].model.set_input_locked(false);
@@ -1054,7 +1151,8 @@ struct FilesApp::State {
     void cancel_read() {
         if (!closing && !modal_pending() && pending(panes[active])) {
             panes[active].queued_view.reset();
-            services[active]->cancel(panes[active].request);
+            const auto request = panes[active].preview_request.value_or(panes[active].request);
+            services[active]->cancel(request);
             panes[active].cancelling = true;
             labels();
         }
@@ -1095,6 +1193,11 @@ struct FilesApp::State {
         if (properties_dialog && !properties_dialog->completed()) {
             if (properties_dialog_window && !properties_dialog_lifetime.expired())
                 properties_dialog_window->close();
+            return;
+        }
+        if (preview_dialog && !preview_dialog->completed()) {
+            if (preview_dialog_window && !preview_dialog_lifetime.expired())
+                preview_dialog_window->close();
             return;
         }
         if (confirmation && !confirmation->completed())
@@ -1163,6 +1266,10 @@ bool FilesApp::view_options_pending() const { return state_->view_dialog && !sta
 bool FilesApp::properties_pending() const {
     return state_->properties_dialog && !state_->properties_dialog->completed();
 }
+bool FilesApp::preview_pending() const {
+    return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) { return pane.previewing; }) ||
+           (state_->preview_dialog && !state_->preview_dialog->completed());
+}
 bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }
@@ -1180,7 +1287,8 @@ bool FilesApp::pending(std::size_t pane) const {
 std::string FilesApp::status(std::size_t pane) const { return state_->status(pane); }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || p.navigating || p.changing || p.queued_view || !state_->services.at(pane)->running())
+    if (state_->closing || p.navigating || p.changing || p.queued_view || p.previewing ||
+        !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())
         return FilesAppTarget{p.navigation, std::move(*target)};

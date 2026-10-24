@@ -66,6 +66,7 @@ class FilesApp final {
     bool close_confirmation_pending() const;
     bool view_options_pending() const;
     bool properties_pending() const;
+    bool preview_pending() const;
     bool location_editor_pending() const;
     std::size_t history_size(std::size_t pane) const;
     std::size_t history_position(std::size_t pane) const;

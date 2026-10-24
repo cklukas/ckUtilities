@@ -222,6 +222,10 @@ struct OpenedIndexedDirectory {
     NativeName name;
     std::unique_ptr<DirectoryCursor> directory;
 };
+struct OpenedIndexedRow {
+    NativeName name;
+    HeldChild::Pointer child;
+};
 // Serialized worker state. Navigation/reorder requests and all successful state
 // changes revoke previously issued stamps. Existing data survives navigation
 // failures. Capture returns only bounded owner-free immutable display payloads.
@@ -257,6 +261,8 @@ class IndexedPane final {
     Observation<OpenedIndexedDirectory> open_directory_row(const PaneStateStamp &stamp, PaneRowId row,
                                                            IndexedDirectoryOpenLimits limits = {},
                                                            std::stop_token stop = {});
+    Observation<OpenedIndexedRow> open_row(const PaneStateStamp &stamp, PaneRowId row, EntryAccess access,
+                                           IndexedDirectoryOpenLimits limits = {}, std::stop_token stop = {});
     IndexedPaneFocus focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop = {});
     Observation<std::unique_ptr<IndexedPaneMarkJob>>
     begin_mark_change(const PaneStateStamp &stamp, const IndexedMarkCommand &command, std::size_t rows_per_step = 256,

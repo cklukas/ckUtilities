@@ -179,8 +179,53 @@ Observation<T> ea_failure(std::uint32_t code, const char* operation) {
 
 class WindowsOpenedEntry final : public OpenedEntry {
 public:
-    WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false)
-        : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access) {}
+    WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false,
+                       bool content_access = false)
+        : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access),
+          content_access_(content_access) {}
+    Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
+                                          std::stop_token stop = {}) const override {
+        using Result = Observation<ContentRead>;
+        if (!limits.valid())
+            return Result::unavailable(ObservationState::Failed,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "content.limits"});
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "content.cancelled"});
+        if (!content_access_)
+            return Result::unavailable(ObservationState::Denied,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "content.access_not_requested"});
+        const auto before = inspect_basic();
+        if (!before.value()) { const auto &e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!before.value()->kind.value() || *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "content.object_kind"});
+        if (!before.value()->logical_size.value()) { const auto &e = *before.value()->logical_size.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto size = *before.value()->logical_size.value();
+        if (offset > size || offset > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max()))
+            return Result::unavailable(ObservationState::Changed,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "content.offset"});
+        const auto count = static_cast<DWORD>(std::min<std::uint64_t>(limits.max_bytes, size - offset));
+        LARGE_INTEGER position{}; position.QuadPart = static_cast<LONGLONG>(offset);
+        if (!SetFilePointerEx(handle_.get(), position, nullptr, FILE_BEGIN))
+            return failure<ContentRead>(GetLastError(), "content.seek");
+        std::vector<std::byte> bytes(count);
+        DWORD copied = 0;
+        if (count && !ReadFile(handle_.get(), bytes.data(), count, &copied, nullptr))
+            return failure<ContentRead>(GetLastError(), "content.ReadFile");
+        bytes.resize(copied);
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "content.cancelled"});
+        const auto after = inspect_basic();
+        if (!after.value()) { const auto &e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!after.value()->identity.value() || !before.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same ||
+            !after.value()->logical_size.value() || *after.value()->logical_size.value() != size)
+            return Result::unavailable(ObservationState::Changed,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "content.identity"});
+        return Result::available({std::move(bytes), offset + copied >= size});
+    }
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const override {
         using Result = Observation<FileIntegrityInfo>;
@@ -491,6 +536,7 @@ private:
     OwnedHandle handle_;
     AdapterScope scope_;
     bool layout_access_;
+    bool content_access_ = false;
 };
 
 Observation<detail::WindowsParentIds> windows_parent_ids(HANDLE handle, IdentityScheme scheme) {
@@ -751,7 +797,8 @@ private:
     Observation<std::unique_ptr<OpenedEntry>> open_component(const NativeName& name, EntryAccess access, ChildLookupMode mode) const {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "open_child.access"});
-        const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_attributes(access) ? FILE_READ_EA : 0) |
+        const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_content_read(access) ? FILE_READ_DATA : 0) |
+            (requests_attributes(access) ? FILE_READ_EA : 0) |
             (requests_security(access) ? READ_CONTROL : 0) | (requests_audit_security(access) ? ACCESS_SYSTEM_SECURITY : 0);
         auto result = open_native_component(name, rights, mode);
         if (!result.value()) {
@@ -759,7 +806,8 @@ private:
             return Observation<std::unique_ptr<OpenedEntry>>::unavailable(error.state, error.error);
         }
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
-        auto original = std::make_unique<WindowsOpenedEntry>(std::move(result).take_value(), scope_);
+        auto original = std::make_unique<WindowsOpenedEntry>(std::move(result).take_value(), scope_, false,
+                                                             requests_content_read(access));
         if (!requests_layout(access)) return Result::available(std::move(original));
         const auto before = original->inspect_basic();
         if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
@@ -781,7 +829,8 @@ private:
         OwnedHandle readable(OpenFileById(original->handle_.get(), &descriptor, rights | FILE_READ_DATA,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
         if (readable.get() == nullptr || readable.get() == INVALID_HANDLE_VALUE) return failure<std::unique_ptr<OpenedEntry>>(GetLastError(), "OpenFileById.layout");
-        auto opened = std::make_unique<WindowsOpenedEntry>(std::move(readable), scope_, true);
+        auto opened = std::make_unique<WindowsOpenedEntry>(std::move(readable), scope_, true,
+                                                           requests_content_read(access));
         const auto after = opened->inspect_basic();
         if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         const auto checked = detail::data_layout_metadata_unchanged(*before.value(), *after.value());

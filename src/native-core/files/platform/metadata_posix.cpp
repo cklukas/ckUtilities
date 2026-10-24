@@ -205,8 +205,62 @@ private:
 
 class PosixOpenedEntry final : public OpenedEntry {
 public:
-    PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false)
-        : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access) {}
+    PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false,
+                     bool content_access = false)
+        : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access),
+          content_access_(content_access) {}
+    Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
+                                          std::stop_token stop = {}) const override {
+        using Result = Observation<ContentRead>;
+        if (!limits.valid())
+            return Result::unavailable(ObservationState::Failed,
+                                       adapter_error(AdapterError::InvalidLimit, "content.limits"));
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                                       adapter_error(AdapterError::InterruptedRead, "content.cancelled"));
+        if (!content_access_)
+            return Result::unavailable(ObservationState::Denied,
+                                       adapter_error(AdapterError::InvalidAccess, "content.access_not_requested"));
+        const auto before = inspect_basic();
+        if (!before.value()) {
+            const auto &e = *before.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        if (!before.value()->kind.value() || *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                                       adapter_error(AdapterError::NotApplicable, "content.object_kind"));
+        if (!before.value()->logical_size.value()) {
+            const auto &e = *before.value()->logical_size.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        const auto size = *before.value()->logical_size.value();
+        if (offset > size)
+            return Result::unavailable(ObservationState::Changed,
+                                       adapter_error(AdapterError::MetadataChanged, "content.offset"));
+        if (offset > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()))
+            return Result::unavailable(ObservationState::Unsupported,
+                                       adapter_error(AdapterError::UnsupportedQuery, "content.offset_range"));
+        const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(limits.max_bytes, size - offset));
+        std::vector<std::byte> bytes(count);
+        const auto read = pread(descriptor_.get(), bytes.data(), bytes.size(), static_cast<off_t>(offset));
+        if (read < 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "content.pread"});
+        bytes.resize(static_cast<std::size_t>(read));
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                                       adapter_error(AdapterError::InterruptedRead, "content.cancelled"));
+        const auto after = inspect_basic();
+        if (!after.value()) {
+            const auto &e = *after.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        if (!after.value()->identity.value() || !before.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same ||
+            !after.value()->logical_size.value() || *after.value()->logical_size.value() != size)
+            return Result::unavailable(ObservationState::Changed,
+                                       adapter_error(AdapterError::MetadataChanged, "content.identity"));
+        return Result::available({std::move(bytes), offset + static_cast<std::uint64_t>(read) >= size});
+    }
 #if defined(__linux__)
     Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const override {
         using Result = Observation<FileInodeFlags>;
@@ -575,6 +629,7 @@ private:
     OwnedDescriptor descriptor_;
     AdapterScope scope_;
     bool layout_access_;
+    bool content_access_ = false;
 #if defined(__linux__)
     bool inode_flags_access_ = false;
 #endif
@@ -919,13 +974,15 @@ public:
         if (!spelling || !name.is_valid())
             return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "open_child.name"));
 #if defined(__linux__)
-        constexpr int flags = O_PATH | O_NOFOLLOW | O_CLOEXEC;
+        const int flags = requests_content_read(access) ? O_RDONLY | O_NOFOLLOW | O_CLOEXEC
+                                                         : O_PATH | O_NOFOLLOW | O_CLOEXEC;
 #else
         // A public event-only descriptor observes identity/metadata; it is not a
         // data-read API and does not prevent volume unmount. The open can still
         // require read permission: preserve Denied rather than bypassing it. O_SYMLINK
         // opens the final symlink itself, including a dangling link.
-        constexpr int flags = O_EVTONLY | O_SYMLINK | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
+        const int flags = requests_content_read(access) ? O_RDONLY | O_NOFOLLOW | O_CLOEXEC
+                                                         : O_EVTONLY | O_SYMLINK | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
 #endif
         OwnedDescriptor descriptor(openat(dirfd(directory_.get()), spelling->c_str(), flags));
         if (descriptor.get() < 0) {
@@ -934,9 +991,9 @@ public:
         }
         auto original = std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_);
 #if defined(__linux__)
-        const bool readable_requested = requests_layout(access) || requests_inode_flags(access);
+        const bool readable_requested = requests_layout(access) || requests_inode_flags(access) || requests_content_read(access);
 #else
-        const bool readable_requested = requests_layout(access);
+        const bool readable_requested = requests_layout(access) || requests_content_read(access);
 #endif
         if (!readable_requested) return Result::available(std::move(original));
         const auto before = original->inspect_basic();
@@ -946,8 +1003,15 @@ public:
 #else
         constexpr auto model = StorageModel::DarwinStatFlags;
 #endif
-        const auto guard = detail::data_layout_access_guard(*before.value(), model);
-        if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (requests_layout(access)) {
+            const auto guard = detail::data_layout_access_guard(*before.value(), model);
+            if (!guard.value()) { const auto& e = *guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        }
+        if (requests_content_read(access)) {
+            original->content_access_ = true;
+            original->layout_access_ = requests_layout(access);
+            return Result::available(std::move(original));
+        }
 #if defined(__APPLE__)
         // SEEK_DATA/SEEK_HOLE operate on the existing event-only descriptor.
         // No basename reopen or additional data-read handle is necessary.

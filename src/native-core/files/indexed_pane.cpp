@@ -732,6 +732,72 @@ Observation<OpenedIndexedDirectory> IndexedPane::open_directory_row(const PaneSt
         throw;
     }
 }
+Observation<OpenedIndexedRow> IndexedPane::open_row(const PaneStateStamp &stamp, PaneRowId row, EntryAccess access,
+                                                    IndexedDirectoryOpenLimits limits, std::stop_token stop) {
+    using Result = Observation<OpenedIndexedRow>;
+    const auto reject = [](const UnavailableObservation &e) { return Result::unavailable(e.state, e.error); };
+    if (!valid_entry_access(access) || limits.wire_bytes < 16 || limits.wire_bytes > DirectoryIndexScanLimits::hard_wire_bytes ||
+        !limits.native_name_bytes || limits.native_name_bytes > NativePathLimits::hard_native_bytes ||
+        !limits.diagnostic_bytes || limits.diagnostic_bytes > 16 * 1024 * 1024)
+        throw std::invalid_argument("invalid indexed row open limits");
+    if (!accepts(stamp) || !data_ || pending_ || mark_pending_)
+        return reject(error(AdapterError::InvalidAccess, "indexed_row.state"));
+    const auto data = data_;
+    if (row.scope != data->row_scope() || !row.number || row.number > data->rows())
+        return reject(error(AdapterError::InvalidIdentifier, "indexed_row.row"));
+    const auto boundary = [&](bool check_stop = true) -> std::optional<UnavailableObservation> {
+        if (!accepts(stamp))
+            return error(AdapterError::InvalidAccess, "indexed_row.stale", ObservationState::Changed);
+        if (data->lookup_->state() != DirectoryIndexLookupState::Ready ||
+            data->store_->state() != DirectoryIndexStoreState::Sealed)
+            return error(AdapterError::InvalidAccess, "indexed_row.dataset");
+        if (check_stop && stop.stop_requested())
+            return error(AdapterError::InterruptedRead, "indexed_row.cancelled", ObservationState::Unknown);
+        return {};
+    };
+    if (auto e = boundary())
+        return reject(*e);
+    auto found = data->lookup_->locate_row({row.scope, row.number});
+    if (!found.value())
+        return reject(*found.unavailable_detail());
+    if (!*found.value())
+        return reject(error(AdapterError::InvalidIdentifier, "indexed_row.excluded_row"));
+    auto read = data->lookup_->read_page(**found.value(), {1, limits.wire_bytes});
+    if (!read.value())
+        return reject(*read.unavailable_detail());
+    if (read.value()->rows.size() != 1 || read.value()->rows.front().record.row_id != row.number)
+        return reject(error(AdapterError::InvalidNativeResult, "indexed_row.record"));
+    auto record = std::move(read).take_value().rows.front().record;
+    const auto units = record.name.posix_bytes() ? record.name.posix_bytes()->size() : record.name.windows_units()->size();
+    const auto width = record.name.posix_bytes() ? std::size_t{1} : sizeof(char16_t);
+    if (units > limits.native_name_bytes / width)
+        return reject(error(AdapterError::InventoryLimit, "indexed_row.name_bytes"));
+    if (!record.metadata.value())
+        return reject(*record.metadata.unavailable_detail());
+    if (auto e = boundary())
+        return reject(*e);
+    auto parent = data->pin_->inspect_basic();
+    if (!parent.value())
+        return reject(*parent.unavailable_detail());
+    if (!data->directory_.value() || !parent.value()->identity.value() ||
+        compare_identity(*data->directory_.value(), *parent.value()->identity.value()) != IdentityComparison::Same)
+        return reject(error(AdapterError::UnqualifiedIdentity, "indexed_row.parent_identity", ObservationState::Changed));
+    auto held = HeldChild::observe_with_access(data->pin_, record.name, access, stop);
+    if (!held.value())
+        return reject(*held.unavailable_detail());
+    if (!(*held.value())->metadata().identity.value() || !record.metadata.value()->identity.value() ||
+        compare_identity(*record.metadata.value()->identity.value(), *(*held.value())->metadata().identity.value()) != IdentityComparison::Same)
+        return reject(error(AdapterError::UnqualifiedIdentity, "indexed_row.identity", ObservationState::Changed));
+    if (auto e = boundary())
+        return reject(*e);
+    auto after = data->pin_->inspect_basic();
+    if (!after.value())
+        return reject(*after.unavailable_detail());
+    if (!data->directory_.value() || !after.value()->identity.value() ||
+        compare_identity(*data->directory_.value(), *after.value()->identity.value()) != IdentityComparison::Same)
+        return reject(error(AdapterError::UnqualifiedIdentity, "indexed_row.parent_changed", ObservationState::Changed));
+    return Result::available({std::move(record.name), std::move(held).take_value()});
+}
 IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop) {
     if (!accepts(stamp))
         return IndexedPaneFocus::Stale;

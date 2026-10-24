@@ -80,4 +80,8 @@ bool HeldChild::continues(const HeldChild& previous) const noexcept {
     return family_ == previous.family_ && revision_ > previous.revision_ && parent_.get() == previous.parent_.get() && name_ == previous.name_;
 }
 Observation<BasicMetadata> HeldChild::inspect_basic() const { return child_->inspect_basic(); }
+Observation<ContentRead> HeldChild::read_content(ContentReadLimits limits, std::uint64_t offset,
+                                                 std::stop_token stop) const {
+    return child_->read_content(limits, offset, stop);
+}
 } // namespace ck::files
