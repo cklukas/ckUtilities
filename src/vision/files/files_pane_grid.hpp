@@ -32,6 +32,7 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     bool current() const noexcept;
     std::optional<FilesPaneRowTarget> target() const;
     std::optional<bool> cursor_marked() const;
+    std::optional<ck::files::ObjectKind> cursor_kind() const;
     // Acknowledged state changes pause input without dropping focus or hiding
     // the retained page. Geometry updates and rendering remain available.
     void set_input_locked(bool locked) noexcept { input_locked_ = locked; }

@@ -41,6 +41,10 @@ class FilesApp final {
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;
     bool navigate(std::size_t pane, ck::files::NativeAbsolutePath location);
+    // Submit the cached stamped directory row; all native checks stay on the worker.
+    bool enter_directory(std::size_t pane);
+    // Last acknowledged requested route, not current membership or operation authority.
+    std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);
     bool change_view(std::size_t pane, ck::files::PaneView view);
     const ck::files::PaneView &view(std::size_t pane) const;

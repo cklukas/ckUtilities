@@ -4041,3 +4041,45 @@ The application still needs its child-entry command, navigation input/completion
 qualified refresh, properties/preview, histories/bookmarks and production
 executable/interactive acceptance. WP-02 remains open. No source filesystem
 mutation or GUI application launch is introduced by this milestone.
+
+
+## 2026-10-24 — WP-02 child-entry application controls
+
+Enter folder now shares one scoped suite command across the Location menu,
+status line, current keymap and native grid double-click. Keyboard activation
+passes through the suite registry, so remapping/unbinding takes effect and F2
+does not implicitly enter a folder. File-list Home/End now move to first/last
+records. Cached directory kind controls enablement; only a stamped row ID is
+submitted, and the worker still performs every native identity/kind check.
+No file is automatically executed and no displayed name is parsed as a target.
+
+Opening freezes movement only in that pane. Previous route/listing/marks/cursor
+and range anchor stay visible until acknowledgment; the other pane, rendering,
+resize and cancellation remain usable. Success adopts the worker route/focus,
+clears old marks/range and the name filter, and retains sort/visibility policy.
+Failure/cancellation preserves the previous dataset. Late cancellation explicitly
+reports an already opened location. Absolute navigation supersedes blocked entry;
+unknown notification outcome blocks just the affected pane. The controller now
+exposes immutable last-acknowledged route data and withdraws activation callbacks
+before teardown.
+
+Eleven new application cases cover all themes, menu/keyboard/double-click
+routing, runtime keymap changes, F2, modal/unrelated contexts, failed-entry
+retention, blocked cancellation, completed-before-cancel ordering, narrow layout,
+supersession, notification failure, uncached Home/End and exact native names.
+The real filesystem tests enter escaped POSIX names and a Windows literal
+trailing-dot/space directory through the UI command without flattening its route.
+All 83 Files suites pass on macOS/Linux/Windows (843/846/842 cases), plus
+the keymap suite. Matched ASan+UBSan on macOS/Linux and ASan on Windows pass
+153/151/150 cases: 83 UI/service, 53 indexed-pane and 17/15/14 native-index.
+Qualification compiles all 73 product units and 124/124/128 pinned SDK units
+with instrumentation. Diagnostic builds and fixtures have been retired; current
+normal builds remain for active work. The unchanged service/native protocol
+retains the prior milestone’s TSan evidence; this does not qualify the changed
+UI controller/grid or new test helper as a whole. Both architecture checks pass.
+See [qualification evidence](evidence/ck-files-child-ui-20261024.json).
+
+WP-02 remains open for navigation input/completion, parent/home/root navigation,
+qualified refresh, properties/preview, histories/bookmarks and production
+executable/interactive acceptance. No source filesystem mutation or production
+GUI application launch is introduced by this component milestone.

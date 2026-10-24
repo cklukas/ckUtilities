@@ -137,6 +137,12 @@ std::optional<bool> FilesPaneGridModel::cursor_marked() const {
     const auto *value = row(cursor_);
     return current() && value ? std::optional<bool>(value->marked) : std::nullopt;
 }
+std::optional<ck::files::ObjectKind> FilesPaneGridModel::cursor_kind() const {
+    const auto *value = row(cursor_);
+    return current() && value && value->metadata.kind.value()
+               ? std::optional<ck::files::ObjectKind>(*value->metadata.kind.value())
+               : std::nullopt;
+}
 void FilesPaneGridModel::set_viewport(int rows_count, int width) {
     const auto previous_height = height_;
     height_ = std::clamp(rows_count, 0, max_viewport_rows);
@@ -255,18 +261,18 @@ void FilesPaneGridModel::navigate(ckv::widgets::GridMove move, bool) {
         break;
     case M::JumpUp:
     case M::GridStart:
+    case M::RowStart: // Home in a file list addresses the first record.
         next = 0;
         break;
     case M::JumpDown:
     case M::GridEnd:
+    case M::RowEnd: // End addresses the last record, not a metadata column.
         next = total_ - 1;
         break;
     case M::Left:
     case M::Right:
     case M::JumpLeft:
     case M::JumpRight:
-    case M::RowStart:
-    case M::RowEnd:
         return;
     }
     cursor_ = static_cast<std::size_t>(next);

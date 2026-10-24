@@ -10,6 +10,17 @@
 #include <stdexcept>
 namespace ck::vision {
 namespace {
+// Keyboard activation belongs to the suite command/keymap layer. Keep the
+// SDK's native double-click hit testing and activation callback, while passing
+// Enter and F2 to command routing (F2 is reserved for Rename).
+class FilesCellGrid final : public ckv::widgets::CellGrid {
+  public:
+    bool on_key(const ckv::KeyEvent &event) override {
+        if (event.chord.key == ckv::Key::Enter || event.chord.key == ckv::Key::F2)
+            return false;
+        return CellGrid::on_key(event);
+    }
+};
 class PaneSurface final : public ckv::ui::View {
   public:
     ckv::widgets::TextView *heading, *footer;
@@ -17,7 +28,7 @@ class PaneSurface final : public ckv::ui::View {
     explicit PaneSurface(FilesPaneGridModel &model) {
         auto header = std::make_unique<ckv::widgets::TextView>();
         heading = header.get();
-        auto cells = std::make_unique<ckv::widgets::CellGrid>();
+        auto cells = std::make_unique<FilesCellGrid>();
         grid = cells.get();
         grid->set_model(model);
         auto status = std::make_unique<ckv::widgets::TextView>();
@@ -47,6 +58,11 @@ bool contains(const ckv::ui::View *root, const ckv::ui::View *view) {
     return false;
 }
 std::string failure(const FilesPaneReply &reply) {
+    if (reply.state == FilesPaneReplyState::Cancelled &&
+        (!reply.error ||
+         (reply.error->error.domain == ck::files::ErrorDomain::Adapter &&
+          reply.error->error.code == static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead))))
+        return "Read cancelled";
     if (reply.error) {
         const auto &e = *reply.error;
         const char *domain = e.error.domain == ck::files::ErrorDomain::Posix      ? "POSIX"
@@ -90,7 +106,7 @@ struct FilesApp::State {
         std::shared_ptr<const FilesPaneLocation> active, requested;
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
-        bool navigating = false, reading = false, navigation_error = false;
+        bool navigating = false, reading = false, navigation_error = false, entering = false;
         bool change_error = false, cancelling = false, preparing_cursor = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
@@ -120,6 +136,7 @@ struct FilesApp::State {
     std::weak_ptr<void> view_dialog_lifetime;
     bool close_after_view = false;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme)
@@ -153,6 +170,12 @@ struct FilesApp::State {
                 return id;
             };
             const auto row_ready = [this] { return ready(active) && panes[active].model.target().has_value(); };
+            enter_id = own(
+                "ck.files.enter_directory", [this] { enter_directory(active); },
+                [this] {
+                    return ready(active) && panes[active].model.target() &&
+                           panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory;
+                });
             const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -203,7 +226,8 @@ struct FilesApp::State {
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
                     "&Location",
-                    {ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
+                    {item(enter_id, "&Enter folder"),
+                     ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
                 ckv::widgets::MenuBarItem{
@@ -214,6 +238,7 @@ struct FilesApp::State {
                      item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
                 ckv::widgets::MenuBarItem{"&View", {item(options_id, "View &options...")}}};
             options.application_status_items = {
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{enter_id, "&Enter folder"}, 35},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{switch_id, "&Switch pane"}, 30},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{toggle, "&Mark"}, 28},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"}, 25},
@@ -269,6 +294,7 @@ struct FilesApp::State {
             if (surface) {
                 surface->grid->clear_model();
                 surface->grid->on_changed = {};
+                surface->grid->on_activate = {};
                 surface->grid->on_bounds_changed = {};
             }
         for (auto *service : services)
@@ -295,7 +321,12 @@ struct FilesApp::State {
         surfaces = pane_views;
         splitter = split_view;
         window = main_view;
-        for (auto *surface : surfaces) {
+        for (std::size_t i = 0; i < surfaces.size(); ++i) {
+            auto *surface = surfaces[i];
+            surface->grid->on_activate = [this, i] {
+                if (active == i)
+                    application.execute_command(enter_id);
+            };
             surface->grid->on_changed = [this] { wake.request(); };
             surface->grid->on_bounds_changed = [this](ckv::Rect) {
                 if (bound && !closing)
@@ -340,7 +371,7 @@ struct FilesApp::State {
         if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
-            text = "Opening location...";
+            text = p.entering ? "Opening folder..." : "Opening location...";
         else if (p.preparing_cursor)
             text = "Reading current row for view change...";
         else if (p.changing)
@@ -406,16 +437,46 @@ struct FilesApp::State {
         p.navigation = p.request = submitted.ticket;
         p.requested = std::move(requested);
         p.navigating = true;
+        p.entering = false;
         p.reading = false;
         p.changing.reset();
         p.queued_view.reset();
-        p.range_start.reset();
         p.model.set_input_locked(false);
         p.cancelling = p.change_error = false;
         p.preparing_cursor = false;
         p.error.clear();
         p.navigation_error = false;
         p.blocked.reset();
+        watch();
+        labels();
+        return true;
+    }
+    bool enter_directory(std::size_t i) {
+        if (!ready(i) || panes[i].model.cursor_kind() != ck::files::ObjectKind::Directory)
+            return false;
+        auto &p = panes[i];
+        const auto target = p.model.target();
+        if (!target)
+            return false;
+        auto view = p.view;
+        view.display_substring.clear();
+        const auto range = p.model.viewport();
+        const auto submitted =
+            services[i]->enter_directory(p.navigation, target->stamp, target->row, std::move(view), range.rows);
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Folder request rejected";
+            labels();
+            return false;
+        }
+        p.navigation = p.request = submitted.ticket;
+        p.requested.reset(); // Only the worker may bind the requested native route.
+        p.navigating = p.entering = true;
+        p.reading = false;
+        p.cancelling = p.change_error = p.navigation_error = p.preparing_cursor = false;
+        p.error.clear();
+        p.blocked.reset();
+        p.inflight = {0, range.rows};
+        p.model.set_input_locked(true);
         watch();
         labels();
         return true;
@@ -582,7 +643,7 @@ struct FilesApp::State {
         p.queued_view.reset();
         const bool cancelled = p.cancelling;
         p.stamp = reply.stamp;
-        p.navigating = false;
+        p.navigating = p.entering = false;
         p.reading = false;
         p.changing.reset();
         p.cancelling = false;
@@ -599,6 +660,7 @@ struct FilesApp::State {
                     p.active = reply.active_location;
                     p.requested = reply.requested_location;
                     p.navigation_error = false;
+                    p.range_start.reset();
                 }
                 p.view = reply.page->view();
                 p.selection = reply.page->selection();
@@ -611,7 +673,10 @@ struct FilesApp::State {
         if (reply.state == FilesPaneReplyState::Ready && adopted) {
             if (!p.navigation_error && !p.change_error)
                 p.error.clear();
-            if (cancelled && preparing_view) {
+            if (cancelled && navigation) {
+                p.error = "Location opened before cancellation completed";
+                p.change_error = true;
+            } else if (cancelled && preparing_view) {
                 p.error = "View change cancelled before application";
                 p.change_error = true;
             } else if (cancelled && reply.change_outcome == FilesPaneChangeOutcome::Applied) {
@@ -764,6 +829,10 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));
+}
+bool FilesApp::enter_directory(std::size_t pane) { return state_->enter_directory(pane); }
+std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
+    return state_->panes.at(pane).active;
 }
 bool FilesApp::change_marks(std::size_t pane, ck::files::IndexedMarkCommand command) {
     return state_->change_marks(pane, std::move(command));

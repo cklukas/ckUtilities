@@ -2848,6 +2848,45 @@ invalid configurations and over-budget routes refuse explicitly. Requested
 child-route data remains absent until the scoped row has actually been bound.
 It may be present for a candidate whose subsequent listing/page fails; the
 active route still identifies the retained pane. The controller consumes these
-structured routes for existing location labels; entering a child from an
-application command, history/bookmark behavior and editable path completion
+structured routes for location labels and acknowledged child entry. History/bookmark behavior and editable path completion
 remain WP-02 integration work.
+
+
+### Application child-entry controls
+
+Enter folder is one scoped suite command (`ck.files.enter_directory`), exposed
+by the Location menu, status line, current keymap and the grid's native
+double-click activation. The product grid passes Enter and F2 keyboard events
+to suite command routing; it retains the SDK's mouse hit testing. Enter is the
+initial binding, runtime remapping/unbinding applies immediately, and F2 remains
+available for Rename rather than implicitly activating a folder. File-list
+Home/End address first/last records, while uncached positions remain unavailable
+as targets until a real stamped row page arrives.
+
+Enablement requires an idle current pane and a cached directory-kind row.
+That cached kind is only an interaction hint: the worker still resolves the
+explicit scoped row, checks native identity/kind and opens relative to the held
+parent. No displayed name or flattened pathname enters this request. Ordinary
+files are not launched. Unrelated focus contexts, modal view options, stale
+pages and stopped workers cannot start this command.
+
+While opening a child, that pane's record movement is paused; rendering,
+geometry, cancellation and the other pane remain usable. The previous location,
+listing, marks, cursor and range anchor remain until acknowledgment. Complete
+success follows worker focus, clears old marks/range and publishes the structured
+route. The current name filter clears on entry; sorting, descending order,
+folders-first, hidden-item and case-policy settings carry forward. Failure or
+cancellation retains the previous dataset/range and reports its actual result.
+A cancellation that arrives after commitment explicitly says that the location
+opened before cancellation completed. Helper interruption is reported as
+cancellation; a native failure retains its failure meaning. Absolute navigation
+can supersede blocked entry; a notification fault disables the affected pane
+without inventing a successful route or blocking the other pane.
+
+`FilesApp::location` returns the last acknowledged requested route as immutable
+owner-free value data. It is not current pathname-membership proof or operation
+authority. Native cursor/entry ownership and filesystem I/O stay in the worker.
+Controller retirement clears grid activation callbacks before releasing command
+handlers and view ownership. Headless real-view interaction tests do not prove
+what a production terminal window displays; production host and actual terminal
+acceptance remain required.

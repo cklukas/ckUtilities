@@ -48,6 +48,42 @@ struct Gate {
         changed.notify_all();
     }
 };
+class ReadGateFile final : public IndexByteFile {
+    std::unique_ptr<IndexByteFile> file_;
+    std::shared_ptr<Gate> gate_;
+    std::shared_ptr<std::atomic<bool>> armed_;
+
+  public:
+    ReadGateFile(std::unique_ptr<IndexByteFile> file, std::shared_ptr<Gate> gate,
+                 std::shared_ptr<std::atomic<bool>> armed)
+        : file_(std::move(file)), gate_(std::move(gate)), armed_(std::move(armed)) {}
+    Observation<std::uint64_t> size() override { return file_->size(); }
+    Observation<std::size_t> write_at(std::uint64_t at, std::span<const std::byte> bytes) override {
+        return file_->write_at(at, bytes);
+    }
+    Observation<std::size_t> read_at(std::uint64_t at, std::span<std::byte> bytes) override {
+        if (armed_->exchange(false))
+            gate_->block();
+        return file_->read_at(at, bytes);
+    }
+};
+class ReadGateFactory final : public IndexFileFactory {
+    std::shared_ptr<IndexFileFactory> factory_;
+    std::shared_ptr<Gate> gate_;
+    std::shared_ptr<std::atomic<bool>> armed_;
+
+  public:
+    ReadGateFactory(std::shared_ptr<IndexFileFactory> factory, std::shared_ptr<Gate> gate,
+                    std::shared_ptr<std::atomic<bool>> armed)
+        : factory_(std::move(factory)), gate_(std::move(gate)), armed_(std::move(armed)) {}
+    Observation<std::unique_ptr<IndexByteFile>> create_file() override {
+        auto result = factory_->create_file();
+        if (!result.value())
+            return result;
+        return Observation<std::unique_ptr<IndexByteFile>>::available(
+            std::make_unique<ReadGateFile>(std::move(result).take_value(), gate_, armed_));
+    }
+};
 struct Fixture {
     ck::testing::ScratchDirectory scratch{"files-app", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT};
     ckv::ManualClock clock;
@@ -55,12 +91,14 @@ struct Fixture {
     ckv::ui::Application application{terminal, clock};
     FilesAppWake wake{application};
     std::shared_ptr<Gate> gate;
+    std::shared_ptr<Gate> directory_gate = std::make_shared<Gate>();
+    std::shared_ptr<std::atomic<bool>> block_directory = std::make_shared<std::atomic<bool>>(false);
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
                      FilesPaneServiceLimits limits = {}, ckv::Size size = {120, 34},
-                     std::shared_ptr<std::atomic<bool>> fail_notification = {})
+                     std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -81,7 +119,31 @@ struct Fixture {
                 if (!file)
                     throw std::runtime_error("cannot write app fixture");
             }
+            if (folders) {
+                const auto folder = dir / (i == 0 ? "left-item-0" : "right-item-0");
+                std::filesystem::remove(folder);
+                std::filesystem::create_directory(folder);
+                std::filesystem::create_directory(folder / "nested");
+                {
+                    std::ofstream file(folder / "inside.txt");
+                    file << "inside";
+                }
+                {
+                    std::ofstream file(folder / "nested" / "leaf.txt");
+                    file << "leaf";
+                }
+            }
             auto backend = native_files_pane_backend(address(cache));
+            if (i == 0) {
+                backend.workspace = [open = std::move(backend.workspace), hold = directory_gate,
+                                     arm = block_directory]() -> Observation<std::shared_ptr<IndexFileFactory>> {
+                    auto result = open();
+                    if (!result.value())
+                        return result;
+                    return Observation<std::shared_ptr<IndexFileFactory>>::available(
+                        std::make_shared<ReadGateFactory>(*result.value(), hold, arm));
+                };
+            }
             if (i == 0 && gate) {
                 backend.filesystem = [create = std::move(backend.filesystem), hold = gate] {
                     hold->block();
@@ -106,6 +168,7 @@ struct Fixture {
         app.reset();
         if (gate)
             gate->release();
+        directory_gate->release();
         for (auto &service : services)
             service->join();
         application.step(0); // Drain late weak posts after controller destruction.
@@ -581,4 +644,221 @@ CK_TEST(files_app_wake_coalesces_worker_notifications_and_ignores_late_callbacks
     late();
     application.step(0);
     CK_CHECK(calls == 1);
+}
+
+CK_TEST(files_app_enter_folder_preserves_view_policy_clears_filter_and_commits_only_after_acknowledgment) {
+    for (auto theme :
+         {ThemeScheme::Classic, ThemeScheme::Dark, ThemeScheme::Light, ThemeScheme::Mono, ThemeScheme::HighContrast}) {
+        Fixture f(theme, {}, {}, {120, 34}, {}, true);
+        f.loaded();
+        auto view = f.app->view(0);
+        view.descending = view.folders_first = view.show_hidden = view.ascii_case_sensitive = true;
+        view.display_substring = "left-item-0";
+        CK_CHECK(f.app->change_view(0, view));
+        f.loaded();
+        CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+        f.loaded();
+        const auto previous = f.app->location(0), other = f.app->location(1);
+        const auto other_target = f.app->target(1)->row.row;
+        CK_CHECK(f.key(ckv::Key::Enter));
+        CK_CHECK(f.app->pending(0) && !f.app->target(0) && f.app->location(0) == previous);
+        f.loaded();
+        CK_CHECK(f.app->location(0)->root_address() == previous->root_address());
+        CK_CHECK(f.app->location(0)->components().size() == 1 &&
+                 f.app->location(0)->components()[0].display_name() == "left-item-0");
+        CK_CHECK(f.app->model(0).row_count() == 2 && f.app->view(0).display_substring.empty());
+        CK_CHECK(f.app->view(0).descending && f.app->view(0).folders_first && f.app->view(0).show_hidden &&
+                 f.app->view(0).ascii_case_sensitive);
+        CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.mark_range"));
+        CK_CHECK(f.app->location(1) == other && f.app->target(1)->row.row == other_target);
+        const auto text = f.painted();
+        CK_CHECK(text.find("nested") != text.npos && text.find("inside.txt") != text.npos);
+        CK_CHECK(f.app->status(0).find("Range start set") == std::string::npos);
+    }
+}
+CK_TEST(files_app_folder_double_click_routes_to_the_clicked_pane_and_keeps_the_other_live) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    const auto left = f.app->location(0);
+    const auto rect = f.app->grid(1)->cell_rect({0, 1});
+    if (!rect)
+        throw std::runtime_error("missing folder cell");
+    const auto grid = f.app->grid(1)->absolute_bounds();
+    const ckv::Point at{grid.x + rect->x + rect->width / 2, grid.y + rect->y};
+    for (int click : {1, 2}) {
+        CK_CHECK(f.application.dispatch(ckv::MouseEvent{
+            .action = ckv::MouseAction::Down, .button = ckv::MouseButton::Left, .cell = at, .click_count = click}));
+        (void)f.application.dispatch(ckv::MouseEvent{
+            .action = ckv::MouseAction::Up, .button = ckv::MouseButton::Left, .cell = at, .click_count = click});
+    }
+    CK_CHECK(f.app->active_pane() == 1 && f.app->pending(1));
+    f.loaded();
+    CK_CHECK(f.app->location(1)->components().size() == 1 &&
+             f.app->location(1)->components()[0].display_name() == "right-item-0");
+    CK_CHECK(f.app->location(0) == left && f.app->model(0).row_count() == 100 && f.app->target(0));
+}
+CK_TEST(files_app_folder_keyboard_activation_uses_live_keymap_and_leaves_F2_to_command_routing) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    f.application.commands().unbind_key({ckv::Key::Enter, ckv::Modifier::None, {}});
+    CK_CHECK(!f.key(ckv::Key::Enter) && !f.key(ckv::Key::F2) && !f.app->pending(0));
+    f.application.commands().bind_key({ckv::Key::F8, ckv::Modifier::Ctrl, {}}, f.id("ck.files.enter_directory"));
+    CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 1);
+}
+CK_TEST(files_app_folder_menu_and_scope_do_not_enter_files_or_run_from_dialogs_and_unrelated_inputs) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Down));
+    CK_CHECK(!f.command("ck.files.enter_directory") && !f.app->enter_directory(0));
+    CK_CHECK(f.key(ckv::Key::Home));
+    auto input = std::make_unique<ckv::widgets::InputLine>();
+    input->set_bounds({0, 0, 20, 1});
+    auto *outside = f.application.root().add_child(std::move(input));
+    f.application.set_focus(outside);
+    CK_CHECK(!f.command("ck.files.enter_directory"));
+    f.application.root().remove_child(outside);
+    f.application.set_focus(f.app->grid(0));
+    CK_CHECK(f.command("ck.files.view_options"));
+    CK_CHECK(!f.command("ck.files.enter_directory") && !f.app->enter_directory(0));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "l"}}));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "e"}}));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 1);
+}
+CK_TEST(files_app_failed_folder_entry_retains_location_rows_marks_range_and_cursor) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+    f.loaded();
+    const auto location = f.app->location(0);
+    const auto row = f.app->target(0)->row.row;
+    std::filesystem::remove_all(f.scratch.path() / "left" / "left-item-0");
+    CK_CHECK(f.command("ck.files.enter_directory"));
+    f.loaded();
+    CK_CHECK(f.app->location(0) == location && f.app->model(0).row_count() == 100 && f.app->target(0)->row.row == row);
+    CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("previous location retained") != std::string::npos);
+    CK_CHECK(f.command("ck.files.mark_range"));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 1);
+}
+CK_TEST(files_app_blocked_folder_entry_freezes_that_pane_and_cancels_without_retargeting_other_pane) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    const auto before = f.app->location(0);
+    const auto cursor = f.app->model(0).cursor().row;
+    *f.block_directory = true;
+    CK_CHECK(f.command("ck.files.enter_directory"));
+    f.directory_gate->wait();
+    CK_CHECK(f.app->pending(0) && !f.app->target(0) && f.app->status(0) == "Opening folder...");
+    f.key(ckv::Key::Down);
+    CK_CHECK(f.app->model(0).cursor().row == cursor);
+    f.app->switch_pane();
+    CK_CHECK(f.key(ckv::Key::Down) && f.app->model(1).cursor().row == 1 && f.app->target(1));
+    f.app->switch_pane();
+    CK_CHECK(f.command("ck.files.cancel_read"));
+    f.directory_gate->release();
+    f.loaded();
+    CK_CHECK(f.app->location(0) == before && f.app->model(0).cursor().row == cursor && f.app->target(0));
+    CK_CHECK(f.app->status(0).find("Read cancelled") != std::string::npos);
+}
+CK_TEST(files_app_folder_cancellation_after_commit_reports_the_opened_location) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (f.services[0]->working()) {
+        if (std::chrono::steady_clock::now() >= until)
+            throw std::runtime_error("folder worker did not finish");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    f.app->cancel_read();
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 1);
+    CK_CHECK(f.app->status(0).find("Location opened before cancellation completed") != std::string::npos);
+}
+CK_TEST(files_app_explicit_navigation_supersedes_blocked_folder_entry) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, true);
+    f.loaded();
+    *f.block_directory = true;
+    CK_CHECK(f.app->enter_directory(0));
+    f.directory_gate->wait();
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "right")));
+    f.directory_gate->release();
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") &&
+             f.app->location(0)->components().empty());
+    CK_CHECK(f.app->model(0).row_count() == 3 && f.app->narrow());
+    CK_CHECK(f.painted().find("Other: Right") != std::string::npos);
+}
+CK_TEST(files_app_folder_notification_fault_blocks_only_that_pane_without_claiming_navigation_success) {
+    auto fault = std::make_shared<std::atomic<bool>>(false);
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, fault, true);
+    f.loaded();
+    const auto previous = f.app->location(0);
+    *fault = true;
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(!f.app->target(0) && !f.app->model(0).current() && f.app->location(0) == previous);
+    CK_CHECK(!f.command("ck.files.enter_directory"));
+    f.app->switch_pane();
+    CK_CHECK(f.command("ck.files.enter_directory"));
+    f.loaded();
+    CK_CHECK(f.app->location(1)->components().size() == 1);
+}
+
+CK_TEST(files_app_folder_entry_preserves_native_names_without_parsing_display_or_flattening_windows_paths) {
+    Fixture f;
+    f.loaded();
+    const auto root = f.scratch.path() / "left";
+#ifdef _WIN32
+    auto preferred = root;
+    preferred.make_preferred();
+    auto native = preferred.native();
+    if (!native.starts_with(L"\\\\?\\"))
+        native = L"\\\\?\\" + native;
+    const auto folder = std::filesystem::path(native + L"\\00-literal. ");
+    const auto expected = *NativeName::from_windows(u"00-literal. ");
+#else
+    const auto folder = root / "00-escaped\\name\n";
+    const auto expected = *NativeName::from_posix(folder.filename().native());
+#endif
+    std::filesystem::create_directory(folder);
+    {
+        std::ofstream file(folder / "leaf.txt");
+        file << "leaf";
+        if (!file)
+            throw std::runtime_error("literal folder fixture write");
+    }
+    CK_CHECK(f.app->navigate(0, address(root)));
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    CK_CHECK(f.painted().find(expected.display_name()) != std::string::npos);
+    CK_CHECK(f.command("ck.files.enter_directory"));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(root) && f.app->location(0)->components().size() == 1);
+    CK_CHECK(f.app->location(0)->components()[0] == expected && f.app->model(0).row_count() == 1);
+    CK_CHECK(f.painted().find("leaf.txt") != std::string::npos);
+    std::filesystem::remove_all(folder); // Exact extended spelling on Windows.
+}
+
+CK_TEST(files_app_home_and_end_address_file_records_and_wait_for_uncached_row_identity) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::End));
+    CK_CHECK(f.app->model(0).cursor().row == 99 && !f.app->target(0));
+    CK_CHECK(!f.command("ck.files.enter_directory"));
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor().row == 99 && f.app->target(0));
+    CK_CHECK(f.key(ckv::Key::Home));
+    CK_CHECK(f.app->model(0).cursor().row == 0 && !f.app->target(0));
+    f.loaded();
+    CK_CHECK(f.app->target(0) && f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    CK_CHECK(f.command("ck.files.enter_directory"));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 1);
 }
