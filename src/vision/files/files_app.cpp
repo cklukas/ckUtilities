@@ -8,6 +8,7 @@
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
+#include <vector>
 #include <stdexcept>
 namespace ck::vision {
 namespace {
@@ -112,6 +113,10 @@ struct FilesApp::State {
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
+        std::vector<std::shared_ptr<const FilesPaneLocation>> history;
+        std::size_t history_position = 0;
+        std::optional<std::size_t> history_target;
+        std::vector<std::shared_ptr<const FilesPaneLocation>> bookmarks;
         ck::files::NameEncoding encoding = ck::files::NameEncoding::PosixBytes;
         ck::files::IndexedPaneSelection selection;
         std::optional<std::uint64_t> worker_focus;
@@ -142,6 +147,10 @@ struct FilesApp::State {
     bool close_after_view = false;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId bookmark_remove_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
@@ -187,6 +196,24 @@ struct FilesApp::State {
                 [this] { return relative_ready(active, true); });
             const auto home_id =
                 own("ck.files.home", [this] { navigate_home(active); }, [this] { return ready(active); });
+            history_back_id = own(
+                "ck.files.history_back", [this] { navigate_history_back(active); },
+                [this] { return ready(active) && panes[active].history_position > 0; });
+            history_forward_id = own(
+                "ck.files.history_forward", [this] { navigate_history_forward(active); },
+                [this] {
+                    return ready(active) && panes[active].history_position + 1 < panes[active].history.size();
+                });
+            bookmark_add_id = own(
+                "ck.files.bookmark_add", [this] { add_bookmark(active); },
+                [this] { return ready(active) && panes[active].active; });
+            bookmark_remove_id = own(
+                "ck.files.bookmark_remove", [this] { remove_bookmark(active); },
+                [this] {
+                    return ready(active) && panes[active].active &&
+                           std::any_of(panes[active].bookmarks.begin(), panes[active].bookmarks.end(),
+                                       [this](const auto &bookmark) { return *bookmark == *panes[active].active; });
+                });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] {
@@ -245,7 +272,9 @@ struct FilesApp::State {
                     "&Location",
                     {item(location_id, "&Go to location..."), item(enter_id, "&Enter folder"),
                      item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
-                     item(home_id, "&Home location"),
+                     item(home_id, "&Home location"), item(history_back_id, "Go &back"),
+                     item(history_forward_id, "Go &forward"), item(bookmark_add_id, "Add &bookmark"),
+                     item(bookmark_remove_id, "Remove bookmark"),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -474,6 +503,7 @@ struct FilesApp::State {
     bool navigate(std::size_t i, FilesPaneLocation location, ck::files::PaneView view) {
         auto requested = std::make_shared<const FilesPaneLocation>(std::move(location));
         auto &p = panes[i];
+        p.history_target.reset();
         auto range = p.model.viewport();
         auto submitted = services[i]->navigate(*requested, std::move(view), range.rows);
         return accept_navigation(i, submitted, std::move(requested));
@@ -483,8 +513,56 @@ struct FilesApp::State {
             return false;
         auto view = panes[i].view;
         view.display_substring.clear();
+        panes[i].history_target.reset();
         return accept_navigation(i, services[i]->navigate_home(std::move(view), panes[i].model.viewport().rows), {},
                                  true);
+    }
+    bool navigate_history(std::size_t i, std::size_t target) {
+        if (!ready(i) || target >= panes[i].history.size() || target == panes[i].history_position)
+            return false;
+        auto view = panes[i].view;
+        view.display_substring.clear();
+        const bool accepted = navigate(i, FilesPaneLocation(*panes[i].history[target]), std::move(view));
+        if (accepted)
+            panes[i].history_target = target;
+        return accepted;
+    }
+    bool navigate_history_back(std::size_t i) {
+        if (i >= 2 || panes[i].history_position == 0)
+            return false;
+        return navigate_history(i, panes[i].history_position - 1);
+    }
+    bool navigate_history_forward(std::size_t i) {
+        if (i >= 2 || panes[i].history_position + 1 >= panes[i].history.size())
+            return false;
+        return navigate_history(i, panes[i].history_position + 1);
+    }
+    bool add_bookmark(std::size_t i) {
+        if (!ready(i) || !panes[i].active)
+            return false;
+        if (std::any_of(panes[i].bookmarks.begin(), panes[i].bookmarks.end(),
+                        [&](const auto &bookmark) { return *bookmark == *panes[i].active; }))
+            return false;
+        panes[i].bookmarks.push_back(panes[i].active);
+        labels();
+        return true;
+    }
+    bool remove_bookmark(std::size_t i) {
+        if (!ready(i) || !panes[i].active)
+            return false;
+        const auto before = panes[i].bookmarks.size();
+        panes[i].bookmarks.erase(std::remove_if(panes[i].bookmarks.begin(), panes[i].bookmarks.end(),
+                                                [&](const auto &bookmark) { return *bookmark == *panes[i].active; }),
+                                 panes[i].bookmarks.end());
+        labels();
+        return panes[i].bookmarks.size() != before;
+    }
+    bool navigate_bookmark(std::size_t i, std::size_t bookmark) {
+        if (!ready(i) || bookmark >= panes[i].bookmarks.size())
+            return false;
+        auto view = panes[i].view;
+        view.display_substring.clear();
+        return navigate(i, FilesPaneLocation(*panes[i].bookmarks[bookmark]), std::move(view));
     }
     bool accept_navigation(std::size_t i, FilesPaneSubmitted submitted,
                            std::shared_ptr<const FilesPaneLocation> requested, bool home = false) {
@@ -521,6 +599,7 @@ struct FilesApp::State {
             return false;
         auto view = p.view;
         view.display_substring.clear();
+        p.history_target.reset();
         const auto range = p.model.viewport();
         const auto submitted =
             services[i]->enter_directory(p.navigation, target->stamp, target->row, std::move(view), range.rows);
@@ -778,6 +857,18 @@ struct FilesApp::State {
                     p.requested = reply.requested_location;
                     p.navigation_error = false;
                     p.range_start.reset();
+                    if (p.active) {
+                        if (p.history_target) {
+                            p.history_position = *p.history_target;
+                            p.history_target.reset();
+                        } else if (p.history.empty() || *p.history.back() != *p.active) {
+                            if (!p.history.empty() && p.history_position + 1 < p.history.size())
+                                p.history.erase(p.history.begin() + static_cast<std::ptrdiff_t>(p.history_position + 1),
+                                                p.history.end());
+                            p.history.push_back(p.active);
+                            p.history_position = p.history.size() - 1;
+                        }
+                    }
                 }
                 p.view = reply.page->view();
                 p.selection = reply.page->selection();
@@ -963,6 +1054,13 @@ bool FilesApp::enter_directory(std::size_t pane) { return state_->enter_director
 bool FilesApp::navigate_parent(std::size_t pane) { return state_->navigate_relative(pane, false); }
 bool FilesApp::navigate_root(std::size_t pane) { return state_->navigate_relative(pane, true); }
 bool FilesApp::navigate_home(std::size_t pane) { return state_->navigate_home(pane); }
+bool FilesApp::navigate_history_back(std::size_t pane) { return state_->navigate_history_back(pane); }
+bool FilesApp::navigate_history_forward(std::size_t pane) { return state_->navigate_history_forward(pane); }
+bool FilesApp::add_bookmark(std::size_t pane) { return state_->add_bookmark(pane); }
+bool FilesApp::remove_bookmark(std::size_t pane) { return state_->remove_bookmark(pane); }
+bool FilesApp::navigate_bookmark(std::size_t pane, std::size_t bookmark) {
+    return state_->navigate_bookmark(pane, bookmark);
+}
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
 }
@@ -984,6 +1082,11 @@ bool FilesApp::view_options_pending() const { return state_->view_dialog && !sta
 bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }
+std::size_t FilesApp::history_size(std::size_t pane) const { return state_->panes.at(pane).history.size(); }
+std::size_t FilesApp::history_position(std::size_t pane) const {
+    return state_->panes.at(pane).history_position;
+}
+std::size_t FilesApp::bookmark_count(std::size_t pane) const { return state_->panes.at(pane).bookmarks.size(); }
 std::size_t FilesApp::active_pane() const noexcept { return state_->active; }
 bool FilesApp::narrow() const noexcept { return state_->compact; }
 bool FilesApp::pending(std::size_t pane) const {

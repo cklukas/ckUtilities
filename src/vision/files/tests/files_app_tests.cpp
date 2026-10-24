@@ -1337,3 +1337,28 @@ CK_TEST(files_app_location_editor_can_supersede_a_blocked_home_request_without_w
     f.loaded();
     CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
 }
+CK_TEST(files_app_history_and_bookmarks_change_only_after_worker_acknowledgment) {
+    Fixture f;
+    f.loaded();
+    const auto left = f.app->location(0);
+    const auto right = address(f.scratch.path() / "right");
+    CK_CHECK(f.app->history_size(0) == 1 && f.app->history_position(0) == 0);
+    CK_CHECK(f.app->navigate(0, right));
+    CK_CHECK(f.app->history_size(0) == 1);
+    f.loaded();
+    CK_CHECK(f.app->history_size(0) == 2 && f.app->history_position(0) == 1 &&
+             f.app->location(0)->root_address() == right);
+    CK_CHECK(f.app->add_bookmark(0) && f.app->bookmark_count(0) == 1);
+    CK_CHECK(!f.app->add_bookmark(0) && f.app->bookmark_count(0) == 1);
+    CK_CHECK(f.app->navigate_history_back(0));
+    CK_CHECK(f.app->pending(0) && f.app->location(0) && *f.app->location(0) != *left);
+    f.loaded();
+    CK_CHECK(f.app->history_position(0) == 0 && f.app->location(0) && *f.app->location(0) == *left);
+    CK_CHECK(f.app->navigate_history_forward(0));
+    f.loaded();
+    CK_CHECK(f.app->history_position(0) == 1 && f.app->location(0)->root_address() == right);
+    CK_CHECK(f.app->navigate_bookmark(0, 0));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == right);
+    CK_CHECK(f.app->remove_bookmark(0) && f.app->bookmark_count(0) == 0);
+}

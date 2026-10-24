@@ -48,6 +48,11 @@ class FilesApp final {
     bool navigate_parent(std::size_t pane);
     bool navigate_root(std::size_t pane);
     bool navigate_home(std::size_t pane);
+    bool navigate_history_back(std::size_t pane);
+    bool navigate_history_forward(std::size_t pane);
+    bool add_bookmark(std::size_t pane);
+    bool remove_bookmark(std::size_t pane);
+    bool navigate_bookmark(std::size_t pane, std::size_t bookmark);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);
@@ -60,6 +65,9 @@ class FilesApp final {
     bool close_confirmation_pending() const;
     bool view_options_pending() const;
     bool location_editor_pending() const;
+    std::size_t history_size(std::size_t pane) const;
+    std::size_t history_position(std::size_t pane) const;
+    std::size_t bookmark_count(std::size_t pane) const;
     std::size_t active_pane() const noexcept;
     bool narrow() const noexcept;
     bool pending(std::size_t pane) const;
