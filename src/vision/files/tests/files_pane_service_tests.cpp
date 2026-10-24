@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_pane_service.hpp"
+#include "files_location_text.hpp"
 #include "native_index_file.hpp"
 #include "scratch_directory.hpp"
 #include "simulated_filesystem.hpp"
@@ -1004,6 +1005,14 @@ CK_TEST(files_service_production_native_backend_reads_real_source_without_exposi
              child.active_location->components().size() == 1 &&
              child.active_location->components()[0] == child_name("folder"));
     CK_CHECK(!result.stamp.current());
+    const auto text = take(format_files_exact_location(*child.active_location));
+    const auto route = take(parse_files_location_text(text, FilesLocationTextSyntax::ExactNames,
+                                                      child.active_location->root_address().encoding()));
+    CK_CHECK(route == *child.active_location);
+    CK_CHECK(f.service->navigate(route).state == FilesPaneSubmission::Accepted);
+    const auto replayed = f.reply();
+    CK_CHECK(replayed.state == FilesPaneReplyState::Ready && *replayed.active_location == route &&
+             replayed.page->rows().empty() && !child.stamp.current());
     f.stopped();
     CK_CHECK(!result.page->stamp().current() && result.page->rows().size() == 2);
 }

@@ -4160,3 +4160,48 @@ active work. Architecture checks and strict documentation pass. See
 WP-02 remains open for editable location/completion, history/bookmarks,
 qualified refresh, properties/preview and production executable/interactive
 acceptance. No mutation command or production GUI launch is introduced.
+
+
+## 2026-10-24 — WP-02 location text and complete-route values
+
+Extracted the owner-free location value from the worker module and added a
+linear complete-route factory. Added a bounded, value-only editor codec:
+ordinary Path input creates a new absolute native address; ExactNames keeps
+its anchor and literal child components separate. Canonical exact text is
+ASCII-only and preserves raw POSIX bytes, unpaired UTF-16 units, controls,
+quotes/backslashes, namespace spelling and normalization distinctions.
+Display text never becomes a native target. Ambiguous ordinary Windows
+component spellings refuse rather than silently trimming/interpreting names.
+
+Ten new cases cover exact/native round trips, all valid POSIX name bytes and
+Windows UTF-16 name units, malformed encodings/escapes, invalid components,
+control/bidi injection, native/text/depth limits, moved values, both syntax
+policies, factory byte accounting and a 4096-component route. The real native
+service test also serializes, decodes and replays an acknowledged child route
+through the worker. All 83 Files suites pass on macOS/Linux/Windows
+(877/880/876 cases), plus keymap. Matched ASan+UBSan on macOS/Linux and ASan on
+Windows pass 199/197/196 cases: 111 UI/service/codec, 53 indexed-pane, 11 path,
+7 native-path/home and 17/15/14 native-index. All 79 product units and
+124/124/128 pinned SDK units compile with instrumentation. Fresh ThreadSanitizer
+runs pass all 50 service cases three times per POSIX host (300 executions),
+including the real native codec/replay case; this covers the exercised UI-free
+worker protocol rather than the UI controller/grid or the entire codec matrix.
+Diagnostic builds and fixtures have been retired; current normal builds remain
+for active work. Architecture checks and strict documentation pass. See
+[qualification evidence](evidence/ck-files-location-text-20261024.json).
+
+The first test builds failed on a malformed raw-string delimiter and a
+strict range-loop-copy warning; both were corrected. Those builds do not
+qualify the final source. Windows additionally rejected an escaped quote in a
+raw string inside CK_CHECK; naming the same expected fixture text corrected the
+portable test expression. Exact task-owned local diagnostic compiler groups
+were stopped and partial trees retired before that fixture edit. Final
+qualification uses fresh diagnostic builds and the corrected frozen source.
+Aggregate native budgeting was then tightened to
+apply while decoding, and constructor validation now precedes native-size
+access. No native source mutation or production GUI launch is introduced.
+
+WP-02 remains open for the location dialog and asynchronous completion,
+history/bookmarks, qualified refresh, properties/preview and production
+executable/interactive acceptance. No location-edit command is enabled by
+this value-layer milestone.

@@ -2968,3 +2968,47 @@ Native API references: [GetUserProfileDirectoryW](https://learn.microsoft.com/en
 and [getpwuid_r / HOME semantics](https://man7.org/linux/man-pages/man3/getpwuid.3.html).
 These identify requested addresses rather than certify existence or identity;
 the existing worker opening/listing boundary establishes actual navigation.
+
+
+### Editable-location text boundary
+
+`FilesPaneLocation` now lives in a UI-free value module. Its complete-route
+factory validates root/name encoding, native byte/depth budgets and moved values
+before adopting the vector in linear time. Native string sizes never come from
+escaped presentation. Existing child/parent/root/home worker semantics remain;
+no native handle, object identity or operation authority is introduced.
+
+`parse_files_location_text` accepts an explicit syntax and pane-supplied native
+encoding. `Path` means one new absolute address written in strict, safe UTF-8.
+No escape parsing, shell/tilde/environment expansion, current-directory lookup,
+Unicode normalization or replacement occurs. POSIX backslashes remain literal.
+Ordinary Windows components which Win32 may trim or interpret refuse; extended
+filesystem addresses are explicit, and literal suffix names can use ExactNames.
+Raw terminal/bidi controls and malformed UTF-8 refuse in both syntaxes.
+
+`ExactNames` is a bracketed sequence of quoted native strings: first the exact
+absolute anchor, then separate literal native child components. It is not JSON
+and not a flattened path. Examples: `["/home/user", "work", "raw\xFF"]` and
+`["V:\\Users", "literal. ", "\u{D800}"]`. Literal backslash/quote/slash escapes,
+short control escapes and braced Unicode escapes are accepted; POSIX also
+accepts fixed two-digit byte escapes. A braced surrogate retains one Windows
+UTF-16 unit but is not a POSIX Unicode scalar. Escaped separators/NUL/navigation
+names cannot smuggle a component boundary. Ordinary display text is never fed
+into this parser. The formatter produces canonical ASCII-only ExactNames text;
+with the encoding supplied, it round-trips exact units, anchor spelling and
+component boundaries. The text alone is not a self-identifying transport format.
+
+Both syntax and native budgets are explicit. Parsing checks total text length
+first and subtracts the aggregate native byte budget as components decode;
+complete-route construction validates again. Formatting checks route/depth/text
+limits and returns no prefix on failure. The defaults match pane navigation's
+64-KiB/1024-component budget, with a one-MiB text budget; hard text bound is
+16 MiB. Invalid configuration refuses without I/O. No provider scan, pathname
+reopen or native query occurs in these functions.
+
+This supplies the input boundary for the forthcoming location dialog and
+asynchronous completion. It does not enable a location-editing command yet.
+Completion must publish bounded revision-tagged candidates on the UI thread,
+retain exact native route values and preserve ckVision's Right-to-accept
+behavior. Existing locations must not lose their literal component structure
+merely because a form is opened and accepted unchanged.

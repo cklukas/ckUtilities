@@ -1,0 +1,35 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+#include "files_location.hpp"
+#include <string_view>
+namespace ck::vision {
+enum class FilesLocationTextSyntax { Path, ExactNames };
+struct FilesLocationTextLimits {
+    ck::files::NativePathLimits path{64 * 1024};
+    std::size_t components = 1024;
+    std::size_t text_bytes = 1024 * 1024;
+    static constexpr std::size_t hard_text_bytes = 16 * 1024 * 1024;
+};
+// Value-only editor codec. Never parse display_text()/display_name() here.
+// Path means one new absolute native address encoded as safe, strict UTF-8;
+// no escaping, shell expansion, cwd lookup or Unicode normalization. Ordinary
+// Windows components that Win32 may alter/interpret refuse; use ExactNames.
+// ExactNames is a bracketed sequence of quoted native strings: the absolute
+// anchor, then zero or more separate native child names. Examples:
+// ["/home/user", "work", "raw\xFF"]
+// ["V:\\Users", "literal. ", "\u{D800}"]
+// Escapes: \\, \", \/, \n, \r, \t, \b, \f and \u{1..6 hex digits};
+// POSIX additionally accepts \xHH.
+// No raw controls/bidi format controls, implicit conversions or partial result.
+// Encoding is supplied by the pane, never inferred. Exact text alone is not a
+// self-identifying cross-platform transport or an operation-authorization token.
+ck::files::Observation<FilesPaneLocation> parse_files_location_text(std::string_view text,
+                                                                    FilesLocationTextSyntax syntax,
+                                                                    ck::files::NameEncoding encoding,
+                                                                    FilesLocationTextLimits limits = {});
+// Canonical ASCII-only ExactNames serialization, not a flattened pathname.
+// Round-trips exact native units, anchor spelling and component boundaries.
+ck::files::Observation<std::string> format_files_exact_location(const FilesPaneLocation &location,
+                                                                FilesLocationTextLimits limits = {});
+} // namespace ck::vision
