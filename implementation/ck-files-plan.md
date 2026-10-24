@@ -1,9 +1,9 @@
 # Files (`ck-files`) — implementation work packages
 
-Status: implementation active; WP-00 complete. Files runtime features are not yet implemented.
+Status: implementation active; WP-00 and WP-01 complete. The Files application is not yet implemented.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
 
-Execution: WP-00 complete; WP-01 in progress. See [implementation evidence](ck-files-progress.md),
+Execution: WP-00 and WP-01 complete; WP-02 is next. See [implementation evidence](ck-files-progress.md),
 [behavioral and adapter contracts](ck-files-contracts.md)
 and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
 
@@ -306,13 +306,21 @@ API is described as implemented. Record clean/incremental build baselines.
 
 - [x] Add core/platform targets with strict warnings, injected filesystem/time,
   identities, fake adapters and explicit resource ownership.
-- [ ] Implement entry classification, lossless paths, metadata/stream inventory,
+- [x] Implement entry classification, lossless paths, metadata/stream inventory,
   native identity queries, permissions and destination capability inspection.
-- [ ] Implement pane sorting/filter/mark semantics, links and collision rules.
+- [x] Implement pane sorting/filter/mark semantics, links and collision rules.
 
 Acceptance: deterministic tests cover native name edge cases, all inventory
 categories, capability unknown/denied states and selection stability. Native
 adapter tests run on all three OSes; UI-free core boundary check passes.
+
+Completed 2026-10-24; implementation through `acf7d7e`. See the
+[requirement-by-requirement acceptance review](ck-files-wp01-acceptance.md) and
+[machine-readable evidence](evidence/ck-files-wp01-acceptance-20261024.json).
+All 82 suites pass on each supported OS; the separate required Linux casefold
+configuration also passes against current sources. Query coverage and unavailable
+states remain explicit. This acceptance grants no preservation or mutation
+authority and does not close the application or release requirements below.
 
 ### WP-02 — read-only Files application
 

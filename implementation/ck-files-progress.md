@@ -3690,3 +3690,35 @@ WP-01 remains in progress; WP-02–08 remain unstarted. Full preservation/collis
 capabilities, operation-specific validation, scoped loss consent and broader
 filesystem qualification remain required. No Files UI or copy/move/delete API
 is introduced by this assessment.
+
+## 2026-10-24 — WP-01 acceptance
+
+WP-01 is complete after a requirement-by-requirement review of the native model,
+inventory services, destination inspection, names/links/collision evidence and
+pane selection semantics. The review checks the 217 current exported inputs
+against the successful three-host snapshot and matches every registered suite
+to its executed cases. All 82 suites pass per host: 750/753/749 cases on
+macOS/Linux/Windows. The prior sanitizer results remain applicable to unchanged
+source bytes: 211/209/208 focused cases.
+
+The audit found one declared case excluded from normal configurations: the Linux
+native casefold gate requires its own enabled filesystem. A fresh strict-warning
+64-unit ASan+UBSan build against current sources passed all 45 focused cases,
+including required native casefold activation and lookup. This closes coverage
+of all 790 declared cases across the host/configuration union. The temporary ext4
+image was unmounted, its loop attachment audited and diagnostic workspace removed.
+The 239.856-second compile is consistent with the nearby 304.193-second 71-unit
+Linux sanitizer build; actual current compiler inputs and native test markers
+establish freshness independently of elapsed time.
+
+See the [acceptance review](ck-files-wp01-acceptance.md) and
+[acceptance evidence](evidence/ck-files-wp01-acceptance-20261024.json). Native
+inspection completion does not prove preservation or authorize mutation. Unknown
+name policies and feature mappings remain explicit; broader filesystem coverage
+remains part of WP-07. No first-release requirement was waived.
+
+WP-02 is next: the real read-only Files application and its asynchronous services,
+navigation/completion, bounded views, properties/preview and interactive tests.
+Large indexed-view refresh still needs application-level qualified selection or
+explicit invalidation behavior. Recursive preservation planning and scoped consent
+remain WP-03; copy/move/delete/recovery and release acceptance remain WP-04–08.
