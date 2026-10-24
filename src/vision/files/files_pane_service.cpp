@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_pane_service.hpp"
 #include "native_index_file.hpp"
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <limits>
@@ -25,6 +26,10 @@ struct Read {
     PaneStateStamp stamp;
     FilesPaneReadRange range;
 };
+struct Change {
+    Read request;
+    FilesPaneChange command;
+};
 bool valid(FilesPaneServiceLimits l) {
     return l.path_bytes && l.path_bytes <= NativePathLimits::hard_native_bytes && l.page_rows && l.page_rows <= 4096 &&
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
@@ -41,10 +46,11 @@ struct FilesPaneService::State {
     std::condition_variable condition;
     std::optional<Navigate> navigation;
     std::optional<Read> read;
+    std::optional<Change> change;
     std::optional<FilesPaneReply> reply;
     FilesPaneTicket latest_navigation, latest_request, cancelled;
     std::optional<std::stop_source> active_stop;
-    bool navigation_busy = false, busy = false, stopping = false, signalled = false;
+    bool navigation_busy = false, change_busy = false, busy = false, stopping = false, signalled = false;
     std::uint64_t next = 1;
     std::atomic<bool> alive{true};
     std::atomic<FilesPaneWorkerFault> worker_fault{FilesPaneWorkerFault::None};
@@ -56,11 +62,13 @@ struct FilesPaneService::State {
             wake();
     }
     bool signal() noexcept { return !std::exchange(signalled, true); }
-    void emit(FilesPaneReply result, bool is_navigation) {
+    void emit(FilesPaneReply result, bool is_navigation, bool is_change = false) {
         bool needed = false;
         {
             std::lock_guard lock(mutex);
             busy = false;
+            if (is_change)
+                change_busy = false;
             active_stop.reset();
             if (stopping || result.request != latest_request)
                 return;
@@ -82,9 +90,10 @@ struct FilesPaneService::State {
         {
             std::lock_guard lock(mutex);
             worker_fault.store(reason, std::memory_order_release);
-            busy = navigation_busy = false;
+            busy = navigation_busy = change_busy = false;
             navigation.reset();
             read.reset();
+            change.reset();
             active_stop.reset();
             if (!stopping && reason != FilesPaneWorkerFault::None) {
                 // This path allocates nothing, even after std::bad_alloc.
@@ -92,7 +101,9 @@ struct FilesPaneService::State {
                 fatal.request = latest_request;
                 fatal.navigation = latest_navigation;
                 fatal.state = FilesPaneReplyState::WorkerFault;
+                fatal.kind = FilesPaneReplyKind::Fault;
                 fatal.worker_fault = reason;
+                fatal.change_outcome = FilesPaneChangeOutcome::Unknown;
                 reply = std::move(fatal);
             }
             alive.store(false, std::memory_order_release);
@@ -126,28 +137,33 @@ struct FilesPaneService::State {
         for (;;) {
             std::optional<Navigate> nav;
             std::optional<Read> page;
+            std::optional<Change> edit;
             std::stop_source stop;
             {
                 std::unique_lock lock(mutex);
-                condition.wait(lock, [&] { return stopping || navigation || read; });
+                condition.wait(lock, [&] { return stopping || navigation || change || read; });
                 if (stopping)
                     return;
                 if (navigation) {
                     nav = std::move(navigation);
                     navigation.reset();
+                } else if (change) {
+                    edit = std::move(change);
+                    change.reset();
                 } else {
                     page = std::move(read);
                     read.reset();
                 }
                 busy = true;
                 active_stop = stop;
-                const auto &current = nav ? nav->ticket : page->ticket;
+                const auto &current = nav ? nav->ticket : edit ? edit->request.ticket : page->ticket;
                 if (current == cancelled)
                     stop.request_stop();
             }
             if (nav) {
                 auto requested = std::make_shared<const NativeAbsolutePath>(std::move(nav->path));
                 FilesPaneReply result;
+                result.kind = FilesPaneReplyKind::Navigation;
                 result.request = result.navigation = nav->ticket;
                 result.active_location = active;
                 result.requested_location = requested;
@@ -251,6 +267,14 @@ struct FilesPaneService::State {
                 }
                 result.stamp = pane->state_stamp();
                 emit(std::move(result), true);
+            } else if (edit) {
+                FilesPaneReply result;
+                result.request = edit->request.ticket;
+                result.navigation = edit->request.navigation;
+                result.active_location = result.requested_location = active;
+                apply(*pane, *edit, stop.get_token(), result);
+                result.stamp = pane->state_stamp();
+                emit(std::move(result), false, true);
             } else {
                 FilesPaneReply result;
                 result.request = page->ticket;
@@ -261,6 +285,124 @@ struct FilesPaneService::State {
                 emit(std::move(result), false);
             }
         }
+    }
+    void apply(IndexedPane &pane, const Change &edit, std::stop_token stop, FilesPaneReply &result) {
+        const auto &request = edit.request;
+        result.change_outcome = FilesPaneChangeOutcome::NotApplied;
+        result.kind = std::holds_alternative<FilesPaneFocusRow>(edit.command)      ? FilesPaneReplyKind::Focus
+                      : std::holds_alternative<FilesPaneChangeMarks>(edit.command) ? FilesPaneReplyKind::Marks
+                                                                                   : FilesPaneReplyKind::View;
+        if (!pane.data() || !pane.accepts(request.stamp)) {
+            result.state = FilesPaneReplyState::Stale;
+            return;
+        }
+        if (stop.stop_requested()) {
+            result.state = FilesPaneReplyState::Cancelled;
+            return;
+        }
+        if (const auto *focus = std::get_if<FilesPaneFocusRow>(&edit.command)) {
+            switch (pane.focus(request.stamp, focus->row, stop)) {
+            case IndexedPaneFocus::Applied:
+                result.change_outcome = FilesPaneChangeOutcome::Applied;
+                break;
+            case IndexedPaneFocus::Stale:
+                result.state = FilesPaneReplyState::Stale;
+                break;
+            case IndexedPaneFocus::Cancelled:
+                result.state = FilesPaneReplyState::Cancelled;
+                break;
+            case IndexedPaneFocus::Failed:
+                result.error = pane.listing_error();
+                break;
+            case IndexedPaneFocus::Unavailable:
+            case IndexedPaneFocus::InvalidTarget:
+                break;
+            }
+        } else if (const auto *marks = std::get_if<FilesPaneChangeMarks>(&edit.command)) {
+            auto started = pane.begin_mark_change(request.stamp, marks->command, 256, limits.cache_bytes, stop);
+            if (!started.value())
+                result.error = *started.unavailable_detail();
+            else {
+                auto job = std::move(started).take_value();
+                const auto stamp = job->stamp();
+                auto state = job->state();
+                while (state == IndexedMarkJobState::Running)
+                    state = job->advance(stop);
+                if (state == IndexedMarkJobState::Complete && !stop.stop_requested()) {
+                    auto completed = job->completed();
+                    if (!completed.value() || pane.publish_marks(*completed.value()) != IndexedPanePublish::Applied)
+                        throw std::logic_error("pane mark publication invariant");
+                    result.change_outcome = FilesPaneChangeOutcome::Applied;
+                } else if (state == IndexedMarkJobState::Failed) {
+                    result.error = *job->failure();
+                    pane.fail_marks(stamp, *result.error);
+                } else {
+                    pane.cancel_marks(stamp);
+                    result.state = FilesPaneReplyState::Cancelled;
+                }
+            }
+        } else {
+            const auto &view = std::get<FilesPaneChangeView>(edit.command).view;
+            auto started = pane.begin_view_change(request.stamp, view);
+            if (!started.value())
+                result.error = *started.unavailable_detail();
+            else {
+                const auto listing = *started.value();
+                IndexedPaneDataJob job(pane.data(), listing, view, {}, {}, limits.cache_bytes, pane.marks());
+                auto state = job.state();
+                while (state == IndexedPaneDataJobState::Sorting || state == IndexedPaneDataJobState::Indexing ||
+                       state == IndexedPaneDataJobState::CountingMarks)
+                    state = job.advance(stop);
+                if (state == IndexedPaneDataJobState::Complete && !stop.stop_requested()) {
+                    auto completed = job.completed();
+                    if (!completed.value())
+                        throw std::logic_error("missing prepared pane view");
+                    const auto published = pane.publish(*completed.value(), stop);
+                    if (published == IndexedPanePublish::Applied)
+                        result.change_outcome = FilesPaneChangeOutcome::Applied;
+                    else if (published == IndexedPanePublish::Failed) {
+                        result.error = pane.listing_error();
+                        if (!result.error)
+                            throw std::logic_error("missing pane view failure");
+                        pane.fail_listing(listing, *result.error);
+                    } else if (published == IndexedPanePublish::Cancelled) {
+                        pane.cancel_listing(listing);
+                        result.state = FilesPaneReplyState::Cancelled;
+                    } else
+                        throw std::logic_error("pane view publication invariant");
+                } else if (state == IndexedPaneDataJobState::Failed) {
+                    result.error = *job.failure();
+                    pane.fail_listing(listing, *result.error);
+                } else {
+                    pane.cancel_listing(listing);
+                    result.state = FilesPaneReplyState::Cancelled;
+                }
+            }
+        }
+        // Reconcile the page with the final state, including after rollback of
+        // a pending mark/view job. Keep the command failure distinct from the
+        // recovery page; cancellation never turns into apparent success.
+        if (result.change_outcome == FilesPaneChangeOutcome::NotApplied && stop.stop_requested() && result.error &&
+            result.error->error.domain == ErrorDomain::Adapter &&
+            result.error->error.code == static_cast<std::int64_t>(AdapterError::InterruptedRead))
+            result.state = FilesPaneReplyState::Cancelled;
+        auto range = request.range;
+        const auto total = pane.visible_rows();
+        range.first = std::min(range.first, total > range.rows ? total - range.rows : 0);
+        if (result.kind != FilesPaneReplyKind::Marks)
+            if (const auto focus = pane.focused_position()) {
+                if (*focus < range.first)
+                    range.first = *focus;
+                else if (*focus - range.first >= range.rows)
+                    range.first = *focus - (range.rows - 1);
+            }
+        FilesPaneReply display;
+        capture(pane, pane.state_stamp(), range, stop, display);
+        if (result.change_outcome == FilesPaneChangeOutcome::Applied) {
+            result.state = display.state;
+            result.error = std::move(display.error);
+        }
+        result.page = std::move(display.page);
     }
     void capture(IndexedPane &pane, const PaneStateStamp &stamp, FilesPaneReadRange range, std::stop_token stop,
                  FilesPaneReply &result) {
@@ -350,6 +492,8 @@ FilesPaneSubmitted FilesPaneService::navigate(NativeAbsolutePath location, PaneV
         request = ticket(state_->next++);
         state_->navigation.emplace(Navigate{request, std::move(location), std::move(view), first_page_rows});
         state_->read.reset();
+        state_->change.reset();
+        state_->change_busy = false;
         state_->reply.reset();
         state_->cancelled = {};
         state_->latest_navigation = state_->latest_request = request;
@@ -375,7 +519,7 @@ FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneS
             return {FilesPaneSubmission::Stopped, {}};
         if (navigation != state_->latest_navigation)
             return {FilesPaneSubmission::Invalid, {}};
-        if (state_->navigation_busy || state_->reply)
+        if (state_->navigation_busy || state_->change_busy || state_->reply)
             return {FilesPaneSubmission::Busy, {}};
         if (!state_->next)
             return {FilesPaneSubmission::Exhausted, {}};
@@ -390,12 +534,44 @@ FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneS
     state_->condition.notify_one();
     return {FilesPaneSubmission::Accepted, request};
 }
+FilesPaneSubmitted FilesPaneService::change(FilesPaneTicket navigation, PaneStateStamp stamp, FilesPaneChange command,
+                                            FilesPaneReadRange range) {
+    if (!navigation.valid() || command.valueless_by_exception())
+        return {FilesPaneSubmission::Invalid, {}};
+    if (!range.rows || range.rows > state_->limits.page_rows)
+        return {FilesPaneSubmission::LimitExceeded, {}};
+    if (const auto *view = std::get_if<FilesPaneChangeView>(&command)) {
+        if (!valid_pane_order({view->view.sort, view->view.descending, view->view.folders_first}))
+            return {FilesPaneSubmission::Invalid, {}};
+        if (view->view.display_substring.size() > 4096)
+            return {FilesPaneSubmission::LimitExceeded, {}};
+    }
+    FilesPaneTicket request;
+    {
+        std::lock_guard lock(state_->mutex);
+        if (state_->stopping || !state_->alive.load())
+            return {FilesPaneSubmission::Stopped, {}};
+        if (navigation != state_->latest_navigation)
+            return {FilesPaneSubmission::Invalid, {}};
+        if (state_->busy || state_->navigation || state_->read || state_->change || state_->reply)
+            return {FilesPaneSubmission::Busy, {}};
+        if (!state_->next)
+            return {FilesPaneSubmission::Exhausted, {}};
+        request = ticket(state_->next++);
+        state_->change.emplace(Change{Read{request, navigation, std::move(stamp), range}, std::move(command)});
+        state_->latest_request = request;
+        state_->cancelled = {};
+        state_->change_busy = true;
+    }
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
 bool FilesPaneService::cancel(const FilesPaneTicket &request) {
     std::optional<std::stop_source> stop;
     {
         std::lock_guard lock(state_->mutex);
         if (!request.valid() || request != state_->latest_request || state_->stopping ||
-            (!state_->navigation && !state_->read && !state_->busy))
+            (!state_->navigation && !state_->read && !state_->change && !state_->busy))
             return false;
         state_->cancelled = request;
         stop = state_->active_stop;
@@ -419,6 +595,7 @@ void FilesPaneService::request_stop() noexcept {
         state_->stopping = true;
         state_->navigation.reset();
         state_->read.reset();
+        state_->change.reset();
         state_->reply.reset();
         stop = state_->active_stop;
     }
@@ -437,7 +614,7 @@ void FilesPaneService::join() {
 bool FilesPaneService::running() const noexcept { return state_->alive.load(std::memory_order_acquire); }
 bool FilesPaneService::working() const {
     std::lock_guard lock(state_->mutex);
-    return state_->busy || state_->navigation || state_->read;
+    return state_->busy || state_->navigation || state_->change || state_->read;
 }
 FilesPaneWorkerFault FilesPaneService::fault() const noexcept {
     return state_->worker_fault.load(std::memory_order_acquire);

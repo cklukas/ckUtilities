@@ -33,6 +33,18 @@ struct FilesPaneSubmitted {
 };
 enum class FilesPaneReplyState { Ready, Failed, Cancelled, Stale, OutOfRange, LimitExceeded, WorkerFault };
 enum class FilesPaneWorkerFault { None, Allocation, Exception };
+struct FilesPaneFocusRow {
+    ck::files::PaneRowId row;
+};
+struct FilesPaneChangeMarks {
+    ck::files::IndexedMarkCommand command;
+};
+struct FilesPaneChangeView {
+    ck::files::PaneView view;
+};
+using FilesPaneChange = std::variant<FilesPaneFocusRow, FilesPaneChangeMarks, FilesPaneChangeView>;
+enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Fault };
+enum class FilesPaneChangeOutcome { NotRequested, NotApplied, Applied, Unknown };
 struct FilesPaneReply {
     FilesPaneTicket request, navigation;
     FilesPaneReplyState state = FilesPaneReplyState::Failed;
@@ -43,6 +55,12 @@ struct FilesPaneReply {
     std::shared_ptr<const ck::files::NativeAbsolutePath> active_location, requested_location;
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
+    FilesPaneReplyKind kind = FilesPaneReplyKind::Page;
+    // A local selection/view change may commit before page capture fails or
+    // cancellation arrives. Never equate a missing page with rollback. Failed
+    // changes can also carry a current recovery page of the retained state.
+    // Terminal worker faults may interrupt acknowledgment after commitment.
+    FilesPaneChangeOutcome change_outcome = FilesPaneChangeOutcome::NotRequested;
 };
 struct FilesPaneServiceLimits {
     std::size_t path_bytes = 64 * 1024;
@@ -85,6 +103,12 @@ class FilesPaneService final {
     FilesPaneSubmitted navigate(ck::files::NativeAbsolutePath location, ck::files::PaneView view = {},
                                 std::size_t first_page_rows = 256);
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
+    // One acknowledged local-state command; Busy while any work/result is
+    // outstanding. It is never coalesced with another change or page request.
+    // Navigation may supersede it; cancellation cannot undo a committed change.
+    // All row lookup, marks, sorting/filtering and retirement run on the worker.
+    FilesPaneSubmitted change(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneChange command,
+                              FilesPaneReadRange range);
     bool cancel(const FilesPaneTicket &request);
     std::optional<FilesPaneReply> take();
     void request_stop() noexcept;

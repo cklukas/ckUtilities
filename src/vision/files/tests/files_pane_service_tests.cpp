@@ -52,6 +52,8 @@ struct Trace {
         wakes{0};
     std::atomic<bool> block_open{false}, block_read{false};
     std::atomic<int> startup_fault{0}, open_fault{0};
+    std::atomic<unsigned> reads{0};
+    std::atomic<bool> read_error{false};
     Gate open_gate, read_gate;
     std::mutex mutex;
     std::condition_variable changed;
@@ -137,8 +139,12 @@ class File final : public IndexByteFile {
     }
     Observation<std::size_t> read_at(std::uint64_t at, std::span<std::byte> data) override {
         trace_->check();
+        ++trace_->reads;
         if (trace_->block_read.exchange(false))
             trace_->read_gate.block();
+        if (trace_->read_error.exchange(false))
+            return Observation<std::size_t>::unavailable(ObservationState::Denied,
+                                                         {ErrorDomain::Posix, 13, "cache.read.denied"});
         return file_->read_at(at, data);
     }
 };
@@ -237,6 +243,279 @@ struct Fixture {
     }
 };
 } // namespace
+CK_TEST(files_service_focus_marks_and_view_changes_preserve_row_identity_on_worker) {
+    Fixture f;
+    f.start();
+    auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    const auto row = first.page->rows()[7].id;
+    auto submitted = f.service->change(nav.ticket, first.stamp, FilesPaneFocusRow{row}, {0, 5});
+    CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+    auto focused = f.reply();
+    CK_CHECK(focused.request == submitted.ticket && focused.kind == FilesPaneReplyKind::Focus &&
+             focused.change_outcome == FilesPaneChangeOutcome::Applied && focused.state == FilesPaneReplyState::Ready);
+    CK_CHECK(!first.stamp.current() && focused.page->focused_position() == 7 && focused.page->first() == 3);
+    CK_CHECK(focused.page->rows().back().id == row);
+    CK_CHECK(f.service
+                 ->change(nav.ticket, focused.stamp,
+                          FilesPaneChangeMarks{IndexedMarkRange{row, first.page->rows()[9].id, true}}, {5, 10})
+                 .state == FilesPaneSubmission::Accepted);
+    auto marked = f.reply();
+    CK_CHECK(marked.kind == FilesPaneReplyKind::Marks && marked.change_outcome == FilesPaneChangeOutcome::Applied);
+    CK_CHECK(marked.page->selection().marks->total == 3 && marked.page->selection().marks->visible == 3);
+    unsigned marks = 0;
+    for (const auto &entry : marked.page->rows())
+        marks += entry.marked ? 1U : 0U;
+    CK_CHECK(marks == 3);
+    PaneView view;
+    view.descending = true;
+    CK_CHECK(f.service->change(nav.ticket, marked.stamp, FilesPaneChangeView{view}, {0, 5}).state ==
+             FilesPaneSubmission::Accepted);
+    auto reordered = f.reply();
+    CK_CHECK(reordered.kind == FilesPaneReplyKind::View && reordered.change_outcome == FilesPaneChangeOutcome::Applied);
+    CK_CHECK(reordered.page->focused_position() == 12 && reordered.page->rows().back().id == row);
+    CK_CHECK(reordered.page->selection().marks->total == 3 && reordered.page->selection().marks->hidden == 0);
+    CK_CHECK(f.trace->opens == 1); // Reorder uses the retained dataset, not a new scan.
+    f.stopped();
+}
+CK_TEST(files_service_filtering_reports_hidden_marks_until_they_are_explicitly_cleared) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto initial = f.reply();
+    CK_CHECK(
+        f.service->change(nav.ticket, initial.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 20}).state ==
+        FilesPaneSubmission::Accepted);
+    auto marked = f.reply();
+    CK_CHECK(marked.page->selection().marks->total == 20);
+    PaneView filter;
+    filter.display_substring = "one-0";
+    CK_CHECK(f.service->change(nav.ticket, marked.stamp, FilesPaneChangeView{filter}, {19, 5}).state ==
+             FilesPaneSubmission::Accepted);
+    auto filtered = f.reply();
+    CK_CHECK(filtered.state == FilesPaneReplyState::Ready && filtered.page->first() == 0 &&
+             filtered.page->visible_rows() == 1);
+    CK_CHECK(filtered.page->selection().state == PaneSourcesState::HiddenMarksNeedReview);
+    CK_CHECK(filtered.page->selection().marks->visible == 1 && filtered.page->selection().marks->hidden == 19);
+    CK_CHECK(f.service->change(nav.ticket, filtered.stamp, FilesPaneChangeMarks{IndexedClearMarks{}}, {0, 5}).state ==
+             FilesPaneSubmission::Accepted);
+    auto cleared = f.reply();
+    CK_CHECK(cleared.page->selection().marks->total == 0 && !cleared.page->rows().front().marked);
+    CK_CHECK(cleared.page->selection().state != PaneSourcesState::HiddenMarksNeedReview && f.trace->opens == 1);
+    f.stopped();
+}
+CK_TEST(files_service_state_changes_reject_stale_stamps_and_foreign_rows_without_changing_selection) {
+    Fixture f;
+    f.start();
+    auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    CK_CHECK(f.service->change(nav.ticket, first.stamp, FilesPaneFocusRow{first.page->rows()[3].id}, {0, 5}).state ==
+             FilesPaneSubmission::Accepted);
+    auto focused = f.reply();
+    const auto reads = f.trace->reads.load();
+    CK_CHECK(f.service->change(nav.ticket, first.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 5}).state ==
+             FilesPaneSubmission::Accepted);
+    auto stale = f.reply();
+    CK_CHECK(stale.state == FilesPaneReplyState::Stale && stale.change_outcome == FilesPaneChangeOutcome::NotApplied);
+    CK_CHECK(!stale.page && f.trace->reads == reads && focused.stamp.current());
+    Fixture other;
+    other.start();
+    other.service->navigate(address("two"));
+    auto foreign = other.reply();
+    CK_CHECK(
+        f.service->change(nav.ticket, focused.stamp, FilesPaneFocusRow{foreign.page->rows()[0].id}, {0, 5}).state ==
+        FilesPaneSubmission::Accepted);
+    auto invalid = f.reply();
+    CK_CHECK(invalid.state == FilesPaneReplyState::Failed &&
+             invalid.change_outcome == FilesPaneChangeOutcome::NotApplied);
+    CK_CHECK(invalid.page && invalid.page->focused_position() == 3 && invalid.page->selection().marks->total == 0);
+    CK_CHECK(
+        f.service->change(foreign.navigation, invalid.stamp, FilesPaneChangeMarks{IndexedClearMarks{}}, {0, 5}).state ==
+        FilesPaneSubmission::Invalid);
+    f.stopped();
+    other.stopped();
+}
+CK_TEST(files_service_state_changes_are_acknowledged_and_cannot_be_replaced_by_pages_or_other_changes) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    f.trace->block_read = true;
+    const auto command = FilesPaneChangeMarks{IndexedMarkRow{first.page->rows()[3].id, true}};
+    auto submitted = f.service->change(nav.ticket, first.stamp, command, {0, 5});
+    CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+    f.trace->read_gate.wait();
+    for (unsigned i = 0; i < 100; ++i) {
+        CK_CHECK(f.service->change(nav.ticket, first.stamp, command, {0, 5}).state == FilesPaneSubmission::Busy);
+        CK_CHECK(f.service->read_page(nav.ticket, first.stamp, {5, 5}).state == FilesPaneSubmission::Busy);
+    }
+    f.trace->read_gate.release();
+    f.idle();
+    CK_CHECK(f.service->change(nav.ticket, first.stamp, command, {0, 5}).state == FilesPaneSubmission::Busy);
+    auto result = f.reply();
+    CK_CHECK(result.request == submitted.ticket && result.change_outcome == FilesPaneChangeOutcome::Applied);
+    CK_CHECK(result.page->selection().marks->total == 1);
+    f.stopped();
+}
+CK_TEST(files_service_cancelling_blocked_mark_preparation_retains_the_previous_selection) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    f.trace->block_read = true;
+    auto submitted = f.service->change(nav.ticket, first.stamp,
+                                       FilesPaneChangeMarks{IndexedMarkRow{first.page->rows()[3].id, true}}, {0, 5});
+    f.trace->read_gate.wait();
+    CK_CHECK(f.service->cancel(submitted.ticket) && f.service->working());
+    f.trace->read_gate.release();
+    auto result = f.reply();
+    CK_CHECK(result.change_outcome == FilesPaneChangeOutcome::NotApplied);
+    CK_CHECK(result.state == FilesPaneReplyState::Cancelled && !result.page);
+    CK_CHECK(f.service->read_page(nav.ticket, result.stamp, {0, 5}).state == FilesPaneSubmission::Accepted);
+    CK_CHECK(f.reply().page->selection().marks->total == 0);
+    f.stopped();
+}
+CK_TEST(files_service_view_change_cancelled_during_blocked_cache_read_preserves_previous_order) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    f.trace->block_read = true;
+    PaneView view;
+    view.descending = true;
+    auto submitted = f.service->change(nav.ticket, first.stamp, FilesPaneChangeView{view}, {0, 5});
+    f.trace->read_gate.wait();
+    CK_CHECK(f.service->cancel(submitted.ticket));
+    f.trace->read_gate.release();
+    auto result = f.reply();
+    CK_CHECK(result.state == FilesPaneReplyState::Cancelled &&
+             result.change_outcome == FilesPaneChangeOutcome::NotApplied);
+    CK_CHECK(f.service->read_page(nav.ticket, result.stamp, {0, 5}).state == FilesPaneSubmission::Accepted);
+    auto retained = f.reply();
+    CK_CHECK(!retained.page->view().descending && retained.page->rows()[0].id == first.page->rows()[0].id);
+    f.stopped();
+}
+CK_TEST(files_service_navigation_supersedes_a_blocked_state_change_without_replaying_it) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    f.trace->block_read = true;
+    auto edit = f.service->change(nav.ticket, first.stamp,
+                                  FilesPaneChangeMarks{IndexedMarkRow{first.page->rows()[3].id, true}}, {0, 5});
+    f.trace->read_gate.wait();
+    const auto next = f.service->navigate(address("two"), {}, 5);
+    CK_CHECK(next.state == FilesPaneSubmission::Accepted && !f.service->cancel(edit.ticket));
+    f.trace->read_gate.release();
+    auto current = f.reply();
+    CK_CHECK(current.request == next.ticket && current.kind == FilesPaneReplyKind::Navigation);
+    CK_CHECK(*current.active_location == address("two") && current.page->selection().marks->total == 0);
+    CK_CHECK(
+        f.service->change(next.ticket, current.stamp, FilesPaneChangeMarks{IndexedInvertVisible{}}, {0, 5}).state ==
+        FilesPaneSubmission::Accepted);
+    auto inverted = f.reply();
+    CK_CHECK(inverted.page->selection().marks->total == 20 && inverted.page->rows()[0].marked);
+    CK_CHECK(
+        f.service->change(next.ticket, inverted.stamp, FilesPaneChangeMarks{IndexedInvertVisible{}}, {0, 5}).state ==
+        FilesPaneSubmission::Accepted);
+    CK_CHECK(f.reply().page->selection().marks->total == 0);
+    f.stopped();
+}
+CK_TEST(files_service_invalid_state_change_parameters_are_rejected_before_any_native_work) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 5);
+    const auto first = f.reply();
+    const auto reads = f.trace->reads.load();
+    PaneView invalid;
+    invalid.sort = static_cast<PaneSortKey>(999);
+    CK_CHECK(f.service->change(nav.ticket, first.stamp, FilesPaneChangeView{invalid}, {0, 5}).state ==
+             FilesPaneSubmission::Invalid);
+    invalid.sort = PaneSortKey::Name;
+    invalid.display_substring.assign(4097, 'x');
+    CK_CHECK(f.service->change(nav.ticket, first.stamp, FilesPaneChangeView{invalid}, {0, 5}).state ==
+             FilesPaneSubmission::LimitExceeded);
+    for (auto count : {std::size_t{0}, std::size_t{4097}})
+        CK_CHECK(
+            f.service->change(nav.ticket, first.stamp, FilesPaneChangeMarks{IndexedClearMarks{}}, {0, count}).state ==
+            FilesPaneSubmission::LimitExceeded);
+    CK_CHECK(f.trace->reads == reads && first.stamp.current() && !f.service->working());
+    f.stopped();
+}
+CK_TEST(files_service_notification_failure_after_mark_commit_reports_unknown_acknowledgment) {
+    Fixture f;
+    std::atomic<unsigned> attempts{0};
+    f.service = std::make_unique<FilesPaneService>(f.backend(), FilesPaneServiceLimits{}, [&] {
+        if (++attempts == 2)
+            throw std::runtime_error("mark acknowledgment notification failed");
+        f.trace->notify();
+    });
+    const auto nav = f.service->navigate(address("one"), {}, 5);
+    auto first = f.reply();
+    const auto submitted =
+        f.service->change(nav.ticket, first.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 5});
+    {
+        std::unique_lock lock(f.trace->mutex);
+        if (!f.trace->changed.wait_for(lock, std::chrono::seconds(5), [&] { return !f.service->running(); }))
+            throw std::runtime_error("faulted mark worker did not retire");
+    }
+    auto result = f.reply();
+    CK_CHECK(result.request == submitted.ticket && result.state == FilesPaneReplyState::WorkerFault);
+    CK_CHECK(result.kind == FilesPaneReplyKind::Fault && result.change_outcome == FilesPaneChangeOutcome::Unknown &&
+             !result.page && !f.service->running());
+    CK_CHECK(attempts == 3 && !first.stamp.current());
+    f.stopped();
+}
+CK_TEST(files_service_committed_changes_remain_explicit_when_display_capture_exceeds_its_budget) {
+    Fixture f;
+    FilesPaneServiceLimits limits;
+    limits.page_wire_bytes = 512;
+    f.start(limits);
+    const auto nav = f.service->navigate(address("one"), {}, 1);
+    auto first = f.reply();
+    CK_CHECK(
+        f.service->change(nav.ticket, first.stamp, FilesPaneChangeMarks{IndexedMarkVisible{true}}, {0, 20}).state ==
+        FilesPaneSubmission::Accepted);
+    auto marked = f.reply();
+    CK_CHECK(marked.state == FilesPaneReplyState::LimitExceeded && !marked.page);
+    CK_CHECK(marked.change_outcome == FilesPaneChangeOutcome::Applied && !first.stamp.current());
+    CK_CHECK(f.service->read_page(nav.ticket, marked.stamp, {0, 1}).state == FilesPaneSubmission::Accepted);
+    auto recovered = f.reply();
+    CK_CHECK(recovered.page->selection().marks->total == 20 && recovered.page->rows()[0].marked);
+    PaneView view;
+    view.descending = true;
+    CK_CHECK(f.service->change(nav.ticket, recovered.stamp, FilesPaneChangeView{view}, {0, 20}).state ==
+             FilesPaneSubmission::Accepted);
+    auto sorted = f.reply();
+    CK_CHECK(sorted.state == FilesPaneReplyState::LimitExceeded && !sorted.page);
+    CK_CHECK(sorted.change_outcome == FilesPaneChangeOutcome::Applied);
+    CK_CHECK(f.service->read_page(nav.ticket, sorted.stamp, {0, 1}).state == FilesPaneSubmission::Accepted);
+    auto final = f.reply();
+    CK_CHECK(final.page->view().descending && final.page->rows()[0].display_name == "one-9");
+    CK_CHECK(final.page->selection().marks->total == 20 && f.trace->opens == 1);
+    f.stopped();
+}
+CK_TEST(files_service_native_mark_failure_keeps_its_exact_error_when_cancellation_races_it) {
+    Fixture f;
+    f.start();
+    const auto nav = f.service->navigate(address("one"), {}, 20);
+    auto first = f.reply();
+    f.trace->block_read = true;
+    f.trace->read_error = true;
+    auto edit = f.service->change(nav.ticket, first.stamp,
+                                  FilesPaneChangeMarks{IndexedMarkRow{first.page->rows()[3].id, true}}, {0, 5});
+    f.trace->read_gate.wait();
+    CK_CHECK(f.service->cancel(edit.ticket));
+    f.trace->read_gate.release();
+    auto result = f.reply();
+    CK_CHECK(result.state == FilesPaneReplyState::Failed &&
+             result.change_outcome == FilesPaneChangeOutcome::NotApplied);
+    CK_CHECK(result.error && result.error->state == ObservationState::Denied);
+    CK_CHECK(result.error->error.domain == ErrorDomain::Posix && result.error->error.code == 13 &&
+             result.error->error.operation == "cache.read.denied");
+    CK_CHECK(!result.page && f.service->running());
+    f.stopped();
+}
 CK_TEST(files_service_native_index_navigation_and_pages_keep_all_native_io_on_worker) {
     Fixture f;
     f.start();

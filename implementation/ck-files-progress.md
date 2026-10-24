@@ -3848,3 +3848,47 @@ refresh with stable selection, marking/view commands, properties/preview,
 histories/bookmarks, mouse acceptance and a production executable with actual
 interactive terminal validation are still required. No mutation command is
 enabled.
+
+## 2026-10-24 — WP-02 acknowledged pane-state commands
+
+The pane service now accepts focus, mark and view-change commands on its owning
+worker. These commands use one acknowledged slot: another change or page read
+receives Busy while work or an unread result is outstanding. Navigation may
+supersede an accepted change; accepted mark commands are never silently replaced
+by page reads or other mark commands. Exact navigation tickets and current model
+stamps gate execution, and row IDs retain their original dataset scope.
+
+Marking uses the core's copy-on-write disk bitmap jobs. Reorder/filter changes
+reuse the retained indexed dataset and preserve row identities, focus and marks;
+they do not rescan a path. Hidden marks remain explicit and block operation
+candidates until reviewed or cleared. Cancellation of pending preparation keeps
+the previous committed state, while native failures retain their exact error
+even when cancellation races them.
+
+Replies distinguish NotApplied, Applied and Unknown outcomes independently of
+page delivery. A committed change whose viewport exceeds a display budget
+remains Applied and can be read back with a smaller page. A worker fault during
+acknowledgment reports Unknown, never an invented rollback. Failed commands can
+carry a current recovery page of the retained state without becoming apparent
+successes. These are local pane-state operations; they do not mutate source
+files.
+
+Eleven additional service tests cover retained focus/row IDs and marks through
+reorder, filtering and hidden marks, clear/invert/range marking, stale and foreign
+targets, exclusive acknowledgments, blocked cancellation and supersession,
+input bounds, native-error precedence, display limits after commitment and
+notification failure. All 83 Files suites pass: 798 cases on Mac, 801 on Linux
+and 797 on Windows. All 48 UI/service cases pass under matched ASan+UBSan on
+Mac/Linux and ASan on Windows, using 71 product units and instrumented installed
+ckVision 1.4.0 SDKs. UI-free ThreadSanitizer builds run all 28 service cases three
+times on each Mac/Linux host (84 case executions per host), without findings.
+
+See [the pane-command evidence](evidence/ck-files-pane-changes-20261024.json)
+for source/compiler/SDK/output fingerprints, exact test sets, timing and cleanup.
+Diagnostic builds and fixture data have been retired; verified normal builds
+remain available for active work. No GUI application was launched at this
+component milestone.
+
+WP-02 remains open. The application still needs to bind these worker commands
+to its focus/mark/view controls, as well as implement the remaining navigation,
+refresh, properties/preview, history/bookmark and interactive acceptance work.
