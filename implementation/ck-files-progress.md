@@ -4343,3 +4343,27 @@ latest-query/revision/lifetime gating and ckVision provider/Right-to-accept
 integration, followed by histories/bookmarks, qualified refresh, properties/
 preview and production executable/interactive acceptance. No completion provider,
 filesystem mutation command or production GUI launch is enabled yet.
+
+
+## 2026-10-24 — WP-02 asynchronous completion service checkpoint
+
+Added a serialized worker service for native parent discovery, bounded completed-index
+cache reuse, revision/ticket-tagged replies, latest-request coalescing, refresh,
+cancellation, fault reporting and worker-owned resource retirement. Twenty-six
+new tests exercise ownership, pagination, supersession, stale continuations,
+quotas, native integration, shutdown and failure/cancellation races.
+
+Final macOS focused tests pass all 26 cases; the full Files/keymap CTest run
+passes all 84 entries. Build timing, exact source/SDK fingerprints, output hash
+and complete validation logs are retained in
+[checkpoint evidence](evidence/ck-files-completion-service-mac-20261024.json).
+The initial strict build rejected an unused helper; it was removed before the
+successful builds and final validation. No production app was built or launched.
+
+This is an in-progress checkpoint committed at the user's request to stop.
+Linux/Windows normal tests, service sanitizer/race qualification and architecture/
+strict documentation checks remain pending. No cross-platform service acceptance
+is claimed. Next qualify those gates, then connect the ckVision completion
+provider with revision/lifetime gating and Right-to-accept. Continue the remaining
+WP-02 history/bookmark, refresh, properties/preview and production interactive
+acceptance work afterward. WP-03–08 remain unstarted.

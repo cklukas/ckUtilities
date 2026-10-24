@@ -56,6 +56,7 @@ class FilesLocationCompletionQuery final {
 
   private:
     friend class FilesCompletionIndexJob;
+    friend class FilesCompletionService;
     friend ck::files::Observation<FilesLocationCompletionQuery>
         parse_files_location_completion(std::string_view, FilesLocationTextSyntax, ck::files::NameEncoding,
                                         FilesLocationTextLimits);
