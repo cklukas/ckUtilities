@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -453,3 +454,62 @@ CK_TEST(index_file_native_windows_protects_from_inherited_world_access_and_exclu
     std::cout << "index-private-native-windows-protected-dacl-exclusive-qualified\n";
 }
 #endif
+CK_TEST(index_scan_native_streams_100000_synthetic_records_without_retaining_address_table) {
+    const ck::testing::ScratchDirectory scratch("files-index-scale", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    auto workspace = take(open_native_index_workspace(address(scratch.path())));
+    auto budget = std::make_shared<IndexStorageBudget>(64ULL * 1024 * 1024, 1);
+    DirectoryIndexContext context;
+    context.generation[0] = std::byte{1};
+    auto store = take(DirectoryIndexStore::create_new(workspace, budget, context, {100000, 64ULL * 1024 * 1024, {}}));
+    const auto start = std::chrono::steady_clock::now();
+    for (std::uint64_t i = 1; i <= 100000; ++i) {
+        BasicMetadata metadata;
+        metadata.kind = Observation<ObjectKind>::available(ObjectKind::RegularFile);
+        metadata.logical_size = Observation<std::uint64_t>::available(i * 3);
+        DirectoryIndexRecord record{i, *NativeName::from_posix("item-" + std::to_string(i)),
+                                    Observation<BasicMetadata>::available(std::move(metadata)),
+                                    Observation<bool>::available(i % 7 == 0)};
+        CK_CHECK(store->append(record).value());
+    }
+    CK_CHECK(take(store->seal()));
+    const auto built = std::chrono::steady_clock::now();
+    auto cursor = take(store->begin_scan());
+    std::uint64_t seen = 0, scanned_bytes = 0;
+    std::size_t pages = 0, max_rows = 0, max_wire = 0;
+    for (;;) {
+        const auto page = take(store->read_page(cursor, {64, 16 * 1024}));
+        CK_CHECK(page.rows.size() <= 64 && page.wire_bytes <= 16 * 1024);
+        CK_CHECK(!page.rows.empty() || page.end);
+        max_rows = std::max(max_rows, page.rows.size());
+        max_wire = std::max(max_wire, page.wire_bytes);
+        scanned_bytes += page.wire_bytes;
+        ++pages;
+        for (const auto &entry : page.rows) {
+            ++seen;
+            CK_CHECK(entry.record.row_id == seen && entry.address.row_id() == seen);
+            CK_CHECK(entry.record.name == *NativeName::from_posix("item-" + std::to_string(seen)));
+            const auto *metadata = entry.record.metadata.value();
+            if (!metadata)
+                throw std::runtime_error("scale record metadata unavailable");
+            CK_CHECK(metadata->logical_size.value() && *metadata->logical_size.value() == seen * 3);
+            CK_CHECK(metadata->kind.value() && *metadata->kind.value() == ObjectKind::RegularFile);
+            CK_CHECK(entry.record.hidden.value() && *entry.record.hidden.value() == (seen % 7 == 0));
+        }
+        cursor = page.next;
+        if (page.end)
+            break;
+    }
+    const auto finished = std::chrono::steady_clock::now();
+    CK_CHECK(seen == 100000 && store->rows() == seen && cursor.position() == seen);
+    CK_CHECK(scanned_bytes == store->bytes() && budget->charged_bytes() == store->bytes());
+    const auto end = take(store->read_page(cursor));
+    CK_CHECK(end.end && end.rows.empty() && end.wire_bytes == 0);
+    std::cout << "index-scan-native-100000-qualified rows=" << seen << " bytes=" << store->bytes() << " pages=" << pages
+              << " max_page_rows=" << max_rows << " max_page_wire=" << max_wire
+              << " append_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(built - start).count()
+              << " scan_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished - built).count() << '\n';
+    store.reset();
+    workspace.reset();
+    CK_CHECK(budget->charged_bytes() == 0 && budget->charged_files() == 0 && children(scratch.path()) == 0);
+}

@@ -3215,3 +3215,52 @@ preservation/collision capabilities are still required. Factories retain a root
 handle outside the byte-file slot count; host controllers must bound instances
 and retire their final owners on workers. WP-01 remains in progress; WP-02–08
 remain unstarted.
+
+## 2026-10-24 — bounded sequential index scans
+
+WP-01 now scans sealed index records without retaining every row address in RAM.
+Opaque same-store cursors contain only counters and a namespace, not native
+owners. Bounded pages preserve records and issue checked same-store addresses;
+copying a cursor supports deterministic retry. The codec's shared framing query
+validates the 12-byte schema/declared bound before allocation, while complete
+codec validation and contiguous row-ID checks precede emission.
+
+Page row and encoded-byte limits are independent. A too-large first record
+returns an explicit page-budget failure without revoking the healthy store, so
+the same cursor can be retried with an adequate bounded limit. Later oversized
+records finish the current page without skipping/truncation. Successful logical
+data transfers are bounded by the page wire budget plus one lookahead header.
+End requires exact stored row/offset exhaustion and a fresh native size check.
+I/O, corruption, cancellation and exceptions return no page prefix and revoke the
+store; previous addresses cannot keep reading through a failed generation.
+
+Nine new scan cases cover repeatability, moved/foreign cursors, exact limits,
+lookahead, retry, post-prefix corruption and cancellation, row substitution,
+all failure states, truncated/trailing data and exceptions. Three framing cases
+check minimum/maximum/overflow/schema boundaries and that framing alone does
+not establish integrity. All 76 Files suites pass on macOS, Linux and Windows:
+636, 639 and 635 cases. Fresh eleven-unit sanitizer runs pass 64, 62 and 61
+focused cases (codec17, store34, native13/11/10), with ASan+UBSan on macOS/Linux
+and ASan on Windows. Linux leak detection remains enabled.
+
+A native synthetic-cache case writes and validates 100,000 records on every
+host, retaining one bounded page and no full address table. Each run stores
+27,888,895 bytes and scans 1,724 pages, with maxima of 59 rows and 16,347 encoded
+bytes per page. Normal append/scan times were 511/327 ms on APFS, 297/354 ms on
+ext4 and 771/918 ms on ReFS. Sanitizer measurements are recorded separately.
+These are cache measurements with OS caching, not real-directory enumeration,
+external sorting, physical-I/O/RSS bounds or full-app responsiveness qualification.
+
+See [the scan evidence](evidence/ck-files-index-scan-20261024.json) for 187 source
+fingerprints, exact commands, SDK/output hashes, scale metrics, timing and
+cleanup. Both Mac fixture roots and remote scratch roots are empty. Diagnostic
+builds and documentation scratch were removed; current verified normal builds
+remain. Windows project work stays on V: with explicit installed tools and a
+bounded process environment. No GUI app was launched or visual result claimed.
+
+Real-directory disk-index collection, duplicate/source-change validation,
+external sorting and address persistence, indexed pane integration, destination
+preservation/collision rules and broader native qualification remain required.
+Scan End describes the private cache rather than source enumeration, a filesystem
+snapshot or native operation authority. WP-01 remains in progress; WP-02–08 remain
+unstarted.

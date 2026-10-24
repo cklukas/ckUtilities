@@ -414,3 +414,39 @@ CK_TEST(index_record_available_metadata_matches_fixed_full_schema_wire_image) {
     CK_CHECK(take(encode_directory_index_record(record, c)) == expected);
     CK_CHECK(take(decode_directory_index_record(expected, c)).name == record.name);
 }
+CK_TEST(index_record_frame_size_is_bounded_framing_not_record_authentication) {
+    auto wire = take(encode_directory_index_record(simple(), context()));
+    const auto header = std::span(wire).first(12);
+    CK_CHECK(take(detail::directory_index_record_wire_size(header, {})) == wire.size());
+    wire.back() ^= std::byte{1};
+    CK_CHECK(take(detail::directory_index_record_wire_size(header, {})) == wire.size());
+    CK_CHECK(!decode_directory_index_record(wire, context()).value());
+}
+CK_TEST(index_record_frame_size_rejects_foreign_schema_short_headers_and_invalid_limits) {
+    auto wire = take(encode_directory_index_record(simple(), context()));
+    for (std::size_t size : {std::size_t{0}, std::size_t{11}, std::size_t{13}})
+        CK_CHECK(!detail::directory_index_record_wire_size(std::span(wire).first(size), {}).value());
+    wire[0] ^= std::byte{1};
+    CK_CHECK(detail::directory_index_record_wire_size(std::span(wire).first(12), {}).state() ==
+             ObservationState::Unsupported);
+    CK_CHECK(!detail::directory_index_record_wire_size(std::span(wire).first(12), {15, 1, 0}).value());
+    CK_CHECK(!detail::directory_index_record_wire_size(std::span(wire).first(12),
+                                                       {DirectoryIndexRecordLimits::hard_record_bytes + 1, 1, 0})
+                  .value());
+}
+CK_TEST(index_record_frame_size_has_exact_minimum_maximum_and_overflow_boundaries) {
+    auto wire = take(encode_directory_index_record(simple(), context()));
+    CK_CHECK(take(detail::directory_index_record_wire_size(std::span(wire).first(12), {wire.size(), 1, 0})) ==
+             wire.size());
+    CK_CHECK(detail::directory_index_record_wire_size(std::span(wire).first(12), {wire.size() - 1, 1, 0}).state() ==
+             ObservationState::Unknown);
+    number(wire, 8, 0, 4);
+    CK_CHECK(take(detail::directory_index_record_wire_size(std::span(wire).first(12), {16, 1, 0})) == 16);
+    number(wire, 8, DirectoryIndexRecordLimits::hard_record_bytes - 16, 4);
+    CK_CHECK(take(detail::directory_index_record_wire_size(std::span(wire).first(12),
+                                                           {DirectoryIndexRecordLimits::hard_record_bytes, 1, 0})) ==
+             DirectoryIndexRecordLimits::hard_record_bytes);
+    number(wire, 8, UINT32_MAX, 4);
+    CK_CHECK(detail::directory_index_record_wire_size(std::span(wire).first(12), {}).state() ==
+             ObservationState::Unknown);
+}

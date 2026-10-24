@@ -192,19 +192,9 @@ Observation<bool> DirectoryIndexStore::seal(std::stop_token stop) {
     if (state_ == DirectoryIndexStoreState::Sealed)
         return Observation<bool>::available(true);
     try {
-        const auto size = file_->size();
-        if (!size.value()) {
-            fail(*size.unavailable_detail());
-            return unavailable<bool>(*failure_);
-        }
-        if (*size.value() != bytes_) {
-            fail(error(AdapterError::InvalidNativeResult, "index_store.size"));
-            return unavailable<bool>(*failure_);
-        }
-        if (stop.stop_requested()) {
-            fail(cancelled());
-            return unavailable<bool>(*failure_);
-        }
+        auto checked = check_size(stop);
+        if (!checked.value())
+            return checked;
         state_ = DirectoryIndexStoreState::Sealed;
         return Observation<bool>::available(true);
     } catch (...) {
@@ -224,27 +214,9 @@ Observation<DirectoryIndexRecord> DirectoryIndexStore::read(const IndexRecordAdd
             return unavailable<DirectoryIndexRecord>(*failure_);
         }
         std::vector<std::byte> wire(address.bytes_);
-        std::size_t done = 0;
-        while (done != wire.size()) {
-            if (stop.stop_requested()) {
-                fail(cancelled());
-                return unavailable<DirectoryIndexRecord>(*failure_);
-            }
-            auto got = file_->read_at(address.offset_ + done, std::span(wire).subspan(done));
-            if (!got.value()) {
-                fail(*got.unavailable_detail());
-                return unavailable<DirectoryIndexRecord>(*failure_);
-            }
-            if (!*got.value() || *got.value() > wire.size() - done) {
-                fail(error(AdapterError::InvalidNativeResult, "index_store.read_count"));
-                return unavailable<DirectoryIndexRecord>(*failure_);
-            }
-            done += *got.value();
-        }
-        if (stop.stop_requested()) {
-            fail(cancelled());
-            return unavailable<DirectoryIndexRecord>(*failure_);
-        }
+        auto filled = read_exact(address.offset_, wire, stop);
+        if (!filled.value())
+            return unavailable<DirectoryIndexRecord>(*filled.unavailable_detail());
         auto record = decode_directory_index_record(wire, context_, limits_.record);
         if (!record.value()) {
             fail(*record.unavailable_detail());
@@ -255,6 +227,140 @@ Observation<DirectoryIndexRecord> DirectoryIndexStore::read(const IndexRecordAdd
             return unavailable<DirectoryIndexRecord>(*failure_);
         }
         return record;
+    } catch (...) {
+        exception();
+        throw;
+    }
+}
+Observation<bool> DirectoryIndexStore::read_exact(std::uint64_t offset, std::span<std::byte> bytes,
+                                                  std::stop_token stop) {
+    std::size_t done = 0;
+    while (done != bytes.size()) {
+        if (stop.stop_requested()) {
+            fail(cancelled());
+            return unavailable<bool>(*failure_);
+        }
+        auto got = file_->read_at(offset + done, bytes.subspan(done));
+        if (!got.value()) {
+            fail(*got.unavailable_detail());
+            return unavailable<bool>(*failure_);
+        }
+        if (!*got.value() || *got.value() > bytes.size() - done) {
+            fail(error(AdapterError::InvalidNativeResult, "index_store.read_count"));
+            return unavailable<bool>(*failure_);
+        }
+        done += *got.value();
+    }
+    if (stop.stop_requested()) {
+        fail(cancelled());
+        return unavailable<bool>(*failure_);
+    }
+    return Observation<bool>::available(true);
+}
+Observation<bool> DirectoryIndexStore::check_size(std::stop_token stop) {
+    if (stop.stop_requested()) {
+        fail(cancelled());
+        return unavailable<bool>(*failure_);
+    }
+    const auto size = file_->size();
+    if (!size.value()) {
+        fail(*size.unavailable_detail());
+        return unavailable<bool>(*failure_);
+    }
+    if (*size.value() != bytes_) {
+        fail(error(AdapterError::InvalidNativeResult, "index_store.size"));
+        return unavailable<bool>(*failure_);
+    }
+    if (stop.stop_requested()) {
+        fail(cancelled());
+        return unavailable<bool>(*failure_);
+    }
+    return Observation<bool>::available(true);
+}
+Observation<IndexScanCursor> DirectoryIndexStore::begin_scan() const {
+    if (state_ != DirectoryIndexStoreState::Sealed)
+        return unavailable<IndexScanCursor>(failure_.value_or(invalid_state()));
+    return Observation<IndexScanCursor>::available(IndexScanCursor(scope_, 0, 0));
+}
+Observation<DirectoryIndexScanPage>
+DirectoryIndexStore::read_page(const IndexScanCursor &cursor, DirectoryIndexScanLimits limits, std::stop_token stop) {
+    using Result = Observation<DirectoryIndexScanPage>;
+    if (state_ != DirectoryIndexStoreState::Sealed)
+        return unavailable<DirectoryIndexScanPage>(failure_.value_or(invalid_state()));
+    if (!limits.rows || limits.rows > limits.hard_rows || limits.wire_bytes < 16 ||
+        limits.wire_bytes > limits.hard_wire_bytes)
+        return unavailable<DirectoryIndexScanPage>(error(AdapterError::InvalidLimit, "index_store.scan_limits"));
+    if (cursor.owner_ != scope_ || cursor.position_ > rows_ || cursor.offset_ > bytes_ ||
+        ((cursor.position_ == rows_) != (cursor.offset_ == bytes_)))
+        return unavailable<DirectoryIndexScanPage>(error(AdapterError::InvalidIdentifier, "index_store.scan_cursor"));
+    try {
+        if (stop.stop_requested()) {
+            fail(cancelled());
+            return unavailable<DirectoryIndexScanPage>(*failure_);
+        }
+        std::vector<DirectoryIndexScanRow> output;
+        std::uint64_t position = cursor.position_, offset = cursor.offset_;
+        std::size_t accumulated = 0;
+        while (position != rows_ && output.size() != limits.rows) {
+            if (bytes_ - offset < 16) {
+                fail(error(AdapterError::InvalidNativeResult, "index_store.scan_length"));
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            std::array<std::byte, 12> header{};
+            auto filled = read_exact(offset, header, stop);
+            if (!filled.value())
+                return unavailable<DirectoryIndexScanPage>(*filled.unavailable_detail());
+            const auto framed = detail::directory_index_record_wire_size(header, limits_.record);
+            if (!framed.value()) {
+                fail(*framed.unavailable_detail());
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            const auto count = *framed.value();
+            if (count > bytes_ - offset) {
+                fail(error(AdapterError::InvalidNativeResult, "index_store.scan_length"));
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            if (count > limits.wire_bytes - accumulated) {
+                if (output.empty())
+                    return unavailable<DirectoryIndexScanPage>(
+                        error(AdapterError::InventoryLimit, "index_store.scan_page_budget", ObservationState::Unknown));
+                break;
+            }
+            std::vector<std::byte> wire(static_cast<std::size_t>(count));
+            std::copy(header.begin(), header.end(), wire.begin());
+            filled = read_exact(offset + header.size(), std::span(wire).subspan(header.size()), stop);
+            if (!filled.value())
+                return unavailable<DirectoryIndexScanPage>(*filled.unavailable_detail());
+            auto decoded = decode_directory_index_record(wire, context_, limits_.record);
+            if (!decoded.value()) {
+                fail(*decoded.unavailable_detail());
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            if (decoded.value()->row_id != position + 1) {
+                fail(error(AdapterError::InvalidNativeResult, "index_store.scan_row"));
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            output.push_back({IndexRecordAddress(scope_, position + 1, offset, static_cast<std::size_t>(count)),
+                              std::move(decoded).take_value()});
+            offset += count;
+            ++position;
+            accumulated += static_cast<std::size_t>(count);
+        }
+        const bool end = position == rows_;
+        if (end) {
+            if (offset != bytes_) {
+                fail(error(AdapterError::InvalidNativeResult, "index_store.scan_end"));
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            auto checked = check_size(stop);
+            if (!checked.value())
+                return unavailable<DirectoryIndexScanPage>(*checked.unavailable_detail());
+        }
+        if (stop.stop_requested()) {
+            fail(cancelled());
+            return unavailable<DirectoryIndexScanPage>(*failure_);
+        }
+        return Result::available({std::move(output), IndexScanCursor(scope_, position, offset), accumulated, end});
     } catch (...) {
         exception();
         throw;

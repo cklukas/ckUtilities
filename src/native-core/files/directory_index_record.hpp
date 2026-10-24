@@ -41,5 +41,9 @@ Observation<DirectoryIndexRecord> decode_directory_index_record(std::span<const 
                                                                 DirectoryIndexRecordLimits limits = {});
 namespace detail {
 std::uint32_t directory_index_crc32c(std::span<const std::byte> bytes) noexcept;
-}
+// Exactly the 12-byte envelope prefix. Checks schema/declared record bound;
+// does not verify a checksum, payload or owner and never certifies a record.
+Observation<std::size_t> directory_index_record_wire_size(std::span<const std::byte> header,
+                                                          DirectoryIndexRecordLimits limits);
+} // namespace detail
 } // namespace ck::files

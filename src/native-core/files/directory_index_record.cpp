@@ -225,6 +225,26 @@ std::uint32_t detail::directory_index_crc32c(std::span<const std::byte> bytes) n
     }
     return ~crc;
 }
+Observation<std::size_t> detail::directory_index_record_wire_size(std::span<const std::byte> header,
+                                                                  DirectoryIndexRecordLimits limits) {
+    using Result = Observation<std::size_t>;
+    try {
+        if (limits.record_bytes < 16 || limits.record_bytes > limits.hard_record_bytes)
+            reject(ObservationState::Failed, AdapterError::InvalidLimit, "index_record.limits");
+        if (header.size() != 12)
+            invalid();
+        if (!std::equal(magic.begin(), magic.end(), header.begin()))
+            reject(ObservationState::Unsupported, AdapterError::UnsupportedQuery, "index_record.schema");
+        std::uint64_t length = 0;
+        for (std::size_t i = 0; i != 4; ++i)
+            length |= std::to_integer<std::uint64_t>(header[8 + i]) << (i * 8);
+        if (length + 16 > limits.record_bytes)
+            limit();
+        return Result::available(static_cast<std::size_t>(length + 16));
+    } catch (const Rejected &e) {
+        return Result::unavailable(e.detail.state, e.detail.error);
+    }
+}
 Observation<std::vector<std::byte>> encode_directory_index_record(const DirectoryIndexRecord &record,
                                                                   const DirectoryIndexContext &context,
                                                                   DirectoryIndexRecordLimits limits) {

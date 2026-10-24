@@ -2063,6 +2063,64 @@ size exceptions and cancellation, shared factories, no double charging and close
 order. No different-account impersonation transition is claimed as native test
 coverage; the current-user refusal branch still needs that matrix qualification.
 
+### Bounded sequential cache scans
+
+`DirectoryIndexStore::begin_scan` issues an opaque same-lifetime cursor only
+after seal. `read_page` reads records sequentially through the existing byte
+owner without retaining an offset/address table for the complete listing.
+A cursor contains only the store namespace and position/offset counters; it owns
+no store, native file, factory or source object. Copies allow deterministic retry
+and independent scans. Foreign/moved cursors and invalid limits perform no data
+I/O and leave the healthy sealed store usable. Cursor validity is checked by the
+store; the token itself is not a standalone currentness/authorization signal.
+
+The codec supplies one checked 12-byte envelope-size query using its own schema
+magic and record-size bound. This query certifies framing only, never a checksum,
+payload, source namespace or native object. The scanner validates declared size
+against the remaining sealed bytes before allocation, reads the bounded body,
+performs the complete existing codec checks, then requires the row ID to equal
+the next contiguous storage ordinal. Each emitted row includes a scoped address
+usable by the same store's checked random-access read. No display/path conversion
+or reconstruction of native ownership occurs.
+
+Default page bounds are 256 rows and four MiB of aggregate encoded record bytes;
+hard bounds are 4,096 rows and 64 MiB. Decoded variable names/diagnostics are
+bounded by those encoded bytes, plus per-row object/container overhead and one
+bounded working record. There is no allocation proportional to the full listing.
+`page.wire_bytes` counts complete emitted record envelopes and checksums, excluding
+lookahead. A successful page transfers at most that configured wire budget plus
+one 12-byte lookahead header through the byte-file interface. These are logical
+successful data-transfer bounds, not physical device/read-ahead/metadata I/O or
+total-process-RSS guarantees. Native calls and final-size queries can still block.
+
+If the first row cannot fit the requested page byte budget, the call returns
+Unknown/InventoryLimit without a page or cursor advancement and keeps the sealed
+store usable. The caller may increase the bounded page limit and retry the same
+cursor. Once some rows fit, a too-large next row finishes that page before the
+next record; the caller's returned cursor points to that unread record. The
+scanner does not skip or truncate it. Retries must not busy-loop with an unchanged
+insufficient limit. Row and byte budgets remain independent.
+
+Data I/O/schema/CRC/row-sequence failure, truncation, cancellation or exception
+publishes no page prefix and revokes the store, including previously issued
+addresses/cursors. Charges remain until normal backend retirement. The input
+cursor changes only when the caller accepts a successful returned next cursor.
+End requires exact row/offset exhaustion AND a fresh native file-size equality
+check; appended tails and truncated data cannot be silently treated as complete.
+Empty/repeated End pages still check size. Scan End describes this private cache,
+not successful source enumeration, source stability or a filesystem snapshot.
+
+Nine deterministic scan cases cover repeated/cross-store/moved cursors, exact
+independent limits and lookahead, bounded retry, corruption after a valid prefix,
+valid-checksum row substitution, short/truncated/trailing data, every native
+failure state, cancellation at all I/O phases and exceptions. Three framing
+cases cover schema/header/limit boundaries and the distinction from integrity.
+A native test writes and scans 100,000 synthetic records, checking every name,
+row ID, selected metadata and hidden state while retaining one bounded page.
+This qualifies cache storage/scanning only; real-directory discovery, external
+sorting/address persistence, pane providers, source-change races and full-app
+memory/latency thresholds remain required work.
+
 API references: [Apple ACL retrieval](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_fd.3.html),
 [Apple ACL entry enumeration](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_entry.3.html),
 [Linux open semantics](https://man7.org/linux/man-pages/man2/open.2.html),

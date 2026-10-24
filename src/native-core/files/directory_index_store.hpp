@@ -77,6 +77,40 @@ class IndexRecordAddress final {
     std::size_t bytes_;
 };
 
+struct DirectoryIndexScanLimits {
+    std::size_t rows = 256;
+    std::size_t wire_bytes = 4 * 1024 * 1024;
+    static constexpr std::size_t hard_rows = 4096;
+    static constexpr std::size_t hard_wire_bytes = 64 * 1024 * 1024;
+};
+// Same-lifetime worker cursor: only a revocation namespace and counters, never
+// a file/native owner or a serialized/restart address. Copying permits retries;
+// only a successfully returned page advances the caller's cursor.
+class IndexScanCursor final {
+  public:
+    std::uint64_t position() const noexcept {
+        return position_;
+    }
+
+  private:
+    friend class DirectoryIndexStore;
+    IndexScanCursor(AdapterScope owner, std::uint64_t position, std::uint64_t offset)
+        : owner_(std::move(owner)), position_(position), offset_(offset) {
+    }
+    AdapterScope owner_;
+    std::uint64_t position_, offset_;
+};
+struct DirectoryIndexScanRow {
+    IndexRecordAddress address;
+    DirectoryIndexRecord record;
+};
+struct DirectoryIndexScanPage {
+    std::vector<DirectoryIndexScanRow> rows;
+    IndexScanCursor next;
+    std::size_t wire_bytes; // emitted records only, excludes lookahead I/O
+    bool end;
+};
+
 // Worker-only bounded append/seal/read store. No per-row offset table or RAM
 // fallback; the caller may stream addresses into a separate bounded sort index.
 // Any I/O/corruption/cancellation failure revokes the complete store. Preflight
@@ -96,6 +130,13 @@ class DirectoryIndexStore final {
     Observation<IndexRecordAddress> append(const DirectoryIndexRecord &record, std::stop_token stop = {});
     Observation<bool> seal(std::stop_token stop = {});
     Observation<DirectoryIndexRecord> read(const IndexRecordAddress &address, std::stop_token stop = {});
+    Observation<IndexScanCursor> begin_scan() const;
+    // Worker I/O; no offset table or retained prefix. Rows and aggregate encoded
+    // bytes bound each returned page. An oversized first row returns a page
+    // budget error without revoking the sealed store, permitting a bounded retry.
+    // Actual I/O is at most the page wire budget plus one 12-byte lookahead header.
+    Observation<DirectoryIndexScanPage> read_page(const IndexScanCursor &cursor, DirectoryIndexScanLimits limits = {},
+                                                  std::stop_token stop = {});
     DirectoryIndexStoreState state() const noexcept {
         return state_;
     }
@@ -119,6 +160,8 @@ class DirectoryIndexStore final {
                    std::shared_ptr<IndexFileFactory> factory, std::stop_token stop);
     void fail(UnavailableObservation failure);
     void exception() noexcept;
+    Observation<bool> read_exact(std::uint64_t offset, std::span<std::byte> bytes, std::stop_token stop);
+    Observation<bool> check_size(std::stop_token stop);
     std::shared_ptr<IndexFileFactory> factory_;
     std::unique_ptr<IndexByteFile> file_;
     std::shared_ptr<IndexStorageBudget> budget_;

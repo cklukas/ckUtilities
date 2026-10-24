@@ -27,6 +27,7 @@ DirectoryIndexRecord row(std::uint64_t id = 1) {
 struct Control {
     std::vector<std::byte> data;
     std::size_t chunk = 7, reads = 0, writes = 0, sizes = 0, closed = 0;
+    std::size_t read_bytes = 0;
     bool zero_write = false, zero_read = false, oversized = false, throw_io = false;
     std::optional<UnavailableObservation> write_error, read_error, size_error;
     std::function<void()> on_write, on_read, on_size, on_close;
@@ -79,6 +80,7 @@ class FakeFile final : public IndexByteFile {
         const auto at = static_cast<std::size_t>(offset);
         const auto n = std::min({bytes.size(), c->chunk, at <= c->data.size() ? c->data.size() - at : std::size_t{0}});
         std::copy_n(c->data.begin() + static_cast<std::ptrdiff_t>(std::min(at, c->data.size())), n, bytes.begin());
+        c->read_bytes += n;
         if (c->on_read)
             c->on_read();
         return Observation<std::size_t>::available(n);
@@ -602,4 +604,188 @@ CK_TEST(index_store_factory_reentrant_creation_cannot_bypass_inflight_file_limit
     auto store = take(DirectoryIndexStore::create_new(factory, budget, context()));
     CK_CHECK(c->calls == 1 && budget->charged_files() == 1);
     c->on_create = {};
+}
+CK_TEST(index_scan_cursor_pages_are_repeatable_and_addresses_match_original_records) {
+    Fixture f;
+    auto store = f.make();
+    CK_CHECK(!store->begin_scan().value());
+    for (std::uint64_t i = 1; i != 4; ++i)
+        CK_CHECK(store->append(row(i)).value());
+    CK_CHECK(take(store->seal()));
+    const auto start = take(store->begin_scan());
+    auto cursor = start;
+    for (std::uint64_t i = 1; i != 4; ++i) {
+        const auto page = take(store->read_page(cursor, {1, 4096}));
+        CK_CHECK(page.rows.size() == 1 && page.rows.front().record.row_id == i);
+        CK_CHECK(take(store->read(page.rows.front().address)).row_id == i);
+        CK_CHECK(page.end == (i == 3));
+        CK_CHECK(cursor.position() == i - 1 && page.next.position() == i);
+        cursor = page.next;
+    }
+    const auto end = take(store->read_page(cursor));
+    CK_CHECK(end.end && end.rows.empty() && end.next.position() == 3);
+    const auto repeat = take(store->read_page(start, {1, 4096}));
+    CK_CHECK(repeat.rows.front().record.row_id == 1 && start.position() == 0);
+}
+CK_TEST(index_scan_wire_budget_has_exact_boundaries_and_one_header_of_lookahead) {
+    Fixture f;
+    auto store = f.make();
+    CK_CHECK(store->append(row()).value());
+    const auto size = static_cast<std::size_t>(store->bytes());
+    CK_CHECK(store->append(row(2)).value());
+    CK_CHECK(take(store->seal()));
+    const auto cursor = take(store->begin_scan());
+    auto page = take(store->read_page(cursor, {2, size}));
+    CK_CHECK(page.rows.size() == 1 && !page.end && page.next.position() == 1);
+    CK_CHECK(f.c->read_bytes == size + 12);
+    auto last = take(store->read_page(page.next, {2, size}));
+    CK_CHECK(last.rows.size() == 1 && last.end && last.rows.front().record.row_id == 2);
+    CK_CHECK(f.c->read_bytes == 2 * size + 12);
+}
+CK_TEST(index_scan_too_small_page_budget_allows_retry_without_revoking_store_or_cursor) {
+    Fixture f;
+    auto store = f.make();
+    const auto address = take(store->append(row()));
+    CK_CHECK(take(store->seal()));
+    const auto cursor = take(store->begin_scan());
+    const auto size = static_cast<std::size_t>(store->bytes());
+    const auto rejected = store->read_page(cursor, {1, size - 1});
+    CK_CHECK(rejected.state() == ObservationState::Unknown && cursor.position() == 0);
+    CK_CHECK(store->state() == DirectoryIndexStoreState::Sealed && f.c->read_bytes == 12);
+    const auto page = take(store->read_page(cursor, {1, size}));
+    CK_CHECK(page.end && page.rows.size() == 1);
+    CK_CHECK(take(store->read(address)).row_id == 1);
+}
+CK_TEST(index_scan_invalid_limits_foreign_and_moved_cursors_perform_no_IO) {
+    Fixture f;
+    auto store = f.make();
+    CK_CHECK(take(store->seal()));
+    auto cursor = take(store->begin_scan());
+    for (auto limits : {DirectoryIndexScanLimits{0, 16}, DirectoryIndexScanLimits{1, 15},
+                        DirectoryIndexScanLimits{DirectoryIndexScanLimits::hard_rows + 1, 16},
+                        DirectoryIndexScanLimits{1, DirectoryIndexScanLimits::hard_wire_bytes + 1}})
+        CK_CHECK(!store->read_page(cursor, limits).value());
+    Fixture g;
+    auto other = g.make();
+    CK_CHECK(take(other->seal()));
+    CK_CHECK(!other->read_page(cursor).value());
+    const auto moved = std::move(cursor);
+    CK_CHECK(!store->read_page(cursor).value());
+    CK_CHECK(f.c->reads == 0 && g.c->reads == 0);
+    CK_CHECK(take(store->read_page(moved)).end);
+    CK_CHECK(store->state() == DirectoryIndexStoreState::Sealed);
+}
+CK_TEST(index_scan_corruption_after_a_valid_prefix_publishes_no_page_and_revokes_addresses) {
+    for (int mode = 0; mode != 4; ++mode) {
+        Fixture f;
+        auto store = f.make();
+        const auto first = take(store->append(row()));
+        const auto offset = static_cast<std::size_t>(store->bytes());
+        CK_CHECK(store->append(row(2)).value());
+        CK_CHECK(take(store->seal()));
+        const auto cursor = take(store->begin_scan());
+        if (mode == 0)
+            f.c->data.back() ^= std::byte{1};
+        if (mode == 1)
+            f.c->data[offset] ^= std::byte{1};
+        if (mode == 2)
+            f.c->data[offset + 8] = std::byte{0xff};
+        if (mode == 3) {
+            const auto substitute = take(encode_directory_index_record(row(3), f.ctx));
+            std::copy(substitute.begin(), substitute.end(), f.c->data.begin() + static_cast<std::ptrdiff_t>(offset));
+        }
+        CK_CHECK(!store->read_page(cursor).value());
+        CK_CHECK(store->state() == DirectoryIndexStoreState::Failed && cursor.position() == 0);
+        const auto reads = f.c->reads;
+        CK_CHECK(!store->read(first).value() && !store->begin_scan().value());
+        CK_CHECK(!store->read_page(cursor).value() && f.c->reads == reads);
+    }
+}
+CK_TEST(index_scan_detects_truncation_and_trailing_bytes_before_publishing_End) {
+    for (bool extra : {false, true}) {
+        Fixture f;
+        auto store = f.make();
+        CK_CHECK(store->append(row()).value());
+        CK_CHECK(take(store->seal()));
+        const auto cursor = take(store->begin_scan());
+        if (extra)
+            f.c->data.push_back(std::byte{});
+        else
+            f.c->data.pop_back();
+        CK_CHECK(!store->read_page(cursor).value());
+        CK_CHECK(store->state() == DirectoryIndexStoreState::Failed);
+    }
+    Fixture f;
+    auto empty = f.make();
+    CK_CHECK(take(empty->seal()));
+    const auto cursor = take(empty->begin_scan());
+    const auto page = take(empty->read_page(cursor));
+    CK_CHECK(page.end && page.rows.empty() && f.c->reads == 0);
+    f.c->data.push_back(std::byte{});
+    CK_CHECK(!empty->read_page(page.next).value());
+}
+CK_TEST(index_scan_preserves_every_native_read_failure_and_never_returns_a_prefix) {
+    for (auto state : {ObservationState::Unsupported, ObservationState::Unknown, ObservationState::Denied,
+                       ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {
+        Fixture f;
+        auto store = f.make();
+        CK_CHECK(store->append(row()).value());
+        CK_CHECK(take(store->seal()));
+        const auto cursor = take(store->begin_scan());
+        f.c->read_error = UnavailableObservation{state, {ErrorDomain::Posix, 5, "scan.read"}};
+        const auto page = store->read_page(cursor);
+        CK_CHECK(page.state() == state && page.unavailable_detail()->error == f.c->read_error->error);
+        CK_CHECK(store->state() == DirectoryIndexStoreState::Failed && cursor.position() == 0);
+    }
+}
+CK_TEST(index_scan_cancellation_before_during_and_after_IO_publishes_nothing) {
+    for (int phase = 0; phase != 4; ++phase) {
+        Fixture f;
+        auto store = f.make();
+        CK_CHECK(store->append(row()).value());
+        const auto first_bytes = static_cast<std::size_t>(store->bytes());
+        if (phase == 3)
+            CK_CHECK(store->append(row(2)).value());
+        CK_CHECK(take(store->seal()));
+        const auto cursor = take(store->begin_scan());
+        std::stop_source stop;
+        if (phase == 0)
+            stop.request_stop();
+        if (phase == 1)
+            f.c->on_read = [&] { stop.request_stop(); };
+        if (phase == 2)
+            f.c->on_size = [&] { stop.request_stop(); };
+        if (phase == 3)
+            f.c->on_read = [&] {
+                if (f.c->read_bytes > first_bytes)
+                    stop.request_stop();
+            };
+        CK_CHECK(!store->read_page(cursor, {}, stop.get_token()).value());
+        CK_CHECK(store->state() == DirectoryIndexStoreState::Failed && cursor.position() == 0);
+        if (phase == 0)
+            CK_CHECK(f.c->reads == 0);
+    }
+}
+CK_TEST(index_scan_native_exceptions_revoke_store_without_releasing_attempted_charges) {
+    for (bool at_end : {false, true}) {
+        Fixture f;
+        auto store = f.make();
+        CK_CHECK(store->append(row()).value());
+        CK_CHECK(take(store->seal()));
+        const auto cursor = take(store->begin_scan());
+        if (at_end)
+            f.c->on_size = [] { throw std::runtime_error("scan size fault"); };
+        else
+            f.c->on_read = [] { throw std::runtime_error("scan read fault"); };
+        bool threw = false;
+        try {
+            (void)store->read_page(cursor);
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CK_CHECK(threw && store->state() == DirectoryIndexStoreState::Failed && !store->failure());
+        CK_CHECK(f.budget->charged_files() == 1 && f.budget->charged_bytes() == store->bytes());
+        store.reset();
+        CK_CHECK(f.budget->charged_files() == 0 && f.budget->charged_bytes() == 0);
+    }
 }
