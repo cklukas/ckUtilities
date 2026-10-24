@@ -96,7 +96,7 @@ bool valid_io(std::uint64_t offset, std::size_t count) {
 }
 class WindowsIndexFile final : public IndexByteFile {
   public:
-    explicit WindowsIndexFile(HANDLE h) : file_(h) {
+    explicit WindowsIndexFile(HANDLE h) noexcept : file_(h) {
     }
     Observation<std::uint64_t> size() override {
         LARGE_INTEGER n{};
@@ -136,53 +136,64 @@ class WindowsIndexFile final : public IndexByteFile {
   private:
     Handle file_;
 };
-} // namespace
-Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const NativeAbsolutePath &root) {
-    using Pointer = std::unique_ptr<IndexByteFile>;
-    auto host = root.host_path();
-    if (!host.value()) {
-        const auto &e = *host.unavailable_detail();
-        return Observation<Pointer>::unavailable(e.state, e.error);
-    }
-    const auto &path = *host.value();
-    const auto last = path.native().back();
-    if (last == L'\\' || last == L'/' || path.filename() == L"." || path.filename() == L"..")
-        return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
-    Handle directory(CreateFileW(path.c_str(), FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
-                                 FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
-                                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
-    if (directory.get() == INVALID_HANDLE_VALUE)
-        return failure<Pointer>(GetLastError(), "index_file.open_root");
+Observation<bool> verify_root(HANDLE directory) {
     FILE_ATTRIBUTE_TAG_INFO tag{};
-    if (!GetFileInformationByHandleEx(directory.get(), FileAttributeTagInfo, &tag, sizeof(tag)))
-        return failure<Pointer>(GetLastError(), "index_file.root_tag");
+    if (!GetFileInformationByHandleEx(directory, FileAttributeTagInfo, &tag, sizeof(tag)))
+        return failure<bool>(GetLastError(), "index_file.root_tag");
     if (!(tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-        return rejected<Pointer>(AdapterError::FinalLinkRejected, "index_file.root_kind");
+        return rejected<bool>(AdapterError::FinalLinkRejected, "index_file.root_kind");
     DWORD flags{};
-    if (!GetVolumeInformationByHandleW(directory.get(), nullptr, 0, nullptr, nullptr, &flags, nullptr, 0))
-        return failure<Pointer>(GetLastError(), "index_file.volume");
+    if (!GetVolumeInformationByHandleW(directory, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0))
+        return failure<bool>(GetLastError(), "index_file.volume");
     if (!(flags & FILE_PERSISTENT_ACLS))
-        return rejected<Pointer>(AdapterError::UnsupportedQuery, "index_file.persistent_acls",
-                                 ObservationState::Unsupported);
+        return rejected<bool>(AdapterError::UnsupportedQuery, "index_file.persistent_acls",
+                              ObservationState::Unsupported);
+    return Observation<bool>::available(true);
+}
+Observation<std::vector<std::byte>> effective_user() {
     HANDLE raw_token{};
     if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &raw_token)) {
         const DWORD code = GetLastError();
         if (code != ERROR_NO_TOKEN)
-            return failure<Pointer>(code, "index_file.thread_token");
+            return failure<std::vector<std::byte>>(code, "index_file.thread_token");
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw_token))
-            return failure<Pointer>(GetLastError(), "index_file.process_token");
+            return failure<std::vector<std::byte>>(GetLastError(), "index_file.process_token");
     }
     Handle token(raw_token);
     DWORD required{};
     if (GetTokenInformation(token.get(), TokenUser, nullptr, 0, &required) ||
         GetLastError() != ERROR_INSUFFICIENT_BUFFER || required < sizeof(TOKEN_USER) || required > 64 * 1024)
-        return rejected<Pointer>(AdapterError::InvalidNativeResult, "index_file.token_size");
+        return rejected<std::vector<std::byte>>(AdapterError::InvalidNativeResult, "index_file.token_size");
     std::vector<std::byte> user_data(required);
     if (!GetTokenInformation(token.get(), TokenUser, user_data.data(), required, &required))
-        return failure<Pointer>(GetLastError(), "index_file.token_user");
+        return failure<std::vector<std::byte>>(GetLastError(), "index_file.token_user");
     PSID user = reinterpret_cast<TOKEN_USER *>(user_data.data())->User.Sid;
     if (!IsValidSid(user))
-        return rejected<Pointer>(AdapterError::InvalidNativeResult, "index_file.user_sid");
+        return rejected<std::vector<std::byte>>(AdapterError::InvalidNativeResult, "index_file.user_sid");
+    const DWORD length = GetLengthSid(user);
+    if (length > SECURITY_MAX_SID_SIZE)
+        return rejected<std::vector<std::byte>>(AdapterError::InvalidNativeResult, "index_file.sid_size");
+    std::vector<std::byte> sid(length);
+    if (!CopySid(length, sid.data(), user))
+        return failure<std::vector<std::byte>>(GetLastError(), "index_file.CopySid");
+    return Observation<std::vector<std::byte>>::available(std::move(sid));
+}
+Observation<std::unique_ptr<IndexByteFile>> create_in_root(HANDLE directory, PSID expected_user) {
+    using Pointer = std::unique_ptr<IndexByteFile>;
+    auto valid = verify_root(directory);
+    if (!valid.value()) {
+        const auto &e = *valid.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    auto queried = effective_user();
+    if (!queried.value()) {
+        const auto &e = *queried.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    auto user_data = std::move(queried).take_value();
+    PSID user = user_data.data();
+    if (!EqualSid(user, expected_user))
+        return rejected<Pointer>(AdapterError::InvalidAccess, "index_file.user_changed", ObservationState::Denied);
     alignas(DWORD) std::array<std::byte, SECURITY_MAX_SID_SIZE> system{};
     DWORD system_size = static_cast<DWORD>(system.size());
     if (!CreateWellKnownSid(WinLocalSystemSid, nullptr, system.data(), &system_size))
@@ -217,7 +228,7 @@ Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const Nativ
         relative.MaximumLength = relative.Length;
         OBJECT_ATTRIBUTES attributes{};
         attributes.Length = sizeof(attributes);
-        attributes.RootDirectory = directory.get();
+        attributes.RootDirectory = directory;
         attributes.ObjectName = &relative;
         attributes.SecurityDescriptor = &descriptor;
         IO_STATUS_BLOCK result{};
@@ -252,5 +263,57 @@ Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const Nativ
         return Observation<Pointer>::available(std::move(owner));
     }
     return rejected<Pointer>(AdapterError::InventoryLimit, "index_file.name_attempts", ObservationState::Unknown);
+}
+class WindowsIndexWorkspace final : public IndexFileFactory {
+  public:
+    explicit WindowsIndexWorkspace(HANDLE directory, std::vector<std::byte> user)
+        : directory_(directory), user_(std::move(user)) {
+    }
+    Observation<std::unique_ptr<IndexByteFile>> create_file() override {
+        return create_in_root(directory_.get(), user_.data());
+    }
+
+  private:
+    Handle directory_;
+    std::vector<std::byte> user_;
+};
+} // namespace
+Observation<std::shared_ptr<IndexFileFactory>> open_native_index_workspace(const NativeAbsolutePath &root) {
+    using Pointer = std::shared_ptr<IndexFileFactory>;
+    auto host = root.host_path();
+    if (!host.value()) {
+        const auto &e = *host.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    const auto &path = *host.value();
+    const auto last = path.native().back();
+    if (last == L'\\' || last == L'/' || path.filename() == L"." || path.filename() == L"..")
+        return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
+    Handle directory(CreateFileW(path.c_str(), FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (directory.get() == INVALID_HANDLE_VALUE)
+        return failure<Pointer>(GetLastError(), "index_file.open_root");
+    auto valid = verify_root(directory.get());
+    if (!valid.value()) {
+        const auto &e = *valid.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    auto user = effective_user();
+    if (!user.value()) {
+        const auto &e = *user.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    auto owner = std::make_shared<WindowsIndexWorkspace>(directory.get(), std::move(user).take_value());
+    directory.release();
+    return Observation<Pointer>::available(std::move(owner));
+}
+Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const NativeAbsolutePath &root) {
+    auto workspace = open_native_index_workspace(root);
+    if (!workspace.value()) {
+        const auto &e = *workspace.unavailable_detail();
+        return Observation<std::unique_ptr<IndexByteFile>>::unavailable(e.state, e.error);
+    }
+    return (*workspace.value())->create_file();
 }
 } // namespace ck::files

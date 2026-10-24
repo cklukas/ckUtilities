@@ -18,6 +18,16 @@ class IndexByteFile {
     virtual Observation<std::size_t> read_at(std::uint64_t offset, std::span<std::byte> bytes) = 0;
 };
 
+// Worker-only creation boundary. A factory must clean any private creation
+// work on failure/exception, and return an exclusively owned empty byte file.
+// Keeping the factory alive may retain a native directory; callers must retire
+// the final factory owner on its worker, never during UI dispatch.
+class IndexFileFactory {
+  public:
+    virtual ~IndexFileFactory() = default;
+    virtual Observation<std::unique_ptr<IndexByteFile>> create_file() = 0;
+};
+
 // A shared, worker-serialized logical-byte/file budget across all live indexes
 // and sort runs. Includes failed/partially written files until close/removal.
 // This bounds requested logical bytes, not filesystem allocation/metadata or
@@ -36,6 +46,7 @@ class IndexStorageBudget final {
 
   private:
     friend class DirectoryIndexStore;
+    class FileSlot;
     const std::uint64_t max_bytes_;
     const std::size_t max_files_;
     std::uint64_t used_bytes_ = 0;
@@ -72,10 +83,13 @@ class IndexRecordAddress final {
 // input/budget rejection writes nothing and leaves prior records usable.
 class DirectoryIndexStore final {
   public:
-    static Observation<std::unique_ptr<DirectoryIndexStore>> create(std::unique_ptr<IndexByteFile> file,
-                                                                    std::shared_ptr<IndexStorageBudget> budget,
-                                                                    DirectoryIndexContext context,
-                                                                    DirectoryIndexStoreLimits limits = {});
+    // Reserves the shared file slot BEFORE calling the factory. Invalid input,
+    // exhausted quota and an already requested stop never invoke creation.
+    // The factory remains owned through file closure. No partial owner is
+    // published after failure, cancellation or exception.
+    static Observation<std::unique_ptr<DirectoryIndexStore>>
+    create_new(std::shared_ptr<IndexFileFactory> factory, std::shared_ptr<IndexStorageBudget> budget,
+               DirectoryIndexContext context, DirectoryIndexStoreLimits limits = {}, std::stop_token stop = {});
     ~DirectoryIndexStore();
     DirectoryIndexStore(const DirectoryIndexStore &) = delete;
     DirectoryIndexStore &operator=(const DirectoryIndexStore &) = delete;
@@ -97,9 +111,15 @@ class DirectoryIndexStore final {
 
   private:
     DirectoryIndexStore(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
-                        DirectoryIndexContext context, DirectoryIndexStoreLimits limits);
+                        DirectoryIndexContext context, DirectoryIndexStoreLimits limits,
+                        std::shared_ptr<IndexFileFactory> factory);
+    static Observation<std::unique_ptr<DirectoryIndexStore>>
+    adopt_reserved(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
+                   DirectoryIndexContext context, DirectoryIndexStoreLimits limits, IndexStorageBudget::FileSlot &slot,
+                   std::shared_ptr<IndexFileFactory> factory, std::stop_token stop);
     void fail(UnavailableObservation failure);
     void exception() noexcept;
+    std::shared_ptr<IndexFileFactory> factory_;
     std::unique_ptr<IndexByteFile> file_;
     std::shared_ptr<IndexStorageBudget> budget_;
     DirectoryIndexContext context_;

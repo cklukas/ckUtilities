@@ -87,12 +87,50 @@ class FakeFile final : public IndexByteFile {
   private:
     std::shared_ptr<Control> c;
 };
+struct FactoryControl {
+    std::shared_ptr<Control> file = std::make_shared<Control>();
+    std::size_t calls = 0, closed = 0;
+    bool null_file = false;
+    std::optional<UnavailableObservation> error;
+    std::function<void()> on_create, on_created, on_close;
+};
+class FakeFactory final : public IndexFileFactory {
+  public:
+    explicit FakeFactory(std::shared_ptr<FactoryControl> control) : c(std::move(control)) {
+    }
+    ~FakeFactory() override {
+        if (c->on_close)
+            c->on_close();
+        ++c->closed;
+    }
+    Observation<std::unique_ptr<IndexByteFile>> create_file() override {
+        ++c->calls;
+        if (c->on_create)
+            c->on_create();
+        if (c->error)
+            return Observation<std::unique_ptr<IndexByteFile>>::unavailable(c->error->state, c->error->error);
+        std::unique_ptr<IndexByteFile> file;
+        if (!c->null_file)
+            file = std::make_unique<FakeFile>(c->file);
+        if (c->on_created)
+            c->on_created();
+        return Observation<std::unique_ptr<IndexByteFile>>::available(std::move(file));
+    }
+
+  private:
+    std::shared_ptr<FactoryControl> c;
+};
+std::shared_ptr<IndexFileFactory> factory_for(std::shared_ptr<Control> file) {
+    auto c = std::make_shared<FactoryControl>();
+    c->file = std::move(file);
+    return std::make_shared<FakeFactory>(std::move(c));
+}
 struct Fixture {
     DirectoryIndexContext ctx = context();
     std::shared_ptr<Control> c = std::make_shared<Control>();
     std::shared_ptr<IndexStorageBudget> budget = std::make_shared<IndexStorageBudget>(1024 * 1024, 4);
     std::unique_ptr<DirectoryIndexStore> make(DirectoryIndexStoreLimits limits = {}) {
-        return take(DirectoryIndexStore::create(std::make_unique<FakeFile>(c), budget, ctx, limits));
+        return take(DirectoryIndexStore::create_new(factory_for(c), budget, ctx, limits));
     }
 };
 } // namespace
@@ -123,7 +161,7 @@ CK_TEST(index_store_shared_budget_rejects_exhaustion_without_changing_earlier_re
     f.budget = std::make_shared<IndexStorageBudget>(size, 2);
     auto a = f.make();
     auto b_control = std::make_shared<Control>();
-    auto b = take(DirectoryIndexStore::create(std::make_unique<FakeFile>(b_control), f.budget, f.ctx));
+    auto b = take(DirectoryIndexStore::create_new(factory_for(b_control), f.budget, f.ctx));
     const auto address = take(a->append(row()));
     CK_CHECK((b->append(row()).state()) == (ObservationState::Unknown));
     CK_CHECK((b_control->writes) == (std::size_t{0}));
@@ -151,26 +189,26 @@ CK_TEST(index_store_enforces_exact_independent_row_and_byte_limits) {
 CK_TEST(index_store_requires_empty_backend_valid_context_limits_and_bounded_file_count) {
     Fixture f;
     f.c->data.push_back(std::byte{1});
-    CK_CHECK(!DirectoryIndexStore::create(std::make_unique<FakeFile>(f.c), f.budget, f.ctx).value());
+    CK_CHECK(!DirectoryIndexStore::create_new(factory_for(f.c), f.budget, f.ctx).value());
     CK_CHECK((f.c->closed) == (std::size_t{1}));
     f.c->data.clear();
     auto invalid = f.ctx;
     invalid.generation.fill(std::byte{});
-    CK_CHECK(!DirectoryIndexStore::create(std::make_unique<FakeFile>(f.c), f.budget, invalid).value());
-    CK_CHECK(!DirectoryIndexStore::create(nullptr, f.budget, f.ctx).value());
-    CK_CHECK(!DirectoryIndexStore::create(std::make_unique<FakeFile>(f.c), {}, f.ctx).value());
+    CK_CHECK(!DirectoryIndexStore::create_new(factory_for(f.c), f.budget, invalid).value());
+    CK_CHECK(!DirectoryIndexStore::create_new({}, f.budget, f.ctx).value());
+    CK_CHECK(!DirectoryIndexStore::create_new(factory_for(f.c), {}, f.ctx).value());
     const DirectoryIndexStoreLimits bad[] = {{0, 10, {}},         {1, 0, {}},          {1, UINT64_MAX, {}},
                                              {1, 10, {15, 1, 0}}, {1, 10, {16, 0, 0}}, {1, 10, {16, 1, 300000}}};
     for (const auto limits : bad)
-        CK_CHECK(!DirectoryIndexStore::create(std::make_unique<FakeFile>(f.c), f.budget, f.ctx, limits).value());
+        CK_CHECK(!DirectoryIndexStore::create_new(factory_for(f.c), f.budget, f.ctx, limits).value());
     CK_CHECK((f.budget->charged_files()) == (std::size_t{0}));
     f.budget = std::make_shared<IndexStorageBudget>(1024, 1);
     auto store = f.make();
     auto c2 = std::make_shared<Control>();
-    CK_CHECK((DirectoryIndexStore::create(std::make_unique<FakeFile>(c2), f.budget, f.ctx).state()) ==
+    CK_CHECK((DirectoryIndexStore::create_new(factory_for(c2), f.budget, f.ctx).state()) ==
              (ObservationState::Unknown));
     CK_CHECK((c2->sizes) == (std::size_t{0}));
-    CK_CHECK((c2->closed) == (std::size_t{1}));
+    CK_CHECK((c2->closed) == (std::size_t{0}));
     for (const auto bytes : {std::uint64_t{0}, UINT64_MAX}) {
         bool threw = false;
         try {
@@ -203,7 +241,7 @@ CK_TEST(index_store_address_cannot_cross_stores_even_for_identical_wire_contexts
     const auto address = take(a->append(row()));
     CK_CHECK(take(a->seal()));
     auto b_control = std::make_shared<Control>();
-    auto b = take(DirectoryIndexStore::create(std::make_unique<FakeFile>(b_control), f.budget, f.ctx));
+    auto b = take(DirectoryIndexStore::create_new(factory_for(b_control), f.budget, f.ctx));
     CK_CHECK(b->append(row()).value());
     CK_CHECK(take(b->seal()));
     CK_CHECK(!b->read(address).value());
@@ -275,7 +313,7 @@ CK_TEST(index_store_corrupt_truncated_or_substituted_records_revoke_sealed_resul
 CK_TEST(index_store_read_and_size_errors_remain_typed_and_no_prefix_is_published) {
     Fixture f;
     f.c->size_error = UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "size"}};
-    auto result = DirectoryIndexStore::create(std::make_unique<FakeFile>(f.c), f.budget, f.ctx);
+    auto result = DirectoryIndexStore::create_new(factory_for(f.c), f.budget, f.ctx);
     CK_CHECK((result.state()) == (ObservationState::Denied));
     CK_CHECK((f.budget->charged_files()) == (std::size_t{0}));
     f.c->size_error.reset();
@@ -425,4 +463,143 @@ CK_TEST(index_store_stop_requested_by_final_IO_is_checked_before_publication) {
     h.c->on_size = [&] { seal_stop.request_stop(); };
     CK_CHECK(!sealing->seal(seal_stop.get_token()).value());
     CK_CHECK(sealing->state() == DirectoryIndexStoreState::Failed);
+}
+CK_TEST(index_store_factory_slot_is_reserved_before_creation_and_empty_size_query) {
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    auto c = std::make_shared<FactoryControl>();
+    auto factory = std::make_shared<FakeFactory>(c);
+    c->on_create = [&] { CK_CHECK(budget->charged_files() == 1 && budget->charged_bytes() == 0); };
+    c->file->on_size = c->on_create;
+    auto store = take(DirectoryIndexStore::create_new(factory, budget, context()));
+    CK_CHECK(c->calls == 1 && budget->charged_files() == 1);
+    CK_CHECK(DirectoryIndexStore::create_new(factory, budget, context()).state() == ObservationState::Unknown);
+    CK_CHECK(c->calls == 1);
+    auto precreated = std::make_shared<Control>();
+    CK_CHECK(DirectoryIndexStore::create_new(factory_for(precreated), budget, context()).state() ==
+             ObservationState::Unknown);
+    CK_CHECK(precreated->closed == 0 && precreated->sizes == 0 && budget->charged_files() == 1);
+    store.reset();
+    CK_CHECK(c->file->closed == 1 && budget->charged_files() == 0);
+    auto adopted = take(DirectoryIndexStore::create_new(factory_for(precreated), budget, context()));
+    CK_CHECK(DirectoryIndexStore::create_new(factory, budget, context()).state() == ObservationState::Unknown);
+    CK_CHECK(c->calls == 1);
+    adopted.reset();
+    CK_CHECK(budget->charged_files() == 0);
+}
+CK_TEST(index_store_factory_invalid_input_and_early_stop_never_invoke_creation) {
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    auto c = std::make_shared<FactoryControl>();
+    auto factory = std::make_shared<FakeFactory>(c);
+    CK_CHECK(!DirectoryIndexStore::create_new({}, budget, context()).value());
+    CK_CHECK(!DirectoryIndexStore::create_new(factory, {}, context()).value());
+    auto invalid = context();
+    invalid.generation.fill(std::byte{});
+    CK_CHECK(!DirectoryIndexStore::create_new(factory, budget, invalid).value());
+    CK_CHECK(!DirectoryIndexStore::create_new(factory, budget, context(), {0, 1024, {}}).value());
+    std::stop_source stop;
+    stop.request_stop();
+    CK_CHECK(!DirectoryIndexStore::create_new(factory, budget, context(), {}, stop.get_token()).value());
+    CK_CHECK(c->calls == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
+}
+CK_TEST(index_store_factory_preserves_all_failure_states_and_releases_unused_slot) {
+    for (auto state : {ObservationState::Unsupported, ObservationState::Unknown, ObservationState::Denied,
+                       ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {
+        auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+        auto c = std::make_shared<FactoryControl>();
+        auto factory = std::make_shared<FakeFactory>(c);
+        c->error = UnavailableObservation{state, {ErrorDomain::Win32, 112, "create"}};
+        c->on_create = [&] { CK_CHECK(budget->charged_files() == 1); };
+        const auto result = DirectoryIndexStore::create_new(factory, budget, context());
+        CK_CHECK(result.state() == state && result.unavailable_detail()->error == c->error->error);
+        CK_CHECK(c->file->closed == 0 && budget->charged_files() == 0);
+        c->error.reset();
+        CK_CHECK(DirectoryIndexStore::create_new(factory, budget, context()).value());
+        CK_CHECK(budget->charged_files() == 0);
+    }
+}
+CK_TEST(index_store_factory_rejects_null_nonempty_and_failed_size_without_partial_owner) {
+    for (int mode = 0; mode != 3; ++mode) {
+        auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+        auto c = std::make_shared<FactoryControl>();
+        auto factory = std::make_shared<FakeFactory>(c);
+        if (mode == 0)
+            c->null_file = true;
+        if (mode == 1)
+            c->file->data.push_back(std::byte{1});
+        if (mode == 2)
+            c->file->size_error = UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "size"}};
+        c->file->on_close = [&] { CK_CHECK(budget->charged_files() == 1); };
+        const auto result = DirectoryIndexStore::create_new(factory, budget, context());
+        CK_CHECK(!result.value() && budget->charged_files() == 0);
+        CK_CHECK(c->file->closed == (mode == 0 ? 0U : 1U));
+    }
+}
+CK_TEST(index_store_factory_cancellation_during_creation_or_size_closes_before_slot_release) {
+    for (bool during_size : {false, true}) {
+        auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+        auto c = std::make_shared<FactoryControl>();
+        auto factory = std::make_shared<FakeFactory>(c);
+        std::stop_source stop;
+        auto request = [&] { stop.request_stop(); };
+        if (during_size)
+            c->file->on_size = request;
+        else
+            c->on_created = request;
+        c->file->on_close = [&] { CK_CHECK(budget->charged_files() == 1); };
+        CK_CHECK(!DirectoryIndexStore::create_new(factory, budget, context(), {}, stop.get_token()).value());
+        CK_CHECK(c->calls == 1 && c->file->closed == 1 && budget->charged_files() == 0);
+    }
+}
+CK_TEST(index_store_factory_exceptions_unwind_file_before_slot_and_keep_factory_live) {
+    for (int phase = 0; phase != 3; ++phase) {
+        auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+        auto c = std::make_shared<FactoryControl>();
+        auto factory = std::make_shared<FakeFactory>(c);
+        const std::weak_ptr<FakeFactory> weak = factory;
+        auto fail = [] { throw std::runtime_error("injected factory/size failure"); };
+        if (phase == 0)
+            c->on_create = fail;
+        if (phase == 1)
+            c->on_created = fail;
+        if (phase == 2)
+            c->file->on_size = fail;
+        c->file->on_close = [&] { CK_CHECK(budget->charged_files() == 1 && !weak.expired()); };
+        bool threw = false;
+        try {
+            (void)DirectoryIndexStore::create_new(std::move(factory), budget, context());
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CK_CHECK(threw && budget->charged_files() == 0 && weak.expired());
+        CK_CHECK(c->file->closed == (phase == 0 ? 0U : 1U));
+    }
+}
+CK_TEST(index_store_retains_factory_until_file_closure_then_releases_both_charges) {
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    auto c = std::make_shared<FactoryControl>();
+    auto factory = std::make_shared<FakeFactory>(c);
+    const std::weak_ptr<FakeFactory> weak = factory;
+    auto store = take(DirectoryIndexStore::create_new(std::move(factory), budget, context()));
+    CK_CHECK(!weak.expired());
+    CK_CHECK(store->append(row()).value());
+    c->file->on_close = [&] {
+        CK_CHECK(!weak.expired() && budget->charged_files() == 1 && budget->charged_bytes() > 0);
+    };
+    c->on_close = [&] {
+        CK_CHECK(c->file->closed == 1 && budget->charged_files() == 1 && budget->charged_bytes() > 0);
+    };
+    store.reset();
+    CK_CHECK(weak.expired() && c->closed == 1 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
+}
+CK_TEST(index_store_factory_reentrant_creation_cannot_bypass_inflight_file_limit) {
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    auto c = std::make_shared<FactoryControl>();
+    auto factory = std::make_shared<FakeFactory>(c);
+    c->on_create = [&] {
+        CK_CHECK(DirectoryIndexStore::create_new(factory, budget, context()).state() == ObservationState::Unknown);
+        CK_CHECK(c->calls == 1);
+    };
+    auto store = take(DirectoryIndexStore::create_new(factory, budget, context()));
+    CK_CHECK(c->calls == 1 && budget->charged_files() == 1);
+    c->on_create = {};
 }

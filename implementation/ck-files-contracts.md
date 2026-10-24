@@ -1899,11 +1899,13 @@ identity/edge revalidation and the later planning/consent rules.
 
 ### Worker-side index record store
 
-`DirectoryIndexStore` owns one injected `IndexByteFile` exclusively. The byte
-backend is separate from the read-only source adapter: it must create an empty
-private scratch file under an explicit root, prevent external access and
-close/remove its file at destruction. This interface and its deterministic
-backend tests do not yet implement or qualify native private-file creation.
+`DirectoryIndexStore::create_new` creates and owns one private `IndexByteFile`
+through an injected `IndexFileFactory`. The byte backend is separate from the
+read-only source adapter: it must create an empty private scratch file under an
+explicit root, prevent external access and close/remove its file at destruction.
+The store's public pre-created-file adoption entry point has been removed: there
+are no production consumers requiring that prototype interface, and creation
+must occur after file-slot reservation. Native conformance is described below.
 No source mutation is added. All store methods and shared-budget access are
 serialized on the owning worker; none belongs in UI dispatch or paint.
 
@@ -1918,14 +1920,15 @@ Sealing checks the backend's exact logical size; it proves neither discovery
 reached native End nor that the directory was a snapshot. The listing job must
 separately prove completion before publishing a pane generation.
 
-`IndexStorageBudget` is a noncopyable shared ledger for adopted live stores,
+`IndexStorageBudget` is a noncopyable shared ledger for live managed stores,
 including future sort runs. Callers explicitly select positive aggregate byte
 and file bounds. Byte bounds cannot exceed INT64_MAX. Default per-store bounds
 are one million rows and one GiB; record limits remain independently enforced.
 The ledger charges complete wire bytes including envelopes and checksums, not
 filesystem allocation, filesystem metadata or other processes' disk usage.
-Physical disk exhaustion remains an independent native error. The future native
-factory must also bound files during creation, before successful adoption.
+Physical disk exhaustion remains an independent native error. File-slot
+accounting includes in-flight factory creation and empty-file qualification,
+not only stores that have successfully published an owner.
 
 Input, state, address and budget rejection perform no data I/O and leave prior
 records usable. Encoding completes before reservation. Before the first write,
@@ -1947,15 +1950,19 @@ fsync, crash-recovery record, native acquisition proof or operation permission.
 
 ### Native private index-file backend
 
-`create_native_index_file` implements the worker scratch-byte boundary without
-adding mutation methods to the source adapter. Its caller supplies an existing
+`open_native_index_workspace` supplies a worker file factory without adding
+mutation methods to the source adapter. Its caller supplies an existing
 explicit host-native directory; there is no environment/default temporary root,
 path transcoding, process-cwd change or alternate-volume fallback. It refuses
 final links/reparse points, trailing separators and final navigation components.
 Earlier path components retain host navigation semantics. Creation uses a held
 directory, an OS-generated 128-bit random component and exclusive creation;
 preexisting objects are never truncated or adopted. There are at most 64 name
-attempts. A successful byte owner never reopens a pathname.
+attempts. A successful byte owner never reopens a pathname. The factory pins
+the directory once and revalidates its privacy on every creation through that
+held directory, even after its original pathname is relocated or replaced.
+`create_native_index_file` remains the direct native-byte conformance boundary;
+managed record-store callers use the factory entry point for quota enforcement.
 
 On POSIX, the held root must be owned by the effective user with exactly 0700
 permissions. Linux currently admits the extended-filesystem family, XFS,
@@ -2011,9 +2018,50 @@ tests are both required evidence; the mount's ownership setting is not changed.
 Positive native filesystem coverage here is APFS, ext4 and ReFS; admitting a
 filesystem under its documented permission contract does not replace the
 remaining filesystem-matrix qualification.
-Native factory adoption/file-count coordination, workspace creation, external
-sorting, indexed pane integration and broader filesystem/crash/exhaustion tests
-remain required work.
+Host directory creation, quota integration for future raw sort-byte owners,
+external sorting, indexed pane integration and broader filesystem/crash/
+exhaustion tests remain required work. A factory neither creates nor deletes
+the supplied root directory.
+
+### Factory reservation and pinned-root lifetime
+
+`DirectoryIndexStore::create_new` validates context, limits, factory and budget
+before invoking a factory. An already requested stop also performs no creation.
+A scope-owned ledger slot is acquired before the call and remains charged while
+the factory runs, while its new file is checked for non-null ownership/zero size,
+and through cleanup after failure or exception. Exhaustion never invokes the
+factory, including a reentrant attempt while the outer factory call is in flight.
+There is no temporary release/reacquisition or second charge at handoff.
+
+The new store takes over the exact acquired slot only after construction
+succeeds. Cancellation is checked before creation and after native creation/size
+query, before owner publication. A factory failure preserves every unavailable
+state and native diagnostic. Invalid/null/nonempty replies, native failures,
+cancellation and exceptions publish no owner. Private file cleanup occurs before
+slot release. A live store retains the factory through file closure; final
+retirement closes the file, releases its factory reference and then releases
+file/byte charges. Construction/unwind ordering also retains the factory while
+its file is being destroyed. All of this remains serialized on the owning worker.
+
+Native factories retain only a directory descriptor/handle and a binding to the
+effective user at open (UID on POSIX, a bounded copied SID on Windows). Creation
+under another effective user is refused. POSIX rechecks owner/mode, volume and
+ACL through the held directory on each call. Windows rechecks root kind and
+persistent ACL support, queries the current effective token and installs/verifies
+each new file's protected DACL. Factory opening and file creation have separate
+ownership: a caller may release its workspace reference while a store remains
+live. Another reference can deliberately keep the directory pinned longer.
+The root handle itself is not charged as a byte-file slot; host controllers must
+bound factory instances and perform final retirement on their workers.
+
+Native tests qualify POSIX creation after root relocation/path replacement,
+Windows root-rename refusal while pinned and success after retirement, POSIX
+mode changes after open with refusal and retry, shared quota/store lifetime,
+and Windows inherited-ACL changes after factory opening. Deterministic cases
+cover reservation timing, all factory failure states, invalid replies, creation/
+size exceptions and cancellation, shared factories, no double charging and close
+order. No different-account impersonation transition is claimed as native test
+coverage; the current-user refusal branch still needs that matrix qualification.
 
 API references: [Apple ACL retrieval](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_fd.3.html),
 [Apple ACL entry enumeration](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_entry.3.html),

@@ -3163,3 +3163,55 @@ address persistence, indexed panes, native exhaustion/crash testing and broader
 filesystem qualification remain required. Destination preservation/collision
 capabilities remain unfinished too. WP-01 remains in progress; WP-02–08 remain
 unstarted.
+
+## 2026-10-24 — factory-only reservation and pinned index workspaces
+
+WP-01 now reserves a shared file slot before an injected factory creates any
+managed record-store file. The reservation remains held during creation, empty
+size qualification and failure/exception cleanup, then transfers exactly once
+to the completed store. Invalid context/limits, an already requested stop or
+exhausted quota never invoke creation. Cancellation during creation/qualification
+publishes no owner. File closure precedes quota release, and the live store
+retains its factory through file closure and construction unwind.
+
+The unreleased pre-created-file adoption entry point had only test consumers;
+it has been removed and all store consumers now use create_new(factory,...).
+This makes pre-creation reservation mandatory at the managed store boundary.
+Deterministic cases cover all native failure states, malformed/null/nonempty
+replies, creation/size exceptions and cancellation, close order, shared factories
+and reentrant attempts while the outer factory call holds the last slot.
+
+Native workspaces pin an explicitly selected existing root once. Every creation
+revalidates privacy through that held directory, and binds to the effective user
+at open (UID or a bounded copied Windows SID). POSIX creation remains tied to the
+original root after pathname relocation/replacement and refuses changed private
+mode until restored. Windows refuses root rename while pinned and allows it
+after retirement; a root ACL changed after opening still cannot broaden the
+new file's protected DACL. Factories neither create nor delete the supplied root.
+
+All 76 Files suites pass on macOS, Linux and Windows: 623, 626 and 622 cases.
+Fresh ten-unit focused sanitizers pass 37, 35 and 34 cases respectively: 25 store
+cases plus 12/10/9 native cases. ASan+UBSan run on macOS/Linux (Linux leak detector
+enabled); Windows uses ASan. Required native privacy/identity/lifetime markers
+are present in both full and focused logs. A different-account impersonation
+transition is not claimed as native coverage and remains matrix work.
+
+Windows SSH initially exposed an empty PATH, preventing normal PowerShell/SFTP
+lookup before any build started. Absolute installed tool paths and an explicit
+bounded process environment restored validation; sources, builds, temporary data,
+module analysis cache and logs remain on V:. Registry, SSH service configuration
+and global environment were left untouched. The evidence records observations
+and the documented command-shell limit supporting the diagnosis.
+
+See [the workspace evidence](evidence/ck-files-index-workspace-20261024.json) for
+187 source fingerprints, exact commands, SDK/output hashes, timing, native
+markers, Windows bootstrap and cleanup. Diagnostic builds and documentation
+scratch were removed; both Mac fixture roots and remote scratch roots are empty.
+Current verified normal test builds remain. No GUI application was launched.
+
+Host directory creation, raw sort-file quota integration, external sorting and
+address persistence, indexed pane integration and remaining destination
+preservation/collision capabilities are still required. Factories retain a root
+handle outside the byte-file slot count; host controllers must bound instances
+and retire their final owners on workers. WP-01 remains in progress; WP-02–08
+remain unstarted.

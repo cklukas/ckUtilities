@@ -26,43 +26,99 @@ IndexStorageBudget::IndexStorageBudget(std::uint64_t bytes, std::size_t files) :
     if (!bytes || bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) || !files)
         throw std::invalid_argument("invalid index storage budget");
 }
+class IndexStorageBudget::FileSlot final {
+  public:
+    explicit FileSlot(std::shared_ptr<IndexStorageBudget> budget) : budget_(std::move(budget)) {
+        if (budget_->used_files_ != budget_->max_files_) {
+            ++budget_->used_files_;
+            owned_ = true;
+        }
+    }
+    ~FileSlot() {
+        if (owned_)
+            --budget_->used_files_;
+    }
+    FileSlot(const FileSlot &) = delete;
+    FileSlot &operator=(const FileSlot &) = delete;
+    bool acquired() const noexcept {
+        return owned_;
+    }
+    void transfer() noexcept {
+        owned_ = false;
+    }
+
+  private:
+    std::shared_ptr<IndexStorageBudget> budget_;
+    bool owned_ = false;
+};
+namespace {
+Observation<bool> configuration(const DirectoryIndexContext &context, DirectoryIndexStoreLimits limits) {
+    const auto &r = limits.record;
+    if (!limits.rows || !limits.bytes ||
+        limits.bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) || r.record_bytes < 16 ||
+        r.record_bytes > r.hard_record_bytes || !r.name_bytes || r.name_bytes > r.hard_name_bytes ||
+        r.diagnostic_bytes > r.hard_diagnostic_bytes)
+        return unavailable<bool>(error(AdapterError::InvalidLimit, "index_store.limits"));
+    if (!context.source_scope.is_valid() ||
+        std::all_of(context.generation.begin(), context.generation.end(), [](auto b) { return b == std::byte{}; }))
+        return unavailable<bool>(error(AdapterError::InvalidIdentifier, "index_store.context"));
+    return Observation<bool>::available(true);
+}
+} // namespace
 DirectoryIndexStore::DirectoryIndexStore(std::unique_ptr<IndexByteFile> file,
                                          std::shared_ptr<IndexStorageBudget> budget, DirectoryIndexContext context,
-                                         DirectoryIndexStoreLimits limits)
-    : file_(std::move(file)), budget_(std::move(budget)), context_(std::move(context)), limits_(limits) {
-    ++budget_->used_files_;
+                                         DirectoryIndexStoreLimits limits, std::shared_ptr<IndexFileFactory> factory)
+    : factory_(std::move(factory)), file_(std::move(file)), budget_(std::move(budget)), context_(std::move(context)),
+      limits_(limits) {
 }
 DirectoryIndexStore::~DirectoryIndexStore() {
-    // Release the charge only after the backend closes/removes its storage.
+    // Keep both reservations until the file and retained factory are retired.
     file_.reset();
+    factory_.reset();
     budget_->used_bytes_ -= charged_;
     --budget_->used_files_;
 }
 Observation<std::unique_ptr<DirectoryIndexStore>>
-DirectoryIndexStore::create(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
-                            DirectoryIndexContext context, DirectoryIndexStoreLimits limits) {
-    using Result = Observation<std::unique_ptr<DirectoryIndexStore>>;
-    const auto &r = limits.record;
-    if (!file || !budget || !limits.rows || !limits.bytes ||
-        limits.bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) || r.record_bytes < 16 ||
-        r.record_bytes > r.hard_record_bytes || !r.name_bytes || r.name_bytes > r.hard_name_bytes ||
-        r.diagnostic_bytes > r.hard_diagnostic_bytes)
-        return unavailable<std::unique_ptr<DirectoryIndexStore>>(
-            error(AdapterError::InvalidLimit, "index_store.limits"));
-    if (!context.source_scope.is_valid() ||
-        std::all_of(context.generation.begin(), context.generation.end(), [](auto b) { return b == std::byte{}; }))
-        return unavailable<std::unique_ptr<DirectoryIndexStore>>(
-            error(AdapterError::InvalidIdentifier, "index_store.context"));
-    if (budget->used_files_ == budget->max_files_)
-        return unavailable<std::unique_ptr<DirectoryIndexStore>>(exhausted());
+DirectoryIndexStore::adopt_reserved(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
+                                    DirectoryIndexContext context, DirectoryIndexStoreLimits limits,
+                                    IndexStorageBudget::FileSlot &slot, std::shared_ptr<IndexFileFactory> factory,
+                                    std::stop_token stop) {
+    using Pointer = std::unique_ptr<DirectoryIndexStore>;
+    if (!file)
+        return unavailable<Pointer>(error(AdapterError::InvalidNativeResult, "index_store.null_file"));
+    if (stop.stop_requested())
+        return unavailable<Pointer>(cancelled());
     const auto size = file->size();
     if (!size.value())
-        return unavailable<std::unique_ptr<DirectoryIndexStore>>(*size.unavailable_detail());
+        return unavailable<Pointer>(*size.unavailable_detail());
     if (*size.value() != 0)
-        return unavailable<std::unique_ptr<DirectoryIndexStore>>(
-            error(AdapterError::InvalidNativeResult, "index_store.nonempty"));
-    return Result::available(std::unique_ptr<DirectoryIndexStore>(
-        new DirectoryIndexStore(std::move(file), std::move(budget), std::move(context), limits)));
+        return unavailable<Pointer>(error(AdapterError::InvalidNativeResult, "index_store.nonempty"));
+    if (stop.stop_requested())
+        return unavailable<Pointer>(cancelled());
+    auto owner = Pointer(
+        new DirectoryIndexStore(std::move(file), std::move(budget), std::move(context), limits, std::move(factory)));
+    slot.transfer();
+    return Observation<Pointer>::available(std::move(owner));
+}
+Observation<std::unique_ptr<DirectoryIndexStore>>
+DirectoryIndexStore::create_new(std::shared_ptr<IndexFileFactory> factory, std::shared_ptr<IndexStorageBudget> budget,
+                                DirectoryIndexContext context, DirectoryIndexStoreLimits limits, std::stop_token stop) {
+    using Pointer = std::unique_ptr<DirectoryIndexStore>;
+    if (!factory || !budget)
+        return unavailable<Pointer>(error(AdapterError::InvalidLimit, "index_store.limits"));
+    auto valid = configuration(context, limits);
+    if (!valid.value())
+        return unavailable<Pointer>(*valid.unavailable_detail());
+    if (stop.stop_requested())
+        return unavailable<Pointer>(cancelled());
+    IndexStorageBudget::FileSlot slot(budget);
+    if (!slot.acquired())
+        return unavailable<Pointer>(exhausted());
+    auto file = factory->create_file();
+    if (!file.value())
+        return unavailable<Pointer>(*file.unavailable_detail());
+    return adopt_reserved(std::move(file).take_value(), std::move(budget), std::move(context), limits, slot, factory,
+                          stop);
 }
 void DirectoryIndexStore::fail(UnavailableObservation failure) {
     state_ = DirectoryIndexStoreState::Failed;

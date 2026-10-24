@@ -14,4 +14,8 @@ namespace ck::files {
 // Same-user processes and privileged administrators remain within the trust
 // boundary. This is scratch storage, not encrypted storage or a durable journal.
 Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const NativeAbsolutePath &root);
+// Pins and validates the existing root, then revalidates its privacy before
+// each creation through that held directory. No directory creation/removal.
+// Use DirectoryIndexStore::create_new to reserve quota before native creation.
+Observation<std::shared_ptr<IndexFileFactory>> open_native_index_workspace(const NativeAbsolutePath &root);
 } // namespace ck::files

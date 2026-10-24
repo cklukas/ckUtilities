@@ -143,14 +143,99 @@ CK_TEST(index_file_native_uses_host_spelling_for_non_ascii_private_root) {
     CK_CHECK(children(root) == 0);
     std::cout << "index-private-native-non-ascii-root-qualified\n";
 }
+CK_TEST(index_workspace_native_pins_original_directory_before_any_file_creation) {
+    const ck::testing::ScratchDirectory scratch("files-index-workspace", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = scratch.path() / "root", moved = scratch.path() / "moved";
+    fs::create_directory(root);
+    private_root(root);
+    auto workspace = take(open_native_index_workspace(address(root)));
+    std::error_code error;
+    fs::rename(root, moved, error);
+#ifdef _WIN32
+    if (error) {
+        CK_CHECK(error.value() == ERROR_ACCESS_DENIED || error.value() == ERROR_SHARING_VIOLATION);
+        auto file = take(workspace->create_file());
+        const std::array data{std::byte{42}};
+        write_all(*file, 0, data);
+        file.reset();
+        workspace.reset();
+        fs::rename(root, moved);
+        CK_CHECK(children(moved) == 0);
+        std::cout << "index-workspace-native-pinned-parent-rename-refusal-qualified\n";
+        return;
+    }
+#endif
+    if (error)
+        throw std::runtime_error("cannot relocate workspace fixture");
+    fs::create_directory(root);
+    private_root(root);
+    {
+        std::ofstream out(root / "sentinel");
+        out << "untouched";
+    }
+    auto file = take(workspace->create_file());
+    const std::array data{std::byte{0xff}, std::byte{0x80}};
+    write_all(*file, 0, data);
+    std::array<std::byte, 2> actual{};
+    read_all(*file, 0, actual);
+    file.reset();
+    workspace.reset();
+    CK_CHECK(actual == data && fs::file_size(root / "sentinel") == 9);
+    CK_CHECK(children(root) == 1 && children(moved) == 0);
+    std::cout << "index-workspace-native-held-root-replacement-qualified\n";
+}
+CK_TEST(index_workspace_native_budgeted_store_retains_factory_and_releases_native_files) {
+    const ck::testing::ScratchDirectory scratch("files-index-budget", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    auto workspace = take(open_native_index_workspace(address(scratch.path())));
+    const std::weak_ptr<IndexFileFactory> weak = workspace;
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    DirectoryIndexContext context;
+    context.generation[0] = std::byte{1};
+    auto store = take(DirectoryIndexStore::create_new(workspace, budget, context));
+    CK_CHECK(budget->charged_files() == 1);
+    CK_CHECK(DirectoryIndexStore::create_new(workspace, budget, context).state() == ObservationState::Unknown);
+    std::stop_source stop;
+    stop.request_stop();
+    CK_CHECK(!DirectoryIndexStore::create_new(workspace, budget, context, {}, stop.get_token()).value());
+    workspace.reset();
+    CK_CHECK(!weak.expired());
+    DirectoryIndexRecord row{1, *NativeName::from_posix("record"), {}, Observation<bool>::available(false)};
+    const auto position = take(store->append(row));
+    CK_CHECK(take(store->seal()));
+    CK_CHECK(take(store->read(position)).name == row.name);
+    store.reset();
+    CK_CHECK(weak.expired() && budget->charged_files() == 0 && budget->charged_bytes() == 0);
+    CK_CHECK(children(scratch.path()) == 0);
+    std::cout << "index-workspace-native-budget-factory-lifetime-qualified\n";
+}
+#ifndef _WIN32
+CK_TEST(index_workspace_native_rechecks_private_mode_after_root_open_and_recovers_without_reopen) {
+    const ck::testing::ScratchDirectory scratch("files-index-recheck", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    auto workspace = take(open_native_index_workspace(address(scratch.path())));
+    CK_CHECK(chmod(scratch.path().c_str(), 0755) == 0);
+    auto budget = std::make_shared<IndexStorageBudget>(1024, 1);
+    DirectoryIndexContext context;
+    context.generation[0] = std::byte{1};
+    CK_CHECK(DirectoryIndexStore::create_new(workspace, budget, context).state() == ObservationState::Denied);
+    CK_CHECK(budget->charged_files() == 0 && children(scratch.path()) == 0);
+    CK_CHECK(chmod(scratch.path().c_str(), 0700) == 0);
+    auto store = take(DirectoryIndexStore::create_new(workspace, budget, context));
+    store.reset();
+    workspace.reset();
+    CK_CHECK(budget->charged_files() == 0 && children(scratch.path()) == 0);
+    std::cout << "index-workspace-native-private-mode-recheck-qualified\n";
+}
+#endif
 CK_TEST(index_file_native_independent_owners_and_record_store_preserve_lossless_names) {
     const ck::testing::ScratchDirectory scratch("files-index-store-native", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     private_root(scratch.path());
     DirectoryIndexContext context;
     context.generation[0] = std::byte{7};
     auto budget = std::make_shared<IndexStorageBudget>(1024 * 1024, 2);
-    auto store =
-        take(DirectoryIndexStore::create(take(create_native_index_file(address(scratch.path()))), budget, context));
+    auto store = take(
+        DirectoryIndexStore::create_new(take(open_native_index_workspace(address(scratch.path()))), budget, context));
     auto other = take(create_native_index_file(address(scratch.path())));
     const auto name = *NativeName::from_windows(std::u16string{u'x', char16_t{0xd800}, u'\u0301'});
     DirectoryIndexRecord record{
@@ -309,6 +394,7 @@ CK_TEST(index_file_native_mac_rejects_extended_root_acl_without_modifying_it) {
 #ifdef _WIN32
 CK_TEST(index_file_native_windows_protects_from_inherited_world_access_and_excludes_other_opens) {
     const ck::testing::ScratchDirectory scratch("files-index-dacl", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto workspace = take(open_native_index_workspace(address(scratch.path())));
     alignas(DWORD) std::array<std::byte, SECURITY_MAX_SID_SIZE> world{};
     DWORD world_size = static_cast<DWORD>(world.size());
     if (!CreateWellKnownSid(WinWorldSid, nullptr, world.data(), &world_size))
@@ -332,7 +418,7 @@ CK_TEST(index_file_native_windows_protects_from_inherited_world_access_and_exclu
                               DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr, nullptr, acl,
                               nullptr) != ERROR_SUCCESS)
         throw std::runtime_error("cannot set inherited root ACL fixture");
-    auto file = take(create_native_index_file(address(scratch.path())));
+    auto file = take(workspace->create_file());
     const auto path = fs::directory_iterator(scratch.path())->path();
     HANDLE second = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                 nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);

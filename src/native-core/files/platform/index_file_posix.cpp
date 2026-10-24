@@ -22,7 +22,7 @@ namespace ck::files {
 namespace {
 class Fd final {
   public:
-    explicit Fd(int fd) : value(fd) {
+    explicit Fd(int fd) noexcept : value(fd) {
     }
     ~Fd() {
         if (value >= 0)
@@ -128,7 +128,7 @@ bool valid_io(std::uint64_t offset, std::size_t count) {
 }
 class PosixIndexFile final : public IndexByteFile {
   public:
-    explicit PosixIndexFile(int fd) : fd_(fd) {
+    explicit PosixIndexFile(int fd) noexcept : fd_(fd) {
     }
     Observation<std::uint64_t> size() override {
         struct stat s{};
@@ -160,30 +160,26 @@ class PosixIndexFile final : public IndexByteFile {
   private:
     Fd fd_;
 };
-} // namespace
-Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const NativeAbsolutePath &root) {
-    using Pointer = std::unique_ptr<IndexByteFile>;
-    auto host = root.host_path();
-    if (!host.value()) {
-        const auto &e = *host.unavailable_detail();
-        return Observation<Pointer>::unavailable(e.state, e.error);
-    }
-    const auto &path = *host.value();
-    if (path.native().back() == '/' || path.filename() == "." || path.filename() == "..")
-        return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
-    Fd directory(open(path.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
-    if (directory.value < 0)
-        return failure<Pointer>(errno, "index_file.open_root");
+Observation<bool> verify_root(int directory) {
     struct stat parent{};
-    if (fstat(directory.value, &parent) != 0)
-        return failure<Pointer>(errno, "index_file.root_stat");
+    if (fstat(directory, &parent) != 0)
+        return failure<bool>(errno, "index_file.root_stat");
     if (!S_ISDIR(parent.st_mode) || parent.st_uid != geteuid() || (parent.st_mode & 07777) != 0700)
-        return rejected<Pointer>(AdapterError::InvalidAccess, "index_file.private_root", ObservationState::Denied);
-    for (auto check : {qualified_volume(directory.value), private_acl(directory.value)}) {
+        return rejected<bool>(AdapterError::InvalidAccess, "index_file.private_root", ObservationState::Denied);
+    for (auto check : {qualified_volume(directory), private_acl(directory)}) {
         if (!check.value()) {
             const auto &e = *check.unavailable_detail();
-            return Observation<Pointer>::unavailable(e.state, e.error);
+            return Observation<bool>::unavailable(e.state, e.error);
         }
+    }
+    return Observation<bool>::available(true);
+}
+Observation<std::unique_ptr<IndexByteFile>> create_in_root(int directory) {
+    using Pointer = std::unique_ptr<IndexByteFile>;
+    auto valid = verify_root(directory);
+    if (!valid.value()) {
+        const auto &e = *valid.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
     }
     // All names below this held root are private to the trusted user. Create
     // exclusively and unlink BEFORE any data or caller-visible owner exists.
@@ -197,14 +193,14 @@ Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const Nativ
             name += "0123456789abcdef"[byte >> 4];
             name += "0123456789abcdef"[byte & 15];
         }
-        Fd file(openat(directory.value, name.c_str(), O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
+        Fd file(openat(directory, name.c_str(), O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
         if (file.value < 0) {
             const int code = errno;
             if (code == EEXIST)
                 continue;
             return failure<Pointer>(code, "index_file.openat_create");
         }
-        if (unlinkat(directory.value, name.c_str(), 0) != 0)
+        if (unlinkat(directory, name.c_str(), 0) != 0)
             return failure<Pointer>(errno, "index_file.unlink_empty_cleanup_required");
         struct stat s{};
         if (fstat(file.value, &s) != 0)
@@ -223,5 +219,51 @@ Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const Nativ
         return Observation<Pointer>::available(std::move(owner));
     }
     return rejected<Pointer>(AdapterError::InventoryLimit, "index_file.name_attempts", ObservationState::Unknown);
+}
+class PosixIndexWorkspace final : public IndexFileFactory {
+  public:
+    explicit PosixIndexWorkspace(int directory) noexcept : directory_(directory), user_(geteuid()) {
+    }
+    Observation<std::unique_ptr<IndexByteFile>> create_file() override {
+        if (geteuid() != user_)
+            return rejected<std::unique_ptr<IndexByteFile>>(AdapterError::InvalidAccess, "index_file.user_changed",
+                                                            ObservationState::Denied);
+        return create_in_root(directory_.value);
+    }
+
+  private:
+    Fd directory_;
+    uid_t user_;
+};
+} // namespace
+Observation<std::shared_ptr<IndexFileFactory>> open_native_index_workspace(const NativeAbsolutePath &root) {
+    using Pointer = std::shared_ptr<IndexFileFactory>;
+    auto host = root.host_path();
+    if (!host.value()) {
+        const auto &e = *host.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    const auto &path = *host.value();
+    if (path.native().back() == '/' || path.filename() == "." || path.filename() == "..")
+        return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
+    Fd directory(open(path.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    if (directory.value < 0)
+        return failure<Pointer>(errno, "index_file.open_root");
+    auto valid = verify_root(directory.value);
+    if (!valid.value()) {
+        const auto &e = *valid.unavailable_detail();
+        return Observation<Pointer>::unavailable(e.state, e.error);
+    }
+    auto owner = std::make_shared<PosixIndexWorkspace>(directory.value);
+    directory.release();
+    return Observation<Pointer>::available(std::move(owner));
+}
+Observation<std::unique_ptr<IndexByteFile>> create_native_index_file(const NativeAbsolutePath &root) {
+    auto workspace = open_native_index_workspace(root);
+    if (!workspace.value()) {
+        const auto &e = *workspace.unavailable_detail();
+        return Observation<std::unique_ptr<IndexByteFile>>::unavailable(e.state, e.error);
+    }
+    return (*workspace.value())->create_file();
 }
 } // namespace ck::files
