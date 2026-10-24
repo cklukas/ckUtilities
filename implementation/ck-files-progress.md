@@ -4294,3 +4294,52 @@ still pending, followed by history/bookmarks, qualified refresh, properties/
 preview and production executable/interactive acceptance. No completion
 provider, filesystem mutation command or production GUI launch is enabled by
 this value-layer milestone.
+
+
+## 2026-10-24 — WP-02 bounded native completion-index matching
+
+Added the serialized worker-side matcher over a completed canonical directory
+index. It uses exact native-prefix matching, no native re-enumeration/new sort,
+one bounded index batch per advance and at most 64 output candidates with
+separate text/name quotas. It offers only observed directories and retains
+explicit counts for unknown kinds, unknown hidden state and unavailable editor
+proposals. Links/reparse types are excluded. Missing observations or a limited
+subset never establish uniqueness.
+
+Owner-free continuations bind dataset, immutable query, scan bounds, hidden
+policy and per-candidate eligibility. They reread one bounded batch and skip its
+consumed prefix without losing the remainder. Aggregate output page bounds can
+change. An exhausted resumed page still reports its preceding results. Error,
+exception, cancellation and abandonment withdraw staging; cancellation preserves
+a healthy shared index and real I/O failure retains precedence over late stop.
+Native/index retirement remains on the worker. Parent/source binding is an
+explicit responsibility of the forthcoming service composition root.
+
+Thirteen new cases cover row/text/name paging, real extra-match lookahead,
+unknown classification/hidden state, raw POSIX/UTF-16 and literal names,
+unrepresentable/per-candidate limits, moved/changed/foreign continuations,
+cancellation and source reuse, I/O/exception precedence, ownership/abandonment,
+invalid limits and a 1025-row bounded/linear paging check. A real native directory
+and protected private index are exercised on each host. All 83 Files suites
+pass on macOS/Linux/Windows (918/921/917 cases), plus keymap; the actual
+UI/service/value suite has 152 cases. Scoped ASan+UBSan on macOS/Linux and ASan
+on Windows pass all 41 matcher/codec/draft cases, including native integration.
+All 68 matcher/native-core/platform/test units compile with instrumentation;
+the harness links no ckVision UI binary. No new service-thread/mailbox race or
+actual-window qualification is claimed. Diagnostic trees/fixtures are retired,
+normal builds remain, and architecture/strict documentation checks pass. See
+[qualification evidence](evidence/ck-files-completion-index-20261024.json).
+
+A diagnostic-driver path-quoting error caused an initial Windows sanitizer
+compile failure; forward-slash CMake path arguments corrected the harness.
+The failed tree was retired after checking exact ownership. Product source was
+unchanged by that correction. Before final qualification, continuation policy
+was tightened to retain per-candidate eligibility and the exhausted resumed-page
+subset flag. Earlier passing runs are retained only as timing evidence; final
+source received fresh normal/sanitizer qualification.
+
+WP-02 remains open for native-parent discovery/cache ownership, asynchronous
+latest-query/revision/lifetime gating and ckVision provider/Right-to-accept
+integration, followed by histories/bookmarks, qualified refresh, properties/
+preview and production executable/interactive acceptance. No completion provider,
+filesystem mutation command or production GUI launch is enabled yet.

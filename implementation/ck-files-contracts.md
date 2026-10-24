@@ -3083,3 +3083,48 @@ This boundary has no native I/O, index scan, provider callback or thread.
 Directory discovery/index matching, revision-gated publication and binding to
 ckVision InputLine remain pending. Candidate limits, unavailable classifications
 and non-unique partial results must remain explicit in that integration.
+
+
+### Worker-side completion over a canonical directory index
+
+`FilesCompletionIndexJob` consumes the canonical native-name ordering certified
+by `CompletedDirectoryIndex`. Its caller must bind the query's parent route to
+the directory it actually opened. The matcher performs no native enumeration,
+source reopening, additional sort or full-directory memory copy. Each advance
+reads one bounded index page, examines at most its configured row count and
+retains at most 64 candidates with separate text/native-name quotas. Matching
+is exact native-prefix matching and stops after the canonical prefix interval.
+
+Candidates require an observed Directory kind. Links, junctions and other
+reparse types are excluded; the matcher does not follow them. Missing kind
+observations, unavailable editor proposals and unknown hidden state under a
+hidden-name filter remain explicit counts. The first proposal error retains
+its error meaning. Known hidden names follow the requested policy. A result
+with uncertainty cannot claim to be a complete match set. Candidate size and
+aggregate page budgets are separate: a per-candidate text failure is an explicit
+unavailable proposal; a first eligible candidate too large for a page fails
+rather than silently disappearing.
+
+Continuation is emitted only after observing a real additional eligible
+candidate. It holds an opaque scan position, bounded within-page skip count,
+immutable query values and the dataset namespace; it retains no native/index
+owner. The next job rereads that one bounded batch and skips exactly its
+consumed prefix. Dataset, full query, scan bounds, hidden policy and per-candidate eligibility
+limit must match;
+output page bounds may change. Changed or moved continuations fail before I/O.
+A resumed page sets `has_previous`, including at exhaustion, so its final item
+cannot be misreported as the directory's only match. `complete()` requires an
+exhausted first page and no uncertainty. These are indexed observations, not a
+live filesystem subscription or a snapshot promise.
+
+Cancellation is checked between bounded reads/records. A read finishes without
+passing stop into the shared store, preserving a healthy index for another
+query. A real read failure retains precedence over a simultaneous stop.
+Cancellation, abandonment, I/O failure and exception expose no staged prefix.
+Native/index owner retirement remains on the serialized worker. Issued pages
+and continuations remain value-only after owners retire; discovery row ordinals
+have only their index namespace and grant no operation authority.
+
+This job has no thread, mailbox or UI binding. Completion service ownership,
+revision/latest-query gating, native parent discovery/cache retirement and
+ckVision provider integration remain to be implemented.

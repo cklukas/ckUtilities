@@ -55,6 +55,7 @@ class FilesLocationCompletionQuery final {
     ck::files::Observation<FilesLocationProposal> propose_directory(const ck::files::NativeName &name) const;
 
   private:
+    friend class FilesCompletionIndexJob;
     friend ck::files::Observation<FilesLocationCompletionQuery>
         parse_files_location_completion(std::string_view, FilesLocationTextSyntax, ck::files::NameEncoding,
                                         FilesLocationTextLimits);
