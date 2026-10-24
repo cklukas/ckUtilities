@@ -65,6 +65,11 @@ const std::array kFindCommands{
     CommandDefinition{"ck.find.cancel_search", "&Cancel search", "Find", "Ctrl+C"},
 };
 
+const std::array kFilesCommands{
+    CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
+    CommandDefinition{"ck.files.cancel_read", "&Cancel read", "Files", ""},
+};
+
 const std::array kDiskUsageCommands{
     CommandDefinition{"ck.du.rescan", "&Rescan", "Disk usage", "F5"},
     CommandDefinition{"ck.du.cancel_scan", "&Cancel scan", "Disk usage", "Ctrl+C"},
@@ -163,6 +168,7 @@ const SuiteCommandMetadata *find_suite_command(std::string_view application_id,
     if (application_id == "ck-json-view") return find_in(kJsonViewCommands, command_key);
     if (application_id == "ck-utilities") return find_in(kLauncherCommands, command_key);
     if (application_id == "ck-find") return find_in(kFindCommands, command_key);
+    if (application_id == "ck-files") return find_in(kFilesCommands, command_key);
     if (application_id == "ck-du") return find_in(kDiskUsageCommands, command_key);
     if (application_id == "ck-config") return find_in(kConfigCommands, command_key);
     if (application_id == "ck-edit") return find_in(kEditCommands, command_key);
@@ -210,6 +216,7 @@ SuiteKeymapCatalog::SuiteKeymapCatalog(KeymapController &active_controller)
     add("ck-utilities", kLauncherCommands);
     add("ck-find", kFindCommands);
     add("ck-du", kDiskUsageCommands);
+    add("ck-files", kFilesCommands);
     add("ck-edit", kEditCommands);
     add("ck-chat", kChatCommands);
 }

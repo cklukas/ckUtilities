@@ -3805,3 +3805,46 @@ WP-02 remains in progress. The two-pane application controller, bounded UI
 publication, focus/mark/view commands, navigation/completion, properties/preview,
 histories/bookmarks, qualified refresh and interactive terminal acceptance are
 still required. No production Files executable or mutation command is enabled.
+
+## 2026-10-24 — WP-02 two-pane application controller
+
+`FilesApp` composes the suite shell, real splitter and two independent pane
+services. Each pane keeps one bounded display page. Worker notifications share
+one coalesced, payload-free UI post; exact navigation/request tickets and model
+stamps gate publication. A watchdog runs only while reads are pending. Paint and
+provider callbacks perform no native I/O or worker joins.
+
+The application displays active and requested locations separately, preserves
+the previous listing on failed navigation, requests uncached viewport pages and
+keeps the other pane usable while a read is blocked. Narrow layouts show the
+active pane with an explicit switch command; both pane models survive resizing.
+The initial divider is established from the actual window geometry and later
+resizes preserve its position. All five suite themes are exercised.
+
+Quit and window close use the same asynchronous shutdown decision. While reads
+are running, Enter chooses Stay and Escape dismisses without exiting. The
+explicit exit choice requests worker stop and returns to the host; the host
+joins outside dispatch after controller callbacks have been withdrawn. Weak
+posts survive controller retirement safely, and the host Quit handler is
+restored after desktop teardown.
+
+Nine application tests exercise native source/cache integration, all themes,
+narrow/wide resizing, independent panes, keyboard switching and uncached paging,
+failed and rapidly superseded navigation, coalesced/late worker notifications,
+blocked-read cancellation and explicit shutdown decisions. All 83 Files suites
+pass: 787 cases on Mac, 790 on Linux and 786 on Windows. The keymap tests pass
+on all three hosts. Fresh matched sanitizer builds compile 71 product units
+and installed instrumented ckVision 1.4.0 SDKs (124/124/128 SDK units); all 37
+UI/service cases pass under ASan+UBSan on Mac/Linux and ASan on Windows.
+
+See [the controller evidence](evidence/ck-files-app-controller-20261024.json)
+for 258 source/config fingerprints, exact compiler sets and sanitizer flags,
+SDK/output hashes, timing, failure investigation and diagnostic cleanup. No
+actual application window has been launched for this component milestone;
+headless view tests do not establish interactive terminal acceptance.
+
+WP-02 remains open. Navigation input/completion and child traversal, qualified
+refresh with stable selection, marking/view commands, properties/preview,
+histories/bookmarks, mouse acceptance and a production executable with actual
+interactive terminal validation are still required. No mutation command is
+enabled.
