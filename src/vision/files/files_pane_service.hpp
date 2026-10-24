@@ -137,6 +137,8 @@ class FilesPaneService final {
     bool running() const noexcept;
     bool working() const;
     FilesPaneWorkerFault fault() const noexcept;
+    // Immutable configuration, value-only and safe for UI validation.
+    FilesPaneServiceLimits limits() const noexcept;
 
   private:
     static FilesPaneTicket ticket(std::uint64_t number) { return FilesPaneTicket(number); }

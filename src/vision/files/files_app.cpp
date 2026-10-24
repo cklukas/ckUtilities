@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
+#include "files_location_dialog.hpp"
 #include "ck/vision/keymap.hpp"
 #include <cvision/core/text.hpp>
 #include <cvision/widgets/dialog.hpp>
@@ -111,6 +112,7 @@ struct FilesApp::State {
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
+        ck::files::NameEncoding encoding = ck::files::NameEncoding::PosixBytes;
         ck::files::IndexedPaneSelection selection;
         std::optional<std::uint64_t> worker_focus;
         std::optional<ck::files::PaneRowId> range_start;
@@ -132,6 +134,8 @@ struct FilesApp::State {
     std::shared_ptr<void> lifetime = std::make_shared<int>(0);
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
+    std::unique_ptr<FilesLocationDialog> location_dialog;
+    bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
     std::weak_ptr<void> view_dialog_lifetime;
     bool close_after_view = false;
@@ -170,6 +174,8 @@ struct FilesApp::State {
                 return id;
             };
             const auto row_ready = [this] { return ready(active) && panes[active].model.target().has_value(); };
+            const auto location_id =
+                own("ck.files.location", [this] { show_location(); }, [this] { return can_edit_location(active); });
             const auto parent_id = own(
                 "ck.files.parent", [this] { navigate_relative(active, false); },
                 [this] { return relative_ready(active, false); });
@@ -234,8 +240,9 @@ struct FilesApp::State {
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
                     "&Location",
-                    {item(enter_id, "&Enter folder"), item(parent_id, "&Parent folder"),
-                     item(root_id, "Location &root"), item(home_id, "&Home location"),
+                    {item(location_id, "&Go to location..."), item(enter_id, "&Enter folder"),
+                     item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
+                     item(home_id, "&Home location"),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -269,8 +276,10 @@ struct FilesApp::State {
             wake.bind([this] { pump(); });
             bound = true;
             application.commands().set_handler(application.commands().standard().quit, [this] { request_close(); });
-            for (std::size_t i = 0; i < 2; ++i)
+            for (std::size_t i = 0; i < 2; ++i) {
+                panes[i].encoding = locations[i].encoding();
                 navigate(i, std::move(locations[i]));
+            }
             application.set_focus(surfaces[0]->grid);
             pump();
         } catch (...) {
@@ -299,6 +308,7 @@ struct FilesApp::State {
             quit_owned = false;
         }
         confirmation.reset();
+        location_dialog.reset();
         view_dialog.reset();
         for (auto *surface : surfaces)
             if (surface) {
@@ -368,7 +378,11 @@ struct FilesApp::State {
             wake.request();
     }
     bool modal_pending() const {
-        return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed());
+        return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
+               (location_dialog && !location_dialog->completed());
+    }
+    bool can_edit_location(std::size_t i) const {
+        return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
     static bool pending(const Pane &p) { return p.navigating || p.reading || p.changing || p.queued_view; }
     bool ready(std::size_t i, bool continuation = false) const {
@@ -592,6 +606,61 @@ struct FilesApp::State {
             return true;
         }
         return begin_change(i, FilesPaneChangeView{std::move(view)});
+    }
+    void show_location() {
+        if (!can_edit_location(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto service_limits = services[pane]->limits();
+        FilesLocationTextLimits limits;
+        limits.path.max_native_bytes = service_limits.path_bytes;
+        limits.components = service_limits.location_components;
+        limits.text_bytes =
+            std::max(limits.text_bytes, service_limits.path_bytes * 8 + service_limits.location_components * 4 + 8);
+        const auto seed = panes[pane].navigating && panes[pane].requested ? panes[pane].requested
+                          : panes[pane].active                            ? panes[pane].active
+                                                                          : panes[pane].requested;
+        auto draft = seed ? FilesLocationDraft::start(*seed, limits)
+                          : FilesLocationDraft::new_location(panes[pane].encoding, limits);
+        // An initial address rejected by the service budget is not a usable
+        // seed. Recovery still offers empty input, never a guessed location.
+        if (!draft.value() && !panes[pane].active)
+            draft = FilesLocationDraft::new_location(panes[pane].encoding, limits);
+        if (!draft.value()) {
+            panes[pane].error = "This location cannot be edited within the configured limits";
+            labels();
+            return;
+        }
+        location_dialog = std::make_unique<FilesLocationDialog>(
+            application, shell->desktop(), shell->roles(), std::move(draft).take_value(),
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation](std::optional<FilesPaneLocation> location) {
+                if (weak.expired())
+                    return;
+                if (close_after_location) {
+                    close_after_location = false;
+                    request_close();
+                    return;
+                }
+                if (!location)
+                    return;
+                if (panes[pane].navigation != navigation) {
+                    panes[pane].error = "Location changed while its editor was open";
+                    labels();
+                    return;
+                }
+                if (!can_edit_location(pane)) {
+                    panes[pane].error = "The location service is unavailable";
+                    labels();
+                    return;
+                }
+                if (!panes[pane].navigating && panes[pane].active && panes[pane].model.current() &&
+                    *panes[pane].active == *location)
+                    return;
+                auto view = panes[pane].view;
+                view.display_substring.clear();
+                navigate(pane, std::move(*location), std::move(view));
+            });
     }
     void show_view_options() {
         if (!ready(active))
@@ -834,6 +903,11 @@ struct FilesApp::State {
     void request_close() {
         if (closing)
             return;
+        if (location_dialog && !location_dialog->completed()) {
+            close_after_location = true;
+            location_dialog->close();
+            return;
+        }
         if (view_dialog && !view_dialog->completed()) {
             close_after_view = true;
             if (view_dialog_window && !view_dialog_lifetime.expired())
@@ -894,6 +968,9 @@ void FilesApp::cancel_read() { state_->cancel_read(); }
 void FilesApp::request_close() { state_->request_close(); }
 bool FilesApp::close_confirmation_pending() const { return state_->confirmation && !state_->confirmation->completed(); }
 bool FilesApp::view_options_pending() const { return state_->view_dialog && !state_->view_dialog->completed(); }
+bool FilesApp::location_editor_pending() const {
+    return state_->location_dialog && !state_->location_dialog->completed();
+}
 std::size_t FilesApp::active_pane() const noexcept { return state_->active; }
 bool FilesApp::narrow() const noexcept { return state_->compact; }
 bool FilesApp::pending(std::size_t pane) const {

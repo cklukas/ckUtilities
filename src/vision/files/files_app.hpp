@@ -57,6 +57,7 @@ class FilesApp final {
     void request_close();
     bool close_confirmation_pending() const;
     bool view_options_pending() const;
+    bool location_editor_pending() const;
     std::size_t active_pane() const noexcept;
     bool narrow() const noexcept;
     bool pending(std::size_t pane) const;

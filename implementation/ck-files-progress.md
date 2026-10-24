@@ -4205,3 +4205,47 @@ WP-02 remains open for the location dialog and asynchronous completion,
 history/bookmarks, qualified refresh, properties/preview and production
 executable/interactive acceptance. No location-edit command is enabled by
 this value-layer milestone.
+
+
+## 2026-10-24 — WP-02 location dialog and reversible drafts
+
+Ctrl+L and Location → Go to location now open a public ckVision modal form.
+A value-only draft keeps exact native routes separate from their text, selects
+Path or ExactNames without losing native units, validates service path/depth
+limits and refuses failed format conversions without discarding user input.
+Accepting an unchanged acknowledged route preserves marks, range, cursor and
+filter. Edited locations submit through the existing asynchronous navigation
+protocol. Failed or rejected startup addresses can recover from an empty form
+requiring an explicit absolute location; no cwd/root/home is guessed.
+
+The editor captures pane/navigation identity, rejects stale form results and
+can supersede blocked home discovery. Modal completion is posted after detach;
+pending state remains through delivery. Quit, cancellation, external detachment,
+controller retirement and queued-result retirement do not submit unaccepted
+text or call an expired application controller. The application and desktop
+outlive the presentation controller. No native I/O or worker join runs in the
+form or dispatch. Codec quotas apply to validation/conversion; the public
+InputLine buffer is not claimed to have a hard allocation cap.
+
+Six new draft cases and ten new application cases cover reversible formats,
+unrepresentable names, invalid/moved values, quotas, all five themes, real
+keymap/menu/focus behavior, tiny resizing and the Go button, startup recovery,
+stale navigation, modal/teardown ownership and blocked discovery supersession.
+The existing real native-literal-name case also exercises the editor. All
+83 Files suites pass on macOS/Linux/Windows (893/896/892 cases), plus keymap.
+Matched ASan+UBSan on macOS/Linux and ASan on Windows pass 215/213/212 cases:
+127 UI/service/codec/draft, 53 indexed-pane, 11 path, 7 native-path/home and
+17/15/14 native-index. All 82 product units and 124/124/128 pinned SDK units
+compile with instrumentation. Fresh ThreadSanitizer builds pass all 50 service
+cases three times per POSIX host (300 executions), covering the UI-free worker
+protocol rather than the UI controller/grid. Diagnostic trees and fixtures
+are retired; current normal builds remain for active work. Architecture checks
+and strict documentation pass. See
+[qualification evidence](evidence/ck-files-location-dialog-20261024.json).
+
+An initial Mac build failed on a strict shadow warning in a lambda capture;
+the capture was renamed. That failed build does not qualify the final source.
+WP-02 remains open for bounded asynchronous completion, history/bookmarks,
+qualified refresh, properties/preview and production executable/interactive
+acceptance. No filesystem mutation command or production GUI launch is
+introduced.

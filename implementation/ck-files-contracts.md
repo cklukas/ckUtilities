@@ -3006,9 +3006,45 @@ limits and returns no prefix on failure. The defaults match pane navigation's
 16 MiB. Invalid configuration refuses without I/O. No provider scan, pathname
 reopen or native query occurs in these functions.
 
-This supplies the input boundary for the forthcoming location dialog and
-asynchronous completion. It does not enable a location-editing command yet.
-Completion must publish bounded revision-tagged candidates on the UI thread,
-retain exact native route values and preserve ckVision's Right-to-accept
-behavior. Existing locations must not lose their literal component structure
-merely because a form is opened and accepted unchanged.
+### Location draft and modal form
+
+Ctrl+L and Location → Go to location open a public ckVision descriptor form.
+`FilesLocationDraft` keeps the original native route independently of its text.
+It selects ordinary Path only when the strict codec accepts a lossless native
+projection; otherwise ExactNames preserves unusual units and component names.
+Accepting unchanged seed text returns the original route, including its separate
+literal suffix components. Switching formats resolves the current text first,
+refuses an unrepresentable or over-budget conversion without discarding text or
+mode, and resets the input's undo buffer through the public text setter.
+
+Path/depth limits come from the pane service's immutable configuration. The
+text codec has a bounded budget sized to represent the configured native route;
+the public InputLine buffer itself is not claimed to enforce a hard allocation
+cap. Go validates the complete value before returning it. Invalid or oversized
+input keeps the form open. No filesystem query runs in the form or UI dispatch.
+If startup opening failed or submission was rejected without an acknowledged
+location, a fresh blank draft permits recovery; it requires an explicit absolute
+address and never guesses cwd, root or home.
+
+`FilesLocationDialog` uses typed materialized fields/buttons, modal presentation,
+window close/detach hooks and posted completion. A result is delivered only after
+modal detachment. Cancellation, external detachment, app retirement and an app
+retiring with an already queued acceptance withdraw the handler safely. Pending
+modal state lasts through delivery so another command cannot replace a queued
+accepted result. Closing the app cancels the form before the ordinary worker
+retirement confirmation. Destruction withdraws completion; the desktop retains
+ownership of its still-attached view tree until normal removal.
+
+The application captures pane and navigation ticket on opening the editor. A
+changed ticket rejects an obsolete form result. An unchanged accepted active
+route with a current listing and no pending navigation is a no-op, preserving
+marks, range, cursor and filter. Otherwise Go supersedes pending navigation
+through the existing latest-request protocol; acknowledged view policy carries
+forward and the name filter clears. The editor remains available during blocked
+worker discovery and when no initial dataset exists, subject to modal/service
+availability. The other pane remains independent.
+
+Asynchronous completion is still pending. It must publish bounded
+revision-tagged candidates on the UI thread, retain exact native route values
+and preserve ckVision's Right-to-accept behavior. The location editor currently
+has no filesystem completion provider.

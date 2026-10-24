@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
+#include "files_location_text.hpp"
 #include "scratch_directory.hpp"
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -101,7 +102,8 @@ struct Fixture {
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
                      FilesPaneServiceLimits limits = {}, ckv::Size size = {120, 34},
-                     std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false)
+                     std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
+                     bool missing_initial = false, bool rejected_initial = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -173,7 +175,10 @@ struct Fixture {
         }
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
-            std::array<NativeAbsolutePath, 2>{address(scratch.path() / "left"), address(scratch.path() / "right")},
+            std::array<NativeAbsolutePath, 2>{
+                address(scratch.path() / (rejected_initial ? std::string(1536, 'x')
+                                                           : std::string(missing_initial ? "missing" : "left"))),
+                address(scratch.path() / "right")},
             [this] { ++exits; }, theme);
     }
     ~Fixture() {
@@ -209,6 +214,28 @@ struct Fixture {
     bool command(std::string_view name) { return application.execute_command(id(name)); }
     bool key(ckv::Key value, ckv::Modifier modifiers = ckv::Modifier::None) {
         return application.dispatch(ckv::KeyEvent{{value, modifiers, {}}});
+    }
+    bool location_key() { return application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Ctrl, "l"}}); }
+    bool alt(std::string text) {
+        return application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, std::move(text)}});
+    }
+    ckv::widgets::InputLine *editor_input() {
+        auto *input = dynamic_cast<ckv::widgets::InputLine *>(application.focused());
+        if (!input)
+            throw std::runtime_error("location editor did not focus its real input");
+        return input;
+    }
+    std::string path_text(const std::filesystem::path &path) {
+        const auto value = address(path);
+        if (value.posix_bytes())
+            return *value.posix_bytes();
+        std::string text;
+        for (auto unit : *value.windows_units()) {
+            if (unit > 0x7f)
+                throw std::runtime_error("fixture root is not ASCII");
+            text.push_back(static_cast<char>(unit));
+        }
+        return text;
     }
     std::string painted() {
         application.step(clock.now_nanos());
@@ -868,6 +895,15 @@ CK_TEST(files_app_folder_entry_preserves_native_names_without_parsing_display_or
     f.loaded();
     CK_CHECK(f.app->location(0)->components().size() == 1 && f.app->location(0)->components()[0] == expected);
     CK_CHECK(f.app->model(0).row_count() == 2);
+    const auto before_editor = f.app->location(0);
+    CK_CHECK(f.location_key());
+    const auto exact_text = format_files_exact_location(*before_editor);
+    CK_CHECK(exact_text.value() && f.editor_input()->text() == *exact_text.value());
+    CK_CHECK(f.alt("p")); // Refuse a lossy ordinary-path projection.
+    CK_CHECK(f.editor_input()->text() == *exact_text.value());
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0) == before_editor && !f.app->pending(0));
     std::filesystem::remove_all(folder); // Exact extended spelling on Windows.
 }
 
@@ -1040,6 +1076,228 @@ CK_TEST(files_app_home_obeys_modal_scope_and_configurable_keymap) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
+}
+CK_TEST(files_app_location_editor_ctrl_l_changes_only_its_pane_and_preserves_view_policy_in_all_themes) {
+    for (auto theme :
+         {ThemeScheme::Classic, ThemeScheme::Dark, ThemeScheme::Light, ThemeScheme::Mono, ThemeScheme::HighContrast}) {
+        Fixture f(theme);
+        f.loaded();
+        auto view = f.app->view(0);
+        view.show_hidden = view.descending = true;
+        view.display_substring = "left";
+        CK_CHECK(f.app->change_view(0, view));
+        f.loaded();
+        CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+        f.loaded();
+        const auto before = f.app->location(0), other = f.app->location(1);
+        CK_CHECK(f.location_key() && f.app->location_editor_pending());
+        CK_CHECK(!f.command("ck.files.home") && !f.command("ck.files.toggle_mark"));
+        f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+        CK_CHECK(f.app->location(0) == before && !f.app->pending(0));
+        CK_CHECK(f.key(ckv::Key::Enter));
+        f.until([&] { return !f.app->location_editor_pending(); });
+        f.loaded();
+        CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") &&
+                 f.app->location(1) == other);
+        CK_CHECK(f.app->view(0).descending && f.app->view(0).show_hidden && f.app->view(0).display_substring.empty());
+        CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.mark_range"));
+        CK_CHECK(f.application.focused() == f.app->grid(0));
+    }
+}
+CK_TEST(files_app_location_editor_unchanged_accept_and_format_switches_preserve_exact_route_marks_and_range) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+    f.loaded();
+    const auto before = f.app->location(0);
+    const auto target = *f.app->target(0);
+    CK_CHECK(before->components().size() == 1 && f.location_key());
+    CK_CHECK(f.alt("e"));
+    const auto exact = format_files_exact_location(*before);
+    CK_CHECK(exact.value() && f.editor_input()->text() == *exact.value());
+    CK_CHECK(f.alt("p"));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0) == before && !f.app->pending(0));
+    CK_CHECK(f.app->target(0)->navigation == target.navigation && f.app->target(0)->row.row == target.row.row);
+    CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
+}
+CK_TEST(files_app_location_editor_vetoes_invalid_text_and_actual_service_limits_without_native_navigation) {
+    FilesPaneServiceLimits limits;
+    limits.location_components = 1;
+    Fixture f(ThemeScheme::Classic, {}, limits);
+    f.loaded();
+    const auto before = f.app->location(0);
+    CK_CHECK(f.location_key());
+    f.editor_input()->set_text("relative");
+    CK_CHECK(f.key(ckv::Key::Enter) && f.app->location_editor_pending() && !f.editor_input()->valid());
+    CK_CHECK(f.painted().find("Enter a valid absolute") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0) == before && !f.app->pending(0));
+    CK_CHECK(f.location_key() && f.alt("e"));
+    auto route = *before;
+    for (auto name : {"first", "second"}) {
+#ifdef _WIN32
+        const auto native =
+            *NativeName::from_windows(std::u16string(name, name + std::char_traits<char>::length(name)));
+#else
+        const auto native = *NativeName::from_posix(name);
+#endif
+        const auto next = route.descend(native, {}, 4);
+        if (!next.value())
+            throw std::runtime_error("limit fixture route");
+        route = *next.value();
+    }
+    const auto exact = format_files_exact_location(route);
+    CK_CHECK(exact.value());
+    f.editor_input()->set_text(*exact.value());
+    CK_CHECK(f.key(ckv::Key::Enter) && f.app->location_editor_pending());
+    CK_CHECK(f.painted().find("exceeds a configured") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0) == before && !f.app->pending(0));
+}
+CK_TEST(files_app_location_editor_recovers_an_initial_native_failure_without_a_completed_location) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, true);
+    f.loaded();
+    CK_CHECK(!f.app->location(0) && !f.app->model(0).current());
+    CK_CHECK(f.location_key());
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") &&
+             f.app->model(0).row_count() == 3);
+}
+CK_TEST(files_app_location_editor_empty_recovery_never_guesses_a_target_after_initial_submission_rejection) {
+    FilesPaneServiceLimits limits;
+    limits.path_bytes = 1024;
+    Fixture f(ThemeScheme::Classic, {}, limits, {120, 34}, {}, false, false, true);
+    f.loaded();
+    const auto other = f.app->location(1);
+    CK_CHECK(!f.app->location(0) && f.location_key() && f.editor_input()->text().empty());
+    CK_CHECK(f.key(ckv::Key::Enter) && f.app->location_editor_pending());
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") && f.app->model(0).current());
+    CK_CHECK(f.app->location(1) == other);
+}
+CK_TEST(files_app_location_editor_does_not_retarget_a_pane_superseded_while_the_form_is_open) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.location_key());
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "right")));
+    f.loaded();
+    const auto replacement = f.app->location(0);
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "left"));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->location(0) == replacement && !f.app->pending(0));
+    CK_CHECK(f.app->status(0).find("Location changed while its editor was open") != std::string::npos);
+}
+CK_TEST(files_app_location_editor_quit_retirement_and_external_detach_never_submit_unaccepted_text) {
+    for (int action : {0, 1, 2, 3}) {
+        Fixture f;
+        f.loaded();
+        const auto before = f.app->location(0);
+        CK_CHECK(f.location_key());
+        f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+        if (action == 0) {
+            f.app->request_close();
+            CK_CHECK(f.exits == 0);
+            f.until([&] { return f.exits == 1; });
+            CK_CHECK(f.app->location(0) == before);
+        } else if (action == 1) {
+            f.app.reset();
+            f.application.step(f.clock.now_nanos());
+            CK_CHECK(f.exits == 0);
+        } else {
+            ckv::widgets::Window *dialog = nullptr;
+            for (auto *view = f.application.focused(); view; view = view->parent())
+                if (auto *candidate = dynamic_cast<ckv::widgets::Window *>(view)) {
+                    dialog = candidate;
+                    break;
+                }
+            if (!dialog || !dialog->parent())
+                throw std::runtime_error("missing attached location window");
+            if (action == 3)
+                CK_CHECK(f.key(ckv::Key::Enter));
+            auto detached = dialog->parent()->remove_child(dialog);
+            (void)detached;
+            if (action == 3) {
+                f.app.reset();
+                f.application.step(f.clock.now_nanos());
+                CK_CHECK(f.exits == 0);
+            } else {
+                f.until([&] { return !f.app->location_editor_pending(); });
+                CK_CHECK(f.app->location(0) == before && !f.app->pending(0));
+            }
+        }
+    }
+}
+CK_TEST(files_app_location_editor_scrolls_after_narrow_resize_and_accepts_through_the_real_go_button) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.location_key());
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+    f.terminal.resize({40, 12});
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *go = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Go")
+            go = button;
+    if (!go)
+        throw std::runtime_error("missing real Go button");
+    const auto rect = go->absolute_bounds();
+    CK_CHECK(rect.width > 0 && rect.height > 0);
+    const ckv::Point at{rect.x + rect.width / 2, rect.y};
+    CK_CHECK(f.application.dispatch(
+        ckv::MouseEvent{.action = ckv::MouseAction::Down, .button = ckv::MouseButton::Left, .cell = at}));
+    CK_CHECK(f.application.dispatch(
+        ckv::MouseEvent{.action = ckv::MouseAction::Up, .button = ckv::MouseButton::Left, .cell = at}));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
+}
+CK_TEST(files_app_location_command_obeys_runtime_remapping_and_unrelated_focus_scope) {
+    Fixture f;
+    f.loaded();
+    auto other = std::make_unique<ckv::widgets::InputLine>();
+    other->set_bounds({0, 0, 20, 1});
+    auto *outside = f.application.root().add_child(std::move(other));
+    f.application.set_focus(outside);
+    CK_CHECK(!f.command("ck.files.location"));
+    f.application.root().remove_child(outside);
+    f.application.set_focus(f.app->grid(0));
+    f.application.commands().unbind_key({ckv::Key::Char, ckv::Modifier::Ctrl, "l"});
+    CK_CHECK(!f.location_key() && !f.app->location_editor_pending());
+    f.application.commands().bind_key({ckv::Key::F8, ckv::Modifier::Ctrl, {}}, f.id("ck.files.location"));
+    CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl) && f.app->location_editor_pending());
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->location_editor_pending(); });
+}
+CK_TEST(files_app_location_editor_can_supersede_a_blocked_home_request_without_waiting_in_dispatch) {
+    Fixture f;
+    f.loaded();
+    const auto before = f.app->location(0);
+    *f.block_home = true;
+    CK_CHECK(f.app->navigate_home(0));
+    f.home_gate->wait();
+    CK_CHECK(f.app->pending(0) && f.location_key() && f.app->location_editor_pending());
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.app->pending(0) && f.app->location(0) == before);
+    f.home_gate->release();
     f.loaded();
     CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
 }

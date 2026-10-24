@@ -615,6 +615,7 @@ FilesPaneService::FilesPaneService(FilesPaneBackend backend, FilesPaneServiceLim
     state_->worker = std::jthread([state = state_.get()] { state->run(); });
 }
 FilesPaneService::~FilesPaneService() { join(); }
+FilesPaneServiceLimits FilesPaneService::limits() const noexcept { return state_->limits; }
 FilesPaneSubmitted FilesPaneService::navigate(NativeAbsolutePath location, PaneView view, std::size_t first_page_rows) {
     if (!location.is_valid())
         return {FilesPaneSubmission::Invalid, {}};
