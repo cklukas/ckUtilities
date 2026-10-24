@@ -9,13 +9,6 @@
 
 namespace ck::files {
 namespace {
-template<class T, class Less> int observed_compare(const Observation<T>& a, const Observation<T>& b, bool descending, Less less) {
-    // All unavailable states stay after available values in either direction.
-    if (!a.value() || !b.value()) return a.value() ? -1 : b.value() ? 1 : 0;
-    const int order = less(*a.value(), *b.value()) ? -1 : less(*b.value(), *a.value()) ? 1 : 0;
-    return descending ? -order : order;
-}
-bool directory(const PaneRow& row) { return row.entry.metadata.kind.value() && *row.entry.metadata.kind.value() == ObjectKind::Directory; }
 bool contains(std::string_view text, std::string_view needle, bool sensitive) {
     const auto fold = [sensitive](unsigned char ch) { return !sensitive && ch >= 'A' && ch <= 'Z' ? ch + ('a' - 'A') : ch; };
     return std::search(text.begin(), text.end(), needle.begin(), needle.end(), [&](char a, char b) {
@@ -23,10 +16,8 @@ bool contains(std::string_view text, std::string_view needle, bool sensitive) {
     }) != text.end() || needle.empty();
 }
 void validate_view(const PaneView& view) {
-    switch (view.sort) {
-    case PaneSortKey::Name: case PaneSortKey::Kind: case PaneSortKey::Size: case PaneSortKey::Modified: break;
-    default: throw std::invalid_argument("invalid pane sort key");
-    }
+    if (!valid_pane_order({view.sort, view.descending, view.folders_first}))
+        throw std::invalid_argument("invalid pane sort key");
     if (view.display_substring.size() > 4096) throw std::invalid_argument("pane filter exceeds limit");
 }
 }
@@ -178,17 +169,8 @@ PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const
     }
     std::sort(result.visible.begin(), result.visible.end(), [&](std::size_t a, std::size_t b) {
         const auto& left = rows[a]; const auto& right = rows[b];
-        if (view.folders_first && directory(left) != directory(right)) return directory(left);
-        int order = 0;
-        switch (view.sort) {
-        case PaneSortKey::Name: order = compare_native_names(left.entry.name, right.entry.name); if (view.descending) order = -order; break;
-        case PaneSortKey::Kind: order = observed_compare(left.entry.metadata.kind, right.entry.metadata.kind, view.descending, std::less<ObjectKind>{}); break;
-        case PaneSortKey::Size: order = observed_compare(left.entry.metadata.logical_size, right.entry.metadata.logical_size, view.descending, std::less<std::uint64_t>{}); break;
-        case PaneSortKey::Modified: order = observed_compare(left.entry.metadata.modified, right.entry.metadata.modified, view.descending, [](const FileTimestamp& x, const FileTimestamp& y) {
-            return x.seconds() < y.seconds() || (x.seconds() == y.seconds() && x.nanoseconds() < y.nanoseconds());
-        }); break;
-        }
-        return order != 0 ? order < 0 : compare_native_names(left.entry.name, right.entry.name) < 0;
+        return compare_pane_entries(left.entry.name, &left.entry.metadata, right.entry.name, &right.entry.metadata,
+            {view.sort, view.descending, view.folders_first}) < 0;
     });
     for (std::size_t i = 0; i < result.visible.size(); ++i) result.positions[result.visible[i]] = i;
     return result;

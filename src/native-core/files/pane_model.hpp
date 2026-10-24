@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "held_child.hpp"
+#include "pane_order.hpp"
 #include "native_name.hpp"
 #include <limits>
 #include <atomic>
@@ -57,7 +58,6 @@ struct PaneRow {
     PaneEntry entry;
     std::string display_name;
 };
-enum class PaneSortKey { Name, Kind, Size, Modified };
 struct PaneView {
     PaneSortKey sort = PaneSortKey::Name;
     bool descending = false;

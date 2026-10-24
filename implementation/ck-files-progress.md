@@ -3264,3 +3264,43 @@ preservation/collision rules and broader native qualification remain required.
 Scan End describes the private cache rather than source enumeration, a filesystem
 snapshot or native operation authority. WP-01 remains in progress; WP-02–08 remain
 unstarted.
+
+
+## 2026-10-24 — bounded external index sorting
+
+WP-01 now has a worker-driven external merge sorter over sealed private indexes.
+It shares the pane comparator for name/kind/size/modified ordering, folder priority
+and unavailable values, adding original row IDs as a deterministic final tie.
+Sorted projections retain every cached observation and original row identity,
+including across re-sorts; physical addresses remain specific to each cache.
+
+Bounded generation blocks and two-page merges use a fixed 64-level run table.
+All runs share the source factory and quota ledger. No RAM fallback or partial
+projection is published on failure. Cancellation/abandonment retires staging and
+keeps healthy input usable; actual source corruption still revokes the source.
+Native calls remain blocking. Final row and encoded-byte counts must match.
+Ledger peaks are measured when reservations occur, including between advances.
+
+Twelve sorter unit cases cover all 16 order combinations with fixed expected
+permutations, exact encoded payload preservation, re-sorting, cancellation at each
+advance, quotas and failure/exception paths. All 77 Files suites pass: 649 cases
+on macOS, 652 on Linux and 648 on Windows. Fresh fourteen-unit sanitizer runs pass
+77/75/74 focused cases, with ASan+UBSan on Mac/Linux and ASan on Windows.
+
+A native 100,000-record reverse-order synthetic sort validates every result on
+APFS/ext4/ReFS. Each uses 28,000,000 source bytes and 2,031 advances, with peaks of
+seven file slots and 84,000,000 logical bytes. Normal sort times were 12,214 ms on
+Mac, 4,143 ms on Linux and 11,886 ms on Windows; these are cache benchmarks, not
+real-directory enumeration, UI latency or physical-memory qualification.
+
+See [the sorter evidence](evidence/ck-files-index-sort-20261024.json) for 192
+source fingerprints, commands, timing, scale metrics, output hashes and cleanup.
+UI-boundary, ckVision-only and strict documentation checks pass. Diagnostic builds
+and documentation scratch were removed after recording hashes; fixture roots are
+empty and current verified normal builds remain. Windows work stays on V:.
+No GUI application was launched.
+
+Real-directory indexed collection, duplicate/source-change validation, disk rank
+and ID lookup, indexed pane integration, destination preservation/collision rules
+and broader native qualification remain required. WP-01 remains in progress;
+WP-02–08 remain unstarted.

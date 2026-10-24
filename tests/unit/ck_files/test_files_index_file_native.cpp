@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_index_file.hpp"
+#include "directory_index_sort_job.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -512,4 +513,71 @@ CK_TEST(index_scan_native_streams_100000_synthetic_records_without_retaining_add
     store.reset();
     workspace.reset();
     CK_CHECK(budget->charged_bytes() == 0 && budget->charged_files() == 0 && children(scratch.path()) == 0);
+}
+CK_TEST(index_sort_native_external_merges_100000_records_and_preserves_stable_source_rows) {
+    const ck::testing::ScratchDirectory scratch("files-index-sort", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    auto factory = take(open_native_index_workspace(address(scratch.path())));
+    auto budget = std::make_shared<IndexStorageBudget>(128ULL * 1024 * 1024, 32);
+    DirectoryIndexContext context;
+    context.generation[0] = std::byte{1};
+    std::shared_ptr<DirectoryIndexStore> source =
+        take(DirectoryIndexStore::create_new(factory, budget, context, {100000, 64ULL * 1024 * 1024, {}}));
+    for (std::uint64_t i = 1; i <= 100000; ++i) {
+        const auto digits = std::to_string(100001 - i);
+        const auto name = *NativeName::from_posix("sort-" + std::string(6 - digits.size(), '0') + digits);
+        BasicMetadata metadata;
+        metadata.kind = Observation<ObjectKind>::available(ObjectKind::RegularFile);
+        metadata.logical_size = Observation<std::uint64_t>::available(i * 3);
+        DirectoryIndexRecord row{i, name, Observation<BasicMetadata>::available(std::move(metadata)),
+                                 Observation<bool>::available(i % 7 == 0)};
+        take(source->append(row));
+    }
+    take(source->seal());
+    const auto source_bytes = source->bytes();
+    const auto namespace_before = source->row_scope();
+    const auto start = std::chrono::steady_clock::now();
+    DirectoryIndexSortJob job(source, {PaneSortKey::Name, false, false}, {{4096, 4 * 1024 * 1024}, 256});
+    std::size_t advances = 0;
+    while (job.state() == DirectoryIndexSortState::Running) {
+        job.advance();
+        ++advances;
+    }
+    auto output = take(job.completed());
+    const auto finished = std::chrono::steady_clock::now();
+    CK_CHECK(output->row_scope() == namespace_before && output->rows() == 100000 &&
+             source->state() == DirectoryIndexStoreState::Sealed);
+    auto cursor = take(output->begin_scan());
+    std::uint64_t seen = 0;
+    for (;;) {
+        auto page = take(output->read_page(cursor, {64, 16 * 1024}));
+        for (const auto &row : page.rows) {
+            ++seen;
+            const auto expected = 100001 - seen;
+            CK_CHECK(row.record.row_id == expected && row.address.row_id() == expected);
+            const auto digits = std::to_string(seen);
+            CK_CHECK(row.record.name ==
+                     *NativeName::from_posix("sort-" + std::string(6 - digits.size(), '0') + digits));
+            const auto *metadata = row.record.metadata.value();
+            if (!metadata)
+                throw std::runtime_error("sorted metadata missing");
+            CK_CHECK(metadata->logical_size.value() && *metadata->logical_size.value() == expected * 3);
+            CK_CHECK(row.record.hidden.value() && *row.record.hidden.value() == (expected % 7 == 0));
+        }
+        cursor = page.next;
+        if (page.end)
+            break;
+    }
+    const auto peak_bytes = budget->peak_charged_bytes();
+    const auto peak_files = budget->peak_charged_files();
+    CK_CHECK(seen == 100000 && output->bytes() == source_bytes && peak_bytes <= 3 * source_bytes && peak_files <= 32);
+    std::cout << "index-sort-native-100000-qualified rows=" << seen << " bytes=" << source_bytes
+              << " advances=" << advances << " peak_files=" << peak_files << " peak_bytes=" << peak_bytes
+              << " sort_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished - start).count() << '\n';
+    output.reset();
+    job.abandon();
+    CK_CHECK(budget->charged_files() == 1 && budget->charged_bytes() == source_bytes);
+    source.reset();
+    factory.reset();
+    CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
 }

@@ -1909,7 +1909,7 @@ must occur after file-slot reservation. Native conformance is described below.
 No source mutation is added. All store methods and shared-budget access are
 serialized on the owning worker; none belongs in UI dispatch or paint.
 
-The store advances from Writing to Sealed or Failed. It appends versioned
+The store advances from Writing to Sealed or Failed. Ingestion appends versioned
 records with contiguous nonzero row IDs beginning at one, issues opaque
 same-lifetime addresses and reads them only after seal. Addresses are scoped
 to the specific store, even when two stores have identical source contexts.
@@ -2079,7 +2079,8 @@ magic and record-size bound. This query certifies framing only, never a checksum
 payload, source namespace or native object. The scanner validates declared size
 against the remaining sealed bytes before allocation, reads the bounded body,
 performs the complete existing codec checks, then requires the row ID to equal
-the next contiguous storage ordinal. Each emitted row includes a scoped address
+the next contiguous storage ordinal for ingestion caches. Private sorter runs
+instead retain original IDs within the source's original-row bound. Each emitted row includes a scoped address
 usable by the same store's checked random-access read. No display/path conversion
 or reconstruction of native ownership occurs.
 
@@ -2120,6 +2121,78 @@ row ID, selected metadata and hidden state while retaining one bounded page.
 This qualifies cache storage/scanning only; real-directory discovery, external
 sorting/address persistence, pane providers, source-change races and full-app
 memory/latency thresholds remain required work.
+
+### External disk-backed ordering
+
+`PaneOrder` and `compare_pane_entries` are shared by the in-memory pane model
+and `DirectoryIndexSortJob`. Name, kind, logical size and modification time
+keep their existing deterministic semantics: observed directories can stay first
+independently of direction; unavailable keys follow available keys in both
+directions; secondary native-name ties ascend. The external sorter adds an
+ascending original-row-ID tie for duplicate native names. It never follows
+links, decodes display text, changes locale, filters hidden rows or drops any
+cached metadata/failure observation.
+
+The worker job reads a bounded source block (default 1,024 rows/four MiB wire),
+sorts that block, then writes a private run through the same factory/ledger as
+its source. A fixed 64-level binary-carry table compacts runs as they arrive;
+there is no list of every run handle or row offset proportional to the source.
+Each merge retains at most two bounded input pages, one previous record for
+strict order/duplicate checks, and one encoder working record. An advance
+generates one bounded block, performs one carry/finalization transition, or
+emits at most the configured merge row count (default 256). CPU block comparison
+checks cancellation too. This is worker work, not a UI/provider callback.
+
+Every input cursor advances once per emitted record; every merge verifies its
+combined row count, strict total order and final file size. Final output must
+match the source row count and encoded-byte count before completion. The codec
+and source scope/generation are retained. Only this sorter can enable a private
+run's nonconsecutive-original-ID mode; ingestion keeps its strict ordinal check.
+Run readers check nonzero IDs against the original source bound, frame integrity
+and complete stored count/size. Runtime checks and deterministic permutation/
+payload tests establish the algorithm's preservation; CRC remains corruption
+detection under the existing private-cache trust boundary, not authentication.
+
+`row_scope()` identifies the original dataset across resorted projections.
+Records retain their original IDs, while scan cursor positions describe storage
+order and cache addresses remain scoped to their particular store. An original
+cache address cannot read a sorted cache merely because their row namespaces
+match. A sorted cache can be sorted again without renumbering selections. This
+namespace is a display/selection handle, never native acquisition or mutation
+authority. Completed output remains sealed and owns its private file/factory;
+the original cache can be retired separately on its worker.
+
+All run creation and encoded bytes share the source ledger, including in-flight
+slots and partial failed writes. Quota/native failures have no RAM fallback and
+publish no partially sorted projection. When the ledger initially contains only the source store and then this job's
+runs, live logical byte reservations are at most three times the source
+wire bytes: original source, current run inventory, and a merge output. Fixed
+levels bound the live run count logarithmically in block count, with 64 levels
+as the absolute table limit; configured file quota remains independently enforced.
+Ledger high-water counters record peaks at reservation time rather than sampling
+between advances. They include failed reservations still owned by files and are
+not physical allocation/metadata/device-I/O/RSS or total-process-descriptor bounds.
+
+Cancelling or abandoning a sort closes its runs and leaves a healthy source
+cache usable. Source reads complete one bounded page before observing sort
+cancellation, so this projection cannot poison the source merely by cancelling
+its read. Actual source corruption/I/O failure still revokes that source. Native
+calls cannot be interrupted. An adapter interruption without a requested stop
+is a failure, not a fabricated user cancellation; native error tuples remain
+intact. Cancellation retires staging even if its optional diagnostic cannot be
+allocated. Other exceptions fail/retire the job and propagate. Completion is
+published only after full finalization; terminal advances perform no new I/O.
+
+Tests fix expected orders for all sixteen key/direction/folders combinations,
+including unavailable fields, duplicate names, links and hidden rows; compare
+full re-encoded payloads; resort a projection; and exercise cancellation at every
+advance, quota/no-progress limits, both merge inputs, post-write exceptions,
+foreign cache addresses and source corruption. Native synthetic 100,000-record
+reverse-order tests check every stable ID/name and selected metadata, final byte
+count, scope, exact ledger peaks and cleanup. They qualify external cache ordering
+on the measured volumes, not real-directory enumeration, full application RSS,
+pane responsiveness, collision validation or operation preservation. Directory
+collection, indexed providers and the remaining package acceptance still need work.
 
 API references: [Apple ACL retrieval](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_fd.3.html),
 [Apple ACL entry enumeration](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_entry.3.html),

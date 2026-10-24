@@ -43,6 +43,12 @@ class IndexStorageBudget final {
     std::size_t charged_files() const noexcept {
         return used_files_;
     }
+    std::uint64_t peak_charged_bytes() const noexcept {
+        return peak_bytes_;
+    }
+    std::size_t peak_charged_files() const noexcept {
+        return peak_files_;
+    }
 
   private:
     friend class DirectoryIndexStore;
@@ -51,6 +57,8 @@ class IndexStorageBudget final {
     const std::size_t max_files_;
     std::uint64_t used_bytes_ = 0;
     std::size_t used_files_ = 0;
+    std::uint64_t peak_bytes_ = 0;
+    std::size_t peak_files_ = 0;
 };
 
 struct DirectoryIndexStoreLimits {
@@ -127,6 +135,11 @@ class DirectoryIndexStore final {
     ~DirectoryIndexStore();
     DirectoryIndexStore(const DirectoryIndexStore &) = delete;
     DirectoryIndexStore &operator=(const DirectoryIndexStore &) = delete;
+    // Stable original-row namespace, retained across trusted sorted projections.
+    // It owns no source/native object and is not operation authority.
+    const AdapterScope &row_scope() const noexcept {
+        return row_scope_;
+    }
     Observation<IndexRecordAddress> append(const DirectoryIndexRecord &record, std::stop_token stop = {});
     Observation<bool> seal(std::stop_token stop = {});
     Observation<DirectoryIndexRecord> read(const IndexRecordAddress &address, std::stop_token stop = {});
@@ -151,6 +164,7 @@ class DirectoryIndexStore final {
     }
 
   private:
+    friend class DirectoryIndexSortJob;
     DirectoryIndexStore(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexStorageBudget> budget,
                         DirectoryIndexContext context, DirectoryIndexStoreLimits limits,
                         std::shared_ptr<IndexFileFactory> factory);
@@ -168,6 +182,9 @@ class DirectoryIndexStore final {
     DirectoryIndexContext context_;
     DirectoryIndexStoreLimits limits_;
     AdapterScope scope_;
+    AdapterScope row_scope_;
+    // Only the sorter can create nonconsecutive runs from validated source rows.
+    std::optional<std::uint64_t> original_row_limit_;
     DirectoryIndexStoreState state_ = DirectoryIndexStoreState::Writing;
     std::uint64_t rows_ = 0, bytes_ = 0, charged_ = 0;
     std::optional<UnavailableObservation> failure_;

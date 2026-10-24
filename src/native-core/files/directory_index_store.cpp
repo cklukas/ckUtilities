@@ -31,6 +31,7 @@ class IndexStorageBudget::FileSlot final {
     explicit FileSlot(std::shared_ptr<IndexStorageBudget> budget) : budget_(std::move(budget)) {
         if (budget_->used_files_ != budget_->max_files_) {
             ++budget_->used_files_;
+            budget_->peak_files_ = std::max(budget_->peak_files_, budget_->used_files_);
             owned_ = true;
         }
     }
@@ -69,7 +70,7 @@ DirectoryIndexStore::DirectoryIndexStore(std::unique_ptr<IndexByteFile> file,
                                          std::shared_ptr<IndexStorageBudget> budget, DirectoryIndexContext context,
                                          DirectoryIndexStoreLimits limits, std::shared_ptr<IndexFileFactory> factory)
     : factory_(std::move(factory)), file_(std::move(file)), budget_(std::move(budget)), context_(std::move(context)),
-      limits_(limits) {
+      limits_(limits), row_scope_(scope_) {
 }
 DirectoryIndexStore::~DirectoryIndexStore() {
     // Keep both reservations until the file and retained factory are retired.
@@ -137,7 +138,8 @@ Observation<IndexRecordAddress> DirectoryIndexStore::append(const DirectoryIndex
     }
     if (rows_ == limits_.rows || rows_ == std::numeric_limits<std::uint64_t>::max())
         return unavailable<IndexRecordAddress>(exhausted());
-    if (record.row_id != rows_ + 1)
+    if ((!original_row_limit_ && record.row_id != rows_ + 1) ||
+        (original_row_limit_ && (!record.row_id || record.row_id > *original_row_limit_)))
         return unavailable<IndexRecordAddress>(error(AdapterError::InvalidIdentifier, "index_store.row"));
     // Encode before reservation/I/O. Invalid input and allocation failure leave
     // the existing store untouched. No RAM grows with the directory row count.
@@ -150,6 +152,7 @@ Observation<IndexRecordAddress> DirectoryIndexStore::append(const DirectoryIndex
     // Charge the complete attempted write. Failure may leave a partial file;
     // keep its reservation until backend destruction, never pretend rollback.
     budget_->used_bytes_ += wire.size();
+    budget_->peak_bytes_ = std::max(budget_->peak_bytes_, budget_->used_bytes_);
     charged_ += wire.size();
     try {
         std::size_t done = 0;
@@ -205,8 +208,9 @@ Observation<bool> DirectoryIndexStore::seal(std::stop_token stop) {
 Observation<DirectoryIndexRecord> DirectoryIndexStore::read(const IndexRecordAddress &address, std::stop_token stop) {
     if (state_ != DirectoryIndexStoreState::Sealed)
         return unavailable<DirectoryIndexRecord>(failure_.value_or(invalid_state()));
-    if (address.owner_ != scope_ || !address.row_ || address.row_ > rows_ || address.offset_ > bytes_ ||
-        address.bytes_ > bytes_ - address.offset_ || address.bytes_ > limits_.record.record_bytes)
+    if (address.owner_ != scope_ || !address.row_ || address.row_ > original_row_limit_.value_or(rows_) ||
+        address.offset_ > bytes_ || address.bytes_ > bytes_ - address.offset_ ||
+        address.bytes_ > limits_.record.record_bytes)
         return unavailable<DirectoryIndexRecord>(error(AdapterError::InvalidIdentifier, "index_store.address"));
     try {
         if (stop.stop_requested()) {
@@ -336,12 +340,14 @@ DirectoryIndexStore::read_page(const IndexScanCursor &cursor, DirectoryIndexScan
                 fail(*decoded.unavailable_detail());
                 return unavailable<DirectoryIndexScanPage>(*failure_);
             }
-            if (decoded.value()->row_id != position + 1) {
+            if ((!original_row_limit_ && decoded.value()->row_id != position + 1) ||
+                (original_row_limit_ && (!decoded.value()->row_id || decoded.value()->row_id > *original_row_limit_))) {
                 fail(error(AdapterError::InvalidNativeResult, "index_store.scan_row"));
                 return unavailable<DirectoryIndexScanPage>(*failure_);
             }
-            output.push_back({IndexRecordAddress(scope_, position + 1, offset, static_cast<std::size_t>(count)),
-                              std::move(decoded).take_value()});
+            output.push_back(
+                {IndexRecordAddress(scope_, decoded.value()->row_id, offset, static_cast<std::size_t>(count)),
+                 std::move(decoded).take_value()});
             offset += count;
             ++position;
             accumulated += static_cast<std::size_t>(count);
