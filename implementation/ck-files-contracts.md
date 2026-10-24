@@ -1344,3 +1344,58 @@ the batch's older occupant observations. Later execution must revalidate the
 exact parent/rules and current occupants and use the required exclusive/native
 publication operations. Cross-platform rules that remain unqualified in the
 native boundary remain unresolved here; they are not waived by this assessment.
+
+## Linux directory fscrypt policy observations
+
+`DirectoryCursor::inspect_fscrypt_policy` is a read-only worker query through
+the already-held directory. Linux uses `FS_IOC_GET_ENCRYPTION_POLICY_EX` with a
+fixed, zero-initialized native buffer; it never reopens a pathname or changes
+enumeration position. Unsupported build headers, kernels, drivers and other
+platforms return explicit unavailable results. There is no deprecated v1 ioctl
+fallback, feature-flag-to-absence inference, key loading, unlocking, policy
+assignment, content access or privilege change in the product query.
+
+An available `DirectoryFscryptPolicy` carries a qualified directory identity
+and either exact policy data or `FscryptPolicyAbsent` with its native `ENODATA`
+witness. Only that native error establishes absence in this query namespace.
+`ENOTTY`/unsupported queries are not absence. Native `EINVAL` (unknown policy
+version) and `EOVERFLOW` (policy does not fit) remain Unknown with original codes;
+other native states remain explicit. Malformed positive return values or lengths
+fail without returning a prefix. Native ABI sizes/offsets/constants are checked
+against the build headers.
+
+Fresh directory kind/identity observations bracket successful/absent queries.
+Changed or unqualified IDs, non-directories, malformed kinds and metadata errors
+cannot yield available policy reports. When statx supplies a known encryption
+bit, it must agree with the queried presence at both observations; contradictions
+are Changed. Missing flag coverage is not treated as a clear bit and does not
+override independent policy evidence. This is still a live observation, not a
+namespace or metadata snapshot; execution must query and qualify again.
+
+`FscryptPolicyData` validates exact v1 (version byte 0, 12 bytes) and v2 (version
+byte 2, 24 bytes) shapes. It retains every byte, including unknown mode/flag,
+data-unit/reserved and key-reference bytes. Accessors expose structural fields
+and the v1 descriptor/v2 identifier; there is no cryptographic-strength,
+algorithm-availability, unlock-state or replay-equivalence claim. Unknown versions
+remain Unsupported. The parser uses bounded byte copies, not native structure
+casts, normalization or partial records. Key references are identifiers, not key
+material, and should not be displayed unnecessarily in the UI.
+
+Absence means no fscrypt policy was reported for that directory at query time.
+It says nothing about dm-crypt/FileVault/EFS, whole-volume or underlying-device
+encryption, all contents, inherited security equivalence, preservation capability
+or permission to create. An available policy does not prove that its key exists
+or that encrypted data can be read/copied. This initial API is directory-only;
+regular-file policy inspection and the operation-level security/preservation
+assessment remain required work.
+
+Native positive qualification uses an exclusively created disposable ext4 image
+in the Lima task workspace, with encryption enabled on that image only. A private
+setup helper assigns a v2 policy to an empty fixture directory using documented
+fixture-only privilege, verifies its key is absent, and never adds key material.
+The product query and tests then run as the ordinary guest user. Tests inspect
+that locked policy, preserve its bytes/owner after a rename, verify an unencrypted
+replacement at the original name, and confirm the existing name-rule boundary
+refuses bytewise qualification for the encrypted directory. Fixture names are
+restored between runs. No encrypted-content copying is claimed by these metadata
+fixtures; the image/mount/helper are audited and removed after validation.

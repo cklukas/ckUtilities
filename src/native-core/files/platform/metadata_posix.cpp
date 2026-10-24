@@ -31,6 +31,9 @@
 #include <sys/vfs.h>
 #include <linux/magic.h>
 #include <linux/fs.h>
+#if __has_include(<linux/fscrypt.h>)
+#include <linux/fscrypt.h>
+#endif
 #include <sys/ioctl.h>
 #include <sys/statvfs.h>
 #endif
@@ -608,6 +611,42 @@ public:
         auto identity = detail::qualify_access_directory(before, inspect_basic(), model);
         if (!identity.value()) { const auto& e = *identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return Result::available({access, family, std::move(identity).take_value(), static_cast<std::uint32_t>(mode)});
+#endif
+    }
+
+    Observation<DirectoryFscryptPolicy> inspect_fscrypt_policy() const override {
+#if defined(__linux__) && defined(FS_IOC_GET_ENCRYPTION_POLICY_EX)
+        using Result = Observation<DirectoryFscryptPolicy>;
+        static_assert(sizeof(fscrypt_policy_v1) == 12 && sizeof(fscrypt_policy_v2) == 24);
+        static_assert(offsetof(fscrypt_get_policy_ex_arg, policy) == 8 && sizeof(fscrypt_get_policy_ex_arg) == 32);
+        static_assert(FSCRYPT_POLICY_V1 == 0 && FSCRYPT_POLICY_V2 == 2 && STATX_ATTR_ENCRYPTED == 0x800);
+        static_assert(offsetof(fscrypt_policy_v1, master_key_descriptor) == 4 && offsetof(fscrypt_policy_v2, master_key_identifier) == 8);
+        static_assert(offsetof(fscrypt_policy_v1, flags) == 3 && offsetof(fscrypt_policy_v2, flags) == 3);
+        const auto before = inspect_basic();
+        const auto qualified = detail::qualify_fscrypt_directory(before, before);
+        if (!qualified.value()) { const auto& e = *qualified.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        fscrypt_get_policy_ex_arg native{}; native.policy_size = sizeof(native.policy);
+        constexpr const char* operation = "FS_IOC_GET_ENCRYPTION_POLICY_EX.directory";
+        const int status = ioctl(dirfd(directory_.get()), FS_IOC_GET_ENCRYPTION_POLICY_EX, &native);
+        const int code = status < 0 ? errno : 0;
+        if (status > 0) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "fscrypt.ioctl_status"));
+        if (status != 0 && code != ENODATA)
+            return Result::unavailable(code == ENOTTY ? ObservationState::Unsupported :
+                code == EOVERFLOW || code == EINVAL ? ObservationState::Unknown : errno_state(code), {ErrorDomain::Posix, code, operation});
+        const bool present = status == 0;
+        std::variant<FscryptPolicyAbsent, FscryptPolicyData> policy{FscryptPolicyAbsent{{ErrorDomain::Posix, code, operation}}};
+        if (present) {
+            if (native.policy_size > sizeof(native.policy)) return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "fscrypt.returned_policy_size"));
+            auto decoded = FscryptPolicyData::decode(std::as_bytes(std::span(&native.policy, 1)).first(static_cast<std::size_t>(native.policy_size)));
+            if (!decoded.value()) { const auto& e = *decoded.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+            policy = std::move(decoded).take_value();
+        }
+        auto identity = detail::qualify_fscrypt_directory(before, inspect_basic(), present);
+        if (!identity.value()) { const auto& e = *identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({std::move(identity).take_value(), std::move(policy)});
+#else
+        return DirectoryCursor::inspect_fscrypt_policy();
 #endif
     }
 

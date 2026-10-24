@@ -8,6 +8,7 @@
 #include "child_lookup.hpp"
 #include "location_info.hpp"
 #include "directory_access.hpp"
+#include "fscrypt_policy.hpp"
 
 #include <memory>
 
@@ -70,6 +71,9 @@ public:
     // original pathname reopening, permission-bit emulation or elevation.
     // Available is a momentary native check, never an operation capability.
     virtual Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const;
+    // Read-only Linux fscrypt directory policy, not whole-volume encryption,
+    // key availability or authority to create/replay encrypted data. Worker-only.
+    virtual Observation<DirectoryFscryptPolicy> inspect_fscrypt_policy() const;
     // Live metadata/parent queries through the held directory, independent of
     // enumeration position. Parent references have metadata-only access and
     // do not certify a frozen ancestry or namespace confinement.

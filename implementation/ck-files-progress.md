@@ -2588,3 +2588,81 @@ ckVision-only (485 active files), ckdocs (24 pages) and whitespace checks pass.
 WP-01 remains open for remaining cross-platform native name policies, complete
 operation capabilities/preservation assessment, remaining inventories, large-view
 indexes, UI/worker ownership and execution safety. WP-02 has not started.
+
+## 2026-10-24 — WP-01 Linux directory fscrypt policy inventory
+
+Added `DirectoryCursor::inspect_fscrypt_policy`, a read-only held-directory
+query using `FS_IOC_GET_ENCRYPTION_POLICY_EX` on Linux. It preserves exact v1
+(version 0, 12 bytes) and v2 (version 2, 24 bytes) policy records, including
+unknown mode/flag/reserved/key-reference bytes. Structural accessors do not claim
+cryptographic strength, key availability or replay equivalence. Only native
+`ENODATA` produces an absent-policy report with its witness. Unsupported and
+unknown queries never become absence; there is no deprecated ioctl fallback,
+pathname reopen, key operation, unlocking, privilege change or content access
+in the product implementation. Other platforms explicitly return Unsupported.
+
+Fresh directory kind/identity reports bracket available/absent results. Known
+statx encryption bits must corroborate policy presence at both observations;
+changed or unqualified identities, malformed kinds and contradictory bits block
+success. Fixed native buffers, exact returned lengths and native-header ABI
+assertions prevent prefix/oversize records. Missing flag coverage is not a clear
+bit. Absence is restricted to fscrypt policy and does not describe whole-volume,
+dm-crypt/FileVault/EFS encryption or operation permission. Regular-file policy
+inspection and preservation/capability integration remain open.
+
+Six deterministic cases cover structural decoding, exact lengths, opaque bytes,
+unknown versions, default unsupported behavior, identity/kind qualification,
+known/unknown encryption bits and every metadata/field failure state. Native
+cases verify enumeration independence and held directories after path replacement.
+A separate Linux fixture qualifies locked v2 policy inspection as the ordinary
+guest user, exact bytes/owner after rename, ENODATA on a plain replacement, and
+refusal of bytewise name rules for the encrypted directory.
+
+That fixture used an exclusively created disposable 64 MiB ext4 image with its
+own encrypt feature. A private setup helper used fixture-only privilege to assign
+a v2 policy to an empty directory with a public placeholder key identifier, then
+verified key status ABSENT. No key was added and no encrypted content was created
+or copied. The test restores fixture names between runs. Privilege is absent
+from the product query and from both configured test executions.
+
+All **142 exported input hashes plus unchanged test-host hash** match validated
+sources. All **57 Files suites** pass: **474 macOS / 475 Linux / 477 Windows
+cases**. The ordinary Linux suite leaves the optional locked case unconfigured;
+a separate configured native-suite run passes all three cases with its required
+positive marker. No unconfigured fixture is counted as positive policy evidence.
+Final build/test took **1.016/0.776**, **39.908/0.165**, **176.904/5.483 s**.
+Mac's fixture update follows the successful 68-step broad build (28.650 s).
+
+Windows' 69-step broad build was slower than the previous 61-step access workload
+(110.317 s). Investigation retained compiler/link logs and Ninja timings: the
+affected sequence links at 161431 ms, with object-inventory fixture compilation
+at 26.164 s and the Windows adapter at 21.245 s. Actual changed-input compilations,
+matching manifests, output hashes and case markers establish freshness. The cause
+of the duration increase is not established; elapsed time is not used as proof
+of freshness or performance. Normal builds remain Ninja/Release.
+
+Focused sanitizers compiled all 35 configured core units, platform adapter, two
+fixtures and test host (39 units) directly from source without object caches.
+**8 Mac / 9 Linux / 8 Windows cases** passed. Linux's configured sanitizer run
+also requires the locked-policy marker. ASan+UBSan build/test took
+**52.060/0.309 s** on Mac and **119.754/0.034 s** on Linux; Windows ASan took
+**78.763/0.176 s**. The preceding different 38-unit destination-name fixture set
+took 55.261/135.470/79.039 s to build. Strict warnings remained errors; Mac
+LeakSanitizer coverage is not claimed.
+
+The private fixture was checked for fd/cwd owners and exact mount/loop backing
+identity, ordinarily unmounted, checked for loop release, hashed and removed.
+An initial cleanup collector lacked explicit list mode for losetup JSON; parsing
+stopped before any unmount or deletion, and the corrected collector completed.
+Diagnostics were separately hashed, checked for live owners and removed. Fixture
+roots are empty and current normal builds remain. Mac temporary work stayed on
+S8T and Windows development on V:. No GUI was launched.
+[Fscrypt evidence](evidence/ck-files-fscrypt-20261024.json) records source/output/
+log hashes, fixture setup/source/cleanup, commands, times, positive markers,
+Windows timing investigation and primary kernel contracts. UI boundaries
+(98 domain sources), ckVision-only (489 active files), ckdocs (24 pages) and
+whitespace checks pass.
+
+WP-01 remains open for remaining inventories, full cross-platform policies and
+operation capability/preservation assessment, large views, UI/worker ownership
+and execution safety. WP-02 has not started.
