@@ -2942,3 +2942,50 @@ normal/sanitizer results, fingerprints, exact output paths, timing and cleanup.
 WP-01 remains in progress for full capability/preservation inspection and
 cross-platform collision rules; WP-02–08 remain unstarted. No mutation or Files
 UI command is introduced here.
+
+
+## 2026-10-24 — held-object volume and mount relationships
+
+WP-01 adds `ObjectLocationRelation`, an immutable worker-owned assessment over
+completed directory/object inventories. It retains both native owners without
+new I/O, path reopen, enumeration or content access. Identity/kind bookends and
+location-query ownership must qualify before their facts can be used. Failures
+retain their state/error, and unrelated adapter scopes or identity schemes are
+not compared as though their raw identifiers belonged to one namespace.
+
+Reported volume-identifier equality and Linux mount-ID equality are independent
+fields. Equal volume IDs never become a same-mount assumption. Mount facts need
+a qualified Linux query context and stable mount IDs at both bookends; other
+platforms return Unsupported for this Linux-specific comparison. These are
+cached facts, not membership, ancestry, same-filesystem rename capability or
+operation permission. Equal serials do not establish a unique physical volume.
+
+All 71 Files suites pass on macOS, Linux and Windows: 559, 563 and 561 cases.
+Nine new deterministic cases cover independent volume/mount combinations,
+all failure states, identity/kind changes, namespace mismatch, wrong query
+owners/families, unsupported platforms, special-object identity and owner
+lifetime without adapter calls. Native ordinary-pair and path-replacement
+checks run on all three OSes. The replacement fixture keeps both references
+open, moves the file and directory independently, replaces both original paths
+and verifies both retained identities. The pair deliberately ceases to have
+parent/child membership, which the relationship must not infer.
+
+The first Windows fixture attempted to rename a directory while its held file
+remained inside it; ReFS/Windows returned Access Denied. The corrected fixture
+uses independent moves for the two references, preserving the full retention
+assertion. Production code contains no rename or fallback. The aborted fixture
+was recorded and removed after exact process checks; subsequent scratch roots
+are checked empty.
+
+A separate private Linux mount namespace qualifies the important counterexample:
+a bind-mounted directory has equal native object/volume IDs but different mount
+IDs. A tmpfs target differs in both reported volume and mount IDs. Independent
+`statx` queries agree. Native mounts are test-only, under the task temporary
+root, private to the subprocess, and unmounted/removed afterward. Normal and
+sanitizer records include the positive fixture marker and cleanup evidence.
+
+See [the location-relationship evidence](evidence/ck-files-location-relation-20261024.json)
+for source/SDK fingerprints, normal/sanitizer runs, timings, exact executable
+paths, native fixtures and cleanup. WP-01 remains in progress for the remaining
+capability/preservation inspection and cross-platform collision rules.
+WP-02–08 remain unstarted; no Files UI or mutation command is enabled here.

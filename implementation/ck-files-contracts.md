@@ -1731,3 +1731,47 @@ from representability: APFS rejected the invalid UTF-8 fixture with EILSEQ;
 Linux and ReFS outcomes are recorded with their own native evidence. Subsequent
 operation planning still requires held identities, collision/name/length rules,
 preservation capabilities and execution-time revalidation.
+
+
+## Held-object volume and Linux mount relationships
+
+`ObjectLocationRelation::inspect` compares one completed directory inventory
+with one completed object inventory. It performs no native calls and retains
+both inventories and their held owners until worker retirement. The immutable
+record is based on the collected observations; it is not a fresh inspection,
+snapshot, parent/child membership or ancestry assertion.
+
+Each subject requires qualified anchor/before/after identities and unchanged
+valid kind. The directory subject must remain a directory. Missing observations
+keep their state/error; changed or unqualified IDs cannot become equality.
+Volume identifiers are compared only within the same adapter scope and identity
+scheme. `SameReportedIdentifier` is literal native identifier equality, not
+proof of the same physical filesystem: volume serials can collide, and equal
+IDs say nothing about bind mounts, subvolumes or rename support. Different
+schemes are not reinterpreted as comparable byte arrays.
+
+Linux mount comparison is independent. Both location-query bookends must be
+Linux descriptor observations owned by the qualified directory, and both
+subjects must have stable before/after mount IDs in the POSIX identity namespace.
+A changed ID remains Changed; missing mount information is never replaced with
+a volume/device comparison. Other platform query families report this Linux
+comparison as Unsupported. A location-query failure can leave the independent
+qualified volume-identifier observation available while the mount result fails.
+
+The [statx contract](https://man7.org/linux/man-pages/man2/statx.2.html)
+defines requested fields and their returned validity mask. `STATX_MNT_ID` reports
+the containing mount's ID; it differs from the newer non-reused unique mount-ID
+namespace. This implementation consumes the existing `mount_id` field and does
+not mix ID namespaces or promise persistence across restart/unmount. Its sealed
+result retains both native references; it still cannot freeze concurrent mount
+changes or detect changes reversed between the bookends.
+
+A [Linux bind mount](https://man7.org/linux/man-pages/man2/mount.2.html)
+provides another mount of an existing directory. The private native fixture
+therefore explicitly qualifies equal volume/object identifiers with different
+mount IDs, plus a tmpfs pair with different reported volume and mount IDs.
+Its mounts exist only in an isolated private mount namespace under the task's
+approved temporary root, and are unmounted and removed after testing. Production
+comparison code never creates mounts, elevates, reads content or mutates paths.
+Neither relation authorizes traversal, same-filesystem publication, a rename,
+copy, move, deletion or user-consent bypass.
