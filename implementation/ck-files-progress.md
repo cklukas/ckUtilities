@@ -3722,3 +3722,43 @@ navigation/completion, bounded views, properties/preview and interactive tests.
 Large indexed-view refresh still needs application-level qualified selection or
 explicit invalidation behavior. Recursive preservation planning and scoped consent
 remain WP-03; copy/move/delete/recovery and release acceptance remain WP-04–08.
+
+## 2026-10-24 — WP-02 bounded pane presentation
+
+WP-02 has started with `FilesPaneGridModel`, a UI-thread implementation of the
+public ckVision `CellGridModel` API. It displays either sealed bounded-pane or
+indexed-pane pages while keeping native resources on the worker. The viewport
+is bounded, uncached rows show Loading, and row targets require an actual cached
+row plus a current revocable stamp. Positions never become native targets.
+
+The grid presents escaped names, worker-supplied marks, exact unsigned byte sizes,
+object kind and UTC modification time. Narrow widths progressively retain the
+most useful columns. Wheel scrolling retains its origin across viewport reads
+and page delivery; following worker focus is explicit. Stale pages remain
+readable but cannot produce row targets. Provider calls perform no native I/O or
+service scheduling, and range-mark semantics remain for controller integration.
+
+Eleven tests cover escaped/control names, unknown metadata, uncached navigation,
+wheel/cursor independence, stale/null pages, geometry and integer limits, UTC
+calendar boundaries, every object kind, explicit worker focus, marks, empty views,
+native indexed-cache retirement and two real ckVision grid views inside the suite
+shell/window/splitter. The headless frame is checked for actual name/header text.
+All 83 normal Files suites pass on Mac/Linux/Windows (761/764/760 cases).
+Fresh matching sanitizer builds compile 63 product units plus an independently
+installed instrumented ckVision 1.4.0 SDK (124 SDK units on Mac/Linux, 128 on
+Windows). All eleven pane cases pass under ASan+UBSan on Mac/Linux and ASan on
+Windows. The initial Mac run against an uninstrumented SDK reported a container
+error in mixed instrumented/uninstrumented code; it is excluded from accepted
+evidence. That report did not recur with the unchanged product sources and
+fully instrumented SDK. Temporary Windows harness
+path/PATH issues were corrected before its accepted run. No finding was suppressed.
+
+See [the pane-grid evidence](evidence/ck-files-pane-grid-20261024.json) for 227
+source/config fingerprints, actual compiler unit sets/flags, SDK install hashes,
+normal and sanitizer results, timings, failure investigation and output cleanup.
+Diagnostic SDK/build trees were retired; verified normal builds remain available.
+
+The full Files application, async service/controller, bounded request/result
+queues, navigation/completion, properties/preview, histories/bookmarks, large-view
+refresh and interactive terminal acceptance remain WP-02 work. No production
+Files executable or mutation command is introduced by this component.

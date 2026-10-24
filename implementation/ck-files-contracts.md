@@ -2668,3 +2668,44 @@ inventory bytes are separate. Fixed-size, const noexcept getters allocate nothin
 The assessment retains its exact inventory/native directory until worker retirement;
 callers must bound concurrent and retained results and associate them with the
 current operation request. No copy/move/delete API is introduced.
+
+## UI-thread bounded file-pane projection
+
+`FilesPaneGridModel` implements the public ckVision `CellGridModel` API over
+one sealed `PanePage` or `IndexedPanePage`. It retains only immutable display
+values and a revocable state stamp. No native name, index store, directory,
+held child or worker model enters the provider. Paint/frame/cell/viewport calls
+perform no filesystem I/O, service calls, scheduling or whole-directory scans.
+The controller must gate asynchronous delivery before publishing and request the
+reported viewport on its worker outside paint/provider callbacks.
+
+Grid indices address display positions only. A row outside the cached page shows
+Loading and cannot supply a row target. `target()` supplies the cached row's exact
+scoped ID and current stamp; a worker must validate that stamp again. Neither the
+position nor the target authorizes mutation. Revoked pages remain readable for a
+clearly labelled stale view, but provide no target and cannot be republished.
+The application still needs to provide that stale/pending/error presentation.
+
+Geometry is bounded to 4096 visible rows and 65536 columns of viewport width.
+Only visible rows and at most five columns enter the frame. Narrow views retain
+mark/name columns and progressively add byte size, kind and UTC modification
+time. Unknown metadata remains Unknown, zero bytes stays zero, and uint64 sizes
+are not narrowed to signed values. Four-digit UTC calendar display covers years
+0000 through 9999 at second precision; values outside it are labelled explicitly.
+The immutable native timestamp retains its full original precision.
+
+Wheel scrolling changes the viewport without moving the cursor. Page publication
+preserves that scroll origin. Following the worker's focused row is an explicit
+controller choice for publications that require it. Cursor movement reveals the
+cursor; unresolved positions never borrow another cached row's ID. Shift movement
+currently moves only the cursor; native range-mark commands still need controller
+wiring and are not represented by a synthetic rectangular selection. Mark flags
+are displayed from the sealed worker page and never edited in a UI cache.
+
+`CellGrid` borrows the provider. The controller must detach the model before the
+provider retires. The headless test uses the actual suite shell, window, splitter
+and two independent grid providers. Native-cache integration verifies that an
+indexed display page stays readable after its entire worker/index retires, while
+its stamp revokes targets. This component is not yet the Files application or a
+production worker adapter; navigation/completion, app lifecycle, asynchronous
+request/result bounds, properties, preview and refresh remain WP-02 work.
