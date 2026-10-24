@@ -3038,3 +3038,42 @@ See [the inode-flag evidence](evidence/ck-files-inode-flags-20261024.json) for t
 fingerprints, timing, native qualification and scratch/diagnostic cleanup.
 WP-01 remains in progress; destination preservation capabilities and remaining
 cross-platform collision rules still need work. WP-02–08 remain unstarted.
+
+
+## 2026-10-24 — bounded lossless directory-index records
+
+WP-01 now has the record-format foundation for the required disk-backed listing
+index. The worker-side codec preserves a nonzero row ID, exact POSIX bytes or
+Windows UTF-16, all 17 basic metadata observations and independent hidden state.
+Available values and every failure state/domain/code/diagnostic remain distinct.
+No pointer, native owner, locale conversion or display-name reconstruction is
+serialized. A trusted live index context supplies the source namespace and
+expected nonzero generation. Cached IDs remain observations, not acquisition
+proof or mutation permission.
+
+The versioned little-endian envelope checks length, schema and CRC32C before
+variable decoding. Every field's type, native component boundary and resource
+budget is checked. Corrupt/truncated/trailing data, wrong generation, invalid
+scalar/enum values and exhausted limits return no prefix. Explicit enum maps,
+a complete aggregate binding and independent wire images guard schema changes.
+The storage owner still needs private ownership and authentication/privacy policy:
+CRC32C is accidental-corruption detection only.
+
+All 74 Files suites pass on macOS, Linux and Windows: 586, 591 and 588 cases.
+Fourteen codec cases also pass in focused sanitizers on all three hosts. They
+cover RFC 3720 CRC vectors, fixed 81-byte failure and 240-byte full-metadata
+images, all 253 valid single-byte POSIX components, all 2048 unpaired UTF-16
+units, signed/unsigned extremes, individual metadata failures, malformed fields
+with recomputed checksums, every truncation and single-bit mutation of the
+failure image, context mismatch, unqualified IDs and exact independent limits.
+The initial positive-name corpus accidentally included the navigation component
+`.`; the codec refused it. The corpus was corrected to contain valid components;
+navigation/separator/NUL rejection remains part of the native-name contract.
+
+See [the index-record evidence](evidence/ck-files-index-record-20261024.json)
+for source/SDK fingerprints, complete-suite and focused sanitizer runs, output
+paths/hashes, timing and cleanup. This milestone adds no filesystem writes or
+index-backed view. The private workspace/backing store, aggregate disk quotas,
+external sorting and page/model integration remain required work, together with
+the remaining capability/preservation and cross-platform collision rules.
+WP-01 remains in progress; WP-02–08 remain unstarted.

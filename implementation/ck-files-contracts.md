@@ -1824,3 +1824,75 @@ participates in existing cancellation, exception and failure-injection tests.
 The getter remains read-only; the native fixture alone sets no-dump on an
 exclusively created test file to qualify a nonzero metadata observation. It
 never changes immutable/append-only flags or requires elevation.
+
+
+## Private directory-index record format, version 1
+
+The disk-index foundation now has a bounded, worker-side record codec. It
+serializes a nonzero row number, one lossless native basename, the complete
+`Observation<BasicMetadata>` and an independent hidden-state observation.
+It performs no filesystem I/O and does not yet implement the backing store,
+external sorting, private workspace, disk quota or index-backed pane provider.
+Those remain required work; this codec does not enable large-directory UI or
+file mutation by itself.
+
+| Envelope field | Wire representation |
+| --- | --- |
+| Magic/schema | Eight ASCII bytes `CKFIDX01` |
+| Payload length | Little-endian u32; excludes the 12-byte header and 4-byte checksum |
+| Generation | Sixteen exact bytes supplied by the live index owner |
+| Row | Little-endian u64, nonzero |
+| Native name | One-byte encoding (0 POSIX, 1 Windows), u32 byte length, exact bytes; Windows units are little-endian u16 |
+| Metadata | Tagged observation followed by its value or complete failure |
+| Hidden state | Independent tagged boolean observation |
+| Checksum | Little-endian CRC32C u32 over header and payload |
+
+Observation tags are explicitly mapped: 0 Available, 1 Unsupported, 2 Unknown,
+3 Denied, 4 Gone, 5 Changed and 6 Failed. A failure contains a domain byte
+(0 None, 1 POSIX, 2 Win32, 3 Adapter, 4 NTSTATUS), signed 64-bit code bits, a
+u32 operation-string byte length and those exact bytes. Strings can contain
+NUL/non-Unicode bytes; they are data and require appropriate presentation
+escaping when displayed. No locale conversion, display-name parsing, Unicode
+replacement or native-name normalization occurs.
+
+Available metadata fields appear in this fixed schema order: identity, kind,
+logical/allocated sizes, link count, UID, GID, POSIX permissions, BSD flags,
+Windows attributes, reparse tag, Linux attribute value/validity masks, mount ID,
+and access/modification/change/birth times. The serializer binds the complete
+`BasicMetadata` aggregate so adding a field requires a compile-time schema
+review. Independent golden wire images cover both failed and fully populated
+metadata, including every scalar field position.
+
+Identity schemes have explicit tags (Unknown, POSIX device/inode, Windows
+128-bit ID, Windows legacy index), followed by the two 16-byte native IDs and
+an optional generation. The live `AdapterScope` is never serialized. Encoding
+rejects an available ID in another source namespace. Decoding uses only the
+trusted owner's supplied namespace and expected generation; the context must
+not be reconstructed from the packet. The owner is responsible for assigning a
+nonzero generation consistently with its live source scope. Unqualified IDs
+remain unqualified observations rather than being promoted to held references.
+A decoded record has no native owner, acquisition proof or operation authority.
+
+Integer fields have explicit widths/endianness; timestamps contain signed
+seconds and a u32 nanosecond fraction below one billion. Native kind, identity,
+state/domain tags and booleans are checked. Unknown schema, wrong generation,
+truncated/trailing data, checksum corruption, invalid names, impossible scalar
+values and resource exhaustion never return a partial record. The decoder
+checks the entire envelope/checksum before decoding variable fields, and each
+length against both configured bounds and remaining input before allocation.
+
+Default bounds are 256 KiB per complete wire record, 64 KiB of native name and
+16 KiB of aggregate diagnostic strings; hard ceilings are 1 MiB, 1 MiB and
+256 KiB respectively. UTF-16 consumes two bytes per unit. Invalid configuration
+fails; exceeded budgets remain Unknown/InventoryLimit. Allocation exceptions
+propagate with no published record. These bounds are not total-process-memory
+or disk quotas; the future store must enforce aggregate limits separately.
+
+CRC32C is checked against the independent vectors in
+[RFC 3720 Appendix B.4](https://www.rfc-editor.org/rfc/rfc3720.html#appendix-B.4).
+It detects accidental corruption and provides no authentication or privacy.
+The future storage owner must enforce exclusive/private workspace ownership,
+resource quotas and cleanup. This is a same-lifetime scratch-cache format,
+not a journal/recovery identity format or a way to resume native ownership
+across restarts. Selection and operations still require native acquisition,
+identity/edge revalidation and the later planning/consent rules.
