@@ -2744,3 +2744,39 @@ Windows sanitizer driver omitted its timing record before throwing; that gap
 is recorded explicitly rather than assigning an invented interval. Failed and
 successful disposable diagnostics were hashed and removed after owner/fixture
 audits. Current normal test builds remain; no application was launched.
+
+### Filesystem-keyring status for held Linux encryption policies
+
+WP-01 now adds read-only `FS_IOC_GET_ENCRYPTION_KEY_STATUS` through a retained
+directory, using that directory's exact v1/v2 policy and independently checking
+identity/policy afterward. Raw status/flags/user-count/reserved output is
+retained; helpers distinguish defined filesystem-keyring states and reject
+unknown status semantics. V1 legacy process-keyring coverage is explicitly
+excluded, and v2-only fields are not inferred for v1 policies. No key material,
+key management, content read or pathname fallback is introduced.
+
+Seven deterministic cases cover unsupported defaults, known/unknown status
+codes, native flags/counts/reserved-word retention, v1 field restrictions,
+every policy-byte change, changed/unqualified directory IDs and all unavailable
+native policy states. A native suite checks enumeration/non-mutation and, when
+explicitly configured, private v1/v2 absent-key policy directories and held
+identity after pathname replacement. The controlled fixtures contain no key
+material or encrypted content; their native queries run as the ordinary guest
+user. Optional unconfigured cases are not positive encryption coverage.
+
+See [the key-status evidence](evidence/ck-files-fscrypt-key-20261024.json) for
+source, ABI, normal/sanitizer, fixture and cleanup records. WP-01 remains in
+progress. This is one native inventory observation, not complete encryption
+inventory, preservation assessment, loss consent or a production operation.
+
+Validation on 2026-10-24: all 61 Files suites pass on macOS (497 cases), Linux
+(500) and Windows (500). Broad Linux runs leave the two optional encrypted
+fixture cases explicitly unconfigured; a separate unprivileged native run and
+the sanitizer run require positive v1/v2 markers. Focused sanitizer results:
+14 macOS cases, 16 Linux cases including both real private fixtures, 14 Windows
+cases. ASan+UBSan run on macOS/Linux, ASan on Windows; Linux leak detection is
+enabled and Apple leak detection is unavailable. All 152 exported inputs match
+current source bytes. The native filesystem image, helper binaries and loop
+mount were audited, hashed, unmounted/released and removed; diagnostic builds
+were removed after owner/empty-scratch checks. Current normal test builds are
+retained with output hashes and build provenance. No app was launched.

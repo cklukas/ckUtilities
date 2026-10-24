@@ -1489,3 +1489,46 @@ candidate readiness into Ready. Full refresh still validates selection
 continuity. This is a pure model boundary, without filesystem opens, mutations,
 planning, consent, implicit hydration or UI-thread model access. Worker queues,
 ckVision command integration and native revalidation remain separate work.
+
+## Linux filesystem-keyring status for a held directory policy
+
+`DirectoryCursor::inspect_fscrypt_key_status()` is a worker-only read query.
+On Linux with the native ioctl ABI available, it obtains this held directory's
+policy, queries `FS_IOC_GET_ENCRYPTION_KEY_STATUS` with that policy's descriptor
+(v1) or identifier (v2), then independently rereads the policy. Directory IDs
+must remain qualified and equal, and every policy byte must match. Changed,
+absent or unavailable final policies prevent publication of a key-status result.
+A directory without a policy produces Unsupported/NotApplicable, rather than
+an invented absent-key observation. Darwin, Windows and unsupported Linux ABIs
+retain explicit Unsupported results; this query says nothing about EFS,
+FileVault, volume encryption or other encryption mechanisms.
+
+The native request is fully zero initialized, with fixed ABI sizes/offsets and
+header constants checked at compile time. The adapter verifies unchanged input
+specifier/reserved fields and rejects malformed positive ioctl returns. Native
+errors retain their codes; ENOTTY is Unsupported and EINVAL is Unknown, without
+a legacy or pathname fallback. The output retains the status code, flags,
+user count and all reserved output words. Unknown status codes stay available
+as raw observations while semantic helpers return Unsupported. Unknown flag
+bits and reserved words are retained without interpretation. Defined v2 user
+fields remain uninterpreted for v1 policies. No key bytes/passphrases are read,
+keys added/removed, process keyrings searched, file contents opened or provider
+hydration authorized. The original pathname and enumeration position are unused.
+
+The three defined statuses concern the filesystem-level keyring: Absent,
+Present and IncompletelyRemoved. V1 keys present only in legacy
+process-subscribed keyrings are outside this ioctl's coverage; Absent therefore
+does not establish that a directory or file is locked. The v2 added-by-self bit
+and user count describe native reports at the query instant. They do not grant
+access, certify stable key availability or establish encryption preservation.
+See the [kernel fscrypt key-status contract](https://docs.kernel.org/filesystems/fscrypt.html#getting-key-status)
+and [native UAPI layout](https://github.com/torvalds/linux/blob/master/include/uapi/linux/fscrypt.h).
+
+Normal and sanitizer tests must distinguish an unconfigured optional fixture
+from positive native evidence. The private Lima qualification creates only
+empty v1/v2 policy directories in an exclusively owned disposable filesystem,
+using public placeholder key references with no keys added. Queries run
+unprivileged. Policy/version/reference, absent filesystem-keyring status, v1
+user-field non-applicability and held-directory isolation are checked, with
+positive markers required. This does not validate a loaded key, incomplete
+removal, legacy process keyrings, encrypted data reads or key management.

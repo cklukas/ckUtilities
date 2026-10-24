@@ -5,6 +5,8 @@
 #endif
 #include "native_filesystem.hpp"
 
+#include <algorithm>
+#include <iterator>
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
@@ -611,6 +613,42 @@ public:
         auto identity = detail::qualify_access_directory(before, inspect_basic(), model);
         if (!identity.value()) { const auto& e = *identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return Result::available({access, family, std::move(identity).take_value(), static_cast<std::uint32_t>(mode)});
+#endif
+    }
+
+    Observation<DirectoryFscryptKeyStatus> inspect_fscrypt_key_status() const override {
+#if defined(__linux__) && defined(FS_IOC_GET_ENCRYPTION_KEY_STATUS)
+        using Result = Observation<DirectoryFscryptKeyStatus>;
+        static_assert(sizeof(fscrypt_get_key_status_arg) == 128 && sizeof(fscrypt_key_specifier) == 40);
+        static_assert(offsetof(fscrypt_get_key_status_arg, status) == 64 && offsetof(fscrypt_get_key_status_arg, status_flags) == 68);
+        static_assert(offsetof(fscrypt_get_key_status_arg, user_count) == 72 && offsetof(fscrypt_get_key_status_arg, __out_reserved) == 76);
+        static_assert(FSCRYPT_KEY_SPEC_TYPE_DESCRIPTOR == 1 && FSCRYPT_KEY_SPEC_TYPE_IDENTIFIER == 2);
+        static_assert(FSCRYPT_KEY_STATUS_ABSENT == 1 && FSCRYPT_KEY_STATUS_PRESENT == 2 && FSCRYPT_KEY_STATUS_INCOMPLETELY_REMOVED == 3);
+        static_assert(FSCRYPT_KEY_STATUS_FLAG_ADDED_BY_SELF == 1);
+        const auto before = inspect_fscrypt_policy();
+        const auto qualified = detail::qualify_fscrypt_key_policy(before, before);
+        if (!qualified.value()) { const auto& e = *qualified.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto& policy = std::get<FscryptPolicyData>(before.value()->policy);
+        fscrypt_get_key_status_arg native{};
+        native.key_spec.type = policy.version() == 0 ? FSCRYPT_KEY_SPEC_TYPE_DESCRIPTOR : FSCRYPT_KEY_SPEC_TYPE_IDENTIFIER;
+        const auto reference = policy.key_reference();
+        auto* destination = policy.version() == 0 ? native.key_spec.u.descriptor : native.key_spec.u.identifier;
+        for (std::size_t i = 0; i < reference.size(); ++i) destination[i] = std::to_integer<unsigned char>(reference[i]);
+        const auto requested = native.key_spec;
+        constexpr const char* operation = "FS_IOC_GET_ENCRYPTION_KEY_STATUS.directory";
+        const int status = ioctl(dirfd(directory_.get()), FS_IOC_GET_ENCRYPTION_KEY_STATUS, &native);
+        if (status < 0) { const int code = errno; return Result::unavailable(code == ENOTTY ? ObservationState::Unsupported :
+            code == EINVAL ? ObservationState::Unknown : errno_state(code), {ErrorDomain::Posix, code, operation}); }
+        if (status != 0 || std::memcmp(&requested, &native.key_spec, sizeof(requested)) != 0 ||
+            std::any_of(std::begin(native.__reserved), std::end(native.__reserved), [](auto value) { return value != 0; }))
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "fscrypt.key_status_reply"));
+        const auto identity = detail::qualify_fscrypt_key_policy(before, inspect_fscrypt_policy());
+        if (!identity.value()) { const auto& e = *identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        FscryptKeyStatusData key{native.status, native.status_flags, native.user_count, {}};
+        std::copy(std::begin(native.__out_reserved), std::end(native.__out_reserved), key.reserved.begin());
+        return Result::available({*identity.value(), policy, key});
+#else
+        return DirectoryCursor::inspect_fscrypt_key_status();
 #endif
     }
 

@@ -9,6 +9,7 @@
 #include "location_info.hpp"
 #include "directory_access.hpp"
 #include "fscrypt_policy.hpp"
+#include "fscrypt_key_status.hpp"
 
 #include <memory>
 
@@ -74,6 +75,10 @@ public:
     // Read-only Linux fscrypt directory policy, not whole-volume encryption,
     // key availability or authority to create/replay encrypted data. Worker-only.
     virtual Observation<DirectoryFscryptPolicy> inspect_fscrypt_policy() const;
+    // Linux filesystem keyring status for this held directory's exact policy.
+    // No keys/passphrases read, added or removed. Policy/identity are bracketed;
+    // no process-keyring, content-access, snapshot or encryption replay promise.
+    virtual Observation<DirectoryFscryptKeyStatus> inspect_fscrypt_key_status() const;
     // Live metadata/parent queries through the held directory, independent of
     // enumeration position. Parent references have metadata-only access and
     // do not certify a frozen ancestry or namespace confinement.

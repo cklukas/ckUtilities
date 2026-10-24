@@ -6,6 +6,11 @@
 
 namespace ck::files {
 
+Observation<DirectoryFscryptKeyStatus> DirectoryCursor::inspect_fscrypt_key_status() const {
+    return Observation<DirectoryFscryptKeyStatus>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "directory.fscrypt_key_status"});
+}
+
 Observation<DirectoryFscryptPolicy> DirectoryCursor::inspect_fscrypt_policy() const {
     return Observation<DirectoryFscryptPolicy>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "directory.fscrypt_policy"});
