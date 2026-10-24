@@ -2762,8 +2762,45 @@ withdrawing the view/controller callback. Clients must bound retained replies
 and validate both service tickets and page stamps. A current model stamp is not
 a filesystem snapshot, live content guarantee or mutation permission.
 
-This service currently supplies navigation and bounded page reads. Application
-focus/mark/reorder/refresh policies, child navigation/completion, properties,
-preview and the actual two-pane controller/lifecycle remain WP-02 work. A fresh
-navigation is not a substitute for the required selection-preserving refresh
-semantics. No copy/move/delete or preservation-loss consent is introduced.
+The service supplies navigation, bounded page reads and acknowledged focus,
+mark and view changes. The two-pane controller binds these through scoped
+commands and asynchronous dialogs. Child navigation/completion, qualified
+refresh, properties, preview, history/bookmarks and production application
+acceptance remain WP-02 work. A fresh navigation is not a substitute for the
+required selection-preserving refresh semantics. No copy/move/delete or
+preservation-loss consent is introduced.
+
+### Indexed child-directory binding
+
+`IndexedPane::open_directory_row` is a serialized worker-only bridge from one
+visible scoped row ID to an independently owning child enumeration cursor.
+The row is explicit and independent of the cursor position and all marks.
+Foreign, excluded, stale and pending-state targets refuse before native access.
+The disk lookup and one-record read are bounded; source names remain native
+POSIX bytes or UTF-16 units. No display-name parsing, path joining, process-cwd
+change or absolute path reopening is involved.
+
+Before opening, the parent scope, identity, directory kind and available
+continuity fields are checked against the indexed baseline. A fresh
+metadata-only child handle stays alive while a separate no-follow enumeration
+cursor opens relative to that same held parent. Both live objects must have
+qualified matching identities and directory kinds. The retained child is
+queried again; the parent scope and metadata are checked again before delivery.
+Links/reparse objects, unavailable identities, contradictions and native errors
+produce no cursor result. Cancellation and supersession also discard staged
+native owners; actual native errors take precedence over concurrent cancellation.
+
+A matching cached discovery ID only rules out an observed contradiction. The
+listing did not retain that child, so matching IDs do not prove continuity from
+discovery, exclude prior ID reuse, freeze directory membership or establish a
+snapshot. The returned cursor identifies the newly bound live directory and
+remains usable after its original name changes. It never authorizes mutation,
+provider hydration, mount confinement or preservation. Its native owners stay
+on the worker; the UI may receive only bounded owner-free display replies.
+The method changes neither pane selection nor published data and does not
+enumerate the returned cursor. Wire/name/metadata-diagnostic bounds fail explicitly;
+individual native failure diagnostics retain their full state/domain/code/operation
+for the service’s bounded error-publication policy. Corrupt or failed index
+storage revokes issued pane stamps. Service submission,
+child address/history presentation and application commands remain separate
+integration work.

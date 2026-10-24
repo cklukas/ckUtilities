@@ -1,6 +1,6 @@
 # Files (`ck-files`) — implementation work packages
 
-Status: implementation active; WP-00 and WP-01 complete. The Files application is not yet implemented.
+Status: implementation active; WP-00 and WP-01 complete. The production Files executable is not yet integrated.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
 
 Execution: WP-00 and WP-01 complete; WP-02 is in progress. See [implementation evidence](ck-files-progress.md),

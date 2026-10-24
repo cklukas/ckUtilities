@@ -1044,3 +1044,86 @@ CK_TEST(index_listing_native_rejects_observed_directory_changes_after_enumeratio
     CK_CHECK(!job.completed().value() && budget->charged_files() == 0 && budget->charged_bytes() == 0 &&
              children(scratch.path()) == 0);
 }
+
+CK_TEST(index_listing_native_opens_scoped_directory_row_without_path_reopen_or_follow) {
+    const ck::testing::ScratchDirectory source("files-index-directory-row");
+    const ck::testing::ScratchDirectory scratch("files-index-directory-row-cache",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    fs::create_directory(source.path() / "folder");
+    {
+        std::ofstream file(source.path() / "folder" / "original");
+        file << "original";
+    }
+    {
+        std::ofstream file(source.path() / "file");
+        file << "file";
+    }
+#ifdef _WIN32
+    fs::create_directory(source.path() / "link");
+    ck::testing::make_junction(source.path() / "link", source.path() / "folder");
+    constexpr auto model = StorageModel::WindowsHandleAttributes;
+#else
+    fs::create_directory_symlink("folder", source.path() / "link");
+#ifdef __APPLE__
+    constexpr auto model = StorageModel::DarwinStatFlags;
+#else
+    constexpr auto model = StorageModel::LinuxStatx;
+#endif
+#endif
+    NativeFileSystem filesystem;
+    auto budget = std::make_shared<IndexStorageBudget>(1024 * 1024, 16);
+    std::optional<OpenedIndexedDirectory> opened;
+    const auto cwd = fs::current_path();
+    {
+        IndexedPane pane;
+        const PaneOrder order{PaneSortKey::Name, false, false};
+        const auto request = pane.begin_listing(order);
+        std::array<std::byte, 16> generation{};
+        generation[0] = std::byte{11};
+        DirectoryIndexListingJob job(request, take(DirectoryListing::open(filesystem, source.path())), model,
+                                     take(open_native_index_workspace(address(scratch.path()))), budget, generation);
+        std::size_t steps = 0;
+        while (job.state() == DirectoryIndexListingState::Collecting ||
+               job.state() == DirectoryIndexListingState::SortingNames ||
+               job.state() == DirectoryIndexListingState::CheckingNames) {
+            if (++steps > 1000)
+                throw std::runtime_error("directory row native listing budget");
+            job.advance();
+        }
+        IndexedPaneDataJob data(take(job.completed()), order);
+        while (data.state() == IndexedPaneDataJobState::Sorting || data.state() == IndexedPaneDataJobState::Indexing ||
+               data.state() == IndexedPaneDataJobState::CountingMarks) {
+            if (++steps > 2000)
+                throw std::runtime_error("directory row native preparation budget");
+            data.advance();
+        }
+        CK_CHECK(pane.publish(take(data.completed())) == IndexedPanePublish::Applied);
+        const auto page = pane.capture_page(pane.state_stamp(), 0);
+        CK_CHECK(page.state == IndexedPaneCaptureState::Ready && page.page->rows().size() == 3);
+        std::size_t entered = 0, refused = 0;
+        for (const auto &row : page.page->rows()) {
+            auto result = pane.open_directory_row(page.page->stamp(), row.id);
+            if (row.display_name == "folder") {
+                opened = take(std::move(result));
+                ++entered;
+            } else {
+                CK_CHECK(!result.value());
+                ++refused;
+            }
+        }
+        CK_CHECK(entered == 1 && refused == 2 && pane.accepts(page.page->stamp()));
+        CK_CHECK(opened->name.display_name() == "folder" && fs::current_path() == cwd);
+    }
+    CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
+    fs::rename(source.path() / "folder", source.path() / "moved");
+    fs::create_directory(source.path() / "folder");
+    {
+        std::ofstream file(source.path() / "folder" / "substitute");
+        file << "substitute";
+    }
+    const auto names = opened->directory->read(4);
+    CK_CHECK(names.state == DirectoryReadState::End && names.names.size() == 1);
+    CK_CHECK(names.names[0].display_name() == "original" && fs::current_path() == cwd);
+    opened.reset();
+}

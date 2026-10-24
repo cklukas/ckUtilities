@@ -55,6 +55,7 @@ class DirectoryIndexLookup final {
   private:
     friend class DirectoryIndexLookupJob;
     friend class IndexedPaneSourceJob;
+    friend class IndexedPane;
     struct Entry {
         std::uint64_t rank, row, offset;
         std::uint32_t bytes;

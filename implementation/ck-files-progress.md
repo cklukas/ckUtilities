@@ -3942,3 +3942,47 @@ builds remain for active work. No GUI application was launched.
 WP-02 remains open for navigation/completion and child traversal, qualified
 refresh with stable selection, properties/preview, histories/bookmarks, a
 production executable and actual interactive terminal acceptance.
+
+
+## 2026-10-24 — WP-02 indexed child-directory binding
+
+The indexed pane now opens one explicit visible row as an independently owning
+child enumeration cursor on the worker. It reads the exact native component
+from the bounded disk index, checks the held parent, and retains a fresh child
+handle while opening the no-follow enumeration cursor relative to that parent.
+Live identities and directory kinds must agree; the retained child and parent
+are checked again before delivery. Marks and cursor position cannot retarget
+this request. Stale, excluded, foreign, pending, link/reparse and unqualified
+rows refuse without a partial result.
+
+Matching cached IDs are only a contradiction check: the listing did not hold
+those children and cannot prove discovery continuity or exclude earlier ID
+reuse. The new result binds the current live directory; it neither authorizes
+mutation nor promises snapshot, provider or mount-boundary semantics. Native
+owners stay on the worker, including failure/cancellation retirement. Source
+names remain exact POSIX bytes or UTF-16 units. Index I/O failure revokes issued
+pane stamps, and explicit wire/name/diagnostic limits never truncate a target.
+
+Nine new core tests cover target/state validation, mark independence, fresh and
+retained-object identity contradictions, parent changes/scope uncertainty,
+cancellation with native-error precedence, exact raw-byte/UTF-16 names,
+reentrant supersession, bounds and index I/O failure/exception retirement.
+One new native test verifies no-follow refusal and an independently owned
+cursor that continues enumerating the original directory after its old name
+is reused for a replacement. All 83 Files suites pass: 820 cases on macOS,
+823 on Linux and 819 on Windows, plus keymap on each platform. Matched
+ASan+UBSan macOS/Linux and ASan Windows runs pass all 130/128/127 cases:
+60 UI/service, 53 indexed-pane and 17/15/14 platform-specific native-index cases.
+All 73 product units and installed instrumented ckVision 1.4.0 SDK units
+(124/124/128) are verified against the final source fingerprints.
+
+See [the child-directory binding evidence](evidence/ck-files-directory-row-20261024.json)
+for exact cases, compiled inputs, SDK/output hashes, timings and cleanup.
+Diagnostic builds and fixture data have been retired; normal builds remain
+for active work. Both architecture gates and strict documentation build pass.
+
+This is the worker-domain foundation for child navigation. Submission and
+acknowledgment through the pane service, exact address/history presentation and
+application commands remain to be integrated. WP-02 remains open, including
+completion, qualified refresh, properties/preview, histories/bookmarks and
+production executable/interactive acceptance. No GUI application was launched.

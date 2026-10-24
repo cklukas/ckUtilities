@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "indexed_pane.hpp"
+#include "native_path.hpp"
 #include "directory_index_observation.hpp"
 #include "pane_page_budget.hpp"
 #include <limits>
@@ -541,6 +542,195 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
     page->text_bytes_ = used;
     page->stamp_ = stamp;
     return {IndexedPaneCaptureState::Ready, std::move(page)};
+}
+Observation<OpenedIndexedDirectory> IndexedPane::open_directory_row(const PaneStateStamp &stamp, PaneRowId row,
+                                                                    IndexedDirectoryOpenLimits limits,
+                                                                    std::stop_token stop) {
+    using Result = Observation<OpenedIndexedDirectory>;
+    const auto reject = [](const UnavailableObservation &e) { return Result::unavailable(e.state, e.error); };
+    if (limits.wire_bytes < 16 || limits.wire_bytes > DirectoryIndexScanLimits::hard_wire_bytes ||
+        !limits.native_name_bytes || limits.native_name_bytes > NativePathLimits::hard_native_bytes ||
+        !limits.diagnostic_bytes || limits.diagnostic_bytes > 16 * 1024 * 1024)
+        throw std::invalid_argument("invalid indexed directory open limits");
+    if (!accepts(stamp) || !data_ || pending_ || mark_pending_)
+        return reject(error(AdapterError::InvalidAccess, "indexed_directory.state"));
+    const auto data = data_;
+    if (row.scope != data->row_scope() || !row.number || row.number > data->rows())
+        return reject(error(AdapterError::InvalidIdentifier, "indexed_directory.row"));
+    const auto boundary = [&](bool check_stop = true) -> std::optional<UnavailableObservation> {
+        if (!accepts(stamp))
+            return error(AdapterError::InvalidAccess, "indexed_directory.stale", ObservationState::Changed);
+        if (data->lookup_->state() != DirectoryIndexLookupState::Ready ||
+            data->store_->state() != DirectoryIndexStoreState::Sealed) {
+            auto e = data->lookup_->failure().value_or(
+                data->store_->failure().value_or(error(AdapterError::InvalidAccess, "indexed_directory.dataset")));
+            io_failure(e);
+            return e;
+        }
+        if (check_stop && stop.stop_requested())
+            return error(AdapterError::InterruptedRead, "indexed_directory.cancelled", ObservationState::Unknown);
+        return {};
+    };
+    if (auto e = boundary())
+        return reject(*e);
+    try {
+        auto found = data->lookup_->locate_row({row.scope, row.number});
+        if (auto e = boundary(false))
+            return reject(*e);
+        if (!found.value())
+            return reject(*found.unavailable_detail());
+        if (!*found.value())
+            return reject(error(AdapterError::InvalidIdentifier, "indexed_directory.excluded_row"));
+        if (auto e = boundary())
+            return reject(*e);
+        auto read = data->lookup_->read_page(**found.value(), {1, limits.wire_bytes});
+        if (auto e = boundary(false))
+            return reject(*e);
+        if (!read.value())
+            return reject(*read.unavailable_detail());
+        if (auto e = boundary())
+            return reject(*e);
+        if (read.value()->rows.size() != 1 || read.value()->rows.front().record.row_id != row.number) {
+            auto e = error(AdapterError::InvalidNativeResult, "indexed_directory.record");
+            data->lookup_->fail(e);
+            io_failure(e);
+            return reject(e);
+        }
+        auto raw = std::move(read).take_value();
+        auto record = std::move(raw.rows.front().record);
+        const auto units =
+            record.name.posix_bytes() ? record.name.posix_bytes()->size() : record.name.windows_units()->size();
+        const auto width = record.name.posix_bytes() ? std::size_t{1} : sizeof(char16_t);
+        if (units > limits.native_name_bytes / width)
+            return reject(error(AdapterError::InventoryLimit, "indexed_directory.name_bytes"));
+        if (!record.metadata.value())
+            return reject(*record.metadata.unavailable_detail());
+        std::size_t diagnostics = 0;
+        const auto qualify = [&](const BasicMetadata &m) -> std::optional<UnavailableObservation> {
+            if (!detail::charge(m, diagnostics, limits.diagnostic_bytes))
+                return error(AdapterError::InventoryLimit, "indexed_directory.diagnostics");
+            if (!m.kind.value())
+                return *m.kind.unavailable_detail();
+            if (*m.kind.value() != ObjectKind::Directory)
+                return error(AdapterError::NotDirectory, "indexed_directory.kind");
+            if (!m.identity.value())
+                return *m.identity.unavailable_detail();
+            const auto &id = *m.identity.value();
+            if (id.scope != data->source_scope_ || compare_identity(id, id) != IdentityComparison::Same)
+                return error(AdapterError::UnqualifiedIdentity, "indexed_directory.identity",
+                             ObservationState::Unknown);
+            return {};
+        };
+        const auto compare = [&](const Observation<ObjectIdentity> &a,
+                                 const Observation<ObjectIdentity> &b) -> std::optional<UnavailableObservation> {
+            for (const auto *id : {&a, &b})
+                if (!id->value())
+                    return *id->unavailable_detail();
+            const auto match = compare_identity(*a.value(), *b.value());
+            if (match != IdentityComparison::Same)
+                return error(AdapterError::UnqualifiedIdentity, "indexed_directory.identity_changed",
+                             match == IdentityComparison::Different ? ObservationState::Changed
+                                                                    : ObservationState::Unknown);
+            return {};
+        };
+        const auto inspect_parent = [&]() -> Observation<BasicMetadata> {
+            auto scope = data->pin_->source_scope();
+            if (!scope.value()) {
+                const auto &e = *scope.unavailable_detail();
+                return Observation<BasicMetadata>::unavailable(e.state, e.error);
+            }
+            if (*scope.value() != data->source_scope_) {
+                const auto e = error(AdapterError::InvalidIdentifier, "indexed_directory.parent_scope");
+                return Observation<BasicMetadata>::unavailable(e.state, e.error);
+            }
+            if (auto e = boundary())
+                return Observation<BasicMetadata>::unavailable(e->state, e->error);
+            auto observed = data->pin_->inspect_basic();
+            if (!observed.value())
+                return observed;
+            if (auto e = qualify(*observed.value()))
+                return Observation<BasicMetadata>::unavailable(e->state, e->error);
+            if (auto e = compare(data->directory_, observed.value()->identity))
+                return Observation<BasicMetadata>::unavailable(e->state, e->error);
+            auto checked =
+                detail::check_index_directory(data->source_scope_, data->directory_,
+                                              Observation<BasicMetadata>::available(data->baseline_), observed);
+            if (!checked.value()) {
+                const auto &e = *checked.unavailable_detail();
+                return Observation<BasicMetadata>::unavailable(e.state, e.error);
+            }
+            return observed;
+        };
+        if (auto e = qualify(*record.metadata.value()))
+            return reject(*e);
+        if (auto e = boundary())
+            return reject(*e);
+        auto before = inspect_parent();
+        if (!before.value())
+            return reject(*before.unavailable_detail());
+        if (auto e = boundary())
+            return reject(*e);
+        // Retain a fresh metadata-only child while opening the enumeration
+        // cursor. This prevents identity recycling between these live checks.
+        auto held = HeldChild::observe(data->pin_, record.name);
+        if (!held.value())
+            return reject(*held.unavailable_detail());
+        if (auto e = qualify((*held.value())->metadata()))
+            return reject(*e);
+        if (auto e = compare(record.metadata.value()->identity, (*held.value())->metadata().identity))
+            return reject(*e);
+        if (auto e = boundary())
+            return reject(*e);
+        auto opened = data->pin_->open_directory_child(record.name);
+        if (!opened.value())
+            return reject(*opened.unavailable_detail());
+        auto cursor = std::move(opened).take_value();
+        if (!cursor)
+            return reject(error(AdapterError::InvalidNativeResult, "indexed_directory.null_cursor"));
+        if (auto e = boundary())
+            return reject(*e);
+        auto child_scope = cursor->source_scope();
+        if (!child_scope.value())
+            return reject(*child_scope.unavailable_detail());
+        if (*child_scope.value() != data->source_scope_)
+            return reject(error(AdapterError::InvalidIdentifier, "indexed_directory.child_scope"));
+        if (auto e = boundary())
+            return reject(*e);
+        auto metadata = cursor->inspect_basic();
+        if (!metadata.value())
+            return reject(*metadata.unavailable_detail());
+        if (auto e = qualify(*metadata.value()))
+            return reject(*e);
+        if (auto e = compare(cursor->identity(), metadata.value()->identity))
+            return reject(*e);
+        if (auto e = compare((*held.value())->metadata().identity, metadata.value()->identity))
+            return reject(*e);
+        if (auto e = boundary())
+            return reject(*e);
+        auto retained = (*held.value())->inspect_basic();
+        if (!retained.value())
+            return reject(*retained.unavailable_detail());
+        if (auto e = qualify(*retained.value()))
+            return reject(*e);
+        if (auto e = compare(retained.value()->identity, metadata.value()->identity))
+            return reject(*e);
+        if (auto e = boundary())
+            return reject(*e);
+        auto after = inspect_parent();
+        if (!after.value())
+            return reject(*after.unavailable_detail());
+        auto checked = detail::check_index_directory(data->source_scope_, before.value()->identity, before, after);
+        if (!checked.value())
+            return reject(*checked.unavailable_detail());
+        if (auto e = boundary())
+            return reject(*e);
+        return Result::available({std::move(record.name), std::move(cursor)});
+    } catch (...) {
+        if (accepts(stamp) && (data->lookup_->state() != DirectoryIndexLookupState::Ready ||
+                               data->store_->state() != DirectoryIndexStoreState::Sealed))
+            invalidate();
+        throw;
+    }
 }
 IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop) {
     if (!accepts(stamp))

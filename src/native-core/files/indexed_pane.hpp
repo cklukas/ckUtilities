@@ -210,6 +210,18 @@ struct IndexedPaneCapture {
 };
 enum class IndexedPanePublish { Applied, Stale, InvalidData, Failed, Cancelled };
 enum class IndexedPaneFocus { Applied, Stale, Unavailable, InvalidTarget, Failed, Cancelled };
+struct IndexedDirectoryOpenLimits {
+    std::size_t wire_bytes = DirectoryIndexScanLimits::hard_wire_bytes;
+    std::size_t native_name_bytes = 64 * 1024;
+    std::size_t diagnostic_bytes = 64 * 1024;
+};
+// Worker-owned live child binding. The name is exact native data, not a path.
+// This result has native owners: never publish it to the UI. No cached listing
+// identity, even a matching one, proves continuity with an unheld discovery.
+struct OpenedIndexedDirectory {
+    NativeName name;
+    std::unique_ptr<DirectoryCursor> directory;
+};
 // Serialized worker state. Navigation/reorder requests and all successful state
 // changes revoke previously issued stamps. Existing data survives navigation
 // failures. Capture returns only bounded owner-free immutable display payloads.
@@ -236,6 +248,15 @@ class IndexedPane final {
     bool cancel_listing(PaneListingRequest request) noexcept;
     IndexedPaneCapture capture_page(const PaneStateStamp &stamp, std::uint64_t first, IndexedPanePageLimits limits = {},
                                     std::stop_token stop = {});
+    // Open exactly one visible row, independent of cursor/marks. Bounded indexed
+    // lookup, held-parent relative no-follow open, live retained-child identity
+    // checks and parent observations. Unknown/contradictory identities refuse;
+    // discovery-ID equality is only a contradiction check, never snapshot or
+    // mutation authority. Native errors take precedence over concurrent cancel.
+    // Does not change this pane or enumerate the opened directory.
+    Observation<OpenedIndexedDirectory> open_directory_row(const PaneStateStamp &stamp, PaneRowId row,
+                                                           IndexedDirectoryOpenLimits limits = {},
+                                                           std::stop_token stop = {});
     IndexedPaneFocus focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop = {});
     Observation<std::unique_ptr<IndexedPaneMarkJob>>
     begin_mark_change(const PaneStateStamp &stamp, const IndexedMarkCommand &command, std::size_t rows_per_step = 256,

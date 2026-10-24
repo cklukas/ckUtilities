@@ -104,7 +104,12 @@ struct Script {
     std::optional<UnavailableObservation> child_identity_error, child_kind_error;
     std::function<void()> on_child_inspect;
     EntryAccess expected_access = EntryAccess::MetadataOnly;
-    int child_live = 0;
+    int child_live = 0, directory_live = 0, directory_opened = 0, directory_reads = 0;
+    bool null_directory = false, foreign_directory = false, missing_directory_id = false;
+    std::optional<std::uint64_t> directory_id;
+    std::optional<UnavailableObservation> directory_error, directory_inspect_error;
+    std::function<void()> on_directory_open, on_directory_inspect;
+    std::optional<NativeName> directory_name;
     int reads = 0, inspections = 0, live = 0, opened = 0;
 };
 ObjectIdentity fixture_identity(const AdapterScope &scope, std::uint64_t id) {
@@ -148,6 +153,38 @@ class Entry final : public OpenedEntry {
   private:
     std::shared_ptr<Script> s_;
 };
+class ChildCursor final : public DirectoryCursor {
+  public:
+    explicit ChildCursor(std::shared_ptr<Script> s)
+        : DirectoryCursor(s->missing_directory_id ? Observation<ObjectIdentity>{}
+                                                  : Observation<ObjectIdentity>::available(fixture_identity(
+                                                        s->scope, s->directory_id.value_or(s->child_id)))),
+          s_(std::move(s)) {
+        ++s_->directory_live;
+    }
+    ~ChildCursor() override { --s_->directory_live; }
+    Observation<AdapterScope> source_scope() const override {
+        return Observation<AdapterScope>::available(s_->foreign_directory ? AdapterScope{} : s_->scope);
+    }
+    Observation<BasicMetadata> inspect_basic() const override {
+        if (s_->on_directory_inspect)
+            s_->on_directory_inspect();
+        if (s_->directory_inspect_error)
+            return Observation<BasicMetadata>::unavailable(s_->directory_inspect_error->state,
+                                                           s_->directory_inspect_error->error);
+        BasicMetadata m;
+        m.kind = Observation<ObjectKind>::available(ObjectKind::Directory);
+        m.identity = identity();
+        return Observation<BasicMetadata>::available(std::move(m));
+    }
+
+  private:
+    Observation<DirectoryStep> next_step() override {
+        ++s_->directory_reads;
+        return Observation<DirectoryStep>::available(DirectoryEnd{});
+    }
+    std::shared_ptr<Script> s_;
+};
 class Cursor final : public DirectoryCursor {
   public:
     explicit Cursor(std::shared_ptr<Script> s)
@@ -179,6 +216,17 @@ class Cursor final : public DirectoryCursor {
                 fixture_identity(s_->foreign_root ? AdapterScope{} : s_->scope, 1));
         m.modified = Observation<FileTimestamp>::available(*FileTimestamp::from_unix(s_->changed ? 2 : 1, 0));
         return Observation<BasicMetadata>::available(std::move(m));
+    }
+    Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName &name) const override {
+        ++s_->directory_opened;
+        s_->directory_name = name;
+        if (s_->on_directory_open)
+            s_->on_directory_open();
+        if (s_->directory_error)
+            return Observation<std::unique_ptr<DirectoryCursor>>::unavailable(s_->directory_error->state,
+                                                                              s_->directory_error->error);
+        return Observation<std::unique_ptr<DirectoryCursor>>::available(
+            s_->null_directory ? nullptr : std::make_unique<ChildCursor>(s_));
     }
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName &, EntryAccess access) const override {
         CK_CHECK(access == s_->expected_access);
@@ -223,7 +271,7 @@ struct Fixture {
             model, factory, budget, generation, limits, sort_limits);
     }
     void released() {
-        CK_CHECK(s->live == 0 && s->child_live == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
+        CK_CHECK(s->live == 0 && s->child_live == 0 && s->directory_live == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
     }
 };
 std::size_t finish(DirectoryIndexListingJob &job) {
@@ -1365,4 +1413,219 @@ CK_TEST(indexed_sources_explicit_query_access_reaches_held_binding_and_invalid_f
     CK_CHECK(acquired->review_required() && acquired->sources()[0].held()->access() == limits.access);
     auto refresh = take(acquired->sources()[0].held()->refresh());
     CK_CHECK(refresh->access() == limits.access && refresh->continues(*acquired->sources()[0].held()));
+}
+
+CK_TEST(indexed_directory_opens_exact_row_independent_of_marks_and_returns_independent_cursor) {
+    Fixture f({"other", "folder\n\xFF"});
+    f.s->child_kind = ObjectKind::Directory;
+    std::optional<OpenedIndexedDirectory> saved;
+    {
+        IndexedPane pane;
+        initialize(pane, f);
+        auto original = page(pane);
+        const auto row = original->rows()[0].id;
+        CK_CHECK(original->rows()[0].display_name != f.s->names[1].posix_bytes()->c_str());
+        mark(pane, IndexedMarkRow{original->rows()[1].id, true});
+        const auto stamp = pane.state_stamp();
+        saved = take(pane.open_directory_row(stamp, row));
+        CK_CHECK(saved->name == f.s->names[1] && f.s->directory_name == saved->name);
+        CK_CHECK(pane.accepts(stamp) && pane.selection().marks->total == 1);
+        CK_CHECK(f.s->child_live == 0 && f.s->directory_live == 1 && f.s->directory_reads == 0);
+    }
+    CK_CHECK(f.s->live == 0 && f.budget->charged_bytes() == 0 && f.budget->charged_files() == 0);
+    CK_CHECK(saved->directory->read(1).state == DirectoryReadState::End && f.s->directory_reads == 1);
+    saved.reset();
+    f.released();
+}
+CK_TEST(indexed_directory_rejects_stale_foreign_excluded_and_pending_rows_before_native_open) {
+    Fixture f;
+    f.s->child_kind = ObjectKind::Directory;
+    IndexedPane pane;
+    initialize(pane, f);
+    const auto before = page(pane);
+    const auto row = before->rows()[0].id;
+    const auto opened = f.s->opened;
+    CK_CHECK(!pane.open_directory_row(before->stamp(), {AdapterScope{}, row.number}).value());
+    CK_CHECK(!pane.open_directory_row(before->stamp(), {row.scope, 0}).value());
+    CK_CHECK(!pane.open_directory_row(before->stamp(), {row.scope, 4}).value());
+    auto view = pane.data()->view();
+    view.display_substring = "b";
+    view_change(pane, view);
+    CK_CHECK(!pane.open_directory_row(before->stamp(), row).value());
+    CK_CHECK(!pane.open_directory_row(pane.state_stamp(), row).value());
+    auto request = pane.begin_listing(ascending);
+    CK_CHECK(!pane.open_directory_row(pane.state_stamp(), page(pane)->rows()[0].id).value());
+    pane.cancel_listing(request);
+    auto current = page(pane);
+    auto job = take(pane.begin_mark_change(current->stamp(), IndexedMarkVisible{true}));
+    CK_CHECK(!pane.open_directory_row(pane.state_stamp(), current->rows()[0].id).value());
+    pane.cancel_marks(job->stamp());
+    CK_CHECK(f.s->directory_opened == 0 && f.s->opened == opened);
+}
+CK_TEST(indexed_directory_refuses_non_directory_and_unqualified_or_changed_discovery) {
+    for (int mode = 0; mode < 6; ++mode) {
+        Fixture f({"folder"});
+        f.s->child_kind = mode == 0 ? ObjectKind::RegularFile : ObjectKind::Directory;
+        if (mode == 1)
+            f.s->missing_child_id = true;
+        IndexedPane pane;
+        initialize(pane, f);
+        auto current = page(pane);
+        if (mode == 2)
+            f.s->child_id = 99;
+        if (mode == 3)
+            f.s->foreign_child = true;
+        if (mode == 4)
+            f.s->missing_child_kind = true;
+        if (mode == 5)
+            f.s->unknown_child_scheme = true;
+        auto result = pane.open_directory_row(current->stamp(), current->rows()[0].id);
+        CK_CHECK(!result.value() && f.s->directory_opened == 0 && f.s->child_live == 0);
+        CK_CHECK(pane.accepts(current->stamp()));
+        if (mode == 2)
+            CK_CHECK(result.state() == ObservationState::Changed);
+    }
+}
+CK_TEST(indexed_directory_live_cursor_must_match_retained_child_with_qualified_scope) {
+    for (int mode = 0; mode < 4; ++mode) {
+        Fixture f({"folder"});
+        f.s->child_kind = ObjectKind::Directory;
+        IndexedPane pane;
+        initialize(pane, f);
+        auto current = page(pane);
+        if (mode == 0)
+            f.s->directory_id = 99;
+        if (mode == 1)
+            f.s->foreign_directory = true;
+        if (mode == 2)
+            f.s->missing_directory_id = true;
+        if (mode == 3)
+            f.s->null_directory = true;
+        f.s->on_directory_open = [&] { CK_CHECK(f.s->child_live == 1); };
+        auto result = pane.open_directory_row(current->stamp(), current->rows()[0].id);
+        CK_CHECK(!result.value() && f.s->directory_opened == 1);
+        CK_CHECK(f.s->directory_live == 0 && f.s->child_live == 0 && f.s->directory_reads == 0);
+        CK_CHECK(pane.accepts(current->stamp()));
+    }
+}
+CK_TEST(indexed_directory_rechecks_retained_object_and_parent_after_open) {
+    for (int mode = 0; mode < 4; ++mode) {
+        Fixture f({"folder"});
+        f.s->child_kind = ObjectKind::Directory;
+        IndexedPane pane;
+        initialize(pane, f);
+        auto current = page(pane);
+        f.s->on_directory_inspect = [&] {
+            if (mode == 0)
+                f.s->child_id = 99;
+            if (mode == 1)
+                f.s->changed = true;
+            if (mode == 2)
+                f.s->root_id = false;
+            if (mode == 3)
+                f.s->scope_changed = true;
+        };
+        auto result = pane.open_directory_row(current->stamp(), current->rows()[0].id);
+        CK_CHECK(!result.value() && f.s->directory_opened == 1);
+        CK_CHECK(f.s->directory_live == 0 && f.s->child_live == 0);
+    }
+}
+CK_TEST(indexed_directory_cancellation_and_native_error_precedence_release_all_owners) {
+    for (int mode = 0; mode < 4; ++mode) {
+        Fixture f({"folder"});
+        f.s->child_kind = ObjectKind::Directory;
+        IndexedPane pane;
+        initialize(pane, f);
+        auto current = page(pane);
+        std::stop_source stop;
+        if (mode == 0)
+            stop.request_stop();
+        f.s->on_directory_open = [&] {
+            stop.request_stop();
+            if (mode == 2)
+                f.s->directory_error =
+                    UnavailableObservation{ObservationState::Denied, {ErrorDomain::Posix, 13, "directory denied"}};
+        };
+        if (mode == 3) {
+            f.s->on_directory_open = {};
+            f.s->on_directory_inspect = [&] {
+                stop.request_stop();
+                f.s->directory_inspect_error =
+                    UnavailableObservation{ObservationState::Gone, {ErrorDomain::Win32, 6, "directory handle gone"}};
+            };
+        }
+        auto result = pane.open_directory_row(current->stamp(), current->rows()[0].id, {}, stop.get_token());
+        CK_CHECK(!result.value() && f.s->directory_live == 0 && f.s->child_live == 0);
+        if (mode < 2)
+            CK_CHECK(result.unavailable_detail()->error.code ==
+                     static_cast<std::int64_t>(AdapterError::InterruptedRead));
+        if (mode == 2)
+            CK_CHECK(result.state() == ObservationState::Denied &&
+                     result.unavailable_detail()->error.operation == "directory denied");
+        if (mode == 3)
+            CK_CHECK(result.state() == ObservationState::Gone &&
+                     result.unavailable_detail()->error.domain == ErrorDomain::Win32);
+        CK_CHECK(pane.accepts(current->stamp()));
+    }
+}
+CK_TEST(indexed_directory_obsolete_reentrant_reply_and_bounded_storage_never_open_partial_target) {
+    Fixture f({"folder"});
+    f.s->child_kind = ObjectKind::Directory;
+    f.s->child_extra_error = "bounded metadata diagnostic";
+    IndexedPane pane;
+    initialize(pane, f);
+    auto current = page(pane);
+    const auto opened = f.s->opened;
+    for (const auto limits : {IndexedDirectoryOpenLimits{16, 65536, 65536}, IndexedDirectoryOpenLimits{65536, 1, 65536},
+                              IndexedDirectoryOpenLimits{65536, 65536, 1}}) {
+        CK_CHECK(!pane.open_directory_row(current->stamp(), current->rows()[0].id, limits).value());
+        CK_CHECK(f.s->opened == opened && pane.accepts(current->stamp()));
+    }
+    for (const auto invalid : {IndexedDirectoryOpenLimits{0, 65536, 65536},
+                                IndexedDirectoryOpenLimits{65536, 0, 65536},
+                                IndexedDirectoryOpenLimits{65536, 65536, 0}}) {
+        bool threw = false;
+        try { pane.open_directory_row(current->stamp(), current->rows()[0].id, invalid); }
+        catch (const std::invalid_argument &) { threw = true; }
+        CK_CHECK(threw && pane.accepts(current->stamp()) && f.s->opened == opened);
+    }
+    f.s->on_directory_inspect = [&] { pane.begin_listing(descending); };
+    CK_CHECK(!pane.open_directory_row(current->stamp(), current->rows()[0].id).value());
+    CK_CHECK(!current->stamp().current() && pane.listing_pending());
+    CK_CHECK(f.s->directory_live == 0 && f.s->child_live == 0);
+}
+
+CK_TEST(indexed_directory_preserves_native_utf16_components_without_display_roundtrip) {
+    Fixture f({});
+    f.s->names.push_back(*NativeName::from_windows(std::u16string{u'f', u'.', u' ', char16_t{0xD800}}));
+    f.s->child_kind = ObjectKind::Directory;
+    IndexedPane pane;
+    f.request = pane.begin_listing(ascending);
+    auto job = f.job(StorageModel::WindowsHandleAttributes);
+    finish(*job);
+    CK_CHECK(pane.publish(prepare(take(job->completed()), ascending)) == IndexedPanePublish::Applied);
+    const auto current = page(pane);
+    auto result = take(pane.open_directory_row(current->stamp(), current->rows()[0].id));
+    CK_CHECK(result.name == f.s->names[0] && result.name.windows_units());
+    CK_CHECK(f.s->directory_name == result.name && pane.accepts(current->stamp()));
+}
+CK_TEST(indexed_directory_io_failure_and_exception_poison_stamps_without_native_open) {
+    for (const bool throwing : {false, true}) {
+        Fixture f({"folder"});
+        f.s->child_kind = ObjectKind::Directory;
+        IndexedPane pane;
+        initialize(pane, f);
+        const auto current = page(pane);
+        for (auto &file : f.c->files) if (!file->closed) {
+            if (throwing) file->on_read = [] { throw std::runtime_error("directory row read fault"); };
+            else file->read_error = UnavailableObservation{ObservationState::Failed,
+                {ErrorDomain::Posix, 5, "directory row I/O"}};
+        }
+        bool threw = false;
+        try {
+            auto result = pane.open_directory_row(current->stamp(), current->rows()[0].id);
+            CK_CHECK(!result.value() && result.unavailable_detail()->error.operation == "directory row I/O");
+        } catch (const std::runtime_error &) { threw = true; }
+        CK_CHECK(threw == throwing && !current->stamp().current() && f.s->directory_opened == 0);
+    }
 }
