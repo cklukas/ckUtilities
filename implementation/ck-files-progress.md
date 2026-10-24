@@ -2374,3 +2374,75 @@ WP-01 remains open for operation-specific capabilities, native name equivalence,
 remaining inventories, large-view indexes, UI/worker ownership integration and
 operation/execution safety integration. These observations do not complete
 self/descendant safety. WP-02 has not started.
+
+## 2026-10-24 — WP-01 native directory access observations
+
+Added worker-only `DirectoryCursor::check_access` for List, Search, AddFile and
+AddDirectory. Successful reports retain request, native query family/mask and
+qualified directory identity. They describe a native check at query time, never
+operation permission or a reservation. Unavailable/denied results keep native
+diagnostics; invalid requests fail before I/O and the default adapter is
+Unsupported. There is no mode-bit/ACL emulation or private probe creation.
+
+Linux calls `faccessat2` directly with `AT_EMPTY_PATH | AT_EACCESS`, with no old
+syscall/libc fallback. Darwin uses fixed internal `.` relative to the held
+directory and `AT_EACCESS`; its native search requirements can differ from Linux
+empty-path semantics. POSIX Add requests check `W_OK | X_OK`, without claiming
+separate file/directory creation capability. Windows opens the exact held ID
+using the requested directory right plus metadata/synchronize rights, full
+sharing and reparse/no-recall flags. It uses no backup intent or privilege
+change and checks the temporary handle against the original object. Native
+Windows qualification is ReFS on V:; other drivers may refuse without a path
+fallback.
+
+Fresh kind/identity checks surround successful queries. Known Darwin/Windows
+provider states block the query; Linux has no generic provider-state query and
+this access check makes no locality/hydration claim. Names, child rights,
+capacity/quotas, mount state, immutable flags, inheritance, security semantics,
+providers and concurrent changes remain independent execution requirements.
+No delete/replace/rename/ACL-replay capability is inferred from Add access.
+
+Four deterministic cases cover defaults/invalid requests, metadata/field errors,
+provider checks, malformed kinds and changed/unqualified identities. Native
+cases exercise every request and exact native mask without consuming enumeration
+or creating children, retained objects after pathname replacement, and current
+permission changes. POSIX tests run unprivileged and restore mode bits. An
+additional Darwin ACL fixture proves denial despite writable mode bits; the
+Windows DACL fixture proves a new denial takes effect despite a retained cursor
+and distinguishes AddFile from AddDirectory. ACLs are restored before cleanup.
+
+The **130 exported input hashes plus unchanged test-host hash** match validated
+sources. All **51 Files suites** pass: **437 macOS / 436 Linux / 440 Windows
+cases**. Initial broad build times were **25.887/51.736/110.317 s** (Mac/Linux/
+Windows, 60/61/61 steps), consistent with actual affected interface/core/platform
+and fixture compilation. Final build/test took **1.104/1.089**, **2.608/0.157**,
+**4.527/2.676 s**, following the documented preceding builds. Ninja records
+identify compiled inputs and links; source/output hashes and individual case
+markers establish freshness. The smaller final updates are not no-op evidence.
+
+Focused diagnostics compiled all 32 core units, platform adapter, two new
+fixtures and test host (36 units), without object caches. **8 Mac / 7 Linux /
+7 Windows cases** passed. Mac ASan+UBSan build/test took **58.369/0.033 s**;
+Linux ASan+UBSan **108.857/0.029 s**; Windows ASan **63.985/0.150 s**. Strict
+warnings remained errors. This new fixture set has its own duration baseline.
+
+The added Darwin ACL fixture initially assumed absence would return an empty
+ACL object; native `acl_get_file` reported `ENOENT`. It now recognizes that exact
+absence and restores the native empty ACL representation. The denial assertion
+remained unchanged; final normal/sanitizer runs pass. Apple ASan also rejected
+an unsupported `detect_leaks=1` option before tests started. The same built binary
+passed with supported ASan+UBSan options and `detect_leaks=0`; no Mac leak-check
+coverage is claimed. Both rejected attempts are recorded and excluded from
+passing results.
+
+All diagnostic binaries were hashed, audited for live owners and removed;
+fixture roots are empty and current normal builds remain. Mac temporary work
+stayed on S8T, Windows development on V:. No GUI was launched.
+[Directory-access evidence](evidence/ck-files-directory-access-20261024.json)
+records source/output/log hashes, commands, times, case markers, rejected runs,
+Ninja timings and cleanup. UI boundaries (92 domain sources), ckVision-only
+(477 active files), ckdocs (24 pages) and whitespace checks pass.
+
+WP-01 remains open for complete operation-specific capability/preservation
+assessment, native name equivalence, remaining inventories, large-view indexes,
+UI/worker integration and execution safety. WP-02 has not started.

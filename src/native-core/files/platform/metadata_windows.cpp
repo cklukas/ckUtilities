@@ -642,6 +642,33 @@ public:
         : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_windows_parent(handle_.get(), scope_); }
+    Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
+        using Result = Observation<DirectoryAccessCheck>;
+        if (!valid_directory_access(access)) return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "directory.check_access"});
+        const auto before = inspect_basic();
+        const auto qualified = detail::qualify_access_directory(before, before, StorageModel::WindowsHandleAttributes);
+        if (!qualified.value()) { const auto& e = *qualified.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        const auto& id = *qualified.value();
+        FILE_ID_DESCRIPTOR descriptor{}; descriptor.dwSize = sizeof(descriptor);
+        if (id.scheme == IdentityScheme::WindowsFileId128) { descriptor.Type = ExtendedFileIdType; std::memcpy(descriptor.ExtendedFileId.Identifier, id.object.bytes.data(), 16); }
+        else if (id.scheme == IdentityScheme::WindowsFileIndex64) { descriptor.Type = FileIdType; std::memcpy(&descriptor.FileId.QuadPart, id.object.bytes.data(), 8); }
+        else return Result::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "directory.access_scheme"});
+        const DWORD right = access == DirectoryAccess::List ? FILE_LIST_DIRECTORY : access == DirectoryAccess::Search ? FILE_TRAVERSE :
+            access == DirectoryAccess::AddFile ? FILE_ADD_FILE : FILE_ADD_SUBDIRECTORY;
+        const DWORD mask = right | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
+        // A temporary access-bearing handle, no content/namespace write. No
+        // backup intent or privilege enablement; unsupported drivers may refuse.
+        OwnedHandle checked(OpenFileById(handle_.get(), &descriptor, mask,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
+        if (checked.get() == INVALID_HANDLE_VALUE || checked.get() == nullptr) return failure<DirectoryAccessCheck>(GetLastError(), "OpenFileById.directory_access");
+        const auto opened = detail::qualify_access_directory(before, handle_metadata(checked.get(), scope_), StorageModel::WindowsHandleAttributes);
+        if (!opened.value()) { const auto& e = *opened.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto after = detail::qualify_access_directory(before, inspect_basic(), StorageModel::WindowsHandleAttributes);
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({access, DirectoryAccessFamily::WindowsOpenById, std::move(after).take_value(), mask});
+    }
     Observation<LocationInfo> inspect_location() const override {
         LocationInfo result;
         result.family = LocationQueryFamily::WindowsHandle;

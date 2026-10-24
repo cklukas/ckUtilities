@@ -1158,3 +1158,52 @@ against public APIs. Subsequent packages must resolve their explicit adapter
 proofs in order; unknown preservation, retirement or durability cannot be
 papered over by an enabled command. The release matrix in the plan remains
 mandatory; a passing macOS run does not qualify Linux or Windows.
+
+## Native directory access observations
+
+`DirectoryCursor::check_access` checks List, Search, AddFile or AddDirectory
+through the held directory on a worker. A successful `DirectoryAccessCheck`
+records the exact request, query family, native mask and qualified directory
+identity. It is evidence of a momentary native access check, not an operation
+capability, reservation, loss decision or permission to mutate. The query does
+not create a probe child or inspect/derive access from mode bits or ACL bytes.
+The default adapter returns Unsupported and invalid requests fail before I/O.
+Native denial and other native errors retain their domain/code/operation.
+
+Linux directly invokes `faccessat2` with `AT_EMPTY_PATH | AT_EACCESS`, avoiding
+older libc permission emulation and its ACL limitations. Missing syscall support
+is Unsupported; there is no old syscall, `/proc` path or permission-bit fallback.
+Darwin uses `faccessat` with the fixed internal component `.` relative to the
+held directory and `AT_EACCESS`. This includes any kernel search checks required
+by that resolution; it is not a promise of equivalence with Linux empty-path
+semantics. List requests `R_OK`, Search requests `X_OK`, and both Add requests
+check `W_OK | X_OK`. POSIX access modes do not separately establish file versus
+directory creation capability. Current effective credentials and kernel policy
+apply; no process credential changes are made.
+
+Windows requests the corresponding `FILE_LIST_DIRECTORY`, `FILE_TRAVERSE`,
+`FILE_ADD_FILE` or `FILE_ADD_SUBDIRECTORY` right with `FILE_READ_ATTRIBUTES |
+SYNCHRONIZE` using `OpenFileById`, with the original held directory as its
+volume/share hint. It uses the exact qualified 64/128-bit identity family,
+read/write/delete sharing, open-reparse/no-recall flags, and no backup flag or
+privilege enablement. The temporary access-bearing handle is checked against
+the original directory identity and closed on the worker. Native driver refusal
+remains unavailable; unsupported IDs are not converted or reopened by pathname.
+The result does not reserve these rights for a later operation.
+
+Fresh directory kind/identity observations surround successful checks. Known
+Darwin/Windows provider/recall states block the query before an access-bearing
+open; Linux has no generic provider-state query and this access check makes no
+locality or hydration claim. Changed/unqualified identities, malformed kinds,
+metadata failures and provider uncertainty cannot become successful reports.
+Native queries do not change enumeration position. Reports carry identity
+context, not independent parent-handle authority; callers must keep the cursor
+and revalidate it when needed.
+
+Neither a positive check nor a denial describes all possible operations.
+Execution still must check the exact child/name, exclusive creation/publication,
+mount state, quotas/capacity, immutable flags, inherited ACLs/labels, provider
+behavior and concurrent changes. No delete/replace/rename/ownership/ACL replay
+capability is inferred from Add access. In particular POSIX write/search checks
+do not waive sticky-directory rules. Filesystem advertisements and permission
+observations remain separate inputs to later operation-specific planning.

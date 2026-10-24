@@ -7,6 +7,7 @@
 #include "opened_entry.hpp"
 #include "child_lookup.hpp"
 #include "location_info.hpp"
+#include "directory_access.hpp"
 
 #include <memory>
 
@@ -65,6 +66,10 @@ public:
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;
+    // Worker-only native check through this held directory, without mutation,
+    // original pathname reopening, permission-bit emulation or elevation.
+    // Available is a momentary native check, never an operation capability.
+    virtual Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const;
     // Live metadata/parent queries through the held directory, independent of
     // enumeration position. Parent references have metadata-only access and
     // do not certify a frozen ancestry or namespace confinement.

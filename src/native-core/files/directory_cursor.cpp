@@ -6,6 +6,11 @@
 
 namespace ck::files {
 
+Observation<DirectoryAccessCheck> DirectoryCursor::check_access(DirectoryAccess access) const {
+    return Observation<DirectoryAccessCheck>::unavailable(valid_directory_access(access) ? ObservationState::Unsupported : ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(valid_directory_access(access) ? AdapterError::UnsupportedQuery : AdapterError::InvalidAccess), "directory.check_access"});
+}
+
 DirectoryRead DirectoryCursor::read(std::size_t limit, std::stop_token stop) {
     if (limit == 0 || limit > max_batch_size) throw std::invalid_argument("invalid directory batch size");
     if (terminal_error_) return {{}, DirectoryReadState::Error, terminal_error_};

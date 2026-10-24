@@ -27,6 +27,7 @@
 #endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
+#include <sys/syscall.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
 #include <linux/fs.h>
@@ -576,6 +577,39 @@ public:
 #endif
     }
     Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_posix_parent(dirfd(directory_.get()), scope_); }
+
+    Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
+        using Result = Observation<DirectoryAccessCheck>;
+        if (!valid_directory_access(access)) return Result::unavailable(ObservationState::Failed,
+            adapter_error(AdapterError::InvalidAccess, "directory.check_access"));
+#if defined(__linux__)
+        constexpr auto model = StorageModel::LinuxStatx;
+#else
+        constexpr auto model = StorageModel::DarwinStatFlags;
+#endif
+        const auto before = inspect_basic();
+        const auto qualified = detail::qualify_access_directory(before, before, model);
+        if (!qualified.value()) { const auto& e = *qualified.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+#if defined(__linux__) && !defined(SYS_faccessat2)
+        return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, "faccessat2.unavailable"));
+#else
+        const int mode = access == DirectoryAccess::List ? R_OK : access == DirectoryAccess::Search ? X_OK : W_OK | X_OK;
+        const int fd = dirfd(directory_.get());
+#if defined(__linux__)
+        const auto status = syscall(SYS_faccessat2, fd, "", mode, AT_EMPTY_PATH | AT_EACCESS);
+        constexpr auto operation = "faccessat2.directory_effective_access";
+        constexpr auto family = DirectoryAccessFamily::LinuxFaccessat2;
+#else
+        const auto status = faccessat(fd, ".", mode, AT_EACCESS);
+        constexpr auto operation = "faccessat.directory_effective_access";
+        constexpr auto family = DirectoryAccessFamily::DarwinFaccessat;
+#endif
+        if (status != 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, operation}); }
+        auto identity = detail::qualify_access_directory(before, inspect_basic(), model);
+        if (!identity.value()) { const auto& e = *identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({access, family, std::move(identity).take_value(), static_cast<std::uint32_t>(mode)});
+#endif
+    }
 
     Observation<LocationInfo> inspect_location() const override {
         LocationInfo result;
