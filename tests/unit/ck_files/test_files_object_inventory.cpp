@@ -55,7 +55,7 @@ struct Fixture {
     }
     void configure(std::size_t count = 1) { fs.set_inventory(file, replies(count)); }
     std::unique_ptr<OpenedEntry> open() {
-        return take(take(fs.open_directory(path()))->open_child(name(), EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity | EntryAccess::MetadataAndLayout));
+        return take(take(fs.open_directory(path()))->open_child(name(), EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndFullSecurity | EntryAccess::MetadataAndLayout | EntryAccess::MetadataAndInodeFlags));
     }
     std::size_t calls(Op operation) const {
         return static_cast<std::size_t>(std::count_if(fs.calls().begin(), fs.calls().end(), [&](const auto& call) { return call.operation == operation; }));
@@ -69,7 +69,7 @@ ObjectInventoryJob::Result finish(ObjectInventoryJob& job) {
     }
     throw std::runtime_error("object inventory fixture exceeded advance bound");
 }
-constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectIntegrity, Op::InspectLayout, Op::ReadLink, Op::InspectLinkLimits, Op::InspectChannels,
+constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectIntegrity, Op::InspectInodeFlags, Op::InspectLayout, Op::ReadLink, Op::InspectLinkLimits, Op::InspectChannels,
     Op::InspectAttributes, Op::ReadAttribute, Op::ReadSecurity};
 }
 CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement) {
@@ -100,7 +100,7 @@ CK_TEST(object_inventory_preserves_all_query_failures_without_inventing_absent_f
         }
         ObjectInventoryJob job(f.open(), {}, f.fs.clock()); const auto result = finish(job); const auto& data = result->data();
         CK_CHECK(data.before.state() == state && data.after.state() == state && data.storage.state() == state);
-        CK_CHECK(data.layout.state() == state && data.link_limits.state() == state && data.integrity.state() == state);
+        CK_CHECK(data.layout.state() == state && data.link_limits.state() == state && data.integrity.state() == state && data.inode_flags.state() == state);
         CK_CHECK(data.link.state() == state && data.channels.state() == state && data.attributes.state() == state);
         CK_CHECK(data.attribute_values.empty() && f.calls(Op::ReadAttribute) == 0 && data.identity_continuity.state() == state);
         for (const auto& security : data.security) CK_CHECK(security.state() == state && security.unavailable_detail()->error == denied().error);
@@ -388,6 +388,43 @@ CK_TEST(object_inventory_integrity_rejects_invalid_family_kind_and_query_budget_
         if (mode == 4) limits.retained.max_native_bytes = 16;
         ObjectInventoryJob job(std::make_unique<Entry>(mode), limits);
         if (mode == 4) CK_CHECK(finish(job)->data().integrity.value());
+        else {
+            CK_CHECK(job.advance() == State::Failed && !job.completed().value());
+            CK_CHECK(job.failure()->error.code == static_cast<std::int64_t>(mode == 3 ? AdapterError::InventoryLimit : AdapterError::InvalidNativeResult));
+        }
+    }
+}
+
+CK_TEST(object_inventory_inode_flags_retains_all_bits_and_keeps_owner_qualification_explicit) {
+    for (bool mismatched : {false,true}) {
+        Fixture f; auto replies = f.replies();
+        replies.inode_flags = Observation<FileInodeFlags>::available({InodeFlagQueryFamily::LinuxIoctlGetFlags,
+            f.fs.metadata(mismatched ? f.root : f.file).identity,ObjectKind::RegularFile,0x80000040U});
+        f.fs.set_inventory(f.file,std::move(replies)); ObjectInventoryJob job(f.open(),{},f.fs.clock()); const auto result = finish(job);
+        const auto info = take(result->data().inode_flags); CK_CHECK(info.raw == 0x80000040U);
+        CK_CHECK(take(reported_inode_flag(info,LinuxInodeFlag::NoDump)) == ReportedFlag::Set);
+        CK_CHECK(take(result->compare_owner(info.owner)) == (mismatched ? IdentityComparison::Different : IdentityComparison::Same));
+        CK_CHECK(f.calls(Op::InspectInodeFlags) == 1);
+    }
+}
+CK_TEST(object_inventory_inode_flags_refuses_malformed_or_over_budget_replies_without_partial_result) {
+    class Entry final : public OpenedEntry {
+    public:
+        explicit Entry(int mode) : mode_(mode) {}
+        Observation<BasicMetadata> inspect_basic() const override { return Observation<BasicMetadata>::available({}); }
+        Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits) const override {
+            return Observation<FileInodeFlags>::available({mode_ == 0 ? InodeFlagQueryFamily::Unknown : InodeFlagQueryFamily::LinuxIoctlGetFlags,
+                {},mode_ == 1 ? ObjectKind::Directory : ObjectKind::RegularFile,0xffffffffU});
+        }
+    private: int mode_;
+    };
+    for (int mode = 0; mode < 5; ++mode) {
+        ObjectInventoryLimits limits;
+        if (mode == 2) limits.query.max_native_bytes = 3;
+        if (mode == 3) limits.retained.max_native_bytes = 3;
+        if (mode == 4) limits.retained.max_native_bytes = 4;
+        ObjectInventoryJob job(std::make_unique<Entry>(mode),limits);
+        if (mode == 4) CK_CHECK(take(finish(job)->data().inode_flags).raw == 0xffffffffU);
         else {
             CK_CHECK(job.advance() == State::Failed && !job.completed().value());
             CK_CHECK(job.failure()->error.code == static_cast<std::int64_t>(mode == 3 ? AdapterError::InventoryLimit : AdapterError::InvalidNativeResult));

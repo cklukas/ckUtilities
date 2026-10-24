@@ -24,7 +24,7 @@ class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     template<class T> using Observed = ck::files::Observation<T>;
 public:
     enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation,
-        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout, OpenParent, InspectLinkLimits, InspectIntegrity };
+        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout, OpenParent, InspectLinkLimits, InspectIntegrity, InspectInodeFlags };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
@@ -209,6 +209,9 @@ private:
         }
         Observed<ck::files::FileIntegrityInfo> inspect_integrity(ck::files::InventoryLimits limits = {}) const override {
             return query(Operation::InspectIntegrity, node_->inventory_.integrity, limits);
+        }
+        Observed<ck::files::FileInodeFlags> inspect_inode_flags(ck::files::InventoryLimits limits = {}) const override {
+            return query(Operation::InspectInodeFlags,node_->inventory_.inode_flags,limits,{},{},ck::files::requests_inode_flags(access_));
         }
         Observed<ck::files::FileLinkLimits> inspect_link_limits() const override {
             const auto fault = step(state_, Operation::InspectLinkLimits, node_, {}, {}, {}, {}, access_);

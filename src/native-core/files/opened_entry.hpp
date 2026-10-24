@@ -11,26 +11,29 @@
 #include "data_layout.hpp"
 #include "file_limits.hpp"
 #include "integrity_info.hpp"
+#include "inode_flags.hpp"
 
 namespace ck::files {
 
 // Requested OS access only; never authority for mutation, loss or hydration.
 // Layout is an explicit regular-file query opt-in and can require data-read
 // permission on platforms that need an additional readable handle.
+// InodeFlags independently requests a Linux regular-file readable handle.
 enum class EntryAccess : unsigned {
     MetadataOnly = 0, MetadataAndAttributes = 1, MetadataAndSecurity = 2,
-    MetadataAndFullSecurity = 6, MetadataAndLayout = 8
+    MetadataAndFullSecurity = 6, MetadataAndLayout = 8, MetadataAndInodeFlags = 16
 };
 constexpr EntryAccess operator|(EntryAccess left, EntryAccess right) noexcept {
     return static_cast<EntryAccess>(static_cast<unsigned>(left) | static_cast<unsigned>(right));
 }
 constexpr bool valid_entry_access(EntryAccess access) noexcept {
     const auto bits = static_cast<unsigned>(access);
-    return (bits & ~15U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
+    return (bits & ~31U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
 }
 constexpr bool requests_attributes(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 1U) != 0; }
 constexpr bool requests_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 2U) != 0; }
 constexpr bool requests_audit_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 4U) != 0; }
+constexpr bool requests_inode_flags(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 16U) != 0; }
 constexpr bool requests_layout(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 8U) != 0; }
 
 // Owns the opened object, independently of the original parent/name. Queries
@@ -55,6 +58,9 @@ public:
     // Fixed read-only integrity configuration query through the retained
     // object. Does not enable/disable integrity or read/verify any content.
     virtual Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const;
+    // Linux regular-file FS_IOC_GETFLAGS. Explicit independent read-access
+    // opt-in; no content reads or setters. Other platforms are Unsupported.
+    virtual Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const;
     virtual Observation<StorageInfo> inspect_storage() const;
     // Explicit opt-in layout access can require native data-read permission;
     // this query seeks/queries metadata and never reads file content. Main data

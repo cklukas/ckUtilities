@@ -207,6 +207,27 @@ class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false)
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access) {}
+#if defined(__linux__)
+    Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const override {
+        using Result = Observation<FileInodeFlags>;
+        if (!limits.valid()) return Result::unavailable(ObservationState::Failed,adapter_error(AdapterError::InvalidLimit,"inode_flags.limits"));
+        if (limits.max_native_bytes < sizeof(std::uint32_t)) return Result::unavailable(ObservationState::Unknown,adapter_error(AdapterError::InventoryLimit,"inode_flags.buffer_limit"));
+        if (!inode_flags_access_) return Result::unavailable(ObservationState::Denied,adapter_error(AdapterError::InvalidAccess,"inode_flags.access_not_requested"));
+        const auto before = inspect_basic(); const auto valid = detail::qualify_inode_flags_subject(before,before);
+        if (!valid.value()) { const auto& e = *valid.unavailable_detail(); return Result::unavailable(e.state,e.error); }
+        static_assert(sizeof(int) == sizeof(std::uint32_t));
+        static_assert(FS_NODUMP_FL == 0x40U && FS_NOATIME_FL == 0x80U && FS_NOCOW_FL == 0x800000U);
+        int flags = 0;
+        if (ioctl(descriptor_.get(),FS_IOC_GETFLAGS,&flags) != 0) {
+            const int code = errno;
+            return Result::unavailable(code == ENOTTY ? ObservationState::Unsupported : code == EINVAL ? ObservationState::Unknown : errno_state(code),
+                {ErrorDomain::Posix,code,"FS_IOC_GETFLAGS.file"});
+        }
+        const auto after = inspect_basic(); const auto owner = detail::qualify_inode_flags_subject(before,after);
+        if (!owner.value()) { const auto& e = *owner.unavailable_detail(); return Result::unavailable(e.state,e.error); }
+        return Result::available({InodeFlagQueryFamily::LinuxIoctlGetFlags,owner,ObjectKind::RegularFile,static_cast<std::uint32_t>(flags)});
+    }
+#endif
     Observation<FileLinkLimits> inspect_link_limits() const override {
         using Result = Observation<FileLinkLimits>;
         const auto before = inspect_basic();
@@ -554,6 +575,9 @@ private:
     OwnedDescriptor descriptor_;
     AdapterScope scope_;
     bool layout_access_;
+#if defined(__linux__)
+    bool inode_flags_access_ = false;
+#endif
 };
 
 Observation<std::unique_ptr<OpenedEntry>> open_posix_parent(int descriptor, const AdapterScope& scope) {
@@ -908,7 +932,12 @@ public:
             return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.child"});
         }
         auto original = std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_);
-        if (!requests_layout(access)) return Result::available(std::move(original));
+#if defined(__linux__)
+        const bool readable_requested = requests_layout(access) || requests_inode_flags(access);
+#else
+        const bool readable_requested = requests_layout(access);
+#endif
+        if (!readable_requested) return Result::available(std::move(original));
         const auto before = original->inspect_basic();
         if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
 #if defined(__linux__)
@@ -924,27 +953,34 @@ public:
         original->layout_access_ = true;
         return Result::available(std::move(original));
 #else
-        // O_PATH cannot seek. Obtain read access through a verified procfs fd
+        // O_PATH cannot seek or use FS_IOC_GETFLAGS. Obtain the explicitly
+        // requested read access through a verified procfs fd
         // directory and its kernel fd link, never the original basename. The
         // original held regular object cannot be swapped for a device/link.
         OwnedDescriptor proc(open("/proc/self/fd", O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
         if (proc.get() < 0) {
             const int code = errno;
             return Result::unavailable(code == ENOENT || code == ENOTDIR ? ObservationState::Unsupported : errno_state(code),
-                {ErrorDomain::Posix, code, "layout.proc_directory"});
+                {ErrorDomain::Posix, code, "read_access.proc_directory"});
         }
         struct statfs filesystem{};
-        if (fstatfs(proc.get(), &filesystem) != 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "layout.proc_statfs"}); }
+        if (fstatfs(proc.get(), &filesystem) != 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "read_access.proc_statfs"}); }
         if (filesystem.f_type != PROC_SUPER_MAGIC) return Result::unavailable(ObservationState::Unsupported,
-            adapter_error(AdapterError::UnsupportedQuery, "layout.proc_filesystem"));
+            adapter_error(AdapterError::UnsupportedQuery, "read_access.proc_filesystem"));
         const auto descriptor_name = std::to_string(original->descriptor_.get());
         OwnedDescriptor readable(openat(proc.get(), descriptor_name.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC));
-        if (readable.get() < 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.layout_fd"}); }
-        auto opened = std::make_unique<PosixOpenedEntry>(std::move(readable), scope_, true);
+        if (readable.get() < 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.read_access_fd"}); }
+        auto opened = std::make_unique<PosixOpenedEntry>(std::move(readable), scope_, requests_layout(access));
+        opened->inode_flags_access_ = requests_inode_flags(access);
         const auto after = opened->inspect_basic();
         if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
-        const auto checked = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
-        if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (requests_layout(access)) {
+            const auto checked = detail::data_layout_metadata_unchanged(*before.value(), *after.value());
+            if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        } else {
+            const auto checked = detail::qualify_inode_flags_subject(before,after);
+            if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        }
         const auto final_guard = detail::data_layout_access_guard(*after.value(), model);
         if (!final_guard.value()) { const auto& e = *final_guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return Result::available(std::move(opened));

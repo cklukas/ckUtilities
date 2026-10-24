@@ -137,7 +137,7 @@ CK_TEST(native_layout_linux_read_denial_is_not_bypassed_by_a_metadata_only_handl
     auto parent = take(filesystem.open_directory(scratch.path()));
     CK_CHECK(parent->open_child(name("file"), EntryAccess::MetadataOnly).value());
     const auto denied = parent->open_child(name("file"), EntryAccess::MetadataAndLayout);
-    CK_CHECK(denied.state() == ObservationState::Denied && !denied.value() && denied.unavailable_detail()->error.operation == "openat.layout_fd");
+    CK_CHECK(denied.state() == ObservationState::Denied && !denied.value() && denied.unavailable_detail()->error.operation == "openat.read_access_fd");
 }
 #elif defined(_WIN32)
 CK_TEST(native_layout_windows_offline_review_blocks_queries_and_access_upgrade) {

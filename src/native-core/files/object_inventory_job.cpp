@@ -94,7 +94,17 @@ void ObjectInventoryJob::step(std::stop_token stop) {
             if (WindowsIntegrityData::wire_bytes > limits_.query.max_native_bytes) { invalid_reply(); return; }
             if (!retain(WindowsIntegrityData::wire_bytes, 0)) return;
         }
-        data_->integrity = std::move(reply); phase_ = Phase::Layout; break;
+        data_->integrity = std::move(reply); phase_ = Phase::InodeFlags; break;
+    }
+    case Phase::InodeFlags: {
+        if (!retain(0,1)) return;
+        auto reply = object_->inspect_inode_flags(limits_.query);
+        if (reply.value()) {
+            if (reply.value()->family != InodeFlagQueryFamily::LinuxIoctlGetFlags || reply.value()->kind != ObjectKind::RegularFile ||
+                sizeof(std::uint32_t) > limits_.query.max_native_bytes) { invalid_reply(); return; }
+            if (!retain(sizeof(std::uint32_t),0)) return;
+        }
+        data_->inode_flags = std::move(reply); phase_ = Phase::Layout; break;
     }
     case Phase::Layout: {
         if (records_ == limits_.retained.max_records) { fail(error(AdapterError::InventoryLimit, "object_inventory.retained_limit")); return; }

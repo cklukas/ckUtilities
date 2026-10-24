@@ -1775,3 +1775,52 @@ approved temporary root, and are unmounted and removed after testing. Production
 comparison code never creates mounts, elevates, reads content or mutates paths.
 Neither relation authorizes traversal, same-filesystem publication, a rename,
 copy, move, deletion or user-consent bypass.
+
+
+## Linux regular-file inode flag inventory
+
+`OpenedEntry::inspect_inode_flags` queries `FS_IOC_GETFLAGS` on the retained
+Linux regular file. `EntryAccess::MetadataAndInodeFlags` is a separate explicit
+read-access request; layout/attribute/security requests do not grant it, and it
+does not grant layout queries. Combined layout/inode requests share one checked
+readable descriptor. macOS/Windows retain Unsupported for this Linux query,
+without acquiring extra data-read rights for the unused request.
+
+On Linux the initial metadata-only `O_PATH` reference pins the object before
+read access is requested. A verified procfs fd directory resolves that held
+kernel fd reference rather than reopening the basename. Kind/identity checks
+qualify the resulting regular-file reference. A FIFO, device, directory or link
+cannot become a content reader through this request. Layout requests keep their
+existing size checks; an inode-only request needs stable kind/identity rather
+than a stable content size. No generic Linux provider-locality guarantee is
+inferred: explicit read access is not hydration consent or proof that every
+provider has been identified.
+
+The [Linux ioctl interface](https://man7.org/linux/man-pages/man2/FS_IOC_GETFLAGS.2const.html)
+returns an `int` flag word. The adapter retains all 32 bits as unsigned data,
+including unfamiliar flags. Before/after metadata must identify the same
+qualified POSIX regular inode. These bookends do not freeze content/flags or
+detect changes reversed between observations. The query never invokes a setter
+or reads main content. ENOTTY remains Unsupported, ambiguous EINVAL remains
+Unknown, and other native failures preserve their error code and state.
+
+Typed helpers interpret literal bits in the
+[Linux FS_IOC_GETFLAGS namespace](https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/linux/fs.h):
+compression/no-compression, synchronous updates, immutable/append-only,
+no-dump/no-atime, encryption, data journaling, directory sync, verity, no-CoW,
+DAX, project inheritance and casefold. They do not mix statx, BSD or xflags
+namespaces. In particular FS_DAX_FL and STATX_ATTR_DAX use different bit values.
+A clear bit does not establish absent filesystem support; a set bit does not
+certify effective behavior, physical representation, meaningful application to
+a regular file, replay capability or operation permission. Uninterpreted bits
+remain available for subsequent preservation/loss review.
+
+The native byte budget must admit the complete four-byte word before any query.
+Invalid limits fail; insufficient space is Unknown with no prefix or native I/O.
+`ObjectInventoryJob` retains an independent phase, validates family/kind, charges
+four payload bytes plus one observation record, preserves refusals and leaves
+owner comparison explicit. Simulation enforces requested access/budgets and
+participates in existing cancellation, exception and failure-injection tests.
+The getter remains read-only; the native fixture alone sets no-dump on an
+exclusively created test file to qualify a nonzero metadata observation. It
+never changes immutable/append-only flags or requires elevation.

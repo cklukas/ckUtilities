@@ -23,7 +23,9 @@ CK_TEST(security_access_requests_are_explicit_and_never_infer_audit_rights) {
     CK_CHECK(requests_audit_security(EntryAccess::MetadataAndFullSecurity));
     CK_CHECK(!valid_entry_access(static_cast<EntryAccess>(4)));
     CK_CHECK(valid_entry_access(EntryAccess::MetadataAndLayout) && requests_layout(EntryAccess::MetadataAndLayout));
-    CK_CHECK(!valid_entry_access(static_cast<EntryAccess>(16)));
+    CK_CHECK(!valid_entry_access(static_cast<EntryAccess>(32)));
+    CK_CHECK(valid_entry_access(EntryAccess::MetadataAndInodeFlags) && requests_inode_flags(EntryAccess::MetadataAndInodeFlags));
+    CK_CHECK(!requests_layout(EntryAccess::MetadataAndInodeFlags) && !requests_inode_flags(EntryAccess::MetadataAndLayout));
     CK_CHECK(!valid_security_part(static_cast<SecurityPart>(-1)));
     CK_CHECK(!valid_security_part(static_cast<SecurityPart>(7)));
     CK_CHECK(!valid_security_part(SecurityPart::Unknown));

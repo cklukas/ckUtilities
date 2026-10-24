@@ -24,6 +24,10 @@ Observation<FileIntegrityInfo> OpenedEntry::inspect_integrity(InventoryLimits li
     return Observation<FileIntegrityInfo>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "integrity.native_query"});
 }
+Observation<FileInodeFlags> OpenedEntry::inspect_inode_flags(InventoryLimits limits) const {
+    return Observation<FileInodeFlags>::unavailable(limits.valid() ? ObservationState::Unsupported : ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(limits.valid() ? AdapterError::UnsupportedQuery : AdapterError::InvalidLimit), "inode_flags.native_query"});
+}
 Observation<StorageInfo> OpenedEntry::inspect_storage() const {
     return Observation<StorageInfo>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "storage.native_query"});

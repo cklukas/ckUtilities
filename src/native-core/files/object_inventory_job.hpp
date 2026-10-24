@@ -18,6 +18,7 @@ struct ObjectInventoryData {
     Observation<BasicMetadata> before, after;
     Observation<StorageInfo> storage;
     Observation<FileIntegrityInfo> integrity;
+    Observation<FileInodeFlags> inode_flags;
     Observation<FileDataLayout> layout;
     Observation<LinkMetadata> link;
     Observation<FileLinkLimits> link_limits;
@@ -78,7 +79,7 @@ public:
     const std::optional<UnavailableObservation>& failure() const noexcept { return failure_; }
     Observation<Result> completed() const;
 private:
-    enum class Phase { Before, Storage, Integrity, Layout, CheckLayout, Link, LinkLimits, Channels, CheckChannels, Attributes, CheckAttributes, Values, Security, After, Seal };
+    enum class Phase { Before, Storage, Integrity, InodeFlags, Layout, CheckLayout, Link, LinkLimits, Channels, CheckChannels, Attributes, CheckAttributes, Values, Security, After, Seal };
     struct FeatureLess {
         bool operator()(const NativeFeatureIdentifier& a, const NativeFeatureIdentifier& b) const noexcept;
     };

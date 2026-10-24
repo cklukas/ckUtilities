@@ -2989,3 +2989,52 @@ for source/SDK fingerprints, normal/sanitizer runs, timings, exact executable
 paths, native fixtures and cleanup. WP-01 remains in progress for the remaining
 capability/preservation inspection and cross-platform collision rules.
 WP-02–08 remain unstarted; no Files UI or mutation command is enabled here.
+
+
+## 2026-10-24 — explicit Linux regular-file inode flags
+
+WP-01 adds read-only `FS_IOC_GETFLAGS` through a retained Linux regular-file
+reference. The separate `MetadataAndInodeFlags` access request obtains a checked
+readable handle via the already-held kernel fd reference, not the old basename.
+Layout and inode access remain independent, including when combined. The query
+never reads main content, sets flags or elevates. Non-Linux queries remain
+Unsupported; special files cannot become readers through the Linux request.
+
+The report preserves all 32 native bits and a qualified before/after owner.
+Literal helpers cover compression/no-compression, synchronous, immutable,
+append-only, no-dump/no-atime, encryption, journaling, directory sync, verity,
+no-CoW, DAX, project inheritance and casefold in their own ioctl namespace.
+Clear bits are not feature-absence evidence; set bits are not effective-behavior
+or preservation guarantees. Unknown bits survive. Inode-only access needs stable
+kind/identity, not an unchanged content size. Directory inode flags remain in the
+existing held-directory location inventory.
+
+`ObjectInventoryJob` collects the new family independently with four-byte
+query/retention accounting, one record and explicit owner qualification.
+Simulation supports access, limits and raw-bit observations; the new phase also
+participates in cancellation, exception and every-state failure injection.
+No partial inventory is published on malformed or over-budget replies.
+
+All 73 Files suites pass on macOS, Linux and Windows: 572, 577 and 574 cases.
+Eight new deterministic cases exercise literal mapping, unknown bits,
+namespace separation, subject qualification, failures and access. Two additional
+object-collector cases test raw retention/owner mismatch and invalid/budgeted
+replies. Native tests qualify independent ioctl agreement, held identity after
+rename/replacement, a no-dump bit on a private file, FIFO refusal and unprivileged
+read denial. Other filesystems may refuse GET/SET flags; tests preserve and
+compare the actual native refusal instead of assuming support. This host's
+positive getter/no-dump/permission markers are required in normal and sanitizer
+evidence. No native no-CoW/DAX/verity-enable qualification is claimed.
+
+The shared Linux fd-upgrade diagnostic is now `openat.read_access_fd`. An initial
+layout regression test correctly retained Denied but still expected the former
+layout-only diagnostic name; the assertion was updated and the independent
+inode-read-denial test added. The read denial itself was never bypassed. Strict
+warnings remain enabled. No unvalidated or failed binary is used as final-source
+evidence.
+
+See [the inode-flag evidence](evidence/ck-files-inode-flags-20261024.json) for the
+53-unit focused sanitizer build, full-suite runs, exact source/SDK/output
+fingerprints, timing, native qualification and scratch/diagnostic cleanup.
+WP-01 remains in progress; destination preservation capabilities and remaining
+cross-platform collision rules still need work. WP-02–08 remain unstarted.
