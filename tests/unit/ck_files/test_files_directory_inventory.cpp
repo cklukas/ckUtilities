@@ -94,6 +94,7 @@ void set_failure(LocationInfo& m, int field) {
     case 12: set(m.posix_name_max); break; case 13: set(m.posix_name_chars_max); break; case 14: set(m.posix_path_max); break;
     case 15: set(m.windows_component_utf16_max); break; case 16: set(m.space_accounting_unit); break; case 17: set(m.total_bytes); break;
     case 18: set(m.free_bytes); break; case 19: set(m.available_bytes); break;
+    case 20: set(m.posix_file_size_bits); break; case 21: set(m.posix_symlink_max); break;
     }
 }
 }
@@ -248,7 +249,7 @@ CK_TEST(directory_inventory_validates_limits_directory_and_clock_before_queries)
 }
 
 CK_TEST(directory_inventory_accounts_every_location_field_and_top_level_query_diagnostic) {
-    for (int field = 0; field < 20; ++field) for (bool after : {false, true}) {
+    for (int field = 0; field < 22; ++field) for (bool after : {false, true}) {
         // Baseline is two 4-byte identifiers + 6-byte absence witness + 3-byte
         // key diagnostic. Required name-rule failures additionally copy "p".
         const std::size_t expected = field == 1 ? 14U : (field == 0 || field == 2 || field == 11) ? 19U : 18U;

@@ -36,6 +36,8 @@ struct Fixture {
         result.storage = Observation<StorageInfo>::available(std::move(storage));
         result.layout = Observation<FileDataLayout>::available({DataLayoutFamily::PosixSeekDataHole, owner, 3, {{0, 3}}});
         result.link = Observation<LinkMetadata>::available({owner, PosixSymlinkData{"../target"}});
+        result.link_limits = Observation<FileLinkLimits>::available({FileLinkLimitFamily::PosixFpathconf, *owner.value(),
+            ObjectKind::RegularFile, Observation<std::uint64_t>::available(1), Observation<std::uint64_t>::available(1), Observation<std::uint64_t>::available(127)});
         DataChannelCatalog channels; channels.owner = owner; channels.coverage = DataChannelCoverage::WindowsFileStreamInfo;
         channels.channels.push_back({*NativeFeatureIdentifier::from_windows(u":a:$DATA"), DataChannelKind::NamedData,
             Observation<std::uint64_t>::available(9), {}});
@@ -67,7 +69,7 @@ ObjectInventoryJob::Result finish(ObjectInventoryJob& job) {
     }
     throw std::runtime_error("object inventory fixture exceeded advance bound");
 }
-constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectLayout, Op::ReadLink, Op::InspectChannels,
+constexpr std::array operations{Op::InspectHandle, Op::InspectStorage, Op::InspectLayout, Op::ReadLink, Op::InspectLinkLimits, Op::InspectChannels,
     Op::InspectAttributes, Op::ReadAttribute, Op::ReadSecurity};
 }
 CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_worker_retirement) {
@@ -76,6 +78,8 @@ CK_TEST(object_inventory_collects_all_families_and_pins_immutable_results_until_
     CK_CHECK(take(data.before.value()->logical_size) == 3 && take(data.before.value()->kind) == ObjectKind::RegularFile);
     CK_CHECK(take(data.identity_continuity) == IdentityComparison::Same);
     CK_CHECK(data.storage.value() && data.link.value() && data.channels.value() && data.attributes.value());
+    CK_CHECK(data.link_limits.value() && take(data.link_limits.value()->maximum_links) == 127);
+    CK_CHECK(take(result->compare_owner(Observation<ObjectIdentity>::available(data.link_limits.value()->owner))) == IdentityComparison::Same);
     CK_CHECK(data.layout.value() && data.layout.value()->ranges.size() == 1 && take(result->compare_owner(data.layout.value()->owner)) == IdentityComparison::Same);
     CK_CHECK(data.attribute_values.size() == 1 && data.attribute_values[0].catalog_index == 0);
     CK_CHECK(take(data.attribute_values[0].value).identifier == id() && take(data.attribute_values[0].value).bytes.size() == 2);
@@ -96,7 +100,7 @@ CK_TEST(object_inventory_preserves_all_query_failures_without_inventing_absent_f
         }
         ObjectInventoryJob job(f.open(), {}, f.fs.clock()); const auto result = finish(job); const auto& data = result->data();
         CK_CHECK(data.before.state() == state && data.after.state() == state && data.storage.state() == state);
-        CK_CHECK(data.layout.state() == state);
+        CK_CHECK(data.layout.state() == state && data.link_limits.state() == state);
         CK_CHECK(data.link.state() == state && data.channels.state() == state && data.attributes.state() == state);
         CK_CHECK(data.attribute_values.empty() && f.calls(Op::ReadAttribute) == 0 && data.identity_continuity.state() == state);
         for (const auto& security : data.security) CK_CHECK(security.state() == state && security.unavailable_detail()->error == denied().error);
@@ -335,4 +339,17 @@ CK_TEST(object_inventory_keeps_additional_data_attribute_roles_and_bytes_explici
     CK_CHECK(result->data().attributes.value()->attributes[0].role == AttributeRole::AdditionalData);
     const NativeBytes expected{std::byte{0}, std::byte{0xff}};
     CK_CHECK(take(result->data().attribute_values[0].value).bytes == expected && f.calls(Op::ReadAttribute) == 1);
+}
+
+CK_TEST(object_inventory_rejects_malformed_link_limit_families_and_preserves_owner_mismatches) {
+    for (int mode = 0; mode < 3; ++mode) {
+        Fixture f; auto replies = f.replies(); auto report = *replies.link_limits->value();
+        if (mode == 0) report.family = FileLinkLimitFamily::Unknown;
+        if (mode == 1) report.kind = static_cast<ObjectKind>(255);
+        if (mode == 2) report.owner.object = NativeIdentifier::from_u64(123456);
+        replies.link_limits = Observation<FileLinkLimits>::available(report); f.fs.set_inventory(f.file, std::move(replies));
+        ObjectInventoryJob job(f.open(), {}, f.fs.clock());
+        if (mode < 2) CK_CHECK(job.advance() == State::Failed && !job.completed().value());
+        else { const auto result = finish(job); CK_CHECK(take(result->compare_owner(Observation<ObjectIdentity>::available(result->data().link_limits.value()->owner))) == IdentityComparison::Different); }
+    }
 }

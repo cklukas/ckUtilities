@@ -683,6 +683,7 @@ public:
         result.filesystem_query_id = Observation<NativeIdentifier>::unavailable(ObservationState::Unsupported,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "volume.filesystem_query_id"});
         result.posix_name_max = result.posix_name_chars_max = result.posix_path_max = not_applicable("volume.posix_limits");
+        result.posix_file_size_bits = result.posix_symlink_max = not_applicable("volume.posix_file_limits");
         result.native_mount_flags = not_applicable("volume.posix_mount_flags");
         DWORD serial = 0, maximum = 0, flags = 0;
         std::array<wchar_t, MAX_PATH + 1> name{};

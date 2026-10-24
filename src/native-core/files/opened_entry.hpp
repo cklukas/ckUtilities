@@ -9,6 +9,7 @@
 #include "storage_info.hpp"
 #include "link_metadata.hpp"
 #include "data_layout.hpp"
+#include "file_limits.hpp"
 
 namespace ck::files {
 
@@ -47,6 +48,9 @@ public:
     // the held object. No original path reopen or enumeration; native support
     // and permissions may refuse. A live edge observation, not a stable path.
     virtual Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const;
+    // Bound for this held inode only. On a directory this concerns the
+    // directory itself, never prospective child files. No content access.
+    virtual Observation<FileLinkLimits> inspect_link_limits() const;
     virtual Observation<StorageInfo> inspect_storage() const;
     // Explicit opt-in layout access can require native data-read permission;
     // this query seeks/queries metadata and never reads file content. Main data

@@ -2815,3 +2815,47 @@ All 156 exported inputs match current bytes. Output hashes/build timestamps,
 commands, scope/timing comparisons, native results and cleanup audits are in
 the evidence. Diagnostic builds were removed after owner/empty-scratch checks;
 current normal test builds remain. No application was launched.
+
+### Native file-size, symlink-length and subject link limits
+
+WP-01 adds descriptor-relative `_PC_FILESIZEBITS` and `_PC_SYMLINK_MAX` to
+location inventory, plus `_PC_LINK_MAX` on the actual retained `OpenedEntry`
+inode. The link report carries stable kind/identity qualification and separate
+before/after link counts; a directory report cannot stand in for child-file
+limits. Object inventory collects it as a separate, cancellable query phase.
+Unsupported Windows/default numeric queries remain explicit, without inferring
+feature absence or inventing a filesystem-specific constant.
+
+Pure numeric assessments cover signed-width boundaries, symlink target bytes
+and proposed hard-link totals with no overflow, allocation by limit, path
+conversion, truncation or permission claim. Size width is not an exact file
+byte ceiling, and current link counts are not a stable remaining allowance.
+The shared pathconf decoder retains indeterminate/native-error states instead
+of converting them to infinity. Directory inventory budgets now cover both new
+fields, with independently calculated exact totals for all 22 location fields.
+
+Seven new deterministic file-limit cases cover boundaries, families, native
+return decoding, subject kind/identity changes and per-field failures. The
+object-inventory fake adapter and existing boundary/cancellation tests include
+the new query; an additional case checks malformed reports/owner mismatch.
+Native tests compare separate descriptor queries, preserve enumeration, retain
+a file after rename/replacement/unlink, collect the new object inventory field,
+and on POSIX query a FIFO without opening a data reader. No huge files, link
+exhaustion or data-loss operation is used. See
+[the file-limit evidence](evidence/ck-files-file-limits-20261024.json).
+WP-01 remains in progress; WP-02–08 remain unstarted.
+
+Final validation on 2026-10-24: all 65 Files suites pass on macOS (523 cases),
+Linux (526) and Windows (525). Reviewed fresh 46-unit sanitizer builds pass
+44 focused cases on macOS/Linux and 43 on Windows. ASan+UBSan run on macOS/
+Linux, ASan on Windows; Linux leak detection is enabled, Apple leak detection
+unavailable. The initial Windows fixture used the wrong native-name encoding;
+the adapter rejected it, and the fixture was corrected to explicit UTF-16
+without changing validation. Its failed scratch leaf was removed only after
+exact owner/content checks. All hosts were retested and sanitizer builds
+repeated for the reviewed source. Initial Windows failure timing was omitted
+by the old success-only driver; that gap is explicit, and the reviewed driver
+now records failures in `finally`. All 160 current inputs, output hashes,
+per-target build provenance, logs, scope/timing differences and cleanup audits
+are retained in the evidence. Diagnostic builds are removed; current normal
+tests remain. No application was launched.

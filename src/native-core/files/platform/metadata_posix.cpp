@@ -55,6 +55,12 @@ ObservationState errno_state(int code) noexcept {
     return ObservationState::Failed;
 }
 
+Observation<std::uint64_t> descriptor_limit(int descriptor, int name, const char* operation) {
+    errno = 0; const auto value = fpathconf(descriptor, name); const int code = errno;
+    static_assert(sizeof(value) <= sizeof(std::int64_t));
+    return detail::decode_posix_limit(static_cast<std::int64_t>(value), code == EINVAL ? ObservationState::Unknown : errno_state(code), {ErrorDomain::Posix, code, operation});
+}
+
 template <class T>
 Observation<T> not_applicable(const char* operation) {
     return Observation<T>::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, operation));
@@ -201,6 +207,18 @@ class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false)
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access) {}
+    Observation<FileLinkLimits> inspect_link_limits() const override {
+        using Result = Observation<FileLinkLimits>;
+        const auto before = inspect_basic();
+        const auto valid = detail::qualify_file_link_subject(before, before);
+        if (!valid.value()) { const auto& e = *valid.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        auto maximum = descriptor_limit(descriptor_.get(), _PC_LINK_MAX, "fpathconf.link_max");
+        const auto after = inspect_basic();
+        const auto owner = detail::qualify_file_link_subject(before, after);
+        if (!owner.value()) { const auto& e = *owner.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available({FileLinkLimitFamily::PosixFpathconf, *owner.value(), *before.value()->kind.value(),
+            before.value()->link_count, after.value()->link_count, std::move(maximum)});
+    }
     Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const override {
         using Result = Observation<FileDataLayout>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "layout.limits"));
@@ -700,18 +718,11 @@ public:
         result.volume_query_serial = not_applicable<std::uint64_t>("volume.query_serial");
         result.windows_component_utf16_max = not_applicable<std::uint64_t>("volume.windows_component_limit");
         result.windows_directory_case_flags = not_applicable<std::uint32_t>("volume.windows_directory_case_flags");
-        const auto limit = [&](int name, const char* operation) {
-            errno = 0;
-            const auto value = fpathconf(fd, name);
-            const int code = errno;
-            if (value < 0) return Observation<std::uint64_t>::unavailable(code == 0 ? ObservationState::Unknown : errno_state(code),
-                {ErrorDomain::Posix, code, operation});
-            if (value == 0) return Observation<std::uint64_t>::unavailable(ObservationState::Unknown,
-                adapter_error(AdapterError::InvalidNativeResult, operation));
-            return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(value));
-        };
+        const auto limit = [&](int name, const char* operation) { return descriptor_limit(fd, name, operation); };
         result.posix_name_max = limit(_PC_NAME_MAX, "fpathconf.name_max");
         result.posix_path_max = limit(_PC_PATH_MAX, "fpathconf.path_max");
+        result.posix_file_size_bits = limit(_PC_FILESIZEBITS, "fpathconf.file_size_bits");
+        result.posix_symlink_max = limit(_PC_SYMLINK_MAX, "fpathconf.symlink_max");
 #if defined(__linux__)
         result.family = LocationQueryFamily::LinuxDescriptor;
         // The ioctl ABI takes int*, despite its historical long-sized request

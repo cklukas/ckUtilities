@@ -23,6 +23,7 @@ struct SimulatedInventory {
     std::optional<Reply<ck::files::StorageInfo>> storage;
     std::optional<Reply<ck::files::FileDataLayout>> layout;
     std::optional<Reply<ck::files::LinkMetadata>> link;
+    std::optional<Reply<ck::files::FileLinkLimits>> link_limits;
     std::optional<Reply<ck::files::DataChannelCatalog>> channels;
     std::optional<Reply<ck::files::AttributeCatalog>> attributes;
     std::map<ck::files::NativeFeatureIdentifier, Reply<ck::files::AttributeValue>, SimulatedFeatureLess> values;

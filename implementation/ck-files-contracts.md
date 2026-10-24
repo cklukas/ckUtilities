@@ -1078,6 +1078,7 @@ marking/writes. Hole punching exists only in the fixture, never the reader.
 `ObjectInventoryJob` collects one already-open `OpenedEntry` on its owning worker.
 It never reopens a pathname, follows a link, elevates privileges or mutates the
 object. It requests basic metadata before/after collection, storage and data-layout observations,
+subject-specific hard-link limits,
 link/reparse payloads, channel and attribute catalogs, each catalogued attribute
 value and all six explicit native security query parts. No main-data/named-stream
 content API is called. Attribute values are explicitly read and may themselves
@@ -1583,3 +1584,59 @@ attempted, not a snapshot, full metadata/security inventory, preservation
 assessment, reservation, execution permission or user consent. The owning
 worker must still collect entry inventories and revalidate native semantics
 at planning/execution. No Files UI or operation is enabled by this job.
+
+## Descriptor-scoped file, symlink and hard-link limits
+
+Location reports now include `_PC_FILESIZEBITS` and `_PC_SYMLINK_MAX` through
+the held POSIX directory. Their scope is regular-file size representation and
+symlink target-string length for entries in that directory, respectively.
+Windows keeps these POSIX query fields explicitly Unsupported/NotApplicable;
+no filesystem label, volume size or feature flag is substituted for a limit.
+
+`assess_file_size_bits` compares a proposed unsigned size's required signed
+bit width against the reported width, without a shift by an unbounded native
+value. It handles all 64-bit input sizes, including the 65 signed bits needed
+for `UINT64_MAX`. Reports below the POSIX minimum width of 32 are rejected as
+malformed. This is a comparison with the reported representation width, not
+an exact filesystem byte ceiling or an authoritative creatability decision.
+Native reports can be coarse or implementation-dependent. Neither side of this
+numeric comparison alone certifies what a filesystem/driver/API will accept.
+Native offset ranges, actual file-size restrictions, quotas, space, providers
+and execution-time results remain independent checks.
+
+`assess_posix_symlink_length` compares a byte count with the reported target
+length; it does not count display columns/code points, convert an encoding,
+validate the target, include a NUL terminator or authorize link creation.
+A within-bound result is only a numeric observation. See the
+[POSIX descriptor-query scope and return contract](https://man7.org/linux/man-pages/man3/fpathconf.3p.html)
+and [FILESIZEBITS definition](https://man7.org/linux/man-pages/man0/limits.h.0p.html).
+
+`OpenedEntry::inspect_link_limits` queries `_PC_LINK_MAX` on the held POSIX
+inode, with fresh kind/identity checks before and after. It preserves both
+observed link counts and the independent maximum observation. Kind and
+qualified identity must agree; changed or unavailable observations do not
+become a limit for a different object. The query works without reopening the
+name, reading contents or opening a FIFO reader. It also follows retained
+objects after rename/unlink. A directory subject remains explicitly Directory:
+its report must never be treated as the limit for new children. Windows/default
+implementations return Unsupported for this numeric query, without declaring
+hard links unsupported.
+
+`assess_hard_link_total` compares an explicit proposed total with the subject's
+reported maximum. It never adds to/subtracts from a racing link count, claims
+remaining capacity, permits directory hard links or promises that a link can
+be created. For a prospective destination inode, planning still needs suitable
+native evidence/probes and execution revalidation rather than borrowing a
+parent-directory report. `ObjectInventoryJob` now collects this query as an
+independent phase, retaining failures and validating its family/kind. Each
+available owner still needs qualification against the inventory.
+
+The native call wrapper clears errno, captures it immediately after the call,
+and passes it to the shared positive-limit decoder.
+`-1` with no errno stays Unknown rather than infinity; native errors retain
+codes, and ambiguous EINVAL stays Unknown. Zero remains Unknown/malformed;
+other negative returns fail. Successful positive values are not replaced with
+constants. Existing component/path-limit queries use the same decoder. All
+observations remain worker queries, not mutation permission or user consent.
+The held-directory collector's variable-byte accounting now includes all 22
+location observation fields.

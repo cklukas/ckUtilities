@@ -45,6 +45,10 @@ struct LocationInfo {
     Observation<std::uint64_t> posix_name_max;
     Observation<std::uint64_t> posix_name_chars_max;
     Observation<std::uint64_t> posix_path_max;
+    // Directory-relative reports for files/symlinks in this directory. Signed
+    // representation bits are NOT an exact maximum file byte count.
+    Observation<std::uint64_t> posix_file_size_bits;
+    Observation<std::uint64_t> posix_symlink_max;
     Observation<std::uint64_t> windows_component_utf16_max;
     // Native reported bytes at query time. Not reserved space, authority to
     // write, proof of quota/physical allocation, or a durable capacity promise.

@@ -81,7 +81,7 @@ private:
         return observe(m.directory) && observe(m.filesystem_name) && observe(m.filesystem_type_code) && observe(m.filesystem_query_id) &&
             observe(m.volume_query_serial) && observe(m.features) && observe(m.native_mount_flags) && observe(m.read_only_mount) &&
             observe(m.case_sensitive_directory) && observe(m.case_preserving_names) && observe(m.windows_directory_case_flags) &&
-            observe(m.linux_directory_inode_flags) && observe(m.posix_name_max) && observe(m.posix_name_chars_max) && observe(m.posix_path_max) &&
+            observe(m.linux_directory_inode_flags) && observe(m.posix_name_max) && observe(m.posix_name_chars_max) && observe(m.posix_path_max) && observe(m.posix_file_size_bits) && observe(m.posix_symlink_max) &&
             observe(m.windows_component_utf16_max) && observe(m.space_accounting_unit) && observe(m.total_bytes) && observe(m.free_bytes) && observe(m.available_bytes);
     }
     bool value(const DirectoryFscryptPolicy& m) {

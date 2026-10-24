@@ -24,7 +24,7 @@ class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     template<class T> using Observed = ck::files::Observation<T>;
 public:
     enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation,
-        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout, OpenParent };
+        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout, OpenParent, InspectLinkLimits };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
@@ -206,6 +206,11 @@ private:
             const auto fault = step(state_, Operation::InspectStorage, node_, {}, {}, {}, {}, access_);
             if (fault) return Observed<ck::files::StorageInfo>::unavailable(fault->state, fault->error);
             return node_->inventory_.storage ? *node_->inventory_.storage : OpenedEntry::inspect_storage();
+        }
+        Observed<ck::files::FileLinkLimits> inspect_link_limits() const override {
+            const auto fault = step(state_, Operation::InspectLinkLimits, node_, {}, {}, {}, {}, access_);
+            if (fault) return Observed<ck::files::FileLinkLimits>::unavailable(fault->state, fault->error);
+            return node_->inventory_.link_limits ? *node_->inventory_.link_limits : OpenedEntry::inspect_link_limits();
         }
         Observed<ck::files::FileDataLayout> inspect_data_layout(ck::files::InventoryLimits limits = {}, std::stop_token stop = {}) const override {
             using Result = Observed<ck::files::FileDataLayout>;

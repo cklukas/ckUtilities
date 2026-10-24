@@ -123,7 +123,14 @@ void ObjectInventoryJob::step(std::stop_token stop) {
                 }
             } else { invalid_reply(); return; }
         }
-        data_->link = std::move(reply); phase_ = Phase::Channels; break;
+        data_->link = std::move(reply); phase_ = Phase::LinkLimits; break;
+    }
+    case Phase::LinkLimits: {
+        if (!retain(0, 1)) return;
+        auto reply = object_->inspect_link_limits();
+        if (reply.value() && (reply.value()->family != FileLinkLimitFamily::PosixFpathconf ||
+            reply.value()->kind < ObjectKind::RegularFile || reply.value()->kind > ObjectKind::Other)) { invalid_reply(); return; }
+        data_->link_limits = std::move(reply); phase_ = Phase::Channels; break;
     }
     case Phase::Channels:
         if (!retain(0, 1)) return;
