@@ -3,6 +3,44 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## WP-02 — cross-platform qualification and production-host checkpoint
+
+The worker-backed location completion integration is committed as `7e4ecfa`;
+the production native host and installed `ck-files` executable are committed
+as `c59b900`. The host accepts zero, one or two native UTF-8 arguments,
+creates four private per-user cache directories under the resolved suite
+configuration root, injects independent pane and completion workers, loads the
+persisted keymap, and runs the real native terminal application. It refuses a
+missing configuration root or cache creation failure; it does not substitute a
+system temporary directory or reinterpret a supplied path through the process
+current directory.
+
+Mac qualification on 2026-10-24 used the pinned ckVision 1.4.0 package and the
+fresh Release build at
+`/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build`.
+`ck_vision_files_tests` passed all 179 internal cases (one CTest entry), and
+the production binary was rebuilt after the host sources, then verified by
+absolute path and `--help`:
+`/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build/bin/ck-files`.
+The native private-index test root remains on the ownership-enabled
+`/Volumes/PRO-BLADE/tmp/ckutilities-wp02-completion-20261024-01-test-scratch`;
+the adapter correctly refuses the ownership-disabled S8T volume.
+
+Linux qualification used a fresh local-ext4 VM workspace
+`/tmp/ckutilities-linux-wp02-20261024-01` because Git FetchContent object
+writes fail on the VM's VirtioFS-mounted `/Volumes/PRO-BLADE/tmp`. A fresh
+ckVision 1.4.0 SDK was built with GCC 14/aarch64, then ckUtilities was built
+with the `c59b900` host. The production `ck-files` target built and its
+`--help` output was verified; the Files test binary also passed all 179 cases.
+
+The Mac ASan/UBSan full Files run remains blocked by a reproducible heap
+buffer-overflow in the untouched pinned ckVision 1.4.0 `Desktop` command-vector
+growth path while constructing `SuiteShell`; a minimal SDK consumer reproduces
+it without Files code. No sanitizer suppression or application workaround was
+introduced. The Windows qualification is also blocked: the active workstation
+session exposes only `C:` and `T:`, not the mandatory `V:` development drive,
+so no Windows source, cache, build, or test data was created outside `V:`.
+
 ## WP-02 — worker-backed location completion checkpoint
 
 This checkpoint records the completion integration milestone. The
