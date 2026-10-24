@@ -2929,3 +2929,42 @@ They preserve sort/visibility policy and clear the name filter only after a
 successful location change. Other-pane state remains independent. Production
 terminal acceptance, home discovery, editable location/completion, history,
 bookmarks, qualified refresh and preview/properties remain WP-02 work.
+
+
+### Native home discovery and Home location
+
+Home location (`ck.files.home`, visible in the Location menu with no default
+key) is a navigation request. Discovery runs only on the serialized pane worker;
+its optional injected resolver accepts native path limits and a stop token.
+Absence, invalid/moved results, over-budget paths and native errors refuse
+explicitly. The service validates the complete returned address independently
+of the resolver. The requested route stays absent until a valid bounded native
+address has been discovered. No guessed root/cwd/profile spelling is used.
+
+On POSIX, `native_home_address` honors the process's `HOME` bytes when that
+variable is present. Empty/relative/invalid HOME values refuse without silently
+changing to an account directory. When HOME is absent, reentrant `getpwuid_r`
+queries the effective account, grows its result buffer only on ERANGE and stops
+at a one-MiB record budget. Missing account data, invalid paths and native errors
+remain explicit. The host keeps its environment immutable after worker startup;
+only isolated native test fixtures alter HOME with no live pane workers.
+
+On Windows, discovery opens the process token with TOKEN_QUERY, queries its
+profile path through `GetUserProfileDirectoryW`, bounds the native byte length
+before allocating the output buffer and retains the exact UTF-16 units. It does
+not convert through UTF-8, use an ANSI code page, expand environment variables,
+create a profile/folder or request elevation. Token ownership is scoped on the
+worker. Error codes remain Win32 observations; no error is relabeled as success.
+
+Account/profile discovery can block. Cancellation is cooperative before and
+after native queries and before source opening; latest navigation supersedes
+old work. A genuine native failure takes precedence over a late cancellation.
+A failed/cancelled home request retains the acknowledged route/listing, marks,
+range, cursor and view/filter. Success clears marks/range and the name filter,
+retains sorting/visibility policy and leaves the other pane independent. Home
+uses existing menu/modal/keymap guards and a visible opening-home status.
+
+Native API references: [GetUserProfileDirectoryW](https://learn.microsoft.com/en-us/windows/win32/api/userenv/nf-userenv-getuserprofiledirectoryw)
+and [getpwuid_r / HOME semantics](https://man7.org/linux/man-pages/man3/getpwuid.3.html).
+These identify requested addresses rather than certify existence or identity;
+the existing worker opening/listing boundary establishes actual navigation.

@@ -106,6 +106,10 @@ struct FilesPaneBackend {
     // do not pre-create native owners on the UI thread or retain returned owners.
     std::function<std::unique_ptr<ck::files::BasicFileSystem>()> filesystem;
     std::function<ck::files::Observation<std::shared_ptr<ck::files::IndexFileFactory>>()> workspace;
+    // Optional native-home discovery, worker-only. An absent resolver refuses
+    // explicitly; it must not cause a guessed location or UI-thread lookup.
+    std::function<ck::files::Observation<ck::files::NativeAbsolutePath>(ck::files::NativePathLimits, std::stop_token)>
+        home;
     ck::files::StorageModel storage_model = ck::files::StorageModel::Unknown;
     std::shared_ptr<const ck::files::MonotonicClock> clock = ck::files::system_monotonic_clock();
 };
@@ -137,6 +141,8 @@ class FilesPaneService final {
     // or claim of continuity with an earlier visit. Latest navigation wins.
     FilesPaneSubmitted navigate(FilesPaneLocation location, ck::files::PaneView view = {},
                                 std::size_t first_page_rows = 256);
+    // Latest-navigation semantics, with bounded lazy discovery on the worker.
+    FilesPaneSubmitted navigate_home(ck::files::PaneView view = {}, std::size_t first_page_rows = 256);
     // Exclusive navigation from one visible scoped row of the current pane.
     // No I/O at submission, no mark/cursor retargeting or absolute path reopen.
     // Busy while work or an unread reply exists. Absolute navigation may

@@ -93,6 +93,9 @@ struct Fixture {
     std::shared_ptr<Gate> gate;
     std::shared_ptr<Gate> directory_gate = std::make_shared<Gate>();
     std::shared_ptr<std::atomic<bool>> block_directory = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<Gate> home_gate = std::make_shared<Gate>();
+    std::shared_ptr<std::atomic<bool>> block_home = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<std::atomic<bool>> fail_home = std::make_shared<std::atomic<bool>>(false);
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
@@ -134,6 +137,15 @@ struct Fixture {
                 }
             }
             auto backend = native_files_pane_backend(address(cache));
+            backend.home = [home = address(scratch.path() / "right"), hold = home_gate, arm = block_home,
+                            fail = fail_home](NativePathLimits, std::stop_token) {
+                if (arm->exchange(false))
+                    hold->block();
+                if (fail->load())
+                    return Observation<NativeAbsolutePath>::unavailable(ObservationState::Denied,
+                                                                        {ErrorDomain::Adapter, 42, "injected.home"});
+                return Observation<NativeAbsolutePath>::available(home);
+            };
             if (i == 0) {
                 backend.workspace = [open = std::move(backend.workspace), hold = directory_gate,
                                      arm = block_directory]() -> Observation<std::shared_ptr<IndexFileFactory>> {
@@ -169,6 +181,7 @@ struct Fixture {
         if (gate)
             gate->release();
         directory_gate->release();
+        home_gate->release();
         for (auto &service : services)
             service->join();
         application.step(0); // Drain late weak posts after controller destruction.
@@ -946,4 +959,87 @@ CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_gu
     CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
     f.loaded();
     CK_CHECK(f.app->location(0)->components().empty());
+}
+
+CK_TEST(files_app_home_menu_discovers_asynchronously_preserves_policy_and_keeps_other_pane_independent) {
+    for (auto theme :
+         {ThemeScheme::Classic, ThemeScheme::Dark, ThemeScheme::Light, ThemeScheme::Mono, ThemeScheme::HighContrast}) {
+        Fixture f(theme);
+        f.loaded();
+        auto view = f.app->view(0);
+        view.show_hidden = view.ascii_case_sensitive = true;
+        view.display_substring = "left";
+        CK_CHECK(f.app->change_view(0, view));
+        f.loaded();
+        CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+        f.loaded();
+        const auto before = f.app->location(0), other = f.app->location(1);
+        CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "l"}}));
+        CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "h"}}));
+        CK_CHECK(f.app->pending(0) && f.app->location(0) == before && f.app->selection(0).marks->total == 1);
+        f.loaded();
+        CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") &&
+                 f.app->location(1) == other);
+        CK_CHECK(f.app->view(0).display_substring.empty() && f.app->view(0).show_hidden &&
+                 f.app->view(0).ascii_case_sensitive);
+        CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.mark_range") &&
+                 f.app->model(0).row_count() == 3);
+    }
+}
+CK_TEST(files_app_blocked_home_cancels_or_is_superseded_and_never_changes_the_other_pane) {
+    for (bool supersede : {false, true}) {
+        Fixture f(ThemeScheme::Classic, {}, {}, {80, 24});
+        f.loaded();
+        const auto before = f.app->location(0), other = f.app->location(1);
+        *f.block_home = true;
+        CK_CHECK(f.command("ck.files.home"));
+        f.home_gate->wait();
+        CK_CHECK(f.app->status(0) == "Opening home location..." && f.app->location(0) == before);
+        CK_CHECK(!f.command("ck.files.home") && !f.app->target(0));
+        f.app->switch_pane();
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.app->switch_pane();
+        if (supersede)
+            CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "right")));
+        else
+            CK_CHECK(f.command("ck.files.cancel_read"));
+        f.home_gate->release();
+        f.loaded();
+        CK_CHECK(f.app->location(1) == other && f.app->model(1).cursor().row == 1);
+        if (supersede)
+            CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
+        else
+            CK_CHECK(f.app->location(0) == before && f.app->status(0).find("Read cancelled") != std::string::npos);
+    }
+}
+CK_TEST(files_app_home_discovery_failure_retains_location_filter_marks_and_range_without_fallback) {
+    Fixture f;
+    f.loaded();
+    auto view = f.app->view(0);
+    view.display_substring = "left";
+    CK_CHECK(f.app->change_view(0, view));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+    f.loaded();
+    const auto before = f.app->location(0);
+    *f.fail_home = true;
+    CK_CHECK(f.app->navigate_home(0));
+    f.loaded();
+    CK_CHECK(f.app->location(0) == before && f.app->view(0).display_substring == "left" &&
+             f.app->model(0).row_count() == 100);
+    CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("previous location retained") != std::string::npos);
+}
+CK_TEST(files_app_home_obeys_modal_scope_and_configurable_keymap) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(!f.app->navigate_home(2));
+    f.application.commands().bind_key({ckv::Key::F8, ckv::Modifier::Ctrl, {}}, f.id("ck.files.home"));
+    CK_CHECK(f.command("ck.files.view_options"));
+    CK_CHECK(!f.command("ck.files.home") && !f.app->navigate_home(0));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right"));
 }

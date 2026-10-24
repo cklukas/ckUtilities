@@ -4119,3 +4119,44 @@ WP-02 remains open for home discovery, editable
 location/completion, history/bookmarks, qualified refresh, properties/preview
 and production executable/interactive acceptance. No mutation commands or
 production GUI launch are introduced.
+
+
+## 2026-10-24 — WP-02 native home discovery and navigation
+
+Home location is a visible suite command and an asynchronous worker request.
+POSIX preserves HOME bytes and uses bounded reentrant effective-account lookup
+only when HOME is absent; Windows queries the process profile in exact UTF-16.
+No cwd/root guessing, ANSI/UTF-8 round trip, folder creation or elevation is
+introduced. Native errors, invalid/moved addresses, absent resolvers and resource
+limits remain explicit. The service rechecks even an injected resolver's path
+budget before opening a source.
+
+Home discovery shares latest-navigation submission and retirement semantics.
+Blocked discovery can be cancelled or superseded while the other pane remains
+usable. The UI keeps its acknowledged route/listing/marks/range/view until a
+complete reply; native failure after cancellation retains its failure meaning.
+Home success carries view policy and clears old marks/range and the name filter.
+The existing Home key still addresses the first file record; the Home location
+command is configurable and has no default key.
+
+Three new native-path cases exercise exact native discovery, path limits,
+pre-cancellation, POSIX empty/relative/raw HOME and absent-HOME account lookup.
+Five new service cases cover lazy worker discovery, missing/invalid/oversized
+resolver results, retained state, cancellation/supersession, genuine native
+failure precedence, terminal faults and invalid/stopped submissions. Four new
+application cases cover all themes, the real menu/current keymap, modal guards,
+blocked/cancelled/superseded discovery and failure/mark/range/filter retention.
+All 83 Files suites pass on macOS/Linux/Windows (867/870/866 cases), plus
+keymap. Matched ASan+UBSan on macOS/Linux and ASan on Windows pass 189/187/186
+cases: 101 UI/service, 53 indexed-pane, 11 path, 7 native-path/home and
+17/15/14 native-index. Qualification builds all 76 product units and
+124/124/128 pinned SDK units with instrumentation. Fresh ThreadSanitizer
+runs pass all 50 service cases three times per POSIX host (300 executions);
+this covers the UI-free worker protocol rather than the UI controller/grid.
+Diagnostic builds and fixtures are retired; current normal builds remain for
+active work. Architecture checks and strict documentation pass. See
+[qualification evidence](evidence/ck-files-home-20261024.json).
+
+WP-02 remains open for editable location/completion, history/bookmarks,
+qualified refresh, properties/preview and production executable/interactive
+acceptance. No mutation command or production GUI launch is introduced.

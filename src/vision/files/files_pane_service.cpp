@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_pane_service.hpp"
 #include "native_index_file.hpp"
+#include "native_home.hpp"
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -109,9 +110,10 @@ struct ChildNavigation {
     PaneStateStamp stamp;
     PaneRowId row;
 };
+struct HomeNavigation {};
 struct Navigate {
     FilesPaneTicket ticket;
-    std::variant<FilesPaneLocation, ChildNavigation> destination;
+    std::variant<FilesPaneLocation, ChildNavigation, HomeNavigation> destination;
     PaneView view;
     std::size_t rows;
 };
@@ -152,6 +154,32 @@ struct FilesPaneService::State {
     std::jthread worker;
     State(FilesPaneBackend b, FilesPaneServiceLimits l, std::function<void()> w)
         : backend(std::move(b)), limits(l), wake(std::move(w)) {}
+    FilesPaneSubmitted submit_navigation(std::variant<FilesPaneLocation, ChildNavigation, HomeNavigation> destination,
+                                         PaneView view, std::size_t first_page_rows) {
+        std::optional<std::stop_source> stop;
+        FilesPaneTicket request;
+        {
+            std::lock_guard lock(mutex);
+            if (stopping || !alive.load())
+                return {FilesPaneSubmission::Stopped, {}};
+            if (!next)
+                return {FilesPaneSubmission::Exhausted, {}};
+            request = FilesPaneService::ticket(next++);
+            navigation.emplace(Navigate{request, std::move(destination), std::move(view), first_page_rows});
+            read.reset();
+            change.reset();
+            change_busy = false;
+            reply.reset();
+            cancelled = {};
+            latest_navigation = latest_request = request;
+            navigation_busy = true;
+            stop = active_stop;
+        }
+        if (stop)
+            stop->request_stop();
+        condition.notify_one();
+        return {FilesPaneSubmission::Accepted, request};
+    }
     void notify(bool needed) {
         if (needed && wake)
             wake();
@@ -275,12 +303,47 @@ struct FilesPaneService::State {
                     result.state = state;
                     result.error = error;
                 };
+                if (std::holds_alternative<HomeNavigation>(nav->destination) && !stop.stop_requested()) {
+                    auto home =
+                        backend.home
+                            ? backend.home({limits.path_bytes}, stop.get_token())
+                            : Observation<NativeAbsolutePath>::unavailable(
+                                  ObservationState::Unsupported,
+                                  {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+                                   "home.resolver_unavailable"});
+                    if (!home.value()) {
+                        const auto &e = *home.unavailable_detail();
+                        fail(e, e.error.domain == ErrorDomain::Adapter &&
+                                        e.error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit)
+                                    ? FilesPaneReplyState::LimitExceeded
+                                    : FilesPaneReplyState::Failed);
+                    } else if (!home.value()->is_valid()) {
+                        fail({ObservationState::Failed,
+                              {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath),
+                               "home.invalid_address"}});
+                    } else {
+                        const auto &value = *home.value();
+                        const auto bytes = value.posix_bytes() ? value.posix_bytes()->size()
+                                                               : value.windows_units()->size() * sizeof(char16_t);
+                        if (bytes > limits.path_bytes)
+                            fail({ObservationState::Unknown,
+                                  {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit),
+                                   "home.path_bytes"}},
+                                 FilesPaneReplyState::LimitExceeded);
+                        else {
+                            nav->destination = FilesPaneLocation(std::move(home).take_value());
+                            absolute = std::get_if<FilesPaneLocation>(&nav->destination);
+                            requested = std::make_shared<const FilesPaneLocation>(*absolute);
+                            result.requested_location = requested;
+                        }
+                    }
+                }
                 const auto *origin = std::get_if<ChildNavigation>(&nav->destination);
                 const bool origin_ready =
                     !origin || (active && origin->navigation == active_epoch && pane->accepts(origin->stamp));
                 if (!origin_ready)
                     result.state = FilesPaneReplyState::Stale;
-                if (!stop.stop_requested() && origin_ready) {
+                if (!stop.stop_requested() && origin_ready && !result.error) {
                     if (!filesystem) {
                         filesystem = backend.filesystem();
                         if (!filesystem)
@@ -619,6 +682,7 @@ FilesPaneBackend native_files_pane_backend(NativeAbsolutePath cache_root) {
     FilesPaneBackend backend;
     backend.filesystem = [] { return std::make_unique<NativeFileSystem>(); };
     backend.workspace = [root = std::move(cache_root)] { return open_native_index_workspace(root); };
+    backend.home = [](NativePathLimits limits, std::stop_token stop) { return native_home_address(limits, stop); };
 #if defined(_WIN32)
     backend.storage_model = StorageModel::WindowsHandleAttributes;
 #elif defined(__APPLE__)
@@ -652,29 +716,14 @@ FilesPaneSubmitted FilesPaneService::navigate(FilesPaneLocation location, PaneVi
         location.components().size() > state_->limits.location_components || view.display_substring.size() > 4096 ||
         !first_page_rows || first_page_rows > state_->limits.page_rows)
         return {FilesPaneSubmission::LimitExceeded, {}};
-    std::optional<std::stop_source> stop;
-    FilesPaneTicket request;
-    {
-        std::lock_guard lock(state_->mutex);
-        if (state_->stopping || !state_->alive.load())
-            return {FilesPaneSubmission::Stopped, {}};
-        if (!state_->next)
-            return {FilesPaneSubmission::Exhausted, {}};
-        request = ticket(state_->next++);
-        state_->navigation.emplace(Navigate{request, std::move(location), std::move(view), first_page_rows});
-        state_->read.reset();
-        state_->change.reset();
-        state_->change_busy = false;
-        state_->reply.reset();
-        state_->cancelled = {};
-        state_->latest_navigation = state_->latest_request = request;
-        state_->navigation_busy = true;
-        stop = state_->active_stop;
-    }
-    if (stop)
-        stop->request_stop();
-    state_->condition.notify_one();
-    return {FilesPaneSubmission::Accepted, request};
+    return state_->submit_navigation(std::move(location), std::move(view), first_page_rows);
+}
+FilesPaneSubmitted FilesPaneService::navigate_home(PaneView view, std::size_t first_page_rows) {
+    if (!valid_pane_order({view.sort, view.descending, view.folders_first}))
+        return {FilesPaneSubmission::Invalid, {}};
+    if (view.display_substring.size() > 4096 || !first_page_rows || first_page_rows > state_->limits.page_rows)
+        return {FilesPaneSubmission::LimitExceeded, {}};
+    return state_->submit_navigation(HomeNavigation{}, std::move(view), first_page_rows);
 }
 FilesPaneSubmitted FilesPaneService::enter_directory(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
                                                      PaneView view, std::size_t first_page_rows) {

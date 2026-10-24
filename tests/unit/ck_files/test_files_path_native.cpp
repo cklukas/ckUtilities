@@ -1,6 +1,10 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#include "native_home.hpp"
+#include <optional>
+#include <vector>
+#include <cstdlib>
 #include "scratch_directory.hpp"
 #include "cvision/testing/cktest.hpp"
 #include <fstream>
@@ -11,11 +15,13 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <userenv.h>
 #else
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pwd.h>
 #endif
 namespace {
 using namespace ck::files;
@@ -130,4 +136,75 @@ CK_TEST(native_path_raw_encoding_acceptance_or_refusal_matches_the_actual_filesy
         CK_CHECK(!report.value() && fs::is_empty(scratch.path()));
         std::cout << "native-path: raw units refused by filesystem, native creation code " << create_error << "\n";
     }
+}
+
+#ifndef _WIN32
+namespace {
+struct ScopedHome {
+    std::optional<std::string> previous;
+    explicit ScopedHome(std::optional<std::string> value) {
+        if (const auto* old = std::getenv("HOME")) previous = old;
+        if ((value ? ::setenv("HOME", value->c_str(), 1) : ::unsetenv("HOME")) != 0)
+            throw std::runtime_error("cannot prepare HOME fixture");
+    }
+    ~ScopedHome() {
+        if ((previous ? ::setenv("HOME", previous->c_str(), 1) : ::unsetenv("HOME")) != 0) std::terminate();
+    }
+};
+}
+#endif
+CK_TEST(native_home_resolver_keeps_native_address_and_enforces_exact_byte_limits_without_opening_it) {
+#ifdef _WIN32
+    HANDLE raw = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &raw)) throw std::runtime_error("home token fixture");
+    const auto close = [](void* token) { ::CloseHandle(token); };
+    const std::unique_ptr<void, decltype(close)> token(raw, close);
+    std::vector<wchar_t> buffer(NativePathLimits::hard_native_bytes / 2 + 1);
+    auto count = static_cast<DWORD>(buffer.size());
+    CK_CHECK(::GetUserProfileDirectoryW(token.get(), buffer.data(), &count));
+    std::u16string expected;
+    for (DWORD i = 0; i + 1 < count; ++i) expected.push_back(static_cast<char16_t>(buffer[i]));
+    const auto home = take(native_home_address());
+    CK_CHECK(*home.windows_units() == expected);
+    const auto bytes = expected.size() * sizeof(char16_t);
+#else
+    ScopedHome environment(std::string("/raw\xff\\literal\n"));
+    const auto home = take(native_home_address());
+    CK_CHECK(*home.posix_bytes() == "/raw\xff\\literal\n");
+    const auto bytes = home.posix_bytes()->size();
+#endif
+    CK_CHECK(take(native_home_address({bytes})) == home);
+    const auto limited = native_home_address({bytes - 1});
+    CK_CHECK(limited.state() == ObservationState::Unknown && limited.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
+             limited.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit));
+}
+CK_TEST(native_home_resolver_rejects_invalid_limits_and_pre_cancelled_discovery_without_fallback) {
+    for (auto bytes : {std::size_t{0}, NativePathLimits::hard_native_bytes + 1}) {
+        const auto invalid = native_home_address({bytes});
+        CK_CHECK(invalid.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidLimit));
+    }
+    std::stop_source stop; stop.request_stop();
+    const auto cancelled = native_home_address({}, stop.get_token());
+    CK_CHECK(cancelled.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
+             cancelled.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InterruptedRead));
+#ifndef _WIN32
+    for (const auto text : {"", ".", "relative", "~/folder"}) {
+        ScopedHome environment{std::string(text)};
+        const auto invalid = native_home_address();
+        CK_CHECK(!invalid.value() && invalid.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidPath));
+    }
+#endif
+}
+CK_TEST(native_home_resolver_uses_native_profile_or_reentrant_account_when_session_home_is_absent) {
+#ifdef _WIN32
+    const auto home = take(native_home_address());
+    CK_CHECK(home.is_valid() && home.windows_units() && !home.windows_units()->empty());
+#else
+    ScopedHome environment(std::nullopt);
+    std::vector<char> buffer(1024 * 1024);
+    passwd account{}; passwd* found = nullptr;
+    CK_CHECK(::getpwuid_r(::geteuid(), &account, buffer.data(), buffer.size(), &found) == 0 && found && found->pw_dir);
+    const auto home = take(native_home_address());
+    CK_CHECK(*home.posix_bytes() == found->pw_dir);
+#endif
 }

@@ -106,7 +106,7 @@ struct FilesApp::State {
         std::shared_ptr<const FilesPaneLocation> active, requested;
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
-        bool navigating = false, reading = false, navigation_error = false, entering = false;
+        bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
@@ -176,6 +176,8 @@ struct FilesApp::State {
             const auto root_id = own(
                 "ck.files.root", [this] { navigate_relative(active, true); },
                 [this] { return relative_ready(active, true); });
+            const auto home_id =
+                own("ck.files.home", [this] { navigate_home(active); }, [this] { return ready(active); });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] {
@@ -233,7 +235,7 @@ struct FilesApp::State {
                 ckv::widgets::MenuBarItem{
                     "&Location",
                     {item(enter_id, "&Enter folder"), item(parent_id, "&Parent folder"),
-                     item(root_id, "Location &root"),
+                     item(root_id, "Location &root"), item(home_id, "&Home location"),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -379,7 +381,7 @@ struct FilesApp::State {
         if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
-            text = p.entering ? "Opening folder..." : "Opening location...";
+            text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
         else if (p.preparing_cursor)
             text = "Reading current row for view change...";
         else if (p.changing)
@@ -454,6 +456,19 @@ struct FilesApp::State {
         auto &p = panes[i];
         auto range = p.model.viewport();
         auto submitted = services[i]->navigate(*requested, std::move(view), range.rows);
+        return accept_navigation(i, submitted, std::move(requested));
+    }
+    bool navigate_home(std::size_t i) {
+        if (!ready(i))
+            return false;
+        auto view = panes[i].view;
+        view.display_substring.clear();
+        return accept_navigation(i, services[i]->navigate_home(std::move(view), panes[i].model.viewport().rows), {},
+                                 true);
+    }
+    bool accept_navigation(std::size_t i, FilesPaneSubmitted submitted,
+                           std::shared_ptr<const FilesPaneLocation> requested, bool home = false) {
+        auto &p = panes[i];
         if (submitted.state != FilesPaneSubmission::Accepted) {
             p.error = "Navigation request rejected";
             labels();
@@ -463,6 +478,7 @@ struct FilesApp::State {
         p.requested = std::move(requested);
         p.navigating = true;
         p.entering = false;
+        p.homing = home;
         p.reading = false;
         p.changing.reset();
         p.queued_view.reset();
@@ -496,6 +512,7 @@ struct FilesApp::State {
         p.navigation = p.request = submitted.ticket;
         p.requested.reset(); // Only the worker may bind the requested native route.
         p.navigating = p.entering = true;
+        p.homing = false;
         p.reading = false;
         p.cancelling = p.change_error = p.navigation_error = p.preparing_cursor = false;
         p.error.clear();
@@ -668,7 +685,7 @@ struct FilesApp::State {
         p.queued_view.reset();
         const bool cancelled = p.cancelling;
         p.stamp = reply.stamp;
-        p.navigating = p.entering = false;
+        p.navigating = p.entering = p.homing = false;
         p.reading = false;
         p.changing.reset();
         p.cancelling = false;
@@ -858,6 +875,7 @@ bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location
 bool FilesApp::enter_directory(std::size_t pane) { return state_->enter_directory(pane); }
 bool FilesApp::navigate_parent(std::size_t pane) { return state_->navigate_relative(pane, false); }
 bool FilesApp::navigate_root(std::size_t pane) { return state_->navigate_relative(pane, true); }
+bool FilesApp::navigate_home(std::size_t pane) { return state_->navigate_home(pane); }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
 }

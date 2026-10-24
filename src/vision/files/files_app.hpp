@@ -45,6 +45,7 @@ class FilesApp final {
     bool enter_directory(std::size_t pane);
     bool navigate_parent(std::size_t pane);
     bool navigate_root(std::size_t pane);
+    bool navigate_home(std::size_t pane);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);

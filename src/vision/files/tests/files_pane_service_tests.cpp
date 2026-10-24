@@ -58,6 +58,10 @@ struct Trace {
     std::atomic<bool> block_child{false}, block_retire{false};
     std::atomic<int> child_fault{0};
     std::atomic<unsigned> child_opens{0}, cursors_closed{0}, entries_closed{0};
+    std::atomic<unsigned> home_queries{0};
+    std::atomic<bool> block_home{false};
+    std::atomic<int> home_fault{0};
+    Gate home_gate;
     bool replace_child = false, long_child_name = false;
     Gate open_gate, read_gate, child_gate, retire_gate;
     std::mutex mutex;
@@ -327,6 +331,7 @@ struct Fixture {
         trace->read_gate.release();
         trace->child_gate.release();
         trace->retire_gate.release();
+        trace->home_gate.release();
         if (service)
             service->join();
     }
@@ -358,6 +363,29 @@ struct Fixture {
                 std::make_shared<Factory>(*opened.value(), t));
         };
         b.storage_model = StorageModel::LinuxStatx;
+        b.home = [t = trace](NativePathLimits limits, std::stop_token stop) {
+            t->check();
+            ++t->home_queries;
+            if (t->block_home.exchange(false))
+                t->home_gate.block();
+            if (t->home_fault == 1)
+                return Observation<NativeAbsolutePath>::unavailable(ObservationState::Denied,
+                                                                    {ErrorDomain::Posix, 13, "injected.home"});
+            if (t->home_fault == 2)
+                throw std::bad_alloc();
+            if (t->home_fault == 3)
+                throw std::runtime_error("home discovery fault");
+            if (t->home_fault == 4) {
+                auto value = address("two");
+                const auto moved = std::move(value);
+                (void)moved;
+                return Observation<NativeAbsolutePath>::available(std::move(value));
+            }
+            (void)limits;
+            (void)stop; // Deliberately untrusted resolver, checked again by the service.
+            return Observation<NativeAbsolutePath>::available(
+                address(t->home_fault == 5 ? "far-too-long-home-address" : "two"));
+        };
         return b;
     }
     void start(FilesPaneServiceLimits limits = {}) {
@@ -1363,7 +1391,8 @@ CK_TEST(files_service_route_replay_cancels_and_latest_absolute_navigation_supers
             CK_CHECK(reply.active_location->root_address() == address("two"));
         } else {
             CK_CHECK(reply.request == request.ticket && reply.state == FilesPaneReplyState::Cancelled);
-            CK_CHECK(reply.active_location == previous.active_location && reply.stamp.current() && previous.stamp.current());
+            CK_CHECK(reply.active_location == previous.active_location && reply.stamp.current() &&
+                     previous.stamp.current());
         }
         CK_CHECK(f.trace->child_opens == 1); // Cancellation checked before the next native open.
         f.stopped();
@@ -1382,5 +1411,109 @@ CK_TEST(files_service_route_replay_enforces_complete_native_bytes_and_depth_befo
     CK_CHECK(f.service->navigate(std::move(moved)).state == FilesPaneSubmission::Invalid);
     CK_CHECK(f.service->navigate(retained).state == FilesPaneSubmission::Accepted);
     CK_CHECK(f.reply().state == FilesPaneReplyState::Ready);
+    f.stopped();
+}
+
+CK_TEST(files_service_home_discovers_only_on_worker_and_publishes_requested_location_after_resolution) {
+    Fixture f;
+    f.start_children();
+    f.service->navigate(address("one"));
+    const auto before = f.reply();
+    f.trace->block_home = true;
+    const auto request = f.service->navigate_home();
+    f.trace->home_gate.wait();
+    CK_CHECK(request.state == FilesPaneSubmission::Accepted && f.service->working() && !f.service->take());
+    CK_CHECK(f.trace->opens == 1 && f.trace->home_queries == 1 && before.stamp.current());
+    f.trace->home_gate.release();
+    const auto reply = f.reply();
+    CK_CHECK(reply.request == request.ticket && reply.state == FilesPaneReplyState::Ready);
+    CK_CHECK(reply.active_location->root_address() == address("two") &&
+             reply.active_location == reply.requested_location);
+    CK_CHECK(!before.stamp.current() && f.trace->opens == 2 && f.trace->wrong_thread == 0);
+    f.stopped();
+}
+CK_TEST(files_service_home_failure_absence_invalid_or_oversized_result_preserves_acknowledged_pane) {
+    for (int fault : {0, 1, 4, 5}) {
+        Fixture f;
+        auto backend = f.backend();
+        if (!fault)
+            backend.home = {};
+        FilesPaneServiceLimits limits;
+        limits.path_bytes = address("two").posix_bytes() ? 8 : 32;
+        f.trace->home_fault = fault;
+        f.service = std::make_unique<FilesPaneService>(std::move(backend), limits, [t = f.trace] { t->notify(); });
+        f.service->navigate(address("one"));
+        const auto before = f.reply();
+        const auto request = f.service->navigate_home();
+        const auto result = f.reply();
+        CK_CHECK(request.state == FilesPaneSubmission::Accepted &&
+                 result.state == (fault == 5 ? FilesPaneReplyState::LimitExceeded : FilesPaneReplyState::Failed));
+        CK_CHECK(result.active_location == before.active_location && !result.requested_location && !result.page &&
+                 before.stamp.current());
+        CK_CHECK(f.trace->opens == 1);
+        CK_CHECK(f.service->read_page(request.ticket, before.stamp, {0, 4}).state == FilesPaneSubmission::Accepted);
+        CK_CHECK(f.reply().state == FilesPaneReplyState::Ready);
+        f.stopped();
+    }
+}
+CK_TEST(files_service_home_blocked_discovery_cancels_or_is_superseded_without_opening_the_old_home) {
+    for (bool supersede : {false, true}) {
+        Fixture f;
+        f.start_children();
+        f.service->navigate(address("one"));
+        const auto before = f.reply();
+        f.trace->block_home = true;
+        const auto home = f.service->navigate_home();
+        f.trace->home_gate.wait();
+        FilesPaneSubmitted next{FilesPaneSubmission::Invalid, {}};
+        if (supersede)
+            next = f.service->navigate(address("two"));
+        else
+            CK_CHECK(f.service->cancel(home.ticket));
+        f.trace->home_gate.release();
+        const auto result = f.reply();
+        CK_CHECK(result.request == (supersede ? next.ticket : home.ticket));
+        CK_CHECK(result.state == (supersede ? FilesPaneReplyState::Ready : FilesPaneReplyState::Cancelled));
+        CK_CHECK(f.trace->opens == (supersede ? 2U : 1U));
+        if (!supersede)
+            CK_CHECK(result.active_location == before.active_location && before.stamp.current());
+        f.stopped();
+    }
+}
+CK_TEST(files_service_home_preserves_native_failure_after_cancel_and_faults_are_terminal) {
+    for (int fault : {1, 2, 3}) {
+        Fixture f;
+        f.start_children();
+        f.service->navigate(address("one"));
+        const auto before = f.reply();
+        f.trace->home_fault = fault;
+        f.trace->block_home = true;
+        const auto home = f.service->navigate_home();
+        f.trace->home_gate.wait();
+        CK_CHECK(f.service->cancel(home.ticket));
+        f.trace->home_gate.release();
+        const auto result = f.reply();
+        if (fault == 1) {
+            CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error->error.domain == ErrorDomain::Posix &&
+                     result.error->error.code == 13);
+            CK_CHECK(result.active_location == before.active_location && before.stamp.current());
+        } else {
+            CK_CHECK(result.state == FilesPaneReplyState::WorkerFault && !f.service->running());
+            CK_CHECK(f.service->fault() ==
+                     (fault == 2 ? FilesPaneWorkerFault::Allocation : FilesPaneWorkerFault::Exception));
+        }
+        f.stopped();
+    }
+}
+CK_TEST(files_service_home_validates_configuration_and_stopped_state_before_discovery) {
+    Fixture f;
+    f.start_children();
+    CK_CHECK(f.service->navigate_home({}, 0).state == FilesPaneSubmission::LimitExceeded);
+    PaneView invalid;
+    invalid.sort = static_cast<PaneSortKey>(255);
+    CK_CHECK(f.service->navigate_home(invalid).state == FilesPaneSubmission::Invalid);
+    CK_CHECK(f.trace->home_queries == 0);
+    f.service->join();
+    CK_CHECK(f.service->navigate_home().state == FilesPaneSubmission::Stopped && f.trace->home_queries == 0);
     f.stopped();
 }
