@@ -866,6 +866,63 @@ covers deterministic and native validation. Self/descendant checks, operation
 capabilities, native equivalence for distinct planned names, conflict decisions,
 consent and publication protocols remain required before mutations.
 
+## Held source and existing-target identity comparison
+
+`SourceTargetJob` consumes ownership of a bounded vector of immutable
+`HeldChild` sources and a completed `DestinationBatchJob` result. Every source
+must match the corresponding batch source component in exact native units;
+all rows and component-byte limits are validated before any metadata query.
+The job never performs a new lookup, reopens a pathname or follows a final link.
+It obtains fresh source metadata through `HeldChild::inspect_basic` and fresh
+existing-target metadata through the probe's retained child handle. The completed
+result retains both source owners and the entire destination batch, including
+its parent pin and the original lookup/mapping/failure evidence.
+
+Available comparisons report Same/Different native identities only after both
+identity and kind reports remain qualified against their retained observations.
+Source/target identity or kind changes produce Changed; unavailable fields and
+unqualified scopes/schemes/generations remain unavailable. Zero object IDs cannot
+prove Same or Different. A Same report with conflicting source/target kinds is
+also Changed. Size and time changes are retained as fresh observations but are
+not content equality or snapshot checks. The
+[Windows file-ID contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+qualifies handle comparisons using file and volume IDs on one computer; the
+[POSIX attribute contract](https://www.gnu.org/software/libc/manual/html_node/Attribute-Meanings.html)
+describes device/inode identity and open-object lifetime. These native reports
+do not provide durable/cross-host identity or universal alias exclusion across
+unqualified providers, mounts or namespaces. Operation-specific capability and
+execution-time qualification remain required.
+
+A missing target remains the batch's earlier native absence observation. It
+produces NotApplicable for comparison, never Different, and is not looked up
+again by this stage. Mapping, lookup and query errors retain their states/codes;
+`source_now` and `target_now` keep independent observations when more than one
+condition is unavailable. Previously unavailable retained metadata cannot gain
+comparison certainty merely because a later query succeeds. No successful empty
+metadata or cached-value substitution hides failed live queries.
+
+Advances perform at most 256 validation/query/comparison steps and observe an
+injected cooperative clock (20 ms default, positive through one second). Rows
+are bounded to 4096 and components to 1 MiB, with lower configurable defaults;
+these are bounds on this result's representations, not process-memory or OS
+handle-capacity promises. Each native basic query returns one complete
+observation. Its reply is committed privately before a cancellation/time yield,
+so resumption does not repeat it. Cancelled jobs expose no partial result.
+Fatal validation/resource/clock failures release staging; exceptions poison
+before rethrow with nonallocating diagnostic construction. Abandonment releases
+private results, while issued immutable payloads retain owners independently.
+All native-owner destruction belongs on workers.
+
+This is self-target evidence, not a copy/move refusal engine, ancestry walk,
+current name-membership proof, frozen operation plan or execution permission.
+A Same identity can inform refusal of a self-target; Different does not establish
+collision freedom, descendant safety or safe replacement. Handles can continue
+to describe old objects after either original basename is replaced. Execution
+must separately revalidate names, parents and relevant capabilities.
+[Source-target evidence](evidence/ck-files-source-target-20261024.json) records
+simulated faults/lifecycle/budgets and native self/hard-link, distinct-file,
+replacement, scope/absence and final-link fixtures.
+
 ## Reported file data ranges
 
 `OpenedEntry::inspect_data_layout` returns `FileDataLayout`: the regular file's

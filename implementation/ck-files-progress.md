@@ -2222,3 +2222,90 @@ UI boundaries (84 domain sources), ckVision-only (463 active files), ckdocs
 WP-01 remains open for self/descendant safety, native name equivalence,
 operation-specific capabilities, remaining inventories, large-view indexes and
 UI/worker integration. WP-02 has not started.
+
+## 2026-10-24 — WP-01 held source/target identity evidence
+
+Added `SourceTargetJob` over bound `HeldChild` sources and a sealed completed
+destination batch. It validates every raw source component and source pointer
+before metadata I/O, then queries both retained objects without a new lookup,
+path reopen or final-link traversal. `HeldChild::inspect_basic` supplies fresh
+metadata through its existing child owner without changing its immutable
+selection snapshot/family. Completed results retain every source and the entire
+destination batch, including target and parent ownership.
+
+Same/Different are available native-identity comparisons only after fresh
+identity and kind reports remain qualified against retained observations.
+Missing targets are NotApplicable, never Different. Mapping, lookup, whole-query
+and individual-field errors stay explicit. Unqualified scopes/schemes, zero IDs,
+generation coverage, changed IDs/kinds and conflicting kinds cannot turn into
+safe negative evidence. Previously unavailable retained metadata cannot gain
+certainty merely because a later read succeeds. Sizes/times can change without
+changing native identity; no content/snapshot equality is claimed.
+
+This supplies evidence for later self-target refusal. It does not implement a
+copy/move refusal engine, descendant walk, current name-membership check or
+execution permission. Native handles may still identify old objects after both
+original names are replaced. Different is not collision freedom or universal
+alias exclusion across unqualified providers/namespaces. Execution still needs
+qualified source/destination names, parents and capabilities.
+
+Each advance has 256 validation/query/comparison steps and an injected cooperative
+slice. Rows/components have configurable caps with hard maxima of 4096/1 MiB.
+Completed basic-query replies are retained privately before cancellation/time
+yields and are not repeated on resume. Fatal validation/resource/clock failures
+release staging; exceptions poison before rethrow. Issued results retain owners
+independently after abandonment. Native calls can block beyond slices, and all
+native-owner retirement belongs on workers.
+
+Twenty-two deterministic cases cover held aliases, distinct IDs, prior absence,
+namespace replacement, every failure state, missing fields, changed IDs/kinds,
+scopes/schemes/zero IDs/generations, conflicting kinds, changing size/time,
+unrepresentable mappings, cancellation, slow calls, 300 rows, full input
+validation, exceptions, clocks, retirement, limits, previously unavailable
+snapshots, UTF-16 byte accounting, empty batches and malformed kinds. Five native
+cases on Mac/Linux and four on Windows qualify same-entry/hard-link aliases,
+distinct files, retained objects after replacement, absence/foreign scopes and
+POSIX final-link non-following. Windows excludes that POSIX-only fixture.
+
+The final **121-file manifest** matches all hosts. All **47 Files suites** pass:
+**405 macOS / 404 Linux / 409 Windows cases**. Final build/test seconds were
+**6.684/1.051**, **5.349/0.179**, **8.663/2.826**. Mac's final two-step fixture update
+follows its initial 21-step build (13.098 s), which compiled the new core, held
+method, affected existing fixtures, both new fixtures and both executables.
+The native inputs remain unchanged from that initial build. The final fixture
+compile was longer than an earlier two-step update (3.372 s); Ninja records show
+an actual **6.563 s compile and 0.076 s link**. Compiled inputs, current hashes,
+output records and every new case marker establish freshness, not elapsed time.
+
+The first Linux build rejected misleading indentation in two test setup lines.
+Those statements were separated without relaxing warnings. The failed driver
+stopped before CTest; final corrected source was rebuilt/tested on every host.
+Linux completed remaining build work, while Windows's final fixture update
+followed its successful broader preliminary build. Failed/stale tests are not
+accepted as validation.
+
+Focused sanitizers compiled all 29 core units, platform adapter, simulator,
+acquisition/refresh/source-target domain and native fixtures, and test host
+(38 units), without cached objects. **105 Mac / 105 Linux / 104 Windows cases**
+passed. Mac ASan+UBSan build/test took **81.822/0.591 s**, Linux ASan+UBSan
+**191.917/0.181**, Windows ASan **108.183/0.530**. This establishes the expanded
+fixture-set baseline; the previous different 35-unit set took
+73.088/162.432/69.077 s. A preliminary same-set Mac sanitizer run passed before
+test-only formatting corrections; its diagnostic was separately hashed and
+removed, and final corrected inputs were compiled/rerun. Strict warnings stayed
+errors throughout.
+
+All final diagnostics were hashed, checked for live owners and removed; full
+fixture-root audits were empty. Current normal builds remain. Mac temporary work
+stayed on S8T; Windows development stayed on V:. No GUI was launched. Validation
+spans UTC 2026-10-23 and 2026-10-24; the local milestone date is 2026-10-24.
+[Source-target evidence](evidence/ck-files-source-target-20261024.json) records
+source/output/log hashes, commands, times, case markers, rejected build,
+preliminary/final cleanup, Ninja timings and repository checks. UI boundaries
+(86 domain sources), ckVision-only (467 active files), ckdocs (24 pages) and
+whitespace checks pass.
+
+WP-01 remains open for descendant safety, operation-specific capabilities,
+native name equivalence, remaining inventories, large-view indexes and UI/worker
+integration. Self-target evidence still needs operation-plan/execution integration.
+WP-02 has not started.
