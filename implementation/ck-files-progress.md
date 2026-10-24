@@ -2780,3 +2780,38 @@ current source bytes. The native filesystem image, helper binaries and loop
 mount were audited, hashed, unmounted/released and removed; diagnostic builds
 were removed after owner/empty-scratch checks. Current normal test builds are
 retained with output hashes and build provenance. No app was launched.
+
+### Bounded held-directory inventory collection
+
+WP-01 adds `DirectoryInventoryJob`: a worker collection through one retained
+cursor for basic/location bookends, all four directory access checks and the
+existing fscrypt policy/key queries. It captures bounded variable payloads,
+seals immutable results only after collection, and supports cancellation/time
+yields without repeating completed query calls. Native errors stay independent;
+malformed results, resource/clock failures and exceptions stop collection and
+release private owners. Completed results retain their exact cursor for worker
+use and retirement.
+
+Cached/before/after directory kinds/IDs must qualify before individual owner
+matches are accepted. Name-rule derivation also rejects contradictory encryption
+observations or unqualified encryption owners. The output is not a snapshot,
+complete preservation inventory or operation authorization.
+
+Twelve deterministic cases cover all query families/denials, every outer query
+cancellation/time/exception boundary, poisoned/abandoned lifetimes, clock
+failures, malformed replies, directory/owner changes, encryption disagreement,
+and independent exact payload totals for all 17 basic metadata fields, all 20
+location fields, top-level diagnostics and native identifier encodings. Two
+native cases verify the held directory, unchanged enumeration/content, owner
+qualification and isolation after original-path replacement. See
+[the directory-inventory evidence](evidence/ck-files-directory-inventory-20261024.json).
+WP-01 remains in progress; WP-02–08 remain unstarted.
+
+Validation on 2026-10-24: all 63 Files suites pass on macOS (511 cases), Linux
+(514) and Windows (514). Each host also passes all 14 focused directory-inventory
+cases after a fresh 43-unit sanitizer build (ASan+UBSan on macOS/Linux, ASan on
+Windows; Linux leak detection enabled, Apple leak detection unavailable).
+All 156 exported inputs match current bytes. Output hashes/build timestamps,
+commands, scope/timing comparisons, native results and cleanup audits are in
+the evidence. Diagnostic builds were removed after owner/empty-scratch checks;
+current normal test builds remain. No application was launched.

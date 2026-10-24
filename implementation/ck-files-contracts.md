@@ -1532,3 +1532,54 @@ unprivileged. Policy/version/reference, absent filesystem-keyring status, v1
 user-field non-applicability and held-directory isolation are checked, with
 positive markers required. This does not validate a loaded key, incomplete
 removal, legacy process keyrings, encrypted data reads or key management.
+
+## Bounded held-directory inventory job
+
+`DirectoryInventoryJob` collects one directory's cached identity, fresh basic
+metadata before/after, location reports before/after, List/Search/AddFile/
+AddDirectory checks, fscrypt policy and filesystem-keyring status. It never
+uses an original pathname, advances enumeration, opens children, reads content,
+elevates privileges, creates probes or mutates anything. There are ten outer
+query invocations; individual native getters may contain multiple OS calls.
+The worker serializes access to the retained cursor with other jobs.
+
+An advance performs at most 32 preparation/query/seal steps and uses the
+injected monotonic clock with a default 20 ms cooperative slice. Cancellation
+is checked between steps. A finished query commits privately before a time or
+cancellation yield and is not repeated on resume. Native calls can block and
+are not interrupted by this budget. No partial result is exposed. Exceptions,
+clock reversal, malformed reply enums/access requests and retention overflow
+poison the job, release staging and prevent further queries. Explicit abandon
+also releases private state; an external completed result retains its worker
+owner independently. Retirement of its last owner can close the native cursor
+and belongs on the worker, not UI dispatch.
+
+Variable retention defaults to 1 MiB, with a hard 8 MiB bound, counting every
+filesystem identifier in its native encoding and every retained diagnostic
+operation string, including nested basic/location fields, policy-absence
+witnesses and derived errors. Fixed observations/arrays have fixed cardinality
+and are bounded separately; this is not an exact allocator-memory quota.
+Bounds are checked without multiplication/addition overflow. Oversized data
+fails collection without truncation or a partial inventory. The cached anchor
+is checked before copying its diagnostic text. Native adapter allocations are
+still governed by their own contracts; this budget bounds retained payloads.
+
+Directory continuity requires Directory kind plus qualified identical cached,
+before and after IDs. A changed ID is retained as Different; denied, missing
+or unqualified identity/kind states remain unavailable. `compare_owner` first
+requires this context to be Same, then qualifies each individual query owner.
+Foreign/unqualified owners never become Same. A native access success or a
+location advertisement is not an operation capability.
+
+Name-rule derivation uses both location reports only after directory continuity
+is qualified. A positive plain-directory rule is rejected if an independent
+policy/key report shows encryption, a different owner or an unqualified owner.
+Raw conflicting observations are retained for review. Other cross-field
+agreement, key availability, permissions, capacity and namespace stability are
+not implied; queries are independent observations at different instants.
+Unsupported or denied queries remain per-field results rather than invented
+absence or a reason to retry them. Completion means these query families were
+attempted, not a snapshot, full metadata/security inventory, preservation
+assessment, reservation, execution permission or user consent. The owning
+worker must still collect entry inventories and revalidate native semantics
+at planning/execution. No Files UI or operation is enabled by this job.
