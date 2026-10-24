@@ -1944,3 +1944,79 @@ native calls and checked after the final call before publication. It cannot
 interrupt a blocked OS call. A read returns a record only after a complete
 bounded read, codec verification and matching row ID. Scratch seal is not an
 fsync, crash-recovery record, native acquisition proof or operation permission.
+
+### Native private index-file backend
+
+`create_native_index_file` implements the worker scratch-byte boundary without
+adding mutation methods to the source adapter. Its caller supplies an existing
+explicit host-native directory; there is no environment/default temporary root,
+path transcoding, process-cwd change or alternate-volume fallback. It refuses
+final links/reparse points, trailing separators and final navigation components.
+Earlier path components retain host navigation semantics. Creation uses a held
+directory, an OS-generated 128-bit random component and exclusive creation;
+preexisting objects are never truncated or adopted. There are at most 64 name
+attempts. A successful byte owner never reopens a pathname.
+
+On POSIX, the held root must be owned by the effective user with exactly 0700
+permissions. Linux currently admits the extended-filesystem family, XFS,
+Btrfs and tmpfs, whose POSIX access-ACL masks enforce the mode class. Other
+index-storage filesystem semantics remain explicitly Unsupported pending
+qualification. macOS admits local APFS/HFS with ownership enforcement
+enabled and no extended ACL entries. A successful `fstatx_np`/filesec property
+query distinguishes absent ACLs from failed queries; `acl_get_fd_np`'s overloaded
+ENOENT is not interpreted as absence. Present ACLs are validated before checking
+entries, using Darwin's documented zero/-1 enumeration convention.
+
+The POSIX file is created 0600 using `openat` with O_EXCL/O_NOFOLLOW/O_CLOEXEC,
+then unlinked through the held root before any data can be written or an owner
+published. Qualification checks regular-file kind, effective-user ownership,
+private mode, zero size and zero links, plus macOS ACL state. The owner retains
+only the descriptor; closing it releases the unnamed file. A failure to unlink
+the newly created empty file is reported as
+`index_file.unlink_empty_cleanup_required`: the selected root may then contain
+an empty scratch artifact requiring cleanup. No data has been written. This
+failure is never reported as successful private storage or silently retried on
+another volume.
+
+Windows first requires FILE_PERSISTENT_ACLS on the held root's volume. It
+creates a new non-directory file relative to that handle with synchronous I/O,
+no sharing or handle inheritance, and FILE_DELETE_ON_CLOSE. The security
+descriptor is supplied at creation with an explicit user owner and protected
+DACL containing exactly two non-inherited FILE_ALL_ACCESS grants: the effective
+thread/process token's user and LocalSystem. The token, ACL and component buffers
+are bounded. After creation, independent native queries verify owner, DACL
+protection, ACE count/type/flags/masks/principals, zero length and one link.
+Failure closes the empty delete-on-close file before returning. Successful
+owners use only the retained handle; file deletion follows its closure.
+
+Reads/writes validate offset plus requested length against the native signed
+offset range before I/O. POSIX uses pread/pwrite; Windows uses explicit seek and
+synchronous ReadFile/WriteFile on the worker's exclusive handle. A native call
+may return short I/O or EOF, which the store handles explicitly. Native failures
+preserve their error domain/code. No retry hides an interrupted/failed operation,
+and no flush/fsync or crash-recovery durability is promised for scratch data.
+These privacy controls trust same-user processes, the OS, privileged administrators
+and the selected filesystem implementation; they are not encryption or secure
+erasure guarantees. Source/destination filesystem support is independent of
+which qualified volume holds the index.
+
+Native tests also exercise record-store integration, non-ASCII root spelling,
+POSIX literal backslashes, root replacement/relocation or native rename refusal,
+EOF/overflow, cleanup, POSIX descriptor inheritance and mode, macOS ACL and
+ownership-disabled refusal, and Windows inheritable Everyone permissions that
+must not reach the index DACL. `CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT` explicitly
+selects a capable fixture volume, independently of build/cache storage. This
+host's S8T ownership-disabled refusal and PRO-BLADE ownership-enabled positive
+tests are both required evidence; the mount's ownership setting is not changed.
+Positive native filesystem coverage here is APFS, ext4 and ReFS; admitting a
+filesystem under its documented permission contract does not replace the
+remaining filesystem-matrix qualification.
+Native factory adoption/file-count coordination, workspace creation, external
+sorting, indexed pane integration and broader filesystem/crash/exhaustion tests
+remain required work.
+
+API references: [Apple ACL retrieval](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_fd.3.html),
+[Apple ACL entry enumeration](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/acl_get_entry.3.html),
+[Linux open semantics](https://man7.org/linux/man-pages/man2/open.2.html),
+[Windows native file creation](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
+and [volume ACL capabilities](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationbyhandlew).

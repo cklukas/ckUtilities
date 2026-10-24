@@ -3114,3 +3114,52 @@ creation, privacy/permission qualification, external sorting and its address
 format, indexed pane integration and large-directory performance remain pending.
 The source read-only adapter gains no mutation methods. WP-01 remains in progress;
 WP-02–08 remain unstarted.
+
+## 2026-10-24 — private native index byte files
+
+WP-01 now implements the native byte backend for the bounded record store.
+Scratch creation takes an explicit native root, creates a new exclusive object
+relative to a held directory and never reopens its name. POSIX roots require
+current-user ownership and private mode on an admitted filesystem; macOS also
+checks ownership enforcement and extended ACL state. POSIX files are unlinked
+before any data is written or an owner published, with close-on-exec descriptors.
+Windows requires persistent ACLs, installs an explicit protected user/LocalSystem
+DACL at creation, verifies it independently, and holds an exclusive synchronous
+delete-on-close handle. Neither source mutation methods nor durability claims
+are added.
+
+The new native tests cover binary seek/overwrite/EOF, overflow rejection,
+lossless record-store integration, non-ASCII root names and POSIX literal
+backslashes, independent owners and cleanup, final symlink/junction refusal,
+root relocation or native rename refusal, POSIX private mode/unlinked descriptors/
+close-on-exec, macOS ACL/ownership-disabled refusal and Windows inherited Everyone
+access that must not reach the file. All 76 Files suites pass on macOS, Linux and
+Windows: 612, 615 and 612 cases. Focused fresh nine-unit sanitizers pass 9 macOS,
+7 Linux and 7 Windows native cases (ASan+UBSan on macOS/Linux, ASan on Windows).
+
+S8T has ownership enforcement disabled, so native private storage correctly
+refuses it. Builds/caches remain on S8T; positive private-file fixtures use the
+explicit ownership-enabled PRO-BLADE temporary root. Both roots are permitted by
+the standing policy and remain empty after tests. The mount setting is unchanged.
+The shared fixture helper accepts an explicitly configured root; its existing
+callers retain their previous default. Windows work remains entirely on V:.
+
+Initial Mac compilation needed the public sys/random.h declaration. The first
+native ACL test then caught acl_get_fd_np's overloaded ENOENT for an absent ACL.
+The backend now uses successful fstatx_np/filesec property presence and support
+checks, following the existing inventory contract, rather than treating failed
+queries as absent ACLs. The empty crash fixture was audited and removed. Final
+full and sanitizer runs include this correction and all required positive markers.
+
+See [the native index-file evidence](evidence/ck-files-index-file-20261024.json)
+for all 187 source fingerprints, exact commands, SDK/output hashes, timing,
+privacy markers and cleanup. APFS/ext4/ReFS are the positive native storage
+coverage here; admitted additional filesystems still need matrix qualification.
+Diagnostic builds and documentation scratch were removed; current verified normal
+test builds remain. No application was launched or visual result claimed.
+
+Workspace creation, pre-adoption file-count coordination, external sorting and
+address persistence, indexed panes, native exhaustion/crash testing and broader
+filesystem qualification remain required. Destination preservation/collision
+capabilities remain unfinished too. WP-01 remains in progress; WP-02–08 remain
+unstarted.

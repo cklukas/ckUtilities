@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ck::testing {
 
@@ -16,7 +17,7 @@ inline std::filesystem::path scratch_root() { return CKTOOLS_TEST_TEMP_ROOT; }
 
 class ScratchDirectory final {
 public:
-    explicit ScratchDirectory(std::string_view prefix) : root_(scratch_root()) {
+    explicit ScratchDirectory(std::string_view prefix, std::filesystem::path root = scratch_root()) : root_(std::move(root)) {
         if (prefix.empty() || prefix.find_first_not_of(
                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") !=
                 std::string_view::npos)
