@@ -818,6 +818,43 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     std::cout
         << "indexed-pane-marks-native-qualified rows=259 total=159 visible=11 hidden=148 bitmap_bytes=576 advances="
         << marking_advances << '\n';
+    CK_CHECK(!pane->begin_source_acquisition(pane->state_stamp()).value());
+    view.display_substring.clear();
+    view.show_hidden = true;
+    const auto reveal_request = take(pane->begin_view_change(pane->state_stamp(), view));
+    IndexedPaneDataJob revealed(pane->data(), reveal_request, view, {{16, 16 * 1024}, 8}, {16, 16 * 1024},
+                                256ULL * 1024 * 1024, pane->marks());
+    std::size_t reveal_steps = 0;
+    while (revealed.state() == IndexedPaneDataJobState::Sorting ||
+           revealed.state() == IndexedPaneDataJobState::Indexing ||
+           revealed.state() == IndexedPaneDataJobState::CountingMarks) {
+        if (++reveal_steps > 10000)
+            throw std::runtime_error("native reveal budget");
+        revealed.advance();
+    }
+    CK_CHECK(pane->publish(take(revealed.completed())) == IndexedPanePublish::Applied);
+    revealed.abandon();
+    CK_CHECK(pane->selection().marks->hidden == 0 && pane->selection().candidates == 159);
+    auto acquisition = take(pane->begin_source_acquisition(pane->state_stamp(), {159, 64 * 1024, 64 * 1024, 16}));
+    std::size_t acquisition_steps = 0;
+    while (acquisition->state() == IndexedSourceJobState::Running) {
+        if (++acquisition_steps > 10000)
+            throw std::runtime_error("native acquisition budget");
+        acquisition->advance();
+    }
+    auto acquired = take(acquisition->completed());
+    CK_CHECK(acquired->sources().size() == 159 && acquired->review_required() && pane->accepts_sources(*acquired));
+    for (const auto &entry : acquired->sources()) {
+        CK_CHECK(entry.discovery_row().scope == pane->data()->row_scope());
+        CK_CHECK(entry.binding_row().scope != entry.discovery_row().scope && entry.held()->metadata().identity.value());
+        CK_CHECK(entry.cached_identity_match() == IdentityComparison::Same);
+        if (entry.held()->name().display_name() == "link")
+            CK_CHECK(*entry.held()->metadata().kind.value() == link_kind);
+    }
+    std::cout << "indexed-pane-sources-native-qualified rows=259 acquired=159 review_required=1 advances="
+              << acquisition_steps << " names=" << acquired->native_name_bytes()
+              << " diagnostics=" << acquired->diagnostic_bytes() << '\n';
+    acquisition->abandon();
     mark(IndexedClearMarks{});
     job.reset();
     result.reset();
@@ -826,6 +863,8 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     pane.reset();
     CK_CHECK(!captured.page->stamp().current() && captured.page->rows().size() == 11);
     CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
+    CK_CHECK(!acquired->stamp().current() && acquired->sources().front().held()->inspect_basic().value());
+    acquired.reset();
 }
 CK_TEST(index_listing_native_rejects_observed_directory_changes_after_enumeration) {
     const ck::testing::ScratchDirectory source("files-index-listing-change");

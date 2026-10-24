@@ -267,7 +267,7 @@ void IndexedPane::invalidate() noexcept {
     stamp_.reset();
 }
 PaneStateStamp IndexedPane::state_stamp() const {
-    if (!stamp_)
+    if (!stamp_ || !stamp_->current.load(std::memory_order_acquire))
         stamp_ = std::make_shared<PaneStateStamp::Token>();
     PaneStateStamp result;
     result.token_ = stamp_;
@@ -690,5 +690,28 @@ IndexedPaneSelection IndexedPane::selection() const noexcept {
         result.candidates = 1;
     }
     return result;
+}
+Observation<std::unique_ptr<IndexedPaneSourceJob>> IndexedPane::begin_source_acquisition(const PaneStateStamp &stamp,
+                                                                                         IndexedSourceLimits limits) {
+    using Result = Observation<std::unique_ptr<IndexedPaneSourceJob>>;
+    const auto selected = selection();
+    if (!accepts(stamp) || selected.state != PaneSourcesState::Ready || !selected.candidates) {
+        const auto e = error(AdapterError::InvalidAccess, "indexed_sources.selection");
+        return Result::unavailable(e.state, e.error);
+    }
+    auto job = std::unique_ptr<IndexedPaneSourceJob>(
+        new IndexedPaneSourceJob(data_, marks_, focus_, stamp, selected.origin, selected.candidates, limits));
+    if (job->state() != IndexedSourceJobState::Running) {
+        const auto &e = *job->failure();
+        return Result::unavailable(e.state, e.error);
+    }
+    return Result::available(std::move(job));
+}
+bool IndexedPane::accepts_sources(const CompletedIndexedSources &sources) const noexcept {
+    const auto selected = selection();
+    return accepts(sources.stamp_) && data_ && sources.dataset_ == data_->revision_ &&
+           sources.marks_ == (marks_ ? std::optional<AdapterScope>(marks_->revision()) : std::nullopt) &&
+           selected.state == PaneSourcesState::Ready && selected.origin == sources.origin_ &&
+           selected.candidates == sources.sources_.size();
 }
 } // namespace ck::files

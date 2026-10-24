@@ -21,6 +21,7 @@ private:
     std::shared_ptr<Token> token_;
     friend class PaneModel;
     friend class IndexedPane;
+    friend class IndexedPaneSourceJob;
 };
 struct ListedEntry;
 class CompletedPaneListing;

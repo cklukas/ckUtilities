@@ -40,6 +40,7 @@ class DirectoryIndexMarks final {
   private:
     friend class IndexedPaneMarkJob;
     friend class DirectoryMarksRecountJob;
+    friend class IndexedPaneSourceJob;
     using Bits = std::array<std::byte, 512>;
     DirectoryIndexMarks(std::unique_ptr<IndexByteFile> file, std::shared_ptr<IndexFileFactory> factory,
                         std::shared_ptr<IndexStorageBudget> budget, AdapterScope scope,

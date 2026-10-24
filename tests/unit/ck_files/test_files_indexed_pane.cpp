@@ -96,6 +96,14 @@ struct Script {
     std::function<void()> on_read, on_inspect;
     bool root_id = true, foreign_child = false, changed = false, foreign_root = false, scope_changed = false;
     bool throw_inspect = false;
+    bool throw_child_inspect = false, missing_child_id = false, missing_child_kind = false,
+         unknown_child_scheme = false;
+    std::uint64_t child_id = 2;
+    ObjectKind child_kind = ObjectKind::RegularFile;
+    std::string child_extra_error;
+    std::optional<UnavailableObservation> child_identity_error, child_kind_error;
+    std::function<void()> on_child_inspect;
+    int child_live = 0;
     int reads = 0, inspections = 0, live = 0, opened = 0;
 };
 ObjectIdentity fixture_identity(const AdapterScope &scope, std::uint64_t id) {
@@ -104,14 +112,35 @@ ObjectIdentity fixture_identity(const AdapterScope &scope, std::uint64_t id) {
 class Entry final : public OpenedEntry {
   public:
     explicit Entry(std::shared_ptr<Script> s) : s_(std::move(s)) {
+        ++s_->child_live;
+    }
+    ~Entry() override {
+        --s_->child_live;
     }
     Observation<BasicMetadata> inspect_basic() const override {
+        if (s_->on_child_inspect)
+            s_->on_child_inspect();
+        if (s_->throw_child_inspect)
+            throw std::runtime_error("child inspect");
         if (s_->metadata_error)
             return Observation<BasicMetadata>::unavailable(s_->metadata_error->state, s_->metadata_error->error);
         BasicMetadata m;
-        m.kind = Observation<ObjectKind>::available(ObjectKind::RegularFile);
-        m.identity =
-            Observation<ObjectIdentity>::available(fixture_identity(s_->foreign_child ? AdapterScope{} : s_->scope, 2));
+        if (!s_->missing_child_kind)
+            m.kind = Observation<ObjectKind>::available(s_->child_kind);
+        if (!s_->missing_child_id) {
+            auto id = fixture_identity(s_->foreign_child ? AdapterScope{} : s_->scope, s_->child_id);
+            if (s_->unknown_child_scheme)
+                id.scheme = IdentityScheme::Unknown;
+            m.identity = Observation<ObjectIdentity>::available(std::move(id));
+        }
+        if (!s_->child_extra_error.empty())
+            m.logical_size = Observation<std::uint64_t>::unavailable(ObservationState::Denied,
+                                                                     {ErrorDomain::Posix, 13, s_->child_extra_error});
+        if (s_->child_identity_error)
+            m.identity = Observation<ObjectIdentity>::unavailable(s_->child_identity_error->state,
+                                                                  s_->child_identity_error->error);
+        if (s_->child_kind_error)
+            m.kind = Observation<ObjectKind>::unavailable(s_->child_kind_error->state, s_->child_kind_error->error);
         return Observation<BasicMetadata>::available(std::move(m));
     }
 
@@ -193,7 +222,7 @@ struct Fixture {
             model, factory, budget, generation, limits, sort_limits);
     }
     void released() {
-        CK_CHECK(s->live == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
+        CK_CHECK(s->live == 0 && s->child_live == 0 && budget->charged_files() == 0 && budget->charged_bytes() == 0);
     }
 };
 std::size_t finish(DirectoryIndexListingJob &job) {
@@ -1030,4 +1059,289 @@ CK_TEST(indexed_marks_inconsistent_popcount_invalidates_snapshot_during_change_a
         mark(pane, IndexedClearMarks{});
         CK_CHECK(!pane.marks() && page(pane)->rows().size() == 3);
     }
+}
+
+namespace {
+std::size_t finish(IndexedPaneSourceJob &job) {
+    std::size_t steps = 0;
+    while (job.state() == IndexedSourceJobState::Running) {
+        if (++steps > 10000)
+            throw std::runtime_error("source job step budget");
+        job.advance();
+    }
+    return steps;
+}
+} // namespace
+CK_TEST(indexed_sources_cursor_uses_new_binding_ids_and_result_pins_no_index_files) {
+    Fixture f;
+    IndexedPaneSourceJob::Result saved;
+    {
+        IndexedPane pane;
+        initialize(pane, f);
+        const auto original = page(pane)->rows()[0].id;
+        const auto opens = f.s->opened;
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+        CK_CHECK(f.s->opened == opens);
+        CK_CHECK(finish(*job) == 3);
+        saved = take(job->completed());
+        CK_CHECK(pane.accepts_sources(*saved) && saved->review_required() && saved->sources().size() == 1);
+        const auto &source = saved->sources()[0];
+        CK_CHECK(source.discovery_row() == original && source.binding_row().scope != original.scope);
+        CK_CHECK(source.binding_row().number == 1 && source.held()->name().display_name() == ".a");
+        CK_CHECK(source.cached_identity_match() == IdentityComparison::Same && saved->native_name_bytes() == 2);
+        CK_CHECK(f.s->opened == opens + 1 && f.s->child_live == 1);
+        auto independently_opened = take(HeldChild::observe(std::make_shared<Cursor>(f.s), source.held()->name()));
+        CK_CHECK(!source.held()->continues(*independently_opened));
+    }
+    CK_CHECK(!saved->stamp().current() && f.s->live == 1 && f.s->child_live == 1);
+    CK_CHECK(f.budget->charged_bytes() == 0 && f.budget->charged_files() == 0);
+    CK_CHECK(saved->sources()[0].held()->inspect_basic().value());
+    saved.reset();
+    f.released();
+}
+CK_TEST(indexed_sources_marks_are_complete_and_hidden_or_oversized_selections_reject_before_IO) {
+    Fixture f;
+    IndexedPane pane, empty;
+    CK_CHECK(!empty.begin_source_acquisition(empty.state_stamp()).value());
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    const auto opens = f.s->opened;
+    IndexedSourceLimits limit;
+    limit.held_entries = 2;
+    CK_CHECK(!pane.begin_source_acquisition(pane.state_stamp(), limit).value() && f.s->opened == opens);
+    limit.held_entries = 3;
+    limit.scan_rows = 1;
+    auto job = take(pane.begin_source_acquisition(pane.state_stamp(), limit));
+    finish(*job);
+    auto result = take(job->completed());
+    CK_CHECK(result->sources().size() == 3 && f.s->opened == opens + 3);
+    for (std::size_t n = 0; n < 3; ++n)
+        CK_CHECK(result->sources()[n].discovery_row().number == n + 1 &&
+                 result->sources()[n].binding_row().number == n + 1);
+    auto view = pane.data()->view();
+    view.display_substring = "b";
+    view_change(pane, view);
+    const auto after = f.s->opened;
+    CK_CHECK(!pane.accepts_sources(*result) && !job->completed().value());
+    CK_CHECK(!pane.begin_source_acquisition(pane.state_stamp()).value() && f.s->opened == after);
+    auto request = pane.begin_listing(ascending);
+    CK_CHECK(!pane.begin_source_acquisition(pane.state_stamp()).value() && f.s->opened == after);
+    pane.cancel_listing(request);
+}
+CK_TEST(indexed_sources_changed_cached_identity_or_kind_always_requires_fresh_review) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    f.s->child_id = 55;
+    f.s->child_kind = ObjectKind::Directory;
+    auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+    finish(*job);
+    auto result = take(job->completed());
+    CK_CHECK(result->review_required() &&
+             result->sources()[0].cached_identity_match() == IdentityComparison::Different);
+    CK_CHECK(*result->sources()[0].discovery_metadata().value()->kind.value() == ObjectKind::RegularFile);
+    CK_CHECK(*result->sources()[0].held()->metadata().kind.value() == ObjectKind::Directory);
+}
+CK_TEST(indexed_sources_failure_after_private_prefix_releases_all_children_and_preserves_native_error) {
+    for (int fault = 0; fault < 3; ++fault) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        mark(pane, IndexedMarkVisible{true});
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+        while (f.s->child_live == 0 && job->state() == IndexedSourceJobState::Running)
+            job->advance();
+        CK_CHECK(f.s->child_live == 1);
+        std::stop_source stop;
+        const UnavailableObservation denied{ObservationState::Denied, {ErrorDomain::Posix, 13, "acquire denied"}};
+        if (fault == 0)
+            f.s->metadata_error = denied;
+        if (fault == 1)
+            f.s->child_identity_error = denied;
+        if (fault == 2)
+            f.s->child_kind_error = denied;
+        f.s->on_child_inspect = [&] { stop.request_stop(); };
+        while (job->state() == IndexedSourceJobState::Running)
+            job->advance(stop.get_token());
+        CK_CHECK(job->state() == IndexedSourceJobState::Failed && job->failure()->error.code == 13);
+        CK_CHECK(!job->completed().value() && f.s->child_live == 0 && pane.selection().marks->total == 3);
+    }
+}
+CK_TEST(indexed_sources_cancellation_at_every_boundary_releases_private_handles_without_partial_result) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    auto baseline = take(pane.begin_source_acquisition(pane.state_stamp()));
+    const auto steps = finish(*baseline);
+    CK_CHECK(baseline->state() == IndexedSourceJobState::Complete);
+    baseline->abandon();
+    const auto bytes = f.budget->charged_bytes();
+    for (std::size_t boundary = 0; boundary < steps; ++boundary) {
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+        for (std::size_t n = 0; n < boundary; ++n)
+            job->advance();
+        std::stop_source stop;
+        stop.request_stop();
+        CK_CHECK(job->advance(stop.get_token()) == IndexedSourceJobState::Cancelled);
+        CK_CHECK(!job->completed().value() && f.s->child_live == 0 && f.budget->charged_bytes() == bytes);
+    }
+}
+CK_TEST(indexed_sources_new_request_during_native_read_wins_and_completed_results_revoke) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+    PaneListingRequest request;
+    f.s->on_child_inspect = [&] { request = pane.begin_listing(descending); };
+    finish(*job);
+    CK_CHECK(job->state() == IndexedSourceJobState::Stale && !job->completed().value() && f.s->child_live == 0);
+    f.s->on_child_inspect = {};
+    pane.cancel_listing(request);
+    job = take(pane.begin_source_acquisition(pane.state_stamp()));
+    finish(*job);
+    auto result = take(job->completed());
+    auto rows = page(pane);
+    pane.focus(rows->stamp(), rows->rows()[1].id);
+    CK_CHECK(!pane.accepts_sources(*result) && !job->completed().value() && !result->stamp().current());
+}
+CK_TEST(indexed_sources_unqualified_parent_or_child_cannot_become_acquired_sources) {
+    for (int fault = 0; fault < 7; ++fault) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        if (fault == 0)
+            f.s->root_id = false;
+        if (fault == 1)
+            f.s->scope_changed = true;
+        if (fault == 2)
+            f.s->missing_child_id = true;
+        if (fault == 3)
+            f.s->foreign_child = true;
+        if (fault == 4)
+            f.s->unknown_child_scheme = true;
+        if (fault == 5)
+            f.s->missing_child_kind = true;
+        if (fault == 6)
+            f.s->child_kind = static_cast<ObjectKind>(-1);
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+        finish(*job);
+        CK_CHECK(job->state() == IndexedSourceJobState::Failed && !job->completed().value() && f.s->child_live == 0);
+    }
+}
+CK_TEST(indexed_sources_name_wire_and_diagnostic_limits_fail_without_truncating_selection) {
+    for (int fault = 0; fault < 3; ++fault) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        const auto opens = f.s->opened;
+        IndexedSourceLimits limits;
+        if (fault == 0)
+            limits.native_name_bytes = 1;
+        if (fault == 1)
+            limits.wire_bytes = 16;
+        if (fault == 2) {
+            limits.diagnostic_bytes = 1;
+            f.s->child_extra_error = "fresh diagnostic";
+        }
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp(), limits));
+        finish(*job);
+        CK_CHECK(job->state() == IndexedSourceJobState::Failed && !job->completed().value() && f.s->child_live == 0);
+        CK_CHECK(f.s->opened == opens + (fault == 2 ? 1 : 0));
+        CK_CHECK(pane.selection().state == PaneSourcesState::Ready);
+    }
+}
+CK_TEST(indexed_sources_mark_corruption_revokes_snapshot_and_stamp_and_allows_explicit_recovery) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkVisible{true});
+    auto file = f.c->files.back();
+    file->data[60] ^= std::byte{1};
+    const auto crc = detail::directory_index_crc32c(std::span<const std::byte>(file->data).first(572));
+    for (std::size_t n = 0; n < 4; ++n)
+        file->data[572 + n] = static_cast<std::byte>((crc >> (8 * n)) & 255);
+    auto old = pane.state_stamp();
+    auto job = take(pane.begin_source_acquisition(old));
+    finish(*job);
+    CK_CHECK(job->state() == IndexedSourceJobState::Failed &&
+             job->failure()->error.operation == "indexed_sources.mark_count");
+    CK_CHECK(!old.current() && pane.selection().state == PaneSourcesState::SelectionInvalidated &&
+             f.s->child_live == 0);
+    CK_CHECK(pane.accepts(pane.state_stamp()));
+    mark(pane, IndexedClearMarks{});
+    CK_CHECK(page(pane)->selection().state == PaneSourcesState::Ready);
+}
+CK_TEST(indexed_sources_parent_change_and_native_exceptions_discard_private_batch) {
+    for (int fault = 0; fault < 3; ++fault) {
+        Fixture f;
+        IndexedPane pane;
+        initialize(pane, f);
+        auto job = take(pane.begin_source_acquisition(pane.state_stamp()));
+        if (fault == 0)
+            f.s->on_child_inspect = [&] { f.s->changed = true; };
+        if (fault == 1)
+            f.s->throw_child_inspect = true;
+        if (fault == 2)
+            f.s->on_child_inspect = [&] { f.s->throw_inspect = true; };
+        bool threw = false;
+        try {
+            finish(*job);
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CK_CHECK(threw == (fault != 0) && job->state() == IndexedSourceJobState::Failed);
+        CK_CHECK(!job->completed().value() && f.s->child_live == 0);
+        if (fault == 0)
+            CK_CHECK(job->failure()->state == ObservationState::Changed);
+    }
+}
+CK_TEST(indexed_sources_use_lossless_native_names_and_invalid_limits_leave_stamp_current) {
+    Fixture f({"a"});
+    f.s->names[0] = *NativeName::from_posix(std::string("a\n\xFF", 3));
+    IndexedPane pane;
+    initialize(pane, f);
+    auto stamp = pane.state_stamp();
+    IndexedSourceLimits invalid;
+    invalid.scan_rows = 0;
+    bool threw = false;
+    try {
+        pane.begin_source_acquisition(stamp, invalid);
+    } catch (const std::invalid_argument &) {
+        threw = true;
+    }
+    CK_CHECK(threw && pane.accepts(stamp));
+    auto job = take(pane.begin_source_acquisition(stamp));
+    finish(*job);
+    auto result = take(job->completed());
+    CK_CHECK(result->sources()[0].held()->name() == f.s->names[0] && result->native_name_bytes() == 3);
+}
+CK_TEST(indexed_sources_excluded_mark_contradiction_invalidates_snapshot_instead_of_reusing_cached_counts) {
+    Fixture f;
+    IndexedPane pane;
+    initialize(pane, f);
+    mark(pane, IndexedMarkRow{page(pane)->rows()[1].id, true});
+    auto view = pane.data()->view();
+    view.display_substring = "b";
+    view_change(pane, view);
+    CK_CHECK(pane.selection().candidates == 1);
+    std::shared_ptr<File> bitmap;
+    for (auto &file : f.c->files)
+        if (!file->closed && file->data.size() == 576)
+            bitmap = file;
+    CK_CHECK(bitmap);
+    bitmap->data[60] ^= std::byte{5}; // original row3 -> row1, preserving popcount
+    const auto crc = detail::directory_index_crc32c(std::span<const std::byte>(bitmap->data).first(572));
+    for (std::size_t n = 0; n < 4; ++n)
+        bitmap->data[572 + n] = static_cast<std::byte>((crc >> (8 * n)) & 255);
+    const auto stamp = pane.state_stamp();
+    const auto opens = f.s->opened;
+    auto job = take(pane.begin_source_acquisition(stamp));
+    finish(*job);
+    CK_CHECK(job->state() == IndexedSourceJobState::Failed &&
+             job->failure()->error.operation == "indexed_sources.excluded_selection");
+    CK_CHECK(!stamp.current() && f.s->opened == opens &&
+             pane.selection().state == PaneSourcesState::SelectionInvalidated);
+    mark(pane, IndexedClearMarks{});
+    CK_CHECK(!pane.marks() && pane.selection().candidates == 0);
 }

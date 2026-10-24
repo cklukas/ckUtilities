@@ -5,6 +5,7 @@
 #include "directory_index_lookup.hpp"
 #include "pane_page.hpp"
 #include "indexed_pane_marks.hpp"
+#include "indexed_pane_sources.hpp"
 namespace ck::files {
 enum class IndexedPaneDataOrigin { Listing, Reorder };
 class IndexedPaneDataJob;
@@ -43,6 +44,7 @@ class CompletedIndexedPaneData final {
     friend class IndexedPaneDataJob;
     friend class IndexedPane;
     friend class IndexedPaneMarkJob;
+    friend class IndexedPaneSourceJob;
     CompletedIndexedPaneData(PaneListingRequest request, PaneOrder order, PaneView view, IndexedPaneDataOrigin origin,
                              AdapterScope scope, std::optional<AdapterScope> predecessor,
                              Observation<ObjectIdentity> directory, Observation<BasicMetadata> before,
@@ -242,6 +244,10 @@ class IndexedPane final {
     bool fail_marks(const PaneStateStamp &stamp, UnavailableObservation failure);
     bool cancel_marks(const PaneStateStamp &stamp) noexcept;
     IndexedPaneSelection selection() const noexcept;
+    Observation<std::unique_ptr<IndexedPaneSourceJob>> begin_source_acquisition(const PaneStateStamp &stamp,
+                                                                                IndexedSourceLimits limits = {});
+    // Review delivery only; never an operation permission or continuity proof.
+    bool accepts_sources(const CompletedIndexedSources &sources) const noexcept;
     const std::shared_ptr<DirectoryIndexMarks> &marks() const noexcept {
         return marks_;
     } // worker only

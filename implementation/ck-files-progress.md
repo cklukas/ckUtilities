@@ -3549,3 +3549,57 @@ preservation/collision capabilities and broader qualification remain required.
 The native/core cases do not establish a rendered Files UI, full-app latency/RSS
 or 100,000-real-entry directory acceptance. WP-01 remains in progress; WP-02–08
 remain unstarted. No production copy/move/delete API is introduced.
+
+## 2026-10-24 — indexed selection acquisition into fresh held bindings
+
+WP-01 now prepares bounded native source batches from the current indexed
+cursor or visible marks. Empty, pending, invalidated and hidden-mark selections
+reject before I/O. The complete selection must fit the explicit held-entry
+budget (default 1,024, hard maximum 4,096), with independent native-name,
+diagnostic and source-read limits. No prefix, truncation or dropped/reopened pin
+can substitute for the requested selection.
+
+Bitmap scanning retains one block and bounds original-row work per advance.
+Selected IDs resolve through checked lookup and one-row source reads, then open
+one native child per acquire advance using MetadataOnly/no-follow access.
+Parent source namespace, qualified identities, kinds and observable directory
+changes are checked around acquisition. Unknown/denied identities cannot be
+confirmed away. Native failures, including required identity/kind field errors,
+remain explicit when cancellation arrives concurrently.
+
+Each child has a fresh held family and binding-ID namespace. Discovery IDs and
+metadata remain separate observations; even a matching cached ID does not prove
+continuity with an unheld discovery row. Every completed batch requires source
+review and grants no copy/move/delete authority. Exceptions, failures,
+cancellation and stale requests discard all staged children. Mark-count or
+selected-but-excluded contradictions invalidate the snapshot and stamp, with
+explicit clear recovery available through a fresh pane stamp.
+
+Completed worker batches retain held children and bounded metadata without
+pinning index/bitmap files. Review delivery checks the exact current stamp,
+dataset/mark revision, selection origin and count. The native 259-entry pipeline
+reveals the hidden selection, acquires all 159 selected objects including the
+link/junction without following it, verifies fresh binding IDs and mandatory
+review, and retires every index file while acquired children remain readable.
+
+Twelve deterministic cases cover fresh IDs and matching/replaced cached IDs,
+hidden/pending/count limits, private-prefix failure, each-boundary cancellation,
+stale native replies, parent/child identity uncertainty, native-name/wire/text
+budgets, CRC-valid count/exclusion contradictions, directory changes,
+exceptions and lossless names. The failure-priority case separately exercises
+whole-metadata, required-identity and required-kind denial during cancellation.
+
+All 81 Files suites pass: 732 cases on macOS, 735 on Linux and 731 on Windows.
+Fresh 68-unit sanitizer builds pass 168/166/165 focused cases, with ASan+UBSan
+on Mac/Linux and ASan on Windows. Final reviewed checks include required-field
+failure priority during cancellation. See [the source acquisition evidence](evidence/ck-files-indexed-sources-20261024.json)
+for 214 source fingerprints, actual compiler unit sets, commands, timings,
+native markers, output hashes and cleanup.
+
+Connecting full native inventories to these held indexed bindings, destination
+preservation/collision capabilities and broader qualification remain required.
+The held-entry bound is per batch; application queue/result retention must also
+be bounded. Larger operation batching belongs to its engine and review policy.
+No rendered Files UI, full-app latency/RSS, filesystem snapshot or
+100,000-real-entry directory qualification is claimed. WP-01 remains in progress;
+WP-02–08 remain unstarted.

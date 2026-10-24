@@ -2526,3 +2526,58 @@ text. They own neither bitmap/native handles nor dataset stores, and remain
 readable after worker retirement with their stamps revoked. Bounded page reads
 reject the entire page on mark I/O failure; generation checks discard replies
 superseded during I/O.
+
+### Indexed selection acquisition into fresh held bindings
+
+`IndexedPane::begin_source_acquisition` captures a current Ready selection for
+`IndexedPaneSourceJob`. Empty, pending, invalidated and hidden-mark selections
+reject before I/O. The complete candidate count must fit the explicit held
+resource limit (default 1,024, maximum 4,096); the job never truncates selection,
+drops safety pins or silently reopens earlier objects to bypass that limit.
+Larger operation batching remains a separate engine concern.
+
+The worker scans original-ID bitmap blocks, examines at most the configured
+1–4,096 rows per scan advance, and retains one bitmap block. Only selected IDs
+resolve through reciprocal disk lookup and a bounded one-row source page.
+Cursor acquisition resolves its one visible focus directly. Names come from
+the checked lossless native record, never escaped display text or a reconstructed
+pathname. An acquire advance opens at most one child with MetadataOnly access,
+without following its final link. Byte limits independently bound retained
+native names, cached/fresh metadata diagnostics and each source read.
+
+Before and after the batch, the job checks the retained directory's live source
+namespace, qualified identity and Directory kind, plus observable contradictions
+against the retained listing baseline and its own before observation. Child
+identity must be qualified in that native namespace and kind must be available
+and valid. Unknown/denied/malformed observations and native failures cannot be
+confirmed away. Native errors are examined before a concurrent cancellation can
+mask them. These checks establish neither a filesystem snapshot nor frozen
+contents or pathname membership.
+
+Each successful child gets a new sealed `HeldChild` family and a binding row ID
+in a fresh namespace. The discovery key and metadata remain separate review
+evidence. Even an equal cached native ID cannot prove continuity with an unheld
+discovery observation: inode/file-ID reuse remains possible. Every completed
+batch therefore reports `review_required=true`. A changed cached identity or
+kind is visible in the old/fresh observations; it is never silently adopted as
+the old selection. Existing held-family refresh remains the separate mechanism
+for qualified continuity.
+
+No prefix result is exposed. Cancellation, stale requests, exceptions, resource
+failures, native errors or directory changes release the entire staged batch.
+Bitmap popcount contradictions revoke the mark snapshot. A selected bitmap key
+that resolves excluded also invalidates that snapshot, even if its CRC and total
+popcount are internally valid; cached visible counts cannot then be reused.
+Detected cache failures revoke the captured stamp, and the serialized pane can
+issue a new stamp for explicit recovery. A stale worker never revokes a newer
+generation's token. Native acquisition failures alone do not rewrite discovery
+marks or claim that cached entries disappeared.
+
+Completed batches retain only fresh held children, bounded metadata, identity
+tokens and their state stamp, without owning the index dataset or bitmap files.
+They belong on the owning worker. `accepts_sources` gates review delivery against
+the exact pane stamp, dataset revision, mark revision, origin and count. A later
+selection/view/navigation change revokes delivery; saved observations remain
+readable through their held objects. Neither this gate nor the result authorizes
+copy, move, deletion, a metadata-loss waiver or native mutation. Full preservation
+inventory, fresh operation-specific validation and consent remain required.
