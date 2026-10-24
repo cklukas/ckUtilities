@@ -2631,3 +2631,40 @@ queue limit. Callers must bound active jobs and retained inventories, associate
 results with the current request and honor indexed source review. No copy/move/
 delete API, preservation-loss waiver, access elevation or mutation authority is
 introduced by this bridge.
+
+### Destination directory observations
+
+`DestinationDirectoryAssessment::inspect` retains one sealed completed directory
+inventory on its owning worker. It performs no native I/O, probe, pathname reopen,
+write or filesystem-label inference. It reports twelve native volume-feature
+advertisements, read-only mount observations, and the recorded AddFile/AddDirectory
+access checks. Advertised and NotAdvertised describe the native advertisement;
+neither proves that a particular object's metadata can be preserved or that a
+feature is absent. Missing mappings and native refusals remain unavailable.
+
+Context requires a qualified directory anchor, before/after identities and kinds,
+and matching location owners, query families and identity schemes. A known feature
+domain must match its native query family. Contradictory available filesystem IDs,
+mount/case/inode flags or modification/change timestamps reject context. Missing
+optional fields are not invented. This is agreement among bounded live observations,
+not an atomic snapshot or a guarantee that the directory remains unchanged.
+
+Each advertisement checks both bookends. Raw native query refusals take priority
+over missing feature mappings; a changed advertisement stays Changed. Read-only
+bookends must both be available and equal. Creation observations first preserve
+access refusals, then qualify owner, requested operation, native family and mask.
+Windows requires read-attributes/synchronize plus the requested add right; POSIX
+requires write and search. Additional sufficient access does not invalidate the
+check. ReadOnlyMountReported and AccessReportedWithoutReadOnlyMount describe only
+those observations. The read-only accessor remains independent when access fails.
+Names, collisions, immutable flags, quotas, inheritance, providers, preservation
+and actual execution need their own checks. No operation permission, automatic
+access upgrade or metadata-loss consent follows from this assessment.
+
+All newly retained diagnostic strings, including invalid-request diagnostics,
+count toward a default 1 MiB budget with an 8 MiB hard maximum. Budget exhaustion
+returns no partial assessment; the original inventory remains intact. Already-owned
+inventory bytes are separate. Fixed-size, const noexcept getters allocate nothing.
+The assessment retains its exact inventory/native directory until worker retirement;
+callers must bound concurrent and retained results and associate them with the
+current operation request. No copy/move/delete API is introduced.

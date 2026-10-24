@@ -3653,3 +3653,40 @@ filesystem qualification remain required. These are bounded query observations,
 not complete preservation coverage, a filesystem snapshot, metadata-loss consent
 or copy/move/delete authority. Global worker/result retention still needs bounds
 in the application. WP-01 remains in progress; WP-02–08 remain unstarted.
+
+## 2026-10-24 — qualified destination directory observations
+
+WP-01 now derives `DestinationDirectoryAssessment` from an exact completed native
+directory inventory. It performs no additional I/O, probe, pathname reopening or
+write. Twelve native feature advertisements, read-only mount observations and
+recorded AddFile/AddDirectory access checks remain distinct. Filesystem labels
+never supply inferred capabilities. Advertised/NotAdvertised describe native
+reports, not preservation guarantees or permission to execute an operation.
+
+The assessment qualifies directory identity/kind, query owners, native family,
+identity scheme and feature domain. Contradictory available location fields,
+mount/case/inode flags or directory timestamps reject context. Raw native feature
+refusals remain visible even when a feature mapping is absent. Creation checks
+validate the requested native rights and owner while preserving access failures;
+read-only state remains separately visible. Neither a successful access query nor
+a non-read-only mount settles names, collisions, flags, quota, inheritance,
+providers or metadata preservation.
+
+All newly retained diagnostics have an explicit budget. Exhaustion publishes no
+partial report. Const getters allocate nothing; the result retains its exact
+inventory and native directory until worker retirement. Nine deterministic cases
+cover native mappings, qualification contradictions, error priority, access masks,
+read-only state, budgets and invalid requests. The existing native 259-entry
+pipeline now checks all twelve derived advertisements and both access observations
+against actual native queries on APFS, ext4 and ReFS.
+
+All 82 normal Files suites pass: 750 cases on macOS, 753 on Linux and 749 on
+Windows. Fresh 71-unit sanitizer builds pass 211/209/208 focused cases with
+ASan+UBSan on Mac/Linux and ASan on Windows. See [the destination assessment
+evidence](evidence/ck-files-destination-assessment-20261024.json) for 217 source
+fingerprints, compiler inputs, native markers, commands, timings, output hashes
+and cleanup. All diagnostic builds were retired after process and fixture checks.
+WP-01 remains in progress; WP-02–08 remain unstarted. Full preservation/collision
+capabilities, operation-specific validation, scoped loss consent and broader
+filesystem qualification remain required. No Files UI or copy/move/delete API
+is introduced by this assessment.

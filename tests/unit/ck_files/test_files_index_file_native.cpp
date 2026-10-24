@@ -6,6 +6,7 @@
 #include "directory_index_lookup.hpp"
 #include "indexed_pane.hpp"
 #include "object_inventory_job.hpp"
+#include "destination_directory_assessment.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -678,15 +679,18 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
 #ifdef _WIN32
     {
         std::ofstream stream(source.path() / "entry-0:ckInventory", std::ios::binary);
-        stream.write(reinterpret_cast<const char*>(feature_bytes.data()), feature_bytes.size());
+        stream.write(reinterpret_cast<const char *>(feature_bytes.data()), feature_bytes.size());
         stream.close();
-        if (!stream) throw std::runtime_error("write native held inventory stream");
+        if (!stream)
+            throw std::runtime_error("write native held inventory stream");
     }
 #elif defined(__APPLE__)
-    if (setxattr((source.path() / "entry-0").c_str(), "com.ckutilities.bound", feature_bytes.data(), feature_bytes.size(), 0, 0) != 0)
+    if (setxattr((source.path() / "entry-0").c_str(), "com.ckutilities.bound", feature_bytes.data(),
+                 feature_bytes.size(), 0, 0) != 0)
         throw std::runtime_error("write native held inventory xattr");
 #else
-    if (setxattr((source.path() / "entry-0").c_str(), "user.ckutilities.bound", feature_bytes.data(), feature_bytes.size(), 0) != 0)
+    if (setxattr((source.path() / "entry-0").c_str(), "user.ckutilities.bound", feature_bytes.data(),
+                 feature_bytes.size(), 0) != 0)
         throw std::runtime_error("write native held inventory xattr");
 #endif
     fs::create_directory(source.path() / "directory");
@@ -873,18 +877,19 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
               << " diagnostics=" << acquired->diagnostic_bytes() << '\n';
     acquisition->abandon();
     mark(IndexedClearMarks{});
-    const auto wanted = std::find_if(acquired->sources().begin(), acquired->sources().end(), [](const auto& entry) {
+    const auto wanted = std::find_if(acquired->sources().begin(), acquired->sources().end(), [](const auto &entry) {
         return entry.held()->name().display_name() == "entry-0";
     });
     CK_CHECK(wanted != acquired->sources().end());
     CK_CHECK(pane->focus(pane->state_stamp(), wanted->discovery_row()) == IndexedPaneFocus::Applied);
     IndexedSourceLimits full_limits;
     full_limits.access = EntryAccess::MetadataAndAttributes | EntryAccess::MetadataAndSecurity |
-        EntryAccess::MetadataAndLayout | EntryAccess::MetadataAndInodeFlags;
+                         EntryAccess::MetadataAndLayout | EntryAccess::MetadataAndInodeFlags;
     auto full_acquisition = take(pane->begin_source_acquisition(pane->state_stamp(), full_limits));
     std::size_t full_steps = 0;
     while (full_acquisition->state() == IndexedSourceJobState::Running) {
-        if (++full_steps > 100) throw std::runtime_error("native full access acquisition budget");
+        if (++full_steps > 100)
+            throw std::runtime_error("native full access acquisition budget");
         full_acquisition->advance();
     }
     auto full_source = take(full_acquisition->completed());
@@ -894,47 +899,102 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
     {
         std::ofstream replacement(source.path() / "entry-0", std::ios::binary);
         replacement << "replacement";
-        if (!replacement) throw std::runtime_error("write native inventory replacement");
+        if (!replacement)
+            throw std::runtime_error("write native inventory replacement");
     }
     std::size_t inventory_steps = 0;
-    while (inventory_job->state() == ObjectInventoryJobState::Collecting || inventory_job->state() == ObjectInventoryJobState::Paused) {
-        if (++inventory_steps > 100) throw std::runtime_error("native held inventory budget");
+    while (inventory_job->state() == ObjectInventoryJobState::Collecting ||
+           inventory_job->state() == ObjectInventoryJobState::Paused) {
+        if (++inventory_steps > 100)
+            throw std::runtime_error("native held inventory budget");
         inventory_job->advance();
     }
     auto inventory = take(inventory_job->completed());
     CK_CHECK(inventory->held_source_for_worker() == full_source->sources()[0].held());
     CK_CHECK(take(inventory->held_identity_continuity()) == IdentityComparison::Same);
-    CK_CHECK(take(inventory->data().before.value()->logical_size) == 7 && take(inventory->data().after.value()->logical_size) == 7);
+    CK_CHECK(take(inventory->data().before.value()->logical_size) == 7 &&
+             take(inventory->data().after.value()->logical_size) == 7);
     const auto replacement = take(filesystem.inspect_basic(source.path() / "entry-0"));
-    CK_CHECK(compare_identity(take(replacement.identity), take(inventory->data().before.value()->identity)) == IdentityComparison::Different);
+    CK_CHECK(compare_identity(take(replacement.identity), take(inventory->data().before.value()->identity)) ==
+             IdentityComparison::Different);
     bool found_feature = false;
 #ifdef _WIN32
-    const auto& channels = take(inventory->data().channels);
+    const auto &channels = take(inventory->data().channels);
     CK_CHECK(take(inventory->compare_owner(channels.owner)) == IdentityComparison::Same);
-    for (const auto& channel : channels.channels)
+    for (const auto &channel : channels.channels)
         if (channel.identifier.windows_units() && *channel.identifier.windows_units() == u":ckInventory:$DATA") {
-            CK_CHECK(take(channel.logical_size) == feature_bytes.size()); found_feature = true;
+            CK_CHECK(take(channel.logical_size) == feature_bytes.size());
+            found_feature = true;
         }
 #else
-    const auto& attributes = take(inventory->data().attributes);
+    const auto &attributes = take(inventory->data().attributes);
     CK_CHECK(take(inventory->compare_owner(attributes.owner)) == IdentityComparison::Same);
-    for (const auto& read : inventory->data().attribute_values) {
-        const auto& descriptor = attributes.attributes[read.catalog_index];
+    for (const auto &read : inventory->data().attribute_values) {
+        const auto &descriptor = attributes.attributes[read.catalog_index];
 #ifdef __APPLE__
         constexpr auto feature_name = "com.ckutilities.bound";
 #else
         constexpr auto feature_name = "user.ckutilities.bound";
 #endif
         if (descriptor.identifier.posix_bytes() && *descriptor.identifier.posix_bytes() == feature_name) {
-            const auto& value = take(read.value);
+            const auto &value = take(read.value);
             CK_CHECK(value.bytes == std::vector<std::byte>(feature_bytes.begin(), feature_bytes.end()));
-            CK_CHECK(take(inventory->compare_owner(value.owner)) == IdentityComparison::Same); found_feature = true;
+            CK_CHECK(take(inventory->compare_owner(value.owner)) == IdentityComparison::Same);
+            found_feature = true;
         }
     }
 #endif
     CK_CHECK(found_feature);
     std::cout << "indexed-held-inventory-native-qualified rows=259 acquired=1 feature=1 identity_same=1 advances="
               << inventory_steps << '\n';
+    auto destination_directory = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(source.path())));
+    DirectoryInventoryJob destination_inventory(destination_directory);
+    std::size_t destination_steps = 0;
+    while (destination_inventory.state() == DirectoryInventoryState::Collecting ||
+           destination_inventory.state() == DirectoryInventoryState::Paused) {
+        if (++destination_steps > 100)
+            throw std::runtime_error("native destination inventory budget");
+        destination_inventory.advance();
+    }
+    auto destination = take(DestinationDirectoryAssessment::inspect(take(destination_inventory.completed())));
+    CK_CHECK(take(destination->context()) == IdentityComparison::Same);
+    std::size_t advertised = 0, not_advertised = 0, unavailable_features = 0;
+    const auto &native_location = *destination->inventory_for_worker()->data().location_after.value();
+    for (const auto feature : destination_advertised_features) {
+        const auto &observed = destination->advertisement(feature);
+        const auto raw = advertised_feature(native_location.features, feature);
+        CK_CHECK(observed.state() == raw.state());
+        if (observed.value()) {
+            CK_CHECK(*observed.value() == *raw.value());
+            if (*observed.value() == FeatureAdvertisement::Advertised)
+                ++advertised;
+            else
+                ++not_advertised;
+        } else {
+            CK_CHECK(observed.unavailable_detail()->error == raw.unavailable_detail()->error);
+            ++unavailable_features;
+        }
+    }
+    CK_CHECK(advertised + not_advertised + unavailable_features == destination_advertised_features.size());
+    for (const auto access_request : {DirectoryAccess::AddFile, DirectoryAccess::AddDirectory}) {
+        const auto &access = destination->inventory_for_worker()->data().access[static_cast<std::size_t>(access_request)];
+        const auto &assessed = destination->creation(access_request);
+        if (!access.value())
+            CK_CHECK(assessed.unavailable_detail()->error == access.unavailable_detail()->error);
+        else if (destination->read_only_mount().value())
+            CK_CHECK(take(assessed) == (*destination->read_only_mount().value()
+                                            ? DestinationCreationObservation::ReadOnlyMountReported
+                                            : DestinationCreationObservation::AccessReportedWithoutReadOnlyMount));
+        else
+            CK_CHECK(assessed.unavailable_detail()->error ==
+                     destination->read_only_mount().unavailable_detail()->error);
+    }
+    std::cout << "destination-assessment-native-qualified features=12 advertised=" << advertised
+              << " not_advertised=" << not_advertised << " unavailable=" << unavailable_features
+              << " variable_bytes=" << destination->variable_bytes() << '\n';
+    destination_inventory.abandon();
+    destination_directory.reset();
+    destination.reset();
     inventory_job->abandon();
     full_acquisition->abandon();
     full_source.reset();
