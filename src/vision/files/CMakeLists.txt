@@ -6,6 +6,16 @@ target_compile_features(ck_vision_files PUBLIC cxx_std_20)
 target_include_directories(ck_vision_files PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ck_vision_files PUBLIC ck_files_core ck_vision_shell ck_vision_keymap ckvision::cvision Threads::Threads PRIVATE ck_files_platform)
 cktools_strict(ck_vision_files)
+
+add_executable(ckfiles_ckvision main.cpp)
+target_compile_features(ckfiles_ckvision PRIVATE cxx_std_20)
+target_link_libraries(ckfiles_ckvision PRIVATE ck_vision_host ck_vision_files ck_vision_keymap)
+set_target_properties(ckfiles_ckvision PROPERTIES
+  OUTPUT_NAME "ck-files"
+  RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
+)
+install(TARGETS ckfiles_ckvision RUNTIME DESTINATION bin COMPONENT Runtime)
+
 if(BUILD_TESTING)
   set(CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT "${PROJECT_BINARY_DIR}/test-scratch" CACHE PATH
     "Explicit fixture root with native private-file permission enforcement")
