@@ -2199,3 +2199,67 @@ API references: [Apple ACL retrieval](https://developer.apple.com/library/archiv
 [Linux open semantics](https://man7.org/linux/man-pages/man2/open.2.html),
 [Windows native file creation](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)
 and [volume ACL capabilities](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationbyhandlew).
+
+
+### Native directory collection into a private index
+
+`DirectoryCursor::source_scope()` reports the owning adapter namespace separately
+from the native directory-ID observation. Native POSIX/Windows and simulated
+cursors return their actual adapter token, including when native ID queries are
+unavailable. The default injected implementation reports Unsupported; it never
+infers a namespace from an arbitrary child or manufactures a replacement token.
+`DirectoryListing` delegates this query to its held cursor. These tokens are
+provenance, never native acquisition or mutation authority.
+
+`DirectoryIndexListingJob` binds that explicit namespace, the pane request and an
+owner-supplied nonzero index generation before writing. Unavailable/invalid
+namespace queries fail visibly with their diagnostics and create no scratch file.
+Every available cached native identity must belong to that namespace, enforced
+by the record codec; missing directory IDs do not hide otherwise observable rows.
+
+The worker reads one bounded `DirectoryListing` batch per collection advance and
+appends ordinals through the quota-first private store. Name encodings must agree
+with each other and with the selected storage model. Per-entry metadata failures
+remain records, and hidden-state observations use the existing pane semantics.
+Enumeration, capacity and scratch errors discard staging without publishing a
+prefix. Native End seals the input, then the existing external sorter prepares
+native-name ascending order with folders-first disabled. A bounded sequential
+pass rejects nonascending or duplicate native names, including duplicates across
+page boundaries. No directory-sized name set, row vector or offset table is kept
+by the production job; only the current native batch, bounded sorter pages/runs
+or one check page and the previous native name are retained.
+
+The held directory is inspected before enumeration and again after duplicate
+validation. An observed foreign namespace, different directory identity, changed
+modification/change timestamp, non-directory kind or Gone/Changed inspection
+rejects publication. Unknown/denied/unsupported fields remain explicit in the
+result's before/after observations; matching available fields never establish a
+snapshot. The live scan can miss changes that native enumeration and these
+observations do not expose, including child-content changes. Source namespace
+continuity is checked again before publication. No original pathname is reopened.
+
+Only this job constructs `CompletedDirectoryIndex`, after native End, full
+external ordering and duplicate checks. Its canonical store, before/after
+observations, request, namespace and read-only directory pin remain worker-owned.
+Rows retain their original enumeration ordinals through ordering. Their row
+namespace is stable within that dataset, not across refreshes or native ID reuse.
+The result is an input to later indexed pane/generation and acquisition services;
+its existence does not certify a current UI generation, pathname binding,
+complete preservation inventory or authority for an operation. Subsequent view
+orders can use the external sorter without changing original row IDs.
+
+Cancellation is terminal for this collector, retiring the cursor, private source,
+sorter runs and check page. It discards any partial listing batch rather than
+resuming a possibly changed enumeration. Abandonment also retires private work;
+already-issued completed results keep their own owners and need the future
+pane's independent generation/revocation gate. Exceptions fail/retire staging
+before propagation; failure and cancellation remain distinct. All native and
+index I/O stays on a single worker, never in paint/provider/event callbacks.
+
+The native integration case indexes 259 real top-level entries using small
+listing/sort/check pages, including an untraversed directory and final link or
+junction, checks every cached identity namespace and result row, and proves
+result/pin/storage retirement. A second native case changes the directory's
+modification time after enumeration and requires Changed with no result.
+This is integration coverage, not the planned 100,000-real-entry throughput,
+RSS or full-application responsiveness qualification.

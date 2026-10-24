@@ -84,6 +84,10 @@ public:
     // do not certify a frozen ancestry or namespace confinement.
     virtual Observation<BasicMetadata> inspect_basic() const;
     virtual Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const;
+    // Live adapter namespace, independent of native ID query success. A default
+    // injected cursor cannot manufacture a namespace from a child observation.
+    // Read-only provenance token, never native acquisition/mutation authority.
+    virtual Observation<AdapterScope> source_scope() const;
     const Observation<ObjectIdentity>& identity() const noexcept { return identity_; }
 
 protected:

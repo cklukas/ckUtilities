@@ -43,6 +43,7 @@ public:
     // Exceptions after consumption poison the stream before being rethrown.
     DirectoryListingBatch read(std::stop_token stop = {});
     const Observation<ObjectIdentity>& identity() const noexcept { return cursor_->identity(); }
+    Observation<AdapterScope> source_scope() const { return cursor_->source_scope(); }
     // Worker-owned lifetime pin, not a frozen namespace or pathname attestation.
     // Enumeration remains owned here; const pins expose read-only native queries.
     std::shared_ptr<const DirectoryCursor> pin_directory() const { return cursor_; }

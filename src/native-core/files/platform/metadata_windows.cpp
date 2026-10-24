@@ -599,6 +599,7 @@ class WindowsDirectoryCursor final : public DirectoryCursor {
 public:
     WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity, AdapterScope scope)
         : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
+    Observation<AdapterScope> source_scope() const override { return Observation<AdapterScope>::available(scope_); }
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_windows_parent(handle_.get(), scope_); }
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {

@@ -3304,3 +3304,52 @@ Real-directory indexed collection, duplicate/source-change validation, disk rank
 and ID lookup, indexed pane integration, destination preservation/collision rules
 and broader native qualification remain required. WP-01 remains in progress;
 WP-02–08 remain unstarted.
+
+
+## 2026-10-24 — real-directory collection into a validated private index
+
+WP-01 now streams native directory listings into the private index and external
+sorter. An explicit cursor adapter namespace binds cached native identities even
+when the directory's own ID is unavailable; default injected cursors report
+Unsupported rather than inventing a namespace. Native POSIX/Windows and simulated
+adapters expose their actual token, independently of native ID query success.
+
+The collector appends bounded native batches with original ordinals, preserves
+per-entry metadata/hidden-state observations, and requires native End before
+sealing and sorting. A bounded name-ordered pass detects duplicate native names
+across pages without a directory-sized set. Only the completed validated result
+exposes the sealed canonical index, pane request, namespace and held directory.
+Cancellation, quotas, enumeration/scratch errors and exceptions retire staging;
+no partial listing or RAM fallback is published.
+
+Root metadata is inspected before enumeration and after duplicate validation.
+Observed identity/time/kind/namespace changes and Gone/Changed inspections reject
+publication. Unavailable observations remain explicit. Matching fields do not
+prove a snapshot, unchanged child contents or absence of concurrent changes.
+The completed result remains worker-owned and still requires future pane
+generation acceptance and fresh native acquisition before any operation.
+
+Fifteen new unit cases cover scope binding/uncertainty, duplicate names,
+cancellation at every advance, native read cancellation, root changes, foreign
+IDs, metadata errors, quotas/errors/exceptions, empty input, result lifetimes,
+encoding mismatch and invalid input. Two native cases index 259 real entries
+with bounded pages, including an untraversed directory and final symlink/junction,
+and reject a directory timestamp changed after enumeration.
+
+All 78 Files suites pass: 666 cases on macOS, 669 on Linux and 665 on Windows.
+Fresh sanitizer builds compile 58 core/platform/host/test units and pass 94/92/91
+focused cases, using ASan+UBSan on Mac/Linux and ASan on Windows. The prior
+100,000-record synthetic scan/sort cases still pass; the 259-real-entry case is
+integration evidence, not the planned large-directory RSS/latency qualification.
+
+See [the collector evidence](evidence/ck-files-index-listing-20261024.json) for
+195 source fingerprints, commands, timing, output hashes, exact native markers
+and cleanup. UI-boundary, ckVision-only and strict documentation checks pass.
+Diagnostic builds and documentation scratch were removed after recording hashes;
+fixture roots are empty and current verified normal builds remain. Windows work
+stays on V:. No GUI app was launched.
+
+Disk rank/ID addressing, indexed pane providers and generation/selection/acquisition
+integration, remaining destination preservation/collision capabilities and broader
+native qualification remain required. WP-01 remains in progress; WP-02–08 remain
+unstarted.

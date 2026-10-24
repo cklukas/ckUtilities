@@ -315,6 +315,9 @@ private:
             ++state_->cursors;
         }
         ~Cursor() override { --state_->cursors; }
+        Observed<ck::files::AdapterScope> source_scope() const override {
+            return Observed<ck::files::AdapterScope>::available(state_->scope);
+        }
         Observed<Metadata> inspect_basic() const override {
             const auto fault = step(state_, Operation::InspectHandle, node_);
             if (fault) return Observed<Metadata>::unavailable(fault->state, fault->error);

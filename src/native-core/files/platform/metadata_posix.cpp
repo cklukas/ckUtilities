@@ -616,6 +616,7 @@ class PosixDirectoryCursor final : public DirectoryCursor {
 public:
     PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity, AdapterScope scope)
         : DirectoryCursor(std::move(identity)), directory_(std::move(directory)), scope_(std::move(scope)) {}
+    Observation<AdapterScope> source_scope() const override { return Observation<AdapterScope>::available(scope_); }
     Observation<BasicMetadata> inspect_basic() const override {
 #if defined(__linux__)
         return statx_metadata(dirfd(directory_.get()), "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW, scope_);

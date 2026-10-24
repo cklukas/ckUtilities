@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_index_file.hpp"
 #include "directory_index_sort_job.hpp"
+#include "directory_index_listing_job.hpp"
 #include "scratch_directory.hpp"
 #include "windows_junction.hpp"
 #include "cvision/testing/cktest.hpp"
@@ -580,4 +581,130 @@ CK_TEST(index_sort_native_external_merges_100000_records_and_preserves_stable_so
     source.reset();
     factory.reset();
     CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
+}
+
+CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_keeps_pin) {
+    const ck::testing::ScratchDirectory source("files-index-listing-source");
+    const ck::testing::ScratchDirectory scratch("files-index-listing-cache", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    for (int i = 0; i < 257; ++i) {
+        std::ofstream file(source.path() / ("entry-" + std::to_string(i)), std::ios::binary);
+        file << "payload";
+        if (!file)
+            throw std::runtime_error("write listing fixture");
+    }
+    fs::create_directory(source.path() / "directory");
+    {
+        std::ofstream file(source.path() / "directory" / "nested");
+        file << "nested";
+    }
+#ifdef _WIN32
+    fs::create_directory(source.path() / "link");
+    ck::testing::make_junction(source.path() / "link", source.path() / "directory");
+    constexpr auto model = StorageModel::WindowsHandleAttributes;
+    constexpr auto link_kind = ObjectKind::Junction;
+#else
+    fs::create_directory_symlink("directory", source.path() / "link");
+#ifdef __APPLE__
+    constexpr auto model = StorageModel::DarwinStatFlags;
+#else
+    constexpr auto model = StorageModel::LinuxStatx;
+#endif
+    constexpr auto link_kind = ObjectKind::SymbolicLink;
+#endif
+    NativeFileSystem filesystem;
+    auto listing = take(DirectoryListing::open(filesystem, source.path(), {7, 4096, 4096}));
+    const auto scope = take(listing->source_scope());
+    const auto root = listing->identity();
+    CK_CHECK(root.value() && root.value()->scope == scope);
+    auto workspace = take(open_native_index_workspace(address(scratch.path())));
+    auto budget = std::make_shared<IndexStorageBudget>(8 * 1024 * 1024, 16);
+    std::array<std::byte, 16> generation{};
+    generation[0] = std::byte{5};
+    auto job = std::make_unique<DirectoryIndexListingJob>(
+        PaneListingRequest{AdapterScope{}, 1}, std::move(listing), model, workspace, budget, generation,
+        DirectoryIndexStoreLimits{}, DirectoryIndexSortLimits{{16, 16 * 1024}, 8});
+    std::size_t advances = 0;
+    while (job->state() == DirectoryIndexListingState::Collecting ||
+           job->state() == DirectoryIndexListingState::SortingNames ||
+           job->state() == DirectoryIndexListingState::CheckingNames) {
+        if (++advances > 10000)
+            throw std::runtime_error("native listing budget");
+        job->advance();
+    }
+    auto result = take(job->completed());
+    CK_CHECK(result->store()->rows() == 259 && result->source_scope() == scope);
+    CK_CHECK(result->before().value() && result->after().value());
+    auto cursor = take(result->store()->begin_scan());
+    std::optional<NativeName> previous;
+    std::set<std::uint64_t> ids;
+    std::size_t seen = 0;
+    for (;;) {
+        auto page = take(result->store()->read_page(cursor, {11, 16 * 1024}));
+        CK_CHECK(page.rows.size() <= 11);
+        for (const auto &row : page.rows) {
+            ++seen;
+            CK_CHECK(ids.insert(row.record.row_id).second && row.record.row_id >= 1 && row.record.row_id <= 259);
+            if (previous)
+                CK_CHECK(compare_native_names(*previous, row.record.name) < 0);
+            previous = row.record.name;
+            const auto &m = *row.record.metadata.value();
+            CK_CHECK(m.identity.value() && m.identity.value()->scope == scope);
+            const auto name = row.record.name.display_name();
+            CK_CHECK(name != "nested");
+            if (name == "directory")
+                CK_CHECK(*m.kind.value() == ObjectKind::Directory);
+            else if (name == "link")
+                CK_CHECK(*m.kind.value() == link_kind);
+            else
+                CK_CHECK(*m.kind.value() == ObjectKind::RegularFile && *m.logical_size.value() == 7);
+        }
+        cursor = page.next;
+        if (page.end)
+            break;
+    }
+    CK_CHECK(seen == 259 && budget->charged_files() == 1);
+    CK_CHECK(compare_identity(*root.value(), *result->directory_pin()->inspect_basic().value()->identity.value()) ==
+             IdentityComparison::Same);
+    std::cout << "index-listing-native-qualified rows=" << seen << " advances=" << advances
+              << " bytes=" << result->store()->bytes() << '\n';
+    job.reset();
+    CK_CHECK(budget->charged_files() == 1);
+    result.reset();
+    workspace.reset();
+    CK_CHECK(budget->charged_files() == 0 && budget->charged_bytes() == 0 && children(scratch.path()) == 0);
+}
+CK_TEST(index_listing_native_rejects_observed_directory_changes_after_enumeration) {
+    const ck::testing::ScratchDirectory source("files-index-listing-change");
+    const ck::testing::ScratchDirectory scratch("files-index-listing-change-cache",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    private_root(scratch.path());
+    {
+        std::ofstream file(source.path() / "entry");
+        file << "payload";
+    }
+    NativeFileSystem filesystem;
+#ifdef _WIN32
+    constexpr auto model = StorageModel::WindowsHandleAttributes;
+#elif defined(__APPLE__)
+    constexpr auto model = StorageModel::DarwinStatFlags;
+#else
+    constexpr auto model = StorageModel::LinuxStatx;
+#endif
+    auto budget = std::make_shared<IndexStorageBudget>(1024 * 1024, 16);
+    std::array<std::byte, 16> generation{};
+    generation[0] = std::byte{9};
+    DirectoryIndexListingJob job({AdapterScope{}, 1}, take(DirectoryListing::open(filesystem, source.path())), model,
+                                 take(open_native_index_workspace(address(scratch.path()))), budget, generation);
+    while (job.state() != DirectoryIndexListingState::CheckingNames) {
+        if (job.state() != DirectoryIndexListingState::Collecting &&
+            job.state() != DirectoryIndexListingState::SortingNames)
+            throw std::runtime_error("native change setup");
+        job.advance();
+    }
+    fs::last_write_time(source.path(), fs::last_write_time(source.path()) + std::chrono::seconds(2));
+    job.advance();
+    CK_CHECK(job.state() == DirectoryIndexListingState::Failed && job.failure()->state == ObservationState::Changed);
+    CK_CHECK(!job.completed().value() && budget->charged_files() == 0 && budget->charged_bytes() == 0 &&
+             children(scratch.path()) == 0);
 }
