@@ -2898,3 +2898,47 @@ source/SDK fingerprints, timing, output hashes and diagnostic cleanup.
 WP-01 remains in progress. Destination integrity application, full preservation
 capabilities and operation-specific consent remain outstanding, as do the
 remaining cross-platform name policies. WP-02–08 remain unstarted.
+
+
+## 2026-10-24 — lossless absolute navigation addresses
+
+WP-01 adds `NativeAbsolutePath`, a bounded tagged value for exact POSIX bytes
+or Windows UTF-16. It preserves spelling and escapes only presentation text.
+The host bridge refuses foreign encodings, invalid/moved values and relative
+addresses before invoking an injected adapter. Qualified Windows drive, UNC
+and volume-GUID paths share one core namespace validator with the production
+filesystem entry points; device namespaces, streams and ordinary DOS aliases
+remain refused. Extended separators and UNC server/share colons are now
+checked explicitly. Oversize input is Unknown/InventoryLimit, never a prefix.
+
+The value performs no I/O, normalization, cwd resolution or cross-encoding
+conversion. It describes a navigation address rather than a retained object.
+Native replacement tests distinguish address lookup of the replacement from
+continued access to the original held object. Existing final-link policy is
+passed explicitly and the native path/directory regression suites remain part
+of focused sanitizer validation.
+
+All 69 Files suites pass on macOS, Linux and Windows: 548, 551 and 550 cases.
+Eight new deterministic cases cover POSIX bytes, all unpaired UTF-16 surrogates,
+namespace roots/refusals, limits, lexical equality, moved values and exact
+adapter dispatch. Four native cases cover real lookup/held identity, replacement,
+foreign/oversize refusal and filesystem-specific raw-encoding behavior.
+Case-sensitive APFS rejects the invalid UTF-8 creation with EILSEQ (92), and its
+lookup refusal matches an independent native call. Linux and workstation ReFS
+accept and enumerate the tested raw units unchanged. The model preserves the
+address in both outcomes; no substitute name is created.
+
+The first Mac fixture incorrectly required APFS to create invalid UTF-8 and
+aborted; its empty private directory was checked and removed. The replacement
+fixture explicitly verifies real acceptance or refusal. GCC also flagged a
+potential uninitialized nested-variant reset; the move operation now clears
+the existing string alternative rather than changing the source variant tag.
+Strict warnings remain enabled. Windows changed input timestamps are explicitly
+advanced after verified extraction so Ninja cannot reuse older-content objects
+whose timestamps happen to be newer than the archive's source timestamp.
+
+See [the navigation-address evidence](evidence/ck-files-path-20261024.json) for
+normal/sanitizer results, fingerprints, exact output paths, timing and cleanup.
+WP-01 remains in progress for full capability/preservation inspection and
+cross-platform collision rules; WP-02–08 remain unstarted. No mutation or Files
+UI command is introduced here.

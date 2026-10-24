@@ -31,77 +31,6 @@
 namespace ck::files {
 namespace {
 
-wchar_t ascii_upper(wchar_t unit) noexcept {
-    return unit >= L'a' && unit <= L'z' ? static_cast<wchar_t>(unit - L'a' + L'A') : unit;
-}
-
-bool ascii_equal(std::wstring_view left, std::wstring_view right) noexcept {
-    if (left.size() != right.size()) return false;
-    for (std::size_t index = 0; index < left.size(); ++index)
-        if (ascii_upper(left[index]) != ascii_upper(right[index])) return false;
-    return true;
-}
-
-
-bool filesystem_components(std::wstring_view tail, bool win32_rules) noexcept {
-    // Object inspection is separate from future channel inventory. A stream
-    // path has its owner's file ID but different data; never conflate the two.
-    if (tail.find(L':') != std::wstring_view::npos) return false;
-    while (!tail.empty()) {
-        const auto separator = tail.find(L'\\');
-        if (win32_rules && detail::win32_device_component(tail.substr(0, separator))) return false;
-        if (separator == std::wstring_view::npos) break;
-        tail.remove_prefix(separator + 1);
-    }
-    return true;
-}
-
-bool drive_path(std::wstring_view path, bool win32_rules) noexcept {
-    if (path.size() < 3 || ascii_upper(path[0]) < L'A' || ascii_upper(path[0]) > L'Z' || path[1] != L':' || path[2] != L'\\') return false;
-    return filesystem_components(path.substr(3), win32_rules);
-}
-
-bool unc_path(std::wstring_view tail, bool win32_rules) noexcept {
-    const auto server_end = tail.find(L'\\');
-    if (server_end == 0 || server_end == std::wstring_view::npos) return false;
-    const auto server = tail.substr(0, server_end);
-    if (server == L"." || server == L".." || server == L"?") return false;
-    tail.remove_prefix(server_end + 1);
-    const auto share_end = tail.find(L'\\');
-    auto share = tail.substr(0, share_end);
-    while (!share.empty() && (share.back() == L' ' || share.back() == L'.')) share.remove_suffix(1);
-    if (share.empty() || ascii_equal(share, L"PIPE") || ascii_equal(share, L"IPC$")) return false;
-    return share_end == std::wstring_view::npos || filesystem_components(tail.substr(share_end + 1), win32_rules);
-}
-
-bool volume_guid_path(std::wstring_view tail) noexcept {
-    if (tail.size() < 45 || !ascii_equal(tail.substr(0, 7), L"Volume{") || tail[43] != L'}' || tail[44] != L'\\') return false;
-    for (std::size_t index = 0; index < 36; ++index) {
-        const wchar_t unit = ascii_upper(tail[7 + index]);
-        if (index == 8 || index == 13 || index == 18 || index == 23) {
-            if (unit != L'-') return false;
-        } else if (!((unit >= L'0' && unit <= L'9') || (unit >= L'A' && unit <= L'F'))) return false;
-    }
-    return filesystem_components(tail.substr(45), false);
-}
-
-// A metadata query must not connect to a named pipe or open a console/device
-// merely because Win32 accepts that spelling as an absolute path. Validate a
-// filesystem namespace before opening anything. Normalize separators only in
-// this validation copy; the actual native path bytes/units remain untouched.
-bool filesystem_path(const std::filesystem::path& path) {
-    std::wstring spelling = path.native();
-    for (auto& unit : spelling) if (unit == L'/') unit = L'\\';
-    std::wstring_view text(spelling);
-    if (text.starts_with(L"\\\\?\\")) {
-        text.remove_prefix(4);
-        if (drive_path(text, false) || volume_guid_path(text)) return true;
-        return text.size() >= 4 && ascii_equal(text.substr(0, 4), L"UNC\\") && unc_path(text.substr(4), false);
-    }
-    if (drive_path(text, true)) return true;
-    return text.starts_with(L"\\\\") && unc_path(text.substr(2), true);
-}
-
 struct HandleCloser {
     void operator()(void* handle) const noexcept {
         if (handle != nullptr && handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
@@ -936,9 +865,8 @@ private:
 } // namespace
 
 Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem::path& path) const {
-    if (!path.is_absolute() || path.native().find(L'\0') != std::wstring::npos || !filesystem_path(path))
-        return Observation<BasicMetadata>::unavailable(ObservationState::Failed,
-            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "inspect_basic"});
+    const auto address = NativeAbsolutePath::from_host(path);
+    if (!address.value()) { const auto& e = *address.unavailable_detail(); return Observation<BasicMetadata>::unavailable(e.state, e.error); }
     const std::unique_ptr<void, HandleCloser> handle(CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL, nullptr));
@@ -950,8 +878,9 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
 Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
     const std::filesystem::path& path, DirectoryLinkPolicy policy) const {
     using Result = Observation<std::unique_ptr<DirectoryCursor>>;
-    if (!path.is_absolute() || path.native().find(L'\0') != std::wstring::npos || !filesystem_path(path) ||
-        (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink))
+    const auto address = NativeAbsolutePath::from_host(path);
+    if (!address.value()) { const auto& e = *address.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    if (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink)
         return Result::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "open_directory"});
     const DWORD link_flag = policy == DirectoryLinkPolicy::RejectFinalLink ? FILE_FLAG_OPEN_REPARSE_POINT : 0;

@@ -1678,3 +1678,56 @@ a completed inventory cannot turn mismatched or unavailable ownership into
 permission. Cancellation and exceptions follow the existing staged collector
 contract. Integrity configuration application, destination capability and
 operation-specific loss/confirmation planning remain outstanding work.
+
+
+## Lossless absolute navigation addresses
+
+`NativeAbsolutePath` owns either POSIX bytes or Windows UTF-16 units on every
+host. It preserves the supplied spelling, including repeated separators,
+trailing separators, dot components, invalid Unicode and case. Equality means
+exact tagged units, never object identity or native name equivalence. Display
+text uses the existing terminal-safe escaping and must never be parsed back.
+A move explicitly empties the source while preserving its encoding; an empty
+address cannot select the process current directory.
+
+Factories require an absolute filesystem address with no NUL. POSIX requires
+a leading slash and retains double-slash spelling rather than assuming its
+implementation-specific meaning. Windows accepts qualified drive, UNC and
+extended drive/UNC/volume-GUID forms. It rejects drive-relative/root-relative
+forms, device namespaces, pipe/IPC shares, explicit stream paths and ordinary
+DOS-device aliases. Extended paths require literal backslash separators;
+ordinary forward slashes are accepted without rewriting the stored address.
+Server/share colons are refused as well as stream colons in the remaining
+components. This is namespace validation, not proof that a spelling exists or
+that its components are accepted by a particular filesystem/API.
+
+The [Windows namespace documentation](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
+distinguishes drive-relative addresses, UNC, device namespaces and extended
+filesystem spelling. This model deliberately excludes device/stream access from
+navigation. It never calls a canonicalization, cwd, environment-expansion or
+Unicode conversion service. Existing operating-system navigation semantics for
+parent components remain; an address is neither containment nor a pinned target.
+
+Input limits are native bytes: 256 KiB by default, 1 MiB hard maximum, with
+UTF-16 units charged twice. Limits are application resource bounds, separate
+from filesystem path/component limits. Validation checks the byte budget before
+scanning or allocating retained text. Invalid limits fail; over-budget input
+remains Unknown/InventoryLimit with no returned prefix. The ordinary native
+filesystem entry points apply the same default bound and retain that refusal.
+
+`from_host`/`host_path` copy only the host's native representation. Foreign
+encodings are Unsupported, never converted through a locale or replacement
+characters. `BasicFileSystem::inspect_native_basic`/`open_native_directory`
+validate the bridge before dispatching to an injected adapter, preserving its
+result and explicit final-link policy. The production entry points share this
+validation. Windows no longer has a separate namespace parser. No filesystem
+I/O occurs inside the value or bridge conversion; adapter calls remain worker
+operations and can block in the OS.
+
+The model can retain a spelling that its filesystem refuses. Private native
+fixtures independently test accepted names and invalid-encoding refusal without
+renaming, substituting or converting them. Filesystem acceptance is separate
+from representability: APFS rejected the invalid UTF-8 fixture with EILSEQ;
+Linux and ReFS outcomes are recorded with their own native evidence. Subsequent
+operation planning still requires held identities, collision/name/length rules,
+preservation capabilities and execution-time revalidation.

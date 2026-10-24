@@ -984,8 +984,8 @@ private:
 } // namespace
 
 Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem::path& path) const {
-    if (!path.is_absolute() || path.native().find('\0') != std::string::npos)
-        return Observation<BasicMetadata>::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "inspect_basic"));
+    const auto address = NativeAbsolutePath::from_host(path);
+    if (!address.value()) { const auto& e = *address.unavailable_detail(); return Observation<BasicMetadata>::unavailable(e.state, e.error); }
 #if defined(__linux__)
     return statx_metadata(AT_FDCWD, path.c_str(), AT_SYMLINK_NOFOLLOW, scope_);
 #else
@@ -996,8 +996,9 @@ Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem
 Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
     const std::filesystem::path& path, DirectoryLinkPolicy policy) const {
     using Result = Observation<std::unique_ptr<DirectoryCursor>>;
-    if (!path.is_absolute() || path.native().find('\0') != std::string::npos ||
-        (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink))
+    const auto address = NativeAbsolutePath::from_host(path);
+    if (!address.value()) { const auto& e = *address.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    if (policy != DirectoryLinkPolicy::RejectFinalLink && policy != DirectoryLinkPolicy::FollowFinalLink)
         return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidPath, "open_directory"));
     auto spelling = path.native();
     // A trailing slash must not turn an explicitly rejected final symlink into

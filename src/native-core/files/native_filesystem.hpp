@@ -3,6 +3,7 @@
 #pragma once
 
 #include "directory_cursor.hpp"
+#include "native_path.hpp"
 
 #include <filesystem>
 #include <memory>
@@ -14,6 +15,11 @@ namespace ck::files {
 class BasicFileSystem {
 public:
     virtual ~BasicFileSystem() = default;
+    // Exact host encoding only. Reject foreign/moved addresses before calling
+    // the injected adapter; no display parsing or current-directory fallback.
+    Observation<std::unique_ptr<DirectoryCursor>> open_native_directory(const NativeAbsolutePath& path,
+        DirectoryLinkPolicy policy = DirectoryLinkPolicy::RejectFinalLink) const;
+    Observation<BasicMetadata> inspect_native_basic(const NativeAbsolutePath& path) const;
     virtual Observation<std::unique_ptr<DirectoryCursor>> open_directory(
         const std::filesystem::path& absolute_path, DirectoryLinkPolicy policy = DirectoryLinkPolicy::RejectFinalLink) const = 0;
     virtual Observation<BasicMetadata> inspect_basic(const std::filesystem::path& absolute_path) const = 0;
