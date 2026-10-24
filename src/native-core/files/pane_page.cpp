@@ -48,6 +48,7 @@ PanePageCapture capture_pane_page(const PaneModel& model, std::size_t first, Pan
     auto page = std::shared_ptr<PanePage>(new PanePage);
     page->first_ = first; page->total_rows_ = model.size(); page->visible_rows_ = model.visible_size();
     page->text_bytes_ = used; page->view_ = model.view(); page->pending_ = model.listing_pending();
+    page->selection_ = model.selection_summary();
     page->error_ = model.listing_error(); page->invalidated_ = model.invalidated_selection();
     page->rows_.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {

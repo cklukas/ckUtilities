@@ -2704,3 +2704,43 @@ UTC build intervals, compiler commands, SDK/test-host fingerprints, the initial
 missing-test-include compile error, and cleanup audits are in the evidence.
 Diagnostic builds were removed after native-owner/process and empty-fixture
 checks; current normal test builds remain. No application was launched.
+
+### Guarded pane commands and copied selection summaries
+
+The WP-01 pane foundation now exposes retained total/visible/hidden marks and
+exact source-readiness counts in immutable pages, without building native-name
+candidate arrays or scanning rows for each summary. Counts are updated with
+mark bits and prepared together with new projections/listings. Pending scans
+and invalidated refresh selection keep zero actionable candidate counts while
+still exposing retained marks; hidden marks remain an explicit review state.
+
+`apply_pane_command` checks the page's state stamp on the owning worker before
+focus, row/range marking, visible bulk marking/inversion, clear-all or view
+changes. Range endpoints are row IDs; stale, foreign, hidden and invalid
+requests cannot retarget selection or clear diagnostics. View limits are
+validated before copying caller text. These commands only change pane state;
+filesystem planning, operations and ckVision UI dispatch remain unimplemented.
+
+Seven new cases cover every command and stale/foreign/empty stamps, queued old
+page reuse, reversed row-ID ranges, reorder/filter safety, atomic invalid-target
+and invalid-view rejection, 1200 deterministic mixed mark/filter/view changes
+checked against independent row-bit counts, hidden marks in copied pages,
+pending/error transitions, qualified versus unheld refresh continuity and
+navigation reset. The existing pane/page/continuity cases remain regression
+coverage. See [the command evidence](evidence/ck-files-pane-command-20261024.json).
+WP-01 remains in progress; WP-02–08 remain unstarted.
+
+Final validation on 2026-10-24: all 59 Files suites pass with 489 macOS,
+490 Linux and 492 Windows cases. Each host also passes 47 focused command/
+page/pane/continuity cases after freshly compiling all 43 sanitizer translation
+units (ASan+UBSan on macOS/Linux; ASan on Windows). Windows ASan initially
+rejected an unreachable shared visitor return under `/W4 /WX`; explicit returns
+per alternative fixed the warning, and an exhaustive compile-time check now
+requires a handler for any future command type. No warning was suppressed.
+All three normal targets/suites and fresh sanitizer builds were rerun after
+that correction. Current source bytes, output timestamps/hashes, compiler
+commands, timing comparisons and diagnostics are in the evidence. The failed
+Windows sanitizer driver omitted its timing record before throwing; that gap
+is recorded explicitly rather than assigning an invented interval. Failed and
+successful disposable diagnostics were hashed and removed after owner/fixture
+audits. Current normal test builds remain; no application was launched.

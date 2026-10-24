@@ -29,6 +29,7 @@ public:
     std::size_t total_rows() const noexcept { return total_rows_; }
     std::size_t visible_rows() const noexcept { return visible_rows_; }
     std::size_t text_bytes() const noexcept { return text_bytes_; }
+    const PaneSelectionSummary& selection() const noexcept { return selection_; }
     const PaneView& view() const noexcept { return view_; }
     bool listing_pending() const noexcept { return pending_; }
     const std::optional<UnavailableObservation>& listing_error() const noexcept { return error_; }
@@ -38,6 +39,7 @@ private:
     PaneStateStamp stamp_;
     std::vector<PaneDisplayRow> rows_;
     std::size_t first_ = 0, total_rows_ = 0, visible_rows_ = 0, text_bytes_ = 0;
+    PaneSelectionSummary selection_;
     PaneView view_;
     bool pending_ = false;
     std::optional<UnavailableObservation> error_;

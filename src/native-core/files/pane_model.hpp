@@ -82,6 +82,18 @@ struct PaneInvalidatedSelection {
 enum class PanePublish { Applied, Stale, InvalidListing, LimitExceeded, Exhausted };
 enum class PaneSourcesState { Empty, Ready, HiddenMarksNeedReview, ListingPending, SelectionInvalidated };
 enum class PaneSourcesOrigin { Cursor, Marks };
+struct PaneMarkCounts {
+    std::size_t total = 0;
+    std::size_t visible = 0;
+    std::size_t hidden = 0;
+};
+struct PaneSelectionSummary {
+    PaneSourcesState state = PaneSourcesState::Empty;
+    PaneSourcesOrigin origin = PaneSourcesOrigin::Cursor;
+    std::size_t visible_count = 0; // exact candidate counts; zero while blocked
+    std::size_t hidden_count = 0;
+    PaneMarkCounts marks; // retained marks, also available during listing/review
+};
 struct PaneSource {
     PaneRowId row;
     NativeName name;
@@ -129,7 +141,7 @@ public:
     std::vector<HeldChild::Pointer> held_entries() const;
     const PaneInvalidatedSelection& invalidated_selection() const noexcept { return invalidated_; }
     const PaneView& view() const noexcept { return view_; }
-    void set_view(PaneView view); // throws invalid_argument for invalid enum/oversize filter
+    void set_view(const PaneView& view); // throws invalid_argument for invalid enum/oversize filter
     std::size_t size() const noexcept { return rows_.size(); }
     std::size_t visible_size() const noexcept { return visible_.size(); }
     const PaneRow* row(PaneRowId id) const noexcept;
@@ -143,6 +155,9 @@ public:
     void invert_visible_marks() noexcept;
     bool mark_range(std::size_t first, std::size_t last, bool marked) noexcept;
     void clear_marks() noexcept;
+    // No allocation, native ownership or row traversal; uses cached counts and
+    // the existing row-ID index for cursor visibility.
+    PaneSelectionSummary selection_summary() const noexcept;
     PaneSources sources() const;
 private:
     struct Projection { std::vector<std::size_t> visible; std::vector<std::optional<std::size_t>> positions; };
@@ -150,6 +165,7 @@ private:
     std::optional<std::size_t> index(PaneRowId id) const noexcept;
     bool current(PaneListingRequest request) const noexcept;
     void invalidate_stamp() noexcept;
+    void set_index_mark(std::size_t index, bool marked) noexcept;
     mutable std::shared_ptr<PaneStateStamp::Token> stamp_;
     PaneLimits limits_;
     AdapterScope scope_;
@@ -161,6 +177,7 @@ private:
     std::vector<std::size_t> visible_;
     std::vector<std::optional<std::size_t>> positions_;
     std::vector<bool> marks_;
+    std::size_t marked_count_ = 0, visible_marked_count_ = 0;
     std::optional<PaneRowId> focus_;
     std::optional<UnavailableObservation> error_;
     PaneView view_;

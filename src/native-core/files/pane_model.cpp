@@ -136,15 +136,20 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
             if (marks[i]) ++retained_marks;
             if (focus_ && rows_[old].id == *focus_) focus = prepared[i].id;
         }
-        invalidated.marks = static_cast<std::size_t>(std::count(marks_.begin(), marks_.end(), true)) - retained_marks + invalidated_.marks;
+        invalidated.marks = marked_count_ - retained_marks + invalidated_.marks;
         invalidated.cursor = (focus_.has_value() && !focus.has_value()) || invalidated_.cursor;
     } else if (!projection.visible.empty()) focus = prepared[projection.visible.front()].id;
+    std::size_t marked_count = 0, visible_marked_count = 0;
+    for (std::size_t i = 0; i < marks.size(); ++i) if (marks[i]) {
+        ++marked_count; if (projection.positions[i]) ++visible_marked_count;
+    }
     // Every allocating step is complete before publication. Old IDs survive
     // only through a sealed live successor; newly allocated IDs never recycle.
     invalidate_stamp();
     next_row_ = next_row;
     indexes_.swap(indexes);
     rows_.swap(prepared); visible_.swap(projection.visible); positions_.swap(projection.positions); marks_.swap(marks);
+    marked_count_ = marked_count; visible_marked_count_ = visible_marked_count;
     focus_ = std::move(focus); invalidated_ = invalidated; pending_ = 0; error_.reset(); listing_directory_ = {}; binding_issues_.clear();
     return PanePublish::Applied;
 }
@@ -188,11 +193,15 @@ PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const
     for (std::size_t i = 0; i < result.visible.size(); ++i) result.positions[result.visible[i]] = i;
     return result;
 }
-void PaneModel::set_view(PaneView view) {
-    validate_view(view);
-    auto projection = project(rows_, view);
+void PaneModel::set_view(const PaneView& view) {
+    validate_view(view); // reject oversize caller data before copying it
+    auto prepared_view = view;
+    auto projection = project(rows_, prepared_view);
+    std::size_t visible_marks = 0;
+    for (const auto i : projection.visible) if (marks_[i]) ++visible_marks;
     invalidate_stamp();
-    view_ = std::move(view); visible_.swap(projection.visible); positions_.swap(projection.positions);
+    visible_marked_count_ = visible_marks;
+    view_ = std::move(prepared_view); visible_.swap(projection.visible); positions_.swap(projection.positions);
 }
 std::optional<std::size_t> PaneModel::index(PaneRowId id) const noexcept {
     if (id.scope != scope_) return std::nullopt;
@@ -203,36 +212,56 @@ const PaneRow* PaneModel::row(PaneRowId id) const noexcept { const auto i = inde
 const PaneRow* PaneModel::visible_row(std::size_t i) const noexcept { return i < visible_.size() ? &rows_[visible_[i]] : nullptr; }
 std::optional<std::size_t> PaneModel::visible_index(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? positions_[*i] : std::nullopt; }
 bool PaneModel::focus(PaneRowId id) noexcept { if (!visible_index(id)) return false; invalidate_stamp(); focus_ = std::move(id); invalidated_ = {}; binding_issues_.clear(); return true; }
-bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; invalidate_stamp(); marks_[*i] = value; invalidated_ = {}; binding_issues_.clear(); return true; }
+bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; invalidate_stamp(); set_index_mark(*i, value); invalidated_ = {}; binding_issues_.clear(); return true; }
 bool PaneModel::marked(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i && marks_[*i]; }
-void PaneModel::mark_visible(bool value) noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) marks_[i] = value; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
-void PaneModel::invert_visible_marks() noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) marks_[i] = !marks_[i]; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
+void PaneModel::mark_visible(bool value) noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) set_index_mark(i, value); if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
+void PaneModel::invert_visible_marks() noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) set_index_mark(i, !marks_[i]); if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
 bool PaneModel::mark_range(std::size_t first, std::size_t last, bool value) noexcept {
     if (first >= visible_.size() || last >= visible_.size()) return false;
     invalidate_stamp();
     if (first > last) std::swap(first, last);
-    for (auto i = first; i <= last; ++i) marks_[visible_[i]] = value;
+    for (auto i = first; i <= last; ++i) set_index_mark(visible_[i], value);
     invalidated_ = {}; binding_issues_.clear();
     return true;
 }
-void PaneModel::clear_marks() noexcept { invalidate_stamp(); std::fill(marks_.begin(), marks_.end(), false); invalidated_ = {}; binding_issues_.clear(); }
+void PaneModel::clear_marks() noexcept { invalidate_stamp(); std::fill(marks_.begin(), marks_.end(), false); marked_count_ = 0; visible_marked_count_ = 0; invalidated_ = {}; binding_issues_.clear(); }
 std::vector<HeldChild::Pointer> PaneModel::held_entries() const {
     std::vector<HeldChild::Pointer> result;
     for (const auto& row : rows_) if (row.entry.held_child()) result.push_back(row.entry.held_child());
     return result;
 }
-PaneSources PaneModel::sources() const {
-    PaneSources result;
+void PaneModel::set_index_mark(std::size_t i, bool value) noexcept {
+    if (marks_[i] == value) return;
+    marks_[i] = value;
+    if (value) { ++marked_count_; if (positions_[i]) ++visible_marked_count_; }
+    else { --marked_count_; if (positions_[i]) --visible_marked_count_; }
+}
+PaneSelectionSummary PaneModel::selection_summary() const noexcept {
+    PaneSelectionSummary result;
+    result.marks = {marked_count_, visible_marked_count_, marked_count_ - visible_marked_count_};
     if (listing_pending()) { result.state = PaneSourcesState::ListingPending; return result; }
     if (invalidated_.marks != 0 || invalidated_.cursor) { result.state = PaneSourcesState::SelectionInvalidated; return result; }
+    if (marked_count_ != 0) {
+        result.origin = PaneSourcesOrigin::Marks;
+        result.visible_count = visible_marked_count_; result.hidden_count = marked_count_ - visible_marked_count_;
+    } else if (focus_ && visible_index(*focus_)) result.visible_count = 1;
+    if (result.visible_count || result.hidden_count)
+        result.state = result.hidden_count ? PaneSourcesState::HiddenMarksNeedReview : PaneSourcesState::Ready;
+    return result;
+}
+PaneSources PaneModel::sources() const {
+    const auto summary = selection_summary();
+    PaneSources result;
+    result.state = summary.state; result.origin = summary.origin;
+    result.visible_count = summary.visible_count; result.hidden_count = summary.hidden_count;
+    if (result.state == PaneSourcesState::ListingPending || result.state == PaneSourcesState::SelectionInvalidated) return result;
     const auto append = [&](std::size_t i) {
         const auto& row = rows_[i];
         result.candidates.push_back({row.id, row.entry.name, row.entry.metadata.identity, row.entry.inspection_error()});
-        if (positions_[i]) ++result.visible_count; else ++result.hidden_count;
     };
-    for (std::size_t i = 0; i < rows_.size(); ++i) if (marks_[i]) { result.origin = PaneSourcesOrigin::Marks; append(i); }
-    if (result.candidates.empty() && focus_) { const auto i = index(*focus_); if (i && positions_[*i]) append(*i); }
-    if (!result.candidates.empty()) result.state = result.hidden_count ? PaneSourcesState::HiddenMarksNeedReview : PaneSourcesState::Ready;
+    if (marked_count_ != 0) {
+        for (std::size_t i = 0; i < rows_.size(); ++i) if (marks_[i]) append(i);
+    } else if (focus_) { const auto i = index(*focus_); if (i && positions_[*i]) append(*i); }
     return result;
 }
 } // namespace ck::files

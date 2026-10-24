@@ -1441,5 +1441,51 @@ A command must return its page stamp and row ID to that worker, which validates
 both against the current model before acting. A current stamp does not prove
 filesystem freshness, selection readiness, object/name continuity or mutation
 permission. Native revalidation and operation review remain mandatory. This
-viewport boundary does not yet implement the command dispatcher, selection
-summary, full properties/diagnostics presentation, ckVision UI or operations.
+viewport boundary does not yet implement ckVision command dispatch, full
+properties/diagnostics presentation, the Files UI or filesystem operations.
+
+## Pane selection summaries and guarded model commands
+
+`PaneModel::selection_summary()` and the copied `PanePage::selection()` provide
+selection status without copying candidate filenames or traversing rows.
+The model caches total and visible mark counts. Individual mark changes adjust
+those counts together with the stored bit; range/bulk commands adjust them for
+each affected visible row. A view change prepares its projection and visible
+mark count before publishing either. A listing publication prepares its marks
+and counts before swapping state; only sealed held-child refresh continuity
+can retain marks. Navigation resets them. Failed/rejected publication, view and
+selection requests leave counts unchanged. Cursor visibility uses the existing
+row-ID index; no metadata query or native-name decoding is performed.
+
+Summaries always expose retained total/visible/hidden mark counts. During a
+pending listing or invalidated selection, candidate counts remain zero and
+status explicitly blocks source readiness. Otherwise any marks take precedence
+over the cursor, including marks hidden by a filter/visibility setting. Hidden
+marks produce `HiddenMarksNeedReview`; clearing visible marks cannot silently
+remove hidden marks. With no marks, exactly one visible focused row is the
+cursor candidate; an absent/hidden cursor produces Empty. `sources()` uses the
+same decision and only then builds exact worker-owned candidates. A summary
+or Ready status never constitutes operation permission or a frozen inventory.
+
+`apply_pane_command` is the serialized worker boundary for focus, individual
+marks, row-ID range marking, visible mark-all/unmark-all, inversion, clear-all
+and view changes. It validates the supplied state stamp before examining or
+applying a command. Empty, foreign and revoked stamps return Stale with no
+change. Row/range endpoints must belong to the current pane and be visible.
+Both range endpoints are validated before changing any mark, then their current
+visible positions define the inclusive range; an old page cannot retarget it
+after sorting/filtering/publication. Invalid targets return InvalidTarget;
+invalid view enums/filter limits return InvalidCommand. Oversized view input is
+validated before copying it; allocation failures propagate with old model state
+and stamp preserved. No invalid request clears selection/binding diagnostics.
+
+A successful command follows existing model revocation and review-reset rules.
+If it changes state, a second queued command carrying the previous page stamp
+is rejected; the caller must process the updated worker result/page before
+issuing a new state-relative command. Empty visible bulk actions may succeed
+without a change or revocation. Commands may change old displayed selection
+while a scan is pending, but never cancel/complete that scan or turn pending
+candidate readiness into Ready. Full refresh still validates selection
+continuity. This is a pure model boundary, without filesystem opens, mutations,
+planning, consent, implicit hydration or UI-thread model access. Worker queues,
+ckVision command integration and native revalidation remain separate work.
