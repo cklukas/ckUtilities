@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_path.hpp"
 #include "windows_name.hpp"
+#include <type_traits>
 namespace ck::files {
 namespace {
 template<class T> Observation<T> error(ObservationState state, AdapterError code, const char* operation) {
@@ -72,6 +73,52 @@ Observation<std::monostate> budget(std::size_t units, std::size_t width, NativeP
 Observation<NativeAbsolutePath> refuse(const UnavailableObservation& e) {
     return Observation<NativeAbsolutePath>::unavailable(e.state, e.error);
 }
+std::size_t root_size(std::string_view path) {
+    // Retain all leading slashes, including POSIX's special // spelling.
+    return path.find_first_not_of('/');
+}
+std::size_t root_size(std::u16string_view path) {
+    const bool extended = path.starts_with(u"\\\\?\\");
+    const auto offset = extended ? std::size_t{4} : 0;
+    const auto tail = path.substr(offset);
+    if (drive(tail, !extended)) return offset + 3;
+    if (extended && volume(tail)) return offset + 45;
+    const auto start = extended ? std::size_t{8} : 2;
+    const auto delimiters = extended ? u"\\" : u"\\/";
+    const auto server_end = path.find_first_of(delimiters, start);
+    const auto share_end = path.find_first_of(delimiters, server_end + 1);
+    return share_end == path.npos ? path.size() : share_end + 1;
+}
+template<class Text> std::size_t parent_size(const Text& text, std::size_t root) {
+    const auto is_separator = [&](std::size_t i) {
+        if constexpr (std::is_same_v<Text, std::string>) return text[i] == '/';
+        else return text[i] == u'\\' || (!text.starts_with(u"\\\\?\\") && text[i] == u'/');
+    };
+    auto end = text.size();
+    while (end > root && is_separator(end - 1)) --end;
+    while (end > root && !is_separator(end - 1)) --end;
+    while (end > root && is_separator(end - 1)) --end;
+    return end;
+}
+}
+Observation<NativeAbsolutePath> NativeAbsolutePath::namespace_root() const {
+    if (!is_valid()) return error<NativeAbsolutePath>(ObservationState::Failed, AdapterError::InvalidPath, "native_path.root_invalid");
+    if (const auto* bytes = posix_bytes()) {
+        const auto end = root_size(std::string_view(*bytes));
+        return from_posix(bytes->substr(0, end), {NativePathLimits::hard_native_bytes});
+    }
+    const auto& units = *windows_units();
+    return from_windows(units.substr(0, root_size(std::u16string_view(units))), {NativePathLimits::hard_native_bytes});
+}
+Observation<NativeAbsolutePath> NativeAbsolutePath::parent_address() const {
+    if (!is_valid()) return error<NativeAbsolutePath>(ObservationState::Failed, AdapterError::InvalidPath, "native_path.parent_invalid");
+    if (const auto* bytes = posix_bytes()) {
+        auto root = root_size(std::string_view(*bytes));
+        if (root == bytes->npos) root = bytes->size();
+        return from_posix(bytes->substr(0, parent_size(*bytes, root)), {NativePathLimits::hard_native_bytes});
+    }
+    const auto& units = *windows_units();
+    return from_windows(units.substr(0, parent_size(units, root_size(std::u16string_view(units)))), {NativePathLimits::hard_native_bytes});
 }
 Observation<NativeAbsolutePath> NativeAbsolutePath::from_posix(std::string_view bytes, NativePathLimits limits) {
     const auto bounded = budget(bytes.size(), 1, limits);

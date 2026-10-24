@@ -2890,3 +2890,42 @@ Controller retirement clears grid activation callbacks before releasing command
 handlers and view ownership. Headless real-view interaction tests do not prove
 what a production terminal window displays; production host and actual terminal
 acceptance remain required.
+
+
+### Requested parent/root navigation and structured route replay
+
+`NativeAbsolutePath::parent_address` and `namespace_root` perform bounded,
+value-only lexical navigation. They preserve native encoding, drive/UNC/share/
+volume-GUID prefixes, extended namespace spelling, unpaired Windows surrogates,
+raw POSIX bytes and leading POSIX slashes (including special `//` spelling).
+They do not resolve `.`/`..`, links, mount boundaries or object identity. Parent
+of a namespace root stays at that root; moved/invalid values refuse. An address
+containing dot components retains their requested breadcrumb meaning rather
+than pretending to identify the physical parent of a held directory.
+
+`FilesPaneLocation::parent` removes one exact component before taking a lexical
+parent of its absolute anchor. Its native-byte budget is recomputed from native
+units, never escaped presentation. `namespace_root` drops the component suffix
+and selects the anchor's filesystem namespace root (a Windows share boundary,
+not a server or device namespace). These values are requested destinations,
+not retained ancestor handles or continuity guarantees.
+
+The service accepts a complete structured route. Submission validates its
+native-byte/depth/view/page budgets without filesystem I/O. The worker opens
+the requested absolute anchor, then opens each exact component relative to the
+preceding held cursor, rejecting final links/reparse points at every step.
+It never flattens a literal suffix into an ordinary Win32 path. Native-default
+name lookup is navigation behavior, not exact-spelling or unchanged-object
+certification. Cancellation is checked between native opens; superseding
+navigation cancels old work. Candidate listing/page preparation and retirement
+finish before acknowledgment. A failed replay retains the previous dataset,
+route, marks, cursor and stamp; the requested route remains visible in the reply.
+
+Parent folder (`ck.files.parent`, initially Backspace) and Location root
+(`ck.files.root`, no default key) use suite command scope and the Location menu;
+Parent is also exposed in the status line. They require a ready current pane,
+obey runtime key remapping and modal guards, and disable at the namespace root.
+They preserve sort/visibility policy and clear the name filter only after a
+successful location change. Other-pane state remains independent. Production
+terminal acceptance, home discovery, editable location/completion, history,
+bookmarks, qualified refresh and preview/properties remain WP-02 work.

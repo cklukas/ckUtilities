@@ -116,3 +116,41 @@ CK_TEST(path_rejected_bridges_make_no_adapter_calls_and_moved_values_do_not_mean
     CK_CHECK(!spy.open_native_directory(moved, static_cast<DirectoryLinkPolicy>(255)).value() && spy.calls == 0);
     source = moved; CK_CHECK(source == moved); source = std::move(moved); CK_CHECK(source.is_valid() && !moved.is_valid());
 }
+
+CK_TEST(path_requested_parent_and_root_preserve_posix_prefixes_and_never_resolve_dot_or_raw_names) {
+    struct Case { const char* path; const char* parent; const char* root; };
+    for (const auto& c : {Case{"/", "/", "/"}, {"//", "//", "//"}, {"///", "///", "///"},
+        {"//host/share//", "//host", "//"}, {"/a/.././b/", "/a/../.", "/"},
+        {"/a//b///", "/a", "/"}, {"/raw\\name\n\xff", "/", "/"}, {"///a", "///", "///"}}) {
+        const auto p = take(NativeAbsolutePath::from_posix(c.path));
+        const auto parent = take(p.parent_address()), root = take(p.namespace_root());
+        CK_CHECK(*parent.posix_bytes() == c.parent && *root.posix_bytes() == c.root);
+        CK_CHECK(take(root.parent_address()) == root && take(root.namespace_root()) == root);
+    }
+}
+CK_TEST(path_requested_windows_parent_and_root_respect_drive_unc_volume_and_extended_literal_names) {
+    struct Case { const char16_t* path; const char16_t* parent; const char16_t* root; };
+    for (const auto& c : {Case{u"V:\\", u"V:\\", u"V:\\"}, {u"v:/a/../b/", u"v:/a/..", u"v:/"},
+        {u"\\\\server\\share", u"\\\\server\\share", u"\\\\server\\share"},
+        {u"//server/share/a", u"//server/share/", u"//server/share/"},
+        {u"\\\\s\\share\\a\\b\\", u"\\\\s\\share\\a", u"\\\\s\\share\\"},
+        {u"\\\\?\\V:\\CON.\\x ", u"\\\\?\\V:\\CON.", u"\\\\?\\V:\\"},
+        {u"\\\\?\\UNC\\server\\share\\x", u"\\\\?\\UNC\\server\\share\\", u"\\\\?\\UNC\\server\\share\\"},
+        {u"\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\x\\y",
+         u"\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\x", u"\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\"}}) {
+        const auto p = take(NativeAbsolutePath::from_windows(c.path));
+        const auto parent = take(p.parent_address()), root = take(p.namespace_root());
+        CK_CHECK(*parent.windows_units() == c.parent && *root.windows_units() == c.root);
+        CK_CHECK(take(root.parent_address()) == root && take(root.namespace_root()) == root);
+    }
+    const auto raw = take(NativeAbsolutePath::from_windows(std::u16string(u"V:\\raw") + char16_t{0xd800} + u"\\leaf"));
+    CK_CHECK(*take(raw.parent_address()).windows_units() == std::u16string(u"V:\\raw") + char16_t{0xd800});
+}
+CK_TEST(path_requested_parent_and_root_refuse_moved_values_and_keep_large_qualified_addresses) {
+    auto source = host_address(); const auto moved = std::move(source);
+    CK_CHECK(!source.parent_address().value() && !source.namespace_root().value());
+    CK_CHECK(moved.parent_address().value() && moved.namespace_root().value());
+    const auto p = take(NativeAbsolutePath::from_posix("/" + std::string(300000, 'a') + "/b", {NativePathLimits::hard_native_bytes}));
+    CK_CHECK(take(p.parent_address()).posix_bytes()->size() == 300001);
+    CK_CHECK(*take(p.namespace_root()).posix_bytes() == "/");
+}

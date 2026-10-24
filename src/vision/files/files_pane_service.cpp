@@ -67,6 +67,41 @@ std::string FilesPaneLocation::display_text() const {
     }
     return ck::files::display_native_text(units);
 }
+ck::files::Observation<FilesPaneLocation> FilesPaneLocation::parent() const {
+    using Result = ck::files::Observation<FilesPaneLocation>;
+    if (!root_.is_valid()) {
+        const auto error = root_.parent_address();
+        return Result::unavailable(error.unavailable_detail()->state, error.unavailable_detail()->error);
+    }
+    if (components_.empty()) {
+        auto parent = root_.parent_address();
+        if (!parent.value())
+            return Result::unavailable(parent.unavailable_detail()->state, parent.unavailable_detail()->error);
+        return Result::available(FilesPaneLocation(std::move(parent).take_value()));
+    }
+    auto next = *this;
+    next.components_.pop_back();
+    // Derive the exact budget from the retained route, including the root's
+    // existing delimiter. Never infer native byte length from escaped display.
+    next.bytes_ = root_.posix_bytes() ? root_.posix_bytes()->size() : root_.windows_units()->size() * sizeof(char16_t);
+    const auto width = root_.posix_bytes() ? std::size_t{1} : sizeof(char16_t);
+    bool delimiter = root_.posix_bytes()
+                         ? root_.posix_bytes()->back() == '/'
+                         : root_.windows_units()->back() == u'\\' || root_.windows_units()->back() == u'/';
+    for (const auto &name : next.components_) {
+        next.bytes_ += (delimiter ? 0 : width) +
+                       (name.posix_bytes() ? name.posix_bytes()->size() : name.windows_units()->size() * width);
+        delimiter = false;
+    }
+    return Result::available(std::move(next));
+}
+ck::files::Observation<FilesPaneLocation> FilesPaneLocation::namespace_root() const {
+    using Result = ck::files::Observation<FilesPaneLocation>;
+    auto root = root_.namespace_root();
+    if (!root.value())
+        return Result::unavailable(root.unavailable_detail()->state, root.unavailable_detail()->error);
+    return Result::available(FilesPaneLocation(std::move(root).take_value()));
+}
 namespace {
 using namespace ck::files;
 struct ChildNavigation {
@@ -76,7 +111,7 @@ struct ChildNavigation {
 };
 struct Navigate {
     FilesPaneTicket ticket;
-    std::variant<NativeAbsolutePath, ChildNavigation> destination;
+    std::variant<FilesPaneLocation, ChildNavigation> destination;
     PaneView view;
     std::size_t rows;
 };
@@ -222,7 +257,7 @@ struct FilesPaneService::State {
                     stop.request_stop();
             }
             if (nav) {
-                const auto *absolute = std::get_if<NativeAbsolutePath>(&nav->destination);
+                const auto *absolute = std::get_if<FilesPaneLocation>(&nav->destination);
                 std::shared_ptr<const FilesPaneLocation> requested;
                 if (absolute)
                     requested = std::make_shared<const FilesPaneLocation>(*absolute);
@@ -264,11 +299,24 @@ struct FilesPaneService::State {
                     if (factory && !result.error && !stop.stop_requested()) {
                         std::unique_ptr<DirectoryCursor> directory;
                         if (absolute) {
-                            auto opened = filesystem->open_native_directory(*absolute);
+                            auto opened = filesystem->open_native_directory(absolute->root_address());
                             if (!opened.value())
                                 fail(*opened.unavailable_detail());
                             else
                                 directory = std::move(opened).take_value();
+                            for (const auto &name : absolute->components()) {
+                                if (!directory || stop.stop_requested())
+                                    break;
+                                auto child = directory->open_directory_child(name);
+                                if (!child.value()) {
+                                    fail(*child.unavailable_detail());
+                                    directory.reset();
+                                    break;
+                                }
+                                directory = std::move(child).take_value();
+                                if (!directory)
+                                    throw std::runtime_error("null route directory");
+                            }
                         } else {
                             const auto &child = std::get<ChildNavigation>(nav->destination);
                             if (!active || child.navigation != active_epoch || !pane->accepts(child.stamp))
@@ -593,12 +641,16 @@ FilesPaneService::FilesPaneService(FilesPaneBackend backend, FilesPaneServiceLim
 }
 FilesPaneService::~FilesPaneService() { join(); }
 FilesPaneSubmitted FilesPaneService::navigate(NativeAbsolutePath location, PaneView view, std::size_t first_page_rows) {
-    if (!location.is_valid() || !valid_pane_order({view.sort, view.descending, view.folders_first}))
+    if (!location.is_valid())
         return {FilesPaneSubmission::Invalid, {}};
-    const auto units = location.posix_bytes() ? location.posix_bytes()->size() : location.windows_units()->size();
-    const auto width = location.posix_bytes() ? 1U : 2U;
-    if (units > state_->limits.path_bytes / width || view.display_substring.size() > 4096 || !first_page_rows ||
-        first_page_rows > state_->limits.page_rows)
+    return navigate(FilesPaneLocation(std::move(location)), std::move(view), first_page_rows);
+}
+FilesPaneSubmitted FilesPaneService::navigate(FilesPaneLocation location, PaneView view, std::size_t first_page_rows) {
+    if (!location.root_address().is_valid() || !valid_pane_order({view.sort, view.descending, view.folders_first}))
+        return {FilesPaneSubmission::Invalid, {}};
+    if (location.native_bytes() > state_->limits.path_bytes ||
+        location.components().size() > state_->limits.location_components || view.display_substring.size() > 4096 ||
+        !first_page_rows || first_page_rows > state_->limits.page_rows)
         return {FilesPaneSubmission::LimitExceeded, {}};
     std::optional<std::stop_source> stop;
     FilesPaneTicket request;

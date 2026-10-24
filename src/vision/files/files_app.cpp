@@ -170,6 +170,12 @@ struct FilesApp::State {
                 return id;
             };
             const auto row_ready = [this] { return ready(active) && panes[active].model.target().has_value(); };
+            const auto parent_id = own(
+                "ck.files.parent", [this] { navigate_relative(active, false); },
+                [this] { return relative_ready(active, false); });
+            const auto root_id = own(
+                "ck.files.root", [this] { navigate_relative(active, true); },
+                [this] { return relative_ready(active, true); });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] {
@@ -226,7 +232,8 @@ struct FilesApp::State {
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
                     "&Location",
-                    {item(enter_id, "&Enter folder"),
+                    {item(enter_id, "&Enter folder"), item(parent_id, "&Parent folder"),
+                     item(root_id, "Location &root"),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -239,6 +246,7 @@ struct FilesApp::State {
                 ckv::widgets::MenuBarItem{"&View", {item(options_id, "View &options...")}}};
             options.application_status_items = {
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{enter_id, "&Enter folder"}, 35},
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{parent_id, "&Parent folder"}, 32},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{switch_id, "&Switch pane"}, 30},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{toggle, "&Mark"}, 28},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"}, 25},
@@ -425,10 +433,27 @@ struct FilesApp::State {
     bool navigate(std::size_t i, ck::files::NativeAbsolutePath location) {
         if (i >= 2 || closing || !location.is_valid())
             return false;
+        return navigate(i, FilesPaneLocation(std::move(location)), {});
+    }
+    bool relative_ready(std::size_t i, bool root) const {
+        if (!ready(i) || !panes[i].active)
+            return false;
+        const auto next = root ? panes[i].active->namespace_root() : panes[i].active->parent();
+        return next.value() && *next.value() != *panes[i].active;
+    }
+    bool navigate_relative(std::size_t i, bool root) {
+        if (!relative_ready(i, root))
+            return false;
+        auto next = root ? panes[i].active->namespace_root() : panes[i].active->parent();
+        auto view = panes[i].view;
+        view.display_substring.clear();
+        return navigate(i, std::move(next).take_value(), std::move(view));
+    }
+    bool navigate(std::size_t i, FilesPaneLocation location, ck::files::PaneView view) {
         auto requested = std::make_shared<const FilesPaneLocation>(std::move(location));
         auto &p = panes[i];
         auto range = p.model.viewport();
-        auto submitted = services[i]->navigate(requested->root_address(), {}, range.rows);
+        auto submitted = services[i]->navigate(*requested, std::move(view), range.rows);
         if (submitted.state != FilesPaneSubmission::Accepted) {
             p.error = "Navigation request rejected";
             labels();
@@ -831,6 +856,8 @@ bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location
     return state_->navigate(pane, std::move(location));
 }
 bool FilesApp::enter_directory(std::size_t pane) { return state_->enter_directory(pane); }
+bool FilesApp::navigate_parent(std::size_t pane) { return state_->navigate_relative(pane, false); }
+bool FilesApp::navigate_root(std::size_t pane) { return state_->navigate_relative(pane, true); }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
 }

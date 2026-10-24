@@ -4083,3 +4083,39 @@ WP-02 remains open for navigation input/completion, parent/home/root navigation,
 qualified refresh, properties/preview, histories/bookmarks and production
 executable/interactive acceptance. No source filesystem mutation or production
 GUI application launch is introduced by this component milestone.
+
+
+## 2026-10-24 — WP-02 parent/root navigation and structured replay
+
+Parent folder and Location root now use suite commands and requested native
+routes. Backspace is configurable; menus expose both commands and the status
+line exposes Parent. Ready/modal/root-boundary guards apply. Parent removes
+exact route components, then uses lexical parents of the requested anchor;
+Root respects Windows drive/share/volume boundaries and POSIX root spelling.
+No display text becomes a native target, dot components are not canonicalized,
+and requested ancestors are not advertised as retained object identities.
+
+The worker can replay a bounded structured route by opening its absolute
+anchor, then exact child components relative to held cursors. Every suffix
+open rejects links/reparse points and checks cancellation before the next open.
+Failed/cancelled replay retains the acknowledged pane; latest navigation can
+supersede blocked replay. The UI retains its old route/listing/marks/range until
+acknowledgment, preserves view policy, and clears a filter only on successful
+parent/root adoption. Real native tests replay parents containing escaped POSIX
+names and a Windows literal trailing-dot/space directory.
+
+Qualification passes all 83 Files suites on macOS/Linux/Windows (855/858/854
+cases), plus the keymap suite. Matched ASan+UBSan on macOS/Linux and ASan on
+Windows pass 173/171/170 cases: 92 UI/service, 53 indexed-pane, 11 path and
+17/15/14 native-index. All 74 product units and 124/124/128 pinned SDK units
+compile with instrumentation. Fresh ThreadSanitizer builds pass all 45 service
+cases three times per POSIX host (270 executions); this qualifies the UI-free
+worker/native protocol rather than the UI controller/grid. Diagnostic builds
+and fixture data are retired; current normal builds remain for active work.
+Architecture checks and strict documentation pass. See
+[qualification evidence](evidence/ck-files-route-20261024.json).
+
+WP-02 remains open for home discovery, editable
+location/completion, history/bookmarks, qualified refresh, properties/preview
+and production executable/interactive acceptance. No mutation commands or
+production GUI launch are introduced.

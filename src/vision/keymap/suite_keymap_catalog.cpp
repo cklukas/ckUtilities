@@ -66,6 +66,8 @@ const std::array kFindCommands{
 };
 
 const std::array kFilesCommands{
+    CommandDefinition{"ck.files.parent", "&Parent folder", "Files", "Backspace"},
+    CommandDefinition{"ck.files.root", "Location &root", "Files", ""},
     CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
     CommandDefinition{"ck.files.cancel_read", "&Cancel activity", "Files", ""},

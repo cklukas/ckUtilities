@@ -1288,3 +1288,99 @@ CK_TEST(files_service_child_without_active_pane_never_retries_native_backend_sta
     CK_CHECK(f.trace->workspaces == 1 && f.trace->opens == 0 && f.trace->child_opens == 0);
     f.stopped();
 }
+
+CK_TEST(files_location_parent_preserves_exact_components_bytes_and_requested_namespace_root) {
+    const auto root = FilesPaneLocation(address("one"));
+    const auto folder = take(root.descend(child_name("folder"), {}, 32));
+    const auto inner = take(folder.descend(child_name("inner"), {}, 32));
+    CK_CHECK(take(inner.parent()) == folder && take(folder.parent()) == root);
+    CK_CHECK(take(inner.parent()).native_bytes() == folder.native_bytes());
+    CK_CHECK(take(root.parent()).root_address() == take(address("one").parent_address()));
+    CK_CHECK(take(inner.namespace_root()).components().empty());
+    CK_CHECK(take(inner.namespace_root()).root_address() == take(address("one").namespace_root()));
+    auto moved = folder;
+    const auto held = std::move(moved);
+    CK_CHECK(!moved.parent().value() && !moved.namespace_root().value() && held.parent().value());
+}
+CK_TEST(files_service_replays_structured_route_on_worker_without_flattening_and_returns_to_requested_parent) {
+    Fixture f;
+    f.start_children();
+    const auto root = FilesPaneLocation(address("one"));
+    const auto folder = take(root.descend(child_name("folder"), {}, 32));
+    const auto inner = take(folder.descend(child_name("inner"), {}, 32));
+    auto request = f.service->navigate(inner);
+    CK_CHECK(request.state == FilesPaneSubmission::Accepted);
+    auto reply = f.reply();
+    CK_CHECK(reply.state == FilesPaneReplyState::Ready && *reply.active_location == inner &&
+             reply.page->rows().size() == 1);
+    CK_CHECK(f.trace->opens == 1 && f.trace->child_opens == 2 && f.trace->wrong_thread == 0);
+    request = f.service->navigate(take(inner.parent()));
+    reply = f.reply();
+    CK_CHECK(reply.state == FilesPaneReplyState::Ready && *reply.active_location == folder);
+    CK_CHECK(f.trace->opens == 2 && f.trace->child_opens == 3);
+    f.stopped();
+}
+CK_TEST(files_service_route_replay_failure_or_link_retains_previous_location_and_dataset) {
+    Fixture f;
+    f.start_children();
+    const auto root = FilesPaneLocation(address("one"));
+    f.service->navigate(root);
+    const auto previous = f.reply();
+    for (const auto text : {"missing", "file", "link"}) {
+        const auto route = take(root.descend(child_name(text), {}, 32));
+        auto request = f.service->navigate(route);
+        auto reply = f.reply();
+        CK_CHECK(request.state == FilesPaneSubmission::Accepted && reply.state == FilesPaneReplyState::Failed);
+        CK_CHECK(reply.active_location == previous.active_location && *reply.requested_location == route &&
+                 !reply.page);
+        CK_CHECK(reply.stamp.current() && previous.stamp.current());
+        auto page = f.service->read_page(request.ticket, previous.stamp, {0, 4});
+        CK_CHECK(page.state == FilesPaneSubmission::Accepted && f.reply().page->rows().size() == 3);
+    }
+    f.stopped();
+}
+CK_TEST(files_service_route_replay_cancels_and_latest_absolute_navigation_supersedes_blocked_component) {
+    for (bool supersede : {false, true}) {
+        Fixture f;
+        f.start_children();
+        const auto root = FilesPaneLocation(address("one"));
+        f.service->navigate(root);
+        const auto previous = f.reply();
+        const auto route = take(take(root.descend(child_name("folder"), {}, 32)).descend(child_name("inner"), {}, 32));
+        f.trace->block_child = true;
+        const auto request = f.service->navigate(route);
+        f.trace->child_gate.wait();
+        CK_CHECK(f.service->working() && f.trace->child_opens == 1);
+        FilesPaneSubmitted next{FilesPaneSubmission::Invalid, {}};
+        if (supersede)
+            next = f.service->navigate(address("two"));
+        else
+            CK_CHECK(f.service->cancel(request.ticket));
+        f.trace->child_gate.release();
+        const auto reply = f.reply();
+        if (supersede) {
+            CK_CHECK(reply.request == next.ticket && reply.state == FilesPaneReplyState::Ready);
+            CK_CHECK(reply.active_location->root_address() == address("two"));
+        } else {
+            CK_CHECK(reply.request == request.ticket && reply.state == FilesPaneReplyState::Cancelled);
+            CK_CHECK(reply.active_location == previous.active_location && reply.stamp.current() && previous.stamp.current());
+        }
+        CK_CHECK(f.trace->child_opens == 1); // Cancellation checked before the next native open.
+        f.stopped();
+    }
+}
+CK_TEST(files_service_route_replay_enforces_complete_native_bytes_and_depth_before_starting_io) {
+    Fixture f;
+    FilesPaneServiceLimits limits;
+    limits.location_components = 1;
+    f.start_children(limits);
+    const auto folder = take(FilesPaneLocation(address("one")).descend(child_name("folder"), {}, 32));
+    const auto inner = take(folder.descend(child_name("inner"), {}, 32));
+    CK_CHECK(f.service->navigate(inner).state == FilesPaneSubmission::LimitExceeded && f.trace->opens == 0);
+    auto moved = folder;
+    const auto retained = std::move(moved);
+    CK_CHECK(f.service->navigate(std::move(moved)).state == FilesPaneSubmission::Invalid);
+    CK_CHECK(f.service->navigate(retained).state == FilesPaneSubmission::Accepted);
+    CK_CHECK(f.reply().state == FilesPaneReplyState::Ready);
+    f.stopped();
+}

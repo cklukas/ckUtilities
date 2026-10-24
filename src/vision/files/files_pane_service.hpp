@@ -19,9 +19,14 @@ class FilesPaneLocation final {
     std::span<const ck::files::NativeName> components() const noexcept { return components_; }
     std::size_t native_bytes() const noexcept { return bytes_; }
     std::string display_text() const; // escaped presentation only, never parse back
+    // Requested-address navigation, not retained ancestor identity. Exact
+    // components remain separate and are replayed through held cursors.
+    ck::files::Observation<FilesPaneLocation> parent() const;
+    ck::files::Observation<FilesPaneLocation> namespace_root() const;
     ck::files::Observation<FilesPaneLocation>
     descend(const ck::files::NativeName &name, ck::files::NativePathLimits limits, std::size_t max_components) const;
     static constexpr std::size_t hard_components = 4096;
+    friend bool operator==(const FilesPaneLocation &, const FilesPaneLocation &) = default;
 
   private:
     ck::files::NativeAbsolutePath root_;
@@ -126,6 +131,11 @@ class FilesPaneService final {
     FilesPaneService(const FilesPaneService &) = delete;
     FilesPaneService &operator=(const FilesPaneService &) = delete;
     FilesPaneSubmitted navigate(ck::files::NativeAbsolutePath location, ck::files::PaneView view = {},
+                                std::size_t first_page_rows = 256);
+    // Reopen the requested root, then each exact component relative to its
+    // held predecessor, rejecting links/reparse points. No pathname flattening
+    // or claim of continuity with an earlier visit. Latest navigation wins.
+    FilesPaneSubmitted navigate(FilesPaneLocation location, ck::files::PaneView view = {},
                                 std::size_t first_page_rows = 256);
     // Exclusive navigation from one visible scoped row of the current pane.
     // No I/O at submission, no mark/cursor retargeting or absolute path reopen.

@@ -843,6 +843,18 @@ CK_TEST(files_app_folder_entry_preserves_native_names_without_parsing_display_or
     CK_CHECK(f.app->location(0)->root_address() == address(root) && f.app->location(0)->components().size() == 1);
     CK_CHECK(f.app->location(0)->components()[0] == expected && f.app->model(0).row_count() == 1);
     CK_CHECK(f.painted().find("leaf.txt") != std::string::npos);
+    std::filesystem::create_directory(folder / "nested");
+    CK_CHECK(f.app->navigate_parent(0));
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 2);
+    CK_CHECK(f.app->navigate_parent(0));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().size() == 1 && f.app->location(0)->components()[0] == expected);
+    CK_CHECK(f.app->model(0).row_count() == 2);
     std::filesystem::remove_all(folder); // Exact extended spelling on Windows.
 }
 
@@ -861,4 +873,77 @@ CK_TEST(files_app_home_and_end_address_file_records_and_wait_for_uncached_row_id
     CK_CHECK(f.command("ck.files.enter_directory"));
     f.loaded();
     CK_CHECK(f.app->location(0)->components().size() == 1);
+}
+
+CK_TEST(files_app_parent_replays_exact_ancestors_and_preserves_view_policy_and_other_pane) {
+    for (auto theme :
+         {ThemeScheme::Classic, ThemeScheme::Dark, ThemeScheme::Light, ThemeScheme::Mono, ThemeScheme::HighContrast}) {
+        Fixture f(theme, {}, {}, {120, 34}, {}, true);
+        f.loaded();
+        const auto start = f.app->location(0), other = f.app->location(1);
+        CK_CHECK(f.app->enter_directory(0));
+        f.loaded();
+        CK_CHECK(f.app->enter_directory(0));
+        f.loaded();
+        CK_CHECK(f.app->location(0)->components().size() == 2);
+        auto view = f.app->view(0);
+        view.show_hidden = view.ascii_case_sensitive = true;
+        view.display_substring = "leaf";
+        CK_CHECK(f.app->change_view(0, view));
+        f.loaded();
+        const auto before = f.app->location(0);
+        CK_CHECK(f.key(ckv::Key::Backspace) && f.app->pending(0) && f.app->location(0) == before);
+        f.loaded();
+        CK_CHECK(f.app->location(0)->components().size() == 1 && f.app->view(0).display_substring.empty());
+        CK_CHECK(f.app->view(0).show_hidden && f.app->view(0).ascii_case_sensitive);
+        CK_CHECK(f.command("ck.files.parent"));
+        f.loaded();
+        CK_CHECK(*f.app->location(0) == *start && f.app->location(1) == other);
+        CK_CHECK(f.app->model(0).row_count() == 100);
+    }
+}
+CK_TEST(files_app_parent_failure_retains_exact_route_rows_and_range_without_affecting_other_pane) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.range_start") && f.command("ck.files.toggle_mark"));
+    f.loaded();
+    const auto previous = f.app->location(0), other = f.app->location(1);
+    std::filesystem::remove_all(f.scratch.path() / "left" / "left-item-0");
+    CK_CHECK(f.app->navigate_parent(0));
+    f.loaded();
+    CK_CHECK(f.app->location(0) == previous && f.app->location(1) == other && f.app->model(0).row_count() == 1);
+    CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("previous location retained") != std::string::npos);
+}
+CK_TEST(files_app_root_menu_obeys_namespace_boundary_and_parent_is_disabled_at_root) {
+    Fixture f(ThemeScheme::HighContrast, {}, {}, {80, 24});
+    f.loaded();
+    const auto expected = f.app->location(0)->namespace_root();
+    const auto other = f.app->location(1);
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "l"}}));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "r"}}));
+    f.loaded();
+    CK_CHECK(*f.app->location(0) == *expected.value() && f.app->location(1) == other);
+    CK_CHECK(!f.command("ck.files.root") && !f.command("ck.files.parent"));
+    CK_CHECK(!f.app->navigate_parent(0) && !f.app->navigate_root(0) && !f.app->navigate_parent(2));
+}
+CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.app->enter_directory(0));
+    f.loaded();
+    f.application.commands().unbind_key({ckv::Key::Backspace, ckv::Modifier::None, {}});
+    CK_CHECK(!f.key(ckv::Key::Backspace) && !f.app->pending(0));
+    f.application.commands().bind_key({ckv::Key::F8, ckv::Modifier::Ctrl, {}}, f.id("ck.files.parent"));
+    CK_CHECK(f.command("ck.files.view_options"));
+    CK_CHECK(!f.command("ck.files.parent") && !f.app->navigate_parent(0) && !f.app->navigate_root(0));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
+    f.loaded();
+    CK_CHECK(f.app->location(0)->components().empty());
 }

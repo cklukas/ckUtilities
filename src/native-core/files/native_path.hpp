@@ -28,6 +28,11 @@ public:
     // A foreign encoding is Unsupported, never silently transcoded. This
     // constructs an exact native host path; it performs no filesystem access.
     Observation<std::filesystem::path> host_path() const;
+    // Lexical requested-address navigation only. Preserve the namespace and
+    // native units; do not resolve dot components, links, mounts or identities.
+    // Parent of a namespace root is that root. Invalid/moved values refuse.
+    Observation<NativeAbsolutePath> parent_address() const;
+    Observation<NativeAbsolutePath> namespace_root() const;
     bool is_valid() const noexcept;
     NameEncoding encoding() const noexcept;
     const std::string* posix_bytes() const noexcept;
