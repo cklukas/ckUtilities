@@ -7,8 +7,10 @@ Progress here does not enable unimplemented capabilities or relax release gates.
 
 The worker-backed location completion integration is committed as `7e4ecfa`;
 the production native host and installed `ck-files` executable are committed
-as `c59b900`; and asynchronous route history/bookmarks are committed as
-`aad2367`. The host accepts zero, one or two native UTF-8 arguments,
+as `c59b900`; asynchronous route history/bookmarks are committed as
+`aad2367`; refresh and Properties are committed as `223dd94`; and bounded
+worker-owned preview is committed as `2b9a7ba`. The host accepts zero, one or
+two native UTF-8 arguments,
 creates four private per-user cache directories under the resolved suite
 configuration root, injects independent pane and completion workers, loads the
 persisted keymap, and runs the real native terminal application. It refuses a
@@ -19,12 +21,12 @@ current directory.
 Mac qualification on 2026-10-24 used the pinned ckVision 1.4.0 package and the
 Debug build at
 `/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build`.
-The `aad2367` target build ran from 21:54:54 to 21:55:19 CEST; the production
+The `2b9a7ba` final target qualification ran at 22:06:48 CEST; the production
 binary was verified by absolute path and `--help`, with SHA-256
-`218ab3ba15dd21d4f65bf83e6000b430c7b086deebb9d2db7bbffd66ae3188ee`:
+`1af9d82867b1f4c46059d088cd4054dee7a73a567449d60f591b0943d81726a4`:
 `/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build/bin/ck-files`.
-`ck_vision_files_tests` passed all 180 internal cases (one CTest entry) in
-7.53 s. The native private-index test root remains on the ownership-enabled
+`ck_vision_files_tests` passed all 182 internal cases (one CTest entry) in
+3.04 s. The native private-index test root remains on the ownership-enabled
 `/Volumes/PRO-BLADE/tmp/ckutilities-wp02-completion-20261024-01-test-scratch`;
 the adapter correctly refuses the ownership-disabled S8T volume.
 
@@ -32,12 +34,12 @@ Linux qualification used a fresh local-ext4 VM workspace
 `/tmp/ckutilities-linux-wp02-20261024-01` because Git FetchContent object
 writes fail on the VM's VirtioFS-mounted `/Volumes/PRO-BLADE/tmp`. A fresh
 ckVision 1.4.0 SDK was built with GCC 14/aarch64, then ckUtilities was built
-with the `aad2367` host. The final qualification target rebuild was recorded
-at 21:55:32 CEST (no source rebuild was needed), the production `ck-files`
+with the `2b9a7ba` host. The final qualification target rebuild was recorded
+at 22:05:06–22:06:26 CEST, the production `ck-files`
 binary has SHA-256
-`2bf62a403933c7f3e4b621d71f7121334c3adec06bb8b155c0bda4d207742563`, its
-`--help` output was verified, and the Files test binary passed all 180 cases
-in 8.30 s.
+`42cb282d5166b68a04fbe1789f147bcfa393ad31d6ae9db6ff124a23e23bbab8`, its
+`--help` output was verified, and the Files test binary passed all 182 cases
+in 11.01 s.
 
 The Mac ASan/UBSan full Files run remains blocked by a reproducible heap
 buffer-overflow in the untouched pinned ckVision 1.4.0 `Desktop` command-vector
@@ -52,8 +54,11 @@ pane. A successful worker acknowledgment appends a route and truncates only
 the forward branch after a new navigation; back/forward and bookmark
 navigation submit the exact structured route asynchronously and do not mutate
 the acknowledged location before acceptance. Duplicate bookmarks and removal
-of a non-bookmarked route are refused. The Mac and Linux 180-case suites cover
-these acknowledgment and branch invariants.
+of a non-bookmarked route are refused. The Mac and Linux 182-case suites cover
+these acknowledgment and branch invariants. Preview additionally opens the
+exact stamped row on the pane worker with explicit bounded read access,
+rechecks identity and logical size around the read, and publishes a bounded
+hex display only after the worker acknowledgment.
 
 ## WP-02 — worker-backed location completion checkpoint
 
@@ -74,11 +79,13 @@ The native private-index test root was explicitly placed at
 `/Volumes/PRO-BLADE/tmp/ckutilities-wp02-completion-20261024-01-test-scratch`
 because S8T has APFS ownership disabled; the adapter correctly refused the
 unqualified S8T root rather than weakening its private-workspace check.
-`ck_vision_files_tests` passed all 85 registered Files tests, including the
-worker completion/Right acceptance case. Build output fingerprint:
+`ck_vision_files_tests` passed all 182 internal Files cases, including the
+worker completion/Right acceptance, refresh/Properties, history/bookmark and
+bounded preview cases. Build output fingerprint:
 `9641d2d2dd400fb0a1ce0a77ad286eebb8faf46966ed83a38db1b7e8ab04d9c1`.
-Sanitizer, Linux/Windows, production executable integration, history/bookmark,
-properties/preview and remaining WP-02 interactive acceptance are still open.
+The remaining release gates are the documented ckVision sanitizer blocker,
+Windows qualification pending the mandatory `V:` drive, and interactive
+acceptance on the real terminal.
 
 ## WP-00 — complete
 
