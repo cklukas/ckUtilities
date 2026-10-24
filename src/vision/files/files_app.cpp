@@ -140,17 +140,22 @@ struct FilesApp::State {
     std::shared_ptr<void> lifetime = std::make_shared<int>(0);
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
     std::weak_ptr<void> view_dialog_lifetime;
     bool close_after_view = false;
+    ckv::widgets::Window *properties_dialog_window = nullptr;
+    std::weak_ptr<void> properties_dialog_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_remove_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId refresh_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId properties_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
@@ -214,6 +219,10 @@ struct FilesApp::State {
                            std::any_of(panes[active].bookmarks.begin(), panes[active].bookmarks.end(),
                                        [this](const auto &bookmark) { return *bookmark == *panes[active].active; });
                 });
+            refresh_id = own("ck.files.refresh", [this] { refresh(active); }, [this] { return ready(active); });
+            properties_id = own("ck.files.properties", [this] { show_properties(); }, [this] {
+                return ready(active) && panes[active].model.cursor_row();
+            });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] {
@@ -274,7 +283,8 @@ struct FilesApp::State {
                      item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
                      item(home_id, "&Home location"), item(history_back_id, "Go &back"),
                      item(history_forward_id, "Go &forward"), item(bookmark_add_id, "Add &bookmark"),
-                     item(bookmark_remove_id, "Remove bookmark"),
+                     item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
+                     item(properties_id, "&Properties..."),
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
@@ -342,6 +352,7 @@ struct FilesApp::State {
         confirmation.reset();
         location_dialog.reset();
         view_dialog.reset();
+        properties_dialog.reset();
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
@@ -414,6 +425,7 @@ struct FilesApp::State {
     }
     bool modal_pending() const {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
+               (properties_dialog && !properties_dialog->completed()) ||
                (location_dialog && !location_dialog->completed());
     }
     bool can_edit_location(std::size_t i) const {
@@ -516,6 +528,11 @@ struct FilesApp::State {
         panes[i].history_target.reset();
         return accept_navigation(i, services[i]->navigate_home(std::move(view), panes[i].model.viewport().rows), {},
                                  true);
+    }
+    bool refresh(std::size_t i) {
+        if (!ready(i) || !panes[i].active)
+            return false;
+        return navigate(i, FilesPaneLocation(*panes[i].active), panes[i].view);
     }
     bool navigate_history(std::size_t i, std::size_t target) {
         if (!ready(i) || target >= panes[i].history.size() || target == panes[i].history_position)
@@ -812,6 +829,64 @@ struct FilesApp::State {
                 }
             });
     }
+    void show_properties() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto *row = panes[pane].model.cursor_row();
+        if (!row)
+            return;
+        const auto display_name = row->display_name;
+        const auto location = panes[pane].active ? panes[pane].active->display_text() : std::string("Unknown location");
+        const auto kind = [&] {
+            if (!row->metadata.kind.value())
+                return std::string("Unknown");
+            switch (*row->metadata.kind.value()) {
+            case ck::files::ObjectKind::RegularFile: return std::string("File");
+            case ck::files::ObjectKind::Directory: return std::string("Folder");
+            case ck::files::ObjectKind::SymbolicLink: return std::string("Symbolic link");
+            case ck::files::ObjectKind::Junction: return std::string("Junction");
+            case ck::files::ObjectKind::ReparsePoint: return std::string("Reparse point");
+            case ck::files::ObjectKind::Fifo: return std::string("FIFO");
+            case ck::files::ObjectKind::Socket: return std::string("Socket");
+            case ck::files::ObjectKind::CharacterDevice: return std::string("Character device");
+            case ck::files::ObjectKind::BlockDevice: return std::string("Block device");
+            case ck::files::ObjectKind::Other: return std::string("Other");
+            }
+            return std::string("Unknown");
+        }();
+        const auto number = [](const auto &value) {
+            return value.value() ? std::to_string(*value.value()) : std::string("Unknown");
+        };
+        const auto timestamp = [](const auto &value) {
+            if (!value.value())
+                return std::string("Unknown");
+            return std::to_string(value.value()->seconds()) + "." +
+                   std::to_string(value.value()->nanoseconds()) + " UTC seconds";
+        };
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Properties";
+        descriptor.fields = {
+            {.label = "Name: " + display_name, .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Location: " + location, .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Type: " + kind, .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Logical bytes: " + number(row->metadata.logical_size), .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Allocated bytes: " + number(row->metadata.allocated_size), .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Links: " + number(row->metadata.link_count), .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Modified: " + timestamp(row->metadata.modified), .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Observation is from the acknowledged listing; refresh to recheck native metadata.",
+             .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
+        properties_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        properties_dialog_window = shell->desktop().active_window();
+        properties_dialog_lifetime = properties_dialog_window->lifetime_token();
+        properties_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
+            if (!weak.expired())
+                properties_dialog_window = nullptr;
+            });
+    }
     void watch() {
         const bool pending = std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
         if (pending && !watchdog)
@@ -1017,6 +1092,11 @@ struct FilesApp::State {
                 view_dialog_window->close();
             return;
         }
+        if (properties_dialog && !properties_dialog->completed()) {
+            if (properties_dialog_window && !properties_dialog_lifetime.expired())
+                properties_dialog_window->close();
+            return;
+        }
         if (confirmation && !confirmation->completed())
             return;
         if (!services[0]->working() && !services[1]->working()) {
@@ -1054,6 +1134,7 @@ bool FilesApp::enter_directory(std::size_t pane) { return state_->enter_director
 bool FilesApp::navigate_parent(std::size_t pane) { return state_->navigate_relative(pane, false); }
 bool FilesApp::navigate_root(std::size_t pane) { return state_->navigate_relative(pane, true); }
 bool FilesApp::navigate_home(std::size_t pane) { return state_->navigate_home(pane); }
+bool FilesApp::refresh(std::size_t pane) { return state_->refresh(pane); }
 bool FilesApp::navigate_history_back(std::size_t pane) { return state_->navigate_history_back(pane); }
 bool FilesApp::navigate_history_forward(std::size_t pane) { return state_->navigate_history_forward(pane); }
 bool FilesApp::add_bookmark(std::size_t pane) { return state_->add_bookmark(pane); }
@@ -1079,6 +1160,9 @@ void FilesApp::cancel_read() { state_->cancel_read(); }
 void FilesApp::request_close() { state_->request_close(); }
 bool FilesApp::close_confirmation_pending() const { return state_->confirmation && !state_->confirmation->completed(); }
 bool FilesApp::view_options_pending() const { return state_->view_dialog && !state_->view_dialog->completed(); }
+bool FilesApp::properties_pending() const {
+    return state_->properties_dialog && !state_->properties_dialog->completed();
+}
 bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }

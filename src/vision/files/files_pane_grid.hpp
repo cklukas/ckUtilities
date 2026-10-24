@@ -31,6 +31,7 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     std::uint64_t row_count() const noexcept;
     bool current() const noexcept;
     std::optional<FilesPaneRowTarget> target() const;
+    const ck::files::PaneDisplayRow *cursor_row() const noexcept;
     std::optional<bool> cursor_marked() const;
     std::optional<ck::files::ObjectKind> cursor_kind() const;
     // Acknowledged state changes pause input without dropping focus or hiding

@@ -446,6 +446,20 @@ CK_TEST(files_app_pane_commands_do_not_run_from_unrelated_input_or_view_options)
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->view_options_pending() && !f.app->pending(0) && f.app->selection(0).marks->total == 0);
 }
+CK_TEST(files_app_refresh_is_an_async_reopen_and_properties_use_acknowledged_row_metadata) {
+    Fixture f;
+    f.loaded();
+    const auto before = f.app->location(0);
+    const auto history = f.app->history_size(0);
+    CK_CHECK(f.command("ck.files.refresh"));
+    CK_CHECK(f.app->pending(0) && f.app->history_size(0) == history);
+    f.loaded();
+    CK_CHECK(f.app->location(0) && before && *f.app->location(0) == *before && f.app->history_size(0) == history);
+    CK_CHECK(f.command("ck.files.properties") && f.app->properties_pending());
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->properties_pending());
+}
 CK_TEST(files_app_view_options_materialize_typed_controls_and_accept_via_mouse_after_narrow_resize) {
     Fixture f;
     f.loaded();

@@ -74,6 +74,8 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.history_forward", "Go &forward", "Files", ""},
     CommandDefinition{"ck.files.bookmark_add", "&Add bookmark", "Files", ""},
     CommandDefinition{"ck.files.bookmark_remove", "&Remove bookmark", "Files", ""},
+    CommandDefinition{"ck.files.refresh", "&Refresh listing", "Files", "Ctrl+R"},
+    CommandDefinition{"ck.files.properties", "&Properties...", "Files", ""},
     CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
     CommandDefinition{"ck.files.cancel_read", "&Cancel activity", "Files", ""},

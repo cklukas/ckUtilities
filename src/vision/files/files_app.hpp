@@ -48,6 +48,7 @@ class FilesApp final {
     bool navigate_parent(std::size_t pane);
     bool navigate_root(std::size_t pane);
     bool navigate_home(std::size_t pane);
+    bool refresh(std::size_t pane);
     bool navigate_history_back(std::size_t pane);
     bool navigate_history_forward(std::size_t pane);
     bool add_bookmark(std::size_t pane);
@@ -64,6 +65,7 @@ class FilesApp final {
     void request_close();
     bool close_confirmation_pending() const;
     bool view_options_pending() const;
+    bool properties_pending() const;
     bool location_editor_pending() const;
     std::size_t history_size(std::size_t pane) const;
     std::size_t history_position(std::size_t pane) const;

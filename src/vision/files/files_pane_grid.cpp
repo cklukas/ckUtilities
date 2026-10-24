@@ -133,6 +133,9 @@ std::optional<FilesPaneRowTarget> FilesPaneGridModel::target() const {
         return {};
     return FilesPaneRowTarget{*stamp(), value->id};
 }
+const ck::files::PaneDisplayRow *FilesPaneGridModel::cursor_row() const noexcept {
+    return current() ? row(cursor_) : nullptr;
+}
 std::optional<bool> FilesPaneGridModel::cursor_marked() const {
     const auto *value = row(cursor_);
     return current() && value ? std::optional<bool>(value->marked) : std::nullopt;
