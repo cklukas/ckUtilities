@@ -78,6 +78,15 @@ with its acknowledged-listing/recheck warning, menu bookmark creation,
 Backspace parent navigation, history back/forward, Ctrl+R refresh, and Alt+X
 shutdown. The process exited cleanly and no mutation command was enabled.
 
+Linux repeated the host check with the exact binary
+`/tmp/ckutilities-linux-wp02-20261024-01/build/bin/ck-files`, SHA-256
+`42cb282d5166b68a04fbe1789f147bcfa393ad31d6ae9db6ff124a23e23bbab8`, in the
+fresh remote PTY workspace `/tmp/ckutilities-linux-wp02-20261024-01`. A
+premature incomplete `.../sr` submission displayed the explicit
+“location disappeared; previous location retained” diagnostic. After waiting
+for the bounded candidate, Right-to-accept selected `sdk/` and Enter opened it;
+Alt+X then shut the process down cleanly.
+
 A fresh macOS ASan+UBSan build at
 `/Volumes/S8T/tmp/ckutilities-wp02-asan-20261024-02` compiled all 90 target
 steps. The complete Files run reproduced the pinned ckVision 1.4.0 heap
@@ -94,6 +103,10 @@ steps. Its worker-focused run passed 89 cases (26 completion service, 13
 completion index, 50 pane service) with no race diagnostics. This is scoped
 worker coverage, not a claim that the upstream-affected UI suite is fully
 sanitized.
+
+The Windows workstation recheck still exposes only `C:` and `T:` drives; the
+mandatory `V:` development drive is absent. No Windows source, cache, build or
+test data was created outside `V:`.
 
 ## WP-02 — worker-backed location completion checkpoint
 
