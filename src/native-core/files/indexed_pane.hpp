@@ -19,6 +19,12 @@ class CompletedIndexedPaneData final {
     PaneOrder order() const noexcept {
         return order_;
     }
+    const PaneView &view() const noexcept {
+        return view_;
+    }
+    std::uint64_t visible_rows() const noexcept {
+        return lookup_->rows();
+    }
     std::uint64_t rows() const noexcept {
         return store_->rows();
     }
@@ -35,19 +41,20 @@ class CompletedIndexedPaneData final {
   private:
     friend class IndexedPaneDataJob;
     friend class IndexedPane;
-    CompletedIndexedPaneData(PaneListingRequest request, PaneOrder order, IndexedPaneDataOrigin origin,
+    CompletedIndexedPaneData(PaneListingRequest request, PaneOrder order, PaneView view, IndexedPaneDataOrigin origin,
                              AdapterScope scope, std::optional<AdapterScope> predecessor,
                              Observation<ObjectIdentity> directory, Observation<BasicMetadata> before,
                              Observation<BasicMetadata> after, BasicMetadata baseline,
                              std::shared_ptr<const DirectoryCursor> pin, std::shared_ptr<DirectoryIndexStore> store,
                              std::shared_ptr<DirectoryIndexLookup> lookup)
-        : request_(std::move(request)), order_(order), origin_(origin), source_scope_(std::move(scope)),
-          predecessor_(std::move(predecessor)), directory_(std::move(directory)), before_(std::move(before)),
-          after_(std::move(after)), baseline_(std::move(baseline)), pin_(std::move(pin)), store_(std::move(store)),
-          lookup_(std::move(lookup)) {
+        : request_(std::move(request)), order_(order), view_(std::move(view)), origin_(origin),
+          source_scope_(std::move(scope)), predecessor_(std::move(predecessor)), directory_(std::move(directory)),
+          before_(std::move(before)), after_(std::move(after)), baseline_(std::move(baseline)), pin_(std::move(pin)),
+          store_(std::move(store)), lookup_(std::move(lookup)) {
     }
     PaneListingRequest request_;
     PaneOrder order_;
+    PaneView view_;
     IndexedPaneDataOrigin origin_;
     AdapterScope source_scope_;
     AdapterScope revision_;
@@ -71,6 +78,12 @@ class IndexedPaneDataJob final {
     IndexedPaneDataJob(Result data, PaneListingRequest target, PaneOrder order,
                        DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
                        std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
+    IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryIndex> listing, const PaneView &view,
+                       DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
+                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
+    IndexedPaneDataJob(Result data, PaneListingRequest target, const PaneView &view,
+                       DirectoryIndexSortLimits sort_limits = {}, DirectoryIndexScanLimits lookup_limits = {},
+                       std::uint64_t lookup_bytes = 256ULL * 1024 * 1024);
     IndexedPaneDataJob(const IndexedPaneDataJob &) = delete;
     IndexedPaneDataJob &operator=(const IndexedPaneDataJob &) = delete;
     IndexedPaneDataJobState advance(std::stop_token stop = {});
@@ -90,6 +103,7 @@ class IndexedPaneDataJob final {
     void cancel() noexcept;
     PaneListingRequest request_;
     PaneOrder order_;
+    PaneView view_;
     IndexedPaneDataOrigin origin_;
     AdapterScope source_scope_;
     std::optional<AdapterScope> predecessor_;
@@ -127,11 +141,20 @@ class IndexedPanePage final {
     std::uint64_t total_rows() const noexcept {
         return total_;
     }
+    std::uint64_t visible_rows() const noexcept {
+        return visible_;
+    }
+    const PaneView &view() const noexcept {
+        return view_;
+    }
+    std::optional<std::uint64_t> focused_position() const noexcept {
+        return focused_position_;
+    }
     std::size_t text_bytes() const noexcept {
         return text_bytes_;
     }
     bool end() const noexcept {
-        return next_ == total_;
+        return next_ == visible_;
     }
     PaneOrder order() const noexcept {
         return order_;
@@ -148,9 +171,11 @@ class IndexedPanePage final {
     IndexedPanePage() = default;
     PaneStateStamp stamp_;
     std::vector<PaneDisplayRow> rows_;
-    std::uint64_t first_ = 0, next_ = 0, total_ = 0;
+    std::uint64_t first_ = 0, next_ = 0, total_ = 0, visible_ = 0;
     std::size_t text_bytes_ = 0;
     PaneOrder order_;
+    PaneView view_;
+    std::optional<std::uint64_t> focused_position_;
     bool pending_ = false;
     std::optional<UnavailableObservation> error_;
 };
@@ -164,8 +189,8 @@ enum class IndexedPaneFocus { Applied, Stale, Unavailable, InvalidTarget, Failed
 // Serialized worker state. Navigation/reorder requests and all successful state
 // changes revoke previously issued stamps. Existing data survives navigation
 // failures. Capture returns only bounded owner-free immutable display payloads.
-// Filtering/marking/acquisition are subsequent indexed services, not silently
-// emulated through an in-memory directory vector or partially accepted commands.
+// Filtering uses the disk view; marking/acquisition remain subsequent services.
+// No directory-sized RAM fallback or partially accepted unsupported commands.
 class IndexedPane final {
   public:
     using Data = IndexedPaneDataJob::Result;
@@ -175,8 +200,12 @@ class IndexedPane final {
     IndexedPane &operator=(const IndexedPane &) = delete;
     PaneStateStamp state_stamp() const;
     bool accepts(const PaneStateStamp &stamp) const noexcept;
+    // Order-only navigation intentionally prepares an unfiltered dataset.
+    // PaneView navigation uses its explicit hidden/substr/case flags.
     PaneListingRequest begin_listing(PaneOrder order);
     Observation<PaneListingRequest> begin_reorder(const PaneStateStamp &stamp, PaneOrder order);
+    PaneListingRequest begin_listing(const PaneView &view);
+    Observation<PaneListingRequest> begin_view_change(const PaneStateStamp &stamp, const PaneView &view);
     IndexedPanePublish publish(Data data, std::stop_token stop = {});
     bool fail_listing(PaneListingRequest request, UnavailableObservation failure);
     bool cancel_listing(PaneListingRequest request) noexcept;
@@ -189,6 +218,12 @@ class IndexedPane final {
     std::uint64_t rows() const noexcept {
         return data_ ? data_->rows() : 0;
     }
+    std::uint64_t visible_rows() const noexcept {
+        return data_ ? data_->visible_rows() : 0;
+    }
+    std::optional<std::uint64_t> focused_position() const noexcept {
+        return focus_position_;
+    }
     const Data &data() const noexcept {
         return data_;
     } // owning worker only
@@ -200,7 +235,7 @@ class IndexedPane final {
     }
 
   private:
-    PaneListingRequest begin(IndexedPaneDataOrigin kind, PaneOrder order);
+    PaneListingRequest begin(IndexedPaneDataOrigin kind, const PaneView &view);
     bool current(PaneListingRequest request) const noexcept;
     void invalidate() noexcept;
     void io_failure(UnavailableObservation error);
@@ -208,10 +243,12 @@ class IndexedPane final {
     std::uint64_t next_request_ = 1, pending_ = 0;
     IndexedPaneDataOrigin pending_kind_ = IndexedPaneDataOrigin::Listing;
     PaneOrder pending_order_;
+    PaneView pending_view_;
     std::optional<AdapterScope> pending_dataset_, pending_revision_;
     mutable std::shared_ptr<PaneStateStamp::Token> stamp_;
     Data data_;
     std::optional<PaneRowId> focus_;
+    std::optional<std::uint64_t> focus_position_;
     std::optional<UnavailableObservation> error_;
 };
 } // namespace ck::files

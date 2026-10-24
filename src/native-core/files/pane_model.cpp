@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pane_model.hpp"
 #include "pane_listing_job.hpp"
+#include "pane_filter.hpp"
 #include <algorithm>
 #include <set>
 #include <map>
@@ -9,12 +10,6 @@
 
 namespace ck::files {
 namespace {
-bool contains(std::string_view text, std::string_view needle, bool sensitive) {
-    const auto fold = [sensitive](unsigned char ch) { return !sensitive && ch >= 'A' && ch <= 'Z' ? ch + ('a' - 'A') : ch; };
-    return std::search(text.begin(), text.end(), needle.begin(), needle.end(), [&](char a, char b) {
-        return fold(static_cast<unsigned char>(a)) == fold(static_cast<unsigned char>(b));
-    }) != text.end() || needle.empty();
-}
 void validate_view(const PaneView& view) {
     if (!valid_pane_order({view.sort, view.descending, view.folders_first}))
         throw std::invalid_argument("invalid pane sort key");
@@ -160,12 +155,12 @@ bool PaneModel::cancel_listing(PaneListingRequest request) noexcept {
     return true;
 }
 PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const PaneView& view) {
+    PaneFilterMatcher filter({view.show_hidden,view.display_substring,view.ascii_case_sensitive});
     Projection result;
     result.positions.resize(rows.size()); result.visible.reserve(rows.size());
     for (std::size_t i = 0; i < rows.size(); ++i) {
         const auto& row = rows[i];
-        if (!view.show_hidden && row.entry.hidden.value() && *row.entry.hidden.value()) continue;
-        if (contains(row.display_name, view.display_substring, view.ascii_case_sensitive)) result.visible.push_back(i);
+        if (filter.match(row.display_name,row.entry.hidden)==PaneFilterMatch::Included) result.visible.push_back(i);
     }
     std::sort(result.visible.begin(), result.visible.end(), [&](std::size_t a, std::size_t b) {
         const auto& left = rows[a]; const auto& right = rows[b];

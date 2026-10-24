@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "directory_index_store.hpp"
+#include "pane_filter.hpp"
 namespace ck::files {
 struct IndexRowKey {
     AdapterScope scope;
@@ -12,6 +13,8 @@ class DirectoryIndexLookupJob;
 // Worker-only, same-lifetime bidirectional disk lookup over one sealed store.
 // Fixed-width rank/ID entries carry schema, generation, role and CRC. No native
 // authority, persistent/restart format, RAM row-address table or UI-thread I/O.
+// Included ranks occupy the front of the position half; excluded ranks occupy
+// its checked tail. All original IDs retain reverse pairs, including exclusions.
 // Source rows must form a permutation of original IDs 1..N. The builder verifies
 // that property using initialized on-disk ID slots, without a directory-size set.
 class DirectoryIndexLookup final {
@@ -20,6 +23,9 @@ class DirectoryIndexLookup final {
     DirectoryIndexLookup(const DirectoryIndexLookup &) = delete;
     DirectoryIndexLookup &operator=(const DirectoryIndexLookup &) = delete;
     std::uint64_t rows() const noexcept {
+        return visible_;
+    }
+    std::uint64_t total_rows() const noexcept {
         return rows_;
     }
     std::uint64_t bytes() const noexcept {
@@ -36,10 +42,13 @@ class DirectoryIndexLookup final {
     }
     // Zero-based position. Foreign/moved row keys and invalid bounds do no I/O
     // and leave a healthy lookup usable. Same row_scope survives re-sorting.
+    // Available(nullopt) means a valid original key excluded by this filter.
+    Observation<std::optional<std::uint64_t>> locate_row(const IndexRowKey &key, std::stop_token stop = {});
     Observation<std::uint64_t> find_row(const IndexRowKey &key, std::stop_token stop = {});
-    // At most one bounded sequential source page plus two 64-byte lookup
-    // records. An inadequate first-row wire budget can be retried. Source reads
-    // finish one bounded page before observing cancellation of this projection.
+    // Complete views use one sequential source page and two fixed entries.
+    // Filtered views read at most the requested row count plus one fixed-entry
+    // lookahead, with two entries and one source record per emitted row.
+    // Inadequate first-row wire budgets can retry; no directory-sized scan.
     Observation<DirectoryIndexScanPage> read_page(std::uint64_t first_rank, DirectoryIndexScanLimits limits = {},
                                                   std::stop_token stop = {});
 
@@ -48,6 +57,7 @@ class DirectoryIndexLookup final {
     struct Entry {
         std::uint64_t rank, row, offset;
         std::uint32_t bytes;
+        bool included = true;
     };
     DirectoryIndexLookup(std::unique_ptr<IndexByteFile> file, std::shared_ptr<DirectoryIndexStore> source,
                          std::shared_ptr<IndexStorageBudget> budget, std::uint64_t bytes);
@@ -64,6 +74,8 @@ class DirectoryIndexLookup final {
     std::shared_ptr<DirectoryIndexStore> source_;
     std::shared_ptr<IndexStorageBudget> budget_;
     const std::uint64_t rows_, bytes_;
+    std::uint64_t visible_ = 0;
+    AdapterScope scan_scope_; // filtered cursors cannot masquerade as source scans
     DirectoryIndexLookupState state_ = DirectoryIndexLookupState::Building;
     std::optional<UnavailableObservation> failure_;
 };
@@ -75,7 +87,8 @@ class DirectoryIndexLookupJob final {
   public:
     using Result = std::shared_ptr<DirectoryIndexLookup>;
     DirectoryIndexLookupJob(std::shared_ptr<DirectoryIndexStore> source, DirectoryIndexScanLimits limits = {},
-                            std::uint64_t max_table_bytes = 256ULL * 1024 * 1024, std::stop_token stop = {});
+                            std::uint64_t max_table_bytes = 256ULL * 1024 * 1024, std::stop_token stop = {},
+                            const PaneFilter &filter = {});
     DirectoryIndexLookupJob(const DirectoryIndexLookupJob &) = delete;
     DirectoryIndexLookupJob &operator=(const DirectoryIndexLookupJob &) = delete;
     DirectoryIndexLookupJobState advance(std::stop_token stop = {});
@@ -94,6 +107,7 @@ class DirectoryIndexLookupJob final {
     void cancel() noexcept;
     Result index_, result_;
     DirectoryIndexScanLimits limits_;
+    PaneFilterMatcher matcher_;
     std::optional<IndexScanCursor> cursor_;
     std::uint64_t initialized_ = 0, processed_ = 0;
     DirectoryIndexLookupJobState state_ = DirectoryIndexLookupJobState::Initializing;

@@ -458,7 +458,7 @@ CK_TEST(indexed_pane_invalid_and_stale_requests_leave_stamps_unchanged_without_I
     CK_CHECK(pane.focus(current->stamp(), {AdapterScope{}, 1}) == IndexedPaneFocus::InvalidTarget);
     bool threw = false;
     try {
-        pane.begin_listing({static_cast<PaneSortKey>(-1), false, false});
+        pane.begin_listing(PaneOrder{static_cast<PaneSortKey>(-1), false, false});
     } catch (const std::invalid_argument &) {
         threw = true;
     }
@@ -496,7 +496,7 @@ CK_TEST(indexed_pane_preparation_limits_failures_and_abandonment_keep_collection
     CK_CHECK(f.budget->charged_bytes() == bytes && f.budget->charged_files() == files);
     bool threw = false;
     try {
-        IndexedPaneDataJob invalid(listing, {static_cast<PaneSortKey>(-1), false, false});
+        IndexedPaneDataJob invalid(listing, PaneOrder{static_cast<PaneSortKey>(-1), false, false});
     } catch (const std::invalid_argument &) {
         threw = true;
     }
@@ -572,4 +572,78 @@ CK_TEST(indexed_pane_request_changes_during_IO_discard_page_focus_and_publicatio
     auto stale_error = newer_target.capture_page(old_stamp, 0);
     CK_CHECK(stale_error.state == IndexedPaneCaptureState::Stale && !stale_error.page);
     CK_CHECK(newer_target.accepts(new_stamp) && !newer_target.listing_error() && newer_target.listing_pending());
+}
+CK_TEST(indexed_pane_full_view_filters_hidden_rows_and_preserves_hidden_focus_until_restored) {
+    Fixture f;
+    IndexedPane pane;
+    pane.publish(prepare(collect(f, pane.begin_listing(ascending)), ascending));
+    auto before = page(pane);
+    const auto key = before->rows()[0].id;
+    auto view = pane.data()->view();
+    view.show_hidden = false;
+    view.display_substring = "B";
+    auto target = take(pane.begin_view_change(pane.state_stamp(), view));
+    IndexedPaneDataJob filtered(pane.data(), target, view, {{1, 4096}, 1}, {1, 4096});
+    finish(filtered);
+    CK_CHECK(pane.publish(take(filtered.completed())) == IndexedPanePublish::Applied);
+    auto visible = page(pane);
+    CK_CHECK(visible->total_rows() == 3 && visible->visible_rows() == 1 && visible->rows()[0].display_name == "b" &&
+             visible->end());
+    CK_CHECK(pane.focused() == key && !pane.focused_position() && !visible->rows()[0].focused);
+    CK_CHECK(pane.focus(visible->stamp(), key) == IndexedPaneFocus::InvalidTarget && pane.accepts(visible->stamp()));
+    view.show_hidden = true;
+    view.display_substring.clear();
+    target = take(pane.begin_view_change(pane.state_stamp(), view));
+    IndexedPaneDataJob restored(pane.data(), target, view);
+    finish(restored);
+    pane.publish(take(restored.completed()));
+    CK_CHECK(pane.focused() == key && pane.focused_position() == 0 && page(pane)->rows()[0].focused);
+}
+CK_TEST(indexed_pane_new_default_view_hides_only_observed_hidden_and_all_excluded_is_not_empty_dataset) {
+    Fixture f;
+    IndexedPane pane;
+    PaneView view;
+    view.folders_first = false;
+    auto request = pane.begin_listing(view);
+    IndexedPaneDataJob initial(collect(f, request), view);
+    finish(initial);
+    pane.publish(take(initial.completed()));
+    CK_CHECK(pane.rows() == 3 && pane.visible_rows() == 2 && page(pane)->rows()[0].display_name == "b" &&
+             pane.focused_position() == 0);
+    view.display_substring = "absent";
+    request = take(pane.begin_view_change(pane.state_stamp(), view));
+    IndexedPaneDataJob none(pane.data(), request, view);
+    finish(none);
+    pane.publish(take(none.completed()));
+    auto empty = page(pane);
+    CK_CHECK(empty->rows().empty() && empty->total_rows() == 3 && empty->visible_rows() == 0 && empty->end() &&
+             !pane.focused_position());
+}
+CK_TEST(indexed_pane_view_result_binds_every_filter_flag_and_charges_filter_text) {
+    Fixture f;
+    IndexedPane pane;
+    pane.publish(prepare(collect(f, pane.begin_listing(ascending)), ascending));
+    auto view = pane.data()->view();
+    view.display_substring = "a";
+    auto request = take(pane.begin_view_change(pane.state_stamp(), view));
+    auto wrong = view;
+    wrong.ascii_case_sensitive = true;
+    IndexedPaneDataJob invalid(pane.data(), request, wrong);
+    finish(invalid);
+    CK_CHECK(pane.publish(take(invalid.completed())) == IndexedPanePublish::InvalidData);
+    IndexedPaneDataJob valid(pane.data(), request, view);
+    finish(valid);
+    pane.publish(take(valid.completed()));
+    auto p = page(pane);
+    CK_CHECK(p->text_bytes() == 3 && p->view().display_substring == "a");
+    CK_CHECK(pane.capture_page(pane.state_stamp(), 0, {{1, 2}, 4096}).state == IndexedPaneCaptureState::LimitExceeded);
+    auto stamp = pane.state_stamp();
+    view.display_substring = std::string(4097, 'x');
+    bool threw = false;
+    try {
+        pane.begin_view_change(stamp, view);
+    } catch (const std::invalid_argument &) {
+        threw = true;
+    }
+    CK_CHECK(threw && pane.accepts(stamp));
 }

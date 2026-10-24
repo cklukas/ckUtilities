@@ -540,3 +540,85 @@ CK_TEST(index_lookup_ready_IO_failure_cancellation_and_exception_revoke_only_loo
         source_only(f);
     }
 }
+CK_TEST(index_lookup_filters_positions_and_distinguishes_valid_excluded_original_keys) {
+    Fixture f;
+    f.populate();
+    sort_source(f);
+    const PaneFilter filter{false, "a", false};
+    DirectoryIndexLookupJob job(f.source, {1, 4096}, 1024 * 1024, {}, filter);
+    finish(job);
+    auto index = take(job.completed());
+    CK_CHECK(index->total_rows() == 7 && index->rows() == 1 && index->bytes() == 896);
+    const auto page = take(index->read_page(0));
+    CK_CHECK(page.end && page.rows.size() == 1 && page.rows[0].record.row_id == 3);
+    CK_CHECK(take(index->locate_row({index->row_scope(), 3})) == 0);
+    CK_CHECK(!take(index->locate_row({index->row_scope(), 6})).has_value());
+    CK_CHECK(!index->find_row({index->row_scope(), 6}).value() && index->state() == DirectoryIndexLookupState::Ready);
+    CK_CHECK(!index->locate_row({AdapterScope{}, 3}).value());
+    CK_CHECK(!f.source->read_page(page.next).value() && f.source->state() == DirectoryIndexStoreState::Sealed);
+    CK_CHECK(!index->read_page(0, {1, 16}).value() && take(index->read_page(0, {1, 4096})).rows.size() == 1);
+}
+CK_TEST(index_lookup_keeps_unavailable_hidden_states_visible_and_all_filtered_End_checked) {
+    Fixture f;
+    for (std::uint64_t i = 1; i <= 4; ++i) {
+        Observation<bool> hidden =
+            i == 1   ? Observation<bool>::available(true)
+            : i == 2 ? Observation<bool>::available(false)
+                     : Observation<bool>::unavailable(i == 3 ? ObservationState::Unknown : ObservationState::Denied,
+                                                      {ErrorDomain::Posix, 13, "hidden"});
+        take(f.source->append({i, *NativeName::from_posix("item" + std::to_string(i)), {}, std::move(hidden)}));
+    }
+    take(f.source->seal());
+    DirectoryIndexLookupJob job(f.source, {2, 4096}, 4096, {}, PaneFilter{false, "", false});
+    finish(job);
+    auto index = take(job.completed());
+    auto page = take(index->read_page(0, {3, 4096}));
+    CK_CHECK(page.end && page.rows.size() == 3 && page.rows[0].record.row_id == 2 && page.rows[2].record.row_id == 4);
+    DirectoryIndexLookupJob none(f.source, {}, 4096, {}, PaneFilter{true, "absent", false});
+    finish(none);
+    auto empty = take(none.completed());
+    CK_CHECK(empty->rows() == 0 && empty->total_rows() == 4 && take(empty->read_page(0)).end);
+    for (std::uint64_t i = 1; i <= 4; ++i)
+        CK_CHECK(!take(empty->locate_row({empty->row_scope(), i})).has_value());
+    live_source(f)->data.push_back(std::byte{});
+    CK_CHECK(!empty->read_page(0).value() && f.source->state() == DirectoryIndexStoreState::Failed);
+}
+CK_TEST(index_lookup_excluded_rows_have_checked_reverse_pairs_and_checksum_protection) {
+    for (bool valid_crc : {false, true}) {
+        Fixture f;
+        f.populate();
+        DirectoryIndexLookupJob job(f.source, {}, 4096, {}, PaneFilter{true, "absent", false});
+        finish(job);
+        auto index = take(job.completed());
+        auto &data = f.c->files.back()->data;
+        // Original ID1 points to excluded tail position6. Alter its counterpart.
+        data[6 * 64 + 40] ^= std::byte{1};
+        if (valid_crc)
+            fix_crc(data, 6 * 64);
+        CK_CHECK(!index->locate_row({index->row_scope(), 1}).value() &&
+                 index->state() == DirectoryIndexLookupState::Failed);
+        CK_CHECK(f.source->state() == DirectoryIndexStoreState::Sealed);
+    }
+}
+CK_TEST(index_lookup_filtered_build_cancellation_preserves_source_and_releases_every_reservation) {
+    Fixture f;
+    f.populate();
+    DirectoryIndexLookupJob baseline(f.source, {1, 4096}, 4096, {}, PaneFilter{false, "a", false});
+    std::size_t steps = 0;
+    while (baseline.state() != DirectoryIndexLookupJobState::Complete) {
+        baseline.advance();
+        if (++steps > 100)
+            throw std::runtime_error("filter baseline");
+    }
+    baseline.abandon();
+    for (std::size_t at = 0; at < steps; ++at) {
+        DirectoryIndexLookupJob job(f.source, {1, 4096}, 4096, {}, PaneFilter{false, "a", false});
+        for (std::size_t i = 0; i < at; ++i)
+            job.advance();
+        std::stop_source stop;
+        stop.request_stop();
+        job.advance(stop.get_token());
+        CK_CHECK(job.state() == DirectoryIndexLookupJobState::Cancelled);
+        source_only(f);
+    }
+}

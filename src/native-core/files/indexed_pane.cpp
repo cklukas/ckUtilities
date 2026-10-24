@@ -12,6 +12,28 @@ UnavailableObservation error(AdapterError code, const char *op, ObservationState
 bool same(PaneOrder a, PaneOrder b) noexcept {
     return a.key == b.key && a.descending == b.descending && a.folders_first == b.folders_first;
 }
+PaneOrder order_of(const PaneView &v) {
+    return {v.sort, v.descending, v.folders_first};
+}
+void validate_view(const PaneView &v) {
+    if (!valid_pane_order(order_of(v)) || v.display_substring.size() > 4096)
+        throw std::invalid_argument("invalid indexed pane view");
+}
+PaneView with_order(PaneView view, PaneOrder order) {
+    view.sort = order.key;
+    view.descending = order.descending;
+    view.folders_first = order.folders_first;
+    return view;
+}
+PaneView unfiltered(PaneOrder order) {
+    PaneView v;
+    v.show_hidden = true;
+    return with_order(std::move(v), order);
+}
+bool same_view(const PaneView &a, const PaneView &b) {
+    return same(order_of(a), order_of(b)) && a.show_hidden == b.show_hidden &&
+           a.display_substring == b.display_substring && a.ascii_case_sensitive == b.ascii_case_sensitive;
+}
 void retain_available(BasicMetadata &baseline, const Observation<BasicMetadata> &value) {
     if (!value.value())
         return;
@@ -29,8 +51,21 @@ void retain_available(BasicMetadata &baseline, const Observation<BasicMetadata> 
 IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryIndex> listing, PaneOrder order,
                                        DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
                                        std::uint64_t lookup_bytes)
-    : order_(order), origin_(IndexedPaneDataOrigin::Listing), lookup_limits_(lookup_limits),
+    : IndexedPaneDataJob(std::move(listing), unfiltered(order), sort_limits, lookup_limits, lookup_bytes) {
+}
+IndexedPaneDataJob::IndexedPaneDataJob(Result data, PaneListingRequest target, PaneOrder order,
+                                       DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
+                                       std::uint64_t lookup_bytes)
+    : IndexedPaneDataJob(data, std::move(target), data ? with_order(data->view_, order) : unfiltered(order),
+                         sort_limits, lookup_limits, lookup_bytes) {
+}
+IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryIndex> listing, const PaneView &view,
+                                       DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
+                                       std::uint64_t lookup_bytes)
+    : order_(order_of(view)), origin_(IndexedPaneDataOrigin::Listing), lookup_limits_(lookup_limits),
       lookup_bytes_(lookup_bytes) {
+    validate_view(view);
+    view_ = view;
     if (listing) {
         request_ = listing->request();
         source_scope_ = listing->source_scope();
@@ -44,12 +79,14 @@ IndexedPaneDataJob::IndexedPaneDataJob(std::shared_ptr<const CompletedDirectoryI
     }
     initialize({PaneSortKey::Name, false, false}, sort_limits);
 }
-IndexedPaneDataJob::IndexedPaneDataJob(Result data, PaneListingRequest target, PaneOrder order,
+IndexedPaneDataJob::IndexedPaneDataJob(Result data, PaneListingRequest target, const PaneView &view,
                                        DirectoryIndexSortLimits sort_limits, DirectoryIndexScanLimits lookup_limits,
                                        std::uint64_t lookup_bytes)
-    : request_(std::move(target)), order_(order), origin_(IndexedPaneDataOrigin::Reorder),
+    : request_(std::move(target)), order_(order_of(view)), origin_(IndexedPaneDataOrigin::Reorder),
       lookup_limits_(lookup_limits), lookup_bytes_(lookup_bytes) {
-    PaneOrder current = order;
+    validate_view(view);
+    view_ = view;
+    PaneOrder current = order_;
     if (data && request_.scope == data->request_.scope && request_.number > data->request_.number) {
         predecessor_ = data->revision_;
         source_scope_ = data->source_scope_;
@@ -140,7 +177,9 @@ IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
             return state_;
         }
         if (!lookup_)
-            lookup_ = std::make_unique<DirectoryIndexLookupJob>(store_, lookup_limits_, lookup_bytes_, stop);
+            lookup_ = std::make_unique<DirectoryIndexLookupJob>(
+                store_, lookup_limits_, lookup_bytes_, stop,
+                PaneFilter{view_.show_hidden, view_.display_substring, view_.ascii_case_sensitive});
         else
             lookup_->advance(stop);
         const auto state = lookup_->state();
@@ -176,9 +215,9 @@ IndexedPaneDataJobState IndexedPaneDataJob::advance(std::stop_token stop) {
             cancel();
             return state_;
         }
-        result_ = Result(new const CompletedIndexedPaneData(request_, order_, origin_, source_scope_, predecessor_,
-                                                            directory_, before_, std::move(after), baseline_, pin_,
-                                                            store_, std::move(lookup)));
+        result_ = Result(new const CompletedIndexedPaneData(request_, order_, view_, origin_, source_scope_,
+                                                            predecessor_, directory_, before_, std::move(after),
+                                                            baseline_, pin_, store_, std::move(lookup)));
         state_ = IndexedPaneDataJobState::Complete;
         release();
         return state_;
@@ -217,15 +256,16 @@ bool IndexedPane::accepts(const PaneStateStamp &stamp) const noexcept {
 bool IndexedPane::current(PaneListingRequest request) const noexcept {
     return pending_ && request.scope == scope_ && request.number == pending_;
 }
-PaneListingRequest IndexedPane::begin(IndexedPaneDataOrigin kind, PaneOrder order) {
-    if (!valid_pane_order(order))
-        throw std::invalid_argument("invalid indexed pane order");
+PaneListingRequest IndexedPane::begin(IndexedPaneDataOrigin kind, const PaneView &view) {
+    validate_view(view);
+    auto prepared_view = view;
     if (!next_request_)
         throw std::overflow_error("indexed pane requests exhausted");
     invalidate();
     pending_ = next_request_++;
     pending_kind_ = kind;
-    pending_order_ = order;
+    pending_order_ = order_of(view);
+    pending_view_ = std::move(prepared_view);
     error_.reset();
     if (kind == IndexedPaneDataOrigin::Reorder) {
         pending_dataset_ = data_->row_scope();
@@ -237,14 +277,20 @@ PaneListingRequest IndexedPane::begin(IndexedPaneDataOrigin kind, PaneOrder orde
     return {scope_, pending_};
 }
 PaneListingRequest IndexedPane::begin_listing(PaneOrder order) {
-    return begin(IndexedPaneDataOrigin::Listing, order);
+    return begin_listing(unfiltered(order));
+}
+PaneListingRequest IndexedPane::begin_listing(const PaneView &view) {
+    return begin(IndexedPaneDataOrigin::Listing, view);
 }
 Observation<PaneListingRequest> IndexedPane::begin_reorder(const PaneStateStamp &stamp, PaneOrder order) {
+    return begin_view_change(stamp, data_ ? with_order(data_->view_, order) : unfiltered(order));
+}
+Observation<PaneListingRequest> IndexedPane::begin_view_change(const PaneStateStamp &stamp, const PaneView &view) {
     if (!accepts(stamp) || !data_ || (pending_ && pending_kind_ == IndexedPaneDataOrigin::Listing)) {
         const auto e = error(AdapterError::InvalidAccess, "indexed_pane.reorder_state");
         return Observation<PaneListingRequest>::unavailable(e.state, e.error);
     }
-    return Observation<PaneListingRequest>::available(begin(IndexedPaneDataOrigin::Reorder, order));
+    return Observation<PaneListingRequest>::available(begin(IndexedPaneDataOrigin::Reorder, view));
 }
 bool IndexedPane::fail_listing(PaneListingRequest request, UnavailableObservation failure) {
     if (!current(request))
@@ -276,7 +322,7 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
         return IndexedPanePublish::InvalidData;
     if (!current(data->request_))
         return IndexedPanePublish::Stale;
-    if (data->origin_ != pending_kind_ || !same(data->order_, pending_order_) ||
+    if (data->origin_ != pending_kind_ || !same_view(data->view_, pending_view_) ||
         (pending_dataset_ && *pending_dataset_ != data->row_scope()) || data->predecessor_ != pending_revision_)
         return IndexedPanePublish::InvalidData;
     if (stop.stop_requested())
@@ -289,8 +335,10 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
     }
     PaneRowId next_focus{data->row_scope(), 0};
     bool have_focus = false;
+    std::uint64_t next_position = 0;
+    bool have_position = false;
     if (pending_kind_ == IndexedPaneDataOrigin::Listing) {
-        if (data->rows()) {
+        if (data->visible_rows()) {
             auto first = [&] {
                 try {
                     return data->lookup_->read_page(0, {1, DirectoryIndexScanLimits::hard_wire_bytes});
@@ -310,11 +358,33 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
                 return IndexedPanePublish::Cancelled;
             next_focus.number = first.value()->rows.front().record.row_id;
             have_focus = true;
+            have_position = true;
         }
     }
     if (pending_kind_ == IndexedPaneDataOrigin::Reorder && focus_) {
         next_focus = *focus_;
         have_focus = true;
+        auto position = [&] {
+            try {
+                return data->lookup_->locate_row({focus_->scope, focus_->number});
+            } catch (...) {
+                if (current(data->request_))
+                    invalidate();
+                throw;
+            }
+        }();
+        if (!current(data->request_))
+            return IndexedPanePublish::Stale;
+        if (!position.value()) {
+            fail_listing(data->request_, *position.unavailable_detail());
+            return IndexedPanePublish::Failed;
+        }
+        if (stop.stop_requested())
+            return IndexedPanePublish::Cancelled;
+        if (*position.value()) {
+            next_position = **position.value();
+            have_position = true;
+        }
     }
     if (!current(data->request_))
         return IndexedPanePublish::Stale;
@@ -324,6 +394,10 @@ IndexedPanePublish IndexedPane::publish(Data data, std::stop_token stop) {
         focus_.emplace(std::move(next_focus));
     else
         focus_.reset();
+    if (have_position)
+        focus_position_.emplace(next_position);
+    else
+        focus_position_.reset();
     pending_ = 0;
     pending_dataset_.reset();
     pending_revision_.reset();
@@ -338,16 +412,21 @@ IndexedPaneCapture IndexedPane::capture_page(const PaneStateStamp &stamp, std::u
         throw std::invalid_argument("invalid indexed pane page limits");
     if (!accepts(stamp))
         return {IndexedPaneCaptureState::Stale, {}};
-    if (first > rows())
+    if (first > visible_rows())
         return {IndexedPaneCaptureState::OutOfRange, {}};
     if (stop.stop_requested())
         return {IndexedPaneCaptureState::Cancelled, {}};
     std::size_t used = 0;
-    if (!detail::charge(error_, used, limits.display.text_bytes))
+    const auto &view = data_ ? data_->view_ : pending_view_;
+    if (!detail::charge(view.display_substring.size(), used, limits.display.text_bytes) ||
+        !detail::charge(error_, used, limits.display.text_bytes))
         return {IndexedPaneCaptureState::LimitExceeded, {}};
     auto page = std::shared_ptr<IndexedPanePage>(new IndexedPanePage);
     page->first_ = first;
     page->total_ = rows();
+    page->visible_ = visible_rows();
+    page->view_ = view;
+    page->focused_position_ = focus_position_;
     page->pending_ = listing_pending();
     page->error_ = error_;
     const auto data = data_; // retain the exact dataset through this bounded request
@@ -415,7 +494,7 @@ IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, 
     const auto data = data_;
     auto found = [&] {
         try {
-            return data->lookup_->find_row({row.scope, row.number});
+            return data->lookup_->locate_row({row.scope, row.number});
         } catch (...) {
             if (accepts(stamp))
                 invalidate();
@@ -428,6 +507,8 @@ IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, 
         io_failure(*found.unavailable_detail());
         return IndexedPaneFocus::Failed;
     }
+    if (!*found.value())
+        return IndexedPaneFocus::InvalidTarget;
     if (stop.stop_requested())
         return IndexedPaneFocus::Cancelled;
     if (!accepts(stamp))
@@ -436,6 +517,7 @@ IndexedPaneFocus IndexedPane::focus(const PaneStateStamp &stamp, PaneRowId row, 
         return IndexedPaneFocus::Applied;
     invalidate();
     focus_ = std::move(row);
+    focus_position_ = **found.value();
     return IndexedPaneFocus::Applied;
 }
 } // namespace ck::files

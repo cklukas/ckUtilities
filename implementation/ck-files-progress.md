@@ -3454,3 +3454,51 @@ required, together with remaining destination preservation/collision capabilitie
 and broader native qualification. Those commands are absent from this backend
 API rather than partially accepted. WP-01 remains in progress; WP-02–08 remain
 unstarted.
+
+
+## 2026-10-24 — indexed hidden and text filtering
+
+WP-01 now applies the full pane view through disk-backed filtering: sort order,
+hidden visibility, literal escaped-display substring and ASCII case sensitivity.
+In-memory and indexed views share a bounded linear-time KMP matcher. Patterns
+are limited to 4,096 bytes before copying; matching checks cancellation within
+long names. Unknown/denied hidden states remain visible rather than becoming
+an invented hidden=false/true observation.
+
+The lookup retains all original records and checked reverse pairs. Included
+positions fill its front; excluded positions fill its tail. A valid excluded
+key returns Available(nullopt), distinct from I/O failure or a foreign key.
+Visible/original counts stay separate, including when nothing matches. Filtered
+pages use bounded per-visible-row reads and cannot pass their logical cursors
+as source-store scans. Every original ID still participates in the permutation
+proof; no directory-sized RAM mask or address array is introduced.
+
+Prepared/pending results bind every view field and the existing exact predecessor
+revision. Failed/cancelled changes preserve the previous view. A hidden focus key
+is retained with no visible position or selected display row; explicit hidden
+focus targets reject, and clearing the filter restores the original position.
+Pages charge copied filter text alongside all metadata/name diagnostics.
+
+Four matcher, four lookup and three pane cases cover binary substring oracles,
+long overlapping patterns, hidden uncertainty, included/excluded reverse lookup,
+all-excluded End, checksum/reverse-pair corruption, cancellation, filter flags,
+text budgets and focus restoration. Existing pane/lookup cases remain regression
+coverage. The 100,000-record synthetic cache case builds 12,800,000 lookup bytes
+in 588 advances with 85,714 visible rows and checks 175 nonsequential page rows.
+The 259-real-entry pipeline applies an ASCII-folded filter yielding 111 matches,
+checks an 11-row page and preserves original/native identity namespaces.
+
+All 81 Files suites pass: 706 cases on macOS, 709 on Linux and 705 on Windows.
+Fresh 65-unit sanitizer builds pass 142/140/139 focused cases, using ASan+UBSan
+on Mac/Linux and ASan on Windows. UI-boundary, ckVision-only and strict docs
+checks pass. See [the filtering evidence](evidence/ck-files-indexed-filter-20261024.json)
+for 207 source fingerprints, commands, timings, native markers, output hashes and
+cleanup. Diagnostic builds/docs scratch were removed after hashing; fixture
+roots are empty and current verified normal builds/SDK remain. Windows project
+work stays on V:. No GUI application or rendered result was claimed.
+
+Disk-backed marking/selection inventories, native acquisition and remaining
+destination preservation/collision capabilities and broader qualification remain
+required. The real-directory integration and synthetic cache measurements do not
+establish full-app latency/RSS or 100,000-real-entry acceptance. WP-01 remains in
+progress; WP-02–08 remain unstarted.

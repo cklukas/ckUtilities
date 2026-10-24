@@ -2403,3 +2403,65 @@ publishes it into indexed pane state, captures an 11-row display page, checks
 native identity namespaces and original row IDs, and retires the worker/native
 owners while retaining the readable revoked page. This is end-to-end native/core
 integration, not a rendered-window or full-application responsiveness result.
+
+
+### Indexed filtering and hidden-row continuity
+
+`PaneFilterMatcher` is shared by in-memory and indexed views. It matches literal
+substrings of escaped display text with optional ASCII-only folding, without
+locale conversion, Unicode normalization, regex evaluation or path parsing.
+Only observed hidden=true is excluded when hidden rows are disabled; unknown or
+denied hidden observations remain visible. Its compiled KMP prefix table is
+bounded by the 4,096-byte pattern limit, rejected before copying. Matching is
+linear in display length plus pattern length, with stop checks at least every
+256 display bytes and at completion. Empty patterns need no display conversion
+in the disk builder.
+
+The lookup still reserves and initializes 128*N bytes for the full original
+dataset. Included position entries fill its front in source order; excluded
+entries fill its tail from the end. Original-ID slots retain checked reverse
+pairs for every row. Schema roles 1/2 identify included position/ID entries;
+roles 4/3 identify excluded position/ID entries. Every entry checks its rank
+against the completed visible boundary, and both halves must agree on inclusion,
+row ID, position, source offset and wire size. The original-ID permutation proof
+still covers all N rows; filtering neither renumbers nor drops source records.
+
+`rows()` on the lookup is the visible count; `total_rows()` is the original
+count. `locate_row` returns Available(nullopt) for a valid excluded key, distinct
+from unavailable I/O/corruption/foreign-key results. `find_row` retains its scalar
+interface and reports NotApplicable for an excluded key without revoking the
+healthy lookup. Excluded rows keep the same checksum and reverse-pair protection
+as included rows, including when no rows match.
+
+A complete view retains the sequential source-page fast path. A filtered page
+reads at most its requested visible row count plus one fixed-entry lookahead;
+each emitted row checks two fixed entries and one bounded source record. Aggregate
+source wire limits remain independent of row limits. End checks native source
+size even when all rows are excluded. Filtered continuation cursors use another
+namespace and cannot be misused as source-store scan cursors. Budget failure,
+I/O, cancellation and exception rules still forbid partial failure publication
+or an unbounded scan/RAM fallback during a page request.
+
+Indexed preparation and pane requests now bind the entire `PaneView`: order,
+hidden visibility, substring and case flag. A filter-only change can reuse the
+complete ordered record store, then constructs a new independently owned lookup.
+The same predecessor-revision and directory-continuity checks apply. Wrong-filter
+replies are rejected, and preparation failure/cancellation retains the previous
+view. Order-only navigation explicitly requests an unfiltered dataset; the full
+PaneView interface uses its normal default `show_hidden=false` setting.
+Order-only changes of an existing dataset retain its filter.
+
+Pages report total and visible counts separately and charge copied filter text
+alongside all names/diagnostics. Focus retains its original key when excluded,
+with no visible position or focused displayed row. An explicit focus request for
+an excluded row is invalid and leaves current state intact. Clearing the filter
+restores that key's position. New navigation chooses its first visible row or
+no focus when nothing matches. Cached focus, including a hidden retained key,
+remains display state rather than native operation authority.
+
+The native synthetic 100,000-record case now builds a filtered table with 85,714
+visible records and validates nonsequential pages, original IDs, hidden/text
+exclusions, reverse lookup and End. The 259-entry real-directory integration additionally
+applies an ASCII-folded entry-name filter, obtains 111 visible rows, and keeps
+metadata namespaces/original IDs intact. These are cache/native-core integration
+measurements, not full-application or 100,000-real-directory qualification.

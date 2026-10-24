@@ -163,8 +163,10 @@ Observation<DirectoryIndexLookup::Entry> DirectoryIndexLookup::decode(std::span<
         get(b, 52, 4) != role || get(b, 56, 4) != 0 || get(b, 60, 4) != detail::directory_index_crc32c(b.first(60)))
         return unavailable<Entry>(error(AdapterError::InvalidNativeResult, "index_lookup.record"));
     Entry e{get(b, 24, 8), get(b, 32, 8), get(b, 40, 8), static_cast<std::uint32_t>(get(b, 48, 4))};
-    if (e.rank >= rows_ || !e.row || e.row > rows_ || e.offset > source_->bytes() || e.bytes < 16 ||
-        e.bytes > source_->limits_.record.record_bytes || e.bytes > source_->bytes() - e.offset)
+    e.included = role == 1 || role == 2;
+    if (e.rank >= rows_ || (e.included ? e.rank >= visible_ : e.rank < visible_) || !e.row || e.row > rows_ ||
+        e.offset > source_->bytes() || e.bytes < 16 || e.bytes > source_->limits_.record.record_bytes ||
+        e.bytes > source_->bytes() - e.offset)
         return unavailable<Entry>(error(AdapterError::InvalidNativeResult, "index_lookup.address"));
     return Observation<Entry>::available(e);
 }
@@ -174,7 +176,12 @@ Observation<DirectoryIndexLookup::Entry> DirectoryIndexLookup::entry_at(std::uin
     const auto offset = (role == 1 ? index : rows_ + index) * 64;
     if (!read_exact(offset, bytes, stop).value())
         return unavailable<Entry>(*failure_);
-    auto decoded = decode(bytes, role);
+    const auto actual_role = static_cast<std::uint32_t>(get(bytes, 52, 4));
+    if ((role == 1 && actual_role != 1) || (role == 2 && actual_role != 2 && actual_role != 3)) {
+        fail(error(AdapterError::InvalidNativeResult, "index_lookup.role"));
+        return unavailable<Entry>(*failure_);
+    }
+    auto decoded = decode(bytes, actual_role);
     if (!decoded.value()) {
         fail(*decoded.unavailable_detail());
         return unavailable<Entry>(*failure_);
@@ -187,34 +194,47 @@ Observation<DirectoryIndexLookup::Entry> DirectoryIndexLookup::entry_at(std::uin
     const auto other_offset = (role == 1 ? rows_ + e.row - 1 : e.rank) * 64;
     if (!read_exact(other_offset, bytes, stop).value())
         return unavailable<Entry>(*failure_);
-    auto other = decode(bytes, role == 1 ? 2 : 1);
+    auto other = decode(bytes, role == 1 ? 2 : e.included ? 1 : 4);
     if (!other.value()) {
         fail(*other.unavailable_detail());
         return unavailable<Entry>(*failure_);
     }
     const auto o = *other.value();
-    if (e.rank != o.rank || e.row != o.row || e.offset != o.offset || e.bytes != o.bytes) {
+    if (e.rank != o.rank || e.row != o.row || e.offset != o.offset || e.bytes != o.bytes || e.included != o.included) {
         fail(error(AdapterError::InvalidNativeResult, "index_lookup.cross_reference"));
         return unavailable<Entry>(*failure_);
     }
     return decoded;
 }
-Observation<std::uint64_t> DirectoryIndexLookup::find_row(const IndexRowKey &key, std::stop_token stop) {
+Observation<std::optional<std::uint64_t>> DirectoryIndexLookup::locate_row(const IndexRowKey &key,
+                                                                           std::stop_token stop) {
     if (state_ != DirectoryIndexLookupState::Ready)
-        return unavailable<std::uint64_t>(failure_.value_or(error(AdapterError::InvalidAccess, "index_lookup.state")));
+        return unavailable<std::optional<std::uint64_t>>(
+            failure_.value_or(error(AdapterError::InvalidAccess, "index_lookup.state")));
     if (key.scope != row_scope() || !key.number || key.number > rows_)
-        return unavailable<std::uint64_t>(error(AdapterError::InvalidIdentifier, "index_lookup.row_key"));
+        return unavailable<std::optional<std::uint64_t>>(
+            error(AdapterError::InvalidIdentifier, "index_lookup.row_key"));
     try {
         if (!healthy() || !size_matches(stop).value())
-            return unavailable<std::uint64_t>(*failure_);
+            return unavailable<std::optional<std::uint64_t>>(*failure_);
         auto entry = entry_at(key.number - 1, 2, stop);
         if (!entry.value())
-            return unavailable<std::uint64_t>(*entry.unavailable_detail());
-        return Observation<std::uint64_t>::available(entry.value()->rank);
+            return unavailable<std::optional<std::uint64_t>>(*entry.unavailable_detail());
+        return Observation<std::optional<std::uint64_t>>::available(
+            entry.value()->included ? std::optional<std::uint64_t>(entry.value()->rank) : std::nullopt);
     } catch (...) {
         exception();
         throw;
     }
+}
+Observation<std::uint64_t> DirectoryIndexLookup::find_row(const IndexRowKey &key, std::stop_token stop) {
+    auto located = locate_row(key, stop);
+    if (!located.value())
+        return unavailable<std::uint64_t>(*located.unavailable_detail());
+    if (!*located.value())
+        return unavailable<std::uint64_t>(
+            error(AdapterError::NotApplicable, "index_lookup.filtered_row", ObservationState::Unknown));
+    return Observation<std::uint64_t>::available(**located.value());
 }
 Observation<DirectoryIndexScanPage>
 DirectoryIndexLookup::read_page(std::uint64_t first, DirectoryIndexScanLimits limits, std::stop_token stop) {
@@ -222,11 +242,55 @@ DirectoryIndexLookup::read_page(std::uint64_t first, DirectoryIndexScanLimits li
     if (state_ != DirectoryIndexLookupState::Ready)
         return unavailable<DirectoryIndexScanPage>(
             failure_.value_or(error(AdapterError::InvalidAccess, "index_lookup.state")));
-    if (first > rows_)
+    if (first > visible_)
         return unavailable<DirectoryIndexScanPage>(error(AdapterError::InvalidIdentifier, "index_lookup.rank"));
     try {
         if (!healthy() || !size_matches(stop).value())
             return unavailable<DirectoryIndexScanPage>(*failure_);
+        if (visible_ != rows_) {
+            std::vector<DirectoryIndexScanRow> output;
+            output.reserve(limits.rows);
+            std::uint64_t next = first;
+            std::size_t wire = 0;
+            while (next < visible_ && output.size() < limits.rows) {
+                auto found = entry_at(next, 1, stop);
+                if (!found.value())
+                    return unavailable<DirectoryIndexScanPage>(*found.unavailable_detail());
+                const auto e = *found.value();
+                if (e.bytes > limits.wire_bytes - wire) {
+                    if (output.empty())
+                        return unavailable<DirectoryIndexScanPage>(
+                            error(AdapterError::InventoryLimit, "index_lookup.page_budget", ObservationState::Unknown));
+                    break;
+                }
+                IndexRecordAddress address(source_->scope_, e.row, e.offset, e.bytes);
+                auto row = source_->read(address);
+                if (!row.value()) {
+                    fail(*row.unavailable_detail());
+                    return unavailable<DirectoryIndexScanPage>(*failure_);
+                }
+                if (stop.stop_requested()) {
+                    fail(cancelled());
+                    return unavailable<DirectoryIndexScanPage>(*failure_);
+                }
+                output.push_back({std::move(address), std::move(row).take_value()});
+                wire += e.bytes;
+                ++next;
+            }
+            if (next == visible_) {
+                auto end = source_->read_page(IndexScanCursor(source_->scope_, rows_, source_->bytes()), {1, 16});
+                if (!end.value()) {
+                    fail(*end.unavailable_detail());
+                    return unavailable<DirectoryIndexScanPage>(*failure_);
+                }
+            }
+            if (stop.stop_requested()) {
+                fail(cancelled());
+                return unavailable<DirectoryIndexScanPage>(*failure_);
+            }
+            return Observation<DirectoryIndexScanPage>::available(
+                {std::move(output), IndexScanCursor(scan_scope_, next, 0), wire, next == visible_});
+        }
         std::optional<Entry> entry;
         if (first < rows_) {
             auto found = entry_at(first, 1, stop);
@@ -265,8 +329,8 @@ DirectoryIndexLookup::read_page(std::uint64_t first, DirectoryIndexScanLimits li
 }
 DirectoryIndexLookupJob::DirectoryIndexLookupJob(std::shared_ptr<DirectoryIndexStore> source,
                                                  DirectoryIndexScanLimits limits, std::uint64_t max_table_bytes,
-                                                 std::stop_token stop)
-    : limits_(limits) {
+                                                 std::stop_token stop, const PaneFilter &filter)
+    : limits_(limits), matcher_(filter) {
     limits_valid(limits);
     if (!max_table_bytes || max_table_bytes > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
         throw std::invalid_argument("invalid lookup byte limit");
@@ -327,7 +391,7 @@ DirectoryIndexLookupJob::DirectoryIndexLookupJob(std::shared_ptr<DirectoryIndexS
         return;
     }
     auto owner = std::unique_ptr<DirectoryIndexLookup>(
-        new DirectoryIndexLookup(std::move(file).take_value(), std::move(source), budget, bytes));
+        new DirectoryIndexLookup(std::move(file).take_value(), source, budget, bytes));
     slot.transfer();
     index_ = std::move(owner);
 }
@@ -423,15 +487,25 @@ DirectoryIndexLookupJobState DirectoryIndexLookupJob::advance(std::stop_token st
                 fail(error(AdapterError::InvalidNativeResult, "index_lookup.duplicate_row"));
                 return state_;
             }
-            DirectoryIndexLookup::Entry entry{processed_, id, a.offset_, static_cast<std::uint32_t>(a.bytes_)};
+            const auto display = matcher_.needs_display() ? row.record.name.display_name() : std::string{};
+            const auto match = matcher_.match(display, row.record.hidden, stop);
+            if (match == PaneFilterMatch::Cancelled) {
+                cancel();
+                return state_;
+            }
+            const bool included = match == PaneFilterMatch::Included;
+            const auto rank = included ? index_->visible_ : index_->rows_ - 1 - (processed_ - index_->visible_);
+            DirectoryIndexLookup::Entry entry{rank, id, a.offset_, static_cast<std::uint32_t>(a.bytes_), included};
             for (const auto role : {1U, 2U}) {
-                const auto wire = index_->encode(entry, role);
-                auto written = index_->write_exact(role == 1 ? processed_ * 64 : id_offset, wire, stop);
+                const auto wire = index_->encode(entry, included ? role : role == 1 ? 4 : 3);
+                auto written = index_->write_exact(role == 1 ? rank * 64 : id_offset, wire, stop);
                 if (!written.value()) {
                     fail(*written.unavailable_detail(), stop.stop_requested());
                     return state_;
                 }
             }
+            if (included)
+                ++index_->visible_;
             ++processed_;
         }
         if (page.next.position() != processed_ || (!page.end && page.rows.empty())) {

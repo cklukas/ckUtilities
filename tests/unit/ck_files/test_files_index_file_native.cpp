@@ -609,6 +609,49 @@ CK_TEST(index_sort_native_external_merges_100000_records_and_preserves_stable_so
               << std::chrono::duration_cast<std::chrono::milliseconds>(lookup_built - lookup_start).count()
               << " query_ms="
               << std::chrono::duration_cast<std::chrono::milliseconds>(lookup_done - lookup_built).count() << '\n';
+    DirectoryIndexLookupJob filtered_job(output, {256, 4 * 1024 * 1024}, 64 * 1024 * 1024, {},
+                                         PaneFilter{false, "sort-0", true});
+    std::size_t filtered_advances = 0;
+    const auto filtered_start = std::chrono::steady_clock::now();
+    while (filtered_job.state() == DirectoryIndexLookupJobState::Initializing ||
+           filtered_job.state() == DirectoryIndexLookupJobState::Building) {
+        if (++filtered_advances > 10000)
+            throw std::runtime_error("native filter budget");
+        filtered_job.advance();
+    }
+    auto filtered = take(filtered_job.completed());
+    CK_CHECK(filtered->total_rows() == 100000 && filtered->rows() == 85714 && filtered->bytes() == 12800000);
+    std::size_t filtered_queried = 0;
+    for (const std::uint64_t rank : {0ULL, 85713ULL, 40000ULL, 1ULL}) {
+        auto page = take(filtered->read_page(rank, {64, 16 * 1024}));
+        std::uint64_t ordinal = 0, id = 100000;
+        for (; id >= 2; --id)
+            if (id % 7 != 0) {
+                if (ordinal == rank)
+                    break;
+                ++ordinal;
+            }
+        for (const auto &row : page.rows) {
+            CK_CHECK(row.record.row_id == id && id % 7 != 0 && row.record.name.display_name().starts_with("sort-0"));
+            CK_CHECK(*row.record.metadata.value()->logical_size.value() == id * 3);
+            ++filtered_queried;
+            do {
+                --id;
+            } while (id && id % 7 == 0);
+        }
+    }
+    CK_CHECK(!take(filtered->locate_row({namespace_before, 1})).has_value() &&
+             !take(filtered->locate_row({namespace_before, 7})).has_value());
+    CK_CHECK(take(filtered->locate_row({namespace_before, 100000})) == 0 && take(filtered->read_page(85714)).end);
+    std::cout << "index-filter-native-100000-qualified rows=" << filtered->total_rows()
+              << " visible=" << filtered->rows() << " bytes=" << filtered->bytes() << " advances=" << filtered_advances
+              << " queried=" << filtered_queried << " elapsed_ms="
+              << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                       filtered_start)
+                     .count()
+              << '\n';
+    filtered_job.abandon();
+    filtered.reset();
     lookup_job.abandon();
     lookup.reset();
     output.reset();
@@ -725,6 +768,30 @@ CK_TEST(index_listing_native_streams_real_directory_through_private_sort_and_kee
         CK_CHECK(row.metadata.identity.value() && row.metadata.identity.value()->scope == scope);
     std::cout << "indexed-pane-native-qualified rows=" << captured.page->total_rows()
               << " page_rows=" << captured.page->rows().size() << " prepared_advances=" << prepared_steps << '\n';
+    auto view = pane->data()->view();
+    view.show_hidden = false;
+    view.display_substring = "ENTRY-1";
+    const auto view_request = take(pane->begin_view_change(pane->state_stamp(), view));
+    IndexedPaneDataJob view_job(pane->data(), view_request, view, {{16, 16 * 1024}, 8}, {16, 16 * 1024});
+    std::size_t view_advances = 0;
+    while (view_job.state() == IndexedPaneDataJobState::Sorting ||
+           view_job.state() == IndexedPaneDataJobState::Indexing) {
+        if (++view_advances > 10000)
+            throw std::runtime_error("native view budget");
+        view_job.advance();
+    }
+    CK_CHECK(pane->publish(take(view_job.completed())) == IndexedPanePublish::Applied);
+    view_job.abandon();
+    auto filtered_page = pane->capture_page(pane->state_stamp(), 0, {{11, 16 * 1024}, 16 * 1024});
+    CK_CHECK(filtered_page.state == IndexedPaneCaptureState::Ready && filtered_page.page->total_rows() == 259 &&
+             filtered_page.page->visible_rows() == 111);
+    CK_CHECK(!pane->focused_position() && !captured.page->stamp().current());
+    for (const auto &row : filtered_page.page->rows())
+        CK_CHECK(row.display_name.starts_with("entry-1") && row.id.scope == result->store()->row_scope() &&
+                 row.metadata.identity.value()->scope == scope);
+    std::cout << "indexed-pane-filter-native-qualified rows=" << filtered_page.page->total_rows()
+              << " visible=" << filtered_page.page->visible_rows() << " page_rows=" << filtered_page.page->rows().size()
+              << " advances=" << view_advances << '\n';
     job.reset();
     result.reset();
     workspace.reset();
