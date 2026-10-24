@@ -41,10 +41,15 @@ class FilesApp final {
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;
     bool navigate(std::size_t pane, ck::files::NativeAbsolutePath location);
+    bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);
+    bool change_view(std::size_t pane, ck::files::PaneView view);
+    const ck::files::PaneView &view(std::size_t pane) const;
+    const ck::files::IndexedPaneSelection &selection(std::size_t pane) const;
     void switch_pane();
     void cancel_read();
     void request_close();
     bool close_confirmation_pending() const;
+    bool view_options_pending() const;
     std::size_t active_pane() const noexcept;
     bool narrow() const noexcept;
     bool pending(std::size_t pane) const;

@@ -67,7 +67,16 @@ const std::array kFindCommands{
 
 const std::array kFilesCommands{
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
-    CommandDefinition{"ck.files.cancel_read", "&Cancel read", "Files", ""},
+    CommandDefinition{"ck.files.cancel_read", "&Cancel activity", "Files", ""},
+    CommandDefinition{"ck.files.toggle_mark", "&Toggle mark", "Files", "Insert"},
+    CommandDefinition{"ck.files.mark_visible", "&Mark visible", "Files", ""},
+    CommandDefinition{"ck.files.unmark_visible", "&Unmark visible", "Files", ""},
+    CommandDefinition{"ck.files.invert_marks", "&Invert visible marks", "Files", ""},
+    CommandDefinition{"ck.files.clear_marks", "&Clear all marks (including hidden)", "Files", ""},
+    CommandDefinition{"ck.files.range_start", "&Set range start", "Files", ""},
+    CommandDefinition{"ck.files.mark_range", "Mark th&rough cursor", "Files", ""},
+    CommandDefinition{"ck.files.unmark_range", "Unmark through curs&or", "Files", ""},
+    CommandDefinition{"ck.files.view_options", "View &options...", "Files", "Ctrl+F"},
 };
 
 const std::array kDiskUsageCommands{

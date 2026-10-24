@@ -31,6 +31,10 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     std::uint64_t row_count() const noexcept;
     bool current() const noexcept;
     std::optional<FilesPaneRowTarget> target() const;
+    std::optional<bool> cursor_marked() const;
+    // Acknowledged state changes pause input without dropping focus or hiding
+    // the retained page. Geometry updates and rendering remain available.
+    void set_input_locked(bool locked) noexcept { input_locked_ = locked; }
     void set_viewport(int rows, int width) override;
     ckv::widgets::GridFrame frame() const override;
     int column_width(ckv::widgets::GridIndex column) const override;
@@ -59,5 +63,6 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     std::uint64_t total_ = 0, page_first_ = 0, first_ = 0;
     std::size_t cursor_ = 0;
     int height_ = 0, width_ = 0;
+    bool input_locked_ = false;
 };
 } // namespace ck::vision

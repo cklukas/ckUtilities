@@ -91,6 +91,13 @@ struct FilesApp::State {
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false;
+        bool change_error = false, cancelling = false, preparing_cursor = false;
+        std::optional<FilesPaneReplyKind> changing;
+        std::optional<ck::files::PaneView> queued_view;
+        ck::files::PaneView view;
+        ck::files::IndexedPaneSelection selection;
+        std::optional<std::uint64_t> worker_focus;
+        std::optional<ck::files::PaneRowId> range_start;
         std::string error;
     };
     ckv::ui::Application &application;
@@ -108,6 +115,10 @@ struct FilesApp::State {
     ckv::ui::Application::AttentionObserverId observer = 0;
     std::shared_ptr<void> lifetime = std::make_shared<int>(0);
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
+    ckv::widgets::Window *view_dialog_window = nullptr;
+    std::weak_ptr<void> view_dialog_lifetime;
+    bool close_after_view = false;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
@@ -127,23 +138,86 @@ struct FilesApp::State {
                                                            [this] { cancel_read(); }));
             if (switch_id == ckv::ui::kInvalidCommand || cancel_id == ckv::ui::kInvalidCommand)
                 throw std::logic_error("missing Files command metadata");
+            application.commands().set_command_scope(switch_id, {.contexts = {"ck.files.pane"}});
+            application.commands().set_command_scope(cancel_id, {.contexts = {"ck.files.pane"}});
+            application.commands().set_enabled_predicate(switch_id, [this] { return !closing && !modal_pending(); });
             application.commands().set_enabled_predicate(
-                switch_id, [this] { return !closing && !(confirmation && !confirmation->completed()); });
-            application.commands().set_enabled_predicate(cancel_id, [this] {
-                return !closing && !(confirmation && !confirmation->completed()) &&
-                       (panes[active].navigating || panes[active].reading);
-            });
+                cancel_id, [this] { return !closing && !modal_pending() && pending(panes[active]); });
+            const auto own = [&](std::string_view key, std::function<void()> handler, std::function<bool()> enabled) {
+                const auto id =
+                    commands.own(declare_suite_command(application.commands(), "ck-files", key, std::move(handler)));
+                if (id == ckv::ui::kInvalidCommand)
+                    throw std::logic_error("missing Files command metadata");
+                application.commands().set_enabled_predicate(id, std::move(enabled));
+                application.commands().set_command_scope(id, {.contexts = {"ck.files.pane"}});
+                return id;
+            };
+            const auto row_ready = [this] { return ready(active) && panes[active].model.target().has_value(); };
+            const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
+            const auto toggle = own(
+                "ck.files.toggle_mark",
+                [this] {
+                    auto target = panes[active].model.target();
+                    auto marked = panes[active].model.cursor_marked();
+                    if (target && marked)
+                        change_marks(active, ck::files::IndexedMarkRow{target->row, !*marked});
+                },
+                row_ready);
+            const auto mark_visible = own(
+                "ck.files.mark_visible", [this] { change_marks(active, ck::files::IndexedMarkVisible{true}); },
+                visible_ready);
+            const auto unmark_visible = own(
+                "ck.files.unmark_visible", [this] { change_marks(active, ck::files::IndexedMarkVisible{false}); },
+                visible_ready);
+            const auto invert = own(
+                "ck.files.invert_marks", [this] { change_marks(active, ck::files::IndexedInvertVisible{}); },
+                visible_ready);
+            const auto clear = own(
+                "ck.files.clear_marks", [this] { change_marks(active, ck::files::IndexedClearMarks{}); },
+                [this] {
+                    return ready(active) && panes[active].selection.marks && panes[active].selection.marks->total != 0;
+                });
+            const auto range = own(
+                "ck.files.range_start",
+                [this] {
+                    if (const auto target = panes[active].model.target()) {
+                        panes[active].range_start = target->row;
+                        labels();
+                    }
+                },
+                row_ready);
+            const auto range_ready = [this] {
+                return ready(active) && panes[active].range_start && panes[active].model.target();
+            };
+            const auto mark_range = own("ck.files.mark_range", [this] { mark_through(true); }, range_ready);
+            const auto unmark_range = own("ck.files.unmark_range", [this] { mark_through(false); }, range_ready);
+            const auto options_id =
+                own("ck.files.view_options", [this] { show_view_options(); }, [this] { return ready(active); });
+            const auto item = [](auto id, const char *title) {
+                return ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{id, title});
+            };
             SuiteShellOptions options;
             options.application_name = "Files";
             options.about_text = "Two independent read-only file locations.";
             options.theme = theme;
-            options.application_menus = {ckv::widgets::MenuBarItem{
-                "&Location",
-                {ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
-                 ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{cancel_id, "&Cancel read"})}}};
+            options.application_menus = {
+                ckv::widgets::MenuBarItem{
+                    "&Location",
+                    {ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
+                     ckv::widgets::MenuItem::command(
+                         ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
+                ckv::widgets::MenuBarItem{
+                    "&Marks",
+                    {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
+                     item(unmark_visible, "&Unmark visible"), item(invert, "&Invert visible marks"),
+                     item(clear, "&Clear all marks (including hidden)"), item(range, "&Set range start"),
+                     item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
+                ckv::widgets::MenuBarItem{"&View", {item(options_id, "View &options...")}}};
             options.application_status_items = {
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{switch_id, "&Switch pane"}, 30},
-                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_id, "&Cancel read"}, 25}};
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{toggle, "&Mark"}, 28},
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"}, 25},
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{options_id, "&View options"}, 20}};
             shell = std::make_unique<SuiteShell>(application, std::move(options));
             create_window();
             observer = application.add_attention_observer([this](auto kind) {
@@ -190,6 +264,7 @@ struct FilesApp::State {
             quit_owned = false;
         }
         confirmation.reset();
+        view_dialog.reset();
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
@@ -208,6 +283,7 @@ struct FilesApp::State {
         auto *split_view = split.get();
         auto main = std::make_unique<ckv::widgets::Window>("Files");
         auto *main_view = main.get();
+        main->set_command_context("ck.files.pane");
         main->set_bounds(shell->desktop().content_area());
         main->set_min_size({40, 12});
         main->set_grow_policy(ckv::widgets::DesktopGrowPolicy::KeepFilling);
@@ -250,11 +326,27 @@ struct FilesApp::State {
         if (bound && !closing)
             wake.request();
     }
+    bool modal_pending() const {
+        return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed());
+    }
+    static bool pending(const Pane &p) { return p.navigating || p.reading || p.changing || p.queued_view; }
+    bool ready(std::size_t i, bool continuation = false) const {
+        return i < 2 && !closing && (continuation || !modal_pending()) && !pending(panes[i]) && panes[i].active &&
+               panes[i].model.current() && services[i]->running();
+    }
     std::string status(std::size_t i) const {
         const auto &p = panes.at(i);
         std::string text;
-        if (p.navigating)
+        if (p.cancelling)
+            text = "Cancelling activity...";
+        else if (p.navigating)
             text = "Opening location...";
+        else if (p.preparing_cursor)
+            text = "Reading current row for view change...";
+        else if (p.changing)
+            text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
+                   : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
+                                                              : "Updating view...";
         else if (!p.error.empty())
             text = p.error;
         else if (!p.active)
@@ -269,6 +361,13 @@ struct FilesApp::State {
             text += "; stale listing";
         if (p.navigation_error && p.active)
             text += "; previous location retained";
+        if (p.selection.marks && p.selection.marks->total) {
+            text += " | Marked: " + std::to_string(p.selection.marks->total);
+            if (p.selection.marks->hidden)
+                text += " (" + std::to_string(p.selection.marks->hidden) + " hidden; review required)";
+        }
+        if (p.range_start)
+            text += " | Range start set";
         return text;
     }
     void labels() {
@@ -308,6 +407,12 @@ struct FilesApp::State {
         p.requested = std::move(requested);
         p.navigating = true;
         p.reading = false;
+        p.changing.reset();
+        p.queued_view.reset();
+        p.range_start.reset();
+        p.model.set_input_locked(false);
+        p.cancelling = p.change_error = false;
+        p.preparing_cursor = false;
         p.error.clear();
         p.navigation_error = false;
         p.blocked.reset();
@@ -315,9 +420,143 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool begin_change(std::size_t i, FilesPaneChange command, bool continuation = false) {
+        if (!ready(i, continuation))
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto kind = std::holds_alternative<FilesPaneFocusRow>(command)      ? FilesPaneReplyKind::Focus
+                          : std::holds_alternative<FilesPaneChangeMarks>(command) ? FilesPaneReplyKind::Marks
+                                                                                  : FilesPaneReplyKind::View;
+        auto submitted = services[i]->change(p.navigation, p.stamp, std::move(command), {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Pane change request rejected";
+            p.change_error = true;
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.inflight = range;
+        p.changing = kind;
+        p.cancelling = p.change_error = false;
+        p.error.clear();
+        p.navigation_error = false;
+        p.blocked.reset();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
+    bool change_marks(std::size_t i, ck::files::IndexedMarkCommand command) {
+        return begin_change(i, FilesPaneChangeMarks{std::move(command)});
+    }
+    void mark_through(bool marked) {
+        auto &p = panes[active];
+        if (p.range_start)
+            if (const auto target = p.model.target())
+                change_marks(active, ck::files::IndexedMarkRange{*p.range_start, target->row, marked});
+    }
+    bool change_view(std::size_t i, ck::files::PaneView view) {
+        if (!ready(i) || !ck::files::valid_pane_order({view.sort, view.descending, view.folders_first}) ||
+            view.display_substring.size() > 4096)
+            return false;
+        auto &p = panes[i];
+        if (const auto target = p.model.target(); target && p.worker_focus != p.model.cursor().row) {
+            if (!begin_change(i, FilesPaneFocusRow{target->row}))
+                return false;
+            p.queued_view = std::move(view);
+            return true;
+        }
+        // Wheel scrolling can leave the cursor outside the displayed cache.
+        // Read its exact dataset position before asking the worker to validate
+        // a row identity; never manufacture one from the position.
+        if (p.model.row_count() && !p.model.target() && p.worker_focus != p.model.cursor().row) {
+            const auto range = p.model.viewport();
+            const auto first = p.model.cursor().row;
+            auto submitted = services[i]->read_page(p.navigation, p.stamp, {first, range.rows});
+            if (submitted.state != FilesPaneSubmission::Accepted)
+                return false;
+            p.request = submitted.ticket;
+            p.inflight = {first, range.rows};
+            p.reading = p.preparing_cursor = true;
+            p.queued_view = std::move(view);
+            p.cancelling = p.change_error = false;
+            p.error.clear();
+            p.blocked.reset();
+            p.model.set_input_locked(true);
+            watch();
+            labels();
+            return true;
+        }
+        return begin_change(i, FilesPaneChangeView{std::move(view)});
+    }
+    void show_view_options() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto &view = panes[pane].view;
+        using namespace ckv::widgets;
+        DialogDescriptor descriptor;
+        descriptor.title = "View options";
+        descriptor.resizable = true;
+        descriptor.fields = {
+            FieldDescriptor{.label = "&Sort by",
+                            .kind = FieldKind::Combo,
+                            .options = {"Name", "Type", "Bytes", "Modified (UTC)"},
+                            .initial_selection = static_cast<int>(view.sort)},
+            FieldDescriptor{.label = "&Descending", .kind = FieldKind::Check, .initial_checked = view.descending},
+            FieldDescriptor{.label = "&Folders first", .kind = FieldKind::Check, .initial_checked = view.folders_first},
+            FieldDescriptor{
+                .label = "Show &hidden items", .kind = FieldKind::Check, .initial_checked = view.show_hidden},
+            FieldDescriptor{.label = "Displayed name &contains",
+                            .initial_text = view.display_substring,
+                            .validate = [](const std::string &text) { return text.size() <= 4096; },
+                            .description = "Literal substring, at most 4096 UTF-8 bytes; no wildcards."},
+            FieldDescriptor{
+                .label = "Match &ASCII case", .kind = FieldKind::Check, .initial_checked = view.ascii_case_sensitive},
+            FieldDescriptor{
+                .label = "Filters match escaped display names. Case folding is ASCII-only. Hidden marks stay marked.",
+                .kind = FieldKind::Note}};
+        descriptor.buttons = {{"&Apply", ButtonRole::Accept, {}}, {"&Cancel", ButtonRole::Dismiss, {}}};
+        view_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        view_dialog_window = shell->desktop().active_window();
+        view_dialog_lifetime = view_dialog_window->lifetime_token();
+        view_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation](const DialogResult &result) {
+                if (weak.expired())
+                    return;
+                view_dialog_window = nullptr;
+                if (close_after_view) {
+                    close_after_view = false;
+                    request_close();
+                    return;
+                }
+                if (!result.accepted)
+                    return;
+                if (panes[pane].navigation != navigation || !ready(pane)) {
+                    panes[pane].error = "Location changed while view options were open";
+                    labels();
+                    return;
+                }
+                if (result.values.size() != 7 || result.checked.size() != 7 || result.selected.size() != 7 ||
+                    result.selected[0] < 0 || result.selected[0] > 3)
+                    throw std::logic_error("invalid Files view dialog result");
+                ck::files::PaneView next;
+                next.sort = static_cast<ck::files::PaneSortKey>(result.selected[0]);
+                next.descending = result.checked[1];
+                next.folders_first = result.checked[2];
+                next.show_hidden = result.checked[3];
+                next.display_substring = result.values[4];
+                next.ascii_case_sensitive = result.checked[5];
+                if (!change_view(pane, std::move(next))) {
+                    panes[pane].error = "View change request rejected";
+                    labels();
+                }
+            });
+    }
     void watch() {
-        const bool pending =
-            std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return p.navigating || p.reading; });
+        const bool pending = std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
         if (pending && !watchdog)
             watchdog = application.start_timer(250'000'000, true, [this] { pump(); });
         if (!pending && watchdog) {
@@ -337,33 +576,81 @@ struct FilesApp::State {
         if (reply.navigation != p.navigation || reply.request != p.request)
             return;
         const bool navigation = reply.request == reply.navigation;
+        const bool reading_cursor = p.preparing_cursor;
+        const bool preparing_view = p.changing == FilesPaneReplyKind::Focus || reading_cursor;
+        auto queued_view = std::move(p.queued_view);
+        p.queued_view.reset();
+        const bool cancelled = p.cancelling;
         p.stamp = reply.stamp;
         p.navigating = false;
         p.reading = false;
-        if (reply.state == FilesPaneReplyState::Ready && reply.page && reply.page->stamp().current()) {
-            if (p.model.publish(reply.page, navigation)) {
+        p.changing.reset();
+        p.cancelling = false;
+        p.preparing_cursor = false;
+        p.model.set_input_locked(false);
+        if (reply.kind == FilesPaneReplyKind::View && reply.change_outcome == FilesPaneChangeOutcome::Applied)
+            p.range_start.reset();
+        bool adopted = false;
+        if (reply.page && reply.page->stamp().current()) {
+            if (p.model.publish(reply.page, navigation || (reply.kind == FilesPaneReplyKind::View &&
+                                                           reply.change_outcome == FilesPaneChangeOutcome::Applied))) {
+                adopted = true;
                 if (navigation) {
                     p.active = reply.active_location;
                     p.requested = reply.requested_location;
                     p.navigation_error = false;
-                    p.error.clear();
-                } else if (!p.navigation_error)
-                    p.error.clear();
+                }
+                p.view = reply.page->view();
+                p.selection = reply.page->selection();
+                p.worker_focus = reply.page->focused_position();
                 p.cache = FilesPaneViewport{reply.page->first(), reply.page->rows().size()};
                 p.blocked.reset();
                 surfaces[i]->grid->model_changed();
-                return;
             }
         }
+        if (reply.state == FilesPaneReplyState::Ready && adopted) {
+            if (!p.navigation_error && !p.change_error)
+                p.error.clear();
+            if (cancelled && preparing_view) {
+                p.error = "View change cancelled before application";
+                p.change_error = true;
+            } else if (cancelled && reply.change_outcome == FilesPaneChangeOutcome::Applied) {
+                p.error = "Change applied before cancellation completed";
+                p.change_error = true;
+            }
+            if (queued_view && reading_cursor && !cancelled) {
+                if (const auto target = p.model.target()) {
+                    if (begin_change(i, FilesPaneFocusRow{target->row}, true))
+                        p.queued_view = std::move(queued_view);
+                } else {
+                    p.error = "View not applied; current row was not delivered";
+                    p.change_error = true;
+                }
+            } else if (queued_view && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
+                       reply.change_outcome == FilesPaneChangeOutcome::Applied)
+                begin_change(i, FilesPaneChangeView{std::move(*queued_view)}, true);
+            return;
+        }
         p.error = reply.state == FilesPaneReplyState::Ready ? "Stale page rejected" : failure(reply);
+        if (reply.change_outcome == FilesPaneChangeOutcome::Applied)
+            p.error = (preparing_view ? "View not applied; current row acknowledged; " : "Change applied; ") + p.error;
+        else if (reply.change_outcome == FilesPaneChangeOutcome::Unknown)
+            p.error = "Change outcome unknown; reopen location before further actions. " + p.error;
+        else if (reply.change_outcome == FilesPaneChangeOutcome::NotApplied)
+            p.error = "Change not applied; " + p.error;
+        else if (preparing_view)
+            p.error = "View not applied; " + p.error;
+        p.change_error = preparing_view || reply.change_outcome != FilesPaneChangeOutcome::NotRequested;
         p.navigation_error = navigation;
         if (navigation && reply.active_location)
             p.active = reply.active_location;
-        p.blocked = p.inflight;
+        if (!adopted)
+            p.blocked = p.inflight;
     }
     void page(std::size_t i) {
         auto &p = panes[i];
-        if (p.navigating || !p.active || !surfaces[i]->visible() || !p.stamp.current() || !services[i]->running())
+        if (p.navigating || p.changing || p.queued_view || !p.active || !surfaces[i]->visible() || !p.stamp.current() ||
+            !services[i]->running())
             return;
         auto range = p.model.viewport();
         if (covers(p, range) || (p.blocked && *p.blocked == range) || (p.reading && p.inflight == range))
@@ -387,9 +674,13 @@ struct FilesApp::State {
             for (std::size_t i = 0; i < 2; ++i) {
                 if (auto reply = services[i]->take())
                     consume(i, std::move(*reply));
-                if (!services[i]->running() && (panes[i].navigating || panes[i].reading)) {
+                if (!services[i]->running() && pending(panes[i])) {
+                    const bool changing = panes[i].changing.has_value();
                     panes[i].navigating = panes[i].reading = false;
-                    panes[i].error = "Worker stopped";
+                    panes[i].changing.reset();
+                    panes[i].queued_view.reset();
+                    panes[i].model.set_input_locked(false);
+                    panes[i].error = changing ? "Worker stopped; change outcome unknown" : "Worker stopped";
                 }
                 page(i);
             }
@@ -402,7 +693,7 @@ struct FilesApp::State {
         }
     }
     void switch_pane() {
-        if (closing || (confirmation && !confirmation->completed()))
+        if (closing || modal_pending())
             return;
         active = 1 - active;
         layout();
@@ -410,9 +701,10 @@ struct FilesApp::State {
         wake.request();
     }
     void cancel_read() {
-        if (!closing && !(confirmation && !confirmation->completed()) &&
-            services[active]->cancel(panes[active].request)) {
-            panes[active].error = "Cancelling read...";
+        if (!closing && !modal_pending() && pending(panes[active])) {
+            panes[active].queued_view.reset();
+            services[active]->cancel(panes[active].request);
+            panes[active].cancelling = true;
             labels();
         }
     }
@@ -435,6 +727,12 @@ struct FilesApp::State {
     void request_close() {
         if (closing)
             return;
+        if (view_dialog && !view_dialog->completed()) {
+            close_after_view = true;
+            if (view_dialog_window && !view_dialog_lifetime.expired())
+                view_dialog_window->close();
+            return;
+        }
         if (confirmation && !confirmation->completed())
             return;
         if (!services[0]->working() && !services[1]->working()) {
@@ -445,11 +743,11 @@ struct FilesApp::State {
         ckv::widgets::DialogDescriptor descriptor;
         descriptor.title = "Close Files";
         descriptor.fields = {ckv::widgets::FieldDescriptor{
-            .label = "Directory reads are still running. Stopping them may wait for blocked storage to respond.",
+            .label = "File reads or pane updates are still running. Stopping may wait for blocked storage to respond.",
             .kind = ckv::widgets::FieldKind::Note}};
         descriptor.buttons = {
             {"&Stay", ckv::widgets::ButtonRole::Accept, {}},
-            {"Stop reads and e&xit", ckv::widgets::ButtonRole::Dismiss, [this] { exit_selected = true; }}};
+            {"Stop activity and e&xit", ckv::widgets::ButtonRole::Dismiss, [this] { exit_selected = true; }}};
         confirmation.emplace(
             ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
         confirmation->set_completion_handler(
@@ -467,20 +765,31 @@ FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));
 }
+bool FilesApp::change_marks(std::size_t pane, ck::files::IndexedMarkCommand command) {
+    return state_->change_marks(pane, std::move(command));
+}
+bool FilesApp::change_view(std::size_t pane, ck::files::PaneView view) {
+    return state_->change_view(pane, std::move(view));
+}
+const ck::files::PaneView &FilesApp::view(std::size_t pane) const { return state_->panes.at(pane).view; }
+const ck::files::IndexedPaneSelection &FilesApp::selection(std::size_t pane) const {
+    return state_->panes.at(pane).selection;
+}
 void FilesApp::switch_pane() { state_->switch_pane(); }
 void FilesApp::cancel_read() { state_->cancel_read(); }
 void FilesApp::request_close() { state_->request_close(); }
 bool FilesApp::close_confirmation_pending() const { return state_->confirmation && !state_->confirmation->completed(); }
+bool FilesApp::view_options_pending() const { return state_->view_dialog && !state_->view_dialog->completed(); }
 std::size_t FilesApp::active_pane() const noexcept { return state_->active; }
 bool FilesApp::narrow() const noexcept { return state_->compact; }
 bool FilesApp::pending(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    return p.navigating || p.reading;
+    return State::pending(p);
 }
 std::string FilesApp::status(std::size_t pane) const { return state_->status(pane); }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || p.navigating || !state_->services.at(pane)->running())
+    if (state_->closing || p.navigating || p.changing || p.queued_view || !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())
         return FilesAppTarget{p.navigation, std::move(*target)};

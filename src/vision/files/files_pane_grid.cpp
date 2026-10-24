@@ -119,6 +119,7 @@ void FilesPaneGridModel::clear() noexcept {
     page_ = std::monostate{};
     total_ = page_first_ = first_ = 0;
     cursor_ = 0;
+    input_locked_ = false;
 }
 const ck::files::PaneDisplayRow *FilesPaneGridModel::row(std::uint64_t at) const noexcept {
     const auto *values = rows();
@@ -131,6 +132,10 @@ std::optional<FilesPaneRowTarget> FilesPaneGridModel::target() const {
     if (!current() || !value)
         return {};
     return FilesPaneRowTarget{*stamp(), value->id};
+}
+std::optional<bool> FilesPaneGridModel::cursor_marked() const {
+    const auto *value = row(cursor_);
+    return current() && value ? std::optional<bool>(value->marked) : std::nullopt;
 }
 void FilesPaneGridModel::set_viewport(int rows_count, int width) {
     const auto previous_height = height_;
@@ -231,7 +236,7 @@ void FilesPaneGridModel::reveal() noexcept {
         first_ = cursor_ - static_cast<unsigned>(height_) + 1;
 }
 void FilesPaneGridModel::navigate(ckv::widgets::GridMove move, bool) {
-    if (!total_)
+    if (input_locked_ || !total_)
         return;
     using M = ckv::widgets::GridMove;
     auto next = static_cast<std::uint64_t>(cursor_);
@@ -268,13 +273,13 @@ void FilesPaneGridModel::navigate(ckv::widgets::GridMove move, bool) {
     reveal();
 }
 void FilesPaneGridModel::place_cursor(ckv::widgets::GridPosition at, bool) {
-    if (!total_ || at.row >= total_)
+    if (input_locked_ || !total_ || at.row >= total_)
         return;
     cursor_ = at.row;
     reveal();
 }
 void FilesPaneGridModel::scroll_by(int delta, int) {
-    if (total_)
+    if (!input_locked_ && total_)
         first_ = shift(first_, delta, last_origin());
 }
 } // namespace ck::vision

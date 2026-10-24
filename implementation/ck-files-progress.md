@@ -3892,3 +3892,53 @@ component milestone.
 WP-02 remains open. The application still needs to bind these worker commands
 to its focus/mark/view controls, as well as implement the remaining navigation,
 refresh, properties/preview, history/bookmark and interactive acceptance work.
+
+## 2026-10-24 — WP-02 pane mark and view controls
+
+The application now exposes mark toggling, visible mark/unmark/invert, explicit
+range start and mark/unmark through cursor, and clearing all marks including
+hidden ones. Insert toggles the current row; the Marks menu and status line use
+the same commands. Range endpoints carry scoped row IDs, including when their
+display pages are no longer cached. Marks and hidden-mark review counts update
+only after worker acknowledgment.
+
+View options provides typed sort, descending order, folders-first and hidden
+settings plus a literal escaped-name substring filter and explicit ASCII case
+matching. Its nonblocking ckVision descriptor dialog validates the filter bound,
+retains usable buttons after narrow resizing, and refuses results from an
+obsolete navigation context. Cancellation leaves the current view unchanged;
+Quit dismisses pending options before following the normal close protocol.
+
+Before reordering or filtering, the controller fetches an off-screen uncached
+cursor row when necessary, acknowledges its scoped row ID on the worker, then
+submits one bounded queued view intent. An already acknowledged worker focus
+does not require reconstructing an uncached row ID. Cursor
+movement pauses in that pane until the acknowledged change finishes; the other
+pane remains usable. Cancelling between the focus acknowledgment and view
+submission withdraws the queued view. Commands are scoped to the pane window
+and are unavailable from unrelated inputs or dialogs.
+
+Applied, not-applied and unknown acknowledgments remain distinct from page
+delivery. Recovery pages do not erase change failures. A committed mark update
+that exceeds a display budget remains explicit and can recover after resizing;
+an unknown acknowledgment disables further changes in that pane while the other
+pane remains usable. No source filesystem mutation is enabled.
+
+Twelve additional application tests cover real menu/keyboard/pointer routing,
+range marking across uncached pages, hidden marks, all themes, focus retention
+through reorder, dialog validation/resizing/cancellation/obsolete contexts,
+acknowledgment failures, off-screen uncached cursor resolution and the
+inter-stage cancellation race. All 83 Files suites pass: 810 cases on macOS,
+813 on Linux and 809 on Windows, plus the keymap suite on each platform.
+All 60 UI/service cases pass matched ASan+UBSan on macOS/Linux and ASan on
+Windows, with all 71 product units and pinned ckVision 1.4.0 SDK units
+(124/124/128 respectively) instrumented.
+
+See [the pane-control evidence](evidence/ck-files-pane-controls-20261024.json)
+for final source, compiler, SDK and output fingerprints, exact tests, timings
+and cleanup. Diagnostic builds and fixture data have been retired; normal
+builds remain for active work. No GUI application was launched.
+
+WP-02 remains open for navigation/completion and child traversal, qualified
+refresh with stable selection, properties/preview, histories/bookmarks, a
+production executable and actual interactive terminal acceptance.
