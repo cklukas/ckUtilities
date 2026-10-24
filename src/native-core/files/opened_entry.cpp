@@ -3,6 +3,10 @@
 #include "opened_entry.hpp"
 
 namespace ck::files {
+Observation<std::unique_ptr<OpenedEntry>> OpenedEntry::open_parent_directory() const {
+    return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "parent.native_query"});
+}
 Observation<FileDataLayout> OpenedEntry::inspect_data_layout(InventoryLimits limits, std::stop_token stop) const {
     const bool valid = limits.valid(), cancelled = stop.stop_requested();
     return Observation<FileDataLayout>::unavailable(!valid ? ObservationState::Failed : cancelled ? ObservationState::Unknown : ObservationState::Unsupported,

@@ -65,6 +65,11 @@ public:
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;
+    // Live metadata/parent queries through the held directory, independent of
+    // enumeration position. Parent references have metadata-only access and
+    // do not certify a frozen ancestry or namespace confinement.
+    virtual Observation<BasicMetadata> inspect_basic() const;
+    virtual Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const;
     const Observation<ObjectIdentity>& identity() const noexcept { return identity_; }
 
 protected:

@@ -43,6 +43,10 @@ public:
     OpenedEntry(const OpenedEntry&) = delete;
     OpenedEntry& operator=(const OpenedEntry&) = delete;
     virtual Observation<BasicMetadata> inspect_basic() const = 0;
+    // Directory objects only. Opens a metadata-only parent reference through
+    // the held object. No original path reopen or enumeration; native support
+    // and permissions may refuse. A live edge observation, not a stable path.
+    virtual Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const;
     virtual Observation<StorageInfo> inspect_storage() const;
     // Explicit opt-in layout access can require native data-read permission;
     // this query seeks/queries metadata and never reads file content. Main data

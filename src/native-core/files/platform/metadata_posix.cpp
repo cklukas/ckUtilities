@@ -241,6 +241,7 @@ public:
         if (!unchanged.value()) { const auto& e = *unchanged.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return result;
     }
+    Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override;
     Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
         using Result = Observation<LinkMetadata>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "link.limits"));
@@ -531,6 +532,33 @@ private:
     bool layout_access_;
 };
 
+Observation<std::unique_ptr<OpenedEntry>> open_posix_parent(int descriptor, const AdapterScope& scope) {
+    using Result = Observation<std::unique_ptr<OpenedEntry>>;
+    const auto check = [](const Observation<BasicMetadata>& metadata) -> std::optional<UnavailableObservation> {
+        if (!metadata.value()) return *metadata.unavailable_detail();
+        if (!metadata.value()->kind.value()) return *metadata.value()->kind.unavailable_detail();
+        if (*metadata.value()->kind.value() != ObjectKind::Directory) return UnavailableObservation{ObservationState::Unsupported,
+            adapter_error(AdapterError::NotApplicable, "parent.object_kind")};
+#if defined(__APPLE__)
+        const auto review = provider_review_required(*metadata.value(), StorageModel::DarwinStatFlags);
+        if (!review.value()) return *review.unavailable_detail();
+        if (*review.value()) return UnavailableObservation{ObservationState::Unknown, adapter_error(AdapterError::ProviderReviewRequired, "parent.provider_review")};
+#endif
+        return {};
+    };
+    if (const auto failure = check(stat_metadata(descriptor, nullptr, true, scope))) return Result::unavailable(failure->state, failure->error);
+#if defined(__linux__)
+    constexpr auto flags = O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#else
+    constexpr auto flags = O_EVTONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#endif
+    OwnedDescriptor parent(openat(descriptor, "..", flags));
+    if (parent.get() < 0) { const int code = errno; return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.parent"}); }
+    if (const auto failure = check(stat_metadata(parent.get(), nullptr, true, scope))) return Result::unavailable(failure->state, failure->error);
+    return Result::available(std::make_unique<PosixOpenedEntry>(std::move(parent), scope));
+}
+Observation<std::unique_ptr<OpenedEntry>> PosixOpenedEntry::open_parent_directory() const { return open_posix_parent(descriptor_.get(), scope_); }
+
 struct DirectoryCloser {
     void operator()(DIR* directory) const noexcept { closedir(directory); }
 };
@@ -540,6 +568,15 @@ class PosixDirectoryCursor final : public DirectoryCursor {
 public:
     PosixDirectoryCursor(OwnedDirectory directory, Observation<ObjectIdentity> identity, AdapterScope scope)
         : DirectoryCursor(std::move(identity)), directory_(std::move(directory)), scope_(std::move(scope)) {}
+    Observation<BasicMetadata> inspect_basic() const override {
+#if defined(__linux__)
+        return statx_metadata(dirfd(directory_.get()), "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW, scope_);
+#else
+        return stat_metadata(dirfd(directory_.get()), nullptr, true, scope_);
+#endif
+    }
+    Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_posix_parent(dirfd(directory_.get()), scope_); }
+
     Observation<LocationInfo> inspect_location() const override {
         LocationInfo result;
         const auto fd = dirfd(directory_.get());

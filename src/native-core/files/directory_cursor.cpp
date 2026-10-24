@@ -70,4 +70,12 @@ Observation<LocationInfo> DirectoryCursor::inspect_location() const {
     return Observation<LocationInfo>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "location.native_query"});
 }
+Observation<BasicMetadata> DirectoryCursor::inspect_basic() const {
+    return Observation<BasicMetadata>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "directory.metadata_query"});
+}
+Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::open_parent_directory() const {
+    return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "parent.native_query"});
+}
 } // namespace ck::files

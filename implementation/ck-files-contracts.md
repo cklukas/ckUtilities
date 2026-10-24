@@ -866,6 +866,86 @@ covers deterministic and native validation. Self/descendant checks, operation
 capabilities, native equivalence for distinct planned names, conflict decisions,
 consent and publication protocols remain required before mutations.
 
+## Native parent references and bounded ancestor observations
+
+`DirectoryCursor::inspect_basic` queries the held directory independently of
+its enumeration state. Both `DirectoryCursor` and `OpenedEntry` provide
+`open_parent_directory`; success owns a metadata-only `OpenedEntry` parent
+reference, not an enumeration cursor. Unsupported implementations remain explicit.
+Regular files and final links/reparse objects are not silently followed as
+directories. Native-owner creation/query/retirement belongs on workers.
+
+POSIX opens the fixed native `..` component relative to the held descriptor,
+with directory/no-follow/close-on-exec protections. Linux uses O_PATH; Darwin uses
+O_EVTONLY. This does not require directory-listing access on Linux and does not
+reopen an original absolute pathname or change cwd. Normal kernel search/access
+checks still apply. Darwin provider flags are checked before and after opening.
+The [openat contract](https://man7.org/linux/man-pages/man2/open.2.html) defines
+relative resolution against a directory descriptor. Parent references are live
+edge observations and provide no mount/namespace confinement guarantee.
+
+Windows queries the held directory with the documented
+[FSCTL_READ_FILE_USN_DATA](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_read_file_usn_data)
+metadata control. The existing identity scheme selects USN v2 (64-bit) or v3
+(128-bit); there is no guessed conversion or ID truncation. The portable decoder
+validates exact record length/alignment, requested major/minor version, header,
+UTF-16 name bounds and nonzero child/parent IDs, without retaining names or
+interpreting the API's invalid time/reason/source fields. The API is optional;
+unsupported drivers, inactive journals and permission failures stay explicit.
+No journal is created, changed or enumerated.
+
+The parent is opened using
+[OpenFileById](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-openfilebyid),
+with the live child as volume/share hint, metadata/synchronization rights,
+share-read/write/delete, no-recall and final-reparse-point protection. No backup
+intent, data-read access or privilege elevation is requested. Source and parent
+identity/kind/provider reports are qualified; a second USN observation with the
+parent handle live must retain the same child/parent IDs. Changes decline the
+edge. ReFS research and native tests verify full IDs, current parent after a
+move, root self-parent behavior and metadata-only access without enumeration or
+backup flags. Native `..` opens were rejected and directory enumeration's `..`
+ID was zero on this host; neither rejected route is used in production. This
+qualification is not a universal provider/no-hydration or filesystem-support
+claim. USN v2 has deterministic decoding coverage; this host qualifies native v3.
+
+`AncestorWalkJob` accepts a bound directory source and held destination directory.
+It qualifies fresh source/destination identity/kind observations against their
+retained bindings, then iteratively opens metadata-only parent references.
+Successful reports retain source, destination and all observed parent owners.
+An `ObservedSource` witness identifies the source's position in that sequence;
+`RepeatedDirectory` identifies a repeated native identity, including a root or
+loop. There is deliberately no NotDescendant/SafeToCopy result. Concurrent moves,
+mount aliases or unsupported edges prevent a walk from certifying universal
+absence of an ancestor. This is evidence for later self/descendant refusal, not
+a frozen namespace, current-name proof, operation plan or execution permission.
+
+The default 256-directory cap includes the destination and repeated endpoint;
+the hard cap is 4096. The last allowed node can still yield a positive/repeat
+witness before budget refusal. Advances have 256 preparation/query/comparison
+steps and an injected cooperative slice (20 ms default, positive through one
+second). Repeat comparisons also consume steps; there is no unbounded comparison
+loop hidden inside an advance. Actual OS descriptor limits can fail sooner.
+These are representation bounds, not process-memory/handle-availability promises.
+Native operations may include several calls and can block beyond the slice.
+
+Whole metadata/field/parent errors and limits produce unavailable outcomes with
+an explicit bounded observation prefix. Completion means the attempt ended;
+callers must inspect the outcome, not infer successful full ancestry. Fatal
+configuration/clock/resource exceptions poison and release private staging;
+malformed null parent replies cannot publish an incomplete report. Cancellation
+exposes no result and retains completed private observations/pending handles;
+resumption does not repeat a completed query. Abandonment releases private state,
+while issued immutable reports retain their owners independently.
+
+Simulation supplies declared directory-parent links, independent native-query
+faults and ownership counts. Same-parent aliases retain the parent until their
+last link is removed; ambiguous graph parents remain Unknown. This is not mount,
+provider, native name-equivalence or permission emulation.
+[Ancestor evidence](evidence/ck-files-ancestor-20261024.json) records decoder,
+state/fault/resource tests, native parent/walk fixtures, Windows API research,
+failed fixture corrections and cleanup. Execution still requires appropriate
+name/edge/capability revalidation and operation-specific safety policy.
+
 ## Held source and existing-target identity comparison
 
 `SourceTargetJob` consumes ownership of a bounded vector of immutable

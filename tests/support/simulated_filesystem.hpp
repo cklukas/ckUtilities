@@ -24,7 +24,7 @@ class SimulatedFileSystem final : public ck::files::BasicFileSystem {
     template<class T> using Observed = ck::files::Observation<T>;
 public:
     enum class Operation { OpenDirectory, InspectPath, ReadDirectory, OpenChild, OpenDirectoryChild, InspectHandle, LookupChild, InspectLocation,
-        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout };
+        InspectStorage, ReadLink, InspectChannels, InspectAttributes, ReadAttribute, ReadSecurity, InspectLayout, OpenParent };
     struct Action {
         std::optional<ck::files::UnavailableObservation> failure;
         ck::files::MonotonicClock::Duration elapsed{};
@@ -51,6 +51,8 @@ public:
         std::optional<Observed<ck::files::LocationInfo>> location_;
         SimulatedInventory inventory_;
         std::vector<std::pair<Name, Pointer>> children_;
+        std::weak_ptr<Node> parent_;
+        bool directory_root_ = false, parent_ambiguous_ = false;
     public:
         std::uint64_t id() const noexcept { return id_; }
     };
@@ -71,6 +73,7 @@ public:
     void bind(const std::filesystem::path& absolute, Pointer node) {
         require(node); if (!valid_path(absolute)) throw std::invalid_argument("invalid simulated path");
         if (!state_->paths.contains(absolute) && state_->paths.size() == max_nodes) throw std::length_error("simulated path limit");
+        if (node->kind_ == Kind::Directory && node->parent_.expired()) node->directory_root_ = true;
         state_->paths.insert_or_assign(absolute, std::move(node));
     }
     void set_location(const Pointer& node, Observed<ck::files::LocationInfo> location) {
@@ -84,14 +87,23 @@ public:
         require(parent); require(child);
         if (parent->kind_ != Kind::Directory || !name.is_valid()) throw std::invalid_argument("invalid simulated child binding");
         if (child->kind_ == Kind::Directory && contains(child, parent)) throw std::invalid_argument("simulated directory cycle");
-        for (auto& entry : parent->children_) if (entry.first == name) { entry.second = std::move(child); return; }
+        if (child->kind_ == Kind::Directory) {
+            if (const auto old = child->parent_.lock(); old && old != parent) child->parent_ambiguous_ = true;
+            child->parent_ = parent; child->directory_root_ = false;
+        }
+        for (auto& entry : parent->children_) if (entry.first == name) {
+            if (entry.second != child) remove_parent_link(parent, entry.second, name);
+            entry.second = std::move(child); return;
+        }
         if (parent->children_.size() == max_nodes) throw std::length_error("simulated directory limit");
         parent->children_.emplace_back(std::move(name), std::move(child));
     }
     bool erase(const Pointer& parent, const Name& name) {
         require(parent);
         for (auto it = parent->children_.begin(); it != parent->children_.end(); ++it)
-            if (it->first == name) { parent->children_.erase(it); return true; }
+            if (it->first == name) {
+            remove_parent_link(parent, it->second, name);
+            parent->children_.erase(it); return true; }
         return false;
     }
     void enqueue(Operation operation, Action action) {
@@ -148,6 +160,11 @@ private:
     void require(const Pointer& node) const {
         if (!node || node->owner_ != state_->scope) throw std::invalid_argument("foreign simulated node");
     }
+    static void remove_parent_link(const Pointer& parent, const Pointer& child, const Name& removed) {
+        if (child->kind_ != Kind::Directory || child->parent_.lock() != parent) return;
+        for (const auto& entry : parent->children_) if (entry.first != removed && entry.second == child) return;
+        child->parent_.reset(); child->directory_root_ = false;
+    }
     static bool contains(const Pointer& root, const Pointer& target) {
         std::vector<Pointer> pending{root};
         std::set<std::uint64_t> visited;
@@ -180,6 +197,7 @@ private:
         Entry(std::shared_ptr<State> state, Pointer node, ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly)
             : state_(std::move(state)), node_(std::move(node)), access_(access) { ++state_->entries; }
         ~Entry() override { --state_->entries; }
+        Observed<std::unique_ptr<ck::files::OpenedEntry>> open_parent_directory() const override { return parent_entry(state_, node_); }
         Observed<Metadata> inspect_basic() const override {
             const auto fault = step(state_, Operation::InspectHandle, node_);
             return fault ? Observed<Metadata>::unavailable(fault->state, fault->error) : Observed<Metadata>::available(node_->metadata_);
@@ -267,6 +285,17 @@ private:
         }
         std::shared_ptr<State> state_; Pointer node_; ck::files::EntryAccess access_;
     };
+    static Observed<std::unique_ptr<ck::files::OpenedEntry>> parent_entry(const std::shared_ptr<State>& state, const Pointer& node) {
+        using Result = Observed<std::unique_ptr<ck::files::OpenedEntry>>;
+        if (const auto fault = step(state, Operation::OpenParent, node)) return Result::unavailable(fault->state, fault->error);
+        if (node->kind_ != Kind::Directory) return Result::unavailable(ck::files::ObservationState::Unsupported,
+            {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::NotApplicable), "simulated.parent_kind"});
+        if (node->parent_ambiguous_) return Result::unavailable(ck::files::ObservationState::Unknown,
+            {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::MetadataChanged), "simulated.parent_ambiguous"});
+        auto parent = node->directory_root_ ? node : node->parent_.lock();
+        if (!parent) return missing<Result>();
+        return Result::available(std::make_unique<Entry>(state, std::move(parent)));
+    }
     class Cursor final : public ck::files::DirectoryCursor {
     public:
         Cursor(std::shared_ptr<State> state, Pointer node)
@@ -275,6 +304,12 @@ private:
             ++state_->cursors;
         }
         ~Cursor() override { --state_->cursors; }
+        Observed<Metadata> inspect_basic() const override {
+            const auto fault = step(state_, Operation::InspectHandle, node_);
+            if (fault) return Observed<Metadata>::unavailable(fault->state, fault->error);
+            return Observed<Metadata>::available(node_->metadata_);
+        }
+        Observed<std::unique_ptr<ck::files::OpenedEntry>> open_parent_directory() const override { return parent_entry(state_, node_); }
         Observed<std::unique_ptr<ck::files::OpenedEntry>> open_child(const Name& name,
             ck::files::EntryAccess access = ck::files::EntryAccess::MetadataOnly) const override {
             using Result = Observed<std::unique_ptr<ck::files::OpenedEntry>>;

@@ -2309,3 +2309,68 @@ WP-01 remains open for descendant safety, operation-specific capabilities,
 native name equivalence, remaining inventories, large-view indexes and UI/worker
 integration. Self-target evidence still needs operation-plan/execution integration.
 WP-02 has not started.
+
+## 2026-10-24 — WP-01 native parent and ancestor observations
+
+Added metadata-only parent references to held entries and directory cursors,
+plus fresh cursor metadata independent of enumeration position. POSIX uses
+fixed-component descriptor-relative `openat("..")`, with Linux `O_PATH` and
+Darwin `O_EVTONLY`, directory/no-follow/close-on-exec flags and normal access
+checks. Linux native coverage verifies no directory-list permission requirement.
+Windows selects exact USN v2/v3 IDs by the existing identity scheme, validates
+record bounds, opens the full parent ID using the held child as volume/share
+hint, and checks native identities, kind and provider before/after acquisition.
+No content read, journal mutation, backup flag, privilege change, directory
+scan or pathname fallback is used. Native Windows qualification is ReFS v3;
+v2 has decoder coverage, not native NTFS qualification. Unsupported queries
+remain explicit. Private native probes and rejected approaches are recorded.
+
+`AncestorWalkJob` retains source, destination and observed parents. Its bounded,
+resumable state machine reports an observed source, repeated directory or
+unavailable edge with the observed prefix. There is no negative ancestry or
+safe-to-copy verdict: live edges are not a namespace snapshot. Execution-time
+name, edge and capability checks remain required. Directory, step and cooperative
+time limits cover traversal and comparisons. Completed replies and pending
+owners survive yields without repeated I/O. Native calls can block; ownership
+must be retired on workers. Simulator parent links survive until the final
+same-parent alias is removed/replaced, with explicit ambiguity across parents.
+
+Nineteen deterministic cases cover qualification, failures, identity changes,
+cancellation, slow queries, retirement, exceptions, malformed owners, clocks,
+limits, long walks and USN decoding. Native cases cover enumeration independence,
+held directories after movement/path replacement, source/self matches, exact
+limits, actual root repetition and regular/final-link refusal; Linux adds
+unprivileged no-list access.
+
+The final **127-file manifest** matches validated sources. All **49 Files suites**
+pass: **429 macOS / 429 Linux / 433 Windows cases**. Final build/test seconds were
+**8.954/0.899**, **13.018/0.152**, **39.244/2.879** respectively. Mac's final
+12-step update follows the initial 63-step build (26.026 s) and fixture updates.
+Compiled inputs, output hashes and case markers establish freshness; elapsed
+time alone is not accepted as proof.
+
+Focused sanitizers compiled all 31 core units plus platform adapter, simulator,
+source-target/ancestor domain and native fixtures, and test host (38 units),
+without cached objects. **77 Mac / 78 Linux / 76 Windows cases** passed.
+ASan+UBSan build/test took **65.956/0.329 s** on Mac and **158.187/0.137 s** on
+Linux; Windows ASan took **83.524/0.314 s**. Strict warnings remained errors.
+An initial cancellation fixture counted acquisition queries in its job total;
+the baseline was corrected while retaining the exact four-query requirement.
+An initial Windows junction fixture omitted directory creation and caused an
+uncaught fixture exception/fast-fail. Explicit creation and scoped removal
+corrected it. Both rejected runs are recorded and excluded from passing results.
+The abandoned private fixture was inventoried and removed after owner/content
+checks. Final tests and sanitizers passed after corrections.
+
+Diagnostics/research were hashed, checked for live owners and removed; final
+fixture roots are empty. Current normal builds remain. Mac scratch stayed on
+S8T and Windows development on V:. No GUI was launched.
+[Ancestor evidence](evidence/ck-files-ancestor-20261024.json) records source,
+output/log hashes, native research, commands, times, case markers, rejected runs
+and cleanup. UI boundaries (90 domain sources), ckVision-only (473 active files),
+ckdocs (24 pages) and whitespace checks pass.
+
+WP-01 remains open for operation-specific capabilities, native name equivalence,
+remaining inventories, large-view indexes, UI/worker ownership integration and
+operation/execution safety integration. These observations do not complete
+self/descendant safety. WP-02 has not started.

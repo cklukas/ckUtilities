@@ -4,6 +4,7 @@
 #include "windows_name.hpp"
 #include "windows_directory_record.hpp"
 #include "windows_stream_records.hpp"
+#include "windows_parent_record.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -294,6 +295,7 @@ public:
         if (!unchanged.value()) { const auto& e = *unchanged.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         return result;
     }
+    Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override;
     Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const override {
         using Result = Observation<LinkMetadata>;
         if (!limits.valid()) return Result::unavailable(ObservationState::Failed,
@@ -532,6 +534,80 @@ private:
     bool layout_access_;
 };
 
+Observation<detail::WindowsParentIds> windows_parent_ids(HANDLE handle, IdentityScheme scheme) {
+    using Result = Observation<detail::WindowsParentIds>;
+    static_assert(offsetof(USN_RECORD_V2, FileName) == 60 && offsetof(USN_RECORD_V3, FileName) == 76);
+    const WORD major = scheme == IdentityScheme::WindowsFileId128 ? 3 : scheme == IdentityScheme::WindowsFileIndex64 ? 2 : 0;
+    if (major == 0) return Result::unavailable(ObservationState::Unknown,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "parent.usn_scheme"});
+    READ_FILE_USN_DATA input{major, major};
+    // USHORT name length plus the largest supported header, rounded to 8 bytes.
+    alignas(8) std::array<std::byte, 65536 + 80> buffer{};
+    DWORD bytes = 0;
+    if (!DeviceIoControl(handle, FSCTL_READ_FILE_USN_DATA, &input, sizeof(input), buffer.data(), static_cast<DWORD>(buffer.size()), &bytes, nullptr)) {
+        const auto code = GetLastError();
+        if (code == ERROR_JOURNAL_NOT_ACTIVE || code == ERROR_JOURNAL_DELETE_IN_PROGRESS)
+            return Result::unavailable(ObservationState::Unsupported, {ErrorDomain::Win32, code, "FSCTL_READ_FILE_USN_DATA.parent"});
+        return failure<detail::WindowsParentIds>(code, "FSCTL_READ_FILE_USN_DATA.parent");
+    }
+    if (bytes > buffer.size()) return Result::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "parent.usn_bytes"});
+    return detail::decode_windows_parent_record(std::span<const std::byte>(buffer).first(bytes), major);
+}
+Observation<std::unique_ptr<OpenedEntry>> open_windows_parent(HANDLE child, const AdapterScope& scope) {
+    using Result = Observation<std::unique_ptr<OpenedEntry>>;
+    const auto check = [](const Observation<BasicMetadata>& metadata) -> std::optional<UnavailableObservation> {
+        if (!metadata.value()) return *metadata.unavailable_detail();
+        if (!metadata.value()->kind.value()) return *metadata.value()->kind.unavailable_detail();
+        if (*metadata.value()->kind.value() != ObjectKind::Directory) return UnavailableObservation{ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "parent.object_kind"}};
+        const auto review = provider_review_required(*metadata.value(), StorageModel::WindowsHandleAttributes);
+        if (!review.value()) return *review.unavailable_detail();
+        if (*review.value()) return UnavailableObservation{ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::ProviderReviewRequired), "parent.provider_review"}};
+        return {};
+    };
+    const auto before = handle_metadata(child, scope);
+    if (const auto denied = check(before)) return Result::unavailable(denied->state, denied->error);
+    if (!before.value()->identity.value()) { const auto& e = *before.value()->identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    const auto& own = *before.value()->identity.value();
+    auto ids = windows_parent_ids(child, own.scheme);
+    if (!ids.value()) { const auto& e = *ids.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    const auto qualify = [&](const NativeIdentifier& id, const ObjectIdentity& observed) -> std::optional<UnavailableObservation> {
+        const auto compared = compare_identity({scope, ids.value()->scheme, own.volume, id, {}}, observed);
+        if (compared == IdentityComparison::Same) return {};
+        return UnavailableObservation{compared == IdentityComparison::Different ? ObservationState::Changed : ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(compared == IdentityComparison::Different ? AdapterError::MetadataChanged : AdapterError::UnqualifiedIdentity), "parent.usn_identity"}};
+    };
+    if (const auto mismatch = qualify(ids.value()->child, own)) return Result::unavailable(mismatch->state, mismatch->error);
+    if ((ids.value()->attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) return Result::unavailable(ObservationState::Changed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "parent.usn_kind"});
+    FILE_ID_DESCRIPTOR descriptor{}; descriptor.dwSize = sizeof(descriptor);
+    if (own.scheme == IdentityScheme::WindowsFileId128) { descriptor.Type = ExtendedFileIdType; std::memcpy(descriptor.ExtendedFileId.Identifier, ids.value()->parent.bytes.data(), 16); }
+    else { descriptor.Type = FileIdType; std::memcpy(&descriptor.FileId.QuadPart, ids.value()->parent.bytes.data(), 8); }
+    // Original live directory supplies the volume hint. No basename/path open,
+    // enumeration, FILE_READ_DATA, backup intent, elevation or journal mutation.
+    OwnedHandle parent(OpenFileById(child, &descriptor, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
+    if (parent.get() == INVALID_HANDLE_VALUE || parent.get() == nullptr) return failure<std::unique_ptr<OpenedEntry>>(GetLastError(), "OpenFileById.parent");
+    auto opened = std::make_unique<WindowsOpenedEntry>(std::move(parent), scope);
+    const auto metadata = opened->inspect_basic();
+    if (const auto denied = check(metadata)) return Result::unavailable(denied->state, denied->error);
+    if (!metadata.value()->identity.value()) { const auto& e = *metadata.value()->identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    if (const auto mismatch = qualify(ids.value()->parent, *metadata.value()->identity.value())) return Result::unavailable(mismatch->state, mismatch->error);
+    const auto again = windows_parent_ids(child, own.scheme);
+    if (!again.value()) { const auto& e = *again.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    if (again.value()->scheme != ids.value()->scheme || again.value()->child != ids.value()->child || again.value()->parent != ids.value()->parent ||
+        (again.value()->attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        return Result::unavailable(ObservationState::Changed, {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "parent.usn_changed"});
+    const auto after = handle_metadata(child, scope);
+    if (const auto denied = check(after)) return Result::unavailable(denied->state, denied->error);
+    if (!after.value()->identity.value()) { const auto& e = *after.value()->identity.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+    if (const auto mismatch = qualify(ids.value()->child, *after.value()->identity.value())) return Result::unavailable(mismatch->state, mismatch->error);
+    return Result::available(std::move(opened));
+}
+Observation<std::unique_ptr<OpenedEntry>> WindowsOpenedEntry::open_parent_directory() const { return open_windows_parent(handle_.get(), scope_); }
+
 // Public FILE_FS_FULL_SIZE_INFORMATION wire layout. The desktop SDK does not
 // declare this WDK structure; no private members or syscall numbers are used.
 struct alignas(8) VolumeSpaceCounters {
@@ -564,6 +640,8 @@ class WindowsDirectoryCursor final : public DirectoryCursor {
 public:
     WindowsDirectoryCursor(OwnedHandle handle, Observation<ObjectIdentity> native_identity, AdapterScope scope)
         : DirectoryCursor(std::move(native_identity)), handle_(std::move(handle)), scope_(std::move(scope)) {}
+    Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
+    Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_windows_parent(handle_.get(), scope_); }
     Observation<LocationInfo> inspect_location() const override {
         LocationInfo result;
         result.family = LocationQueryFamily::WindowsHandle;
