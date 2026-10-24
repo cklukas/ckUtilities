@@ -2666,3 +2666,41 @@ whitespace checks pass.
 WP-01 remains open for remaining inventories, full cross-platform policies and
 operation capability/preservation assessment, large views, UI/worker ownership
 and execution safety. WP-02 has not started.
+
+### Immutable bounded pane display pages
+
+The next WP-01 milestone supplies the worker-to-UI viewport boundary:
+`PanePage` copies prepared display rows and observations without raw native
+names, native owners or a reference to the worker model. Capturing a window
+has explicit row/string limits and preserves every included observation and
+diagnostic without truncation. Failure returns no partial page.
+
+`PaneStateStamp` lets the worker reject commands originating from an older
+model state. Every successful state mutator and model destruction revokes prior
+stamps; rejected requests preserve them. The shared revocation bit can be read
+on the UI thread without exposing mutable model state or retaining handles.
+It neither freezes the filesystem nor authorizes operations.
+
+Eight new cases cover window/end/overflow bounds, default/hard/invalid limits,
+aggregate string accounting (including each of the 17 metadata diagnostics),
+filter/hidden/inspection/listing errors, immutable old rows, mark/focus/view
+state, pending and invalidated selection, every state mutator, foreign and
+rejected stamps, worker-model destruction, native-owner retirement through the
+simulated adapter, zero filesystem calls during capture, and a retained page
+read on a separate UI thread. Existing pane and continuity cases also run in
+the focused sanitizer executable. Validation details are recorded in
+[the pane-page evidence](evidence/ck-files-pane-page-20261024.json).
+
+WP-01 remains in progress. These are viewport values and state validation
+primitives; they do not implement the UI/command dispatcher, full property
+presentation, operation planning or mutation. WP-02–08 remain unstarted.
+
+Validation on 2026-10-24: all 58 Files suites pass with 482 cases on macOS,
+483 on Linux and 485 on Windows. Each host also passes 40 focused pane/page/
+continuity cases in a fresh sanitizer build: ASan+UBSan on macOS/Linux and ASan
+on Windows. Linux leak detection is enabled; Apple leak detection is unavailable.
+All 145 exported source inputs match current bytes. Exact test output hashes,
+UTC build intervals, compiler commands, SDK/test-host fingerprints, the initial
+missing-test-include compile error, and cleanup audits are in the evidence.
+Diagnostic builds were removed after native-owner/process and empty-fixture
+checks; current normal test builds remain. No application was launched.

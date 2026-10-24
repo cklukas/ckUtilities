@@ -1399,3 +1399,47 @@ replacement at the original name, and confirm the existing name-rule boundary
 refuses bytewise qualification for the encrypted directory. Fixture names are
 restored between runs. No encrypted-content copying is claimed by these metadata
 fixtures; the image/mount/helper are audited and removed after validation.
+
+## Immutable pane display pages and state revocation
+
+`capture_pane_page` runs on the same serialized worker that owns `PaneModel`.
+It copies only a requested visible window into `shared_ptr<const PanePage>`.
+The page contains prepared escaped display text, row IDs, basic observations,
+visibility/inspection diagnostics, mark/focus bits, view settings, row counts,
+listing status/error and invalidated-selection diagnostics. It contains no raw
+native names, `HeldChild`, cursor, model reference or native resource owner.
+A UI may retain the page after the worker destroys the model without retaining
+native handles or performing native cleanup on the UI thread.
+
+Default capture is at most 256 rows and 1 MiB of copied string payload; hard
+limits are 4096 rows and 16 MiB. The string budget includes the filter, listing
+error and every retained row diagnostic operation, including all 17 basic
+metadata observations. Fixed object/row overhead is bounded separately by the
+row limit; the string budget is not a claim about exact allocator consumption.
+An oversized field/page produces `LimitExceeded` with no partial page and no
+truncation. An offset beyond the visible count produces `OutOfRange`; an offset
+exactly at the end produces a valid empty page. Counts are subtracted before
+adding bounded offsets, so maximum-sized caller offsets cannot wrap. Capture
+makes two bounded window traversals, with no whole-directory scan, sorting,
+raw-name conversion or filesystem call. Allocation failure propagates without
+publishing a page or changing pane state. Capture belongs on the worker even
+though its inputs have already been prepared; it has no real-time latency claim.
+
+Each page carries a `PaneStateStamp`. A stamp owns only a shared atomic
+revocation bit. A newly captured stamp remains current across reads/captures
+of unchanged state. Successful listing requests, publications, cancellations,
+failures, view changes and selection changes revoke the previous stamp before
+publishing the new state. Accepted selection/view requests may conservatively
+revoke even when their visible value is unchanged. Rejected requests and
+validation failures preserve the existing stamp. Model destruction revokes it.
+Revocation allocates nothing and cannot wrap a generation counter. Retained
+old tokens prevent address reuse from causing an old stamp to match a new one.
+
+The UI may query only `stamp.current()` concurrently. All model reads, capture,
+mutation and `model.accepts(stamp)` remain serialized on the owning worker.
+A command must return its page stamp and row ID to that worker, which validates
+both against the current model before acting. A current stamp does not prove
+filesystem freshness, selection readiness, object/name continuity or mutation
+permission. Native revalidation and operation review remain mandatory. This
+viewport boundary does not yet implement the command dispatcher, selection
+summary, full properties/diagnostics presentation, ckVision UI or operations.

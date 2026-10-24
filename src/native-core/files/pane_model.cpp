@@ -42,6 +42,18 @@ void validate_pane_limits(PaneLimits limits) {
         throw std::invalid_argument("invalid pane resource limits");
 }
 PaneModel::PaneModel(PaneLimits limits) : limits_(limits) { validate_pane_limits(limits); }
+PaneModel::~PaneModel() { invalidate_stamp(); }
+PaneStateStamp PaneModel::state_stamp() const {
+    if (!stamp_) stamp_ = std::make_shared<PaneStateStamp::Token>();
+    PaneStateStamp result; result.token_ = stamp_; return result;
+}
+bool PaneModel::accepts(const PaneStateStamp& stamp) const noexcept {
+    return stamp_ && stamp.token_ == stamp_ && stamp.current();
+}
+void PaneModel::invalidate_stamp() noexcept {
+    if (stamp_) stamp_->current.store(false, std::memory_order_release);
+    stamp_.reset();
+}
 PaneEntry PaneEntry::from_listed(ListedEntry entry, Observation<bool> hidden_state) {
     if (entry.metadata.value()) return PaneEntry(std::move(entry.name), std::move(entry.metadata).take_value(), std::move(hidden_state));
     PaneEntry result(std::move(entry.name), {}, std::move(hidden_state));
@@ -59,6 +71,7 @@ PanePublish PaneModel::publish(const CompletedPaneListing& listing) {
 PaneListingRequest PaneModel::begin_listing(PaneListingPurpose purpose) {
     if (purpose != PaneListingPurpose::Navigate && purpose != PaneListingPurpose::Refresh) throw std::invalid_argument("invalid pane listing purpose");
     if (next_request_ == std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error("pane request handles exhausted");
+    invalidate_stamp();
     pending_ = next_request_++;
     purpose_ = purpose;
     error_.reset();
@@ -128,6 +141,7 @@ PanePublish PaneModel::publish(PaneListingRequest request, const std::vector<Pan
     } else if (!projection.visible.empty()) focus = prepared[projection.visible.front()].id;
     // Every allocating step is complete before publication. Old IDs survive
     // only through a sealed live successor; newly allocated IDs never recycle.
+    invalidate_stamp();
     next_row_ = next_row;
     indexes_.swap(indexes);
     rows_.swap(prepared); visible_.swap(projection.visible); positions_.swap(projection.positions); marks_.swap(marks);
@@ -139,11 +153,13 @@ bool PaneModel::fail_listing(PaneListingRequest request, UnavailableObservation 
     if (failure.state == ObservationState::Available) throw std::invalid_argument("listing failure cannot be Available");
     // Validate arbitrary enum input through the shared observation invariant.
     (void)Observation<int>::unavailable(failure.state, failure.error);
+    invalidate_stamp();
     error_ = std::move(failure); pending_ = 0;
     return true;
 }
 bool PaneModel::cancel_listing(PaneListingRequest request) noexcept {
     if (!current(request)) return false;
+    invalidate_stamp();
     pending_ = 0; error_.reset();
     return true;
 }
@@ -175,6 +191,7 @@ PaneModel::Projection PaneModel::project(const std::vector<PaneRow>& rows, const
 void PaneModel::set_view(PaneView view) {
     validate_view(view);
     auto projection = project(rows_, view);
+    invalidate_stamp();
     view_ = std::move(view); visible_.swap(projection.visible); positions_.swap(projection.positions);
 }
 std::optional<std::size_t> PaneModel::index(PaneRowId id) const noexcept {
@@ -185,19 +202,20 @@ std::optional<std::size_t> PaneModel::index(PaneRowId id) const noexcept {
 const PaneRow* PaneModel::row(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? &rows_[*i] : nullptr; }
 const PaneRow* PaneModel::visible_row(std::size_t i) const noexcept { return i < visible_.size() ? &rows_[visible_[i]] : nullptr; }
 std::optional<std::size_t> PaneModel::visible_index(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i ? positions_[*i] : std::nullopt; }
-bool PaneModel::focus(PaneRowId id) noexcept { if (!visible_index(id)) return false; focus_ = std::move(id); invalidated_ = {}; binding_issues_.clear(); return true; }
-bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; marks_[*i] = value; invalidated_ = {}; binding_issues_.clear(); return true; }
+bool PaneModel::focus(PaneRowId id) noexcept { if (!visible_index(id)) return false; invalidate_stamp(); focus_ = std::move(id); invalidated_ = {}; binding_issues_.clear(); return true; }
+bool PaneModel::set_mark(PaneRowId id, bool value) noexcept { const auto i = index(std::move(id)); if (!i || !positions_[*i]) return false; invalidate_stamp(); marks_[*i] = value; invalidated_ = {}; binding_issues_.clear(); return true; }
 bool PaneModel::marked(PaneRowId id) const noexcept { const auto i = index(std::move(id)); return i && marks_[*i]; }
-void PaneModel::mark_visible(bool value) noexcept { for (auto i : visible_) marks_[i] = value; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
-void PaneModel::invert_visible_marks() noexcept { for (auto i : visible_) marks_[i] = !marks_[i]; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
+void PaneModel::mark_visible(bool value) noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) marks_[i] = value; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
+void PaneModel::invert_visible_marks() noexcept { if (!visible_.empty()) invalidate_stamp(); for (auto i : visible_) marks_[i] = !marks_[i]; if (!visible_.empty()) { invalidated_ = {}; binding_issues_.clear(); } }
 bool PaneModel::mark_range(std::size_t first, std::size_t last, bool value) noexcept {
     if (first >= visible_.size() || last >= visible_.size()) return false;
+    invalidate_stamp();
     if (first > last) std::swap(first, last);
     for (auto i = first; i <= last; ++i) marks_[visible_[i]] = value;
     invalidated_ = {}; binding_issues_.clear();
     return true;
 }
-void PaneModel::clear_marks() noexcept { std::fill(marks_.begin(), marks_.end(), false); invalidated_ = {}; binding_issues_.clear(); }
+void PaneModel::clear_marks() noexcept { invalidate_stamp(); std::fill(marks_.begin(), marks_.end(), false); invalidated_ = {}; binding_issues_.clear(); }
 std::vector<HeldChild::Pointer> PaneModel::held_entries() const {
     std::vector<HeldChild::Pointer> result;
     for (const auto& row : rows_) if (row.entry.held_child()) result.push_back(row.entry.held_child());

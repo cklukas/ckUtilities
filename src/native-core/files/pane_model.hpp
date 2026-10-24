@@ -4,10 +4,22 @@
 #include "held_child.hpp"
 #include "native_name.hpp"
 #include <limits>
+#include <atomic>
 #include <vector>
 #include <unordered_map>
 
 namespace ck::files {
+// A stamp owns only a revocation bit, never a model or native resource. It is
+// safe to query on the UI thread; all model access remains worker-serialized.
+class PaneStateStamp final {
+public:
+    PaneStateStamp() = default;
+    bool current() const noexcept { return token_ && token_->current.load(std::memory_order_acquire); }
+private:
+    struct Token { std::atomic<bool> current{true}; };
+    std::shared_ptr<Token> token_;
+    friend class PaneModel;
+};
 struct ListedEntry;
 class CompletedPaneListing;
 void validate_pane_limits(struct PaneLimits limits);
@@ -92,6 +104,11 @@ struct PaneSources {
 class PaneModel final {
 public:
     explicit PaneModel(PaneLimits limits = {});
+    ~PaneModel();
+    // Worker-only capture/validation. A current stamp prevents stale model
+    // commands; it is not a filesystem snapshot or operation permission.
+    PaneStateStamp state_stamp() const;
+    bool accepts(const PaneStateStamp& stamp) const noexcept;
     PaneModel(const PaneModel&) = delete;
     PaneModel& operator=(const PaneModel&) = delete;
     // Caller must distinguish navigation from refresh. Newer requests supersede
@@ -132,6 +149,8 @@ private:
     static Projection project(const std::vector<PaneRow>& rows, const PaneView& view);
     std::optional<std::size_t> index(PaneRowId id) const noexcept;
     bool current(PaneListingRequest request) const noexcept;
+    void invalidate_stamp() noexcept;
+    mutable std::shared_ptr<PaneStateStamp::Token> stamp_;
     PaneLimits limits_;
     AdapterScope scope_;
     std::uint64_t next_row_ = 1;
