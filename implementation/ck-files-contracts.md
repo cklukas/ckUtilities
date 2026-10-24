@@ -1281,3 +1281,66 @@ native IDs. A hard-link fixture verifies that name distinction does not become
 object distinction. All hosts verify enumeration independence, lexical evidence,
 held-directory refresh after pathname replacement and owner retirement. Other
 filesystem policies remain explicit limitations rather than presumed passes.
+
+## Destination batch name-group assessment
+
+`DestinationNamesJob` connects a sealed `CompletedDestinationBatch` to fresh
+name-rule observations through that batch's retained parent. It retains the
+whole batch, including original names, mapping failures, exact-name leaders,
+existing occupants and their independent object-identity alias evidence. It
+never performs a new child lookup, reopens the original pathname, creates a
+probe or mutates a source/destination.
+
+The immutable completed assessment records mapped/unmapped row counts, exact
+component groups, duplicate groups and rows within duplicate groups. `row`
+reports the exact group leader/count and number of other mapped groups.
+Mapping failures remain explicit per-row observations, including batches with
+no successfully mapped rows. `OtherNameGroups::None` means there are zero other
+mapped groups: duplicates within the one group, unmapped source rows and
+existing-target conflicts can still require refusal/review. It is never a
+no-conflicts or creation-permission result.
+
+For two or more mapped groups, the job obtains a live parent location report,
+qualifies a potentially usable rule, then obtains and qualifies a second report.
+An unavailable/unqualified first report is preserved without a retry or second
+query. The name-rule boundary's native identity/family/type/relevant-flag checks
+apply unchanged. The initial bytewise rule must also apply to the mapped-name
+encoding. An available native policy with an inapplicable encoding remains
+visible while group comparisons explicitly fail applicability. Unknown policies
+and changed/denied/failed queries never become evidence of distinct names.
+
+For a qualified applicable bytewise rule, distinct exact-name groups are
+`DistinctUnderReportedRules`. Otherwise comparisons against distinct groups
+retain the rule's unavailable state/diagnostic. Pair comparison is O(1) in the
+number/length of input names: it uses the sealed batch's exact group index,
+without rescanning names, new I/O or allocating a quadratic pair table.
+Comparing rows in the same exact group reports `IdenticalNativeUnits` even when
+native rules fail, preserving any unavailable native directory context. Bounds
+errors and either row's mapping failure remain explicit. Existing-object alias
+IDs never establish name equivalence; distinct hard-link names stay separate.
+
+Validation and summary construction are linear in rows and complete before new
+native I/O. Row limits have a hard maximum of 4096; per-component native-byte
+limits default to 64 KiB and have a hard maximum of 1 MiB. UTF-16 counts bytes,
+not characters. The component limit applies to successfully mapped destination components;
+unmapped sources retain their mapping errors and the original batch bounds.
+The original batch retains its separate name-storage bounds;
+this assessment stores summaries and two location observations, not new copies
+of every name. None of these bounds is a process-memory or OS-handle guarantee.
+
+Each advance has 256 steps and an injected cooperative time slice (default
+20 ms, maximum 1 s). Each location call is a separate phase, and its completed
+reply is committed before cancellation/time yields, so resume does not repeat
+native I/O. Native calls can still block beyond a slice. Invalid configuration
+throws before new queries; row/component resource failures, backwards clocks
+and exceptions fail/poison staging without exposing a prefix. Abandonment
+releases private ownership; issued immutable results keep the entire batch
+alive independently. Native-owner retirement belongs on workers.
+
+This is name-group evidence for later operation planning, not a frozen plan,
+namespace snapshot, name acceptance, object inequality, absence, permission or
+execution-time collision proof. Even a qualified group result does not update
+the batch's older occupant observations. Later execution must revalidate the
+exact parent/rules and current occupants and use the required exclusive/native
+publication operations. Cross-platform rules that remain unqualified in the
+native boundary remain unresolved here; they are not waived by this assessment.

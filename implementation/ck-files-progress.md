@@ -2524,3 +2524,67 @@ encrypted/casefold or other-driver qualification is claimed. WP-01 remains open
 for complete cross-platform names/collisions, operation capabilities and
 preservation assessment, remaining inventories, large-view indexes, UI/worker
 ownership and execution safety. WP-02 has not started.
+
+## 2026-10-24 — WP-01 destination batch name-group assessment
+
+Added `DestinationNamesJob` over a sealed destination batch. It retains original
+source/mapped names, mapping failures, exact-name groups, existing occupants and
+independent object-alias evidence through the original held parent. Summary
+construction and input validation are linear in rows; pair/row access uses the
+sealed exact-group index without rescanning names or a quadratic pair table.
+No new child lookup, original pathname reopen, content access or mutation occurs.
+
+The result reports mapped/unmapped rows, exact groups, duplicate groups and rows
+within duplicate groups. Zero or one mapped group needs no native policy query;
+`None` means no other mapped groups, never no conflicts or permission. Duplicate
+groups, mapping failures and existing-target conflicts remain explicit. Distinct
+groups require a fresh qualified applicable native rule; unavailable policies,
+changed/denied/failed observations and encoding inapplicability remain unresolved.
+Hard-link object identity cannot become name equivalence. These observations do
+not refresh old occupants or supply an execution-time collision proof.
+
+Each parent location call is a separate phase. Completed replies commit before
+cancellation/time yields and are not repeated on resume. All mapped component
+limits and row limits are validated before new native I/O. The job has 256 steps
+per advance, an injected cooperative slice and hard row/component caps. Fatal
+resource/clock errors and exceptions poison staging without exposing a prefix;
+abandonment releases private ownership while issued results retain the whole
+batch independently. Native calls/retirement belong on workers and can block.
+
+Thirteen deterministic cases cover exact/qualified/unresolved groups, hard-link
+aliases, empty/duplicate-only/all-unmapped inputs, every native failure state in
+either observation, identity/flag changes, encoding applicability, cancellation,
+slow calls, 600 rows, pre-I/O limits, UTF-16 byte accounting at a later row,
+configuration, exceptions, clock reversal, abandonment and issued-owner lifetime.
+Three native cases on every host cover missing candidate groups, hard links and
+held-parent queries after pathname replacement. Linux native markers prove the
+positive distinct-group branch ran; other native policies remain unqualified.
+
+All **138 exported input hashes plus unchanged test-host hash** match validated
+sources. All **55 Files suites** pass: **466 macOS / 466 Linux / 469 Windows
+cases**. Final build/test took **3.407/0.891**, **7.483/0.171**, **21.651/3.423 s**.
+Mac's final two-step fixture update follows its initial six-step core/native/
+fixture build (6.814 s); native/core code remained unchanged between those builds.
+Compiled inputs, source/output hashes and case markers establish freshness.
+Normal targets remain Ninja/Release on all three hosts.
+
+Focused diagnostics compiled all 34 configured core units, platform adapter,
+two new fixtures and test host (38 units) directly from source without object
+cache inputs. **16 cases passed on each host**. ASan+UBSan build/test took
+**55.261/0.327 s** on Mac and **135.470/0.074 s** on Linux; Windows ASan took
+**79.039/0.219 s**. The preceding different 37-unit name-rule fixture set took
+52.305/118.198/67.413 s to build; the new larger fixture set establishes its own
+baseline. Strict warnings remained errors. No failed run is counted as evidence,
+and no Mac LeakSanitizer coverage is claimed.
+
+Diagnostics were hashed, checked for live owners and removed; fixture roots are
+empty and current normal builds remain. Mac temporary work stayed on S8T and
+Windows development on V:. No GUI was launched.
+[Destination-name evidence](evidence/ck-files-destination-names-20261024.json)
+records source/output/log hashes, configuration, commands, times, native branch
+markers, cleanup and compiled-unit coverage. UI boundaries (96 domain sources),
+ckVision-only (485 active files), ckdocs (24 pages) and whitespace checks pass.
+
+WP-01 remains open for remaining cross-platform native name policies, complete
+operation capabilities/preservation assessment, remaining inventories, large-view
+indexes, UI/worker ownership and execution safety. WP-02 has not started.
