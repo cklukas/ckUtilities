@@ -60,6 +60,41 @@ exact stamped row on the pane worker with explicit bounded read access,
 rechecks identity and logical size around the read, and publishes a bounded
 hex display only after the worker acknowledgment.
 
+## 2026-10-24 — WP-02 real-terminal and current-source race qualification
+
+The exact production binary
+`/Volumes/S8T/tmp/ckutilities-wp02-completion-20261024-01/build/bin/ck-files`
+was launched in a real 80x24 terminal with independent left/right locations.
+Its SHA-256 is
+`1af9d82867b1f4c46059d088cd4054dee7a73a567449d60f591b0943d81726a4`. The
+ownership-disabled S8T config root was refused by the private-cache contract;
+the successful run used the ownership-capable task root
+`/Volumes/PRO-BLADE/tmp/ckutilities-wp02-completion-20261024-01-interactive-config-pty-02`.
+
+The real UI rendered both panes and exercised worker completion for a partial
+`.../imp` path, plain Right-to-accept followed by Enter into `implementation/`,
+F3 bounded hexadecimal preview of `ck-files-contracts.md`, Properties metadata
+with its acknowledged-listing/recheck warning, menu bookmark creation,
+Backspace parent navigation, history back/forward, Ctrl+R refresh, and Alt+X
+shutdown. The process exited cleanly and no mutation command was enabled.
+
+A fresh macOS ASan+UBSan build at
+`/Volumes/S8T/tmp/ckutilities-wp02-asan-20261024-02` compiled all 90 target
+steps. The complete Files run reproduced the pinned ckVision 1.4.0 heap
+buffer overflow in `ckv::widgets::Desktop::install_default_handler` during
+`SuiteShell` construction, before the UI application cases; the stack contains
+no Files source frame beyond the caller. No suppression or product workaround
+was added. The same current instrumented binary passed 117 worker/value cases:
+26 completion service, 13 completion index, 22 location text, 6 location
+draft, and 50 pane service cases.
+
+A fresh current-source ThreadSanitizer build at
+`/Volumes/S8T/tmp/ckutilities-wp02-tsan-20261024-01` compiled all 90 target
+steps. Its worker-focused run passed 89 cases (26 completion service, 13
+completion index, 50 pane service) with no race diagnostics. This is scoped
+worker coverage, not a claim that the upstream-affected UI suite is fully
+sanitized.
+
 ## WP-02 — worker-backed location completion checkpoint
 
 This checkpoint records the completion integration milestone. The
