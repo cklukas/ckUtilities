@@ -876,6 +876,17 @@ passes all **103** registered tests, representing **678 core** and **168
 native** cktest cases. Windows compilation/execution remains gated by the
 unavailable mandatory `V:` workstation drive.
 
+Commit `58c9c68` adds the journaled copy-stage orchestrator. It revalidates the
+source and destination before durable `Prepared`, creates the private copy
+stage only afterward, advances the bounded native stream job, records `Copied`
+only after independent digest verification has completed, and records
+`Verified` only after the explicit metadata-verification callback succeeds.
+Cancellation and copy failures are journaled; unavailable preparation or
+verification outcomes remain reconciliation-required. The final publication
+and source-retirement adapters remain separate. Three orchestration cases pass
+under normal, ASan/UBSan and TSan macOS builds; Windows compilation/execution
+remains gated by the unavailable mandatory `V:` workstation drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
