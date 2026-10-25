@@ -945,6 +945,13 @@ commit stage. The final current normal regression remains **105/105** Files
 CTest entries; direct suite runs report **687 core** and **169 native** cktest
 cases, all passing.
 
+Commit `36c5b59` adds a bounded progress projection to the execution job. It
+reports the current stage and bytes actually observed by the worker, leaves the
+total unknown unless a qualified snapshot supplies one, and never fabricates a
+percentage or completion estimate. The final normal macOS regression remains
+**105/105** Files CTest entries, with **687 core** and **169 native** cktest
+cases passing; focused ASan/UBSan and TSan execution checks also pass.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
