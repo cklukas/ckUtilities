@@ -3,6 +3,7 @@
 #pragma once
 
 #include "operation_journal.hpp"
+#include "operation_journal_file.hpp"
 
 #include <optional>
 #include <vector>
@@ -38,5 +39,12 @@ struct OperationRecoveryReport final {
 Observation<OperationRecoveryReport> inspect_operation_recovery(
     const OperationJournal& journal,
     std::optional<UnavailableObservation> tail = std::nullopt);
+
+// Read-only startup composition. The file remains worker-owned; a successful
+// result contains the decoded journal and any untrusted tail projected into
+// explicit review actions. No native object is opened or mutated here.
+Observation<OperationRecoveryReport> inspect_native_operation_recovery(
+    OperationJournalFile& file, OperationJournalLimits journal_limits = {},
+    OperationJournalCodecLimits codec_limits = {});
 
 } // namespace ck::files

@@ -72,4 +72,15 @@ Observation<OperationRecoveryReport> inspect_operation_recovery(
     return Observation<OperationRecoveryReport>::available(std::move(report));
 }
 
+Observation<OperationRecoveryReport> inspect_native_operation_recovery(
+    OperationJournalFile& file, OperationJournalLimits journal_limits,
+    OperationJournalCodecLimits codec_limits) {
+    auto loaded = load_operation_journal(file, journal_limits, codec_limits);
+    if (!loaded.value()) {
+        const auto& error = *loaded.unavailable_detail();
+        return Observation<OperationRecoveryReport>::unavailable(error.state, error.error);
+    }
+    return inspect_operation_recovery(*loaded.value()->journal, loaded.value()->tail);
+}
+
 } // namespace ck::files

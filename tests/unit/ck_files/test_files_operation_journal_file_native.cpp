@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_journal_file.hpp"
+#include "operation_recovery.hpp"
 #include "scratch_directory.hpp"
 
 #include <cvision/testing/cktest.hpp>
@@ -63,4 +64,22 @@ CK_TEST(operation_journal_file_native_rejects_foreign_name_encoding_and_non_priv
     CK_CHECK(!open_native_operation_journal_file(root, *foreign, true).value());
     const auto missing = address(scratch.path() / "missing");
     CK_CHECK(!open_native_operation_journal_file(missing, name("operation.journal"), true).value());
+}
+
+CK_TEST(operation_journal_file_native_startup_projection_preserves_untrusted_tail) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-native", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    auto file = take(open_native_operation_journal_file(address(scratch.path()), name("recovery.journal"), true));
+    OperationJournalId journal_id;
+    journal_id.bytes[0] = std::byte{2};
+    auto created = take(OperationJournal::create(FileOperation::Copy, journal_id, {4, 16, 64}));
+    CK_CHECK(append_operation_journal_file(*file, *created,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+    const std::array<std::byte, 1> torn{std::byte{0xFF}};
+    const auto end = take(file->size());
+    CK_CHECK(file->write_at(end, torn).value());
+    auto report = inspect_native_operation_recovery(*file, {4, 16, 64});
+    CK_CHECK(report.value() && report.value()->has_untrusted_tail && report.value()->requires_reconciliation);
 }
