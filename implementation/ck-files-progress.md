@@ -800,6 +800,12 @@ pass under normal, ASan/UBSan and TSan core builds. This remains an injected
 worker boundary: native publication, metadata restoration and source removal
 adapters are not connected, and no mutation UI command is enabled.
 
+Commit `0cb69f3` expands deterministic failure coverage at the same boundaries:
+journal-intent persistence failure prevents publication, post-publication
+journal failure prevents Move source retirement, and a pre-cancelled stream
+never opens a destination or flushes it. Six commit-job and four stream-copy
+cases pass under normal, ASan/UBSan and TSan core builds.
+
 Commit `4d87679` adds the read-only startup recovery projection. It maps
 incomplete staging, commit-intent, destination-committed, source-retirement
 and terminal states to explicit actions; only terminal records are ignored.
