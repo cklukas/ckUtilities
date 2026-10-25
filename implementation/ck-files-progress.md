@@ -60,6 +60,23 @@ exact stamped row on the pane worker with explicit bounded read access,
 rechecks identity and logical size around the read, and publishes a bounded
 hex display only after the worker acknowledgment.
 
+## 2026-10-25 — resumed WP-02 acceptance audit
+
+The ordered work-package gate was rechecked from the clean repository state.
+The official ckVision remote still has `v1.4.0` as its latest stable release;
+the annotated tag resolves to `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`,
+matching the installed SDK source used by the current qualification records.
+No newer verified SDK package is available to replace the pinned sanitizer
+input, so the upstream `Desktop::install_default_handler` sanitizer defect
+remains an external gate rather than an application workaround target.
+
+The Windows workstation was queried again through its configured session. Its
+filesystem inventory still contains only `C:\\` and `T:\\`; the mandatory
+`V:` development drive is absent. No Windows source, build, cache, scratch or
+test data was created on either exposed drive. The current ck-files production
+binary and repository remain unchanged, with no running ck-files or Files test
+process owned by this task.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
