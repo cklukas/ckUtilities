@@ -252,6 +252,37 @@ mandatory unavailable `V:` development drive, and sanitizer/race evidence
 for the new dialog is still required. The recursive worker adapter and
 operation-flow invocation remain open WP-03 work.
 
+## WP-03 — bounded recursive inventory worker
+
+Added `RecursiveInventoryJob` for the worker side of operation planning. It
+owns mutable directory cursors for the entire traversal, appends exact native
+components without display-text parsing, retains the root and every child in
+one sealed `FrozenInventory`, and publishes no partial result. It requires
+qualified identity, kind, mount and logical-size observations for every entry;
+enforces bounded depth, entries and logical bytes; refuses directory identity
+cycles and mount crossings under `StayOnRootMount`; preserves links without
+following them; and refuses `FollowLinks` until explicit target evidence is
+available. Cancellation before or between native stages pauses with the
+current component retained, while abandonment retires all worker-owned cursors.
+
+Four deterministic tests cover exact recursive paths and hard-link aliases,
+link-policy refusal, mount/depth/cycle failures, cancellation/resume and
+abandonment. The macOS core suite passes **629** cases. Fresh Linux
+qualification of commit `823d8cb` rebuilt the production binary, core and UI
+test binaries at 10:22:35–10:49:53 CET; the focused recursive suite passed 4
+cases, the full core suite passed **629**, the Files/ckVision UI suite passed
+**185**, and the independent installed-package consumer passed at
+10:50:16. Linux output hashes are:
+
+* `ck-files` — `af88af935496aab8420a0c39a4b9cc3a5ae045e0287ca7e3969cab5208170207`
+* `ck_vision_files_tests` — `3c2f19bbbb7686c338a876fe9485fbb78bf22b003fd819f6c28279701bfac020`
+* `ck_files_core_tests` — `1e89b5eca638c156a740fb2fce2cfe2646228c2e725c6a94c00e9a663a219fca`
+
+The worker currently produces the frozen structural inventory only; mapping
+each completed object’s preservation observations into capability differences
+and invoking the review dialog from a copy/move operation coordinator remain
+open. Windows and sanitizer/race qualification remain release gates.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
