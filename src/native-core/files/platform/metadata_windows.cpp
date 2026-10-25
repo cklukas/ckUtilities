@@ -829,7 +829,12 @@ public:
             const auto& error = *observed.unavailable_detail();
             return Result::unavailable(error.state, error.error);
         }
-        if (!FlushFileBuffers(handle_.get()))
+        auto parent_access = open_namespace_write_handle();
+        if (!parent_access.value()) {
+            const auto& error = *parent_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!FlushFileBuffers(parent_access.value()->get()))
             return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(),
                 "FlushFileBuffers.create_child_directory_parent");
         return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(opened), std::move(observed), scope_));
