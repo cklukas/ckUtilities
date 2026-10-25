@@ -968,6 +968,11 @@ without constructing the commit job or invoking any publication/retirement
 callback; journal failure remains reconciliation. The focused execution case
 passes under normal, ASan and TSan macOS builds.
 
+Commit `65f74ff` makes guarded folder creation durable: POSIX flushes the
+containing directory after identity verification, and Windows maps native name
+collisions to `Changed` and flushes the held parent directory before success.
+The native folder case passes under normal, ASan and TSan macOS builds.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
