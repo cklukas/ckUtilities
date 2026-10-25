@@ -85,6 +85,23 @@ POSIX/macOS refusal cases. Recovery cleanup for process-crash artifacts still
 requires exact journal/artifact identity evidence and remains unimplemented;
 no mutation command is enabled in `ck-files`.
 
+## 2026-10-25 — WP-04 batch cleanup ownership checkpoint
+
+Commit `6eb8e45` carries the worker-only cleanup callback through
+`NativeOperationCopyJob`, `OperationExecutionJob` and the serialized
+`OperationBatchJob`. A batch may request cleanup only for an item already
+recorded as Failed or Cancelled; completed, pending and out-of-range items are
+rejected. The callback remains bound to the original native state after the
+wrapper is transferred, so cleanup never reopens a staging name from UI text.
+
+The post-commit full current-source `ctest -L files` matrix passed **106/106**
+on macOS in 13.14 seconds (21:55:43–21:55:56 UTC), Windows in 28.24 seconds
+(21:55:47–21:56:15 UTC), and Linux in 40.07 seconds
+(21:55:43–21:56:23 UTC). The focused batch and native-content suites also
+passed on all three platforms. This remains cleanup of a live, unambiguous
+worker-owned staging object; process-crash recovery still requires a separate
+exact artifact/journal inspection flow and is not enabled in the product UI.
+
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
 The earlier qualification note below is retained as historical evidence. The
