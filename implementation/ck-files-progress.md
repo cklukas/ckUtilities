@@ -3,6 +3,29 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 durable startup native-evidence projection checkpoint
+
+Commit `b9bbb42` adds the worker-only
+`inspect_native_operation_recovery_evidence(OperationJournalFile&, ...)`
+composition. It loads one bounded durable journal through the existing native
+file boundary, preserves any explicit untrusted tail, and projects the latest
+native recovery evidence into review artifacts. A valid durable record is
+available for later fresh-handle inspection; a missing, malformed, or
+truncated record remains `RequireReview` with reconciliation required. The
+composition performs no path reconstruction, native-object open, cleanup,
+resume, replacement, or source retirement.
+
+The focused recovery suite passed **7/7** on macOS, Windows and Linux. The
+current-source Files matrix passed **107/107** on all three platforms:
+macOS in 14.62 seconds, Windows in 27.03 seconds, and Linux after a fresh
+full-project Release build from 22:14:42–22:42:36 UTC (27m54s) on the remote
+ARM host. Linux's final Files run also passed all 107 entries. Windows used
+the mandatory `V:\\dev\\ckutilities` source and `V:\\tmp` build/temp roots;
+Linux used its task-local `/home/klukas/tmp/ckutilities-recovery-inspection-20261025-01`
+temporary root. This checkpoint still does not enable automatic recovery,
+metadata preservation, mutation UI, or a complete Norton Commander/Midnight
+Commander replacement.
+
 ## 2026-10-25 — WP-04 identity-bound recovery disposition checkpoint
 
 Commits `6bd0c49` and `441c808` extend native recovery evidence with the
