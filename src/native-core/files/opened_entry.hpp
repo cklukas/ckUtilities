@@ -108,6 +108,12 @@ public:
     virtual Observation<std::size_t> write_content(std::uint64_t offset, std::span<const std::byte> bytes,
                                                     ContentWriteLimits limits = {}, std::stop_token stop = {});
     virtual Observation<bool> flush_content();
+    // Apply only the platform's explicitly qualified portable-basic metadata
+    // subset to this worker-created staging object. This is not a complete
+    // preservation operation: callers must account separately for ownership,
+    // ACL/security, channels, attributes/xattrs, flags, provider state and any
+    // timestamp field outside the adapter's documented subset.
+    virtual Observation<bool> apply_portable_basic_metadata(const BasicMetadata& source);
     // Publish this worker-created staging object under a new destination name
     // relative to a held directory. The default refuses the operation; a
     // platform adapter must provide an atomic no-replace primitive and retain

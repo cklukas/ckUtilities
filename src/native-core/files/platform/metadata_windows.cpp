@@ -112,6 +112,24 @@ Observation<FileTimestamp> timestamp(LARGE_INTEGER native) {
     return Observation<FileTimestamp>::available(FileTimestamp::from_windows_ticks(static_cast<std::uint64_t>(native.QuadPart)));
 }
 
+Observation<LONGLONG> windows_ticks(const FileTimestamp& value, const char* operation) {
+    constexpr std::int64_t epoch_seconds = 11'644'473'600;
+    constexpr std::uint64_t ticks_per_second = 10'000'000;
+    if (value.nanoseconds() % 100U != 0 || value.seconds() < -epoch_seconds ||
+        value.seconds() > std::numeric_limits<std::int64_t>::max() - epoch_seconds)
+        return Observation<LONGLONG>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), operation});
+    const auto seconds = static_cast<std::uint64_t>(value.seconds() + epoch_seconds);
+    if (seconds > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max()) / ticks_per_second)
+        return Observation<LONGLONG>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), operation});
+    const auto ticks = seconds * ticks_per_second + value.nanoseconds() / 100U;
+    if (ticks > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max()))
+        return Observation<LONGLONG>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), operation});
+    return Observation<LONGLONG>::available(static_cast<LONGLONG>(ticks));
+}
+
 Observation<std::uint64_t> nonnegative(LONGLONG value, const char* operation) {
     if (value < 0)
         return Observation<std::uint64_t>::unavailable(ObservationState::Failed,
@@ -303,6 +321,52 @@ public:
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "content.flush_access"});
         if (!FlushFileBuffers(handle_.get())) return failure<bool>(GetLastError(), "content.FlushFileBuffers");
         return Observation<bool>::available(true);
+    }
+    Observation<bool> apply_portable_basic_metadata(const BasicMetadata& source) override {
+        using Result = Observation<bool>;
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "metadata.portable_basic.write_access"});
+        const auto target = inspect_basic();
+        if (!target.value()) {
+            const auto& error = *target.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!target.value()->kind.value() || *target.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "metadata.portable_basic.target_kind"});
+        if (!source.kind.value() || *source.kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "metadata.portable_basic.source_kind"});
+        if (!source.windows_attributes.value()) {
+            const auto& error = *source.windows_attributes.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!source.accessed.value() || !source.modified.value() || !source.changed.value() || !source.created.value()) {
+            const auto& missing = !source.accessed.value() ? source.accessed :
+                !source.modified.value() ? source.modified : !source.changed.value() ? source.changed : source.created;
+            const auto& error = *missing.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        const auto accessed = windows_ticks(*source.accessed.value(), "metadata.portable_basic.accessed_range");
+        const auto modified = windows_ticks(*source.modified.value(), "metadata.portable_basic.modified_range");
+        const auto changed = windows_ticks(*source.changed.value(), "metadata.portable_basic.changed_range");
+        const auto created = windows_ticks(*source.created.value(), "metadata.portable_basic.created_range");
+        for (const auto* value : {&accessed, &modified, &changed, &created}) {
+            if (!value->value()) {
+                const auto& error = *value->unavailable_detail();
+                return Result::unavailable(error.state, error.error);
+            }
+        }
+        FILE_BASIC_INFO native{};
+        native.CreationTime.QuadPart = *created.value();
+        native.LastAccessTime.QuadPart = *accessed.value();
+        native.LastWriteTime.QuadPart = *modified.value();
+        native.ChangeTime.QuadPart = *changed.value();
+        native.FileAttributes = *source.windows_attributes.value();
+        if (!SetFileInformationByHandle(handle_.get(), FileBasicInfo, &native, sizeof(native)))
+            return failure<bool>(GetLastError(), "metadata.portable_basic.FileBasicInfo");
+        return Result::available(true);
     }
     Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }

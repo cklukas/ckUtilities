@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <optional>
 #include <utility>
 
 #include <dirent.h>
@@ -304,6 +305,59 @@ public:
         if (fsync(descriptor_.get()) != 0)
             return Observation<bool>::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "content.fsync"});
         return Observation<bool>::available(true);
+    }
+    Observation<bool> apply_portable_basic_metadata(const BasicMetadata& source) override {
+        using Result = Observation<bool>;
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied,
+                adapter_error(AdapterError::InvalidAccess, "metadata.portable_basic.write_access"));
+        const auto target = inspect_basic();
+        if (!target.value()) {
+            const auto& error = *target.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!target.value()->kind.value() || *target.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "metadata.portable_basic.target_kind"));
+        if (!source.kind.value() || *source.kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "metadata.portable_basic.source_kind"));
+        if (!source.posix_permissions.value()) {
+            const auto& error = *source.posix_permissions.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!source.accessed.value()) {
+            const auto& error = *source.accessed.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!source.modified.value()) {
+            const auto& error = *source.modified.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (fchmod(descriptor_.get(), static_cast<mode_t>(*source.posix_permissions.value())) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "metadata.portable_basic.fchmod"});
+        const auto to_timespec = [](const FileTimestamp& value, timespec& result, const char* operation)
+            -> std::optional<UnavailableObservation> {
+            const auto seconds = value.seconds();
+            if constexpr (std::numeric_limits<time_t>::is_signed) {
+                if (seconds < static_cast<std::int64_t>(std::numeric_limits<time_t>::lowest()) ||
+                    seconds > static_cast<std::int64_t>(std::numeric_limits<time_t>::max()))
+                    return UnavailableObservation{ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation)};
+            } else if (seconds < 0 || static_cast<std::uint64_t>(seconds) > std::numeric_limits<time_t>::max()) {
+                return UnavailableObservation{ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation)};
+            }
+            result.tv_sec = static_cast<time_t>(seconds);
+            result.tv_nsec = static_cast<long>(value.nanoseconds());
+            return std::nullopt;
+        };
+        timespec times[2]{};
+        if (const auto error = to_timespec(*source.accessed.value(), times[0], "metadata.portable_basic.accessed_range"))
+            return Result::unavailable(error->state, error->error);
+        if (const auto error = to_timespec(*source.modified.value(), times[1], "metadata.portable_basic.modified_range"))
+            return Result::unavailable(error->state, error->error);
+        if (futimens(descriptor_.get(), times) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "metadata.portable_basic.futimens"});
+        return Result::available(true);
     }
     Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;
 #if defined(__linux__)

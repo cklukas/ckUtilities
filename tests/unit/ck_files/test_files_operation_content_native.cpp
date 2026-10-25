@@ -55,6 +55,49 @@ CK_TEST(native_operation_staging_file_is_created_relative_to_held_directory_and_
     CK_CHECK(!directory->create_child_file(name("staging.bin")).value());
 }
 
+CK_TEST(native_operation_staging_applies_platform_portable_basic_metadata) {
+    const ck::testing::ScratchDirectory scratch("files-operation-metadata-boundary",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_path = scratch.path() / "source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "portable metadata";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("source.bin"), EntryAccess::ContentRead));
+    const auto source_metadata = take(source->inspect_basic());
+    auto staging = take(directory->create_child_file(name(".ck-metadata-staging")));
+    const auto applied = staging->apply_portable_basic_metadata(source_metadata);
+    if (!applied.value())
+        throw std::runtime_error("portable metadata application unavailable: " +
+            (applied.unavailable_detail() ? applied.unavailable_detail()->error.operation : "false"));
+    CK_CHECK(applied.value() && *applied.value());
+    const auto staging_metadata = take(staging->inspect_basic());
+#if defined(_WIN32)
+    CK_CHECK(source_metadata.windows_attributes.value() && staging_metadata.windows_attributes.value() &&
+             *source_metadata.windows_attributes.value() == *staging_metadata.windows_attributes.value() &&
+             source_metadata.accessed.value() && staging_metadata.accessed.value() &&
+             *source_metadata.accessed.value() == *staging_metadata.accessed.value() &&
+             source_metadata.modified.value() && staging_metadata.modified.value() &&
+             *source_metadata.modified.value() == *staging_metadata.modified.value() &&
+             source_metadata.changed.value() && staging_metadata.changed.value() &&
+             *source_metadata.changed.value() == *staging_metadata.changed.value() &&
+             source_metadata.created.value() && staging_metadata.created.value() &&
+             *source_metadata.created.value() == *staging_metadata.created.value());
+#else
+    CK_CHECK(source_metadata.posix_permissions.value() && staging_metadata.posix_permissions.value() &&
+             *source_metadata.posix_permissions.value() == *staging_metadata.posix_permissions.value() &&
+             source_metadata.accessed.value() && staging_metadata.accessed.value() &&
+             *source_metadata.accessed.value() == *staging_metadata.accessed.value() &&
+             source_metadata.modified.value() && staging_metadata.modified.value() &&
+             *source_metadata.modified.value() == *staging_metadata.modified.value());
+#endif
+}
+
 CK_TEST(native_operation_staging_file_rejects_foreign_names_and_cancelled_writes) {
     const ck::testing::ScratchDirectory scratch("files-operation-content-invalid", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;
