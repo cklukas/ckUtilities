@@ -101,6 +101,24 @@ contract tests were also corrected to cover the already-implemented bounded
 `ContentRead` permission used by preview; the invalid value remains an
 out-of-range access mask.
 
+## WP-03 — frozen inventory accumulator
+
+The next WP-03 slice adds a bounded, UI-independent `FrozenInventoryBuilder`
+for worker-produced records. It seals an immutable result only after every
+record has a qualified native identity, an available mount identity and an
+exact absolute native path. The selected mount policy refuses crossing or
+unknown mount boundaries; the selected link policy refuses implicit traversal,
+unknown targets, cycles and self-targets. Repeated qualified identities are
+retained as hard-link aliases rather than silently deduplicated. Entry and
+logical-byte limits fail with explicit unknown/inventory-limit state, and the
+builder performs no path reopening or filesystem I/O.
+
+The strict macOS target rebuild ran at 08:43:34–08:43:45 CET after CMake
+regeneration. `test_files_frozen_inventory` passed, and the complete
+`ck_files_core_tests` binary passed all 613 cases. Recursive worker traversal,
+capability comparison and review presentation remain separate follow-up slices;
+this checkpoint does not authorize mutation.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
