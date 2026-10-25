@@ -338,8 +338,8 @@ CK_TEST(files_completion_index_unrepresentable_and_per_candidate_limits_are_expl
              page->first_proposal_error);
     FilesCompletionIndexLimits limits;
     limits.candidate_text_bytes = 7;
-    FilesCompletionIndexJob small(source, query(), limits);
-    page = finish(small);
+    FilesCompletionIndexJob bounded(source, query(), limits);
+    page = finish(bounded);
     CK_CHECK(!page->complete() && page->entries.empty() && page->unavailable_proposals == 2 &&
              page->first_proposal_error);
     FilesCompletionIndexJob exact(source, query("[\"/root\", \"", FilesLocationTextSyntax::ExactNames));
