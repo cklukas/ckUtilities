@@ -978,6 +978,12 @@ cursor continues to observe the created directory after its name is renamed and
 replaced, while a regular-file collision remains unchanged. Normal, ASan and
 TSan macOS native checks pass.
 
+Commit `0287ae4` adds the worker-only serialized batch coordinator. It executes
+items in explicit order, records independent per-item outcomes, continues
+unrelated items after a failed or reconciliation-required item, and does not
+start pending items after cancellation. The new partial-outcome and
+pending-cancellation cases pass under normal, ASan and TSan macOS builds.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
