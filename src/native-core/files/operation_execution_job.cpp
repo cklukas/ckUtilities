@@ -68,6 +68,19 @@ OperationExecutionState OperationExecutionJob::advance(std::stop_token stop) {
     }
 
     if (result_.state == OperationExecutionState::PreparingCommit) {
+        if (stop.stop_requested()) {
+            const auto cancelled = request_.copy->cancel_after_verification();
+            if (cancelled == OperationCopyState::Cancelled) {
+                result_.state = OperationExecutionState::Cancelled;
+            } else if (cancelled == OperationCopyState::NeedsReconciliation) {
+                if (request_.copy->failure()) result_.failure = request_.copy->failure();
+                result_.state = OperationExecutionState::NeedsReconciliation;
+            } else {
+                fail(error(AdapterError::InvalidNativeResult, "operation_execution.cancel_verified"),
+                     OperationExecutionState::NeedsReconciliation);
+            }
+            return result_.state;
+        }
         try {
             auto prepared = request_.prepare_commit(stop);
             if (!prepared.value()) {

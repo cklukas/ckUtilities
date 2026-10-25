@@ -60,6 +60,14 @@ bool OperationCopyJob::validate(const std::function<Observation<bool>(std::stop_
     return true;
 }
 
+OperationCopyState OperationCopyJob::cancel_after_verification() {
+    if (result_.state != OperationCopyState::Verified)
+        return result_.state;
+    if (append(OperationJournalState::Cancelled))
+        result_.state = OperationCopyState::Cancelled;
+    return result_.state;
+}
+
 OperationCopyState OperationCopyJob::advance(std::stop_token stop) {
     if (result_.state == OperationCopyState::Verified || result_.state == OperationCopyState::Failed ||
         result_.state == OperationCopyState::Cancelled || result_.state == OperationCopyState::NeedsReconciliation)

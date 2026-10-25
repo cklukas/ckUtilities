@@ -48,6 +48,10 @@ public:
     OperationCopyState state() const noexcept { return result_.state; }
     const OperationCopyResult& result() const noexcept { return result_; }
     const std::optional<UnavailableObservation>& failure() const noexcept { return result_.failure; }
+    // Cancels a verified-but-not-yet-committed copy without invoking any
+    // native publication callback. The journal transition remains durable;
+    // a journal failure becomes reconciliation rather than being hidden.
+    OperationCopyState cancel_after_verification();
     OperationCopyState advance(std::stop_token stop = {});
 
 private:
