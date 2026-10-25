@@ -90,3 +90,16 @@ CK_TEST(preservation_diff_rejects_ambiguous_or_unbounded_inputs) {
     CK_CHECK(bounded.state() == ObservationState::Failed &&
         bounded.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidLimit));
 }
+
+CK_TEST(preservation_diff_allows_distinct_destination_mappings_for_one_storage_family) {
+    const std::vector source{
+        SourceCapabilityEvidence{0, PreservationFeature::StorageRepresentation, SourceCapabilityState::Present,
+            PreservationConsequence::RepresentationChange, VolumeFeature::SparseFiles, true},
+        SourceCapabilityEvidence{0, PreservationFeature::StorageRepresentation, SourceCapabilityState::Present,
+            PreservationConsequence::RepresentationChange, VolumeFeature::FileCompression, true}};
+    const std::vector destination{
+        advertised(VolumeFeature::SparseFiles, FeatureAdvertisement::Advertised),
+        advertised(VolumeFeature::FileCompression, FeatureAdvertisement::NotAdvertised)};
+    const auto issues = take(PreservationCapabilityDiff::compare(source, destination));
+    CK_CHECK(issues.size() == 1 && issues.front().feature == PreservationFeature::StorageRepresentation);
+}

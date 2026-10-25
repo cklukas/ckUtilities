@@ -1,0 +1,37 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "operation_plan_assembly.hpp"
+
+#include <cstdint>
+
+namespace ck::files {
+namespace {
+
+template <class T>
+Observation<T> rejected(AdapterError code, const char* operation) {
+    return Observation<T>::unavailable(ObservationState::Failed,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
+}
+
+} // namespace
+
+Observation<OperationPlan::Pointer> OperationPlanAssembly::assemble(FileOperation operation,
+    std::shared_ptr<const FrozenInventory> inventory, std::span<const SourceTargetTopology> topologies,
+    std::span<const SourceCapabilityEvidence> source,
+    std::span<const DestinationCapabilityEvidence> destination,
+    std::vector<DestinationConflict> conflicts, OperationPlanAssemblyLimits limits) {
+    using Result = Observation<OperationPlan::Pointer>;
+    if (!inventory || topologies.size() != inventory->entries().size())
+        return rejected<OperationPlan::Pointer>(AdapterError::PlanInvalid, "operation_plan_assembly.inventory_shape");
+    for (const auto& evidence : source)
+        if (evidence.item >= inventory->entries().size())
+            return rejected<OperationPlan::Pointer>(AdapterError::PlanInvalid, "operation_plan_assembly.source_item");
+
+    auto differences = PreservationCapabilityDiff::compare(source, destination, limits.preservation);
+    if (!differences.value())
+        return Result::unavailable(differences.unavailable_detail()->state, differences.unavailable_detail()->error);
+    return OperationPlan::create_from_inventory(operation, std::move(inventory), topologies,
+        std::move(differences).take_value(), std::move(conflicts), limits.plan);
+}
+
+} // namespace ck::files

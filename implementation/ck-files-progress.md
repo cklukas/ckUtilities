@@ -359,6 +359,28 @@ Apple Clang did not diagnose. The one-line const-reference correction was
 committed as `eaf5673`; no warning was suppressed and no partial output was
 used.
 
+## WP-03 — immutable operation-plan assembly from worker evidence
+
+Added `OperationPlanAssembly`, a value-only boundary that combines a sealed
+`FrozenInventory`, exact per-entry source/target topology, projected source
+capabilities, destination capability observations, and destination conflicts
+into one immutable `OperationPlan`. It validates inventory shape and source
+indices, delegates bounded capability comparison without reopening paths or
+performing native I/O, and propagates every unavailable or failed observation
+unchanged. It does not authorize execution; the worker-owned revalidation
+callback remains mandatory before any accepted review receipt is delivered.
+
+Preservation diff identity was tightened at the same boundary: one source
+feature may map to multiple distinct destination feature families, while an
+exact repeated mapping remains invalid. This preserves independent sparse and
+compression decisions instead of collapsing or rejecting valid evidence.
+
+Three assembly cases and the distinct-destination diff case pass in the focused
+macOS suites. The full macOS core suite passes **637** cases and the Files UI
+suite passes **186** cases after the strict target rebuild. Linux qualification,
+sanitizer/race checks and the mandatory Windows gate remain pending for this
+slice. No mutation or production GUI launch is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

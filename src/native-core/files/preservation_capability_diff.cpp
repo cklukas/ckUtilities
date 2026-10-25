@@ -42,7 +42,8 @@ bool hard_unavailable(ObservationState state) noexcept {
 
 bool duplicate_source(std::span<const SourceCapabilityEvidence> source, std::size_t index) noexcept {
     for (std::size_t prior = 0; prior < index; ++prior)
-        if (source[prior].item == source[index].item && source[prior].feature == source[index].feature)
+        if (source[prior].item == source[index].item && source[prior].feature == source[index].feature &&
+            source[prior].destination_feature == source[index].destination_feature)
             return true;
     return false;
 }
