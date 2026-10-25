@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "opened_entry.hpp"
+#include "native_name.hpp"
 
 namespace ck::files {
 Observation<std::unique_ptr<OpenedEntry>> OpenedEntry::open_parent_directory() const {

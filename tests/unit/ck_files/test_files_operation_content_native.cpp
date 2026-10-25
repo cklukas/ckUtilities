@@ -94,3 +94,24 @@ CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
     const auto read = take(destination->read_content({1024}, 0));
     CK_CHECK(read.complete && read.bytes.size() == job->result().source_bytes);
 }
+
+CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {
+    const ck::testing::ScratchDirectory scratch("files-operation-publication", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto staging = take(directory->create_child_file(name("staging.bin")));
+    const std::array<std::byte, 4> bytes{std::byte{'s'}, std::byte{'a'}, std::byte{'f'}, std::byte{'e'}};
+    CK_CHECK(take(staging->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(staging->flush_content()));
+    CK_CHECK(take(staging->publish_noreplace(*directory, name("published.bin"))));
+    CK_CHECK(!fs::exists(scratch.path() / "staging.bin") && fs::exists(scratch.path() / "published.bin"));
+    const auto published = take(directory->open_child(name("published.bin"), EntryAccess::ContentRead));
+    const auto read = take(published->read_content({16}, 0));
+    CK_CHECK(read.complete && read.bytes == std::vector<std::byte>(bytes.begin(), bytes.end()));
+
+    auto second = take(directory->create_child_file(name("second.bin")));
+    CK_CHECK(take(second->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(second->flush_content()));
+    const auto occupied = second->publish_noreplace(*directory, name("published.bin"));
+    CK_CHECK(!occupied.value() && occupied.state() == ObservationState::Changed && fs::exists(scratch.path() / "second.bin"));
+}

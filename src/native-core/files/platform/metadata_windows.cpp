@@ -271,6 +271,7 @@ public:
         if (!FlushFileBuffers(handle_.get())) return failure<bool>(GetLastError(), "content.FlushFileBuffers");
         return Observation<bool>::available(true);
     }
+    Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const override {
         using Result = Observation<FileIntegrityInfo>;
@@ -714,9 +715,9 @@ public:
         attributes.ObjectName = &native_name;
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
-        const NTSTATUS status = NtCreateFile(&raw, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL,
+        const NTSTATUS status = NtCreateFile(&raw, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL | DELETE,
             &attributes, &io, nullptr, FILE_ATTRIBUTE_NORMAL,
-            FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_CREATE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_CREATE,
             FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_WRITE_THROUGH,
             nullptr, 0);
         OwnedHandle opened(raw);
@@ -733,6 +734,53 @@ public:
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.kind"});
         return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true));
+    }
+    Observation<bool> publish_noreplace(HANDLE source, const NativeName& name) const {
+        using Result = Observation<bool>;
+        const auto* units = name.windows_units();
+        if (!name.is_valid() || !units || units->find(u':') != std::u16string::npos ||
+            units->size() > (std::numeric_limits<ULONG>::max() / sizeof(WCHAR)))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "publish_noreplace.name"});
+        const auto length = units->size() * sizeof(WCHAR);
+        if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "publish_noreplace.name_limit"});
+        std::vector<std::byte> buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
+        auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+        info->ReplaceIfExists = FALSE;
+        info->RootDirectory = handle_.get();
+        info->FileNameLength = static_cast<DWORD>(length);
+        std::memcpy(info->FileName, units->data(), length);
+        if (!SetFileInformationByHandle(source, FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
+            const DWORD code = GetLastError();
+            if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
+                return Result::unavailable(ObservationState::Changed,
+                    {ErrorDomain::Win32, code, "publish_noreplace.destination_occupied"});
+            if (code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED ||
+                code == ERROR_INVALID_PARAMETER)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Win32, code, "publish_noreplace.atomic_primitive"});
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, code, "publish_noreplace.atomic_primitive"});
+        }
+
+        auto opened = open_native_component(name, FILE_READ_ATTRIBUTES | SYNCHRONIZE, ChildLookupMode::NativeDefault);
+        if (!opened.value())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "publish_noreplace.destination_identity"});
+        auto destination = std::move(opened).take_value();
+        const auto source_identity = identity(source, scope_);
+        const auto destination_metadata = handle_metadata(destination.get(), scope_);
+        if (!source_identity.value() || !destination_metadata.value() || !destination_metadata.value()->identity.value() ||
+            compare_identity(*source_identity.value(), *destination_metadata.value()->identity.value()) != IdentityComparison::Same ||
+            !destination_metadata.value()->kind.value() || *destination_metadata.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "publish_noreplace.destination_identity"});
+        if (!FlushFileBuffers(handle_.get()))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "publish_noreplace.directory_flush"});
+        return Result::available(true);
     }
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
         using Result = Observation<DirectoryAccessCheck>;
@@ -997,6 +1045,14 @@ private:
     std::optional<std::size_t> offset_;
     bool started_ = false;
 };
+
+Observation<bool> WindowsOpenedEntry::publish_noreplace(const DirectoryCursor& destination, const NativeName& name) {
+    const auto* cursor = dynamic_cast<const WindowsDirectoryCursor*>(&destination);
+    if (!cursor)
+        return Observation<bool>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "publish_noreplace.destination_adapter"});
+    return cursor->publish_noreplace(handle_.get(), name);
+}
 
 } // namespace
 

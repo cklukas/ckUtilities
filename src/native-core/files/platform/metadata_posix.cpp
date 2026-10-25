@@ -26,6 +26,7 @@
 #include <sys/acl.h>
 #include <sys/attr.h>
 #include <sys/mount.h>
+#include <sys/stdio.h>
 #endif
 #if defined(__linux__)
 #include <sys/sysmacros.h>
@@ -203,12 +204,21 @@ private:
     int descriptor_;
 };
 
+struct PosixPublicationContext final {
+    PosixPublicationContext(OwnedDescriptor retained_parent, NativeName retained_name)
+        : parent(std::move(retained_parent)), name(std::move(retained_name)) {}
+    OwnedDescriptor parent;
+    NativeName name;
+};
+
 class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false,
-                     bool content_access = false, bool content_write_access = false)
+                     bool content_access = false, bool content_write_access = false,
+                     std::unique_ptr<PosixPublicationContext> publication = {})
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access),
-          content_access_(content_access), content_write_access_(content_write_access) {}
+          content_access_(content_access), content_write_access_(content_write_access),
+          publication_(std::move(publication)) {}
     Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                           std::stop_token stop = {}) const override {
         using Result = Observation<ContentRead>;
@@ -295,6 +305,7 @@ public:
             return Observation<bool>::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "content.fsync"});
         return Observation<bool>::available(true);
     }
+    Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;
 #if defined(__linux__)
     Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const override {
         using Result = Observation<FileInodeFlags>;
@@ -665,6 +676,7 @@ private:
     bool layout_access_;
     bool content_access_ = false;
     bool content_write_access_ = false;
+    std::unique_ptr<PosixPublicationContext> publication_;
 #if defined(__linux__)
     bool inode_flags_access_ = false;
 #endif
@@ -720,6 +732,10 @@ public:
         const auto* spelling = name.posix_bytes();
         if (!name.is_valid() || !spelling)
             return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidIdentifier, "create_child_file.name"));
+        const int parent = fcntl(dirfd(directory_.get()), F_DUPFD_CLOEXEC, 0);
+        if (parent < 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "fcntl.create_child_file_parent"});
+        OwnedDescriptor retained_parent(parent);
         OwnedDescriptor descriptor(openat(dirfd(directory_.get()), spelling->c_str(),
             O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
         if (descriptor.get() < 0) {
@@ -731,7 +747,71 @@ public:
             return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "fstat.create_child_file"});
         if (!S_ISREG(native.st_mode) || native.st_nlink != 1)
             return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "create_child_file.kind"));
-        return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_, false, true, true));
+        return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_, false, true, true,
+            std::make_unique<PosixPublicationContext>(std::move(retained_parent), name)));
+    }
+    Observation<bool> publish_noreplace(int source_parent, const NativeName& source_name, int source_descriptor,
+                                         const NativeName& destination_name) const {
+        using Result = Observation<bool>;
+        const auto* source_spelling = source_name.posix_bytes();
+        const auto* destination_spelling = destination_name.posix_bytes();
+        if (!source_name.is_valid() || !destination_name.is_valid() || !source_spelling || !destination_spelling)
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidIdentifier, "publish_noreplace.name"));
+
+        struct stat held{};
+        struct stat named{};
+        if (fstat(source_descriptor, &held) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "publish_noreplace.source_handle"});
+        if (!S_ISREG(held.st_mode))
+            return Result::unavailable(ObservationState::Changed, adapter_error(AdapterError::MetadataChanged, "publish_noreplace.source_kind"));
+        if (fstatat(source_parent, source_spelling->c_str(), &named, AT_SYMLINK_NOFOLLOW) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "publish_noreplace.source_name"});
+        if (!S_ISREG(named.st_mode) || named.st_dev != held.st_dev || named.st_ino != held.st_ino)
+            return Result::unavailable(ObservationState::Changed, adapter_error(AdapterError::MetadataChanged, "publish_noreplace.source_identity"));
+
+        struct stat existing{};
+        if (fstatat(dirfd(directory_.get()), destination_spelling->c_str(), &existing, AT_SYMLINK_NOFOLLOW) == 0)
+            return Result::unavailable(ObservationState::Changed, adapter_error(AdapterError::PlanDecisionStale, "publish_noreplace.destination_occupied"));
+        if (errno != ENOENT)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "publish_noreplace.destination_probe"});
+
+        int status = -1;
+#if defined(__linux__) && defined(SYS_renameat2)
+        constexpr unsigned int no_replace = 1U;
+        status = static_cast<int>(syscall(SYS_renameat2, source_parent, source_spelling->c_str(),
+                                           dirfd(directory_.get()), destination_spelling->c_str(), no_replace));
+#elif defined(__APPLE__)
+        status = renameatx_np(source_parent, source_spelling->c_str(), dirfd(directory_.get()),
+                              destination_spelling->c_str(), RENAME_EXCL);
+#else
+        errno = ENOTSUP;
+#endif
+        if (status != 0) {
+            const int code = errno;
+            if (code == EEXIST)
+                return Result::unavailable(ObservationState::Changed,
+                    adapter_error(AdapterError::PlanDecisionStale, "publish_noreplace.destination_occupied"));
+            if (code == ENOSYS || code == ENOTSUP || code == EOPNOTSUPP)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Posix, code, "publish_noreplace.atomic_primitive"});
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, code, "publish_noreplace.atomic_primitive"});
+        }
+
+        struct stat published{};
+        if (fstatat(dirfd(directory_.get()), destination_spelling->c_str(), &published, AT_SYMLINK_NOFOLLOW) != 0 ||
+            !S_ISREG(published.st_mode) || published.st_dev != held.st_dev || published.st_ino != held.st_ino)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, static_cast<std::int64_t>(errno), "publish_noreplace.destination_identity"});
+        if (fsync(dirfd(directory_.get())) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, code, "publish_noreplace.destination_fsync"});
+        }
+        if (fsync(source_parent) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, code, "publish_noreplace.source_fsync"});
+        }
+        return Result::available(true);
     }
 
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
@@ -1134,6 +1214,16 @@ private:
     OwnedDirectory directory_;
     AdapterScope scope_;
 };
+
+Observation<bool> PosixOpenedEntry::publish_noreplace(const DirectoryCursor& destination, const NativeName& name) {
+    if (!publication_)
+        return OpenedEntry::publish_noreplace(destination, name);
+    const auto* cursor = dynamic_cast<const PosixDirectoryCursor*>(&destination);
+    if (!cursor)
+        return Observation<bool>::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "publish_noreplace.destination_adapter"));
+    return cursor->publish_noreplace(publication_->parent.get(), publication_->name, descriptor_.get(), name);
+}
 
 } // namespace
 
