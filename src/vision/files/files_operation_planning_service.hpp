@@ -3,6 +3,7 @@
 #pragma once
 
 #include "files_pane_service.hpp"
+#include "operation_evidence_job.hpp"
 #include "operation_planning_coordinator.hpp"
 #include "operation_review.hpp"
 
@@ -24,6 +25,17 @@ struct FilesOperationPlanningRequest final {
     std::vector<ck::files::ObjectInventoryData> source_objects;
     std::shared_ptr<const ck::files::CompletedDestinationBatch> destination_batch;
     std::vector<ck::files::DestinationCapabilityEvidence> destination_capabilities;
+    ck::files::SourceCapabilityProjectionPolicy projection_policy;
+    ck::files::OperationPlanningCoordinatorLimits limits;
+    ck::files::OperationReviewLimits review_limits;
+};
+
+// Native preparation is submitted only by a worker-owned composition root.
+// The planning worker performs the read-only native evidence stages, then
+// consumes their completed value bundle before any review model is published.
+// No native owner crosses into UI state or a consent receipt.
+struct FilesOperationNativePlanningRequest final {
+    ck::files::OperationEvidenceJobRequest evidence;
     ck::files::SourceCapabilityProjectionPolicy projection_policy;
     ck::files::OperationPlanningCoordinatorLimits limits;
     ck::files::OperationReviewLimits review_limits;
@@ -72,6 +84,7 @@ public:
     FilesOperationPlanningService& operator=(const FilesOperationPlanningService&) = delete;
 
     FilesOperationPlanningSubmitted request(FilesOperationPlanningRequest request);
+    FilesOperationPlanningSubmitted request(FilesOperationNativePlanningRequest request);
     bool cancel(const FilesOperationPlanningTicket& request);
     std::optional<FilesOperationPlanningReply> take();
     void request_stop() noexcept;

@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <variant>
 
 namespace ck::vision {
 namespace {
@@ -22,6 +23,13 @@ bool valid(const FilesOperationPlanningRequest& request) noexcept {
            request.review_limits.max_rows != 0;
 }
 
+bool valid(const FilesOperationNativePlanningRequest& request) noexcept {
+    return request.evidence.root_source && request.evidence.source_root && request.evidence.source_path &&
+           request.evidence.source_path->is_valid() && request.evidence.destination && request.evidence.clock &&
+           request.evidence.limits.max_items != 0 &&
+           request.evidence.limits.max_items <= ck::files::OperationEvidenceJobLimits::hard_max_items;
+}
+
 bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {
     return detail.error.domain == ck::files::ErrorDomain::Adapter &&
            detail.error.code == static_cast<std::int64_t>(ck::files::AdapterError::InventoryLimit);
@@ -30,10 +38,11 @@ bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {
 } // namespace
 
 struct FilesOperationPlanningService::State final {
+    using Input = std::variant<FilesOperationPlanningRequest, FilesOperationNativePlanningRequest>;
     std::function<void()> wake;
     std::mutex mutex;
     std::condition_variable condition;
-    std::optional<FilesOperationPlanningRequest> pending;
+    std::optional<Input> pending;
     std::optional<FilesOperationPlanningReply> reply;
     FilesOperationPlanningTicket latest, cancelled;
     std::optional<std::stop_source> active_stop;
@@ -110,9 +119,28 @@ struct FilesOperationPlanningService::State final {
         }
     }
 
+    FilesOperationPlanningSubmitted submit(Input request) {
+        const bool valid_request = std::visit([](const auto& value) { return valid(value); }, request);
+        std::lock_guard lock(mutex);
+        if (!valid_request)
+            return {FilesOperationPlanningSubmission::Invalid, {}};
+        if (stopping || !alive.load(std::memory_order_acquire))
+            return {FilesOperationPlanningSubmission::Stopped, {}};
+        if (pending || busy || reply)
+            return {FilesOperationPlanningSubmission::Busy, {}};
+        if (!next)
+            return {FilesOperationPlanningSubmission::Exhausted, {}};
+        const auto request_ticket = latest = FilesOperationPlanningService::ticket(next++);
+        cancelled = {};
+        signalled = false;
+        pending.emplace(std::move(request));
+        condition.notify_one();
+        return {FilesOperationPlanningSubmission::Accepted, request_ticket};
+    }
+
     void loop() {
         for (;;) {
-            std::optional<FilesOperationPlanningRequest> request;
+            std::optional<Input> request;
             FilesOperationPlanningTicket ticket;
             std::stop_source stop;
             {
@@ -134,18 +162,83 @@ struct FilesOperationPlanningService::State final {
             if (stop.stop_requested()) {
                 result.state = FilesOperationPlanningReplyState::Cancelled;
             } else {
-                auto plan = ck::files::OperationPlanningCoordinator::assemble(
-                    request->operation, std::move(request->inventory), request->source_target,
-                    request->ancestry, request->source_objects, *request->destination_batch,
-                    request->destination_capabilities, request->projection_policy, request->limits);
-                if (!plan.value()) {
+                // A provisional non-terminal state lets the shared completion
+                // path distinguish an uncomputed plan from a native-stage
+                // terminal reply.
+                result.state = FilesOperationPlanningReplyState::Ready;
+                ck::files::OperationReviewLimits review_limits;
+                ck::files::Observation<ck::files::OperationPlan::Pointer> plan;
+                if (auto* value = std::get_if<FilesOperationPlanningRequest>(&*request)) {
+                    review_limits = value->review_limits;
+                    plan = ck::files::OperationPlanningCoordinator::assemble(
+                        value->operation, std::move(value->inventory), value->source_target,
+                        value->ancestry, value->source_objects, *value->destination_batch,
+                        value->destination_capabilities, value->projection_policy, value->limits);
+                } else {
+                    auto native = std::move(std::get<FilesOperationNativePlanningRequest>(*request));
+                    review_limits = native.review_limits;
+                    try {
+                        ck::files::OperationEvidenceJob evidence(std::move(native.evidence));
+                        for (;;) {
+                            const auto state = evidence.advance(stop.get_token());
+                            if (state == ck::files::OperationEvidenceJobState::Paused || stop.stop_requested()) {
+                                result.state = FilesOperationPlanningReplyState::Cancelled;
+                                break;
+                            }
+                            if (state == ck::files::OperationEvidenceJobState::Failed) {
+                                if (evidence.failure()) result.error = *evidence.failure();
+                                result.state = result.error && limit_error(*result.error)
+                                    ? FilesOperationPlanningReplyState::LimitExceeded
+                                    : FilesOperationPlanningReplyState::Failed;
+                                break;
+                            }
+                            if (state == ck::files::OperationEvidenceJobState::Complete) {
+                                auto completed = evidence.completed();
+                                if (!completed.value()) {
+                                    result.error = completed.unavailable_detail()
+                                        ? *completed.unavailable_detail()
+                                        : ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
+                                            {ck::files::ErrorDomain::Adapter,
+                                                static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
+                                                "files_planning.native_result"}};
+                                    result.state = FilesOperationPlanningReplyState::Failed;
+                                    break;
+                                }
+                                const auto& native_result = *completed.value();
+                                plan = ck::files::OperationPlanningCoordinator::assemble(
+                                    native_result->operation(), native_result->inventory(), native_result->source_target(),
+                                    native_result->ancestry(), native_result->source_objects(),
+                                    *native_result->destination_batch(), native_result->destination_capabilities(),
+                                    native.projection_policy, native.limits);
+                                break;
+                            }
+                        }
+                    } catch (const std::invalid_argument&) {
+                        result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
+                            {ck::files::ErrorDomain::Adapter,
+                                static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
+                                "files_planning.native_request"}};
+                        result.state = FilesOperationPlanningReplyState::Failed;
+                    } catch (const std::length_error&) {
+                        result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Unknown,
+                            {ck::files::ErrorDomain::Adapter,
+                                static_cast<std::int64_t>(ck::files::AdapterError::InventoryLimit),
+                                "files_planning.native_request_limit"}};
+                        result.state = FilesOperationPlanningReplyState::LimitExceeded;
+                    }
+                }
+                if (result.state == FilesOperationPlanningReplyState::Cancelled ||
+                    result.state == FilesOperationPlanningReplyState::Failed ||
+                    result.state == FilesOperationPlanningReplyState::LimitExceeded)
+                    ;
+                else if (!plan.value()) {
                     result.error = *plan.unavailable_detail();
                     result.state = limit_error(*result.error) ? FilesOperationPlanningReplyState::LimitExceeded
                                                                 : FilesOperationPlanningReplyState::Failed;
                 } else if (stop.stop_requested()) {
                     result.state = FilesOperationPlanningReplyState::Cancelled;
                 } else {
-                    auto review = ck::files::OperationReviewModel::create(*plan.value(), request->review_limits);
+                    auto review = ck::files::OperationReviewModel::create(*plan.value(), review_limits);
                     if (!review.value()) {
                         result.error = *review.unavailable_detail();
                         result.state = limit_error(*result.error) ? FilesOperationPlanningReplyState::LimitExceeded
@@ -170,21 +263,11 @@ FilesOperationPlanningService::FilesOperationPlanningService(std::function<void(
 FilesOperationPlanningService::~FilesOperationPlanningService() { join(); }
 
 FilesOperationPlanningSubmitted FilesOperationPlanningService::request(FilesOperationPlanningRequest request) {
-    std::lock_guard lock(state_->mutex);
-    if (!valid(request))
-        return {FilesOperationPlanningSubmission::Invalid, {}};
-    if (state_->stopping || !state_->alive.load(std::memory_order_acquire))
-        return {FilesOperationPlanningSubmission::Stopped, {}};
-    if (state_->pending || state_->busy || state_->reply)
-        return {FilesOperationPlanningSubmission::Busy, {}};
-    if (!state_->next)
-        return {FilesOperationPlanningSubmission::Exhausted, {}};
-    const auto request_ticket = state_->latest = FilesOperationPlanningService::ticket(state_->next++);
-    state_->cancelled = {};
-    state_->signalled = false;
-    state_->pending.emplace(std::move(request));
-    state_->condition.notify_one();
-    return {FilesOperationPlanningSubmission::Accepted, request_ticket};
+    return state_->submit(FilesOperationPlanningService::State::Input(std::move(request)));
+}
+
+FilesOperationPlanningSubmitted FilesOperationPlanningService::request(FilesOperationNativePlanningRequest request) {
+    return state_->submit(FilesOperationPlanningService::State::Input(std::move(request)));
 }
 
 bool FilesOperationPlanningService::cancel(const FilesOperationPlanningTicket& request) {
