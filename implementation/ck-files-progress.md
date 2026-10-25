@@ -3,6 +3,33 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — WP-04 reviewed non-security attribute replay boundary checkpoint
+
+Commit `693e194` adds the worker-only
+`OpenedEntry::apply_nonsecurity_attribute()` boundary. It replays one
+already-inventoried, review-bound non-security attribute onto a held staging
+object: POSIX uses the held-object xattr boundary and Windows uses the public
+native EA boundary. Both implementations require a worker-created writable
+regular object, a bounded and valid native identifier, a reviewed source
+owner, and identity revalidation after the write. Security/ACL attributes are
+refused by this boundary instead of being silently treated as ordinary
+attributes; unsupported platforms/categories remain explicit `Unsupported`.
+
+The source slice was qualified from commit `693e194` with the current Release
+build outputs and full native suites: macOS (**179/179**), Windows
+(**178/178**) and Linux ARM (**182/182**). The verified executables are:
+
+- macOS: `/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_native_tests`, built output timestamp `2026-10-26T00:18:42+0100`, SHA-256 `d217090623662d9a72dc483354affd56c70078c637739390a7f0c68345ca7c97`;
+- Windows: `V:\tmp\ckutilities-windows-qualification-20261025-01\build\tests\unit\ck_files\Release\ck_files_native_tests.exe`, built output timestamp `2026-10-25T23:24:56.8279211Z`, SHA-256 `92B2E795A4412663626C18672E0E2B071384CA70085C5F8392B3613A017D37C7`;
+- Linux ARM: `/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_native_tests`, built output timestamp `2026-10-26 00:54:57.470612593 +0100`, SHA-256 `b3d2c5be062eb7036671c5fc7f696b591dd91cbdf741f92901efc516c792d5cb`.
+
+The Linux qualification log is retained at
+`/home/klukas/tmp/ckutilities-attribute-boundary-20261026-01/ck_files_native_tests.log`.
+No application instance was launched. This checkpoint does not implement
+security/ACL replay, channels/resource forks, attribute deletion/absence
+replay, automatic metadata policy, mutation UI, or a complete Norton
+Commander/Midnight Commander replacement.
+
 ## 2026-10-25 — WP-04 platform portable-basic metadata boundary checkpoint
 
 Commit `9bc9b72` adds the worker-only
