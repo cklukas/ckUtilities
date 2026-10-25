@@ -855,11 +855,14 @@ targets are refused without clobbering, while post-call identity or durability
 uncertainty remains an explicit reconciliation result. Windows uses the held
 staging handle and destination directory handle with `SetFileInformationByHandle`
 and `FileRenameInfo`, with replacement disabled and the same post-publication
-identity/flush checks. The fourth native content case passes normally, ASan/UBSan
-and TSan; the complete normal macOS Files CTest set passes all **102** tests,
-representing **675 core** and **168 native** cktest cases. Windows compilation
-and execution remain gated by the unavailable mandatory `V:` workstation drive;
-no replacement, move, delete or UI mutation command is enabled.
+identity/flush checks. Commit `fcae179` adds an adversarial source-basename
+substitution case; the adapter refuses the changed identity while retaining
+both the retired original and the replacement. The fifth native content case
+passes normally, ASan/UBSan and TSan; the complete normal macOS Files CTest set
+passes all **103** tests, representing **678 core** and **169 native** cktest
+cases. Windows compilation and execution remain gated by the unavailable
+mandatory `V:` workstation drive; no replacement, move, delete or UI mutation
+command is enabled.
 
 Commit `682794f` adds the ordered metadata-application worker boundary. It
 requires explicit callbacks for traversal-preserving metadata, security,
