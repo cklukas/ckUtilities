@@ -925,6 +925,11 @@ journaled before verification and leaves publication unavailable. The copy
 orchestration failure-boundary case passes under normal, ASan/UBSan and TSan
 macOS builds.
 
+Commit `dec3995` keeps an unknown metadata outcome at `NeedsReconciliation`
+with the journal still at `Copied`; only a known metadata failure becomes a
+terminal `Failed` record. The focused normal, ASan/UBSan and TSan copy-job
+runs pass after this correction.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
