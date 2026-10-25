@@ -733,6 +733,29 @@ Windows remains gated by the unavailable mandatory `V:` development drive;
 no Windows checkout, build, cache or temporary artifact was created. No copy,
 move, replacement, deletion or other mutation command is enabled.
 
+## WP-04 — journal state and replay foundation
+
+Commit `935b627` adds the UI-independent operation journal model. Copy and Move
+items enforce the contract order from Planned through Prepared, Copied,
+Verified, commit intent, destination commit and (for Move) source intent and
+retirement. Cancellation, failure, retained-source and needs-reconciliation
+outcomes are explicit terminal states; sequence gaps, illegal transitions,
+post-terminal rewrites, item/evidence limits and invalid operations fail
+closed. The journal is still a value model: no native write, rename, source
+removal or mutation command is enabled.
+
+The journal codec uses bounded little-endian frames with a checksum. Intact
+records round-trip; a truncated or corrupt tail returns all older records plus
+an explicit reconciliation condition, so recovery cannot silently discard the
+last known durable state. Six new cases pass; the complete macOS core suite
+passes **658** cases. The six journal cases pass under both macOS ASan/UBSan
+and TSan. Durable private-file storage, native streaming, verification,
+publication and crash-recovery adapters remain the next WP-04 gates.
+
+Windows remains gated by the unavailable mandatory `V:` development drive;
+no Windows checkout, build, cache or temporary artifact was created. No copy,
+move, replacement, deletion or other mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
