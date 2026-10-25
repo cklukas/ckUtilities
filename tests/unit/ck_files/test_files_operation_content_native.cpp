@@ -114,4 +114,16 @@ CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_c
     CK_CHECK(take(second->flush_content()));
     const auto occupied = second->publish_noreplace(*directory, name("published.bin"));
     CK_CHECK(!occupied.value() && occupied.state() == ObservationState::Changed && fs::exists(scratch.path() / "second.bin"));
+
+    auto substituted = take(directory->create_child_file(name("substituted.bin")));
+    CK_CHECK(take(substituted->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(substituted->flush_content()));
+    fs::rename(scratch.path() / "substituted.bin", scratch.path() / "substituted.retired");
+    {
+        std::ofstream replacement(scratch.path() / "substituted.bin", std::ios::binary);
+        replacement << "replacement";
+    }
+    const auto changed = substituted->publish_noreplace(*directory, name("substituted.published"));
+    CK_CHECK(!changed.value() && changed.state() == ObservationState::Changed &&
+             fs::exists(scratch.path() / "substituted.retired") && fs::exists(scratch.path() / "substituted.bin"));
 }
