@@ -166,6 +166,52 @@ CK_TEST(operation_commit_job_post_publication_journal_failure_stops_before_sourc
     CK_CHECK(records == 2 && retirements == 0 && value->state(0) == OperationJournalState::CommitIntended);
 }
 
+CK_TEST(operation_commit_job_complete_journal_failure_requires_reconciliation_after_copy_commit) {
+    auto value = journal(FileOperation::Copy);
+    unsigned publications = 0;
+    auto request_value = request(FileOperation::Copy, value);
+    request_value.commit_destination = [&publications](std::stop_token) {
+        ++publications;
+        return Observation<bool>::available(true);
+    };
+    request_value.append_journal = [&value](OperationJournalRecord record) {
+        if (record.state == OperationJournalState::Complete)
+            return Observation<bool>::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.complete_flush"});
+        return value->append(std::move(record));
+    };
+    auto created = OperationCommitJob::create(std::move(request_value));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    CK_CHECK(job->advance() == OperationCommitState::CommittingDestination);
+    CK_CHECK(job->advance() == OperationCommitState::NeedsReconciliation);
+    CK_CHECK(publications == 1 && value->state(0) == OperationJournalState::DestinationCommitted);
+}
+
+CK_TEST(operation_commit_job_source_removal_intent_failure_never_retires_source) {
+    auto value = journal(FileOperation::Move);
+    unsigned retirements = 0;
+    auto request_value = request(FileOperation::Move, value);
+    request_value.append_journal = [&value](OperationJournalRecord record) {
+        if (record.state == OperationJournalState::SourceRemovalIntended)
+            return Observation<bool>::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.source_removal_intent_flush"});
+        return value->append(std::move(record));
+    };
+    request_value.retire_source = [&retirements](std::stop_token) {
+        ++retirements;
+        return Observation<bool>::available(true);
+    };
+    auto created = OperationCommitJob::create(std::move(request_value));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    CK_CHECK(job->advance() == OperationCommitState::CommittingDestination);
+    CK_CHECK(job->advance() == OperationCommitState::NeedsReconciliation);
+    CK_CHECK(retirements == 0 && value->state(0) == OperationJournalState::DestinationCommitted);
+}
+
 CK_TEST(operation_commit_job_move_requires_source_stability_before_retirement) {
     auto value = journal(FileOperation::Move);
     unsigned retirements = 0;
