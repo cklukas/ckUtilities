@@ -3,6 +3,45 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 durable native recovery evidence checkpoint
+
+Commits `6ba3e6c` and `402bc5a` add a bounded, versioned native recovery
+evidence codec and persist it on every native copy journal transition after
+`Planned`. Evidence retains exact POSIX bytes or Windows UTF-16 units for the
+staging and destination basenames, plus source-parent, source and destination
+native identity fields. The durable form deliberately omits the live
+`AdapterScope`; recovery must bind decoded values to a freshly opened,
+handle-owned root and revalidate identity before any action. Corrupt,
+truncated, foreign-version, over-budget and unqualified evidence is rejected;
+no path is reconstructed from display text and no recovery mutation is enabled.
+
+The codec and native journal integration passed the focused tests on macOS,
+Windows and Linux, including MSVC warnings-as-errors. The final current-source
+`ctest -L files` matrix passed **107/107** on macOS (12.60 seconds), Windows
+(27.58 seconds), and Linux (30.97 seconds). The macOS run completed at
+2026-10-25T22:04:36Z against
+`/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build`;
+Windows used the mandatory `V:\dev\ckutilities` source and
+`V:\tmp\ckutilities-windows-qualification-20261025-01\build`, and Linux used
+`/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build`. The
+source-slice fingerprint was
+`034e31a949ba52266faea67f7bf05bd702124fb9b8a5b587081cbab756219792`.
+The resulting test executables were hashed after validation: macOS core/native
+`e1e27015a23560da2e4a489c8480fb7d2f42c7a1e8f6567160f9ff7951b4cd1e` /
+`37fc2a7bcab8912a8e9cd02c387d8628325f728769cf552ddd7ad306ddf691ee`;
+Windows core/native
+`7267020D597D424C0BACE993E3D02CEC10AC7C9A96C14D6F708ED51289488BF4` /
+`4EF8BCAB5C00920F2B152464120CF44DD2493DF03A8BFB64BF1C2930938B205C`;
+Linux core/native
+`6483a857aa60a5afa124bb725e3202461a2d4c33b947980a1d1cec13fd87a7ba` /
+`48b3aa51d1e6d7f6c05044f06177fd2812de770090441032ac341e38c625ad50`.
+
+This checkpoint identifies crash artifacts but does not yet inspect a durable
+journal into a native recovery candidate or execute safe post-restart cleanup.
+Metadata preservation adapters, replacement semantics, move retirement,
+Trash/deletion, mutation UI and deterministic process-crash acceptance remain
+open work packages.
+
 ## 2026-10-25 — WP-04 native worker-owned copy composition checkpoint
 
 Commits `a69ad02` and `80a3d29` add `NativeOperationCopyJob`, a worker-only
