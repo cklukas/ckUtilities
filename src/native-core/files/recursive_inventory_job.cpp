@@ -112,24 +112,32 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
             if (phase_ == Phase::Root) {
                 auto root_metadata = root_->inspect_basic();
                 if (!root_metadata.value()) { const auto& detail = *root_metadata.unavailable_detail(); fail(detail); return state_; }
-                if (!available_identity(root_metadata.value()->identity) || !available_kind(root_metadata.value()->kind) ||
-                    *root_metadata.value()->kind.value() != ObjectKind::Directory || !available_size(root_metadata.value()->logical_size)) {
+                const auto& metadata = *root_metadata.value();
+                if (!available_identity(metadata.identity) || !available_size(metadata.logical_size)) {
+                    fail(AdapterError::InvalidNativeResult, "recursive_inventory.root"); return state_;
+                }
+                const auto* root_kind = metadata.kind.value();
+                if (!root_kind || *root_kind != ObjectKind::Directory) {
                     fail(AdapterError::InvalidNativeResult, "recursive_inventory.root"); return state_;
                 }
                 if (!available_identity(root_->identity()) ||
-                    compare_identity(*root_->identity().value(), *root_metadata.value()->identity.value()) != IdentityComparison::Same) {
+                    compare_identity(*root_->identity().value(), *metadata.identity.value()) != IdentityComparison::Same) {
                     fail(AdapterError::MetadataChanged, "recursive_inventory.root_identity", ObservationState::Changed); return state_;
                 }
                 if (root_source_) {
-                    if (!root_source_->name().is_valid() || !root_source_->metadata().identity.value() ||
-                        compare_identity(*root_source_->metadata().identity.value(), *root_metadata.value()->identity.value()) != IdentityComparison::Same ||
-                        !root_source_->metadata().kind.value() || *root_source_->metadata().kind.value() != ObjectKind::Directory) {
+                    const auto& source_metadata = root_source_->metadata();
+                    if (!root_source_->name().is_valid() || !source_metadata.identity.value() ||
+                        compare_identity(*source_metadata.identity.value(), *metadata.identity.value()) != IdentityComparison::Same) {
+                        fail(AdapterError::MetadataChanged, "recursive_inventory.root_source", ObservationState::Changed); return state_;
+                    }
+                    const auto* source_kind = source_metadata.kind.value();
+                    if (!source_kind || *source_kind != ObjectKind::Directory) {
                         fail(AdapterError::MetadataChanged, "recursive_inventory.root_source", ObservationState::Changed); return state_;
                     }
                     held_sources_.push_back(root_source_);
                 }
-                if (!add_metadata(root_path_, *root_metadata.value(), LinkTraversalEvidence::NotLink)) return state_;
-                const auto identity = *root_metadata.value()->identity.value();
+                if (!add_metadata(root_path_, metadata, LinkTraversalEvidence::NotLink)) return state_;
+                const auto identity = *metadata.identity.value();
                 frames_.push_back({root_, root_path_, identity, {}, 0});
                 directory_identities_.push_back(identity);
                 phase_ = Phase::Enumerate;
