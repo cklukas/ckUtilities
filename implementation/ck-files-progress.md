@@ -341,6 +341,24 @@ cases at 10:10:02–10:10:05 UTC. This adapter does not yet construct a full
 operation coordinator or authorize mutation; destination assessment and
 execution-time revalidation remain mandatory.
 
+Linux requalification of the portability fix `eaf5673` used a new source and
+build workspace at `/tmp/ckutilities-wp03-linux-eaf5673`, while retaining only
+the unchanged pinned SDK and llama inputs from the prior qualification. The
+strict configure/build ran at 10:12:36–10:18:28 UTC; the UI and core binaries
+then passed **186** and **633** cases at 10:18:31–10:18:34 UTC. The independent
+installed-package consumer also passed its CTest entry. Final output hashes
+are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `831838a553cd9e12dc78bcae904cae7018a27d61859eeae0959fb21b6ba80ed7`
+* `ck_files_core_tests` — `84401ac3744a181e5906b61605695bcc9098e43e706637686e24ec88a8585425`
+
+The prior clean Linux attempt at `6c21df6` was rejected after GCC 14's
+`-Werror=range-loop-construct` identified a structured-binding pair copy that
+Apple Clang did not diagnose. The one-line const-reference correction was
+committed as `eaf5673`; no warning was suppressed and no partial output was
+used.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
