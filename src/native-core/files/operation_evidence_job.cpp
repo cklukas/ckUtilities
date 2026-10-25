@@ -25,21 +25,32 @@ Observation<T> unavailable(const UnavailableObservation& detail) {
 
 OperationEvidenceJob::OperationEvidenceJob(OperationEvidenceJobRequest request)
     : request_(std::move(request)) {
+    const bool recursive = request_.root_source && request_.source_root && request_.source_path &&
+        request_.source_path->is_valid() && request_.direct_sources.empty() && request_.direct_source_paths.empty();
+    const bool flat = !request_.root_source && !request_.source_root && !request_.source_path &&
+        !request_.direct_sources.empty() && request_.direct_sources.size() == request_.direct_source_paths.size();
     if ((request_.operation != FileOperation::Copy && request_.operation != FileOperation::Move) ||
-        !request_.root_source || !request_.source_root || !request_.source_path || !request_.source_path->is_valid() ||
+        (!recursive && !flat) ||
         !request_.destination || !request_.clock || request_.limits.max_items == 0 ||
         request_.limits.max_items > OperationEvidenceJobLimits::hard_max_items ||
         request_.destination_names.size() > request_.limits.max_items) {
         throw std::invalid_argument("invalid operation evidence job");
     }
-    recursive_ = std::make_unique<RecursiveInventoryJob>(request_.source_root, *request_.source_path,
-        request_.mount_policy, request_.link_policy, request_.limits.recursive, request_.clock,
-        request_.root_source);
+    if (recursive) {
+        recursive_ = std::make_unique<RecursiveInventoryJob>(request_.source_root, *request_.source_path,
+            request_.mount_policy, request_.link_policy, request_.limits.recursive, request_.clock,
+            request_.root_source);
+    } else {
+        flat_builder_ = std::make_unique<FrozenInventoryBuilder>(request_.mount_policy, request_.link_policy,
+            request_.limits.recursive.inventory);
+        phase_ = Phase::FlatInventory;
+    }
 }
 
 void OperationEvidenceJob::release_staging() noexcept {
     recursive_.reset();
     recursive_result_.reset();
+    flat_builder_.reset();
     object_.reset();
     source_objects_.clear();
     destination_inventory_.reset();
@@ -52,7 +63,7 @@ void OperationEvidenceJob::release_staging() noexcept {
     ancestry_.reset();
     ancestry_results_.clear();
     destination_capabilities_.clear();
-    next_object_ = next_ancestry_ = 0;
+    next_object_ = next_flat_ = next_ancestry_ = 0;
 }
 
 void OperationEvidenceJob::fail(UnavailableObservation failure) noexcept {
@@ -99,6 +110,58 @@ void OperationEvidenceJob::advance_recursive(std::stop_token stop) {
         fail(error(AdapterError::InventoryLimit, "operation_evidence.stage_rows", ObservationState::Unknown));
         return;
     }
+    source_objects_.reserve(recursive_result_->sources().size());
+    phase_ = Phase::Object;
+}
+
+void OperationEvidenceJob::advance_flat_inventory() {
+    if (next_flat_ < request_.direct_sources.size()) {
+        const auto& source = request_.direct_sources[next_flat_];
+        if (!source || !request_.direct_source_paths[next_flat_].is_valid()) {
+            fail(error(AdapterError::InvalidIdentifier, "operation_evidence.direct_source"));
+            return;
+        }
+        const auto& metadata = source->metadata();
+        if (!metadata.identity.value() || !metadata.kind.value() || !metadata.mount_id.value() ||
+            !metadata.logical_size.value()) {
+            fail(error(AdapterError::UnqualifiedIdentity, "operation_evidence.direct_metadata", ObservationState::Unknown));
+            return;
+        }
+        if (!flat_builder_->add({request_.direct_source_paths[next_flat_], *metadata.identity.value(),
+                *metadata.kind.value(), metadata.mount_id, *metadata.logical_size.value(),
+                LinkTraversalEvidence::NotLink, {}})) {
+            if (flat_builder_->failure()) fail(*flat_builder_->failure());
+            else fail(error(AdapterError::PlanInvalid, "operation_evidence.direct_inventory"));
+            return;
+        }
+        ++next_flat_;
+        return;
+    }
+    if (!flat_builder_->seal()) {
+        if (flat_builder_->failure()) fail(*flat_builder_->failure());
+        else fail(error(AdapterError::PlanInvalid, "operation_evidence.direct_seal"));
+        return;
+    }
+    auto inventory = flat_builder_->completed();
+    if (!inventory.value()) {
+        fail(inventory.unavailable_detail() ? *inventory.unavailable_detail()
+                                            : error(AdapterError::PlanInvalid, "operation_evidence.direct_result"));
+        return;
+    }
+    if (request_.destination_names.size() != request_.direct_sources.size()) {
+        fail(error(AdapterError::PlanInvalid, "operation_evidence.inventory_shape"));
+        return;
+    }
+    if (request_.direct_sources.size() > request_.limits.max_items ||
+        request_.limits.object.time_slice <= MonotonicClock::Duration::zero() ||
+        request_.limits.object.time_slice > std::chrono::seconds(1) ||
+        request_.limits.source_target.rows < request_.direct_sources.size() ||
+        request_.limits.destination_batch.rows < request_.direct_sources.size()) {
+        fail(error(AdapterError::InventoryLimit, "operation_evidence.stage_rows", ObservationState::Unknown));
+        return;
+    }
+    recursive_result_ = std::shared_ptr<const CompletedRecursiveInventory>(
+        new const CompletedRecursiveInventory(std::move(inventory).take_value(), std::move(request_.direct_sources)));
     source_objects_.reserve(recursive_result_->sources().size());
     phase_ = Phase::Object;
 }
@@ -250,6 +313,9 @@ OperationEvidenceJobState OperationEvidenceJob::advance(std::stop_token stop) {
     try {
         state_ = OperationEvidenceJobState::Collecting;
         switch (phase_) {
+        case Phase::FlatInventory:
+            advance_flat_inventory();
+            break;
         case Phase::Recursive:
             advance_recursive(stop);
             break;
@@ -297,6 +363,7 @@ OperationEvidenceJobState OperationEvidenceJob::advance(std::stop_token stop) {
     } catch (...) {
         const char* operation = "operation_evidence.exception";
         switch (phase_) {
+        case Phase::FlatInventory: operation = "operation_evidence.flat_exception"; break;
         case Phase::Recursive: operation = "operation_evidence.recursive_exception"; break;
         case Phase::Object: operation = "operation_evidence.object_exception"; break;
         case Phase::DestinationInventory: operation = "operation_evidence.destination_inventory_exception"; break;

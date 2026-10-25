@@ -76,6 +76,72 @@ CK_TEST(operation_evidence_job_composes_recursive_objects_destination_and_topolo
     CK_CHECK(job.advance() == OperationEvidenceJobState::Complete);
 }
 
+CK_TEST(operation_evidence_job_composes_direct_held_sources_without_reopening_paths) {
+    FS fs;
+    auto source_parent = fs.make_node(ObjectKind::Directory);
+    auto source_file = fs.make_node(ObjectKind::RegularFile);
+    auto destination = fs.make_node(ObjectKind::Directory);
+    fs.bind("/operation-evidence-direct-source", source_parent);
+    fs.bind("/operation-evidence-direct-destination", destination);
+    fs.put(source_parent, name("file"), source_file);
+    fs.metadata(source_file).logical_size = Observation<std::uint64_t>::available(4);
+    fs.metadata(source_file).mount_id = Observation<std::uint64_t>::available(1);
+
+    std::shared_ptr<const DirectoryCursor> source_parent_cursor(take(fs.open_directory("/operation-evidence-direct-source")));
+    auto source = take(HeldChild::observe(source_parent_cursor, name("file")));
+    std::shared_ptr<const DirectoryCursor> destination_cursor(take(fs.open_directory("/operation-evidence-direct-destination")));
+
+    OperationEvidenceJobRequest request;
+    request.direct_sources.push_back(std::move(source));
+    request.direct_source_paths.push_back(path("/operation-evidence-direct-source/file"));
+    request.destination = std::move(destination_cursor);
+    request.destination_names = {name("file")};
+    request.clock = fs.clock();
+    request.limits.max_items = 1;
+    request.limits.destination_batch.rows = 1;
+    request.limits.source_target.rows = 1;
+
+    OperationEvidenceJob job(std::move(request));
+    const auto result = finish(job);
+    CK_CHECK(result->inventory() && result->inventory()->entries().size() == 1);
+    CK_CHECK(result->source_objects().size() == 1);
+    CK_CHECK(result->destination_batch() && result->destination_batch()->entries().size() == 1);
+    CK_CHECK(result->source_target().size() == 1 && result->ancestry().size() == 1);
+}
+
+CK_TEST(operation_evidence_job_rejects_direct_destination_shape_before_object_work) {
+    FS fs;
+    auto source_parent = fs.make_node(ObjectKind::Directory);
+    auto source_file = fs.make_node(ObjectKind::RegularFile);
+    auto destination = fs.make_node(ObjectKind::Directory);
+    fs.bind("/operation-evidence-direct-shape-source", source_parent);
+    fs.bind("/operation-evidence-direct-shape-destination", destination);
+    fs.put(source_parent, name("file"), source_file);
+    fs.metadata(source_file).logical_size = Observation<std::uint64_t>::available(4);
+    fs.metadata(source_file).mount_id = Observation<std::uint64_t>::available(1);
+
+    std::shared_ptr<const DirectoryCursor> source_parent_cursor(take(fs.open_directory("/operation-evidence-direct-shape-source")));
+    auto source = take(HeldChild::observe(source_parent_cursor, name("file")));
+    std::shared_ptr<const DirectoryCursor> destination_cursor(take(fs.open_directory("/operation-evidence-direct-shape-destination")));
+
+    OperationEvidenceJobRequest request;
+    request.direct_sources.push_back(std::move(source));
+    request.direct_source_paths.push_back(path("/operation-evidence-direct-shape-source/file"));
+    request.destination = std::move(destination_cursor);
+    request.clock = fs.clock();
+    request.limits.max_items = 1;
+    request.limits.destination_batch.rows = 1;
+    request.limits.source_target.rows = 1;
+
+    OperationEvidenceJob job(std::move(request));
+    OperationEvidenceJobState state = OperationEvidenceJobState::Collecting;
+    for (int step = 0; step != 10 && state != OperationEvidenceJobState::Failed; ++step)
+        state = job.advance();
+    CK_CHECK(state == OperationEvidenceJobState::Failed);
+    CK_CHECK(job.failure() && job.failure()->error.code == static_cast<std::int64_t>(AdapterError::PlanInvalid));
+    CK_CHECK(!job.completed().value());
+}
+
 CK_TEST(operation_evidence_job_rejects_destination_shape_before_native_batch_work) {
     FS fs;
     auto source_parent = fs.make_node(ObjectKind::Directory);

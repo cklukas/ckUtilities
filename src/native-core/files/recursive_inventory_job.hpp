@@ -15,6 +15,8 @@
 
 namespace ck::files {
 
+class OperationEvidenceJob;
+
 struct RecursiveInventoryLimits final {
     FrozenInventoryLimits inventory{};
     std::size_t max_depth = 1024;
@@ -34,6 +36,7 @@ public:
 
 private:
     friend class RecursiveInventoryJob;
+    friend class OperationEvidenceJob;
     CompletedRecursiveInventory(FrozenInventory::Pointer inventory,
         std::vector<HeldChild::Pointer> sources) noexcept
         : inventory_(std::move(inventory)), sources_(std::move(sources)) {}

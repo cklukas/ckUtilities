@@ -106,31 +106,24 @@ FilesOperationPlanningRequest request(Fixture& fixture) {
 
 FilesOperationNativePlanningRequest native_request(Fixture& fixture) {
     auto source_parent = fixture.fs.make_node(ObjectKind::Directory);
-    auto source_root = fixture.fs.make_node(ObjectKind::Directory);
     auto source_file = fixture.fs.make_node(ObjectKind::RegularFile);
     fixture.fs.bind("/planning-service-source", source_parent);
-    fixture.fs.put(source_parent, name("root"), source_root);
-    fixture.fs.put(source_root, name("file"), source_file);
-    fixture.fs.metadata(source_root).logical_size = Observation<std::uint64_t>::available(0);
+    fixture.fs.put(source_parent, name("file"), source_file);
     fixture.fs.metadata(source_file).logical_size = Observation<std::uint64_t>::available(4);
-    fixture.fs.metadata(source_root).mount_id = Observation<std::uint64_t>::available(1);
     fixture.fs.metadata(source_file).mount_id = Observation<std::uint64_t>::available(1);
 
     std::shared_ptr<const DirectoryCursor> parent(take(fixture.fs.open_directory("/planning-service-source")));
-    auto root_source = take(HeldChild::observe(parent, name("root")));
-    auto source_root_cursor = std::shared_ptr<DirectoryCursor>(
-        take(parent->open_directory_child(name("root"))));
+    auto source = take(HeldChild::observe(parent, name("file")));
 
     FilesOperationNativePlanningRequest result;
-    result.evidence.root_source = std::move(root_source);
-    result.evidence.source_root = std::move(source_root_cursor);
-    result.evidence.source_path = take(NativeAbsolutePath::from_posix("/planning-service-source/root"));
+    result.evidence.direct_sources.push_back(std::move(source));
+    result.evidence.direct_source_paths.push_back(take(NativeAbsolutePath::from_posix("/planning-service-source/file")));
     result.evidence.destination = fixture.cursor;
-    result.evidence.destination_names = {name("root"), name("file")};
+    result.evidence.destination_names = {name("file")};
     result.evidence.clock = fixture.fs.clock();
-    result.evidence.limits.max_items = 2;
-    result.evidence.limits.destination_batch.rows = 2;
-    result.evidence.limits.source_target.rows = 2;
+    result.evidence.limits.max_items = 1;
+    result.evidence.limits.destination_batch.rows = 1;
+    result.evidence.limits.source_target.rows = 1;
     return result;
 }
 
@@ -186,9 +179,8 @@ CK_TEST(operation_planning_service_composes_native_evidence_before_publishing_pl
     const auto submitted = service.request(std::move(input));
     CK_CHECK(submitted.state == FilesOperationPlanningSubmission::Accepted && submitted.ticket.valid());
     const auto reply = wake.reply(service);
-    CK_CHECK(reply.request == submitted.ticket && reply.state == FilesOperationPlanningReplyState::Failed);
-    CK_CHECK(!reply.plan && !reply.review && reply.error &&
-        reply.error->error.code == static_cast<std::int64_t>(AdapterError::PlanTopologyUnsafe));
+    CK_CHECK(reply.request == submitted.ticket && reply.state == FilesOperationPlanningReplyState::Ready);
+    CK_CHECK(reply.plan && reply.review && reply.plan->items().size() == 1 && reply.plan->conflicts().empty());
     service.join();
 }
 

@@ -24,10 +24,16 @@ bool valid(const FilesOperationPlanningRequest& request) noexcept {
 }
 
 bool valid(const FilesOperationNativePlanningRequest& request) noexcept {
-    return request.evidence.root_source && request.evidence.source_root && request.evidence.source_path &&
-           request.evidence.source_path->is_valid() && request.evidence.destination && request.evidence.clock &&
+    const bool recursive = request.evidence.root_source && request.evidence.source_root && request.evidence.source_path &&
+        request.evidence.source_path->is_valid() && request.evidence.direct_sources.empty() &&
+        request.evidence.direct_source_paths.empty();
+    const bool flat = !request.evidence.root_source && !request.evidence.source_root &&
+        !request.evidence.source_path && !request.evidence.direct_sources.empty() &&
+        request.evidence.direct_sources.size() == request.evidence.direct_source_paths.size();
+    return (recursive || flat) && request.evidence.destination && request.evidence.clock &&
            request.evidence.limits.max_items != 0 &&
-           request.evidence.limits.max_items <= ck::files::OperationEvidenceJobLimits::hard_max_items;
+           request.evidence.limits.max_items <= ck::files::OperationEvidenceJobLimits::hard_max_items &&
+           (!flat || request.evidence.direct_sources.size() <= request.evidence.limits.max_items);
 }
 
 bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {

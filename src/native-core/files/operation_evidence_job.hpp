@@ -39,6 +39,8 @@ struct OperationEvidenceJobRequest final {
     HeldChild::Pointer root_source;
     std::shared_ptr<DirectoryCursor> source_root;
     std::optional<NativeAbsolutePath> source_path;
+    std::vector<HeldChild::Pointer> direct_sources;
+    std::vector<NativeAbsolutePath> direct_source_paths;
     std::shared_ptr<const DirectoryCursor> destination;
     std::vector<NativeName> destination_names;
     NameEncoding destination_encoding = NameEncoding::PosixBytes;
@@ -100,12 +102,13 @@ public:
     Observation<Result> completed() const;
 
 private:
-    enum class Phase { Recursive, Object, DestinationInventory, DestinationAssessment,
+    enum class Phase { FlatInventory, Recursive, Object, DestinationInventory, DestinationAssessment,
         DestinationBatch, SourceTarget, Ancestry, Seal };
 
     void fail(UnavailableObservation failure) noexcept;
     void release_staging() noexcept;
     void advance_recursive(std::stop_token stop);
+    void advance_flat_inventory();
     void advance_object(std::stop_token stop);
     void advance_destination_inventory(std::stop_token stop);
     void advance_destination_batch(std::stop_token stop);
@@ -115,6 +118,7 @@ private:
     OperationEvidenceJobRequest request_;
     std::unique_ptr<RecursiveInventoryJob> recursive_;
     std::shared_ptr<const CompletedRecursiveInventory> recursive_result_;
+    std::unique_ptr<FrozenInventoryBuilder> flat_builder_;
     std::unique_ptr<ObjectInventoryJob> object_;
     std::vector<ObjectInventoryData> source_objects_;
     std::unique_ptr<DirectoryInventoryJob> destination_inventory_;
@@ -128,6 +132,7 @@ private:
     std::vector<Observation<AncestorWalkWitness>> ancestry_results_;
     std::vector<DestinationCapabilityEvidence> destination_capabilities_;
     std::size_t next_object_ = 0;
+    std::size_t next_flat_ = 0;
     std::size_t next_ancestry_ = 0;
     Phase phase_ = Phase::Recursive;
     OperationEvidenceJobState state_ = OperationEvidenceJobState::Collecting;
