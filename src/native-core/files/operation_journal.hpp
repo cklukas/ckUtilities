@@ -6,8 +6,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace ck::files {
@@ -40,6 +42,11 @@ struct OperationJournalLimits final {
     static constexpr std::size_t hard_max_evidence_bytes = 64 * 1024 * 1024;
 };
 
+struct OperationJournalId final {
+    std::array<std::byte, 16> bytes{};
+    friend bool operator==(const OperationJournalId&, const OperationJournalId&) = default;
+};
+
 struct OperationJournalRecord final {
     std::uint64_t sequence = 0;
     std::size_t item = 0;
@@ -53,9 +60,11 @@ class OperationJournal final {
 public:
     using Pointer = std::shared_ptr<OperationJournal>;
 
-    static Observation<Pointer> create(FileOperation operation, OperationJournalLimits limits = {});
+    static Observation<Pointer> create(FileOperation operation, OperationJournalId id,
+                                       OperationJournalLimits limits = {});
 
     FileOperation operation() const noexcept { return operation_; }
+    const OperationJournalId& id() const noexcept { return id_; }
     const OperationJournalLimits& limits() const noexcept { return limits_; }
     const std::vector<OperationJournalRecord>& records() const noexcept { return records_; }
 
@@ -68,10 +77,11 @@ public:
     bool terminal(std::size_t item) const noexcept;
 
 private:
-    OperationJournal(FileOperation operation, OperationJournalLimits limits) noexcept
-        : operation_(operation), limits_(limits) {}
+    OperationJournal(FileOperation operation, OperationJournalId id, OperationJournalLimits limits) noexcept
+        : operation_(operation), id_(id), limits_(limits) {}
 
     FileOperation operation_;
+    OperationJournalId id_;
     OperationJournalLimits limits_;
     std::vector<OperationJournalRecord> records_;
 };
@@ -79,5 +89,23 @@ private:
 bool operation_journal_transition(FileOperation operation, OperationJournalState from,
                                   OperationJournalState to) noexcept;
 bool operation_journal_terminal(OperationJournalState state) noexcept;
+
+struct OperationJournalCodecLimits final {
+    std::size_t max_bytes = 64 * 1024 * 1024;
+    static constexpr std::size_t hard_max_bytes = 256 * 1024 * 1024;
+};
+
+struct OperationJournalDecode final {
+    OperationJournal::Pointer journal;
+    // A bounded, explicitly reported tail condition does not erase earlier
+    // verified records. The caller must inspect/reconcile it before resume.
+    std::optional<UnavailableObservation> tail;
+};
+
+Observation<std::vector<std::byte>> encode_operation_journal(const OperationJournal& journal,
+                                                             OperationJournalCodecLimits limits = {});
+Observation<OperationJournalDecode> decode_operation_journal(std::span<const std::byte> bytes,
+                                                             OperationJournalLimits journal_limits = {},
+                                                             OperationJournalCodecLimits codec_limits = {});
 
 } // namespace ck::files

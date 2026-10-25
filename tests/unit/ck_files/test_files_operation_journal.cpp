@@ -9,8 +9,13 @@
 using namespace ck::files;
 
 namespace {
+OperationJournalId id() {
+    OperationJournalId result;
+    result.bytes[0] = std::byte{1};
+    return result;
+}
 OperationJournal::Pointer journal(FileOperation operation = FileOperation::Copy) {
-    auto result = OperationJournal::create(operation, {4, 32, 64});
+    auto result = OperationJournal::create(operation, id(), {4, 32, 64});
     if (!result.value())
         throw std::runtime_error("journal fixture creation failed");
     return std::move(result).take_value();
@@ -70,7 +75,46 @@ CK_TEST(operation_journal_failure_reconciliation_and_record_limits_are_explicit)
     CK_CHECK(writable->append({3, 0, OperationJournalState::NeedsReconciliation, {}}).value());
     CK_CHECK(writable->terminal(0));
     CK_CHECK(!writable->append({4, 1, OperationJournalState::Planned, std::vector<std::byte>(65)}).value());
-    auto invalid = OperationJournal::create(FileOperation::Copy, {0, 1, 1});
+    auto invalid = OperationJournal::create(FileOperation::Copy, id(), {0, 1, 1});
     CK_CHECK(!invalid.value() && invalid.unavailable_detail()->error.code ==
         static_cast<std::int64_t>(AdapterError::InvalidLimit));
+}
+
+CK_TEST(operation_journal_codec_roundtrips_records_and_preserves_opaque_evidence) {
+    auto value = journal();
+    value->append({1, 0, OperationJournalState::Planned, {std::byte{1}, std::byte{2}}});
+    value->append({2, 0, OperationJournalState::Prepared, {std::byte{3}}});
+    auto encoded = encode_operation_journal(*value);
+    CK_CHECK(encoded.value());
+    auto decoded = decode_operation_journal(*encoded.value(), {4, 32, 64});
+    CK_CHECK(decoded.value() && decoded.value()->journal && !decoded.value()->tail);
+    if (decoded.value() && decoded.value()->journal) {
+        CK_CHECK(decoded.value()->journal->operation() == FileOperation::Copy);
+        CK_CHECK(decoded.value()->journal->id() == id());
+        CK_CHECK(decoded.value()->journal->records().size() == 2);
+        CK_CHECK(decoded.value()->journal->records()[0].evidence.size() == 2);
+        CK_CHECK(decoded.value()->journal->records()[1].evidence.size() == 1);
+    }
+}
+
+CK_TEST(operation_journal_codec_reports_truncated_or_corrupt_tail_without_erasing_older_records) {
+    auto value = journal();
+    value->append({1, 0, OperationJournalState::Planned, {}});
+    value->append({2, 0, OperationJournalState::Prepared, {}});
+    auto encoded = encode_operation_journal(*value);
+    CK_CHECK(encoded.value() && encoded.value()->size() > 4);
+    if (!encoded.value())
+        return;
+    auto truncated = *encoded.value();
+    truncated.pop_back();
+    auto truncated_result = decode_operation_journal(truncated, {4, 32, 64});
+    CK_CHECK(truncated_result.value() && truncated_result.value()->journal && truncated_result.value()->tail);
+    if (truncated_result.value() && truncated_result.value()->journal)
+        CK_CHECK(truncated_result.value()->journal->records().size() == 1);
+    auto corrupt = *encoded.value();
+    corrupt[corrupt.size() - 1] ^= std::byte{1};
+    auto corrupt_result = decode_operation_journal(corrupt, {4, 32, 64});
+    CK_CHECK(corrupt_result.value() && corrupt_result.value()->journal && corrupt_result.value()->tail);
+    if (corrupt_result.value() && corrupt_result.value()->journal)
+        CK_CHECK(corrupt_result.value()->journal->records().size() == 1);
 }
