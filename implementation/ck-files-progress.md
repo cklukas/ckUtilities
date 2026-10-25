@@ -381,6 +381,19 @@ suite passes **186** cases after the strict target rebuild. Linux qualification,
 sanitizer/race checks and the mandatory Windows gate remain pending for this
 slice. No mutation or production GUI launch is enabled.
 
+Linux requalification of commit `a88f32e` used the fresh source/build root
+`/tmp/ckutilities-wp03-linux-a88f32e` with the unchanged pinned ckVision and
+llama.cpp inputs. Strict configure ran at 10:20:51–10:20:58 UTC and the
+project target build ran at 10:20:58–10:25:58 UTC under GCC 14. The rebuilt
+core suite passed **637** cases at 10:26:11 and the Files UI suite passed
+**186** cases at 10:26:11–10:26:13. The independent installed-package
+consumer configured, built and passed its CTest entry at 10:26:16–10:26:18.
+The verified Linux output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `039fcd16e1d8e7e116c719baa55ad270efccc4cd509fa7b955e12752af1f674a`
+* `ck_files_core_tests` — `f22f472955268f2a9e0d1407022759b45ad47ee44da03913fe99df0079668600`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
