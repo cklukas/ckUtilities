@@ -962,6 +962,12 @@ passes under normal, ASan and TSan macOS builds; the full normal Files
 regression passes **105/105** entries. Windows compilation and execution remain
 unclaimed until the mandatory `V:` workstation is available.
 
+Commit `fb76cb5` closes the cancellation window after copy verification and
+before commit preparation. A stop request now appends durable `Cancelled`
+without constructing the commit job or invoking any publication/retirement
+callback; journal failure remains reconciliation. The focused execution case
+passes under normal, ASan and TSan macOS builds.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
