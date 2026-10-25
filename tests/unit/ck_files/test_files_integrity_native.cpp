@@ -106,7 +106,7 @@ CK_TEST(native_integrity_object_inventory_preserves_query_result_and_small_buffe
     const ck::testing::ScratchDirectory scratch("files-integrity-inventory"); write(scratch.path()/"file");
     NativeFileSystem filesystem; auto parent = take(filesystem.open_directory(scratch.path())); auto entry = take(parent->open_child(name()));
     InventoryLimits invalid; invalid.max_native_bytes = 0; CK_CHECK(entry->inspect_integrity(invalid).state() == ObservationState::Failed);
-    InventoryLimits small; small.max_native_bytes = 15; const auto limited = entry->inspect_integrity(small);
+    InventoryLimits bounded_limits; bounded_limits.max_native_bytes = 15; const auto limited = entry->inspect_integrity(bounded_limits);
 #ifdef _WIN32
     CK_CHECK(limited.state() == ObservationState::Unknown && limited.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit));
 #else
