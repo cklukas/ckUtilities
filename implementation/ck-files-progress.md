@@ -917,6 +917,14 @@ identity, rejects hard-link aliases, applies handle-based disposition, and
 flushes the parent directory. Windows compilation/execution remains unclaimed
 until the mandatory `V:` workstation is available.
 
+Commit `7c99dad` composes the ordered metadata job into the journaled copy
+stage. A private stream copy must reach `Copied`, then traversal metadata,
+security, final times and destination flush complete in order before the
+independent verification callback can run. Metadata failure/cancellation is
+journaled before verification and leaves publication unavailable. The copy
+orchestration failure-boundary case passes under normal, ASan/UBSan and TSan
+macOS builds.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
