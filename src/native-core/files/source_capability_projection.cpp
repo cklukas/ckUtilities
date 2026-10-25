@@ -221,7 +221,7 @@ Observation<std::vector<SourceCapabilityEvidence>> SourceCapabilityProjection::f
     }
 
     if (const auto* storage = inventory.storage.value()) {
-        for (const auto [flag, destination] : std::array{
+        for (const auto& [flag, destination] : std::array{
                  std::pair{StorageFeature::SparseFlag, VolumeFeature::SparseFiles},
                  std::pair{StorageFeature::CompressionFlag, VolumeFeature::FileCompression},
                  std::pair{StorageFeature::EncryptionFlag, VolumeFeature::FileEncryption}}) {
