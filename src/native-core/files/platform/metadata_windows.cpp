@@ -779,7 +779,7 @@ public:
             (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_directory.kind"});
-        auto observed = identity(opened.get(), scope_);
+        auto observed = ::ck::files::identity(opened.get(), scope_);
         if (!observed.value()) {
             const auto& error = *observed.unavailable_detail();
             return Result::unavailable(error.state, error.error);
@@ -1049,7 +1049,7 @@ public:
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "publish_noreplace.destination_identity"});
         auto destination = std::move(opened).take_value();
-        const auto source_identity = identity(source, scope_);
+        const auto source_identity = ::ck::files::identity(source, scope_);
         const auto destination_metadata = handle_metadata(destination.get(), scope_);
         if (!source_identity.value() || !destination_metadata.value() || !destination_metadata.value()->identity.value() ||
             compare_identity(*source_identity.value(), *destination_metadata.value()->identity.value()) != IdentityComparison::Same ||

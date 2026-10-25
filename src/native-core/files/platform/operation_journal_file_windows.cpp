@@ -103,7 +103,7 @@ Observation<bool> verify_security(HANDLE file, PSID expected) {
         if (ace->Header.AceType != ACCESS_ALLOWED_ACE_TYPE || ace->Header.AceFlags != 0 ||
             ace->Header.AceSize < sizeof(ACCESS_ALLOWED_ACE) || ace->Mask != FILE_ALL_ACCESS)
             return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace");
-        auto* sid = const_cast<PSID>(reinterpret_cast<const SID*>(&ace->SidStart));
+        auto* sid = reinterpret_cast<PSID>(const_cast<SID*>(reinterpret_cast<const SID*>(&ace->SidStart)));
         if (!IsValidSid(sid) || GetLengthSid(sid) > ace->Header.AceSize - offsetof(ACCESS_ALLOWED_ACE, SidStart))
             return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace_sid");
         if (index == 0 && EqualSid(sid, expected)) user = true;
