@@ -939,6 +939,12 @@ commit stage. The new composition cases pass under normal, ASan/UBSan and TSan
 macOS builds. The full current normal Files regression passes **105/105**
 entries, representing **686 core** and **169 native** cktest cases.
 
+Commit `69425d8` adds the execution-level cancellation case: a pre-copy stop
+durably records `Cancelled`, invokes no preparation callback, and constructs no
+commit stage. The final current normal regression remains **105/105** Files
+CTest entries; direct suite runs report **687 core** and **169 native** cktest
+cases, all passing.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
