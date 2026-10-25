@@ -903,6 +903,11 @@ source retirement is still not enabled: POSIX compare-delete remains
 unqualified, and Windows qualification remains gated by the unavailable
 mandatory `V:` workstation drive.
 
+Commit `001fca7` makes that proof type-safe: the Move boundary accepts only
+`Snapshot` or `EnforcedExclusion` as qualifying guarantees; the explicit
+`BeforeAfterObservation` value is rejected and records `RetainedSource`.
+Focused macOS ASan/UBSan and TSan runs pass after this refinement.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
