@@ -800,6 +800,14 @@ pass under normal, ASan/UBSan and TSan core builds. This remains an injected
 worker boundary: native publication, metadata restoration and source removal
 adapters are not connected, and no mutation UI command is enabled.
 
+Commit `4d87679` adds the read-only startup recovery projection. It maps
+incomplete staging, commit-intent, destination-committed, source-retirement
+and terminal states to explicit actions; only terminal records are ignored.
+Corrupt/truncated journal tails and `NeedsReconciliation` records keep the
+report in review-required state. Three recovery cases pass under normal,
+ASan/UBSan and TSan core builds. No recovery action opens, deletes, replaces,
+resumes, or retires a native object.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
