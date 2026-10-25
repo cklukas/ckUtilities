@@ -761,9 +761,14 @@ public:
             FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_WRITE_THROUGH,
             nullptr, 0);
         OwnedHandle opened(raw);
-        if (status < 0)
-            return Result::unavailable(error_state(RtlNtStatusToDosError(status)),
+        if (status < 0) {
+            const DWORD code = RtlNtStatusToDosError(status);
+            if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
+                return Result::unavailable(ObservationState::Changed,
+                    {ErrorDomain::Win32, code, "NtCreateFile.create_child_directory.existing"});
+            return Result::unavailable(error_state(code),
                 {ErrorDomain::NtStatus, static_cast<std::int64_t>(status), "NtCreateFile.create_child_directory"});
+        }
         if (io.Information != FILE_CREATED || raw == nullptr || raw == INVALID_HANDLE_VALUE)
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_directory.result"});
@@ -779,6 +784,9 @@ public:
             const auto& error = *observed.unavailable_detail();
             return Result::unavailable(error.state, error.error);
         }
+        if (!FlushFileBuffers(handle_.get()))
+            return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(),
+                "FlushFileBuffers.create_child_directory_parent");
         return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(opened), std::move(observed), scope_));
     }
     Observation<bool> retire_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {

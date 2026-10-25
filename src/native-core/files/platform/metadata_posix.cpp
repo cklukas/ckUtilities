@@ -765,10 +765,12 @@ public:
         }
 
         struct stat expected{};
-        if (fstatat(dirfd(directory_.get()), spelling->c_str(), &expected, AT_SYMLINK_NOFOLLOW) != 0 ||
-            !S_ISDIR(expected.st_mode))
+        if (fstatat(dirfd(directory_.get()), spelling->c_str(), &expected, AT_SYMLINK_NOFOLLOW) != 0)
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Posix, errno, "create_child_directory.created_identity"});
+        if (!S_ISDIR(expected.st_mode))
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidNativeResult, "create_child_directory.created_kind"));
         const int raw = openat(dirfd(directory_.get()), spelling->c_str(),
 #if defined(__linux__)
             O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
@@ -792,6 +794,11 @@ public:
         if (!S_ISDIR(actual.st_mode) || actual.st_dev != expected.st_dev || actual.st_ino != expected.st_ino)
             return Result::unavailable(ObservationState::Changed,
                 adapter_error(AdapterError::MetadataChanged, "create_child_directory.identity"));
+        if (fsync(dirfd(directory_.get())) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, code, "fsync.create_child_directory_parent"});
+        }
         std::optional<std::uint64_t> generation;
 #if defined(__APPLE__)
         generation = actual.st_gen;
