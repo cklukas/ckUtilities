@@ -973,6 +973,11 @@ containing directory after identity verification, and Windows maps native name
 collisions to `Changed` and flushes the held parent directory before success.
 The native folder case passes under normal, ASan and TSan macOS builds.
 
+Commit `8527e62` extends that native qualification adversarially: the returned
+cursor continues to observe the created directory after its name is renamed and
+replaced, while a regular-file collision remains unchanged. Normal, ASan and
+TSan macOS native checks pass.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
