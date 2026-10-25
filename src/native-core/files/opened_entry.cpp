@@ -85,6 +85,11 @@ Observation<bool> OpenedEntry::apply_portable_basic_metadata(const BasicMetadata
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
          "metadata.portable_basic_native_query"});
 }
+Observation<bool> OpenedEntry::apply_nonsecurity_attribute(const AttributeValue&) {
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+         "attributes.nonsecurity_native_query"});
+}
 Observation<bool> OpenedEntry::publish_noreplace(const DirectoryCursor&, const NativeName& name) {
     if (!name.is_valid())
         return Observation<bool>::unavailable(ObservationState::Failed,

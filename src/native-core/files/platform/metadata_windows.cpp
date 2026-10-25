@@ -192,6 +192,15 @@ using OwnedHandle = std::unique_ptr<void, HandleCloser>;
 // Public native-system-service ABI: ZwQueryEaFile contract, Nt user-mode
 // entry point. No private information class or hard-coded syscall number.
 using QueryEa = NTSTATUS (NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, BOOLEAN, PVOID, ULONG, PULONG, BOOLEAN);
+using SetEa = NTSTATUS (NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG);
+struct FullEaInformation final {
+    ULONG NextEntryOffset;
+    UCHAR Flags;
+    UCHAR EaNameLength;
+    USHORT EaValueLength;
+    char EaName[1];
+};
+static_assert(offsetof(FullEaInformation, EaName) == 8);
 Observation<QueryEa> query_ea_api() {
     const auto module = GetModuleHandleW(L"ntdll.dll");
     const auto address = module ? GetProcAddress(module, "NtQueryEaFile") : nullptr;
@@ -201,6 +210,17 @@ Observation<QueryEa> query_ea_api() {
     }
     static_assert(sizeof(QueryEa) == sizeof(address));
     return Observation<QueryEa>::available(std::bit_cast<QueryEa>(address));
+}
+Observation<SetEa> set_ea_api() {
+    const auto module = GetModuleHandleW(L"ntdll.dll");
+    const auto address = module ? GetProcAddress(module, "NtSetEaFile") : nullptr;
+    if (!address) {
+        const DWORD code = GetLastError();
+        return Observation<SetEa>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Win32, code, "NtSetEaFile.resolve"});
+    }
+    static_assert(sizeof(SetEa) == sizeof(address));
+    return Observation<SetEa>::available(std::bit_cast<SetEa>(address));
 }
 constexpr std::uint32_t no_eas = 0xC0000052U;
 constexpr std::uint32_t no_more_eas = 0x80000012U;
@@ -366,6 +386,79 @@ public:
         native.FileAttributes = *source.windows_attributes.value();
         if (!SetFileInformationByHandle(handle_.get(), FileBasicInfo, &native, sizeof(native)))
             return failure<bool>(GetLastError(), "metadata.portable_basic.FileBasicInfo");
+        return Result::available(true);
+    }
+    Observation<bool> apply_nonsecurity_attribute(const AttributeValue& source) override {
+        using Result = Observation<bool>;
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "attributes.nonsecurity.write_access"});
+        const auto* name = source.identifier.windows_ea_bytes();
+        if (!name || !NativeFeatureIdentifier::from_windows_ea(*name))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "attributes.nonsecurity.identifier"});
+        if (attribute_role(source.identifier, source.native_flags.value() ? *source.native_flags.value() : 0) == AttributeRole::Security)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "attributes.nonsecurity.security_attribute"});
+        if (name->size() > UCHAR_MAX || source.bytes.size() > USHRT_MAX)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "attributes.nonsecurity.value_limit"});
+        if (!source.native_flags.value()) {
+            const auto& error = *source.native_flags.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!source.owner.value() || !source.owner.value()->scope.is_valid()) {
+            if (!source.owner.value()) {
+                const auto& error = *source.owner.unavailable_detail();
+                return Result::unavailable(error.state, error.error);
+            }
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "attributes.nonsecurity.owner"});
+        }
+        const auto before = inspect_basic();
+        if (!before.value()) {
+            const auto& error = *before.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!before.value()->identity.value() || !before.value()->kind.value() ||
+            *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "attributes.nonsecurity.target_kind"});
+        if (const auto guarded = provider_guard(*before.value()))
+            return Result::unavailable(guarded->state, guarded->error);
+        const auto api = set_ea_api();
+        if (!api.value()) {
+            const auto& error = *api.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        const auto bytes = offsetof(FullEaInformation, EaName) + name->size() + 1 + source.bytes.size();
+        if (bytes > std::numeric_limits<ULONG>::max())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "attributes.nonsecurity.wire_limit"});
+        std::vector<std::uint32_t> storage((bytes + sizeof(std::uint32_t) - 1) / sizeof(std::uint32_t), 0);
+        auto wire = std::as_writable_bytes(std::span(storage)).first(bytes);
+        auto* record = reinterpret_cast<FullEaInformation*>(wire.data());
+        record->NextEntryOffset = 0;
+        record->Flags = static_cast<UCHAR>(*source.native_flags.value());
+        record->EaNameLength = static_cast<UCHAR>(name->size());
+        record->EaValueLength = static_cast<USHORT>(source.bytes.size());
+        std::memcpy(record->EaName, name->data(), name->size());
+        record->EaName[name->size()] = '\0';
+        if (!source.bytes.empty())
+            std::memcpy(record->EaName + name->size() + 1, source.bytes.data(), source.bytes.size());
+        IO_STATUS_BLOCK io{};
+        const auto status = (*api.value())(handle_.get(), &io, wire.data(), static_cast<ULONG>(wire.size()));
+        if (status < 0)
+            return ea_failure<bool>(static_cast<std::uint32_t>(status), "NtSetEaFile");
+        const auto after = inspect_basic();
+        if (!after.value()) {
+            const auto& error = *after.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!after.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "attributes.nonsecurity.identity"});
         return Result::available(true);
     }
     Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;

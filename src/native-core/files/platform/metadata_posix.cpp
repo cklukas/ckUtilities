@@ -359,6 +359,65 @@ public:
             return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "metadata.portable_basic.futimens"});
         return Result::available(true);
     }
+    Observation<bool> apply_nonsecurity_attribute(const AttributeValue& source) override {
+        using Result = Observation<bool>;
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied,
+                adapter_error(AdapterError::InvalidAccess, "attributes.nonsecurity.write_access"));
+        const auto* name = source.identifier.posix_bytes();
+        if (!name || !NativeFeatureIdentifier::from_posix(*name))
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "attributes.nonsecurity.identifier"));
+        if (attribute_role(source.identifier) == AttributeRole::Security)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "attributes.nonsecurity.security_attribute"));
+        if (source.bytes.size() > InventoryLimits::hard_native_bytes)
+            return Result::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::InventoryLimit, "attributes.nonsecurity.value_limit"));
+        if (!source.owner.value() || !source.owner.value()->scope.is_valid()) {
+            if (!source.owner.value()) {
+                const auto& error = *source.owner.unavailable_detail();
+                return Result::unavailable(error.state, error.error);
+            }
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::UnqualifiedIdentity, "attributes.nonsecurity.owner"));
+        }
+        const auto before = inspect_basic();
+        if (!before.value()) {
+            const auto& error = *before.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!before.value()->identity.value() || !before.value()->kind.value() ||
+            *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "attributes.nonsecurity.target_kind"));
+#if defined(__APPLE__)
+        if (const auto guarded = provider_guard(*before.value()))
+            return Result::unavailable(guarded->state, guarded->error);
+#endif
+        const auto proxy = attribute_proxy();
+        if (!proxy.value()) {
+            const auto& error = *proxy.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+#if defined(__linux__)
+        if (setxattr(proxy.value()->c_str(), name->c_str(), source.bytes.data(), source.bytes.size(), 0) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "attributes.nonsecurity.setxattr"});
+#else
+        if (fsetxattr(descriptor_.get(), name->c_str(), source.bytes.data(), source.bytes.size(), 0, XATTR_SHOWCOMPRESSION) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "attributes.nonsecurity.fsetxattr"});
+#endif
+        const auto after = inspect_basic();
+        if (!after.value()) {
+            const auto& error = *after.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!after.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "attributes.nonsecurity.identity"));
+        return Result::available(true);
+    }
     Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name) override;
 #if defined(__linux__)
     Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const override {

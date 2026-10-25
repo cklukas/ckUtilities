@@ -114,6 +114,11 @@ public:
     // ACL/security, channels, attributes/xattrs, flags, provider state and any
     // timestamp field outside the adapter's documented subset.
     virtual Observation<bool> apply_portable_basic_metadata(const BasicMetadata& source);
+    // Apply one already-inventoried non-security attribute to this held
+    // staging object. Security/ACL attributes have a separate adapter
+    // contract and are refused here; the caller must bind the value to its
+    // reviewed source identity before invoking this worker-only boundary.
+    virtual Observation<bool> apply_nonsecurity_attribute(const AttributeValue& source);
     // Publish this worker-created staging object under a new destination name
     // relative to a held directory. The default refuses the operation; a
     // platform adapter must provide an atomic no-replace primitive and retain

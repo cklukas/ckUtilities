@@ -98,6 +98,46 @@ CK_TEST(native_operation_staging_applies_platform_portable_basic_metadata) {
 #endif
 }
 
+CK_TEST(native_operation_staging_applies_reviewed_nonsecurity_attribute_on_held_object) {
+    const ck::testing::ScratchDirectory scratch("files-operation-attribute-boundary",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_path = scratch.path() / "source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "attribute source";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("source.bin"), EntryAccess::ContentRead));
+    const auto source_metadata = take(source->inspect_basic());
+    auto staging = take(directory->create_child_file(name(".ck-attribute-staging")));
+#if defined(_WIN32)
+    const auto identifier = NativeFeatureIdentifier::from_windows_ea("ckutilities");
+    const auto flags = Observation<std::uint32_t>::available(0);
+#else
+    const auto identifier = NativeFeatureIdentifier::from_posix("user.ckutilities.portable");
+    const auto flags = Observation<std::uint32_t>::unavailable(
+        ObservationState::Unsupported, {ErrorDomain::Adapter,
+            static_cast<std::int64_t>(AdapterError::NotApplicable), "attributes.test_flags"});
+#endif
+    if (!identifier || !source_metadata.identity.value())
+        throw std::runtime_error("attribute fixture could not construct its native identity");
+    const NativeBytes bytes{std::byte{'a'}, std::byte{'t'}, std::byte{'t'}, std::byte{'r'}, std::byte{'\0'}, std::byte{'x'}};
+    const AttributeValue value{*identifier, bytes, source_metadata.identity, flags};
+    const auto applied = staging->apply_nonsecurity_attribute(value);
+    if (!applied.value())
+        throw std::runtime_error("nonsecurity attribute application unavailable: " +
+            (applied.unavailable_detail() ? applied.unavailable_detail()->error.operation : "false"));
+    CK_CHECK(applied.value() && *applied.value());
+    const auto observed = take(staging->read_attribute(*identifier));
+    CK_CHECK(observed.bytes == bytes && observed.owner.value());
+    if (observed.owner.value() && source_metadata.identity.value())
+        CK_CHECK(observed.bytes == bytes && observed.owner.value()->scope == source_metadata.identity.value()->scope);
+}
+
 CK_TEST(native_operation_staging_file_rejects_foreign_names_and_cancelled_writes) {
     const ck::testing::ScratchDirectory scratch("files-operation-content-invalid", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;
