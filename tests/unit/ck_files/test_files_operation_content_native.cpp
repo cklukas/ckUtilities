@@ -167,7 +167,7 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
 
     if (job->state() != OperationExecutionState::Complete) {
         std::string detail = "native copy execution state " + std::to_string(static_cast<int>(job->state())) +
-            " records";
+            " bytes " + std::to_string(job->progress().observed_bytes) + " records";
         for (const auto& record : journal->records()) detail += " " + std::to_string(static_cast<int>(record.state));
         if (job->result().failure) detail += " failure " + job->result().failure->error.operation;
         throw std::runtime_error(detail);
@@ -175,10 +175,21 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
 
     CK_CHECK(job->state() == OperationExecutionState::Complete);
     CK_CHECK(fs::exists(destination_directory_path / "copied.bin"));
-    std::ifstream input(destination_directory_path / "copied.bin", std::ios::binary);
+    const auto published = take(destination->open_child(destination_name, EntryAccess::ContentRead));
+    const auto published_metadata = take(published->inspect_basic());
+    if (!published_metadata.logical_size.value() ||
+        *published_metadata.logical_size.value() != std::string("native operation copy job").size())
+        throw std::runtime_error("published native size=" +
+                                 (published_metadata.logical_size.value() ?
+                                      std::to_string(*published_metadata.logical_size.value()) : "unknown"));
+    const auto published_content = take(published->read_content({1024}, 0));
     std::string copied;
-    std::getline(input, copied);
-    CK_CHECK(copied == "native operation copy job");
+    copied.reserve(published_content.bytes.size());
+    for (const auto byte : published_content.bytes)
+        copied.push_back(static_cast<char>(std::to_integer<unsigned char>(byte)));
+    if (copied != "native operation copy job")
+        throw std::runtime_error("copied bytes=" + std::to_string(copied.size()) + " value=" + copied +
+                                 " progress=" + std::to_string(job->progress().observed_bytes));
     CK_CHECK(journal->state(0) == OperationJournalState::Complete);
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
 }
