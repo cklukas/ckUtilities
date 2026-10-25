@@ -34,6 +34,11 @@ struct OperationCommitRequest final {
     // reconciliation rather than guessing what the filesystem did.
     std::function<Observation<bool>(std::stop_token)> revalidate_source;
     std::function<Observation<bool>(std::stop_token)> revalidate_destination;
+    // Move source retirement requires a positive content-stability proof after
+    // destination commit. An identity check or before/after observation alone
+    // is not such a proof; platform adapters must report false/unknown when
+    // their supported snapshot or enforced-exclusion guarantee is absent.
+    std::function<Observation<bool>(std::stop_token)> verify_source_stability;
     std::function<Observation<bool>(std::stop_token)> commit_destination;
     std::function<Observation<bool>(std::stop_token)> retire_source;
 

@@ -23,7 +23,9 @@ Observation<OperationCommitJob::Pointer> OperationCommitJob::create(OperationCom
     if (!request.journal || request.item >= request.journal->limits().max_items ||
         request.journal->operation() != request.operation ||
         !request.revalidate_source || !request.revalidate_destination || !request.commit_destination ||
-        !request.append_journal || (request.operation == FileOperation::Move && !request.retire_source))
+        !request.append_journal ||
+        (request.operation == FileOperation::Move &&
+         (!request.retire_source || !request.verify_source_stability)))
         return rejected<OperationCommitJob::Pointer>(AdapterError::PlanInvalid, "operation_commit.request");
     if (request.journal->state(request.item) != OperationJournalState::Verified)
         return rejected<OperationCommitJob::Pointer>(AdapterError::PlanInvalid, "operation_commit.journal_state");
@@ -142,6 +144,13 @@ OperationCommitState OperationCommitJob::advance(std::stop_token stop) {
         return result_.state;
     }
     if (!invoke_revalidation(request_.revalidate_source, stop, "operation_commit.source_changed_before_retire",
+                             OperationJournalState::RetainedSource))
+        return result_.state;
+    // A held identity and a pair of observations do not prove that a writer
+    // could not have changed content. Require the adapter's explicit snapshot
+    // or enforced-exclusion guarantee before entering source retirement.
+    if (!invoke_revalidation(request_.verify_source_stability, stop,
+                             "operation_commit.source_unstable_before_retire",
                              OperationJournalState::RetainedSource))
         return result_.state;
     try {
