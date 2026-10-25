@@ -3,6 +3,33 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 platform portable-basic metadata boundary checkpoint
+
+Commit `9bc9b72` adds the worker-only
+`OpenedEntry::apply_portable_basic_metadata()` boundary. POSIX adapters apply
+the held staging descriptor's mode bits and access/modify timestamps with
+`fchmod`/`futimens`; Windows adapters apply attributes and all four basic
+timestamps with `SetFileInformationByHandle(FileBasicInfo)`. Both paths require
+the worker-created writable object and validate that it is a regular file.
+The boundary deliberately does not claim ownership, ACL/security, channels,
+xattrs/EAs, flags, provider state, or POSIX birth/change-time preservation;
+those categories remain explicit planning work and are not silently reported as
+preserved. The generic `OpenedEntry` default remains `Unsupported`.
+
+The new platform test passed in the native suites on macOS (**178/178**),
+Windows (**177/177**) and Linux (**181/181**). The verified Release test
+executables are:
+
+- macOS: `/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_native_tests`, SHA-256 `eb8dffc5dee1daa4e34663ef96f00a818999a0f70359d55421c787331403d27b`;
+- Windows: `V:\tmp\ckutilities-windows-qualification-20261025-01\build\tests\unit\ck_files\Release\ck_files_native_tests.exe`, SHA-256 `246a1c724425cea818f4b55f65b403267b1707615207dcfca3552fff19db0641`;
+- Linux ARM: `/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_native_tests`, SHA-256 `98ab8a90bd24a79867a1fde66ae192d50d3a1dd7e8e4709cca0e5da41e9e665e`.
+
+The build outputs remain in their existing verified qualification trees; no
+application instance was launched. This is a native metadata capability
+checkpoint, not completion of WP-03 planning/consent or a claim that the
+product is a complete mutating Norton Commander/Midnight Commander
+replacement.
+
 ## 2026-10-25 — WP-04 durable startup native-evidence projection checkpoint
 
 Commit `b9bbb42` adds the worker-only
