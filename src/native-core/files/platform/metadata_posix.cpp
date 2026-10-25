@@ -336,8 +336,15 @@ public:
         const auto after = inspect_basic();
         const auto owner = detail::qualify_file_link_subject(before, after);
         if (!owner.value()) { const auto& e = *owner.unavailable_detail(); return Result::unavailable(e.state, e.error); }
-        return Result::available({FileLinkLimitFamily::PosixFpathconf, *owner.value(), *before.value()->kind.value(),
-            before.value()->link_count, after.value()->link_count, std::move(maximum)});
+        const auto& before_metadata = *before.value();
+        const auto& after_metadata = *after.value();
+        const auto* before_kind = before_metadata.kind.value();
+        if (!before_kind) {
+            const auto& e = *before_metadata.kind.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        return Result::available({FileLinkLimitFamily::PosixFpathconf, *owner.value(), *before_kind,
+            before_metadata.link_count, after_metadata.link_count, std::move(maximum)});
     }
     Observation<FileDataLayout> inspect_data_layout(InventoryLimits limits = {}, std::stop_token stop = {}) const override {
         using Result = Observation<FileDataLayout>;
