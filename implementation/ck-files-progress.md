@@ -41,10 +41,26 @@ remain the applicable sanitizer evidence for the current source; the full
 macOS ckVision UI sanitizer gate remains blocked by the pinned upstream
 ckVision `Desktop` command-vector defect described below.
 
-The normal three-platform result is green, but WP-02 remains open until the
-actual user-facing window is inspected interactively and the unsupported
-sanitizer/runtime gates are resolved or explicitly accepted with a supported
-toolchain/host. No mutation command is enabled by this qualification record.
+The normal three-platform result is green, and the required macOS terminal
+window/navigation/completion smoke is now recorded below. WP-02 remains open
+for the unsupported sanitizer/runtime gates plus mouse/restricted-key and
+broader interactive acceptance. No mutation command is enabled by this
+qualification record.
+
+The fresh macOS Release executable
+`/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/bin/ck-files`
+was verified after the build by absolute path, timestamp and SHA-256
+`295e0111217c3cec7763cee2debb7f5262f2a52cbbc5a228ce02125c6ea4ee20`; its
+`--help` output was also checked. One exact instance was launched in a
+task-local pseudo-terminal with `XDG_CONFIG_HOME` at the ownership-enabled
+`/Volumes/PRO-BLADE/tmp/ckutilities-cross-qualification-20261025-01-config`.
+The actual terminal UI rendered both panes, loaded the repository listing,
+entered `benchmarks`, returned to the parent, opened the location editor,
+typed a partial path, accepted the worker-backed completion with Right, and
+pressed Enter to navigate to `implementation/`. The process was then closed
+and verified absent by its exact executable path. This is interactive WP-02
+evidence for navigation and Right-to-accept; mutation, mouse and restricted
+key paths remain later acceptance work.
 
 The worker-backed location completion integration is committed as `7e4ecfa`;
 the production native host and installed `ck-files` executable are committed
