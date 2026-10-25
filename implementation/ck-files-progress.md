@@ -930,6 +930,15 @@ with the journal still at `Copied`; only a known metadata failure becomes a
 terminal `Failed` record. The focused normal, ASan/UBSan and TSan copy-job
 runs pass after this correction.
 
+Commit `e6e3d32` adds the worker-only execution composition boundary. It
+advances the journaled copy/metadata/verification job to `Verified` before
+constructing the commit job; commit preparation and all publication/retirement
+callbacks are unreachable from an unverified copy. Copy-side failure,
+cancellation and reconciliation states are preserved without constructing a
+commit stage. The new composition cases pass under normal, ASan/UBSan and TSan
+macOS builds. The full current normal Files regression passes **105/105**
+entries, representing **681 core** and **169 native** cktest cases.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
