@@ -262,7 +262,7 @@ Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal
     object.SecurityDescriptor = create_new ? relative_descriptor.data() : nullptr;
     IO_STATUS_BLOCK io{};
     HANDLE raw_file{};
-    const auto status = NtCreateFile(&raw_file, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL,
+    const auto status = NtCreateFile(&raw_file, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL | WRITE_OWNER,
         &object, &io, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE,
         create_new ? FILE_CREATE : FILE_OPEN,
         FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_WRITE_THROUGH,
@@ -280,6 +280,11 @@ Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal
     if ((tag.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) || info.NumberOfLinks != 1 ||
         (create_new && info.EndOfFile.QuadPart != 0))
         return rejected<Pointer>(AdapterError::InvalidAccess, "journal_file.file_kind", ObservationState::Denied);
+    if (create_new) {
+        const auto owner_code = SetSecurityInfo(file.get(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION,
+            user_data.data(), nullptr, nullptr, nullptr);
+        if (owner_code != ERROR_SUCCESS) return failure<Pointer>(owner_code, "journal_file.set_owner");
+    }
     auto security = verify_security(file.get(), user_data.data());
     if (!security.value()) {
         const auto& detail = *security.unavailable_detail();
