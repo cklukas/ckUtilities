@@ -90,7 +90,7 @@ CK_TEST(native_inode_flags_explicit_access_is_independent_and_matches_direct_rea
     CK_CHECK(metadata->inspect_inode_flags().state() == ObservationState::Unsupported && report.state() == ObservationState::Unsupported);
 #endif
     InventoryLimits invalid; invalid.max_native_bytes = 0; CK_CHECK(entry->inspect_inode_flags(invalid).state() == ObservationState::Failed);
-    InventoryLimits small; small.max_native_bytes = 3; const auto bounded = entry->inspect_inode_flags(small);
+    InventoryLimits bounded_limits; bounded_limits.max_native_bytes = 3; const auto bounded = entry->inspect_inode_flags(bounded_limits);
 #ifdef __linux__
     CK_CHECK(bounded.state() == ObservationState::Unknown && bounded.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InventoryLimit));
 #else
