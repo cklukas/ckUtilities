@@ -126,7 +126,17 @@ OperationCopyState OperationCopyJob::advance(std::stop_token stop) {
             if (metadata_->failure()) result_.failure = metadata_->failure();
             if (append(OperationJournalState::Cancelled)) result_.state = OperationCopyState::Cancelled;
         } else if (metadata_state == OperationMetadataState::Failed) {
-            if (metadata_->failure()) result_.failure = metadata_->failure();
+            if (metadata_->failure()) {
+                result_.failure = metadata_->failure();
+                // An unknown metadata syscall may have applied its change even
+                // though its reply failed. Keep the private destination at the
+                // last durable state and require inspection rather than
+                // hiding that uncertainty behind terminal Failed.
+                if (metadata_->failure()->state == ObservationState::Unknown) {
+                    result_.state = OperationCopyState::NeedsReconciliation;
+                    return result_.state;
+                }
+            }
             if (append(OperationJournalState::Failed)) result_.state = OperationCopyState::Failed;
         } else if (metadata_state == OperationMetadataState::Complete) {
             result_.state = OperationCopyState::Verifying;

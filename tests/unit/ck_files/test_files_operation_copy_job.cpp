@@ -173,6 +173,6 @@ CK_TEST(operation_copy_job_metadata_failure_prevents_verification) {
     auto job = std::move(created).take_value();
     for (unsigned step = 0; step != 20 && job->state() != OperationCopyState::Failed &&
          job->state() != OperationCopyState::NeedsReconciliation; ++step) job->advance();
-    CK_CHECK(job->state() == OperationCopyState::Failed && verifications == 0 &&
-             value->state(0) == OperationJournalState::Failed);
+    CK_CHECK(job->state() == OperationCopyState::NeedsReconciliation && verifications == 0 &&
+             value->state(0) == OperationJournalState::Copied);
 }
