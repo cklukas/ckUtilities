@@ -88,13 +88,16 @@ Observation<bool> verify_security(HANDLE file, PSID expected) {
     SECURITY_DESCRIPTOR_CONTROL control{}; DWORD revision{};
     if (!GetSecurityDescriptorControl(raw, &control, &revision))
         return failure<bool>(GetLastError(), "journal_file.GetSecurityDescriptorControl");
-    if (!owner || !IsValidSid(owner) || !EqualSid(owner, expected) || !acl || !IsValidAcl(acl) ||
-        !(control & SE_DACL_PROTECTED))
-        return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor");
+    if (!owner || !IsValidSid(owner) || !EqualSid(owner, expected))
+        return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.owner");
+    if (!acl || !IsValidAcl(acl))
+        return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.dacl");
+    if (!(control & SE_DACL_PROTECTED))
+        return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.protection");
     ACL_SIZE_INFORMATION info{};
     if (!GetAclInformation(acl, &info, sizeof(info), AclSizeInformation))
         return failure<bool>(GetLastError(), "journal_file.GetAclInformation");
-    if (info.AceCount != 2) return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace_count");
+    if (info.AceCount != 2) return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.ace_count");
     bool user = false, system = false;
     for (DWORD index = 0; index != info.AceCount; ++index) {
         void* raw_ace{};
@@ -102,13 +105,13 @@ Observation<bool> verify_security(HANDLE file, PSID expected) {
         const auto* ace = static_cast<const ACCESS_ALLOWED_ACE*>(raw_ace);
         if (ace->Header.AceType != ACCESS_ALLOWED_ACE_TYPE || ace->Header.AceFlags != 0 ||
             ace->Header.AceSize < sizeof(ACCESS_ALLOWED_ACE) || ace->Mask != FILE_ALL_ACCESS)
-            return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace");
+            return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.ace");
         auto* sid = reinterpret_cast<PSID>(const_cast<SID*>(reinterpret_cast<const SID*>(&ace->SidStart)));
         if (!IsValidSid(sid) || GetLengthSid(sid) > ace->Header.AceSize - offsetof(ACCESS_ALLOWED_ACE, SidStart))
-            return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace_sid");
+            return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.ace_sid");
         if (index == 0 && EqualSid(sid, expected)) user = true;
         else if (index == 1 && IsWellKnownSid(sid, WinLocalSystemSid)) system = true;
-        else return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.ace_principal");
+        else return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.ace_principal");
     }
     return Observation<bool>::available(user && system);
 }
