@@ -3,6 +3,7 @@
 #pragma once
 
 #include "operation_journal.hpp"
+#include "operation_metadata_job.hpp"
 #include "stream_copy_job.hpp"
 
 #include <functional>
@@ -12,8 +13,8 @@
 
 namespace ck::files {
 
-enum class OperationCopyState { Ready, Preparing, Copying, Verifying, Verified, Failed, Cancelled,
-                                NeedsReconciliation };
+enum class OperationCopyState { Ready, Preparing, Copying, PreparingMetadata, ApplyingMetadata,
+                                Verifying, Verified, Failed, Cancelled, NeedsReconciliation };
 
 struct OperationCopyRequest final {
     std::size_t item = 0;
@@ -24,6 +25,10 @@ struct OperationCopyRequest final {
     // unavailable result is conservative: the caller must reconcile ownership
     // before deciding whether any staging object exists.
     std::function<Observation<StreamCopyJob::Pointer>(std::stop_token)> prepare_copy;
+    // Creates the ordered metadata job against the still-private destination.
+    // It runs only after the stream copy has independently verified its bytes.
+    // An unavailable result requires reconciliation; no publication follows.
+    std::function<Observation<OperationMetadataJob::Pointer>(std::stop_token)> prepare_metadata;
     std::function<Observation<bool>(std::stop_token)> verify_copy;
     std::function<Observation<bool>(OperationJournalRecord)> append_journal;
 };
@@ -53,6 +58,7 @@ private:
     OperationCopyRequest request_;
     OperationCopyResult result_;
     StreamCopyJob::Pointer copy_;
+    OperationMetadataJob::Pointer metadata_;
 };
 
 } // namespace ck::files

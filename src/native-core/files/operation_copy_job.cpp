@@ -19,7 +19,8 @@ Observation<T> rejected(AdapterError code, const char* operation) {
 Observation<OperationCopyJob::Pointer> OperationCopyJob::create(OperationCopyRequest request) {
     if (!request.journal || request.item >= request.journal->limits().max_items ||
         request.journal->state(request.item) != OperationJournalState::Planned || !request.revalidate_source ||
-        !request.revalidate_destination || !request.prepare_copy || !request.verify_copy || !request.append_journal)
+        !request.revalidate_destination || !request.prepare_copy || !request.prepare_metadata ||
+        !request.verify_copy || !request.append_journal)
         return rejected<Pointer>(AdapterError::PlanInvalid, "operation_copy.request");
     return Observation<Pointer>::available(Pointer(new OperationCopyJob(std::move(request))));
 }
@@ -95,7 +96,40 @@ OperationCopyState OperationCopyJob::advance(std::stop_token stop) {
             if (copy_->failure()) result_.failure = copy_->failure();
             if (append(OperationJournalState::Failed)) result_.state = OperationCopyState::Failed;
         } else if (copied == StreamCopyState::Complete) {
-            if (append(OperationJournalState::Copied)) result_.state = OperationCopyState::Verifying;
+            if (append(OperationJournalState::Copied)) result_.state = OperationCopyState::PreparingMetadata;
+        }
+        return result_.state;
+    }
+    if (result_.state == OperationCopyState::PreparingMetadata) {
+        if (stop.stop_requested()) {
+            if (append(OperationJournalState::Cancelled)) result_.state = OperationCopyState::Cancelled;
+            return result_.state;
+        }
+        try {
+            auto prepared = request_.prepare_metadata(stop);
+            if (!prepared.value()) { fail(*prepared.unavailable_detail(), true); return result_.state; }
+            metadata_ = std::move(prepared).take_value();
+            if (!metadata_) {
+                fail(error(AdapterError::InvalidNativeResult, "operation_copy.metadata_prepare_null"), true);
+                return result_.state;
+            }
+        } catch (...) {
+            fail(error(AdapterError::InvalidNativeResult, "operation_copy.metadata_prepare_exception"), true);
+            return result_.state;
+        }
+        result_.state = OperationCopyState::ApplyingMetadata;
+        return result_.state;
+    }
+    if (result_.state == OperationCopyState::ApplyingMetadata) {
+        const auto metadata_state = metadata_->advance(stop);
+        if (metadata_state == OperationMetadataState::Cancelled) {
+            if (metadata_->failure()) result_.failure = metadata_->failure();
+            if (append(OperationJournalState::Cancelled)) result_.state = OperationCopyState::Cancelled;
+        } else if (metadata_state == OperationMetadataState::Failed) {
+            if (metadata_->failure()) result_.failure = metadata_->failure();
+            if (append(OperationJournalState::Failed)) result_.state = OperationCopyState::Failed;
+        } else if (metadata_state == OperationMetadataState::Complete) {
+            result_.state = OperationCopyState::Verifying;
         }
         return result_.state;
     }

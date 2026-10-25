@@ -54,6 +54,15 @@ OperationJournal::Pointer journal() {
     if (!value->append({1, 0, OperationJournalState::Planned, {}}).value()) return {};
     return value;
 }
+
+Observation<OperationMetadataJob::Pointer> no_op_metadata_job() {
+    OperationMetadataRequest request;
+    request.apply_traversal_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+    request.apply_security_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+    request.apply_final_times = [](std::stop_token) { return Observation<bool>::available(true); };
+    request.flush_destination = [](std::stop_token) { return Observation<bool>::available(true); };
+    return OperationMetadataJob::create(std::move(request));
+}
 }
 
 CK_TEST(operation_copy_job_durably_orders_prepare_copy_and_verify) {
@@ -70,6 +79,7 @@ CK_TEST(operation_copy_job_durably_orders_prepare_copy_and_verify) {
             ++preparations;
             return StreamCopyJob::create(memory.request());
         },
+        [](std::stop_token) { return no_op_metadata_job(); },
         [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
     };
@@ -95,6 +105,7 @@ CK_TEST(operation_copy_job_cancellation_before_prepare_is_journaled_without_nati
             return Observation<StreamCopyJob::Pointer>::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.prepare"});
         },
+        [](std::stop_token) { return no_op_metadata_job(); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
     };
@@ -116,6 +127,7 @@ CK_TEST(operation_copy_job_unknown_verification_failure_requires_reconciliation)
         [](std::stop_token) { return Observation<bool>::available(true); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [&memory](std::stop_token) { return StreamCopyJob::create(memory.request()); },
+        [](std::stop_token) { return no_op_metadata_job(); },
         [](std::stop_token) { return Observation<bool>::unavailable(ObservationState::Unknown,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.verify"}); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
@@ -126,4 +138,41 @@ CK_TEST(operation_copy_job_unknown_verification_failure_requires_reconciliation)
     auto job = std::move(created).take_value();
     for (unsigned step = 0; step != 20 && job->state() != OperationCopyState::NeedsReconciliation; ++step) job->advance();
     CK_CHECK(job->state() == OperationCopyState::NeedsReconciliation && value->state(0) == OperationJournalState::Copied);
+}
+
+CK_TEST(operation_copy_job_metadata_failure_prevents_verification) {
+    auto value = journal();
+    MemoryCopy memory;
+    unsigned verifications = 0;
+    auto request = OperationCopyRequest{
+        0, value,
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [&memory](std::stop_token) { return StreamCopyJob::create(memory.request()); },
+        [](std::stop_token) {
+            OperationMetadataRequest metadata;
+            metadata.apply_traversal_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+            metadata.apply_security_metadata = [](std::stop_token) {
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+                     "test.metadata_security"});
+            };
+            metadata.apply_final_times = [](std::stop_token) { return Observation<bool>::available(true); };
+            metadata.flush_destination = [](std::stop_token) { return Observation<bool>::available(true); };
+            return OperationMetadataJob::create(std::move(metadata));
+        },
+        [&verifications](std::stop_token) {
+            ++verifications;
+            return Observation<bool>::available(true);
+        },
+        [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+    };
+    auto created = OperationCopyJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 20 && job->state() != OperationCopyState::Failed &&
+         job->state() != OperationCopyState::NeedsReconciliation; ++step) job->advance();
+    CK_CHECK(job->state() == OperationCopyState::Failed && verifications == 0 &&
+             value->state(0) == OperationJournalState::Failed);
 }
