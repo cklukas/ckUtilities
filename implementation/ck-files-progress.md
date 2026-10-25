@@ -303,6 +303,21 @@ invoke this callback. Linux requalification and sanitizer/race checks for this
 change remain release gates; Windows remains gated by the unavailable `V:`
 development drive.
 
+Linux requalification of commit `3f818f9` used a fresh remote workspace at
+`/tmp/ckutilities-wp03-linux-3f818f9`. The pinned ckVision source
+`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` built and installed at
+09:56:39–09:58:54 UTC; the pinned llama.cpp source was `0124ac989f7e`.
+The ckUtilities target build ran at 09:59:07–10:07:05 UTC, with no source
+checkout or generated output reused from the prior Linux checkpoint. The
+production target, core suite and UI suite were rebuilt from the committed
+source; the UI suite passed **186** cases and the core suite passed **629**.
+An independent installed-package consumer configured, built and passed its
+CTest entry at 10:07:16–10:07:19 UTC. Output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `83df111ab08280d82f1397e8e1d742c3b53f8f1328745b9610306219078797b5`
+* `ck_files_core_tests` — `4fc4c863484bbb8d20eb054fc7e96206de2bbd5e9a520223f75cf576225dfca1`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
