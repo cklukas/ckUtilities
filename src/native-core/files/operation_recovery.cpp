@@ -127,4 +127,16 @@ Observation<OperationRecoveryReport> inspect_native_operation_recovery(
     return inspect_operation_recovery(*loaded.value()->journal, loaded.value()->tail);
 }
 
+Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery_evidence(
+    OperationJournalFile& file, OperationJournalLimits journal_limits,
+    OperationJournalCodecLimits codec_limits, NativeOperationRecoveryEvidenceLimits evidence_limits) {
+    auto loaded = load_operation_journal(file, journal_limits, codec_limits);
+    if (!loaded.value()) {
+        const auto& error = *loaded.unavailable_detail();
+        return Observation<NativeOperationRecoveryInspection>::unavailable(error.state, error.error);
+    }
+    return inspect_native_operation_recovery_evidence(
+        *loaded.value()->journal, loaded.value()->tail, evidence_limits);
+}
+
 } // namespace ck::files

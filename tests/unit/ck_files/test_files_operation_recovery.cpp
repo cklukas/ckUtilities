@@ -2,18 +2,45 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_recovery.hpp"
 #include "native_operation_recovery_evidence.hpp"
+#include "operation_journal_file.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
+#include <algorithm>
 #include <stdexcept>
+#include <vector>
 
 using namespace ck::files;
 
 namespace {
+class MemoryJournalFile final : public OperationJournalFile {
+public:
+    std::vector<std::byte> bytes;
+
+    Observation<std::uint64_t> size() override {
+        return Observation<std::uint64_t>::available(bytes.size());
+    }
+    Observation<std::size_t> read_at(std::uint64_t offset, std::span<std::byte> output) override {
+        if (offset > bytes.size())
+            return Observation<std::size_t>::unavailable(ObservationState::Gone,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "recovery.file_offset"});
+        const auto count = std::min(output.size(), bytes.size() - static_cast<std::size_t>(offset));
+        std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(offset), count, output.begin());
+        return Observation<std::size_t>::available(count);
+    }
+    Observation<std::size_t> write_at(std::uint64_t offset, std::span<const std::byte> input) override {
+        if (offset > bytes.size()) bytes.resize(static_cast<std::size_t>(offset));
+        if (offset + input.size() > bytes.size()) bytes.resize(static_cast<std::size_t>(offset + input.size()));
+        std::copy(input.begin(), input.end(), bytes.begin() + static_cast<std::ptrdiff_t>(offset));
+        return Observation<std::size_t>::available(input.size());
+    }
+    Observation<bool> flush() override { return Observation<bool>::available(true); }
+};
+
 OperationJournal::Pointer journal(FileOperation operation) {
     OperationJournalId id;
     id.bytes[0] = std::byte{0x71};
-    auto result = OperationJournal::create(operation, id, {4, 32, 64});
+    auto result = OperationJournal::create(operation, id, {4, 32, 4096});
     if (!result.value()) throw std::runtime_error("recovery journal fixture failed");
     return std::move(result).take_value();
 }
@@ -21,6 +48,15 @@ void append(const OperationJournal::Pointer& value, std::uint64_t sequence, std:
             OperationJournalState state) {
     if (!value->append({sequence, item, state, {}}).value())
         throw std::runtime_error("recovery state fixture failed");
+}
+
+NativeOperationRecoveryEvidence evidence() {
+    AdapterScope scope;
+    const auto identity = *NativeDurableIdentity::from_live(
+        {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(7),
+         NativeIdentifier::from_u64(8), {}});
+    return {*NativeName::from_posix(".ck-stage"), *NativeName::from_posix("destination"),
+            identity, identity, identity, identity};
 }
 }
 
@@ -121,4 +157,38 @@ CK_TEST(native_operation_recovery_projection_requires_review_for_missing_or_corr
              inspection.value()->artifacts.empty());
     if (inspection.value())
         CK_CHECK(inspection.value()->report.items[0].action == OperationRecoveryAction::RequireReview);
+}
+
+CK_TEST(native_operation_recovery_file_projection_loads_durable_evidence) {
+    MemoryJournalFile file;
+    auto value = journal(FileOperation::Copy);
+    CK_CHECK(append_operation_journal_file(file, *value,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+    auto encoded = encode_native_operation_recovery_evidence(evidence());
+    CK_CHECK(encoded.value());
+    if (!encoded.value()) return;
+    CK_CHECK(append_operation_journal_file(file, *value,
+        {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
+
+    auto inspection = inspect_native_operation_recovery_evidence(file, {2, 8, 4096});
+    CK_CHECK(inspection.value() && inspection.value()->artifacts.size() == 1 &&
+             !inspection.value()->has_untrusted_evidence);
+    if (inspection.value())
+        CK_CHECK(inspection.value()->artifacts[0].evidence.staging_identity.has_value() &&
+                 inspection.value()->report.items[0].action == OperationRecoveryAction::InspectUnpublishedStaging);
+}
+
+CK_TEST(native_operation_recovery_file_projection_keeps_truncated_tail_review_only) {
+    MemoryJournalFile file;
+    auto value = journal(FileOperation::Copy);
+    CK_CHECK(append_operation_journal_file(file, *value,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+    file.bytes.push_back(std::byte{0xff});
+
+    auto inspection = inspect_native_operation_recovery_evidence(file, {2, 8, 4096});
+    CK_CHECK(inspection.value() && inspection.value()->report.has_untrusted_tail &&
+             inspection.value()->has_untrusted_evidence && inspection.value()->report.requires_reconciliation);
+    if (inspection.value())
+        CK_CHECK(inspection.value()->report.items[0].action == OperationRecoveryAction::RequireReview &&
+                 inspection.value()->artifacts.empty());
 }

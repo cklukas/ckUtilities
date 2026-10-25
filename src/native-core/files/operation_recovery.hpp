@@ -68,4 +68,12 @@ Observation<OperationRecoveryReport> inspect_native_operation_recovery(
     OperationJournalFile& file, OperationJournalLimits journal_limits = {},
     OperationJournalCodecLimits codec_limits = {});
 
+// Read-only native startup composition. This retains the durable loader's
+// explicit tail condition while also projecting the latest native evidence;
+// an untrusted tail or evidence record remains review-only.
+Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery_evidence(
+    OperationJournalFile& file, OperationJournalLimits journal_limits = {},
+    OperationJournalCodecLimits codec_limits = {},
+    NativeOperationRecoveryEvidenceLimits evidence_limits = {});
+
 } // namespace ck::files
