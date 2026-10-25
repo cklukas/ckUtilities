@@ -394,6 +394,22 @@ The verified Linux output hashes are:
 * `ck_vision_files_tests` — `039fcd16e1d8e7e116c719baa55ad270efccc4cd509fa7b955e12752af1f674a`
 * `ck_files_core_tests` — `f22f472955268f2a9e0d1407022759b45ad47ee44da03913fe99df0079668600`
 
+## WP-03 — completed object-inventory evidence composition
+
+Added `OperationEvidenceAssembly`, the worker-facing value boundary that
+projects one completed `ObjectInventoryData` per frozen inventory item and
+passes the resulting source evidence through immutable operation-plan
+assembly. It requires exact item-shape correspondence, bounds total retained
+source evidence, propagates projection failures without downgrading them, and
+keeps destination observations and conflict rows explicit. It performs no
+native I/O, path reopening, probing, normalization or mutation; execution-time
+revalidation remains mandatory.
+
+The focused Mac suite passes **3** new cases, and the full strict Mac core and
+Files UI suites pass **640** and **186** cases respectively at 10:27:46–10:27:50
+UTC. Linux qualification, sanitizer/race checks and the mandatory Windows gate
+remain pending for this slice. No mutation or production GUI launch is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
