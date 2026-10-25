@@ -119,6 +119,23 @@ regeneration. `test_files_frozen_inventory` passed, and the complete
 capability comparison and review presentation remain separate follow-up slices;
 this checkpoint does not authorize mutation.
 
+## WP-03 — preservation capability differences
+
+The next slice adds `PreservationCapabilityDiff`, which compares explicit
+worker-produced source feature evidence with an immutable destination
+capability snapshot. It distinguishes absent source features from missing,
+unsupported, denied, changed and unknown destination knowledge; unknown or
+denied source/destination evidence is marked hard for consent. Duplicate
+capability mappings, missing feature mappings and invalid issue limits are
+rejected instead of being merged or treated as absence. The result is only a
+bounded list of `PreservationIssue` records and performs no I/O, probing,
+normalization or mutation.
+
+The macOS strict target rebuild ran at 08:45:19–08:45:33 CET after CMake
+regeneration. `test_files_preservation_capability_diff` passed, and the
+complete `ck_files_core_tests` binary passed all 617 cases. Review dialogs and
+the worker adapter that supplies this snapshot remain follow-up work.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
