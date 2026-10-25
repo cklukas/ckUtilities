@@ -57,6 +57,7 @@ CK_TEST(operation_journal_move_requires_source_intent_and_retirement_after_desti
 
 CK_TEST(operation_journal_rejects_gaps_invalid_edges_and_terminal_rewrites) {
     auto value = journal();
+    CK_CHECK(!value->validate({2, 0, OperationJournalState::Planned, {}}).value() && value->records().empty());
     CK_CHECK(!value->append({2, 0, OperationJournalState::Planned, {}}).value());
     append(value, 1, 0, OperationJournalState::Planned);
     CK_CHECK(!value->append({2, 0, OperationJournalState::Copied, {}}).value());

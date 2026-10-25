@@ -71,6 +71,7 @@ public:
     // The first record for each item must be Planned. Every later record must
     // be the next legal state for that same item and sequences are global,
     // contiguous and strictly monotonic. Rejected records are not retained.
+    Observation<bool> validate(const OperationJournalRecord& record) const;
     Observation<bool> append(OperationJournalRecord record);
 
     std::optional<OperationJournalState> state(std::size_t item) const noexcept;

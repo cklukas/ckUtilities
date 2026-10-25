@@ -131,6 +131,19 @@ Observation<OperationJournal::Pointer> OperationJournal::create(FileOperation op
 }
 
 Observation<bool> OperationJournal::append(OperationJournalRecord record) {
+    auto valid = validate(record);
+    if (!valid.value())
+        return valid;
+    try {
+        records_.push_back(std::move(record));
+    } catch (...) {
+        return rejected<bool>(AdapterError::InventoryLimit, "operation_journal.append",
+                              ObservationState::Unknown);
+    }
+    return Observation<bool>::available(true);
+}
+
+Observation<bool> OperationJournal::validate(const OperationJournalRecord &record) const {
     if (!valid_state(record.state))
         return rejected<bool>(AdapterError::PlanInvalid, "operation_journal.state");
     if (record.item >= limits_.max_items || record.evidence.size() > limits_.max_evidence_bytes)
@@ -148,12 +161,6 @@ Observation<bool> OperationJournal::append(OperationJournalRecord record) {
             return rejected<bool>(AdapterError::PlanInvalid, "operation_journal.transition");
     } else if (record.state != OperationJournalState::Planned) {
         return rejected<bool>(AdapterError::PlanInvalid, "operation_journal.first_state");
-    }
-    try {
-        records_.push_back(std::move(record));
-    } catch (...) {
-        return rejected<bool>(AdapterError::InventoryLimit, "operation_journal.append",
-                              ObservationState::Unknown);
     }
     return Observation<bool>::available(true);
 }
@@ -210,6 +217,9 @@ Observation<OperationJournalDecode> decode_operation_journal(std::span<const std
         return journal_rejected<OperationJournalDecode>(
             journal_error(bytes.empty() ? AdapterError::PlanInvalid : AdapterError::InventoryLimit,
                           "operation_journal.input", bytes.empty() ? ObservationState::Failed : ObservationState::Unknown));
+    if (!valid_limits(journal_limits))
+        return journal_rejected<OperationJournalDecode>(
+            journal_error(AdapterError::InvalidLimit, "operation_journal.journal_limits"));
     std::size_t offset = 0;
     OperationJournal::Pointer journal;
     std::optional<UnavailableObservation> tail;
