@@ -790,6 +790,16 @@ unavailable mandatory `V:` workstation drive. Metadata preservation, safe
 publication, source retirement, crash recovery orchestration and mutation UI
 remain pending; no copy/move command is enabled.
 
+Commit `17503ea` adds the journal-driven commit job contract. It revalidates
+source and destination before recording commit intent, never invokes a
+publication adapter before that durable intent, and separates Copy completion
+from Move source retirement. Cancellation after destination publication
+records `RetainedSource`; known revalidation failures record terminal `Failed`;
+ambiguous publication or retirement stays `NeedsReconciliation`. Four cases
+pass under normal, ASan/UBSan and TSan core builds. This remains an injected
+worker boundary: native publication, metadata restoration and source removal
+adapters are not connected, and no mutation UI command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
