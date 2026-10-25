@@ -886,6 +886,11 @@ public:
         std::wstring spelling;
         spelling.reserve(destination_units->size());
         for (const auto unit : *destination_units) spelling.push_back(static_cast<wchar_t>(unit));
+        auto destination_access = target->open_namespace_write_handle();
+        if (!destination_access.value()) {
+            const auto& error = *destination_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
         const auto length = spelling.size() * sizeof(WCHAR);
         if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
             return Result::unavailable(ObservationState::Failed,
@@ -893,7 +898,7 @@ public:
         std::vector<std::byte> buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
         auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
         info->ReplaceIfExists = FALSE;
-        info->RootDirectory = target->handle_.get();
+        info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, spelling.data(), length);
         if (!SetFileInformationByHandle(source.get(), FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
@@ -919,7 +924,7 @@ public:
             compare_identity(*published_metadata.value()->identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "rename_child_noreplace.destination_identity"});
-        if (!FlushFileBuffers(handle_.get()) || !FlushFileBuffers(target->handle_.get()))
+        if (!FlushFileBuffers(handle_.get()) || !FlushFileBuffers(destination_access.value()->get()))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Win32, GetLastError(), "rename_child_noreplace.directory_flush"});
         return Result::available(true);
@@ -977,6 +982,11 @@ public:
         std::wstring spelling;
         spelling.reserve(destination_units->size());
         for (const auto unit : *destination_units) spelling.push_back(static_cast<wchar_t>(unit));
+        auto destination_access = open_namespace_write_handle();
+        if (!destination_access.value()) {
+            const auto& error = *destination_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
         const auto length = spelling.size() * sizeof(WCHAR);
         if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
             return Result::unavailable(ObservationState::Failed,
@@ -984,7 +994,7 @@ public:
         std::vector<std::byte> buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
         auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
         info->ReplaceIfExists = FALSE;
-        info->RootDirectory = handle_.get();
+        info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, spelling.data(), length);
         if (!SetFileInformationByHandle(source.get(), FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
@@ -1009,7 +1019,7 @@ public:
             compare_identity(*renamed_metadata.value()->identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "rename_child_case_only.destination_identity"});
-        if (!FlushFileBuffers(handle_.get()))
+        if (!FlushFileBuffers(destination_access.value()->get()))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Win32, GetLastError(), "rename_child_case_only.directory_flush"});
         return Result::available(true);
@@ -1025,10 +1035,15 @@ public:
         if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "publish_noreplace.name_limit"});
+        auto destination_access = open_namespace_write_handle();
+        if (!destination_access.value()) {
+            const auto& error = *destination_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
         std::vector<std::byte> buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
         auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
         info->ReplaceIfExists = FALSE;
-        info->RootDirectory = handle_.get();
+        info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, units->data(), length);
         if (!SetFileInformationByHandle(source, FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
@@ -1056,7 +1071,7 @@ public:
             !destination_metadata.value()->kind.value() || *destination_metadata.value()->kind.value() != ObjectKind::RegularFile)
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "publish_noreplace.destination_identity"});
-        if (!FlushFileBuffers(handle_.get()))
+        if (!FlushFileBuffers(destination_access.value()->get()))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Win32, GetLastError(), "publish_noreplace.directory_flush"});
         return Result::available(true);
@@ -1250,6 +1265,41 @@ private:
         if (!checked.value()) { const auto& e = *checked.unavailable_detail(); return Result::unavailable(e.state, e.error); }
         const auto final_guard = detail::data_layout_access_guard(*after.value(), StorageModel::WindowsHandleAttributes);
         if (!final_guard.value()) { const auto& e = *final_guard.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        return Result::available(std::move(opened));
+    }
+    Observation<OwnedHandle> open_namespace_write_handle() const {
+        using Result = Observation<OwnedHandle>;
+        const auto current = identity();
+        if (!current.value()) {
+            const auto& error = *current.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        FILE_ID_DESCRIPTOR descriptor{};
+        descriptor.dwSize = sizeof(descriptor);
+        if (current.value()->scheme == IdentityScheme::WindowsFileId128) {
+            descriptor.Type = ExtendedFileIdType;
+            std::memcpy(descriptor.ExtendedFileId.Identifier, current.value()->object.bytes.data(),
+                        sizeof(descriptor.ExtendedFileId.Identifier));
+        } else if (current.value()->scheme == IdentityScheme::WindowsFileIndex64) {
+            descriptor.Type = FileIdType;
+            std::memcpy(&descriptor.FileId.QuadPart, current.value()->object.bytes.data(),
+                        sizeof(descriptor.FileId.QuadPart));
+        } else {
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                 "publish_noreplace.directory_scheme"});
+        }
+        OwnedHandle opened(OpenFileById(handle_.get(), &descriptor,
+            FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
+        if (opened.get() == nullptr || opened.get() == INVALID_HANDLE_VALUE)
+            return failure<OwnedHandle>(GetLastError(), "publish_noreplace.directory_access");
+        const auto observed = ::ck::files::identity(opened.get(), scope_);
+        if (!observed.value() || compare_identity(*observed.value(), *current.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                 "publish_noreplace.directory_identity"});
         return Result::available(std::move(opened));
     }
     Observation<OwnedHandle> open_native_component(const NativeName& name, ACCESS_MASK rights, ChildLookupMode mode) const {
