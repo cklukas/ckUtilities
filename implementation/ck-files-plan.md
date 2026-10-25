@@ -1,12 +1,12 @@
 # Files (`ck-files`) — implementation work packages
 
 Status: implementation active; WP-00 and WP-01 complete. WP-02 feature
-implementation and current-source macOS/Linux qualification are complete;
-final WP-02 acceptance remains open for the mandatory Windows `V:` workstation
-qualification and the pinned ckVision UI sanitizer defect documented in the
+implementation and current-source normal qualification are complete on
+macOS, Linux and Windows. Final WP-02 acceptance remains open for interactive
+real-window acceptance and sanitizer/runtime gates documented in the
 [implementation evidence](ck-files-progress.md). The production `ck-files`
-executable is integrated and has passed real-terminal checks on macOS and
-Linux.
+executable is integrated and has passed the available real-terminal checks on
+macOS and Linux.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
 
 Execution: WP-00 and WP-01 complete; WP-02 feature implementation is complete

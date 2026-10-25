@@ -5,6 +5,47 @@ Progress here does not enable unimplemented capabilities or relax release gates.
 
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
+The earlier qualification note below is retained as historical evidence. The
+current-source qualification was refreshed on 2026-10-25 after the Windows
+native publication hardening and two GCC portability fixes.
+
+## 2026-10-25 — current-source three-platform qualification
+
+The Windows workstation was qualified through `ssh workstation` using only the
+required `V:` development drive. Source, SDK staging, build output, scratch
+data and logs were under
+`V:\dev\ckutilities` or
+`V:\tmp\ckutilities-windows-qualification-20261025-01`, with `TEMP`,
+`TMP` and `TMPDIR` set to its task-specific `V:` scratch directory. The
+ckVision SDK was pinned to `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`; the
+standard test harness was restored after temporary diagnosis and its source
+and SDK headers matched by SHA-256. The final Release target rebuild and
+standard `ctest -L files` run passed **106/106** tests in 39.99 seconds.
+
+Linux was refreshed from the same source snapshot in
+`/home/klukas/tmp/ckutilities-linux-qualification-20261025-01`, with
+`TMPDIR` set to its task-local `tmp` directory. The current Release rebuild
+completed at 21:36:29–21:58:41 CET and `ctest -L files` passed **106/106**
+tests at 21:58:41–21:59:24 CET. This includes the recursive-inventory and
+POSIX link-limit fixes that were required by GCC 14's `-Werror=array-bounds`
+diagnostics.
+
+The Linux ASan/UBSan target also built successfully. Its test run cannot be
+classified as a code pass on this host: every instrumented process aborts
+before entering test code because the Raspberry Pi 4 kernel is configured for
+39-bit AArch64 virtual addresses (`CONFIG_ARM64_VA_BITS=39`), while the
+installed GCC 14 sanitizer runtime requires the 48-bit allocator layout. No
+ASan suppression, kernel change, compiler-runtime rebuild, or application
+workaround was introduced. The macOS focused ASan/UBSan and TSan records
+remain the applicable sanitizer evidence for the current source; the full
+macOS ckVision UI sanitizer gate remains blocked by the pinned upstream
+ckVision `Desktop` command-vector defect described below.
+
+The normal three-platform result is green, but WP-02 remains open until the
+actual user-facing window is inspected interactively and the unsupported
+sanitizer/runtime gates are resolved or explicitly accepted with a supported
+toolchain/host. No mutation command is enabled by this qualification record.
+
 The worker-backed location completion integration is committed as `7e4ecfa`;
 the production native host and installed `ck-files` executable are committed
 as `c59b900`; asynchronous route history/bookmarks are committed as
@@ -45,9 +86,8 @@ The Mac ASan/UBSan full Files run remains blocked by a reproducible heap
 buffer-overflow in the untouched pinned ckVision 1.4.0 `Desktop` command-vector
 growth path while constructing `SuiteShell`; a minimal SDK consumer reproduces
 it without Files code. No sanitizer suppression or application workaround was
-introduced. The Windows qualification is also blocked: the active workstation
-session exposes only `C:` and `T:`, not the mandatory `V:` development drive,
-so no Windows source, cache, build, or test data was created outside `V:`.
+introduced. The Windows qualification was subsequently completed on the
+mandatory `V:` drive as recorded above.
 
 The history/bookmark checkpoint keeps one route history and bookmark set per
 pane. A successful worker acknowledgment appends a route and truncates only
