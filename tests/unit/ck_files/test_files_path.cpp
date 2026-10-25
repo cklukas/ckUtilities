@@ -154,3 +154,20 @@ CK_TEST(path_requested_parent_and_root_refuse_moved_values_and_keep_large_qualif
     CK_CHECK(take(p.parent_address()).posix_bytes()->size() == 300001);
     CK_CHECK(*take(p.namespace_root()).posix_bytes() == "/");
 }
+
+CK_TEST(path_child_address_preserves_native_units_and_refuses_foreign_or_oversize_components) {
+    const auto posix = take(NativeAbsolutePath::from_posix("/root/"));
+    std::string raw_bytes = "raw\\name"; raw_bytes.push_back(static_cast<char>(0xff));
+    const auto raw = *NativeName::from_posix(raw_bytes);
+    CK_CHECK(*take(posix.child_address(raw)).posix_bytes() == std::string("/root/") + raw_bytes);
+    const auto windows = take(NativeAbsolutePath::from_windows(u"V:/root/"));
+    const auto name = *NativeName::from_windows(std::u16string(u"raw") + char16_t{0xd800});
+    CK_CHECK(*take(windows.child_address(name)).windows_units() ==
+        std::u16string(u"V:/root/raw") + char16_t{0xd800});
+    CK_CHECK(posix.child_address(name).state() == ObservationState::Failed);
+    NativePathLimits limits; limits.max_native_bytes = 5;
+    CK_CHECK(posix.child_address(*NativeName::from_posix("long"), limits).state() == ObservationState::Unknown);
+    auto moved = posix; const auto empty = std::move(moved);
+    CK_CHECK(!moved.child_address(*NativeName::from_posix("x")).value());
+    CK_CHECK(empty.child_address(*NativeName::from_posix("x")).value());
+}

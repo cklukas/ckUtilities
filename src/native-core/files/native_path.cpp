@@ -144,6 +144,27 @@ Observation<NativeAbsolutePath> NativeAbsolutePath::from_host(const std::filesys
     return from_posix(path.native(), limits);
 #endif
 }
+Observation<NativeAbsolutePath> NativeAbsolutePath::child_address(const NativeName& component,
+    NativePathLimits limits) const {
+    if (!is_valid()) return error<NativeAbsolutePath>(ObservationState::Failed, AdapterError::InvalidPath,
+        "native_path.child_parent");
+    if (!component.is_valid() || component.encoding() != encoding())
+        return error<NativeAbsolutePath>(ObservationState::Failed, AdapterError::InvalidIdentifier,
+            "native_path.child_component");
+    if (const auto* bytes = posix_bytes()) {
+        const auto* name = component.posix_bytes();
+        std::string value = *bytes;
+        if (value.empty() || value.back() != '/') value.push_back('/');
+        value += *name;
+        return from_posix(value, limits);
+    }
+    const auto* units = windows_units();
+    const auto* name = component.windows_units();
+    std::u16string value = *units;
+    if (value.empty() || (value.back() != u'/' && value.back() != u'\\')) value.push_back(u'\\');
+    value += *name;
+    return from_windows(value, limits);
+}
 bool NativeAbsolutePath::is_valid() const noexcept {
     if (const auto* bytes = posix_bytes()) return bytes->size() <= NativePathLimits::hard_native_bytes && valid_posix(*bytes);
     const auto* units = windows_units();

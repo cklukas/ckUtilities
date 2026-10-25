@@ -25,6 +25,10 @@ public:
     static Observation<NativeAbsolutePath> from_posix(std::string_view bytes, NativePathLimits limits = {});
     static Observation<NativeAbsolutePath> from_windows(std::u16string_view units, NativePathLimits limits = {});
     static Observation<NativeAbsolutePath> from_host(const std::filesystem::path& path, NativePathLimits limits = {});
+    // Append one exact native basename without parsing display text, changing
+    // encoding, normalizing separators, or resolving links/dot components.
+    Observation<NativeAbsolutePath> child_address(const NativeName& component,
+        NativePathLimits limits = {}) const;
     // A foreign encoding is Unsupported, never silently transcoded. This
     // constructs an exact native host path; it performs no filesystem access.
     Observation<std::filesystem::path> host_path() const;
