@@ -994,6 +994,17 @@ normal, ASan and TSan macOS builds, and does not mutate the POSIX fixture.
 Windows compilation and execution remain gated by the mandatory unavailable
 `V:` workstation.
 
+Commit `bb5e110` adds a separate worker-only case-only rename boundary. It
+requires distinct native source/destination spellings, revalidates the held
+source identity, rejects regular-file hard-link ambiguity, proves that the
+case-insensitive destination lookup is the same object, uses Windows
+handle-based no-replace rename, reopens the destination and flushes the held
+parent before success. POSIX remains explicitly `Unsupported` because the
+adapter has no qualified native case-only identity proof. The fresh macOS
+arm64 Debug build against pinned ckVision 1.4.0 passed the focused native case
+and its CTest entry; Windows compilation/execution remains gated by the
+mandatory unavailable `V:` workstation.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
