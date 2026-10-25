@@ -118,3 +118,47 @@ CK_TEST(operation_commit_job_revalidation_failure_is_durable_and_starts_no_mutat
     CK_CHECK(job->advance() == OperationCommitState::Failed);
     CK_CHECK(publications == 0 && value->state(0) == OperationJournalState::Failed);
 }
+
+CK_TEST(operation_commit_job_journal_intent_failure_prevents_publication) {
+    auto value = journal(FileOperation::Copy);
+    unsigned publications = 0;
+    auto request_value = request(FileOperation::Copy, value);
+    request_value.append_journal = [](OperationJournalRecord) {
+        return Observation<bool>::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.intent_flush"});
+    };
+    request_value.commit_destination = [&](std::stop_token) {
+        ++publications;
+        return Observation<bool>::available(true);
+    };
+    auto created = OperationCommitJob::create(std::move(request_value));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    CK_CHECK(job->advance() == OperationCommitState::NeedsReconciliation);
+    CK_CHECK(publications == 0 && value->state(0) == OperationJournalState::Verified);
+}
+
+CK_TEST(operation_commit_job_post_publication_journal_failure_stops_before_source_retirement) {
+    auto value = journal(FileOperation::Move);
+    unsigned records = 0, retirements = 0;
+    auto request_value = request(FileOperation::Move, value);
+    request_value.append_journal = [&records, &value](OperationJournalRecord record) {
+        ++records;
+        if (record.state == OperationJournalState::DestinationCommitted)
+            return Observation<bool>::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.commit_flush"});
+        return value->append(std::move(record));
+    };
+    request_value.retire_source = [&](std::stop_token) {
+        ++retirements;
+        return Observation<bool>::available(true);
+    };
+    auto created = OperationCommitJob::create(std::move(request_value));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    CK_CHECK(job->advance() == OperationCommitState::CommittingDestination);
+    CK_CHECK(job->advance() == OperationCommitState::NeedsReconciliation);
+    CK_CHECK(records == 2 && retirements == 0 && value->state(0) == OperationJournalState::CommitIntended);
+}

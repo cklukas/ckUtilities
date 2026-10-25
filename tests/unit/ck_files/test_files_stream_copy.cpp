@@ -151,4 +151,16 @@ CK_TEST(stream_copy_job_cancellation_and_flush_failure_are_terminal_without_succ
             job->advance();
         CK_CHECK(job->state() == StreamCopyState::Failed && !job->result().error.value().error.operation.empty());
     }
+
+    MemoryCopy cancelled;
+    cancelled.source = bytes("cancel before start");
+    auto cancelled_job_result = StreamCopyJob::create(cancelled.request());
+    CK_CHECK(cancelled_job_result.value());
+    if (cancelled_job_result.value()) {
+        auto cancelled_job = std::move(cancelled_job_result).take_value();
+        std::stop_source stop;
+        stop.request_stop();
+        CK_CHECK(cancelled_job->advance(stop.get_token()) == StreamCopyState::Cancelled);
+        CK_CHECK(cancelled.flushes == 0 && cancelled_job->failure());
+    }
 }
