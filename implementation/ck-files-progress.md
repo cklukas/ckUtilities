@@ -765,6 +765,17 @@ Windows remains gated by the unavailable mandatory `V:` development drive;
 no Windows checkout, build, cache or temporary artifact was created. No copy,
 move, replacement, deletion or other mutation command is enabled.
 
+Commit `9346516` adds the worker-owned streaming copy state machine and a
+dependency-free SHA-256 implementation. It bounds each source read, rejects
+zero/over-count writes and source no-progress, tolerates short writes within a
+bounded attempt budget, flushes before verification, rereads the destination
+independently, and refuses digest or length mismatches. Cancellation, adapter
+exceptions and flush failures are terminal non-success outcomes. Four copy/
+digest cases pass under normal, ASan/UBSan and TSan core builds; the complete
+normal macOS core suite passes **664** cases. Native platform read/write,
+metadata preservation, safe publication and durable recovery remain pending;
+no mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
