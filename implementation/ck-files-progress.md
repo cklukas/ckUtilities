@@ -410,6 +410,19 @@ Files UI suites pass **640** and **186** cases respectively at 10:27:46–10:27:
 UTC. Linux qualification, sanitizer/race checks and the mandatory Windows gate
 remain pending for this slice. No mutation or production GUI launch is enabled.
 
+Linux requalification of commit `406fac6` used the fresh source/build root
+`/tmp/ckutilities-wp03-linux-406fac6` with the unchanged pinned ckVision and
+llama.cpp inputs. Strict configure ran at 10:28:02–10:28:08 UTC and the
+project target build ran at 10:28:08–10:33:26 UTC under GCC 14. The rebuilt
+core suite passed **640** cases at 10:33:28–10:33:29 and the Files UI suite
+passed **186** cases at 10:33:29–10:33:31. The independent installed-package
+consumer configured, built and passed its CTest entry at 10:33:35–10:33:37.
+The verified Linux output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `8209a0752920f41c2306dda6939cf64fae5ff36abcb749203e420bfa93cc4b95`
+* `ck_files_core_tests` — `a7bcbd1871ebb931a7471ee85147e0f6fbf7eee60ce16b51800be6f1752fd566`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
