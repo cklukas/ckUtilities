@@ -3,10 +3,12 @@
 #pragma once
 
 #include "operation_execution_job.hpp"
+#include "operation_batch_job.hpp"
 #include "operation_journal_file.hpp"
 
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace ck::files {
 
@@ -49,6 +51,14 @@ public:
     const OperationExecutionResult& result() const noexcept { return execution_->result(); }
     OperationExecutionState advance(std::stop_token stop = {});
 
+    // Transfers the worker-bound execution job into the serialized batch
+    // coordinator. The callbacks retain State, so native owners remain alive
+    // after this wrapper is moved and never cross into UI state.
+    OperationExecutionJob::Pointer release_execution_job() && noexcept {
+        state_.reset();
+        return std::move(execution_);
+    }
+
 private:
     struct State;
     NativeOperationCopyJob(std::shared_ptr<State> state, OperationExecutionJob::Pointer execution) noexcept
@@ -57,5 +67,10 @@ private:
     std::shared_ptr<State> state_;
     OperationExecutionJob::Pointer execution_;
 };
+
+// Composes already-qualified native copy jobs without changing their
+// per-item journal or failure semantics. The batch remains strictly ordered.
+Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
+    std::vector<NativeOperationCopyJob::Pointer> jobs);
 
 } // namespace ck::files

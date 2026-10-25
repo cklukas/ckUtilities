@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_batch_job.hpp"
+#include "native_operation_copy_job.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
@@ -177,4 +178,12 @@ CK_TEST(operation_batch_job_cancellation_does_not_start_pending_items) {
     CK_CHECK(job->result().items[0].outcome == OperationItemOutcome::Complete);
     CK_CHECK(job->result().items[1].outcome == OperationItemOutcome::Pending);
     CK_CHECK(first_commits == 1 && second_commits == 0);
+}
+
+CK_TEST(native_operation_copy_batch_rejects_null_worker_jobs) {
+    std::vector<NativeOperationCopyJob::Pointer> jobs;
+    jobs.push_back({});
+    const auto result = create_native_operation_copy_batch(std::move(jobs));
+    CK_CHECK(!result.value() && result.state() == ObservationState::Failed &&
+        result.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::PlanInvalid));
 }

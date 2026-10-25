@@ -177,4 +177,17 @@ OperationExecutionState NativeOperationCopyJob::advance(std::stop_token stop) {
     return execution_->advance(stop);
 }
 
+Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
+    std::vector<NativeOperationCopyJob::Pointer> jobs) {
+    OperationBatchRequest request;
+    request.jobs.reserve(jobs.size());
+    for (auto& job : jobs) {
+        if (!job)
+            return rejected<OperationBatchJob::Pointer>(AdapterError::PlanInvalid,
+                                                        "native_operation_batch.null_job");
+        request.jobs.push_back(std::move(*job).release_execution_job());
+    }
+    return OperationBatchJob::create(std::move(request));
+}
+
 } // namespace ck::files
