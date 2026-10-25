@@ -908,6 +908,15 @@ Commit `001fca7` makes that proof type-safe: the Move boundary accepts only
 `BeforeAfterObservation` value is rejected and records `RetainedSource`.
 Focused macOS ASan/UBSan and TSan runs pass after this refinement.
 
+Commit `9d109ca` adds the worker-only `DirectoryCursor::retire_child` safety
+boundary. POSIX keeps the default `Unsupported` result because its adapter has
+no qualified compare-and-delete primitive; the native test proves the source
+remains untouched. Windows has a guarded implementation that opens the child
+relative to the held directory with DELETE access, checks the expected native
+identity, rejects hard-link aliases, applies handle-based disposition, and
+flushes the parent directory. Windows compilation/execution remains unclaimed
+until the mandatory `V:` workstation is available.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
