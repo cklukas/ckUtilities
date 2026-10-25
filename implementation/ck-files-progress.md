@@ -861,6 +861,18 @@ representing **675 core** and **168 native** cktest cases. Windows compilation
 and execution remain gated by the unavailable mandatory `V:` workstation drive;
 no replacement, move, delete or UI mutation command is enabled.
 
+Commit `682794f` adds the ordered metadata-application worker boundary. It
+requires explicit callbacks for traversal-preserving metadata, security,
+final timestamps and destination flush; applies them in that order; stops
+before the next phase on cancellation; and prevents later phases after a
+failure or exception. This is still an injected ordering contract: native
+metadata setters and preservation receipts are not connected, and the private
+destination is not published by this job. Three core cases pass under normal,
+ASan/UBSan and TSan macOS builds. The complete normal macOS Files CTest set
+passes all **103** registered tests, representing **678 core** and **168
+native** cktest cases. Windows compilation/execution remains gated by the
+unavailable mandatory `V:` workstation drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
