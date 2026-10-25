@@ -63,6 +63,28 @@ green. No mutation command is enabled in `ck-files`, and
 metadata adapters, recovery cleanup, replacement, move retirement, Trash or
 deletion remain gated behind their own complete work packages.
 
+## 2026-10-25 — WP-04 staging-cleanup safety boundary
+
+Commit `facc5b0` adds a worker-only `discard_child` boundary and
+`NativeOperationCopyJob::cleanup_unpublished_staging()`. Cleanup is permitted
+only for a terminal Failed/Cancelled job whose journal has not crossed an
+ambiguous publication state; it re-inspects the held staging object and binds
+the disposition to its identity. Windows uses the qualified handle-bound
+disposition and flushes a namespace-write handle. POSIX/macOS explicitly
+return Unsupported because a pathname unlink after an identity check would
+retain a race against replacement; no unsafe fallback was added. The cleanup
+API is not exposed as a UI command and does not touch recovery-ambiguous
+artifacts.
+
+The post-commit full current-source `ctest -L files` matrix passed **106/106**
+on macOS in 13.06 seconds (21:51:35–21:51:49 UTC), Windows in 27.85 seconds
+(21:51:39–21:52:07 UTC), and Linux in 41.33 seconds
+(21:51:36–21:52:17 UTC). The native staging-content suite passed on all three
+platforms, including the Windows positive handle-disposition case and the
+POSIX/macOS refusal cases. Recovery cleanup for process-crash artifacts still
+requires exact journal/artifact identity evidence and remains unimplemented;
+no mutation command is enabled in `ck-files`.
+
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
 The earlier qualification note below is retained as historical evidence. The
