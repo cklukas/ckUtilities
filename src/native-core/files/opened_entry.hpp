@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <stop_token>
 #include <vector>
 
@@ -50,6 +51,12 @@ struct ContentReadLimits {
 struct ContentRead {
     std::vector<std::byte> bytes;
     bool complete = false;
+};
+
+struct ContentWriteLimits {
+    std::size_t max_bytes = 4 * 1024 * 1024;
+    static constexpr std::size_t hard_max_bytes = 4 * 1024 * 1024;
+    bool valid() const noexcept { return max_bytes > 0 && max_bytes <= hard_max_bytes; }
 };
 
 // Owns the opened object, independently of the original parent/name. Queries
@@ -92,6 +99,12 @@ public:
     virtual Observation<NativeSecurityValue> read_security(SecurityPart part, InventoryLimits limits = {}) const;
     virtual Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                                    std::stop_token stop = {}) const;
+    // Explicit staging-file write boundary. The object must have been created
+    // by the worker's held parent with write access; this is not a path-based
+    // replacement API and does not publish a destination name.
+    virtual Observation<std::size_t> write_content(std::uint64_t offset, std::span<const std::byte> bytes,
+                                                    ContentWriteLimits limits = {}, std::stop_token stop = {});
+    virtual Observation<bool> flush_content();
 protected:
     OpenedEntry() = default;
 };

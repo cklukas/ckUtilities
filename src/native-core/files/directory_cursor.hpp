@@ -65,6 +65,11 @@ public:
     // cwd. Name resolution is native-default, not exact-spelling certification.
     // No recursive traversal, mount confinement, provider or snapshot guarantee.
     virtual Observation<std::unique_ptr<DirectoryCursor>> open_directory_child(const NativeName& name) const;
+    // Worker-only creation of a new regular staging file below this held
+    // directory. Existing names, final links/reparse points and non-regular
+    // results are refused. The returned handle is not published under a
+    // destination name and must be retained by the worker.
+    virtual Observation<std::unique_ptr<OpenedEntry>> create_child_file(const NativeName& name) const;
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;

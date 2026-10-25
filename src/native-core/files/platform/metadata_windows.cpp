@@ -180,9 +180,9 @@ Observation<T> ea_failure(std::uint32_t code, const char* operation) {
 class WindowsOpenedEntry final : public OpenedEntry {
 public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false,
-                       bool content_access = false)
+                       bool content_access = false, bool content_write_access = false)
         : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access),
-          content_access_(content_access) {}
+          content_access_(content_access), content_write_access_(content_write_access) {}
     Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                           std::stop_token stop = {}) const override {
         using Result = Observation<ContentRead>;
@@ -225,6 +225,51 @@ public:
             return Result::unavailable(ObservationState::Changed,
                                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "content.identity"});
         return Result::available({std::move(bytes), offset + copied >= size});
+    }
+    Observation<std::size_t> write_content(std::uint64_t offset, std::span<const std::byte> bytes,
+                                            ContentWriteLimits limits = {}, std::stop_token stop = {}) override {
+        using Result = Observation<std::size_t>;
+        if (!limits.valid() || bytes.size() > limits.max_bytes)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "content.write_limits"});
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "content.write_cancelled"});
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "content.write_access_not_requested"});
+        const auto before = inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!before.value()->kind.value() || *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "content.write_object_kind"});
+        constexpr auto maximum = static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max());
+        if (offset > maximum || bytes.size() > maximum - offset)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "content.write_offset"});
+        LARGE_INTEGER position{}; position.QuadPart = static_cast<LONGLONG>(offset);
+        if (!SetFilePointerEx(handle_.get(), position, nullptr, FILE_BEGIN))
+            return failure<std::size_t>(GetLastError(), "content.write_seek");
+        DWORD written = 0;
+        if (!WriteFile(handle_.get(), bytes.data(), static_cast<DWORD>(std::min(bytes.size(), static_cast<std::size_t>(MAXDWORD))), &written, nullptr))
+            return failure<std::size_t>(GetLastError(), "content.WriteFile");
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "content.write_cancelled"});
+        const auto after = inspect_basic();
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!after.value()->identity.value() || !before.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "content.write_identity"});
+        return Result::available(static_cast<std::size_t>(written));
+    }
+    Observation<bool> flush_content() override {
+        if (!content_write_access_)
+            return Observation<bool>::unavailable(ObservationState::Denied,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess), "content.flush_access"});
+        if (!FlushFileBuffers(handle_.get())) return failure<bool>(GetLastError(), "content.FlushFileBuffers");
+        return Observation<bool>::available(true);
     }
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<FileIntegrityInfo> inspect_integrity(InventoryLimits limits = {}) const override {
@@ -537,6 +582,7 @@ private:
     AdapterScope scope_;
     bool layout_access_;
     bool content_access_ = false;
+    bool content_write_access_ = false;
 };
 
 Observation<detail::WindowsParentIds> windows_parent_ids(HANDLE handle, IdentityScheme scheme) {
@@ -648,6 +694,46 @@ public:
     Observation<AdapterScope> source_scope() const override { return Observation<AdapterScope>::available(scope_); }
     Observation<BasicMetadata> inspect_basic() const override { return handle_metadata(handle_.get(), scope_); }
     Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_windows_parent(handle_.get(), scope_); }
+    Observation<std::unique_ptr<OpenedEntry>> create_child_file(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        const auto* units = name.windows_units();
+        if (!units || !name.is_valid() || units->find(u':') != std::u16string::npos ||
+            units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "create_child_file.name"});
+        std::wstring spelling;
+        spelling.reserve(units->size());
+        for (const auto unit : *units) spelling.push_back(static_cast<wchar_t>(unit));
+        UNICODE_STRING native_name{};
+        native_name.Length = static_cast<USHORT>(spelling.size() * sizeof(WCHAR));
+        native_name.MaximumLength = native_name.Length;
+        native_name.Buffer = spelling.data();
+        OBJECT_ATTRIBUTES attributes{};
+        attributes.Length = sizeof(attributes);
+        attributes.RootDirectory = handle_.get();
+        attributes.ObjectName = &native_name;
+        IO_STATUS_BLOCK io{};
+        HANDLE raw = nullptr;
+        const NTSTATUS status = NtCreateFile(&raw, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL,
+            &attributes, &io, nullptr, FILE_ATTRIBUTE_NORMAL,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_CREATE,
+            FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_WRITE_THROUGH,
+            nullptr, 0);
+        OwnedHandle opened(raw);
+        if (status < 0)
+            return Result::unavailable(error_state(RtlNtStatusToDosError(status)),
+                {ErrorDomain::NtStatus, static_cast<std::int64_t>(status), "NtCreateFile.create_child_file"});
+        if (io.Information != FILE_CREATED || raw == nullptr || raw == INVALID_HANDLE_VALUE)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.result"});
+        FILE_BASIC_INFO basic{};
+        if (!GetFileInformationByHandleEx(opened.get(), FileBasicInfo, &basic, sizeof(basic)))
+            return failure<std::unique_ptr<OpenedEntry>>(GetLastError(), "create_child_file.info");
+        if ((basic.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.kind"});
+        return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true));
+    }
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
         using Result = Observation<DirectoryAccessCheck>;
         if (!valid_directory_access(access)) return Result::unavailable(ObservationState::Failed,

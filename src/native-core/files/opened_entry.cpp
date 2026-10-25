@@ -64,4 +64,19 @@ Observation<ContentRead> OpenedEntry::read_content(ContentReadLimits limits, std
          static_cast<std::int64_t>(stop.stop_requested() ? AdapterError::InterruptedRead : AdapterError::UnsupportedQuery),
          "content.native_query"});
 }
+Observation<std::size_t> OpenedEntry::write_content(std::uint64_t, std::span<const std::byte> bytes,
+                                                    ContentWriteLimits limits, std::stop_token stop) {
+    if (!limits.valid() || bytes.size() > limits.max_bytes)
+        return Observation<std::size_t>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "content.write_limits"});
+    return Observation<std::size_t>::unavailable(
+        stop.stop_requested() ? ObservationState::Unknown : ObservationState::Unsupported,
+        {ErrorDomain::Adapter,
+         static_cast<std::int64_t>(stop.stop_requested() ? AdapterError::InterruptedRead : AdapterError::UnsupportedQuery),
+         "content.write_native_query"});
+}
+Observation<bool> OpenedEntry::flush_content() {
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "content.flush_native_query"});
+}
 } // namespace ck::files

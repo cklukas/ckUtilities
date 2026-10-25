@@ -206,9 +206,9 @@ private:
 class PosixOpenedEntry final : public OpenedEntry {
 public:
     PosixOpenedEntry(OwnedDescriptor descriptor, AdapterScope scope, bool layout_access = false,
-                     bool content_access = false)
+                     bool content_access = false, bool content_write_access = false)
         : descriptor_(std::move(descriptor)), scope_(std::move(scope)), layout_access_(layout_access),
-          content_access_(content_access) {}
+          content_access_(content_access), content_write_access_(content_write_access) {}
     Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                           std::stop_token stop = {}) const override {
         using Result = Observation<ContentRead>;
@@ -260,6 +260,40 @@ public:
             return Result::unavailable(ObservationState::Changed,
                                        adapter_error(AdapterError::MetadataChanged, "content.identity"));
         return Result::available({std::move(bytes), offset + static_cast<std::uint64_t>(read) >= size});
+    }
+    Observation<std::size_t> write_content(std::uint64_t offset, std::span<const std::byte> bytes,
+                                            ContentWriteLimits limits = {}, std::stop_token stop = {}) override {
+        using Result = Observation<std::size_t>;
+        if (!limits.valid() || bytes.size() > limits.max_bytes)
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidLimit, "content.write_limits"));
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "content.write_cancelled"));
+        if (!content_write_access_)
+            return Result::unavailable(ObservationState::Denied, adapter_error(AdapterError::InvalidAccess, "content.write_access_not_requested"));
+        const auto before = inspect_basic();
+        if (!before.value()) { const auto& e = *before.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!before.value()->kind.value() || *before.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::NotApplicable, "content.write_object_kind"));
+        const auto maximum = static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
+        if (offset > maximum || bytes.size() > maximum - offset)
+            return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InvalidLimit, "content.write_offset"));
+        const auto written = pwrite(descriptor_.get(), bytes.data(), bytes.size(), static_cast<off_t>(offset));
+        if (written < 0) return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "content.pwrite"});
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InterruptedRead, "content.write_cancelled"));
+        const auto after = inspect_basic();
+        if (!after.value()) { const auto& e = *after.unavailable_detail(); return Result::unavailable(e.state, e.error); }
+        if (!after.value()->identity.value() || !before.value()->identity.value() ||
+            compare_identity(*before.value()->identity.value(), *after.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed, adapter_error(AdapterError::MetadataChanged, "content.write_identity"));
+        return Result::available(static_cast<std::size_t>(written));
+    }
+    Observation<bool> flush_content() override {
+        if (!content_write_access_)
+            return Observation<bool>::unavailable(ObservationState::Denied, adapter_error(AdapterError::InvalidAccess, "content.flush_access"));
+        if (fsync(descriptor_.get()) != 0)
+            return Observation<bool>::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "content.fsync"});
+        return Observation<bool>::available(true);
     }
 #if defined(__linux__)
     Observation<FileInodeFlags> inspect_inode_flags(InventoryLimits limits = {}) const override {
@@ -630,6 +664,7 @@ private:
     AdapterScope scope_;
     bool layout_access_;
     bool content_access_ = false;
+    bool content_write_access_ = false;
 #if defined(__linux__)
     bool inode_flags_access_ = false;
 #endif
@@ -680,6 +715,24 @@ public:
 #endif
     }
     Observation<std::unique_ptr<OpenedEntry>> open_parent_directory() const override { return open_posix_parent(dirfd(directory_.get()), scope_); }
+    Observation<std::unique_ptr<OpenedEntry>> create_child_file(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<OpenedEntry>>;
+        const auto* spelling = name.posix_bytes();
+        if (!name.is_valid() || !spelling)
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidIdentifier, "create_child_file.name"));
+        OwnedDescriptor descriptor(openat(dirfd(directory_.get()), spelling->c_str(),
+            O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
+        if (descriptor.get() < 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.create_child_file"});
+        }
+        struct stat native{};
+        if (fstat(descriptor.get(), &native) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "fstat.create_child_file"});
+        if (!S_ISREG(native.st_mode) || native.st_nlink != 1)
+            return Result::unavailable(ObservationState::Failed, adapter_error(AdapterError::InvalidNativeResult, "create_child_file.kind"));
+        return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_, false, true, true));
+    }
 
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
         using Result = Observation<DirectoryAccessCheck>;
