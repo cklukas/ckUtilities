@@ -1429,6 +1429,9 @@ CK_TEST(files_app_operation_preparation_rejects_invalid_worker_evidence_before_o
     CK_CHECK(!f.app->prepare_operation(FilesOperationPlanningRequest{}, NameEncoding::PosixBytes,
         [&](const ConsentReceipt &value) { return Observation<ConsentReceipt>::available(value); },
         [&](Observation<ConsentReceipt>) { delivered = true; }));
+    CK_CHECK(!f.app->prepare_operation(FilesOperationPanePlanningRequest{}, NameEncoding::PosixBytes,
+        [&](const ConsentReceipt &value) { return Observation<ConsentReceipt>::available(value); },
+        [&](Observation<ConsentReceipt>) { delivered = true; }));
     CK_CHECK(!f.app->operation_review_pending() && !delivered);
 }
 CK_TEST(files_app_operation_review_revalidates_accepted_decisions_before_delivery) {

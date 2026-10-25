@@ -261,6 +261,10 @@ class IndexedPane final {
     Observation<OpenedIndexedDirectory> open_directory_row(const PaneStateStamp &stamp, PaneRowId row,
                                                            IndexedDirectoryOpenLimits limits = {},
                                                            std::stop_token stop = {});
+    // Worker-only destination handoff. Retains the already held directory
+    // cursor after the stamp and sealed dataset are checked; it performs no
+    // path reopen and publishes no native owner to UI state.
+    Observation<std::shared_ptr<const DirectoryCursor>> hold_directory(const PaneStateStamp &stamp) const;
     Observation<OpenedIndexedRow> open_row(const PaneStateStamp &stamp, PaneRowId row, EntryAccess access,
                                            IndexedDirectoryOpenLimits limits = {}, std::stop_token stop = {});
     IndexedPaneFocus focus(const PaneStateStamp &stamp, PaneRowId row, std::stop_token stop = {});

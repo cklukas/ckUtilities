@@ -41,6 +41,24 @@ struct FilesOperationNativePlanningRequest final {
     ck::files::OperationReviewLimits review_limits;
 };
 
+// Composition-root request for the real pane operation path. The two pane
+// workers acquire their own held source/destination objects and deliver them
+// directly to the planning worker. This value contains no native owner.
+struct FilesOperationPanePlanningRequest final {
+    ck::files::FileOperation operation = ck::files::FileOperation::Copy;
+    FilesPaneService *source_service = nullptr;
+    FilesPaneService *destination_service = nullptr;
+    FilesPaneTicket source_navigation, destination_navigation;
+    ck::files::PaneStateStamp source_stamp, destination_stamp;
+    ck::files::IndexedSourceLimits source_limits;
+    ck::files::InventoryMountPolicy mount_policy = ck::files::InventoryMountPolicy::StayOnRootMount;
+    ck::files::InventoryLinkPolicy link_policy = ck::files::InventoryLinkPolicy::PreserveLinks;
+    ck::files::OperationEvidenceJobLimits evidence_limits;
+    ck::files::SourceCapabilityProjectionPolicy projection_policy;
+    ck::files::OperationPlanningCoordinatorLimits limits;
+    ck::files::OperationReviewLimits review_limits;
+};
+
 enum class FilesOperationPlanningSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
 enum class FilesOperationPlanningReplyState { Ready, Failed, Cancelled, LimitExceeded, WorkerFault };
 
@@ -85,6 +103,7 @@ public:
 
     FilesOperationPlanningSubmitted request(FilesOperationPlanningRequest request);
     FilesOperationPlanningSubmitted request(FilesOperationNativePlanningRequest request);
+    FilesOperationPlanningSubmitted request(FilesOperationPanePlanningRequest request);
     bool cancel(const FilesOperationPlanningTicket& request);
     std::optional<FilesOperationPlanningReply> take();
     void request_stop() noexcept;

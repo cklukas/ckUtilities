@@ -1333,6 +1333,22 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool prepare_operation(FilesOperationPanePlanningRequest request,
+        ck::files::NameEncoding destination_encoding, FilesApp::OperationRevalidation revalidate,
+        FilesOperationReviewDialog::Completion completion) {
+        if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
+            !planning_service->running())
+            return false;
+        const auto submitted = planning_service->request(std::move(request));
+        if (submitted.state != FilesOperationPlanningSubmission::Accepted)
+            return false;
+        operation_planning_request = submitted.ticket;
+        operation_planning_encoding = destination_encoding;
+        operation_planning_revalidation = std::move(revalidate);
+        operation_planning_completion = std::move(completion);
+        labels();
+        return true;
+    }
 };
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
                    std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
@@ -1395,6 +1411,12 @@ bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
 }
 bool FilesApp::prepare_operation(FilesOperationPlanningRequest request, ck::files::NameEncoding destination_encoding,
     OperationRevalidation revalidate, FilesOperationReviewDialog::Completion completion) {
+    return state_->prepare_operation(std::move(request), destination_encoding, std::move(revalidate),
+        std::move(completion));
+}
+bool FilesApp::prepare_operation(FilesOperationPanePlanningRequest request,
+    ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
+    FilesOperationReviewDialog::Completion completion) {
     return state_->prepare_operation(std::move(request), destination_encoding, std::move(revalidate),
         std::move(completion));
 }

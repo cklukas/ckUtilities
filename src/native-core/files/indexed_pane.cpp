@@ -732,6 +732,16 @@ Observation<OpenedIndexedDirectory> IndexedPane::open_directory_row(const PaneSt
         throw;
     }
 }
+Observation<std::shared_ptr<const DirectoryCursor>> IndexedPane::hold_directory(const PaneStateStamp &stamp) const {
+    using Result = Observation<std::shared_ptr<const DirectoryCursor>>;
+    if (!accepts(stamp) || !data_ || pending_ || mark_pending_ || !data_->pin_ ||
+        !data_->directory_.value())
+        return Result::unavailable(ObservationState::Changed,
+                                   {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess),
+                                    "indexed_directory.state"});
+    return Result::available(data_->pin_);
+}
+
 Observation<OpenedIndexedRow> IndexedPane::open_row(const PaneStateStamp &stamp, PaneRowId row, EntryAccess access,
                                                     IndexedDirectoryOpenLimits limits, std::stop_token stop) {
     using Result = Observation<OpenedIndexedRow>;

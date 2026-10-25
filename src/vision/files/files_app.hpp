@@ -82,6 +82,9 @@ class FilesApp final {
     bool prepare_operation(FilesOperationPlanningRequest request,
         ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
         FilesOperationReviewDialog::Completion completion);
+    bool prepare_operation(FilesOperationPanePlanningRequest request,
+        ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
+        FilesOperationReviewDialog::Completion completion);
     std::size_t history_size(std::size_t pane) const;
     std::size_t history_position(std::size_t pane) const;
     std::size_t bookmark_count(std::size_t pane) const;

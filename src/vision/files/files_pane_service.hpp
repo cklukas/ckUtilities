@@ -73,6 +73,18 @@ struct FilesPaneReply {
     // Terminal worker faults may interrupt acknowledgment after commitment.
     FilesPaneChangeOutcome change_outcome = FilesPaneChangeOutcome::NotRequested;
 };
+// Worker-to-worker operation handoff. The source handles and exact native
+// addresses are created and consumed only by worker services; FilesApp never
+// stores or inspects this payload.
+struct FilesPaneOperationSources final {
+    std::vector<ck::files::HeldChild::Pointer> sources;
+    std::vector<ck::files::NativeAbsolutePath> paths;
+    std::vector<ck::files::NativeName> names;
+};
+using FilesPaneOperationSourceHandoff =
+    std::function<void(ck::files::Observation<FilesPaneOperationSources>)>;
+using FilesPaneOperationDestinationHandoff =
+    std::function<void(ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>>)>;
 struct FilesPaneServiceLimits {
     std::size_t path_bytes = 64 * 1024;
     std::size_t page_rows = 4096, page_text_bytes = 1024 * 1024;
@@ -141,6 +153,16 @@ class FilesPaneService final {
     // All row lookup, marks, sorting/filtering and retirement run on the worker.
     FilesPaneSubmitted change(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneChange command,
                               FilesPaneReadRange range);
+    // Queue a worker-to-worker source handoff for operation planning. The
+    // callback is invoked on this service's worker and must not touch UI.
+    FilesPaneSubmitted acquire_operation_sources(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                                 ck::files::IndexedSourceLimits limits,
+                                                 FilesPaneOperationSourceHandoff handoff);
+    // Queue a worker-to-worker destination-directory handoff for operation
+    // planning. The callback is invoked on this service's worker and must not
+    // touch UI.
+    FilesPaneSubmitted acquire_operation_destination(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                                     FilesPaneOperationDestinationHandoff handoff);
     bool cancel(const FilesPaneTicket &request);
     std::optional<FilesPaneReply> take();
     void request_stop() noexcept;

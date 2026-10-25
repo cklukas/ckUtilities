@@ -10,6 +10,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <type_traits>
 #include <utility>
 namespace ck::vision {
 static_assert(std::is_nothrow_move_constructible_v<FilesPaneReply> &&
@@ -43,6 +44,18 @@ struct Preview {
     PaneRowId row;
     FilesPanePreviewLimits limits;
 };
+struct OperationSources {
+    FilesPaneTicket ticket, navigation;
+    PaneStateStamp stamp;
+    IndexedSourceLimits limits;
+    FilesPaneOperationSourceHandoff handoff;
+};
+struct OperationDestination {
+    FilesPaneTicket ticket, navigation;
+    PaneStateStamp stamp;
+    FilesPaneOperationDestinationHandoff handoff;
+};
+using Operation = std::variant<OperationSources, OperationDestination>;
 bool valid(FilesPaneServiceLimits l) {
     return l.path_bytes && l.path_bytes <= NativePathLimits::hard_native_bytes && l.page_rows && l.page_rows <= 4096 &&
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
@@ -50,6 +63,33 @@ bool valid(FilesPaneServiceLimits l) {
            l.diagnostic_bytes <= 1024 * 1024 && l.directory_rows && l.directory_rows <= 1'000'000 && l.cache_bytes &&
            l.cache_bytes <= 8ULL * 1024 * 1024 * 1024 && l.cache_files && l.cache_files <= 256 &&
            l.location_components && l.location_components <= FilesPaneLocation::hard_components;
+}
+UnavailableObservation operation_error(AdapterError code, const char *operation,
+                                       ObservationState state = ObservationState::Failed) {
+    return {state, {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
+}
+void cancel_operation(Operation &operation) noexcept {
+    try {
+        std::visit(
+            [](auto &request) {
+                using Request = std::decay_t<decltype(request)>;
+                if constexpr (std::is_same_v<Request, OperationSources>) {
+                    request.handoff(Observation<FilesPaneOperationSources>::unavailable(
+                        ObservationState::Unknown,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
+                         "pane.operation_sources.stopped"}));
+                } else {
+                    request.handoff(Observation<std::shared_ptr<const DirectoryCursor>>::unavailable(
+                        ObservationState::Unknown,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
+                         "pane.operation_destination.stopped"}));
+                }
+            },
+            operation);
+    } catch (...) {
+        // request_stop() is noexcept; the worker remains responsible for
+        // reporting callback failures when it is actively delivering work.
+    }
 }
 } // namespace
 struct FilesPaneService::State {
@@ -62,6 +102,7 @@ struct FilesPaneService::State {
     std::optional<Read> read;
     std::optional<Change> change;
     std::optional<Preview> preview;
+    std::optional<Operation> operation;
     std::optional<FilesPaneReply> reply;
     FilesPaneTicket latest_navigation, latest_request, cancelled;
     std::optional<std::stop_source> active_stop;
@@ -80,6 +121,8 @@ struct FilesPaneService::State {
             std::lock_guard lock(mutex);
             if (stopping || !alive.load())
                 return {FilesPaneSubmission::Stopped, {}};
+            if (operation)
+                return {FilesPaneSubmission::Busy, {}};
             if (!next)
                 return {FilesPaneSubmission::Exhausted, {}};
             request = FilesPaneService::ticket(next++);
@@ -87,6 +130,7 @@ struct FilesPaneService::State {
             read.reset();
             change.reset();
             preview.reset();
+            operation.reset();
             change_busy = false;
             reply.reset();
             cancelled = {};
@@ -137,6 +181,7 @@ struct FilesPaneService::State {
             read.reset();
             change.reset();
             preview.reset();
+            operation.reset();
             active_stop.reset();
             if (!stopping && reason != FilesPaneWorkerFault::None) {
                 // This path allocates nothing, even after std::bad_alloc.
@@ -183,10 +228,11 @@ struct FilesPaneService::State {
             std::optional<Read> page;
             std::optional<Change> edit;
             std::optional<Preview> inspection;
+            std::optional<Operation> op;
             std::stop_source stop;
             {
                 std::unique_lock lock(mutex);
-                condition.wait(lock, [&] { return stopping || navigation || change || read || preview; });
+                condition.wait(lock, [&] { return stopping || navigation || change || read || preview || operation; });
                 if (stopping)
                     return;
                 if (navigation) {
@@ -198,14 +244,29 @@ struct FilesPaneService::State {
                 } else if (preview) {
                     inspection = std::move(preview);
                     preview.reset();
+                } else if (operation) {
+                    // Operation preparation is serialized with all pane
+                    // activity and hands native owners directly to the
+                    // planning worker through its callback.
+                    op = std::move(operation);
+                    operation.reset();
                 } else {
                     page = std::move(read);
                     read.reset();
                 }
                 busy = true;
                 active_stop = stop;
-                const auto &current = nav ? nav->ticket : edit ? edit->request.ticket
-                    : inspection ? inspection->ticket : page->ticket;
+                FilesPaneTicket current;
+                if (nav)
+                    current = nav->ticket;
+                else if (edit)
+                    current = edit->request.ticket;
+                else if (inspection)
+                    current = inspection->ticket;
+                else if (page)
+                    current = page->ticket;
+                else
+                    std::visit([&](const auto &request) { current = request.ticket; }, *op);
                 if (current == cancelled)
                     stop.request_stop();
             }
@@ -462,6 +523,114 @@ struct FilesPaneService::State {
                 }
                 result.stamp = pane->state_stamp();
                 emit(std::move(result), false);
+            } else if (op) {
+                std::visit(
+                    [&](auto &request) {
+                        using Request = std::decay_t<decltype(request)>;
+                        if constexpr (std::is_same_v<Request, OperationSources>) {
+                            using Result = Observation<FilesPaneOperationSources>;
+                            const auto fail = [&](UnavailableObservation detail) {
+                                request.handoff(Result::unavailable(detail.state, detail.error));
+                            };
+                            if (!request.handoff)
+                                throw std::invalid_argument("missing operation source handoff");
+                            if (!pane->data() || request.navigation != active_epoch || !pane->accepts(request.stamp)) {
+                                fail(operation_error(AdapterError::InvalidAccess, "pane.operation_sources.stale",
+                                                      ObservationState::Changed));
+                                return;
+                            }
+                            if (stop.stop_requested()) {
+                                fail(operation_error(AdapterError::InterruptedRead, "pane.operation_sources.cancelled",
+                                                      ObservationState::Unknown));
+                                return;
+                            }
+                            auto started = pane->begin_source_acquisition(request.stamp, request.limits);
+                            if (!started.value()) {
+                                fail(*started.unavailable_detail());
+                                return;
+                            }
+                            auto job = std::move(started).take_value();
+                            auto state = job->state();
+                            while (state == IndexedSourceJobState::Running && !stop.stop_requested())
+                                state = job->advance(stop.get_token());
+                            if (state != IndexedSourceJobState::Complete || stop.stop_requested()) {
+                                if (stop.stop_requested()) {
+                                    fail(operation_error(AdapterError::InterruptedRead,
+                                                          "pane.operation_sources.cancelled", ObservationState::Unknown));
+                                } else if (job->failure()) {
+                                    fail(*job->failure());
+                                } else {
+                                    fail(operation_error(AdapterError::PlanInvalid, "pane.operation_sources.incomplete"));
+                                }
+                                return;
+                            }
+                            auto completed = job->completed();
+                            if (!completed.value() || !pane->accepts_sources(**completed.value())) {
+                                fail(operation_error(AdapterError::InvalidAccess, "pane.operation_sources.changed",
+                                                      ObservationState::Changed));
+                                return;
+                            }
+                            if (!active) {
+                                fail(operation_error(AdapterError::InvalidAccess, "pane.operation_sources.location",
+                                                      ObservationState::Changed));
+                                return;
+                            }
+                            auto parent_path = active->root_address();
+                            for (const auto &component : active->components()) {
+                                auto child = parent_path.child_address(component, {limits.path_bytes});
+                                if (!child.value()) {
+                                    fail(*child.unavailable_detail());
+                                    return;
+                                }
+                                parent_path = std::move(child).take_value();
+                            }
+                            FilesPaneOperationSources result;
+                            const auto &sources = **completed.value();
+                            result.sources.reserve(sources.sources().size());
+                            result.paths.reserve(sources.sources().size());
+                            result.names.reserve(sources.sources().size());
+                            for (const auto &bound : sources.sources()) {
+                                if (!bound.held()) {
+                                    fail(operation_error(AdapterError::UnqualifiedIdentity,
+                                                          "pane.operation_sources.handle", ObservationState::Unknown));
+                                    return;
+                                }
+                                auto child = parent_path.child_address(bound.held()->name(), {limits.path_bytes});
+                                if (!child.value()) {
+                                    fail(*child.unavailable_detail());
+                                    return;
+                                }
+                                result.sources.push_back(bound.held());
+                                result.paths.push_back(std::move(child).take_value());
+                                result.names.push_back(bound.held()->name());
+                            }
+                            request.handoff(Result::available(std::move(result)));
+                        } else {
+                            using Result = Observation<std::shared_ptr<const DirectoryCursor>>;
+                            if (!request.handoff)
+                                throw std::invalid_argument("missing operation destination handoff");
+                            if (!pane->data() || request.navigation != active_epoch || !pane->accepts(request.stamp)) {
+                                request.handoff(Result::unavailable(ObservationState::Changed,
+                                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidAccess),
+                                     "pane.operation_destination.stale"}));
+                                return;
+                            }
+                            if (stop.stop_requested()) {
+                                request.handoff(Result::unavailable(ObservationState::Unknown,
+                                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
+                                     "pane.operation_destination.cancelled"}));
+                                return;
+                            }
+                            auto directory = pane->hold_directory(request.stamp);
+                            request.handoff(std::move(directory));
+                        }
+                    },
+                    *op);
+                {
+                    std::lock_guard lock(mutex);
+                    busy = false;
+                    active_stop.reset();
+                }
             } else {
                 FilesPaneReply result;
                 result.request = page->ticket;
@@ -725,7 +894,7 @@ FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneS
             return {FilesPaneSubmission::Stopped, {}};
         if (navigation != state_->latest_navigation)
             return {FilesPaneSubmission::Invalid, {}};
-        if (state_->navigation_busy || state_->change_busy || state_->reply)
+        if (state_->navigation_busy || state_->change_busy || state_->operation || state_->reply)
             return {FilesPaneSubmission::Busy, {}};
         if (!state_->next)
             return {FilesPaneSubmission::Exhausted, {}};
@@ -796,12 +965,56 @@ FilesPaneSubmitted FilesPaneService::change(FilesPaneTicket navigation, PaneStat
     state_->condition.notify_one();
     return {FilesPaneSubmission::Accepted, request};
 }
+FilesPaneSubmitted FilesPaneService::acquire_operation_sources(FilesPaneTicket navigation, PaneStateStamp stamp,
+                                                               IndexedSourceLimits limits,
+                                                               FilesPaneOperationSourceHandoff handoff) {
+    if (!navigation.valid() || !handoff || !stamp.current() || !limits.held_entries || limits.held_entries > 4096 ||
+        !limits.native_name_bytes || limits.native_name_bytes > 64 * 1024 * 1024 || !limits.diagnostic_bytes ||
+        limits.diagnostic_bytes > 16 * 1024 * 1024 || !limits.scan_rows || limits.scan_rows > 4096 ||
+        limits.wire_bytes < 16 || limits.wire_bytes > DirectoryIndexScanLimits::hard_wire_bytes ||
+        !valid_entry_access(limits.access))
+        return {FilesPaneSubmission::Invalid, {}};
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping || !state_->alive.load())
+        return {FilesPaneSubmission::Stopped, {}};
+    if (navigation != state_->latest_navigation || state_->busy || state_->navigation || state_->read ||
+        state_->change || state_->preview || state_->operation || state_->reply)
+        return {FilesPaneSubmission::Busy, {}};
+    if (!state_->next)
+        return {FilesPaneSubmission::Exhausted, {}};
+    const auto request = ticket(state_->next++);
+    state_->operation.emplace(OperationSources{request, navigation, std::move(stamp), limits, std::move(handoff)});
+    state_->latest_request = request;
+    state_->cancelled = {};
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
+FilesPaneSubmitted FilesPaneService::acquire_operation_destination(
+    FilesPaneTicket navigation, PaneStateStamp stamp, FilesPaneOperationDestinationHandoff handoff) {
+    if (!navigation.valid() || !handoff || !stamp.current())
+        return {FilesPaneSubmission::Invalid, {}};
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping || !state_->alive.load())
+        return {FilesPaneSubmission::Stopped, {}};
+    if (navigation != state_->latest_navigation || state_->busy || state_->navigation || state_->read ||
+        state_->change || state_->preview || state_->operation || state_->reply)
+        return {FilesPaneSubmission::Busy, {}};
+    if (!state_->next)
+        return {FilesPaneSubmission::Exhausted, {}};
+    const auto request = ticket(state_->next++);
+    state_->operation.emplace(OperationDestination{request, navigation, std::move(stamp), std::move(handoff)});
+    state_->latest_request = request;
+    state_->cancelled = {};
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
 bool FilesPaneService::cancel(const FilesPaneTicket &request) {
     std::optional<std::stop_source> stop;
     {
         std::lock_guard lock(state_->mutex);
         if (!request.valid() || request != state_->latest_request || state_->stopping ||
-            (!state_->navigation && !state_->read && !state_->change && !state_->preview && !state_->busy))
+            (!state_->navigation && !state_->read && !state_->change && !state_->preview && !state_->operation &&
+             !state_->busy))
             return false;
         state_->cancelled = request;
         stop = state_->active_stop;
@@ -820,6 +1033,7 @@ std::optional<FilesPaneReply> FilesPaneService::take() {
 }
 void FilesPaneService::request_stop() noexcept {
     std::optional<std::stop_source> stop;
+    std::optional<Operation> queued_operation;
     {
         std::lock_guard lock(state_->mutex);
         state_->stopping = true;
@@ -827,11 +1041,15 @@ void FilesPaneService::request_stop() noexcept {
         state_->read.reset();
         state_->change.reset();
         state_->preview.reset();
+        queued_operation = std::move(state_->operation);
+        state_->operation.reset();
         state_->reply.reset();
         stop = state_->active_stop;
     }
     if (stop)
         stop->request_stop();
+    if (queued_operation)
+        cancel_operation(*queued_operation);
     state_->condition.notify_one();
 }
 void FilesPaneService::join() {
@@ -845,7 +1063,7 @@ void FilesPaneService::join() {
 bool FilesPaneService::running() const noexcept { return state_->alive.load(std::memory_order_acquire); }
 bool FilesPaneService::working() const {
     std::lock_guard lock(state_->mutex);
-    return state_->busy || state_->navigation || state_->change || state_->read || state_->preview;
+    return state_->busy || state_->navigation || state_->change || state_->read || state_->preview || state_->operation;
 }
 FilesPaneWorkerFault FilesPaneService::fault() const noexcept {
     return state_->worker_fault.load(std::memory_order_acquire);

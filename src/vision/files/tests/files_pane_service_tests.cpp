@@ -1514,6 +1514,59 @@ CK_TEST(files_service_home_preserves_native_failure_after_cancel_and_faults_are_
         f.stopped();
     }
 }
+
+CK_TEST(files_service_operation_handoffs_keep_native_sources_on_the_worker) {
+    Fixture source;
+    Fixture destination;
+    source.start_children();
+    destination.start_children();
+    const auto source_navigation = source.service->navigate(address("one"), {}, 20);
+    const auto destination_navigation = destination.service->navigate(address("two"), {}, 20);
+    const auto source_listing = source.reply();
+    CK_CHECK(source.service->change(source_navigation.ticket, source_listing.stamp,
+                                    FilesPaneFocusRow{source_listing.page->rows().front().id},
+                                    {0, 20}).state == FilesPaneSubmission::Accepted);
+    const auto source_page = source.reply();
+    const auto destination_page = destination.reply();
+
+    std::mutex mutex;
+    std::condition_variable condition;
+    unsigned callbacks = 0;
+    bool source_ok = false, destination_ok = false;
+    std::thread::id source_thread, destination_thread;
+    IndexedSourceLimits limits;
+    limits.held_entries = 1;
+    auto source_submission = source.service->acquire_operation_sources(
+        source_navigation.ticket, source_page.stamp, limits,
+        [&](Observation<FilesPaneOperationSources> result) {
+            std::lock_guard lock(mutex);
+            source_thread = std::this_thread::get_id();
+            source_ok = result.value() && result.value()->sources.size() == 1 &&
+                result.value()->sources.size() == result.value()->paths.size() &&
+                result.value()->sources.size() == result.value()->names.size();
+            ++callbacks;
+            condition.notify_all();
+        });
+    auto destination_submission = destination.service->acquire_operation_destination(
+        destination_navigation.ticket, destination_page.stamp,
+        [&](Observation<std::shared_ptr<const DirectoryCursor>> result) {
+            std::lock_guard lock(mutex);
+            destination_thread = std::this_thread::get_id();
+            destination_ok = result.value() && *result.value();
+            ++callbacks;
+            condition.notify_all();
+        });
+    CK_CHECK(source_submission.state == FilesPaneSubmission::Accepted &&
+             destination_submission.state == FilesPaneSubmission::Accepted);
+    {
+        std::unique_lock lock(mutex);
+        CK_CHECK(condition.wait_for(lock, std::chrono::seconds(5), [&] { return callbacks == 2; }));
+        CK_CHECK(source_ok && destination_ok);
+        CK_CHECK(source_thread != std::this_thread::get_id() && destination_thread != std::this_thread::get_id());
+    }
+    source.stopped();
+    destination.stopped();
+}
 CK_TEST(files_service_home_validates_configuration_and_stopped_state_before_discovery) {
     Fixture f;
     f.start_children();
