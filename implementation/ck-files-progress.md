@@ -5460,3 +5460,26 @@ is claimed. Next qualify those gates, then connect the ckVision completion
 provider with revision/lifetime gating and Right-to-accept. Continue the remaining
 WP-02 history/bookmark, refresh, properties/preview and production interactive
 acceptance work afterward. WP-03–08 remain unstarted.
+
+
+## 2026-10-25 — WP-02 Linux current-source qualification
+
+Qualified the current committed source on Debian aarch64 `rpi4` against the
+exact ckVision 1.4.0 commit `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`.
+The dependency was built from source with its Development component installed;
+ckUtilities was then configured with a fresh Release build tree and the remote
+private-index test root under the task-owned temporary workspace.
+
+The targeted Release build completed all 224 steps in 2,993 seconds and linked
+`ck_vision_files_tests`, `ck_files_core_tests`, and `ck_files_native_tests`.
+The complete Files CTest label passed 106/106 in 30 seconds, including all 37
+native tests and the current operation-content, operation-journal,
+copy-boundary, commit-boundary, and POSIX index cases. No production executable
+was launched. The Windows workstation qualification remains gated because this
+Mac session has no approved `V:` development drive. Sanitizer/race runs on
+Linux remain a separate gate and are not claimed by this record.
+
+The task-owned remote build and dependency tree remain available for the next
+qualification pass; they use `/home/klukas/tmp/ckutilities-linux-qualification-20261025-01`
+and `TMPDIR` is set within that root. See the command output retained in the
+task session for the full CTest list and timing evidence.
