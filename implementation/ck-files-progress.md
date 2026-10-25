@@ -837,6 +837,15 @@ native** cktest cases. Windows compilation/execution remains gated by the
 unavailable mandatory `V:` workstation drive, and no copy/move UI command is
 enabled.
 
+Commit `2ed5bf1` composes durable journal loading with the read-only recovery
+projection. Startup inspection now reads the bounded file through its retained
+handle and carries any corrupt/truncated tail directly into the report's
+review-required state; it performs no native resume, delete, replacement or
+source retirement. The native journal suite now has three cases, including the
+untrusted-tail projection; the selected journal/recovery/copy tests pass under
+normal, ASan/UBSan and TSan macOS builds. Windows compilation/execution
+remains gated by the unavailable mandatory `V:` workstation drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
