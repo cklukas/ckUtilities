@@ -692,6 +692,47 @@ Windows remains gated by the unavailable mandatory `V:` development drive;
 no Windows checkout, build, cache or temporary artifact was created. No copy,
 move, replacement, deletion or other mutation command is enabled.
 
+## WP-03 — worker-to-worker pane operation handoff
+
+The real pane path now hands exact selected source children and the held
+destination directory directly from the pane workers to the serialized
+planning worker. The UI and consent model retain only value requests and
+immutable replies; native owners, exact source addresses and destination
+cursors remain worker-owned. The planning service accepts this composition-root
+request, joins both handoffs into the direct evidence mode, and runs the same
+bounded inventory, metadata, destination, capability and topology stages before
+publishing a plan or review. Pane shutdown and planning cancellation explicitly
+interrupt queued or active handoffs so no worker waits indefinitely for a
+dropped callback. `FilesApp` exposes the pane-planning overload without adding
+any filesystem mutation command.
+
+The committed checkpoint is `c5849a8`. macOS normal qualification passed all
+**652** core and **192** Files UI cases. The new pane handoff case passed 1/1
+under ASan/UBSan and TSan; the full TSan suites passed 652/192. The full ASan/
+UBSan core suite passed 652. The full UI ASan/UBSan run remains blocked by the
+known pinned ckVision `Desktop::install_default_handler` heap-buffer-overflow,
+which occurs during unrelated `SuiteShell` construction; no sanitizer
+suppression or application workaround was added. Normal macOS test hashes are:
+
+* `ck_vision_files_tests` — `90575f846403c63eff260086f79ba60dc202fec3148598fcb3c1d72e610d871d`
+* `ck_files_core_tests` — `7bc670f8eaf40878c4463737bea9f1f7378a18448fb4044332fb15c067270bf5`
+
+Linux requalification used the fresh remote root
+`/tmp/ckutilities-wp03-linux-operation-handoff-c5849a8`, GCC 14.2/aarch64,
+the pinned ckVision commit `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` and the
+previously qualified installed SDK. The core suite passed **652**, the Files UI
+suite passed **192**, the production `ck-files --help` check passed, and the
+independent installed-package consumer passed its CTest entry. Verified Linux
+hashes are:
+
+* `ck-files` — `b43932af3361f6fcadf05e8968bf775854eb4d62a8e50907a7c768b0759c46f1`
+* `ck_vision_files_tests` — `0e3446330e506c2291fc10f9e780993c8ba6e41f167cfc517dee34acc81934d0`
+* `ck_files_core_tests` — `6ac8edd25cb833539b7dfa807df2dc10b6d31f682b7b6c21dfca7ca9f2df960f`
+
+Windows remains gated by the unavailable mandatory `V:` development drive;
+no Windows checkout, build, cache or temporary artifact was created. No copy,
+move, replacement, deletion or other mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
