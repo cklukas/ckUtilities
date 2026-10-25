@@ -210,6 +210,25 @@ CTest entry passed and the complete `ck_files_core_tests` binary passed all
 624 cases. The future copy/move worker must call this boundary after its
 fresh native checks and before any mutation.
 
+## WP-03 — ckVision operation review dialog integration
+
+Added `FilesOperationReviewDialog`, a real ckVision modal presentation of the
+immutable `OperationReviewModel`. It displays bounded preservation and
+destination-conflict rows, requires explicit issue acknowledgement, accepts
+only actions that the plan permits, parses Keep Both names using the explicit
+destination encoding, and returns a plan-bound Cancel receipt on Escape,
+close or host shutdown. It performs no native I/O and exposes no mutation
+command. `FilesApp` now owns its lifecycle, blocks pane commands while it is
+open, and safely closes it before host exit; worker integration can submit a
+model through `review_operation` without retargeting either pane.
+
+Headless ckVision tests cover modal command gating, Escape cancellation and a
+reviewed native Keep Both basename. The strict macOS production/UI build ran
+at 08:55:59–08:56:01 CET, `ck_vision_files_tests` passed all **185** cases,
+and the complete `ck_files_core_tests` binary passed all **624** cases. The
+copy/move worker still needs to produce these models from recursive native
+inventory and invoke the dialog in its operation flow.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

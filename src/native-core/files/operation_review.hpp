@@ -52,7 +52,8 @@ public:
     // not execute anything; the plan remains the authority for policy.
     Observation<ConsentReceipt> bind(ConsentAction action,
         std::span<const std::size_t> reviewed_issues = {},
-        std::span<const std::size_t> resolved_conflicts = {}) const;
+        std::span<const std::size_t> resolved_conflicts = {},
+        std::vector<NativeName> keep_both_names = {}) const;
 
 private:
     explicit OperationReviewModel(OperationPlan::Pointer plan) noexcept : plan_(std::move(plan)) {}

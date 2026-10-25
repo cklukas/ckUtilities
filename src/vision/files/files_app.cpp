@@ -173,6 +173,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
+    std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -466,6 +467,7 @@ struct FilesApp::State {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
+               (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed());
     }
     bool can_edit_location(std::size_t i) const {
@@ -1200,6 +1202,10 @@ struct FilesApp::State {
                 preview_dialog_window->close();
             return;
         }
+        if (operation_review_dialog && !operation_review_dialog->completed()) {
+            operation_review_dialog->close();
+            return;
+        }
         if (confirmation && !confirmation->completed())
             return;
         if (!services[0]->working() && !services[1]->working()) {
@@ -1222,6 +1228,23 @@ struct FilesApp::State {
                 if (!weak.expired() && exit_selected)
                     finish_exit();
             });
+    }
+
+    bool review_operation(ck::files::OperationReviewModel::Pointer model,
+        ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion) {
+        if (closing || modal_pending() || !model || !completion)
+            return false;
+        const auto weak = std::weak_ptr<void>(lifetime);
+        operation_review_dialog = std::make_unique<FilesOperationReviewDialog>(
+            application, shell->desktop(), shell->roles(), std::move(model), destination_encoding,
+            [this, weak, delivered_completion = std::move(completion)](
+                ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
+                if (weak.expired())
+                    return;
+                operation_review_dialog.reset();
+                delivered_completion(std::move(result));
+            });
+        return true;
     }
 };
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
@@ -1270,8 +1293,15 @@ bool FilesApp::preview_pending() const {
     return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) { return pane.previewing; }) ||
            (state_->preview_dialog && !state_->preview_dialog->completed());
 }
+bool FilesApp::operation_review_pending() const {
+    return state_->operation_review_dialog && !state_->operation_review_dialog->completed();
+}
 bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
+}
+bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
+    ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion) {
+    return state_->review_operation(std::move(model), destination_encoding, std::move(completion));
 }
 std::size_t FilesApp::history_size(std::size_t pane) const { return state_->panes.at(pane).history.size(); }
 std::size_t FilesApp::history_position(std::size_t pane) const {

@@ -55,10 +55,11 @@ OperationReviewSummary OperationReviewModel::summarize(const OperationPlan& plan
 }
 
 Observation<ConsentReceipt> OperationReviewModel::bind(ConsentAction action,
-    std::span<const std::size_t> reviewed_issues, std::span<const std::size_t> resolved_conflicts) const {
+    std::span<const std::size_t> reviewed_issues, std::span<const std::size_t> resolved_conflicts,
+    std::vector<NativeName> keep_both_names) const {
     if (!plan_) return rejected<ConsentReceipt>(AdapterError::InvalidIdentifier, "operation_review.plan");
     return plan_->bind(action, std::vector<std::size_t>(reviewed_issues.begin(), reviewed_issues.end()),
-        std::vector<std::size_t>(resolved_conflicts.begin(), resolved_conflicts.end()));
+        std::vector<std::size_t>(resolved_conflicts.begin(), resolved_conflicts.end()), std::move(keep_both_names));
 }
 
 } // namespace ck::files

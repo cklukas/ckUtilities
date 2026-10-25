@@ -28,6 +28,19 @@ NativeAbsolutePath address(const std::filesystem::path &path) {
         throw std::runtime_error("invalid app fixture address");
     return std::move(value).take_value();
 }
+OperationReviewModel::Pointer review_model() {
+    FrozenOperationItem source{ObjectIdentity{AdapterScope{}, IdentityScheme::PosixDeviceInode,
+        NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(2), {}}, ObjectKind::RegularFile,
+        SourceTargetTopology::Disjoint, std::nullopt};
+    auto plan = OperationPlan::create(FileOperation::Copy, {std::move(source)}, {},
+        {{0, DestinationConflictKind::ExistingFile}});
+    if (!plan.value())
+        throw std::runtime_error("Files app review fixture plan unavailable");
+    auto model = OperationReviewModel::create(std::move(plan).take_value());
+    if (!model.value())
+        throw std::runtime_error("Files app review fixture model unavailable");
+    return std::move(model).take_value();
+}
 struct Gate {
     std::mutex mutex;
     std::condition_variable changed;
@@ -1386,4 +1399,21 @@ CK_TEST(files_app_history_and_bookmarks_change_only_after_worker_acknowledgment)
     f.loaded();
     CK_CHECK(f.app->location(0)->root_address() == right);
     CK_CHECK(f.app->remove_bookmark(0) && f.app->bookmark_count(0) == 0);
+}
+CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
+    Fixture f;
+    f.loaded();
+    std::optional<ConsentReceipt> receipt;
+    CK_CHECK(f.app->review_operation(review_model(), NameEncoding::PosixBytes,
+        [&](Observation<ConsentReceipt> result) {
+            if (result.value())
+                receipt = std::move(result).take_value();
+        }));
+    CK_CHECK(f.app->operation_review_pending());
+    CK_CHECK(!f.command("ck.files.toggle_mark"));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->operation_review_pending() && receipt && receipt->action == ConsentAction::Cancel &&
+        receipt->plan.is_valid());
 }

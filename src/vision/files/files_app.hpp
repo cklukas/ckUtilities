@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "files_completion_service.hpp"
+#include "files_operation_review_dialog.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
 #include "ck/vision/suite_shell.hpp"
@@ -67,7 +68,10 @@ class FilesApp final {
     bool view_options_pending() const;
     bool properties_pending() const;
     bool preview_pending() const;
+    bool operation_review_pending() const;
     bool location_editor_pending() const;
+    bool review_operation(ck::files::OperationReviewModel::Pointer model,
+        ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion);
     std::size_t history_size(std::size_t pane) const;
     std::size_t history_position(std::size_t pane) const;
     std::size_t bookmark_count(std::size_t pane) const;
