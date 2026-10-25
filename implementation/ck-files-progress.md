@@ -814,6 +814,17 @@ report in review-required state. Three recovery cases pass under normal,
 ASan/UBSan and TSan core builds. No recovery action opens, deletes, replaces,
 resumes, or retires a native object.
 
+Commit `1f4a952` adds the held native staging-content boundary. A worker can
+create a new regular staging file relative to a held destination directory,
+write bounded chunks, flush them, and reread the retained object; existing
+names, foreign encodings, links/reparse points and pre-cancelled writes fail
+closed. POSIX uses `openat`/`pwrite`/`fsync`; Windows uses the held-directory
+`NtCreateFile` handle with `WriteFile`/`FlushFileBuffers`. The boundary does not
+publish a destination or expose a Files UI mutation command. Two native cases
+pass under normal, ASan/UBSan and TSan macOS builds; the complete normal macOS
+suites pass **675 core** and **165 native** cases. Windows compilation and
+execution remain gated by the unavailable mandatory `V:` workstation drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
