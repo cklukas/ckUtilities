@@ -610,6 +610,22 @@ Linux qualification and the mandatory Windows `V:` gate remain pending for
 this checkpoint. The evidence bundle is still a planning input only; no copy,
 move, replacement, deletion or other mutation command is enabled.
 
+Linux requalification of commit `33d782b` used the fresh remote root
+`/tmp/ckutilities-wp03-linux-evidence-33d782b`, the unchanged pinned ckVision
+and llama.cpp inputs, and GCC 14.2 on aarch64. The core configure/build ran at
+11:36:49–11:42:10 UTC; the focused evidence suite passed **2** cases and the
+full core suite passed **650**. The production/UI target rebuild ran at
+11:42:14–11:44:05; the Files UI suite passed **190** cases. A fresh
+installed-package consumer configured, built and passed its CTest entry at
+11:44:15–11:44:17. Verified Linux output hashes are:
+
+* `ck-files` — `acf52cf6ce2764a38f38ad2e8973f17c9d82844febc711276ffd659ab968a2c9`
+* `ck_vision_files_tests` — `ba632f839898329da877e5f96ecc5a73712cb1c000f291891a39b4e3a7df347e`
+* `ck_files_core_tests` — `a70a3263c62d0783b15041e5678c0ce83013029e75bab99238e72e75ce057e10`
+
+Windows remains blocked by the mandatory unavailable `V:` development drive;
+no Windows source, build, cache or temporary artifact was created.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
