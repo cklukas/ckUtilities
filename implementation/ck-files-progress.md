@@ -1005,6 +1005,16 @@ arm64 Debug build against pinned ckVision 1.4.0 passed the focused native case
 and its CTest entry; Windows compilation/execution remains gated by the
 mandatory unavailable `V:` workstation.
 
+Commit `09f90bb` adds deterministic copy-journal failure injection at the
+`Prepared`, `Copied` and `Verified` boundaries. The cases prove that a
+failed/unknown journal append prevents the next native stage, preserves the
+last durable journal state and reports `NeedsReconciliation` rather than
+claiming success. All seven copy-job cases pass under the fresh Release,
+ASan/UBSan and TSan macOS builds. The Release Files regression remains
+**106/106** entries; the Debug stress run is retained separately because its
+existing 100,000-record index case takes 158.5 seconds and exceeds its fixed
+60-second CTest timeout.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
