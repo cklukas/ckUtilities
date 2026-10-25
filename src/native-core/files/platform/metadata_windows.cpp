@@ -198,12 +198,24 @@ Observation<T> ea_failure(std::uint32_t code, const char* operation) {
     return Observation<T>::unavailable(state, {ErrorDomain::NtStatus, code, operation});
 }
 
+struct WindowsPublicationContext final {
+    WindowsPublicationContext(OwnedHandle retained_parent, NativeName retained_name,
+                              Observation<ObjectIdentity> retained_parent_identity)
+        : parent(std::move(retained_parent)), name(std::move(retained_name)),
+          parent_identity(std::move(retained_parent_identity)) {}
+    OwnedHandle parent;
+    NativeName name;
+    Observation<ObjectIdentity> parent_identity;
+};
+
 class WindowsOpenedEntry final : public OpenedEntry {
 public:
     WindowsOpenedEntry(OwnedHandle handle, AdapterScope scope, bool layout_access = false,
-                       bool content_access = false, bool content_write_access = false)
+                       bool content_access = false, bool content_write_access = false,
+                       std::unique_ptr<WindowsPublicationContext> publication = {})
         : handle_(std::move(handle)), scope_(std::move(scope)), layout_access_(layout_access),
-          content_access_(content_access), content_write_access_(content_write_access) {}
+          content_access_(content_access), content_write_access_(content_write_access),
+          publication_(std::move(publication)) {}
     Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                           std::stop_token stop = {}) const override {
         using Result = Observation<ContentRead>;
@@ -605,6 +617,7 @@ private:
     bool layout_access_;
     bool content_access_ = false;
     bool content_write_access_ = false;
+    std::unique_ptr<WindowsPublicationContext> publication_;
 };
 
 Observation<detail::WindowsParentIds> windows_parent_ids(HANDLE handle, IdentityScheme scheme) {
@@ -726,6 +739,16 @@ public:
         std::wstring spelling;
         spelling.reserve(units->size());
         for (const auto unit : *units) spelling.push_back(static_cast<wchar_t>(unit));
+        HANDLE retained_raw = nullptr;
+        if (!DuplicateHandle(GetCurrentProcess(), handle_.get(), GetCurrentProcess(), &retained_raw,
+                             0, FALSE, DUPLICATE_SAME_ACCESS))
+            return failure<std::unique_ptr<OpenedEntry>>(GetLastError(), "create_child_file.parent_handle");
+        OwnedHandle retained_parent(retained_raw);
+        auto parent_identity = ::ck::files::identity(handle_.get(), scope_);
+        if (!parent_identity.value()) {
+            const auto& error = *parent_identity.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
         UNICODE_STRING native_name{};
         native_name.Length = static_cast<USHORT>(spelling.size() * sizeof(WCHAR));
         native_name.MaximumLength = native_name.Length;
@@ -754,7 +777,8 @@ public:
         if ((basic.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0)
             return Result::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.kind"});
-        return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true));
+        return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true,
+            std::make_unique<WindowsPublicationContext>(std::move(retained_parent), name, std::move(parent_identity))));
     }
     Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
         using Result = Observation<std::unique_ptr<DirectoryCursor>>;
@@ -1397,9 +1421,50 @@ private:
 };
 
 Observation<bool> WindowsOpenedEntry::publish_noreplace(const DirectoryCursor& destination, const NativeName& name) {
+    using Result = Observation<bool>;
+    if (!publication_)
+        return OpenedEntry::publish_noreplace(destination, name);
+    const auto* source_units = publication_->name.windows_units();
+    if (!source_units || !publication_->name.is_valid())
+        return Result::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier),
+             "publish_noreplace.source_name"});
+    const auto current_parent = identity(publication_->parent.get(), scope_);
+    if (!current_parent.value() || !publication_->parent_identity.value() ||
+        compare_identity(*current_parent.value(), *publication_->parent_identity.value()) != IdentityComparison::Same)
+        return Result::unavailable(ObservationState::Changed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+             "publish_noreplace.source_parent"});
+    std::wstring spelling;
+    spelling.reserve(source_units->size());
+    for (const auto unit : *source_units) spelling.push_back(static_cast<wchar_t>(unit));
+    UNICODE_STRING native_name{};
+    native_name.Length = static_cast<USHORT>(spelling.size() * sizeof(WCHAR));
+    native_name.MaximumLength = native_name.Length;
+    native_name.Buffer = spelling.data();
+    OBJECT_ATTRIBUTES attributes{};
+    attributes.Length = sizeof(attributes);
+    attributes.RootDirectory = publication_->parent.get();
+    attributes.ObjectName = &native_name;
+    IO_STATUS_BLOCK io{};
+    HANDLE raw = nullptr;
+    const NTSTATUS status = NtCreateFile(&raw, FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &io, nullptr, 0,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
+        FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
+    OwnedHandle named(raw);
+    if (status < 0)
+        return Result::unavailable(ObservationState::Changed,
+            {ErrorDomain::NtStatus, static_cast<std::int64_t>(status), "publish_noreplace.source_name"});
+    const auto held_identity = identity(handle_.get(), scope_);
+    const auto named_identity = identity(named.get(), scope_);
+    if (!held_identity.value() || !named_identity.value() ||
+        compare_identity(*held_identity.value(), *named_identity.value()) != IdentityComparison::Same)
+        return Result::unavailable(ObservationState::Changed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+             "publish_noreplace.source_identity"});
     const auto* cursor = dynamic_cast<const WindowsDirectoryCursor*>(&destination);
     if (!cursor)
-        return Observation<bool>::unavailable(ObservationState::Unsupported,
+        return Result::unavailable(ObservationState::Unsupported,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "publish_noreplace.destination_adapter"});
     return cursor->publish_noreplace(handle_.get(), name);
 }
