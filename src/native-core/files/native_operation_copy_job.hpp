@@ -51,6 +51,12 @@ public:
     const OperationExecutionResult& result() const noexcept { return execution_->result(); }
     OperationExecutionState advance(std::stop_token stop = {});
 
+    // Removes only an unpublished, worker-created staging file after a
+    // non-ambiguous Failed/Cancelled outcome. Platforms without a qualified
+    // handle-bound disposition return Unsupported; ambiguous publication is
+    // never cleaned by this API.
+    Observation<bool> cleanup_unpublished_staging();
+
     // Transfers the worker-bound execution job into the serialized batch
     // coordinator. The callbacks retain State, so native owners remain alive
     // after this wrapper is moved and never cross into UI state.

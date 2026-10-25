@@ -77,6 +77,11 @@ public:
     // Unsupported is required until the platform has a qualified protocol.
     virtual Observation<bool> retire_child(const NativeName& name,
                                             const ObjectIdentity& expected_identity) const;
+    // Worker-only cleanup of a file created by this operation under the held
+    // directory. The adapter must bind the disposition to the verified object
+    // handle; a pathname unlink/stat sequence is not an implementation.
+    virtual Observation<bool> discard_child(const NativeName& name,
+                                             const ObjectIdentity& expected_identity) const;
     // Worker-only same-filesystem no-replace rename below held parents. The
     // adapter must verify the source identity at use, reject an occupied
     // destination, publish through a native no-clobber primitive, verify the

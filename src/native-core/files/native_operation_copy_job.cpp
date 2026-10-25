@@ -177,6 +177,47 @@ OperationExecutionState NativeOperationCopyJob::advance(std::stop_token stop) {
     return execution_->advance(stop);
 }
 
+Observation<bool> NativeOperationCopyJob::cleanup_unpublished_staging() {
+    if (!state_ || !execution_)
+        return rejected<bool>(AdapterError::InvalidNativeResult, "native_operation_copy.cleanup_state");
+    const auto execution_state = execution_->state();
+    if (execution_state != OperationExecutionState::Failed &&
+        execution_state != OperationExecutionState::Cancelled)
+        return rejected<bool>(AdapterError::PlanDecisionStale, "native_operation_copy.cleanup_state");
+    const auto journal_state = state_->request.journal->state(state_->request.item);
+    if (!journal_state)
+        return rejected<bool>(AdapterError::InvalidNativeResult, "native_operation_copy.cleanup_journal_state");
+    switch (*journal_state) {
+    case OperationJournalState::Planned:
+    case OperationJournalState::Prepared:
+    case OperationJournalState::Copied:
+    case OperationJournalState::Verified:
+    case OperationJournalState::Failed:
+    case OperationJournalState::Cancelled:
+        break;
+    default:
+        return rejected<bool>(AdapterError::PlanDecisionStale, "native_operation_copy.cleanup_ambiguous",
+                              ObservationState::Unknown);
+    }
+    if (!state_->staging)
+        return Observation<bool>::available(true);
+    const auto metadata = state_->staging->inspect_basic();
+    if (!metadata.value())
+        return unavailable_bool(*metadata.unavailable_detail());
+    if (!metadata.value()->identity.value() || !metadata.value()->kind.value() ||
+        *metadata.value()->kind.value() != ObjectKind::RegularFile)
+        return rejected<bool>(AdapterError::MetadataChanged, "native_operation_copy.cleanup_kind",
+                              ObservationState::Changed);
+    auto discarded = state_->request.destination->discard_child(
+        state_->request.staging_name, *metadata.value()->identity.value());
+    if (!discarded.value())
+        return unavailable_bool(*discarded.unavailable_detail());
+    if (!*discarded.value())
+        return rejected<bool>(AdapterError::InvalidNativeResult, "native_operation_copy.cleanup_result");
+    state_->staging.reset();
+    return Observation<bool>::available(true);
+}
+
 Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
     std::vector<NativeOperationCopyJob::Pointer> jobs) {
     OperationBatchRequest request;

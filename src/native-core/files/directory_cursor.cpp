@@ -107,6 +107,18 @@ Observation<bool> DirectoryCursor::retire_child(const NativeName& name,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "retire_child.native_query"});
 }
 
+Observation<bool> DirectoryCursor::discard_child(const NativeName& name,
+                                                  const ObjectIdentity& expected_identity) const {
+    if (!name.is_valid())
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "discard_child.name"});
+    if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "discard_child.identity"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "discard_child.native_query"});
+}
+
 Observation<bool> DirectoryCursor::rename_child_noreplace(const NativeName& name,
                                                            const ObjectIdentity& expected_identity,
                                                            const DirectoryCursor& destination,

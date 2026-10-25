@@ -70,6 +70,35 @@ CK_TEST(native_operation_staging_file_rejects_foreign_names_and_cancelled_writes
     CK_CHECK(staging->write_content(0, byte, {}, stop.get_token()).state() == ObservationState::Unknown);
 }
 
+CK_TEST(native_operation_staging_cleanup_requires_handle_bound_disposition) {
+    const ck::testing::ScratchDirectory scratch("files-operation-staging-cleanup",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto staging = take(directory->create_child_file(name("owned-staging.bin")));
+    const std::array<std::byte, 4> bytes{std::byte{'o'}, std::byte{'w'}, std::byte{'n'}, std::byte{'d'}};
+    CK_CHECK(take(staging->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(staging->flush_content()));
+    const auto metadata = take(staging->inspect_basic());
+    CK_CHECK(metadata.identity.value());
+    if (!metadata.identity.value()) return;
+    const auto discarded = directory->discard_child(name("owned-staging.bin"), *metadata.identity.value());
+    staging.reset();
+#if defined(_WIN32)
+    if (!discarded.value())
+        throw std::runtime_error("staging discard failed: " + discarded.unavailable_detail()->error.operation);
+    if (fs::exists(scratch.path() / "owned-staging.bin"))
+        throw std::runtime_error("staging discard remained present");
+    CK_CHECK(discarded.value() && !fs::exists(scratch.path() / "owned-staging.bin"));
+#else
+    CK_CHECK(!discarded.value() && discarded.state() == ObservationState::Unsupported &&
+             fs::exists(scratch.path() / "owned-staging.bin"));
+#endif
+}
+
 CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
     const ck::testing::ScratchDirectory scratch("files-operation-native-copy", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto source_path = scratch.path() / "source.bin";

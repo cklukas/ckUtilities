@@ -884,10 +884,21 @@ public:
             return Result::unavailable(code == ERROR_IO_PENDING ? ObservationState::Unknown : error_state(code),
                 {ErrorDomain::Win32, code, "retire_child.disposition"});
         }
-        if (!FlushFileBuffers(handle_.get()))
+        auto parent_access = open_namespace_write_handle();
+        if (!parent_access.value()) {
+            const auto& error = *parent_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!FlushFileBuffers(parent_access.value()->get()))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Win32, GetLastError(), "retire_child.directory_flush"});
         return Result::available(true);
+    }
+    Observation<bool> discard_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {
+        // Staging cleanup uses the same handle-bound disposition protocol as
+        // source retirement, but is exposed separately so callers cannot
+        // mistake cleanup for an authorized Move operation.
+        return retire_child(name, expected_identity);
     }
     Observation<bool> rename_child_noreplace(const NativeName& name, const ObjectIdentity& expected_identity,
                                               const DirectoryCursor& destination,
