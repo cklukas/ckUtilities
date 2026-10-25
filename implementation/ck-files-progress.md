@@ -3,6 +3,28 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 identity-bound recovery disposition checkpoint
+
+Commits `6bd0c49` and `441c808` extend native recovery evidence with the
+staging object identity once that object exists, and add
+`cleanup_native_unpublished_staging()`. Cleanup accepts only Prepared/Copied/
+Verified recovery candidates with a recorded staging identity, a fresh held
+destination whose identity matches both the request and durable evidence, and
+an exact regular-file identity match at the point of disposition. The final
+platform boundary remains `DirectoryCursor::discard_child`: Windows performs
+the qualified handle-bound disposition and parent flush; POSIX/macOS return
+`Unsupported` rather than emulating unlink with a pathname race. Substitution
+tests prove a replacement under the recorded staging name is retained.
+
+The focused recovery and native-content tests passed on macOS, Windows and
+Linux. The final current-source `ctest -L files` matrix passed **107/107** on
+macOS in 22.44 seconds (22:11:47–22:12:10 UTC), Windows in 27.44 seconds, and
+Linux in 31.86 seconds. This is an engine/reconciliation checkpoint only:
+startup inspection still does not execute automatically, no recovery mutation
+command is exposed in `ck-files`, metadata preservation and process-crash
+fault-injection acceptance remain open, and the product is not yet a complete
+mutating Norton Commander/Midnight Commander replacement.
+
 ## 2026-10-25 — WP-04 read-only native recovery projection checkpoint
 
 Commit `c68413e` adds `inspect_native_operation_recovery_evidence()`, a
