@@ -825,6 +825,18 @@ pass under normal, ASan/UBSan and TSan macOS builds; the complete normal macOS
 suites pass **675 core** and **165 native** cases. Windows compilation and
 execution remain gated by the unavailable mandatory `V:` workstation drive.
 
+Commit `a8a01da` composes those retained source and staging handles with the
+bounded `StreamCopyJob`. The native adapter wires bounded reads, short-write
+retry, destination flush, independent reread/digest verification and
+cancellation directly to `OpenedEntry`; it never reopens either pathname and
+requires both worker-owned entries to outlive the job. The new native case and
+the four core stream-copy cases pass normally; the native case also passes
+under macOS ASan/UBSan and TSan. The complete normal macOS Files CTest set
+passes all **102** registered tests, representing **675 core** and **166
+native** cktest cases. Windows compilation/execution remains gated by the
+unavailable mandatory `V:` workstation drive, and no copy/move UI command is
+enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
