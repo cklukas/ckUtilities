@@ -952,6 +952,16 @@ percentage or completion estimate. The final normal macOS regression remains
 **105/105** Files CTest entries, with **687 core** and **169 native** cktest
 cases passing; focused ASan/UBSan and TSan execution checks also pass.
 
+Commit `2230898` adds a worker-only exclusive folder-creation boundary. POSIX
+uses `mkdirat` below the held parent, refuses pre-existing names, reopens the
+created directory without following a final symlink, verifies its identity and
+returns a held directory cursor. Windows uses `NtCreateFile` relative to the
+held parent with directory-only and no-reparse semantics, then validates the
+created handle before returning its cursor. The native folder-creation case
+passes under normal, ASan and TSan macOS builds; the full normal Files
+regression passes **105/105** entries. Windows compilation and execution remain
+unclaimed until the mandatory `V:` workstation is available.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
