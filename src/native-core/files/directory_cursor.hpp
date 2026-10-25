@@ -77,6 +77,10 @@ public:
     // Unsupported is required until the platform has a qualified protocol.
     virtual Observation<bool> retire_child(const NativeName& name,
                                             const ObjectIdentity& expected_identity) const;
+    // Worker-only creation of a new regular directory below this held
+    // directory. Creation is exclusive, final links/reparse points are
+    // refused, and the returned cursor owns the created directory handle.
+    virtual Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const;
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;

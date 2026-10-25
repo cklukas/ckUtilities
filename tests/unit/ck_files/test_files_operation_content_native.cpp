@@ -151,3 +151,15 @@ CK_TEST(native_operation_source_retirement_refuses_unqualified_posix_compare_del
     CK_CHECK(fs::exists(source_path));
 #endif
 }
+
+CK_TEST(native_operation_folder_creation_is_exclusive_and_returns_a_held_directory) {
+    const ck::testing::ScratchDirectory scratch("files-operation-folder-creation", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto child = take(directory->create_child_directory(name("created")));
+    const auto metadata = take(child->inspect_basic());
+    CK_CHECK(metadata.kind.value() && *metadata.kind.value() == ObjectKind::Directory);
+    CK_CHECK(fs::is_directory(scratch.path() / "created"));
+    const auto existing = directory->create_child_directory(name("created"));
+    CK_CHECK(!existing.value() && existing.state() == ObservationState::Changed);
+}

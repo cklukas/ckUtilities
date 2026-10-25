@@ -750,6 +750,57 @@ public:
         return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_, false, true, true,
             std::make_unique<PosixPublicationContext>(std::move(retained_parent), name)));
     }
+    Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+        const auto* spelling = name.posix_bytes();
+        if (!name.is_valid() || !spelling)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "create_child_directory.name"));
+        if (mkdirat(dirfd(directory_.get()), spelling->c_str(), 0700) != 0) {
+            const int code = errno;
+            if (code == EEXIST)
+                return Result::unavailable(ObservationState::Changed,
+                    adapter_error(AdapterError::PlanDecisionStale, "create_child_directory.existing"));
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "mkdirat.create_child_directory"});
+        }
+
+        struct stat expected{};
+        if (fstatat(dirfd(directory_.get()), spelling->c_str(), &expected, AT_SYMLINK_NOFOLLOW) != 0 ||
+            !S_ISDIR(expected.st_mode))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, errno, "create_child_directory.created_identity"});
+        const int raw = openat(dirfd(directory_.get()), spelling->c_str(),
+#if defined(__linux__)
+            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+#else
+            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+#endif
+        );
+        if (raw < 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.create_child_directory"});
+        }
+        OwnedDirectory opened(fdopendir(raw));
+        if (!opened) {
+            const int code = errno;
+            close(raw);
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "openat.create_child_directory"});
+        }
+        struct stat actual{};
+        if (fstat(dirfd(opened.get()), &actual) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "fstat.create_child_directory"});
+        if (!S_ISDIR(actual.st_mode) || actual.st_dev != expected.st_dev || actual.st_ino != expected.st_ino)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "create_child_directory.identity"));
+        std::optional<std::uint64_t> generation;
+#if defined(__APPLE__)
+        generation = actual.st_gen;
+#endif
+        auto observed = Observation<ObjectIdentity>::available({scope_, IdentityScheme::PosixDeviceInode,
+            NativeIdentifier::from_u64(static_cast<std::uint64_t>(actual.st_dev)),
+            NativeIdentifier::from_u64(static_cast<std::uint64_t>(actual.st_ino)), generation});
+        return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(opened), std::move(observed), scope_));
+    }
     Observation<bool> publish_noreplace(int source_parent, const NativeName& source_name, int source_descriptor,
                                          const NativeName& destination_name) const {
         using Result = Observation<bool>;

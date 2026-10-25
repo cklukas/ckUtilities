@@ -735,6 +735,52 @@ public:
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.kind"});
         return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true));
     }
+    Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
+        using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+        const auto* units = name.windows_units();
+        if (!units || !name.is_valid() || units->find(u':') != std::u16string::npos ||
+            units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "create_child_directory.name"});
+        std::wstring spelling;
+        spelling.reserve(units->size());
+        for (const auto unit : *units) spelling.push_back(static_cast<wchar_t>(unit));
+        UNICODE_STRING native_name{};
+        native_name.Length = static_cast<USHORT>(spelling.size() * sizeof(WCHAR));
+        native_name.MaximumLength = native_name.Length;
+        native_name.Buffer = spelling.data();
+        OBJECT_ATTRIBUTES attributes{};
+        attributes.Length = sizeof(attributes);
+        attributes.RootDirectory = handle_.get();
+        attributes.ObjectName = &native_name;
+        IO_STATUS_BLOCK io{};
+        HANDLE raw = nullptr;
+        const NTSTATUS status = NtCreateFile(&raw, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            &attributes, &io, nullptr, FILE_ATTRIBUTE_NORMAL,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_CREATE,
+            FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_WRITE_THROUGH,
+            nullptr, 0);
+        OwnedHandle opened(raw);
+        if (status < 0)
+            return Result::unavailable(error_state(RtlNtStatusToDosError(status)),
+                {ErrorDomain::NtStatus, static_cast<std::int64_t>(status), "NtCreateFile.create_child_directory"});
+        if (io.Information != FILE_CREATED || raw == nullptr || raw == INVALID_HANDLE_VALUE)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_directory.result"});
+        FILE_BASIC_INFO basic{};
+        if (!GetFileInformationByHandleEx(opened.get(), FileBasicInfo, &basic, sizeof(basic)))
+            return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(), "create_child_directory.info");
+        if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+            (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_directory.kind"});
+        auto observed = identity(opened.get(), scope_);
+        if (!observed.value()) {
+            const auto& error = *observed.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        return Result::available(std::make_unique<WindowsDirectoryCursor>(std::move(opened), std::move(observed), scope_));
+    }
     Observation<bool> retire_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {
         using Result = Observation<bool>;
         if (!name.is_valid() || compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
