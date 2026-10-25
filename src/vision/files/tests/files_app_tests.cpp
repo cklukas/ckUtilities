@@ -112,6 +112,7 @@ struct Fixture {
     std::shared_ptr<std::atomic<bool>> fail_home = std::make_shared<std::atomic<bool>>(false);
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
     std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
+    std::unique_ptr<FilesOperationPlanningService> planning_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
@@ -196,6 +197,7 @@ struct Fixture {
                 std::make_unique<FilesCompletionService>(native_files_pane_backend(address(completion_cache)),
                                                          FilesCompletionServiceLimits{}, wake.callback());
         }
+        planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
             std::array<NativeAbsolutePath, 2>{
@@ -203,7 +205,8 @@ struct Fixture {
                                                            : std::string(missing_initial ? "missing" : "left"))),
                 address(scratch.path() / "right")},
             [this] { ++exits; }, theme,
-            std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()});
+            std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
+            planning_service.get());
     }
     ~Fixture() {
         app.reset();
@@ -215,6 +218,7 @@ struct Fixture {
             service->join();
         for (auto &service : completion_services)
             service->join();
+        planning_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
     template <class Predicate> void until(Predicate ready) {
@@ -1417,6 +1421,15 @@ CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->operation_review_pending() && receipt && receipt->action == ConsentAction::Cancel &&
         receipt->plan.is_valid());
+}
+CK_TEST(files_app_operation_preparation_rejects_invalid_worker_evidence_before_opening_review) {
+    Fixture f;
+    f.loaded();
+    bool delivered = false;
+    CK_CHECK(!f.app->prepare_operation(FilesOperationPlanningRequest{}, NameEncoding::PosixBytes,
+        [&](const ConsentReceipt &value) { return Observation<ConsentReceipt>::available(value); },
+        [&](Observation<ConsentReceipt>) { delivered = true; }));
+    CK_CHECK(!f.app->operation_review_pending() && !delivered);
 }
 CK_TEST(files_app_operation_review_revalidates_accepted_decisions_before_delivery) {
     Fixture f;

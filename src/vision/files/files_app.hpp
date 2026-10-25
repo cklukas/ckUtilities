@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "files_completion_service.hpp"
+#include "files_operation_planning_service.hpp"
 #include "files_operation_review_dialog.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
@@ -43,7 +44,8 @@ class FilesApp final {
     FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
              std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
              ThemeScheme theme = ThemeScheme::Classic,
-             std::array<FilesCompletionService *, 2> completion_services = {});
+             std::array<FilesCompletionService *, 2> completion_services = {},
+             FilesOperationPlanningService *planning_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;
@@ -75,6 +77,9 @@ class FilesApp final {
     bool operation_review_pending() const;
     bool location_editor_pending() const;
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
+        ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
+        FilesOperationReviewDialog::Completion completion);
+    bool prepare_operation(FilesOperationPlanningRequest request,
         ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
         FilesOperationReviewDialog::Completion completion);
     std::size_t history_size(std::size_t pane) const;

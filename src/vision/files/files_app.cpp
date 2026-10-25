@@ -157,6 +157,7 @@ struct FilesApp::State {
     ckv::ui::Application &application;
     std::array<FilesPaneService *, 2> services;
     std::array<FilesCompletionService *, 2> completion_services;
+    FilesOperationPlanningService *planning_service = nullptr;
     FilesAppWake &wake;
     std::function<void()> host_quit;
     std::array<Pane, 2> panes;
@@ -174,6 +175,10 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
+    std::optional<FilesOperationPlanningTicket> operation_planning_request;
+    std::optional<ck::files::NameEncoding> operation_planning_encoding;
+    FilesApp::OperationRevalidation operation_planning_revalidation;
+    FilesOperationReviewDialog::Completion operation_planning_completion;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -195,8 +200,9 @@ struct FilesApp::State {
     SuiteCommandScope commands;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
-          std::array<FilesCompletionService *, 2> supplied_completion)
-        : application(app), services(supplied), completion_services(supplied_completion), wake(signal),
+          std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning)
+        : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
+          wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
         if (!services[0] || !services[1] || services[0] == services[1] || !host_quit)
             throw std::invalid_argument("invalid Files host");
@@ -393,6 +399,11 @@ struct FilesApp::State {
         view_dialog.reset();
         properties_dialog.reset();
         preview_dialog.reset();
+        operation_review_dialog.reset();
+        operation_planning_request.reset();
+        operation_planning_encoding.reset();
+        operation_planning_revalidation = {};
+        operation_planning_completion = {};
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
@@ -406,6 +417,8 @@ struct FilesApp::State {
         for (auto *service : completion_services)
             if (service)
                 service->request_stop();
+        if (planning_service)
+            planning_service->request_stop();
     }
     void create_window() {
         auto first = std::make_unique<PaneSurface>(panes[0].model),
@@ -468,7 +481,7 @@ struct FilesApp::State {
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
-               (location_dialog && !location_dialog->completed());
+               (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
     bool can_edit_location(std::size_t i) const {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
@@ -949,7 +962,8 @@ struct FilesApp::State {
         labels();
     }
     void watch() {
-        const bool pending = std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
+        const bool pending = operation_planning_request.has_value() ||
+            std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
         if (pending && !watchdog)
             watchdog = application.start_timer(250'000'000, true, [this] { pump(); });
         if (!pending && watchdog) {
@@ -1111,11 +1125,54 @@ struct FilesApp::State {
             p.error = "Page request rejected";
         }
     }
+    void consume_planning(FilesOperationPlanningReply reply) {
+        if (!operation_planning_request || reply.request != *operation_planning_request)
+            return;
+        const auto encoding = *operation_planning_encoding;
+        auto revalidate = std::move(operation_planning_revalidation);
+        auto completion = std::move(operation_planning_completion);
+        operation_planning_request.reset();
+        operation_planning_encoding.reset();
+        operation_planning_revalidation = {};
+        operation_planning_completion = {};
+        if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
+            const auto fallback = completion;
+            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(completion)))
+                fallback(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
+                    ck::files::ObservationState::Failed,
+                    {ck::files::ErrorDomain::Adapter,
+                        static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
+                        "files_app.operation_review_start"}));
+            return;
+        }
+        const auto detail = reply.error.value_or(ck::files::UnavailableObservation{
+            ck::files::ObservationState::Failed,
+            {ck::files::ErrorDomain::Adapter,
+                static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
+                "files_app.operation_planning"}});
+        completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error));
+    }
     void pump() {
         if (closing || pumping)
             return;
         pumping = true;
         try {
+            if (planning_service) {
+                if (auto reply = planning_service->take())
+                    consume_planning(std::move(*reply));
+                if (operation_planning_request && !planning_service->running()) {
+                    auto completion = std::move(operation_planning_completion);
+                    operation_planning_request.reset();
+                    operation_planning_encoding.reset();
+                    operation_planning_revalidation = {};
+                    operation_planning_completion = {};
+                    completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
+                        ck::files::ObservationState::Failed,
+                        {ck::files::ErrorDomain::Adapter,
+                            static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
+                            "files_app.operation_planning_worker"}));
+                }
+            }
             for (std::size_t i = 0; i < 2; ++i) {
                 if (auto reply = services[i]->take())
                     consume(i, std::move(*reply));
@@ -1176,6 +1233,8 @@ struct FilesApp::State {
         for (auto *service : completion_services)
             if (service)
                 service->request_stop();
+        if (planning_service)
+            planning_service->request_stop();
         host_quit(); // No join in dispatch; the composition owner joins afterwards.
     }
     void request_close() {
@@ -1259,12 +1318,28 @@ struct FilesApp::State {
             });
         return true;
     }
+    bool prepare_operation(FilesOperationPlanningRequest request, ck::files::NameEncoding destination_encoding,
+        FilesApp::OperationRevalidation revalidate, FilesOperationReviewDialog::Completion completion) {
+        if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
+            !planning_service->running())
+            return false;
+        const auto submitted = planning_service->request(std::move(request));
+        if (submitted.state != FilesOperationPlanningSubmission::Accepted)
+            return false;
+        operation_planning_request = submitted.ticket;
+        operation_planning_encoding = destination_encoding;
+        operation_planning_revalidation = std::move(revalidate);
+        operation_planning_completion = std::move(completion);
+        labels();
+        return true;
+    }
 };
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
                    std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
-                   ThemeScheme theme, std::array<FilesCompletionService *, 2> completion_services)
+                   ThemeScheme theme, std::array<FilesCompletionService *, 2> completion_services,
+                   FilesOperationPlanningService *planning_service)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
-                                     completion_services)) {}
+                                     completion_services, planning_service)) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));
@@ -1316,6 +1391,11 @@ bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
     ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
     FilesOperationReviewDialog::Completion completion) {
     return state_->review_operation(std::move(model), destination_encoding, std::move(revalidate),
+        std::move(completion));
+}
+bool FilesApp::prepare_operation(FilesOperationPlanningRequest request, ck::files::NameEncoding destination_encoding,
+    OperationRevalidation revalidate, FilesOperationReviewDialog::Completion completion) {
+    return state_->prepare_operation(std::move(request), destination_encoding, std::move(revalidate),
         std::move(completion));
 }
 std::size_t FilesApp::history_size(std::size_t pane) const { return state_->panes.at(pane).history.size(); }

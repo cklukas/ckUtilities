@@ -90,6 +90,7 @@ int run(const std::vector<std::string> &args) {
     ck::vision::FilesAppWake wake(application);
     std::array<std::unique_ptr<ck::vision::FilesPaneService>, 2> services;
     std::array<std::unique_ptr<ck::vision::FilesCompletionService>, 2> completion_services;
+    auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
     services[0] = std::make_unique<ck::vision::FilesPaneService>(
         ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     services[1] = std::make_unique<ck::vision::FilesPaneService>(
@@ -107,7 +108,7 @@ int run(const std::vector<std::string> &args) {
         {*left, *right},
         [&application] { application.request_quit(); },
         ck::vision::ThemeScheme::Classic,
-        {completion_services[0].get(), completion_services[1].get()});
+        {completion_services[0].get(), completion_services[1].get()}, planning_service.get());
     keymap.load();
     application.run();
     return 0;
