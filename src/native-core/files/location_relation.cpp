@@ -49,11 +49,16 @@ Observation<LocationQueryFamily> family(const Observation<LocationInfo>& first, 
     return Observation<LocationQueryFamily>::available(first.value()->family);
 }
 Observation<std::uint64_t> mount(const detail::LocationSubjectBookends& value) {
-    for (const auto* endpoint : {&value.before,&value.after})
-        if (!endpoint->value()->mount_id.value()) return unavailable<std::uint64_t>(*endpoint->value()->mount_id.unavailable_detail());
-    if (*value.before.value()->mount_id.value() != *value.after.value()->mount_id.value())
+    for (const auto* endpoint : {&value.before,&value.after}) {
+        if (!endpoint->value()) return unavailable<std::uint64_t>(*endpoint->unavailable_detail());
+        if (!endpoint->value()->mount_id.value())
+            return unavailable<std::uint64_t>(*endpoint->value()->mount_id.unavailable_detail());
+    }
+    const auto& before = *value.before.value();
+    const auto& after = *value.after.value();
+    if (*before.mount_id.value() != *after.mount_id.value())
         return error<std::uint64_t>(ObservationState::Changed, AdapterError::MetadataChanged, "location_relation.mount_changed");
-    return value.after.value()->mount_id;
+    return after.mount_id;
 }
 }
 LocationRelationData detail::assess_location_bookends(const LocationSubjectBookends& directory, const LocationSubjectBookends& object,
