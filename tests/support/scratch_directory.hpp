@@ -37,7 +37,7 @@ struct HandleCloser {
     }
 };
 
-bool qualify_windows_scratch_directory(const std::filesystem::path& path) {
+inline bool qualify_windows_scratch_directory(const std::filesystem::path& path) {
     HANDLE raw_token{};
     if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &raw_token)) {
         if (GetLastError() != ERROR_NO_TOKEN ||
