@@ -501,6 +501,19 @@ Linux qualification, sanitizer/race checks and the mandatory Windows gate
 remain pending for this slice. No mutation or production GUI launch is
 enabled.
 
+Linux requalification of commit `39a4a08` used the fresh source/build root
+`/tmp/ckutilities-wp03-linux-39a4a08` with the unchanged pinned ckVision and
+llama.cpp inputs. Strict configure ran at 10:51:29–10:51:35 UTC and the
+project target build ran at 10:51:35–10:57:02 UTC under GCC 14. The rebuilt
+core suite passed **648** cases at 10:57:04–10:57:05 and the Files UI suite
+passed **186** cases at 10:57:05–10:57:07. The independent installed-package
+consumer configured, built and passed its CTest entry at 10:57:10–10:57:12.
+The verified Linux output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `f5ee2c98ee54316f3257c14df4bf235376c0775617cd3f865ac2f192ea3606f3`
+* `ck_files_core_tests` — `76c7fd98067818c5b75ba559537852ac8832ca7e164231f8d6f2ecf21712ed41`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
