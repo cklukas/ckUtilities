@@ -3,6 +3,34 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 native worker-owned copy composition checkpoint
+
+Commits `a69ad02` and `80a3d29` add `NativeOperationCopyJob`, a worker-only
+composition of the existing journal, bounded stream-copy, metadata-job and
+commit state machines. It retains source and destination directory owners,
+revalidates parent and source identity at execution and commit boundaries,
+creates a distinct exclusive staging basename, independently rereads and
+digests the staged main data, requires an explicit metadata callback for all
+four metadata phases, and publishes only through the platform no-replace
+primitive. Durable journal transitions are appended through the retained
+`OperationJournalFile`; the native test verifies the complete transition to
+`Complete` without replacing an existing target or removing the source.
+
+This is an engine checkpoint, not a product completion claim. Metadata
+preservation adapters, owned-staging cleanup/recovery orchestration, batch/tree
+composition, replacement semantics, move retirement, Trash/deletion and UI
+commands remain unimplemented. The callback is mandatory precisely so this
+path cannot silently claim preservation while dropping attributes, channels or
+security state. No mutation command is enabled in `ck-files`.
+
+The focused native content suite passed on macOS, Linux and Windows. The full
+current-source `ctest -L files` matrix passed **106/106** on the Windows
+workstation (`V:\dev\ckutilities`, task build under
+`V:\tmp\ckutilities-windows-qualification-20261025-01`) and on the Linux
+qualification root (`/home/klukas/tmp/ckutilities-linux-qualification-20261025-01`,
+task-local `TMPDIR`). All Windows project/build/temp paths remained on `V:`;
+no system temporary path or source fallback was used.
+
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
 The earlier qualification note below is retained as historical evidence. The
