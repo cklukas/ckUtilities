@@ -484,6 +484,23 @@ The verified Linux output hashes are:
 * `ck_vision_files_tests` — `5eb37d11f000e135e08f92db1180471ab097141b452ac26ed0161ee416c19473`
 * `ck_files_core_tests` — `8435c83cb99a855d3316929b3bb857d4696f4c07dc9b04e38c467f628d02a0cf`
 
+## WP-03 — worker evidence planning coordinator
+
+Added `OperationPlanningCoordinator`, which joins the completed topology,
+destination-conflict and source-capability projections before creating one
+immutable `OperationPlan`. It requires exact source/destination evidence
+shapes, propagates all failed or unavailable worker observations, and leaves
+unknown directory topology rejected by the plan boundary. It remains a
+value-only worker composition point: no native I/O, path reopening, probing,
+normalization, mutation or execution authorization occurs here.
+
+Two focused Mac cases cover successful regular-file assembly and rejection of
+an unknown directory topology. The full strict Mac core suite passes **648**
+cases and the Files UI suite passes **186** cases at 10:51:12–10:51:16 UTC.
+Linux qualification, sanitizer/race checks and the mandatory Windows gate
+remain pending for this slice. No mutation or production GUI launch is
+enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
