@@ -145,3 +145,38 @@ CK_TEST(operation_execution_job_preserves_copy_reconciliation_without_commit_pre
     CK_CHECK(job->state() == OperationExecutionState::NeedsReconciliation &&
              value->state(0) == OperationJournalState::Prepared);
 }
+
+CK_TEST(operation_execution_job_cancellation_before_copy_never_constructs_commit) {
+    auto value = journal();
+    unsigned commit_preparations = 0;
+    OperationCopyRequest copy_request{
+        0, value,
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) {
+            return Observation<StreamCopyJob::Pointer>::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.unexpected_prepare"});
+        },
+        [](std::stop_token) { return metadata(); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+    };
+    auto copy = OperationCopyJob::create(std::move(copy_request));
+    CK_CHECK(copy.value());
+    if (!copy.value()) return;
+    OperationExecutionRequest request;
+    request.copy = std::move(copy).take_value();
+    request.prepare_commit = [&commit_preparations](std::stop_token) {
+        ++commit_preparations;
+        return Observation<OperationCommitJob::Pointer>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.unexpected_commit"});
+    };
+    auto created = OperationExecutionJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    std::stop_source stop;
+    stop.request_stop();
+    CK_CHECK(job->advance(stop.get_token()) == OperationExecutionState::Cancelled);
+    CK_CHECK(commit_preparations == 0 && value->state(0) == OperationJournalState::Cancelled);
+}
