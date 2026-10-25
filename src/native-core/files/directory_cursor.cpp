@@ -107,6 +107,24 @@ Observation<bool> DirectoryCursor::retire_child(const NativeName& name,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "retire_child.native_query"});
 }
 
+Observation<bool> DirectoryCursor::rename_child_noreplace(const NativeName& name,
+                                                           const ObjectIdentity& expected_identity,
+                                                           const DirectoryCursor& destination,
+                                                           const NativeName& destination_name) const {
+    if (!name.is_valid() || !destination_name.is_valid())
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "rename_child_noreplace.name"});
+    const auto& source_parent = identity();
+    const auto& destination_parent = destination.identity();
+    if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same ||
+        !source_parent.value() || !destination_parent.value() ||
+        compare_identity(*source_parent.value(), *destination_parent.value()) == IdentityComparison::Different)
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "rename_child_noreplace.identity"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "rename_child_noreplace.native_query"});
+}
+
 Observation<std::unique_ptr<DirectoryCursor>> DirectoryCursor::create_child_directory(const NativeName& name) const {
     if (!name.is_valid())
         return Observation<std::unique_ptr<DirectoryCursor>>::unavailable(ObservationState::Failed,

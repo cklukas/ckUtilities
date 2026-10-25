@@ -152,6 +152,29 @@ CK_TEST(native_operation_source_retirement_refuses_unqualified_posix_compare_del
 #endif
 }
 
+CK_TEST(native_operation_rename_boundary_never_emulates_unqualified_posix_rename) {
+    const ck::testing::ScratchDirectory scratch("files-operation-rename-boundary", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "source remains until rename identity protocol is qualified";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("source.bin"), EntryAccess::ContentRead));
+    const auto metadata = take(source->inspect_basic());
+    CK_CHECK(metadata.identity.value());
+    if (!metadata.identity.value()) return;
+    const auto renamed = directory->rename_child_noreplace(name("source.bin"), *metadata.identity.value(),
+                                                            *directory, name("renamed.bin"));
+#if defined(_WIN32)
+    CK_CHECK(renamed.value() || renamed.state() != ObservationState::Unsupported);
+#else
+    CK_CHECK(!renamed.value() && renamed.state() == ObservationState::Unsupported);
+    CK_CHECK(fs::exists(source_path) && !fs::exists(scratch.path() / "renamed.bin"));
+#endif
+}
+
 CK_TEST(native_operation_folder_creation_is_exclusive_and_returns_a_held_directory) {
     const ck::testing::ScratchDirectory scratch("files-operation-folder-creation", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;

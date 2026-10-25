@@ -77,6 +77,16 @@ public:
     // Unsupported is required until the platform has a qualified protocol.
     virtual Observation<bool> retire_child(const NativeName& name,
                                             const ObjectIdentity& expected_identity) const;
+    // Worker-only same-filesystem no-replace rename below held parents. The
+    // adapter must verify the source identity at use, reject an occupied
+    // destination, publish through a native no-clobber primitive, verify the
+    // destination identity and flush the affected parent directories. A
+    // pathname stat-then-rename emulation is not an implementation of this
+    // contract; Unsupported is required until the platform is qualified.
+    virtual Observation<bool> rename_child_noreplace(const NativeName& name,
+                                                      const ObjectIdentity& expected_identity,
+                                                      const DirectoryCursor& destination,
+                                                      const NativeName& destination_name) const;
     // Worker-only creation of a new regular directory below this held
     // directory. Creation is exclusive, final links/reparse points are
     // refused, and the returned cursor owns the created directory handle.
