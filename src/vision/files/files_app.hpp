@@ -36,6 +36,10 @@ struct FilesAppTarget {
 // destruction and must request outer-loop exit without joining workers itself.
 class FilesApp final {
   public:
+    // The callback must only compare the receipt with already-published fresh
+    // worker evidence; it must not perform native I/O or block the UI thread.
+    using OperationRevalidation = std::function<ck::files::Observation<ck::files::ConsentReceipt>(
+        const ck::files::ConsentReceipt &)>;
     FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
              std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
              ThemeScheme theme = ThemeScheme::Classic,
@@ -71,7 +75,8 @@ class FilesApp final {
     bool operation_review_pending() const;
     bool location_editor_pending() const;
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
-        ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion);
+        ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
+        FilesOperationReviewDialog::Completion completion);
     std::size_t history_size(std::size_t pane) const;
     std::size_t history_position(std::size_t pane) const;
     std::size_t bookmark_count(std::size_t pane) const;

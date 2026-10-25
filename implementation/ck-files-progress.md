@@ -283,6 +283,26 @@ each completed object’s preservation observations into capability differences
 and invoking the review dialog from a copy/move operation coordinator remain
 open. Windows and sanitizer/race qualification remain release gates.
 
+## WP-03 — review-flow decision revalidation boundary
+
+`FilesApp::review_operation` now requires a worker-supplied revalidation
+callback before it delivers any accepted operation receipt. Cancel and
+Choose-another-destination remain safe review outcomes; every action that
+could authorize work is synchronously checked against already-published fresh
+worker evidence on the UI boundary. The callback is explicitly prohibited
+from native I/O or blocking, and an exception fails closed as an interrupted
+adapter read rather than delivering the receipt. The app test now exercises a
+valid native Keep Both decision and verifies that a stale revalidation result
+is delivered instead of an authorization.
+
+The strict macOS UI target rebuilt at 09:52:26–09:52:38 UTC and the complete
+`ck_vision_files_tests` suite passed **186** cases at 09:55:33–09:55:36 UTC.
+This is a flow-safety boundary only; the copy/move coordinator still must
+construct fresh source/destination evidence from the recursive inventory and
+invoke this callback. Linux requalification and sanitizer/race checks for this
+change remain release gates; Windows remains gated by the unavailable `V:`
+development drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

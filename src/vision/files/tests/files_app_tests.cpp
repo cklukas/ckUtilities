@@ -1405,6 +1405,7 @@ CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     f.loaded();
     std::optional<ConsentReceipt> receipt;
     CK_CHECK(f.app->review_operation(review_model(), NameEncoding::PosixBytes,
+        [&](const ConsentReceipt &value) { return Observation<ConsentReceipt>::available(value); },
         [&](Observation<ConsentReceipt> result) {
             if (result.value())
                 receipt = std::move(result).take_value();
@@ -1416,4 +1417,53 @@ CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->operation_review_pending() && receipt && receipt->action == ConsentAction::Cancel &&
         receipt->plan.is_valid());
+}
+CK_TEST(files_app_operation_review_revalidates_accepted_decisions_before_delivery) {
+    Fixture f;
+    f.loaded();
+    bool revalidated = false;
+    bool delivered_failure = false;
+    CK_CHECK(f.app->review_operation(review_model(), NameEncoding::PosixBytes,
+        [&](const ConsentReceipt &) {
+            revalidated = true;
+            return Observation<ConsentReceipt>::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::PlanDecisionStale),
+                    "files_app.test.stale"});
+        },
+        [&](Observation<ConsentReceipt> result) {
+            delivered_failure = !result.value() && result.unavailable_detail() &&
+                                result.unavailable_detail()->state == ObservationState::Changed &&
+                                result.unavailable_detail()->error.code ==
+                                    static_cast<std::int64_t>(AdapterError::PlanDecisionStale);
+        }));
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::InputLine *> inputs;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), inputs);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1 && !inputs.empty());
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(apply != nullptr);
+    combos.front()->set_selected_index(3); // Keep both.
+    ckv::widgets::InputLine *name = nullptr;
+    for (auto *input : inputs) {
+        bool inside_combo = false;
+        for (auto *parent = input->parent(); parent; parent = parent->parent())
+            inside_combo = inside_combo || dynamic_cast<ckv::widgets::ComboBox *>(parent) != nullptr;
+        if (!inside_combo)
+            name = input;
+    }
+    CK_CHECK(name != nullptr);
+    name->set_text("copy");
+    CK_CHECK(apply->activate_mnemonic("a"));
+    for (int i = 0; i < 5; ++i)
+        f.application.step(f.clock.now_nanos());
+    CK_CHECK(revalidated);
+    CK_CHECK(delivered_failure);
+    CK_CHECK(!f.app->operation_review_pending());
 }

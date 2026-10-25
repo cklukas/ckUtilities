@@ -1231,17 +1231,30 @@ struct FilesApp::State {
     }
 
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
-        ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion) {
-        if (closing || modal_pending() || !model || !completion)
+        ck::files::NameEncoding destination_encoding, FilesApp::OperationRevalidation revalidate,
+        FilesOperationReviewDialog::Completion completion) {
+        if (closing || modal_pending() || !model || !revalidate || !completion)
             return false;
         const auto weak = std::weak_ptr<void>(lifetime);
         operation_review_dialog = std::make_unique<FilesOperationReviewDialog>(
             application, shell->desktop(), shell->roles(), std::move(model), destination_encoding,
-            [this, weak, delivered_completion = std::move(completion)](
+            [this, weak, review_revalidation = std::move(revalidate), delivered_completion = std::move(completion)](
                 ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
                 if (weak.expired())
                     return;
                 operation_review_dialog.reset();
+                if (result.value() && result.value()->action != ck::files::ConsentAction::Cancel &&
+                    result.value()->action != ck::files::ConsentAction::ChooseAnotherDestination) {
+                    try {
+                        result = review_revalidation(*result.value());
+                    } catch (...) {
+                        result = ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
+                            ck::files::ObservationState::Failed,
+                            {ck::files::ErrorDomain::Adapter,
+                                static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
+                                "files_app.operation_revalidation"});
+                    }
+                }
                 delivered_completion(std::move(result));
             });
         return true;
@@ -1300,8 +1313,10 @@ bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }
 bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
-    ck::files::NameEncoding destination_encoding, FilesOperationReviewDialog::Completion completion) {
-    return state_->review_operation(std::move(model), destination_encoding, std::move(completion));
+    ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
+    FilesOperationReviewDialog::Completion completion) {
+    return state_->review_operation(std::move(model), destination_encoding, std::move(revalidate),
+        std::move(completion));
 }
 std::size_t FilesApp::history_size(std::size_t pane) const { return state_->panes.at(pane).history.size(); }
 std::size_t FilesApp::history_position(std::size_t pane) const {
