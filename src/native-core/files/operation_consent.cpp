@@ -22,6 +22,20 @@ bool contains(const std::vector<std::size_t>& values, std::size_t value) noexcep
     return std::find(values.begin(), values.end(), value) != values.end();
 }
 
+bool same_item(const FrozenOperationItem& left, const FrozenOperationItem& right) noexcept {
+    return compare_identity(left.source, right.source) == IdentityComparison::Same && left.kind == right.kind &&
+        left.topology == right.topology && left.hard_link_group == right.hard_link_group;
+}
+
+bool same_issue(const PreservationIssue& left, const PreservationIssue& right) noexcept {
+    return left.item == right.item && left.feature == right.feature && left.state == right.state &&
+        left.consequence == right.consequence && left.hard_failure == right.hard_failure;
+}
+
+bool same_conflict(const DestinationConflict& left, const DestinationConflict& right) noexcept {
+    return left.item == right.item && left.kind == right.kind;
+}
+
 } // namespace
 
 Observation<OperationPlan::Pointer> OperationPlan::create(FileOperation operation,
@@ -202,6 +216,25 @@ bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcep
             conflict_action_valid(receipt.action, receipt.resolved_conflicts, receipt.keep_both_names);
     }
     return false;
+}
+
+Observation<ConsentReceipt> OperationPlan::revalidate(const ConsentReceipt& receipt,
+    std::span<const FrozenOperationItem> items, std::span<const PreservationIssue> issues,
+    std::span<const DestinationConflict> conflicts) const {
+    if (!receipt_matches(receipt))
+        return rejected<ConsentReceipt>(AdapterError::PlanInvalid, "operation_plan.receipt");
+    if (items.size() != items_.size() || issues.size() != issues_.size() || conflicts.size() != conflicts_.size())
+        return rejected<ConsentReceipt>(AdapterError::PlanDecisionStale, "operation_plan.changed", ObservationState::Changed);
+    for (std::size_t index = 0; index < items_.size(); ++index)
+        if (!same_item(items_[index], items[index]))
+            return rejected<ConsentReceipt>(AdapterError::PlanDecisionStale, "operation_plan.item_changed", ObservationState::Changed);
+    for (std::size_t index = 0; index < issues_.size(); ++index)
+        if (!same_issue(issues_[index], issues[index]))
+            return rejected<ConsentReceipt>(AdapterError::PlanDecisionStale, "operation_plan.issue_changed", ObservationState::Changed);
+    for (std::size_t index = 0; index < conflicts_.size(); ++index)
+        if (!same_conflict(conflicts_[index], conflicts[index]))
+            return rejected<ConsentReceipt>(AdapterError::PlanDecisionStale, "operation_plan.conflict_changed", ObservationState::Changed);
+    return Observation<ConsentReceipt>::available(receipt);
 }
 
 } // namespace ck::files

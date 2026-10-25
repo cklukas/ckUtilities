@@ -130,6 +130,12 @@ public:
         std::vector<std::size_t> reviewed_issues = {},
         std::vector<std::size_t> resolved_conflicts = {},
         std::vector<NativeName> keep_both_names = {}) const;
+    // Execution must compare fresh worker evidence before using a receipt.
+    // Any source, topology, preservation or conflict change makes the
+    // decision stale; this method performs no I/O or mutation.
+    Observation<ConsentReceipt> revalidate(const ConsentReceipt& receipt,
+        std::span<const FrozenOperationItem> items, std::span<const PreservationIssue> issues,
+        std::span<const DestinationConflict> conflicts) const;
     bool receipt_matches(const ConsentReceipt& receipt) const noexcept;
 
 private:

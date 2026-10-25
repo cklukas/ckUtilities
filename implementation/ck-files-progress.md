@@ -195,6 +195,21 @@ The macOS strict target rebuilt at 08:50:25–08:50:34 CET. The focused consent
 CTest entry passed and the complete `ck_files_core_tests` binary passed all
 623 cases. No mutation or UI action is enabled by this checkpoint.
 
+## WP-03 — execution-time decision revalidation
+
+`OperationPlan::revalidate` now compares a receipt with fresh worker-produced
+source items, object kinds, topology, preservation issues and destination
+conflicts before the receipt can be handed to an execution layer. Any size or
+value change returns `PlanDecisionStale` with `Changed` state; an invalid or
+forged receipt remains a plan failure. The comparison is value/identity based,
+does not reopen paths or perform I/O, and preserves the original immutable
+receipt on success.
+
+The macOS strict target rebuilt at 08:51:23–08:51:25 CET. The focused consent
+CTest entry passed and the complete `ck_files_core_tests` binary passed all
+624 cases. The future copy/move worker must call this boundary after its
+fresh native checks and before any mutation.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

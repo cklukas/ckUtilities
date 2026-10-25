@@ -145,3 +145,34 @@ CK_TEST(operation_plan_from_frozen_inventory_rejects_incomplete_topology_evidenc
     CK_CHECK(OperationPlan::create_from_inventory(FileOperation::Copy, inventory, topologies).state() ==
         ObservationState::Failed);
 }
+
+CK_TEST(operation_consent_revalidation_invalidates_changed_worker_evidence) {
+    const auto operation = plan({item(14)},
+        {PreservationIssue{0, PreservationFeature::TimesAndFlags, PreservationIssueState::Missing,
+            PreservationConsequence::MetadataLoss, false}},
+        {{0, DestinationConflictKind::ExistingFile}});
+    const auto receipt = take(operation->bind(ConsentAction::ChooseAnotherDestination));
+    const std::vector<FrozenOperationItem> same_items = operation->items();
+    const std::vector<PreservationIssue> same_issues{
+        {0, PreservationFeature::TimesAndFlags, PreservationIssueState::Missing,
+            PreservationConsequence::MetadataLoss, false}};
+    const std::vector<DestinationConflict> same_conflicts{{0, DestinationConflictKind::ExistingFile}};
+    CK_CHECK(operation->revalidate(receipt, same_items, same_issues, same_conflicts).value());
+
+    auto changed_items = same_items;
+    changed_items[0].topology = SourceTargetTopology::Unknown;
+    auto stale = operation->revalidate(receipt, changed_items, same_issues, same_conflicts);
+    CK_CHECK(stale.state() == ObservationState::Changed &&
+        stale.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::PlanDecisionStale));
+
+    auto changed_issue = same_issues;
+    changed_issue[0].state = PreservationIssueState::Unknown;
+    stale = operation->revalidate(receipt, same_items, changed_issue, same_conflicts);
+    CK_CHECK(stale.state() == ObservationState::Changed &&
+        stale.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::PlanDecisionStale));
+
+    auto forged = receipt;
+    forged.action = ConsentAction::Cancel;
+    forged.reviewed_issues = {0};
+    CK_CHECK(operation->revalidate(forged, same_items, same_issues, same_conflicts).state() == ObservationState::Failed);
+}
