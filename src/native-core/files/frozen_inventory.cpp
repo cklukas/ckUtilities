@@ -80,7 +80,7 @@ bool FrozenInventoryBuilder::add(FrozenInventoryEntry entry) {
 
     const std::size_t group = group_for(entry.identity);
     entries_.push_back(std::move(entry));
-    hard_link_groups_.push_back(group == entries_.size() - 1 ? group : group);
+    hard_link_groups_.push_back(group);
     logical_bytes_ += entries_.back().logical_size;
     return true;
 }
