@@ -194,6 +194,106 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
 }
 
+CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-copy-batch",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_directory_path = scratch.path() / "source";
+    const auto destination_directory_path = scratch.path() / "destination";
+    fs::create_directory(source_directory_path);
+    fs::create_directory(destination_directory_path);
+    {
+        std::ofstream first(source_directory_path / "first.bin", std::ios::binary);
+        first << "first native batch payload";
+        std::ofstream second(source_directory_path / "second.bin", std::ios::binary);
+        second << "second native batch payload";
+    }
+
+    NativeFileSystem filesystem;
+    auto source_parent = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(source_directory_path)));
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_directory_path)));
+    const auto source_parent_identity = take(source_parent->identity());
+    const auto destination_identity = take(destination->identity());
+
+    auto make_job = [&](const char* source_text, const char* staging_text, const char* destination_text,
+                        const char* journal_text, std::byte journal_byte) {
+        const auto source_name = name(source_text);
+        const auto staging_name = name(staging_text);
+        const auto destination_name = name(destination_text);
+        const auto source = take(source_parent->open_child(source_name, EntryAccess::ContentRead));
+        const auto source_metadata = take(source->inspect_basic());
+        const auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+        auto journal_file = take(open_native_operation_journal_file(journal_root, name(journal_text), true));
+        OperationJournalId journal_id;
+        journal_id.bytes[0] = journal_byte;
+        auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 256}));
+        CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+            {1, 0, OperationJournalState::Planned, {}}).value());
+
+        NativeOperationCopyRequest request{
+            journal,
+            std::shared_ptr<OperationJournalFile>(std::move(journal_file)),
+            0,
+            source_parent,
+            source_parent_identity,
+            source_name,
+            take(source_metadata.identity),
+            destination,
+            destination_identity,
+            staging_name,
+            destination_name,
+            {},
+            {}};
+        request.copy_limits.chunk_bytes = 4;
+        request.copy_limits.max_bytes = 1024;
+        request.prepare_metadata = [](OpenedEntry&, std::stop_token) {
+            OperationMetadataRequest metadata;
+            metadata.apply_traversal_metadata = [](std::stop_token) {
+                return Observation<bool>::available(true);
+            };
+            metadata.apply_security_metadata = [](std::stop_token) {
+                return Observation<bool>::available(true);
+            };
+            metadata.apply_final_times = [](std::stop_token) {
+                return Observation<bool>::available(true);
+            };
+            metadata.flush_destination = [](std::stop_token) {
+                return Observation<bool>::available(true);
+            };
+            return OperationMetadataJob::create(std::move(metadata));
+        };
+        auto created = NativeOperationCopyJob::create(std::move(request));
+        CK_CHECK(created.value());
+        return created.value() ? std::move(created).take_value() : NativeOperationCopyJob::Pointer{};
+    };
+
+    std::vector<NativeOperationCopyJob::Pointer> jobs;
+    jobs.push_back(make_job("first.bin", ".ck-first-staging", "first-copy.bin", "first.journal", std::byte{0x41}));
+    jobs.push_back(make_job("second.bin", ".ck-second-staging", "second-copy.bin", "second.journal", std::byte{0x42}));
+    CK_CHECK(jobs[0] && jobs[1]);
+    if (!jobs[0] || !jobs[1]) return;
+
+    auto created = create_native_operation_copy_batch(std::move(jobs));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto batch = std::move(created).take_value();
+    for (unsigned step = 0; step != 400 && batch->state() != OperationBatchState::Complete &&
+         batch->state() != OperationBatchState::Failed && batch->state() != OperationBatchState::Cancelled; ++step)
+        batch->advance();
+
+    CK_CHECK(batch->state() == OperationBatchState::Complete);
+    CK_CHECK(batch->result().items.size() == 2);
+    CK_CHECK(batch->result().items[0].outcome == OperationItemOutcome::Complete);
+    CK_CHECK(batch->result().items[1].outcome == OperationItemOutcome::Complete);
+    for (const auto& destination_name : {name("first-copy.bin"), name("second-copy.bin")}) {
+        const auto published = take(destination->open_child(destination_name, EntryAccess::ContentRead));
+        const auto content = take(published->read_content({1024}, 0));
+        CK_CHECK(content.complete && !content.bytes.empty());
+    }
+}
+
 CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {
     const ck::testing::ScratchDirectory scratch("files-operation-publication", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;
