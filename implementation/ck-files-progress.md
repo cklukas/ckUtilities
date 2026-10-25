@@ -560,6 +560,24 @@ drive is unavailable; no Windows checkout, build or temporary artifact was
 created. No mutation command or production operation-flow invocation is
 enabled by this slice.
 
+`FilesApp` now optionally lends this service from the composition root.
+`prepare_operation` blocks pane activity while planning, consumes only the
+exact planning ticket, opens the existing review dialog only for a ready
+worker-produced model, and delivers planning or worker-stop failures as
+unavailable consent results. Teardown withdraws the UI callback before
+stopping the planning worker. The strict macOS Files UI suite passes **190**
+tests, including invalid-evidence rejection at the app boundary; Linux
+requalification of commit `9d94145` passes **648** core tests and **190** Files
+UI tests with the same pinned inputs. The Linux flow-build hashes are:
+
+* `ck-files` — `7e265b680a22499d9f745c90f7ce42a0fe84f989289637d2b7ede968ffc62bcf`
+* `ck_vision_files_tests` — `752cc785402d0c64c31f0b989a2fff20e0324540280b06d395e7b1f1f7dc8fa1`
+* `ck_files_core_tests` — `c6a182172a7208a037a6c5124789c6d5f8fcc341b29dd7ec40520871c2906777`
+
+The independent Linux installed-package consumer also passed. This remains a
+planning/review path only: no copy, move, delete or replacement command is
+enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
