@@ -59,6 +59,27 @@ Observation<T> not_applicable(const char* operation) {
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), operation});
 }
 
+using NtSetInformationFileFunction = NTSTATUS (NTAPI *)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
+
+bool set_file_rename_information(HANDLE source, PFILE_RENAME_INFO information, ULONG size) {
+    const auto module = GetModuleHandleW(L"ntdll.dll");
+    const auto address = module ? GetProcAddress(module, "NtSetInformationFile") : nullptr;
+    if (!address) {
+        SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+        return false;
+    }
+    static_assert(sizeof(NtSetInformationFileFunction) == sizeof(address));
+    const auto set_information = std::bit_cast<NtSetInformationFileFunction>(address);
+    IO_STATUS_BLOCK io{};
+    // FileRenameInformation is the documented native information class used
+    // by NtSetInformationFile. Unlike the Win32 wrapper, the native call
+    // preserves a verified relative RootDirectory handle on local volumes.
+    const auto status = set_information(source, &io, information, size, 10);
+    if (status >= 0) return true;
+    SetLastError(RtlNtStatusToDosError(status));
+    return false;
+}
+
 Observation<ObjectIdentity> identity(HANDLE handle, const AdapterScope& scope) {
     FILE_ID_INFO native{};
     if (GetFileInformationByHandleEx(handle, FileIdInfo, &native, sizeof(native))) {
@@ -901,7 +922,7 @@ public:
         info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, spelling.data(), length);
-        if (!SetFileInformationByHandle(source.get(), FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
+        if (!set_file_rename_information(source.get(), info, static_cast<ULONG>(buffer.size()))) {
             const DWORD code = GetLastError();
             if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
                 return Result::unavailable(ObservationState::Changed,
@@ -997,7 +1018,7 @@ public:
         info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, spelling.data(), length);
-        if (!SetFileInformationByHandle(source.get(), FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
+        if (!set_file_rename_information(source.get(), info, static_cast<ULONG>(buffer.size()))) {
             const DWORD code = GetLastError();
             if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
                 return Result::unavailable(ObservationState::Changed,
@@ -1046,7 +1067,7 @@ public:
         info->RootDirectory = destination_access.value()->get();
         info->FileNameLength = static_cast<DWORD>(length);
         std::memcpy(info->FileName, units->data(), length);
-        if (!SetFileInformationByHandle(source, FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
+        if (!set_file_rename_information(source, info, static_cast<ULONG>(buffer.size()))) {
             const DWORD code = GetLastError();
             if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
                 return Result::unavailable(ObservationState::Changed,
