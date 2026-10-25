@@ -21,6 +21,9 @@
 
 namespace ck::files {
 
+class DirectoryCursor;
+class NativeName;
+
 // Requested OS access only; never authority for mutation, loss or hydration.
 // Layout is an explicit regular-file query opt-in and can require data-read
 // permission on platforms that need an additional readable handle.
@@ -105,6 +108,11 @@ public:
     virtual Observation<std::size_t> write_content(std::uint64_t offset, std::span<const std::byte> bytes,
                                                     ContentWriteLimits limits = {}, std::stop_token stop = {});
     virtual Observation<bool> flush_content();
+    // Publish this worker-created staging object under a new destination name
+    // relative to a held directory. The default refuses the operation; a
+    // platform adapter must provide an atomic no-replace primitive and retain
+    // an ambiguous native outcome for reconciliation.
+    virtual Observation<bool> publish_noreplace(const DirectoryCursor& destination, const NativeName& name);
 protected:
     OpenedEntry() = default;
 };

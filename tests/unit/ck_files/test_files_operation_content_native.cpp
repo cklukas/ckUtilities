@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "scratch_directory.hpp"
+#include "stream_copy_job.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
 #include <array>
+#include <fstream>
 #include <filesystem>
 #include <stdexcept>
 #include <span>
@@ -64,4 +66,31 @@ CK_TEST(native_operation_staging_file_rejects_foreign_names_and_cancelled_writes
     stop.request_stop();
     const std::array<std::byte, 1> byte{std::byte{1}};
     CK_CHECK(staging->write_content(0, byte, {}, stop.get_token()).state() == ObservationState::Unknown);
+}
+
+CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
+    const ck::testing::ScratchDirectory scratch("files-operation-native-copy", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "native held stream copy with independent verification";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("source.bin"), EntryAccess::ContentRead));
+    auto destination = take(directory->create_child_file(name("staging.bin")));
+    StreamCopyLimits limits;
+    limits.chunk_bytes = 7;
+    limits.max_bytes = 1024;
+    auto created = create_stream_copy_job(*source, *destination, limits);
+    CK_CHECK(created.value());
+    if (!created.value())
+        return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 100 && job->state() != StreamCopyState::Complete &&
+         job->state() != StreamCopyState::Failed; ++step)
+        job->advance();
+    CK_CHECK(job->state() == StreamCopyState::Complete);
+    const auto read = take(destination->read_content({1024}, 0));
+    CK_CHECK(read.complete && read.bytes.size() == job->result().source_bytes);
 }

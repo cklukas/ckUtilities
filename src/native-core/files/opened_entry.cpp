@@ -79,4 +79,11 @@ Observation<bool> OpenedEntry::flush_content() {
     return Observation<bool>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "content.flush_native_query"});
 }
+Observation<bool> OpenedEntry::publish_noreplace(const DirectoryCursor&, const NativeName& name) {
+    if (!name.is_valid())
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "publish_noreplace.name"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "publish_noreplace.native_query"});
+}
 } // namespace ck::files

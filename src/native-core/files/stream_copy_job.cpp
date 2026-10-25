@@ -174,4 +174,27 @@ StreamCopyState StreamCopyJob::advance(std::stop_token stop) {
     return verify_step(stop);
 }
 
+Observation<StreamCopyJob::Pointer> create_stream_copy_job(OpenedEntry& source, OpenedEntry& destination,
+                                                           StreamCopyLimits limits) {
+    StreamCopyRequest request;
+    request.limits = limits;
+    request.read_source = [&source](std::uint64_t offset, std::size_t limit, std::stop_token stop) {
+        return source.read_content(ContentReadLimits{limit}, offset, stop);
+    };
+    request.write_destination = [&destination, limits](std::uint64_t offset, std::span<const std::byte> bytes,
+                                                        std::stop_token stop) {
+        return destination.write_content(offset, bytes, ContentWriteLimits{limits.chunk_bytes}, stop);
+    };
+    request.read_destination = [&destination](std::uint64_t offset, std::size_t limit, std::stop_token stop) {
+        return destination.read_content(ContentReadLimits{limit}, offset, stop);
+    };
+    request.flush_destination = [&destination](std::stop_token stop) {
+        if (stop.stop_requested())
+            return Observation<bool>::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "stream_copy.native_flush_cancelled"});
+        return destination.flush_content();
+    };
+    return StreamCopyJob::create(std::move(request));
+}
+
 } // namespace ck::files

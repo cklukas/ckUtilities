@@ -79,4 +79,10 @@ private:
     std::uint64_t verify_offset_ = 0;
 };
 
+// Compose the bounded copy state machine with two worker-owned native object
+// handles. Both entries must remain alive and dedicated to this job until it
+// reaches a terminal state; this helper performs no path reopening or UI work.
+Observation<StreamCopyJob::Pointer> create_stream_copy_job(OpenedEntry& source, OpenedEntry& destination,
+                                                           StreamCopyLimits limits = {});
+
 } // namespace ck::files
