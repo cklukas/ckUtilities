@@ -162,4 +162,21 @@ CK_TEST(native_operation_folder_creation_is_exclusive_and_returns_a_held_directo
     CK_CHECK(fs::is_directory(scratch.path() / "created"));
     const auto existing = directory->create_child_directory(name("created"));
     CK_CHECK(!existing.value() && existing.state() == ObservationState::Changed);
+
+    fs::rename(scratch.path() / "created", scratch.path() / "retired");
+    fs::create_directory(scratch.path() / "created");
+    const auto held_metadata = take(child->inspect_basic());
+    CK_CHECK(held_metadata.kind.value() && *held_metadata.kind.value() == ObjectKind::Directory);
+    CK_CHECK(fs::is_directory(scratch.path() / "retired") && fs::is_directory(scratch.path() / "created"));
+
+    {
+        std::ofstream output(scratch.path() / "occupied");
+        output << "preserve this file";
+    }
+    const auto occupied = directory->create_child_directory(name("occupied"));
+    CK_CHECK(!occupied.value() && occupied.state() == ObservationState::Changed);
+    std::ifstream input(scratch.path() / "occupied");
+    std::string content;
+    std::getline(input, content);
+    CK_CHECK(content == "preserve this file");
 }
