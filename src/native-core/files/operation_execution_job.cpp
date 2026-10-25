@@ -129,4 +129,21 @@ OperationExecutionState OperationExecutionJob::advance(std::stop_token stop) {
     return result_.state;
 }
 
+Observation<bool> OperationExecutionJob::cleanup_unpublished_staging() {
+    if (result_.state != OperationExecutionState::Failed &&
+        result_.state != OperationExecutionState::Cancelled)
+        return rejected<bool>(AdapterError::PlanDecisionStale, "operation_execution.cleanup_state");
+    if (!request_.cleanup_unpublished_staging)
+        return Observation<bool>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+             "operation_execution.cleanup_unavailable"});
+    try {
+        return request_.cleanup_unpublished_staging();
+    } catch (...) {
+        return Observation<bool>::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+             "operation_execution.cleanup_exception"});
+    }
+}
+
 } // namespace ck::files

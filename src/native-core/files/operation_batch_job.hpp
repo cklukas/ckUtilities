@@ -46,6 +46,7 @@ public:
     const OperationBatchResult& result() const noexcept { return result_; }
     std::size_t current_item() const noexcept { return current_; }
     OperationBatchState advance(std::stop_token stop = {});
+    Observation<bool> cleanup_item(std::size_t item);
 
 private:
     explicit OperationBatchJob(OperationBatchRequest request);

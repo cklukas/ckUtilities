@@ -113,4 +113,13 @@ OperationBatchState OperationBatchJob::advance(std::stop_token stop) {
     return result_.state;
 }
 
+Observation<bool> OperationBatchJob::cleanup_item(std::size_t item) {
+    if (item >= request_.jobs.size())
+        return rejected<bool>(AdapterError::InvalidIdentifier, "operation_batch.cleanup_item");
+    const auto outcome = result_.items[item].outcome;
+    if (outcome != OperationItemOutcome::Failed && outcome != OperationItemOutcome::Cancelled)
+        return rejected<bool>(AdapterError::PlanDecisionStale, "operation_batch.cleanup_state");
+    return request_.jobs[item]->cleanup_unpublished_staging();
+}
+
 } // namespace ck::files

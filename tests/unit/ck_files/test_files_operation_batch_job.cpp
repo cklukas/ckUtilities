@@ -151,6 +151,14 @@ CK_TEST(operation_batch_job_serializes_items_and_preserves_partial_outcomes) {
     CK_CHECK(job->result().items[1].outcome == OperationItemOutcome::Failed);
     CK_CHECK(job->result().items[2].outcome == OperationItemOutcome::Complete);
     CK_CHECK(first_commits == 1 && third_commits == 1);
+    const auto completed_cleanup = job->cleanup_item(0);
+    CK_CHECK(!completed_cleanup.value() &&
+             completed_cleanup.unavailable_detail()->error.code ==
+                 static_cast<std::int64_t>(AdapterError::PlanDecisionStale));
+    const auto missing_cleanup = job->cleanup_item(3);
+    CK_CHECK(!missing_cleanup.value() &&
+             missing_cleanup.unavailable_detail()->error.code ==
+                 static_cast<std::int64_t>(AdapterError::InvalidIdentifier));
 }
 
 CK_TEST(operation_batch_job_cancellation_does_not_start_pending_items) {

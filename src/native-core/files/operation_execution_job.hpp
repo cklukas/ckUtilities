@@ -31,6 +31,7 @@ struct OperationExecutionRequest final {
     // Construction must be side-effect free; the returned commit job owns all
     // native callbacks and remains worker-bound.
     std::function<Observation<OperationCommitJob::Pointer>(std::stop_token)> prepare_commit;
+    std::function<Observation<bool>()> cleanup_unpublished_staging;
 };
 
 struct OperationExecutionResult final {
@@ -51,6 +52,7 @@ public:
     const std::optional<UnavailableObservation>& failure() const noexcept { return result_.failure; }
     OperationProgress progress() const noexcept;
     OperationExecutionState advance(std::stop_token stop = {});
+    Observation<bool> cleanup_unpublished_staging();
 
 private:
     explicit OperationExecutionJob(OperationExecutionRequest request) noexcept : request_(std::move(request)) {}
