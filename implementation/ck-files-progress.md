@@ -578,6 +578,38 @@ The independent Linux installed-package consumer also passed. This remains a
 planning/review path only: no copy, move, delete or replacement command is
 enabled.
 
+## WP-03 — native operation evidence composition
+
+The recursive inventory worker now has an additive worker-only completion
+view that retains one exact `HeldChild` per sealed inventory entry, including
+the selected root handle. The handles remain aligned with the immutable
+inventory and are never exposed through UI publication or consent receipts.
+Added `OperationEvidenceJob` composes the native stages in one serialized
+worker boundary: recursive inventory, per-entry object inventory, destination
+directory assessment, destination-name batch probing, source/target identity
+checks and ancestry walks. It publishes only a complete evidence bundle;
+shape mismatches, unavailable observations, limits, cancellation and native
+failures remain explicit and no stage performs mutation, path reopening,
+display-text parsing or implicit capability inference.
+
+The strict macOS core build reused the current verified SDK/llama inputs and
+rebuilt at 11:28:12–11:29:16 UTC. The focused evidence suite passed **2**
+cases and the complete `ck_files_core_tests` binary passed **650** cases. The
+verified normal core output is:
+
+* `ck_files_core_tests` — `34fc6ec12fca8a802c72d3a95e964f7a59f96ac2b502282cf15a0652e0baadb4`
+
+The same focused suite passed under the fresh macOS ASan/UBSan build at
+11:32:39–11:33:01 UTC and the fresh ThreadSanitizer build at
+11:33:01–11:36:04 UTC. Sanitizer outputs are:
+
+* ASan/UBSan `ck_files_core_tests` — `44e33b00952a13b8fe1521c7ae314b9e426953746227f286bbdf585b7a948f8c`
+* TSan `ck_files_core_tests` — `14f23fff23b11f8352e5d9a990a5494cbf84c29262aab2363e98e1c591dd6ca0`
+
+Linux qualification and the mandatory Windows `V:` gate remain pending for
+this checkpoint. The evidence bundle is still a planning input only; no copy,
+move, replacement, deletion or other mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

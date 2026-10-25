@@ -4,6 +4,7 @@
 
 #include "directory_cursor.hpp"
 #include "frozen_inventory.hpp"
+#include "held_child.hpp"
 #include "monotonic_clock.hpp"
 
 #include <cstddef>
@@ -23,6 +24,23 @@ struct RecursiveInventoryLimits final {
 
 enum class RecursiveInventoryState { Collecting, Paused, Complete, Failed, Abandoned };
 
+// Worker-only companion to a sealed inventory. The source handles are kept in
+// entry order and never belong in a UI publication or plan receipt. Retiring
+// this result, including every HeldChild owner, remains a worker responsibility.
+class CompletedRecursiveInventory final {
+public:
+    const FrozenInventory::Pointer& inventory() const noexcept { return inventory_; }
+    const std::vector<HeldChild::Pointer>& sources() const noexcept { return sources_; }
+
+private:
+    friend class RecursiveInventoryJob;
+    CompletedRecursiveInventory(FrozenInventory::Pointer inventory,
+        std::vector<HeldChild::Pointer> sources) noexcept
+        : inventory_(std::move(inventory)), sources_(std::move(sources)) {}
+    FrozenInventory::Pointer inventory_;
+    std::vector<HeldChild::Pointer> sources_;
+};
+
 // Worker-owned, read-only recursive traversal. The root cursor and every
 // child cursor remain held by this job; no path is reopened and no display
 // string is parsed. It seals a FrozenInventory only after every enumerated
@@ -37,7 +55,8 @@ public:
     RecursiveInventoryJob(std::shared_ptr<DirectoryCursor> root,
         NativeAbsolutePath root_path, InventoryMountPolicy mount_policy,
         InventoryLinkPolicy link_policy, RecursiveInventoryLimits limits = {},
-        std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
+        std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock(),
+        HeldChild::Pointer root_source = {});
     RecursiveInventoryJob(const RecursiveInventoryJob&) = delete;
     RecursiveInventoryJob& operator=(const RecursiveInventoryJob&) = delete;
 
@@ -46,6 +65,7 @@ public:
     RecursiveInventoryState state() const noexcept { return state_; }
     const std::optional<UnavailableObservation>& failure() const noexcept { return failure_; }
     Observation<Result> completed() const;
+    Observation<std::shared_ptr<const CompletedRecursiveInventory>> completed_sources() const;
 
 private:
     struct Frame final {
@@ -68,6 +88,7 @@ private:
     void release_staging() noexcept;
 
     std::shared_ptr<DirectoryCursor> root_;
+    HeldChild::Pointer root_source_;
     NativeAbsolutePath root_path_;
     InventoryLinkPolicy link_policy_;
     RecursiveInventoryLimits limits_;
@@ -80,6 +101,8 @@ private:
     RecursiveInventoryState state_ = RecursiveInventoryState::Collecting;
     std::optional<UnavailableObservation> failure_;
     Result completed_;
+    std::shared_ptr<const CompletedRecursiveInventory> completed_sources_;
+    std::vector<HeldChild::Pointer> held_sources_;
 };
 
 } // namespace ck::files

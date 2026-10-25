@@ -34,9 +34,10 @@ bool available_size(const Observation<std::uint64_t>& size) noexcept { return si
 RecursiveInventoryJob::RecursiveInventoryJob(std::shared_ptr<DirectoryCursor> root,
     NativeAbsolutePath root_path, InventoryMountPolicy mount_policy,
     InventoryLinkPolicy link_policy, RecursiveInventoryLimits limits,
-    std::shared_ptr<const MonotonicClock> clock)
-    : root_(std::move(root)), root_path_(std::move(root_path)), link_policy_(link_policy), limits_(limits),
-      clock_(std::move(clock)), builder_(std::make_unique<FrozenInventoryBuilder>(mount_policy, link_policy, limits.inventory)) {
+    std::shared_ptr<const MonotonicClock> clock, HeldChild::Pointer root_source)
+    : root_(std::move(root)), root_source_(std::move(root_source)), root_path_(std::move(root_path)),
+      link_policy_(link_policy), limits_(limits), clock_(std::move(clock)),
+      builder_(std::make_unique<FrozenInventoryBuilder>(mount_policy, link_policy, limits.inventory)) {
     if (!root_ || !root_path_.is_valid() || !clock_ || limits_.max_depth == 0 ||
         limits_.max_depth > RecursiveInventoryLimits::hard_max_depth ||
         limits_.time_slice <= MonotonicClock::Duration::zero() || limits_.time_slice > std::chrono::seconds(1))
@@ -68,6 +69,8 @@ void RecursiveInventoryJob::release_staging() noexcept {
     frames_.clear();
     directory_identities_.clear();
     root_.reset();
+    root_source_.reset();
+    held_sources_.clear();
 }
 
 bool RecursiveInventoryJob::add_metadata(const NativeAbsolutePath& path, const BasicMetadata& metadata,
@@ -117,6 +120,14 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
                     compare_identity(*root_->identity().value(), *root_metadata.value()->identity.value()) != IdentityComparison::Same) {
                     fail(AdapterError::MetadataChanged, "recursive_inventory.root_identity", ObservationState::Changed); return state_;
                 }
+                if (root_source_) {
+                    if (!root_source_->name().is_valid() || !root_source_->metadata().identity.value() ||
+                        compare_identity(*root_source_->metadata().identity.value(), *root_metadata.value()->identity.value()) != IdentityComparison::Same ||
+                        !root_source_->metadata().kind.value() || *root_source_->metadata().kind.value() != ObjectKind::Directory) {
+                        fail(AdapterError::MetadataChanged, "recursive_inventory.root_source", ObservationState::Changed); return state_;
+                    }
+                    held_sources_.push_back(root_source_);
+                }
                 if (!add_metadata(root_path_, *root_metadata.value(), LinkTraversalEvidence::NotLink)) return state_;
                 const auto identity = *root_metadata.value()->identity.value();
                 frames_.push_back({root_, root_path_, identity, {}, 0});
@@ -133,6 +144,13 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
                 auto result = builder_->completed();
                 if (!result.value()) { fail(*result.unavailable_detail()); return state_; }
                 completed_ = std::move(result).take_value();
+                if (root_source_) {
+                    if (held_sources_.size() != completed_->entries().size()) {
+                        fail(AdapterError::PlanInvalid, "recursive_inventory.source_shape"); return state_;
+                    }
+                    completed_sources_ = std::shared_ptr<const CompletedRecursiveInventory>(
+                        new const CompletedRecursiveInventory(completed_, std::move(held_sources_)));
+                }
                 release_staging();
                 // release_staging intentionally does not clear completed_ on success.
                 state_ = RecursiveInventoryState::Complete;
@@ -175,7 +193,8 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
                 if (stop.stop_requested()) { state_ = RecursiveInventoryState::Paused; return state_; }
                 fail(*held.unavailable_detail()); return state_;
             }
-            const auto& metadata = (*held.value())->metadata();
+            auto held_source = std::move(held).take_value();
+            const auto& metadata = held_source->metadata();
             const auto kind = metadata.kind.value();
             if (!available_kind(metadata.kind)) { fail(AdapterError::InvalidNativeResult, "recursive_inventory.child_kind"); return state_; }
             if (link_kind(*kind) && link_policy_ == InventoryLinkPolicy::FollowLinks) {
@@ -187,6 +206,7 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
             auto child_path = std::move(path).take_value();
             if (!add_metadata(child_path, metadata,
                     link_kind(*kind) ? LinkTraversalEvidence::NotFollowed : LinkTraversalEvidence::NotLink)) return state_;
+            if (root_source_) held_sources_.push_back(held_source);
             if (*kind != ObjectKind::Directory) { frame.pending.reset(); continue; }
             auto child = frame.directory->open_directory_child(name);
             if (!child.value()) {
@@ -229,6 +249,13 @@ bool RecursiveInventoryJob::abandon() noexcept {
 Observation<RecursiveInventoryJob::Result> RecursiveInventoryJob::completed() const {
     if (completed_) return Observation<Result>::available(completed_);
     if (failure_) return unavailable_from<Result>(*failure_);
+    return {};
+}
+
+Observation<std::shared_ptr<const CompletedRecursiveInventory>> RecursiveInventoryJob::completed_sources() const {
+    using ResultWithSources = std::shared_ptr<const CompletedRecursiveInventory>;
+    if (completed_sources_) return Observation<ResultWithSources>::available(completed_sources_);
+    if (failure_) return Observation<ResultWithSources>::unavailable(failure_->state, failure_->error);
     return {};
 }
 
