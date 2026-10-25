@@ -119,6 +119,97 @@ CK_TEST(operation_copy_job_cancellation_before_prepare_is_journaled_without_nati
     CK_CHECK(value->state(0) == OperationJournalState::Cancelled);
 }
 
+CK_TEST(operation_copy_job_prepared_journal_failure_prevents_copy_preparation) {
+    auto value = journal();
+    unsigned preparations = 0;
+    auto request = OperationCopyRequest{
+        0, value,
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [&preparations](std::stop_token) {
+            ++preparations;
+            return Observation<StreamCopyJob::Pointer>::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.prepare_unreachable"});
+        },
+        [](std::stop_token) { return no_op_metadata_job(); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [value](OperationJournalRecord record) {
+            if (record.state == OperationJournalState::Prepared)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.prepared_flush"});
+            return value->append(std::move(record));
+        },
+    };
+    auto created = OperationCopyJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    CK_CHECK(job->advance() == OperationCopyState::NeedsReconciliation && preparations == 0 &&
+             value->state(0) == OperationJournalState::Planned);
+}
+
+CK_TEST(operation_copy_job_copied_journal_failure_prevents_metadata_stage) {
+    auto value = journal();
+    MemoryCopy memory;
+    unsigned metadata_preparations = 0;
+    auto request = OperationCopyRequest{
+        0, value,
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [&memory](std::stop_token) { return StreamCopyJob::create(memory.request()); },
+        [&metadata_preparations](std::stop_token) {
+            ++metadata_preparations;
+            return no_op_metadata_job();
+        },
+        [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
+        [value](OperationJournalRecord record) {
+            if (record.state == OperationJournalState::Copied)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.copied_flush"});
+            return value->append(std::move(record));
+        },
+    };
+    auto created = OperationCopyJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 20 && job->state() != OperationCopyState::NeedsReconciliation; ++step)
+        job->advance();
+    CK_CHECK(job->state() == OperationCopyState::NeedsReconciliation && metadata_preparations == 0 &&
+             value->state(0) == OperationJournalState::Prepared && memory.destination == memory.source);
+}
+
+CK_TEST(operation_copy_job_verified_journal_failure_requires_reconciliation_after_verification) {
+    auto value = journal();
+    MemoryCopy memory;
+    unsigned verifications = 0;
+    auto request = OperationCopyRequest{
+        0, value,
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [](std::stop_token) { return Observation<bool>::available(true); },
+        [&memory](std::stop_token) { return StreamCopyJob::create(memory.request()); },
+        [](std::stop_token) { return no_op_metadata_job(); },
+        [&verifications](std::stop_token) {
+            ++verifications;
+            return Observation<bool>::available(true);
+        },
+        [value](OperationJournalRecord record) {
+            if (record.state == OperationJournalState::Verified)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.verified_flush"});
+            return value->append(std::move(record));
+        },
+    };
+    auto created = OperationCopyJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 20 && job->state() != OperationCopyState::NeedsReconciliation; ++step)
+        job->advance();
+    CK_CHECK(job->state() == OperationCopyState::NeedsReconciliation && verifications == 1 &&
+             value->state(0) == OperationJournalState::Copied && memory.destination == memory.source);
+}
+
 CK_TEST(operation_copy_job_unknown_verification_failure_requires_reconciliation) {
     auto value = journal();
     MemoryCopy memory;
