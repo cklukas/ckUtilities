@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -105,6 +106,22 @@ struct OperationJournalDecode final {
 
 Observation<std::vector<std::byte>> encode_operation_journal(const OperationJournal& journal,
                                                              OperationJournalCodecLimits limits = {});
+Observation<std::vector<std::byte>> encode_operation_journal_frame(const OperationJournal& journal,
+                                                                   const OperationJournalRecord& record,
+                                                                   OperationJournalCodecLimits limits = {});
+
+struct OperationJournalSink final {
+    std::function<Observation<std::size_t>(std::uint64_t, std::span<const std::byte>)> write_at;
+    std::function<Observation<bool>()> flush;
+};
+
+// The sink owns the durable file. The journal is updated only after every
+// byte has been written and flush succeeds. A failed write/flush leaves the
+// in-memory state unchanged and must be reconciled by the caller.
+Observation<bool> append_operation_journal(OperationJournal& journal, OperationJournalRecord record,
+                                           std::uint64_t offset, OperationJournalSink sink,
+                                           OperationJournalCodecLimits limits = {});
+
 Observation<OperationJournalDecode> decode_operation_journal(std::span<const std::byte> bytes,
                                                              OperationJournalLimits journal_limits = {},
                                                              OperationJournalCodecLimits codec_limits = {});

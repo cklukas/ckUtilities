@@ -165,11 +165,54 @@ Observation<bool> OperationJournal::validate(const OperationJournalRecord &recor
     return Observation<bool>::available(true);
 }
 
-Observation<std::vector<std::byte>> encode_operation_journal(const OperationJournal &journal,
-                                                              OperationJournalCodecLimits limits) {
+Observation<std::vector<std::byte>> encode_frame_unchecked(const OperationJournal &journal,
+                                                           const OperationJournalRecord &record,
+                                                           OperationJournalCodecLimits limits) {
     if (!limits.max_bytes || limits.max_bytes > OperationJournalCodecLimits::hard_max_bytes)
         return journal_rejected<std::vector<std::byte>>(
             journal_error(AdapterError::InvalidLimit, "operation_journal.codec_limits"));
+    try {
+        if (record.evidence.size() > std::numeric_limits<std::uint32_t>::max())
+            return journal_rejected<std::vector<std::byte>>(
+                journal_error(AdapterError::InventoryLimit, "operation_journal.evidence", ObservationState::Unknown));
+        const auto body_size = fixed_body_bytes + record.evidence.size();
+        if (body_size > std::numeric_limits<std::uint32_t>::max() ||
+            body_size + 9 + sizeof(std::uint32_t) > limits.max_bytes)
+            return journal_rejected<std::vector<std::byte>>(
+                journal_error(AdapterError::InventoryLimit, "operation_journal.frame", ObservationState::Unknown));
+        std::vector<std::byte> body;
+        body.reserve(body_size);
+        body.push_back(journal.operation() == FileOperation::Copy ? std::byte{0} : std::byte{1});
+        body.insert(body.end(), journal.id().bytes.begin(), journal.id().bytes.end());
+        put_u64(body, record.sequence);
+        put_u64(body, static_cast<std::uint64_t>(record.item));
+        body.push_back(std::byte{static_cast<unsigned char>(record.state)});
+        put_u32(body, static_cast<std::uint32_t>(record.evidence.size()));
+        body.insert(body.end(), record.evidence.begin(), record.evidence.end());
+        std::vector<std::byte> encoded;
+        encoded.reserve(9 + body.size() + sizeof(std::uint32_t));
+        encoded.insert(encoded.end(), {std::byte{'C'}, std::byte{'K'}, std::byte{'F'}, std::byte{'J'}, std::byte{1}});
+        put_u32(encoded, static_cast<std::uint32_t>(body.size()));
+        encoded.insert(encoded.end(), body.begin(), body.end());
+        put_u32(encoded, checksum(body));
+        return Observation<std::vector<std::byte>>::available(std::move(encoded));
+    } catch (const std::bad_alloc &) {
+        return journal_rejected<std::vector<std::byte>>(
+            journal_error(AdapterError::InventoryLimit, "operation_journal.encode", ObservationState::Unknown));
+    }
+}
+
+Observation<std::vector<std::byte>> encode_operation_journal_frame(const OperationJournal &journal,
+                                                                   const OperationJournalRecord &record,
+                                                                   OperationJournalCodecLimits limits) {
+    auto valid = journal.validate(record);
+    if (!valid.value())
+        return journal_rejected<std::vector<std::byte>>(*valid.unavailable_detail());
+    return encode_frame_unchecked(journal, record, limits);
+}
+
+Observation<std::vector<std::byte>> encode_operation_journal(const OperationJournal &journal,
+                                                              OperationJournalCodecLimits limits) {
     if (journal.records().empty())
         return journal_rejected<std::vector<std::byte>>(
             journal_error(AdapterError::PlanInvalid, "operation_journal.empty"));
@@ -177,34 +220,57 @@ Observation<std::vector<std::byte>> encode_operation_journal(const OperationJour
         std::vector<std::byte> encoded;
         encoded.reserve(std::min<std::size_t>(limits.max_bytes, 4096));
         for (const auto &record : journal.records()) {
-            if (record.evidence.size() > std::numeric_limits<std::uint32_t>::max())
-                return journal_rejected<std::vector<std::byte>>(
-                    journal_error(AdapterError::InventoryLimit, "operation_journal.evidence", ObservationState::Unknown));
-            const auto body_size = fixed_body_bytes + record.evidence.size();
-            if (body_size > std::numeric_limits<std::uint32_t>::max() || body_size > limits.max_bytes ||
-                encoded.size() > limits.max_bytes - (9 + body_size + sizeof(std::uint32_t)))
+            auto frame = encode_frame_unchecked(journal, record, limits);
+            if (!frame.value())
+                return journal_rejected<std::vector<std::byte>>(*frame.unavailable_detail());
+            if (encoded.size() > limits.max_bytes - frame.value()->size())
                 return journal_rejected<std::vector<std::byte>>(
                     journal_error(AdapterError::InventoryLimit, "operation_journal.encoded", ObservationState::Unknown));
-            std::vector<std::byte> body;
-            body.reserve(body_size);
-            body.push_back(journal.operation() == FileOperation::Copy ? std::byte{0} : std::byte{1});
-            body.insert(body.end(), journal.id().bytes.begin(), journal.id().bytes.end());
-            put_u64(body, record.sequence);
-            put_u64(body, static_cast<std::uint64_t>(record.item));
-            body.push_back(std::byte{static_cast<unsigned char>(record.state)});
-            put_u32(body, static_cast<std::uint32_t>(record.evidence.size()));
-            body.insert(body.end(), record.evidence.begin(), record.evidence.end());
-            encoded.insert(encoded.end(), {std::byte{'C'}, std::byte{'K'}, std::byte{'F'}, std::byte{'J'},
-                                           std::byte{1}});
-            put_u32(encoded, static_cast<std::uint32_t>(body.size()));
-            encoded.insert(encoded.end(), body.begin(), body.end());
-            put_u32(encoded, checksum(body));
+            encoded.insert(encoded.end(), frame.value()->begin(), frame.value()->end());
         }
         return Observation<std::vector<std::byte>>::available(std::move(encoded));
     } catch (const std::bad_alloc &) {
         return journal_rejected<std::vector<std::byte>>(
             journal_error(AdapterError::InventoryLimit, "operation_journal.encode", ObservationState::Unknown));
     }
+}
+
+Observation<bool> append_operation_journal(OperationJournal &journal, OperationJournalRecord record,
+                                           std::uint64_t offset, OperationJournalSink sink,
+                                           OperationJournalCodecLimits limits) {
+    if (!sink.write_at || !sink.flush)
+        return rejected<bool>(AdapterError::InvalidAccess, "operation_journal.sink");
+    std::uint64_t expected_offset = 0;
+    if (!journal.records().empty()) {
+        auto existing = encode_operation_journal(journal, limits);
+        if (!existing.value())
+            return journal_rejected<bool>(*existing.unavailable_detail());
+        expected_offset = existing.value()->size();
+    }
+    if (offset != expected_offset)
+        return rejected<bool>(AdapterError::InvalidAccess, "operation_journal.offset");
+    auto frame = encode_operation_journal_frame(journal, record, limits);
+    if (!frame.value())
+        return journal_rejected<bool>(*frame.unavailable_detail());
+    std::size_t written = 0;
+    while (written != frame.value()->size()) {
+        if (offset > std::numeric_limits<std::uint64_t>::max() - written)
+            return rejected<bool>(AdapterError::InvalidLimit, "operation_journal.offset");
+        auto result = sink.write_at(offset + written,
+                                    std::span<const std::byte>(frame.value()->data() + written,
+                                                                 frame.value()->size() - written));
+        if (!result.value())
+            return journal_rejected<bool>(*result.unavailable_detail());
+        if (!*result.value() || *result.value() > frame.value()->size() - written)
+            return rejected<bool>(AdapterError::InvalidNativeResult, "operation_journal.write_count");
+        written += *result.value();
+    }
+    auto flushed = sink.flush();
+    if (!flushed.value())
+        return journal_rejected<bool>(*flushed.unavailable_detail());
+    if (!*flushed.value())
+        return rejected<bool>(AdapterError::InvalidNativeResult, "operation_journal.flush_result");
+    return journal.append(std::move(record));
 }
 
 Observation<OperationJournalDecode> decode_operation_journal(std::span<const std::byte> bytes,

@@ -4,6 +4,7 @@
 
 #include <cvision/testing/cktest.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 
 using namespace ck::files;
@@ -118,4 +119,54 @@ CK_TEST(operation_journal_codec_reports_truncated_or_corrupt_tail_without_erasin
     CK_CHECK(corrupt_result.value() && corrupt_result.value()->journal && corrupt_result.value()->tail);
     if (corrupt_result.value() && corrupt_result.value()->journal)
         CK_CHECK(corrupt_result.value()->journal->records().size() == 1);
+}
+
+CK_TEST(operation_journal_sink_commits_memory_only_after_short_writes_and_flush) {
+    auto value = journal();
+    std::vector<std::byte> storage;
+    unsigned flushes = 0;
+    OperationJournalSink sink;
+    sink.write_at = [&](std::uint64_t offset, std::span<const std::byte> bytes) {
+        if (offset > storage.size())
+            storage.resize(static_cast<std::size_t>(offset));
+        const auto count = std::min<std::size_t>(3, bytes.size());
+        if (offset + count > storage.size())
+            storage.resize(static_cast<std::size_t>(offset + count));
+        std::copy_n(bytes.begin(), count, storage.begin() + static_cast<std::ptrdiff_t>(offset));
+        return Observation<std::size_t>::available(count);
+    };
+    sink.flush = [&] {
+        ++flushes;
+        return Observation<bool>::available(true);
+    };
+    CK_CHECK(append_operation_journal(*value, {1, 0, OperationJournalState::Planned, {}}, 0,
+                                      std::move(sink)).value());
+    CK_CHECK(value->records().size() == 1 && flushes == 1);
+    auto decoded = decode_operation_journal(storage, {4, 32, 64});
+    CK_CHECK(decoded.value() && decoded.value()->journal && decoded.value()->journal->records().size() == 1);
+}
+
+CK_TEST(operation_journal_sink_failure_does_not_publish_unflushed_state) {
+    auto value = journal();
+    unsigned writes = 0;
+    OperationJournalSink sink;
+    sink.write_at = [&](std::uint64_t, std::span<const std::byte> bytes) {
+        ++writes;
+        return Observation<std::size_t>::available(bytes.size());
+    };
+    sink.flush = [] {
+        return Observation<bool>::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
+             "test.journal_flush"});
+    };
+    auto result = append_operation_journal(*value, {1, 0, OperationJournalState::Planned, {}}, 0,
+                                           std::move(sink));
+    CK_CHECK(!result.value() && writes == 1 && value->records().empty());
+    OperationJournalSink unused;
+    unused.write_at = [](std::uint64_t, std::span<const std::byte> bytes) {
+        return Observation<std::size_t>::available(bytes.size());
+    };
+    unused.flush = [] { return Observation<bool>::available(true); };
+    CK_CHECK(!append_operation_journal(*value, {1, 0, OperationJournalState::Planned, {}}, 1,
+                                       std::move(unused)).value());
 }
