@@ -1,8 +1,10 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#include "native_operation_copy_job.hpp"
 #include "scratch_directory.hpp"
 #include "stream_copy_job.hpp"
+#include "operation_journal_file.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
@@ -93,6 +95,92 @@ CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
     CK_CHECK(job->state() == StreamCopyState::Complete);
     const auto read = take(destination->read_content({1024}, 0));
     CK_CHECK(read.complete && read.bytes.size() == job->result().source_bytes);
+}
+
+CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replacement) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-copy-job",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_directory_path = scratch.path() / "source";
+    const auto destination_directory_path = scratch.path() / "destination";
+    fs::create_directory(source_directory_path);
+    fs::create_directory(destination_directory_path);
+    {
+        std::ofstream output(source_directory_path / "source.bin", std::ios::binary);
+        output << "native operation copy job";
+    }
+
+    NativeFileSystem filesystem;
+    auto source_parent = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(source_directory_path)));
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_directory_path)));
+    const auto source_name = name("source.bin");
+    const auto destination_name = name("copied.bin");
+    const auto source = take(source_parent->open_child(source_name, EntryAccess::ContentRead));
+    const auto source_metadata = take(source->inspect_basic());
+    const auto source_parent_identity = take(source_parent->identity());
+    const auto destination_identity = take(destination->identity());
+
+    const auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    auto journal_file = take(open_native_operation_journal_file(journal_root, name("copy.journal"), true));
+    OperationJournalId journal_id;
+    journal_id.bytes[0] = std::byte{0x31};
+    auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 256}));
+    CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+
+    OperationMetadataRequest metadata;
+    metadata.apply_traversal_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+    metadata.apply_security_metadata = [](std::stop_token) { return Observation<bool>::available(true); };
+    metadata.apply_final_times = [](std::stop_token) { return Observation<bool>::available(true); };
+    metadata.flush_destination = [](std::stop_token) { return Observation<bool>::available(true); };
+
+    NativeOperationCopyRequest request{
+        journal,
+        std::shared_ptr<OperationJournalFile>(std::move(journal_file)),
+        0,
+        source_parent,
+        source_parent_identity,
+        source_name,
+        take(source_metadata.identity),
+        destination,
+        destination_identity,
+        name(".ck-copy-staging"),
+        destination_name,
+        {},
+        {}};
+    request.copy_limits.chunk_bytes = 5;
+    request.copy_limits.max_bytes = 1024;
+    request.prepare_metadata = [metadata_request = std::move(metadata)](OpenedEntry&, std::stop_token) mutable {
+        return OperationMetadataJob::create(std::move(metadata_request));
+    };
+
+    auto created = NativeOperationCopyJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 200 && job->state() != OperationExecutionState::Complete &&
+         job->state() != OperationExecutionState::Failed &&
+         job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        job->advance();
+
+    if (job->state() != OperationExecutionState::Complete) {
+        std::string detail = "native copy execution state " + std::to_string(static_cast<int>(job->state())) +
+            " records";
+        for (const auto& record : journal->records()) detail += " " + std::to_string(static_cast<int>(record.state));
+        if (job->result().failure) detail += " failure " + job->result().failure->error.operation;
+        throw std::runtime_error(detail);
+    }
+
+    CK_CHECK(job->state() == OperationExecutionState::Complete);
+    CK_CHECK(fs::exists(destination_directory_path / "copied.bin"));
+    std::ifstream input(destination_directory_path / "copied.bin", std::ios::binary);
+    std::string copied;
+    std::getline(input, copied);
+    CK_CHECK(copied == "native operation copy job");
+    CK_CHECK(journal->state(0) == OperationJournalState::Complete);
+    CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
 }
 
 CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {

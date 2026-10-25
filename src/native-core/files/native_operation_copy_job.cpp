@@ -1,0 +1,180 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "native_operation_copy_job.hpp"
+
+#include "directory_cursor.hpp"
+#include "opened_entry.hpp"
+
+#include <cstdint>
+
+namespace ck::files {
+namespace {
+
+template <class T>
+Observation<T> rejected(AdapterError code, const char* operation,
+                        ObservationState state = ObservationState::Failed) {
+    return Observation<T>::unavailable(state,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
+}
+
+Observation<bool> unavailable_bool(const UnavailableObservation& detail) {
+    return Observation<bool>::unavailable(detail.state, detail.error);
+}
+
+bool same(const ObjectIdentity& left, const ObjectIdentity& right) noexcept {
+    return compare_identity(left, right) == IdentityComparison::Same;
+}
+
+} // namespace
+
+struct NativeOperationCopyJob::State final {
+    explicit State(NativeOperationCopyRequest value) : request(std::move(value)) {}
+
+    NativeOperationCopyRequest request;
+    std::unique_ptr<OpenedEntry> source;
+    std::unique_ptr<OpenedEntry> staging;
+};
+
+Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
+    NativeOperationCopyRequest request) {
+    if (!request.journal || !request.journal_file || request.item >= request.journal->limits().max_items ||
+        request.journal->operation() != FileOperation::Copy ||
+        request.journal->state(request.item) != OperationJournalState::Planned ||
+        !request.source_parent || !request.destination || !request.source_name.is_valid() ||
+        !request.staging_name.is_valid() ||
+        !request.source_parent_identity.scope.is_valid() ||
+        !request.destination_name.is_valid() || !request.source_identity.scope.is_valid() ||
+        request.source_identity.scheme == IdentityScheme::Unknown ||
+        !request.destination_identity.scope.is_valid() ||
+        request.destination_identity.scheme == IdentityScheme::Unknown ||
+        !request.prepare_metadata || !request.copy_limits.valid())
+        return rejected<Pointer>(AdapterError::PlanInvalid, "native_operation_copy.request");
+    const auto source_parent_identity = request.source_parent->identity();
+    const auto destination_identity = request.destination->identity();
+    if (!source_parent_identity.value() || !destination_identity.value() ||
+        !same(*source_parent_identity.value(), request.source_parent_identity) ||
+        !same(*destination_identity.value(), request.destination_identity))
+        return rejected<Pointer>(AdapterError::PlanDecisionStale, "native_operation_copy.parent_identity",
+                                ObservationState::Changed);
+
+    auto state = std::make_shared<State>(std::move(request));
+    const auto append = [state](OperationJournalRecord record) {
+        return append_operation_journal_file(*state->request.journal_file, *state->request.journal,
+                                             std::move(record));
+    };
+
+    OperationCopyRequest copy;
+    copy.item = state->request.item;
+    copy.journal = state->request.journal;
+    copy.revalidate_source = [state](std::stop_token) {
+        auto opened = state->request.source_parent->open_child(state->request.source_name, EntryAccess::ContentRead);
+        if (!opened.value()) return unavailable_bool(*opened.unavailable_detail());
+        auto metadata = (*opened.value())->inspect_basic();
+        if (!metadata.value()) return unavailable_bool(*metadata.unavailable_detail());
+        if (!metadata.value()->identity.value() || !metadata.value()->kind.value() ||
+            !same(*metadata.value()->identity.value(), state->request.source_identity) ||
+            *metadata.value()->kind.value() != ObjectKind::RegularFile)
+            return Observation<bool>::available(false);
+        state->source = std::move(opened).take_value();
+        return Observation<bool>::available(true);
+    };
+    copy.revalidate_destination = [state](std::stop_token) {
+        const auto identity = state->request.destination->identity();
+        if (!identity.value()) return unavailable_bool(*identity.unavailable_detail());
+        return Observation<bool>::available(same(*identity.value(), state->request.destination_identity));
+    };
+    copy.prepare_copy = [state](std::stop_token) {
+        if (!state->source)
+            return rejected<StreamCopyJob::Pointer>(AdapterError::InvalidNativeResult,
+                                                    "native_operation_copy.source_handle");
+        auto staging = state->request.destination->create_child_file(state->request.staging_name);
+        if (!staging.value()) return Observation<StreamCopyJob::Pointer>::unavailable(
+            staging.state(), staging.unavailable_detail()->error);
+        state->staging = std::move(staging).take_value();
+        return create_stream_copy_job(*state->source, *state->staging, state->request.copy_limits);
+    };
+    copy.prepare_metadata = [state](std::stop_token stop) {
+        if (!state->staging)
+            return rejected<OperationMetadataJob::Pointer>(AdapterError::InvalidNativeResult,
+                                                           "native_operation_copy.staging_handle");
+        return state->request.prepare_metadata(*state->staging, stop);
+    };
+    copy.verify_copy = [state](std::stop_token) {
+        if (!state->source || !state->staging)
+            return rejected<bool>(AdapterError::InvalidNativeResult,
+                                  "native_operation_copy.verify_handles");
+        const auto source = state->source->inspect_basic();
+        if (!source.value()) return unavailable_bool(*source.unavailable_detail());
+        const auto destination = state->staging->inspect_basic();
+        if (!destination.value()) return unavailable_bool(*destination.unavailable_detail());
+        if (!source.value()->identity.value() || !source.value()->kind.value() ||
+            !source.value()->logical_size.value() || !destination.value()->identity.value() ||
+            !destination.value()->kind.value() || !destination.value()->logical_size.value())
+            return rejected<bool>(AdapterError::UnsupportedQuery, "native_operation_copy.verify_metadata",
+                                  ObservationState::Unknown);
+        return Observation<bool>::available(
+            same(*source.value()->identity.value(), state->request.source_identity) &&
+            *source.value()->kind.value() == ObjectKind::RegularFile &&
+            *destination.value()->kind.value() == ObjectKind::RegularFile &&
+            *source.value()->logical_size.value() == *destination.value()->logical_size.value());
+    };
+    copy.append_journal = append;
+
+    auto copy_job = OperationCopyJob::create(std::move(copy));
+    if (!copy_job.value())
+        return Observation<Pointer>::unavailable(copy_job.unavailable_detail()->state,
+                                                copy_job.unavailable_detail()->error);
+
+    OperationExecutionRequest execution_request;
+    execution_request.copy = std::move(copy_job).take_value();
+    execution_request.prepare_commit = [state, append](std::stop_token) {
+        OperationCommitRequest commit;
+        commit.operation = FileOperation::Copy;
+        commit.item = state->request.item;
+        commit.journal = state->request.journal;
+        commit.revalidate_source = [state](std::stop_token) {
+            if (!state->source) return rejected<bool>(AdapterError::InvalidNativeResult,
+                                                       "native_operation_copy.commit_source_handle");
+            auto current = state->request.source_parent->open_child(state->request.source_name,
+                                                                     EntryAccess::MetadataOnly);
+            if (!current.value()) return unavailable_bool(*current.unavailable_detail());
+            const auto current_metadata = (*current.value())->inspect_basic();
+            if (!current_metadata.value()) return unavailable_bool(*current_metadata.unavailable_detail());
+            if (!current_metadata.value()->identity.value() || !current_metadata.value()->kind.value() ||
+                !same(*current_metadata.value()->identity.value(), state->request.source_identity) ||
+                *current_metadata.value()->kind.value() != ObjectKind::RegularFile)
+                return Observation<bool>::available(false);
+            const auto metadata = state->source->inspect_basic();
+            if (!metadata.value()) return unavailable_bool(*metadata.unavailable_detail());
+            return Observation<bool>::available(metadata.value()->identity.value() &&
+                same(*metadata.value()->identity.value(), state->request.source_identity));
+        };
+        commit.revalidate_destination = [state](std::stop_token) {
+            const auto identity = state->request.destination->identity();
+            if (!identity.value()) return unavailable_bool(*identity.unavailable_detail());
+            return Observation<bool>::available(same(*identity.value(), state->request.destination_identity));
+        };
+        commit.commit_destination = [state](std::stop_token) {
+            if (!state->staging) return rejected<bool>(AdapterError::InvalidNativeResult,
+                                                        "native_operation_copy.commit_staging_handle");
+            auto published = state->staging->publish_noreplace(*state->request.destination,
+                                                                state->request.destination_name);
+            if (!published.value()) return unavailable_bool(*published.unavailable_detail());
+            return Observation<bool>::available(*published.value());
+        };
+        commit.append_journal = append;
+        return OperationCommitJob::create(std::move(commit));
+    };
+
+    auto execution = OperationExecutionJob::create(std::move(execution_request));
+    if (!execution.value()) return rejected<Pointer>(AdapterError::PlanInvalid,
+                                                     "native_operation_copy.execution_job");
+    return Observation<Pointer>::available(Pointer(new NativeOperationCopyJob(
+        std::move(state), std::move(execution).take_value())));
+}
+
+OperationExecutionState NativeOperationCopyJob::advance(std::stop_token stop) {
+    return execution_->advance(stop);
+}
+
+} // namespace ck::files
