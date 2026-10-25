@@ -155,7 +155,17 @@ private:
             {ck::files::ErrorDomain::Adapter, 2, "simulated.missing"});
     }
     static bool valid_path(const std::filesystem::path& path) {
-        return path.is_absolute() && path.native().find(std::filesystem::path::value_type{}) == std::filesystem::path::string_type::npos;
+        // The simulated fixture uses POSIX spelling so the same cases exercise
+        // identical logical addresses on every host. On Windows, a leading
+        // slash is a root-relative path (has a root directory but no drive),
+        // which is the portable equivalent required by these fixtures even
+        // though std::filesystem::path::is_absolute() reports false.
+        const bool portable_absolute = path.is_absolute()
+#if defined(_WIN32)
+            || path.has_root_directory()
+#endif
+            ;
+        return portable_absolute && path.native().find(std::filesystem::path::value_type{}) == std::filesystem::path::string_type::npos;
     }
     void require(const Pointer& node) const {
         if (!node || node->owner_ != state_->scope) throw std::invalid_argument("foreign simulated node");
