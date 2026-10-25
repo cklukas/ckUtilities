@@ -88,8 +88,9 @@ Observation<bool> verify_security(HANDLE file, PSID expected) {
     SECURITY_DESCRIPTOR_CONTROL control{}; DWORD revision{};
     if (!GetSecurityDescriptorControl(raw, &control, &revision))
         return failure<bool>(GetLastError(), "journal_file.GetSecurityDescriptorControl");
-    if (!owner || !IsValidSid(owner) || !EqualSid(owner, expected))
+    if (!owner || !IsValidSid(owner) || !EqualSid(owner, expected)) {
         return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.owner");
+    }
     if (!acl || !IsValidAcl(acl))
         return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.private_descriptor.dacl");
     if (!(control & SE_DACL_PROTECTED))
@@ -231,15 +232,24 @@ Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal
     name.reserve(basename.windows_units()->size());
     for (const auto unit : *basename.windows_units()) name.push_back(static_cast<wchar_t>(unit));
     std::vector<std::byte> system, acl_data;
+    std::vector<std::byte> relative_descriptor;
     SECURITY_DESCRIPTOR descriptor{};
-    SECURITY_ATTRIBUTES attributes{};
     if (create_new) {
         auto security = make_security(user_data, system, acl_data, descriptor);
         if (!security.value()) {
             const auto& detail = *security.unavailable_detail();
             return Observation<Pointer>::unavailable(detail.state, detail.error);
         }
-        attributes = *security.value();
+        DWORD relative_size = 0;
+        if (MakeSelfRelativeSD(&descriptor, nullptr, &relative_size))
+            return rejected<Pointer>(AdapterError::InvalidNativeResult, "journal_file.relative_descriptor_size");
+        const DWORD size_error = GetLastError();
+        if (size_error != ERROR_INSUFFICIENT_BUFFER || relative_size == 0)
+            return failure<Pointer>(size_error, "journal_file.relative_descriptor_size");
+        relative_descriptor.resize(relative_size);
+        if (!MakeSelfRelativeSD(&descriptor,
+                reinterpret_cast<PSECURITY_DESCRIPTOR>(relative_descriptor.data()), &relative_size))
+            return failure<Pointer>(GetLastError(), "journal_file.relative_descriptor");
     }
     UNICODE_STRING relative{};
     relative.Buffer = name.data();
@@ -249,7 +259,7 @@ Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal
     object.Length = sizeof(object);
     object.RootDirectory = directory.get();
     object.ObjectName = &relative;
-    object.SecurityDescriptor = create_new ? &descriptor : nullptr;
+    object.SecurityDescriptor = create_new ? relative_descriptor.data() : nullptr;
     IO_STATUS_BLOCK io{};
     HANDLE raw_file{};
     const auto status = NtCreateFile(&raw_file, FILE_GENERIC_READ | FILE_GENERIC_WRITE | READ_CONTROL,
