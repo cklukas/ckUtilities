@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-25 — WP-04 read-only native recovery projection checkpoint
+
+Commit `c68413e` adds `inspect_native_operation_recovery_evidence()`, a
+read-only startup projection over the generic recovery report. For each
+nonterminal or review-relevant item it decodes the latest native evidence into
+an explicit artifact candidate. Missing, malformed, truncated, or over-budget
+evidence changes that item to `RequireReview` and sets reconciliation state;
+the projection never reconstructs a path, opens a native object, deletes a
+staging file, resumes an operation, or grants mutation authority.
+
+The focused recovery suite passed on macOS, Windows and Linux, followed by the
+full current-source `ctest -L files` matrix at **107/107** on all three
+platforms. Matrix durations were 12.30 seconds on macOS, 27.16 seconds on
+Windows, and 29.71 seconds on Linux. The recovery cleanup boundary remains a
+separate step requiring a fresh held root, live identity revalidation and a
+platform-qualified handle-bound disposition; no mutation command is enabled.
+
 ## 2026-10-25 — WP-04 durable native recovery evidence checkpoint
 
 Commits `6ba3e6c` and `402bc5a` add a bounded, versioned native recovery
