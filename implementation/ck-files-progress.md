@@ -229,6 +229,29 @@ and the complete `ck_files_core_tests` binary passed all **624** cases. The
 copy/move worker still needs to produce these models from recursive native
 inventory and invoke the dialog in its operation flow.
 
+Linux qualification for this dialog used the clean source checkpoint
+`a647a92`, the pinned ckVision `v1.4.0` source at
+`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`, and the pinned llama.cpp `b6617`
+source. On the aarch64 Debian host, the release ckVision package built and
+installed at 09:17:16–09:29:53 CET; ckUtilities configured at
+09:31:03–09:31:54 and its resumed clean target build completed at
+09:54:48–10:17:24. The core binary passed all **624** cases and the
+`ck_vision_files_tests` binary passed all **185** cases. An independent
+installed-package consumer also configured, built, and passed its CTest entry
+at 10:17:38–10:17:50. The verified Linux outputs are:
+
+* `/tmp/ckutilities-wp03-linux-a647a92/build/bin/ck-files` — SHA-256
+  `ea6b99a3ae1dcb2e2d5649e4b23d9d916f842c560ca6e3550c1dcfde0145c1a9`
+* `/tmp/ckutilities-wp03-linux-a647a92/build/src/vision/files/ck_vision_files_tests`
+  — SHA-256 `dc8f9da9832d1afc75d6438535521ed8e59622e07e3eff9f3b89b8fe0a0dc72a`
+* `/tmp/ckutilities-wp03-linux-a647a92/build/tests/unit/ck_files/ck_files_core_tests`
+  — SHA-256 `fb937d965d58072a685c33d11bb168279f10cc74a3f9cd7eebdf6fc40db9399`
+
+This is normal Linux qualification only; Windows remains gated by the
+mandatory unavailable `V:` development drive, and sanitizer/race evidence
+for the new dialog is still required. The recursive worker adapter and
+operation-flow invocation remain open WP-03 work.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
