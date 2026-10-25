@@ -846,6 +846,21 @@ untrusted-tail projection; the selected journal/recovery/copy tests pass under
 normal, ASan/UBSan and TSan macOS builds. Windows compilation/execution
 remains gated by the unavailable mandatory `V:` workstation drive.
 
+Commit `216c019` adds the atomic no-replace publication boundary for a worker-
+created staging regular file. macOS/POSIX uses the held parent descriptors and
+`renameatx_np(RENAME_EXCL)` where available, or Linux `renameat2` with
+`RENAME_NOREPLACE`; it checks the source identity before the call, the published
+identity after it, and both directory flushes before reporting success. Existing
+targets are refused without clobbering, while post-call identity or durability
+uncertainty remains an explicit reconciliation result. Windows uses the held
+staging handle and destination directory handle with `SetFileInformationByHandle`
+and `FileRenameInfo`, with replacement disabled and the same post-publication
+identity/flush checks. The fourth native content case passes normally, ASan/UBSan
+and TSan; the complete normal macOS Files CTest set passes all **102** tests,
+representing **675 core** and **168 native** cktest cases. Windows compilation
+and execution remain gated by the unavailable mandatory `V:` workstation drive;
+no replacement, move, delete or UI mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
