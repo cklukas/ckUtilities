@@ -41,6 +41,28 @@ incremental relink was expected because the core and native test targets had
 already rebuilt the changed source; no stale object was used by the final
 link, and the complete matrix passed against that build tree.
 
+## 2026-10-25 — WP-04 serialized native batch checkpoint
+
+Commit `97b90b3` adds the worker-only bridge from `NativeOperationCopyJob` to
+the strictly ordered `OperationBatchJob`. The bridge rejects null worker jobs
+before composition and transfers the execution job while its callbacks retain
+the native state, so directory and entry owners do not cross into UI state or
+get reopened from display names. Commit `249ae91` adds a real two-item native
+batch test: both files are journaled, copied through private staging handles,
+verified and published with individual receipts on every supported platform.
+
+The focused `test_files_operation_content_native` and
+`test_files_operation_batch_job` entries passed on macOS, Linux and Windows.
+The full current-source `ctest -L files` matrix then passed **106/106** on
+macOS in 14.62 seconds (21:28:20–21:28:35 UTC), Windows in 28.02 seconds
+(21:28:24–21:28:52 UTC), and Linux in 29.64 seconds
+(21:28:20–21:28:50 UTC). The first macOS run exposed a stale core-test
+executable that lacked the already-listed recursive-inventory object; the
+target was relinked, its focused test passed, and the complete rerun was
+green. No mutation command is enabled in `ck-files`, and
+metadata adapters, recovery cleanup, replacement, move retirement, Trash or
+deletion remain gated behind their own complete work packages.
+
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
 The earlier qualification note below is retained as historical evidence. The
