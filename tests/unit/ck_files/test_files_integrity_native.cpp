@@ -14,6 +14,12 @@
 #endif
 #include <windows.h>
 #include <winioctl.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 #endif
 namespace {
 using namespace ck::files;
