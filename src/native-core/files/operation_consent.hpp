@@ -3,6 +3,7 @@
 #pragma once
 
 #include "file_metadata.hpp"
+#include "native_name.hpp"
 #include "observation.hpp"
 
 #include <cstddef>
@@ -96,6 +97,9 @@ struct ConsentReceipt final {
     ConsentAction action = ConsentAction::Cancel;
     std::vector<std::size_t> reviewed_issues;
     std::vector<std::size_t> resolved_conflicts;
+    // One valid destination basename per resolved KeepBoth conflict. Native
+    // alias/collision checks remain execution-time responsibilities.
+    std::vector<NativeName> keep_both_names;
 };
 
 class OperationPlan final {
@@ -124,7 +128,8 @@ public:
     // mutation; a later execution engine must revalidate the frozen plan.
     Observation<ConsentReceipt> bind(ConsentAction action,
         std::vector<std::size_t> reviewed_issues = {},
-        std::vector<std::size_t> resolved_conflicts = {}) const;
+        std::vector<std::size_t> resolved_conflicts = {},
+        std::vector<NativeName> keep_both_names = {}) const;
     bool receipt_matches(const ConsentReceipt& receipt) const noexcept;
 
 private:
@@ -133,7 +138,8 @@ private:
 
     static bool all_indices_present(const std::vector<std::size_t>& selected, std::size_t count) noexcept;
     static bool indices_valid_and_unique(const std::vector<std::size_t>& selected, std::size_t count) noexcept;
-    bool conflict_action_valid(ConsentAction action, const std::vector<std::size_t>& selected) const noexcept;
+    bool conflict_action_valid(ConsentAction action, const std::vector<std::size_t>& selected,
+        const std::vector<NativeName>& keep_both_names) const noexcept;
 
     FileOperation operation_;
     std::vector<FrozenOperationItem> items_;

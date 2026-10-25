@@ -181,6 +181,20 @@ CTest entry passed, and the complete `ck_files_core_tests` binary passed all
 623 cases. The review dialog presentation, recursive worker adapter and
 execution-time revalidation remain open WP-03 work.
 
+## WP-03 — harden Keep Both consent
+
+The consent boundary now requires `KeepBoth` to carry one valid native
+basename for every selected conflict. Empty, moved-from or path-like names
+are rejected, and names are rejected for unrelated actions. The receipt keeps
+those exact native names with the immutable plan identity; destination alias,
+case and collision checks remain mandatory at execution time. This prevents a
+future review dialog from presenting a superficially accepted but unusable
+Keep Both decision.
+
+The macOS strict target rebuilt at 08:50:25–08:50:34 CET. The focused consent
+CTest entry passed and the complete `ck_files_core_tests` binary passed all
+623 cases. No mutation or UI action is enabled by this checkpoint.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

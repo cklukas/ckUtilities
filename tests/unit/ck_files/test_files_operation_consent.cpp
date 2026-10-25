@@ -110,6 +110,17 @@ CK_TEST(operation_consent_conflicts_require_type_specific_review) {
     const auto mismatch = plan({item(13)}, {}, {{0, DestinationConflictKind::TypeMismatch}});
     CK_CHECK(!mismatch->bind(ConsentAction::Replace, {}, {0}).value());
     CK_CHECK(mismatch->bind(ConsentAction::SkipConflict, {}, {0}).value());
+
+    const auto keep_both_name = NativeName::from_posix("copy");
+    CK_CHECK(keep_both_name.has_value());
+    CK_CHECK(!mismatch->bind(ConsentAction::KeepBoth, {}, {0}).value());
+    CK_CHECK(mismatch->bind(ConsentAction::KeepBoth, {}, {0}, {*keep_both_name}).value());
+    auto moved_name = NativeName::from_posix("copy");
+    CK_CHECK(moved_name.has_value());
+    auto valid_name = std::move(*moved_name);
+    (void)valid_name;
+    CK_CHECK(!moved_name->is_valid());
+    CK_CHECK(!mismatch->bind(ConsentAction::KeepBoth, {}, {0}, {std::move(*moved_name)}).value());
 }
 
 CK_TEST(operation_plan_from_frozen_inventory_preserves_hard_link_aliases) {

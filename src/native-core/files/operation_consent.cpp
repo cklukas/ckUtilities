@@ -107,8 +107,14 @@ bool OperationPlan::all_indices_present(const std::vector<std::size_t>& selected
     return true;
 }
 
-bool OperationPlan::conflict_action_valid(ConsentAction action, const std::vector<std::size_t>& selected) const noexcept {
+bool OperationPlan::conflict_action_valid(ConsentAction action, const std::vector<std::size_t>& selected,
+    const std::vector<NativeName>& keep_both_names) const noexcept {
     if (selected.empty() || !indices_valid_and_unique(selected, conflicts_.size())) return false;
+    if (action == ConsentAction::KeepBoth) {
+        if (keep_both_names.size() != selected.size()) return false;
+        for (const auto& name : keep_both_names)
+            if (!name.is_valid()) return false;
+    } else if (!keep_both_names.empty()) return false;
     for (const std::size_t index : selected) {
         const auto& conflict = conflicts_[index];
         const auto kind = items_[conflict.item].kind;
@@ -132,21 +138,24 @@ bool OperationPlan::conflict_action_valid(ConsentAction action, const std::vecto
 }
 
 Observation<ConsentReceipt> OperationPlan::bind(ConsentAction action,
-    std::vector<std::size_t> reviewed_issues, std::vector<std::size_t> resolved_conflicts) const {
+    std::vector<std::size_t> reviewed_issues, std::vector<std::size_t> resolved_conflicts,
+    std::vector<NativeName> keep_both_names) const {
     if (!indices_valid_and_unique(reviewed_issues, issues_.size()) ||
-        !indices_valid_and_unique(resolved_conflicts, conflicts_.size()))
+        !indices_valid_and_unique(resolved_conflicts, conflicts_.size()) ||
+        (action != ConsentAction::KeepBoth && !keep_both_names.empty()))
         return rejected<ConsentReceipt>(AdapterError::PlanInvalid, "operation_plan.review_indices");
 
     if (action == ConsentAction::Cancel)
-        return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action, {}, {}});
+        return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action, {}, {}, {}});
 
     if (action == ConsentAction::ChooseAnotherDestination) {
         if (!requires_review()) return rejected<ConsentReceipt>(AdapterError::PlanInvalid, "operation_plan.no_review");
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
-            std::move(reviewed_issues), std::move(resolved_conflicts)});
+            std::move(reviewed_issues), std::move(resolved_conflicts), {}});
     }
     if (action == ConsentAction::ContinueWithListedLosses || action == ConsentAction::SkipAffectedItems) {
-        if (!all_indices_present(reviewed_issues, issues_.size()) || issues_.empty() || !resolved_conflicts.empty())
+        if (!all_indices_present(reviewed_issues, issues_.size()) || issues_.empty() || !resolved_conflicts.empty() ||
+            !keep_both_names.empty())
             return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.unreviewed_issue");
         if (action == ConsentAction::ContinueWithListedLosses) {
             for (const auto& issue : issues_)
@@ -155,11 +164,11 @@ Observation<ConsentReceipt> OperationPlan::bind(ConsentAction action,
                     return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.uncertain_loss");
         }
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
-            std::move(reviewed_issues), std::move(resolved_conflicts)});
+            std::move(reviewed_issues), std::move(resolved_conflicts), {}});
     }
-    if (reviewed_issues.empty() && conflict_action_valid(action, resolved_conflicts))
+    if (reviewed_issues.empty() && conflict_action_valid(action, resolved_conflicts, keep_both_names))
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
-            std::move(reviewed_issues), std::move(resolved_conflicts)});
+            std::move(reviewed_issues), std::move(resolved_conflicts), std::move(keep_both_names)});
     return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.conflict_review");
 }
 
@@ -170,11 +179,12 @@ bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcep
         return false;
     switch (receipt.action) {
     case ConsentAction::Cancel:
-        return receipt.reviewed_issues.empty() && receipt.resolved_conflicts.empty();
+        return receipt.reviewed_issues.empty() && receipt.resolved_conflicts.empty() && receipt.keep_both_names.empty();
     case ConsentAction::ChooseAnotherDestination:
-        return requires_review();
+        return requires_review() && receipt.keep_both_names.empty();
     case ConsentAction::ContinueWithListedLosses:
-        if (!receipt.resolved_conflicts.empty() || !all_indices_present(receipt.reviewed_issues, issues_.size()) || issues_.empty())
+        if (!receipt.resolved_conflicts.empty() || !receipt.keep_both_names.empty() ||
+            !all_indices_present(receipt.reviewed_issues, issues_.size()) || issues_.empty())
             return false;
         for (const auto& issue : issues_)
             if (issue.hard_failure || issue.state == PreservationIssueState::Unknown ||
@@ -182,12 +192,14 @@ bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcep
                 return false;
         return true;
     case ConsentAction::SkipAffectedItems:
-        return receipt.resolved_conflicts.empty() && all_indices_present(receipt.reviewed_issues, issues_.size()) && !issues_.empty();
+        return receipt.resolved_conflicts.empty() && receipt.keep_both_names.empty() &&
+            all_indices_present(receipt.reviewed_issues, issues_.size()) && !issues_.empty();
     case ConsentAction::SkipConflict:
     case ConsentAction::KeepBoth:
     case ConsentAction::Replace:
     case ConsentAction::MergeDirectories:
-        return receipt.reviewed_issues.empty() && conflict_action_valid(receipt.action, receipt.resolved_conflicts);
+        return receipt.reviewed_issues.empty() &&
+            conflict_action_valid(receipt.action, receipt.resolved_conflicts, receipt.keep_both_names);
     }
     return false;
 }
