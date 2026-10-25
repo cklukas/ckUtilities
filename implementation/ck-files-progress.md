@@ -658,6 +658,40 @@ Windows remains gated by the unavailable mandatory `V:` development drive.
 No mutation command is enabled; this is still evidence collection, planning
 and explicit consent only.
 
+## WP-03 — direct held-source planning
+
+Selected regular files now have an explicit flat evidence mode. The worker
+accepts exact held children and aligned native paths, builds a one-entry
+frozen inventory from cached held metadata, and applies the same object,
+destination, topology, ancestry and capability planning stages as recursive
+directory selections. Mixed recursive/flat requests, empty selections,
+destination shape mismatches, oversize selections and insufficient stage
+capacity fail closed before a plan or review model is published. The native
+owners remain inside the worker-owned request and are never exposed to UI
+state or consent receipts.
+
+The strict macOS normal build passed **652** core tests and **191** Files UI
+tests. The direct-source focused core cases passed under normal, ASan/UBSan
+and TSan builds; the focused native planning-service cases passed under the
+same three configurations. The known full UI sanitizer gate remains the
+pinned ckVision `Desktop::install_default_handler` defect recorded above.
+
+Linux requalification of commit `bbbf91e` used the fresh remote root
+`/tmp/ckutilities-wp03-linux-direct-source-bbbf91e`. It rebuilt the pinned
+ckVision `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` and llama.cpp `b6617`
+inputs, then configured and built ckUtilities with GCC 14.2/aarch64. The
+production/core/UI outputs completed at 13:05:00–13:05:05 CET; the core suite
+passed **652**, the Files UI suite passed **191**, and the independent
+installed-package consumer passed its CTest entry. Verified Linux hashes are:
+
+* `ck-files` — `4ed3545a2fe9083d2dc5c3f535b12e42b23c1596eeec9dc94f8fcfa96be09641`
+* `ck_vision_files_tests` — `877e65030acaaa6c719cea54bc8cfb3d4d7a670b390b4781f451931cbe60297e`
+* `ck_files_core_tests` — `1bfedb9888f0dd208b288445b2c0c0d50fcc4247e7ffa2516fb2250d7a203f89`
+
+Windows remains gated by the unavailable mandatory `V:` development drive;
+no Windows checkout, build, cache or temporary artifact was created. No copy,
+move, replacement, deletion or other mutation command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
