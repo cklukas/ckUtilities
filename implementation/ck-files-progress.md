@@ -887,6 +887,10 @@ and source-retirement adapters remain separate. Three orchestration cases pass
 under normal, ASan/UBSan and TSan macOS builds; Windows compilation/execution
 remains gated by the unavailable mandatory `V:` workstation drive.
 
+Post-checkpoint normal qualification passes all **104** registered Files CTest
+tests, representing **681 core** and **169 native** cktest cases; no app was
+launched and no mutation command was enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
