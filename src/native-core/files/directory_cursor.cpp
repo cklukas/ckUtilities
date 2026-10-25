@@ -125,6 +125,19 @@ Observation<bool> DirectoryCursor::rename_child_noreplace(const NativeName& name
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "rename_child_noreplace.native_query"});
 }
 
+Observation<bool> DirectoryCursor::rename_child_case_only(const NativeName& name,
+                                                          const ObjectIdentity& expected_identity,
+                                                          const NativeName& destination_name) const {
+    if (!name.is_valid() || !destination_name.is_valid() || name == destination_name)
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "rename_child_case_only.name"});
+    if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "rename_child_case_only.identity"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "rename_child_case_only.native_query"});
+}
+
 Observation<std::unique_ptr<DirectoryCursor>> DirectoryCursor::create_child_directory(const NativeName& name) const {
     if (!name.is_valid())
         return Observation<std::unique_ptr<DirectoryCursor>>::unavailable(ObservationState::Failed,

@@ -924,6 +924,96 @@ public:
                 {ErrorDomain::Win32, GetLastError(), "rename_child_noreplace.directory_flush"});
         return Result::available(true);
     }
+    Observation<bool> rename_child_case_only(const NativeName& name, const ObjectIdentity& expected_identity,
+                                              const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto* source_units = name.windows_units();
+        const auto* destination_units = destination_name.windows_units();
+        if (!source_units || !destination_units || !name.is_valid() || !destination_name.is_valid() ||
+            name == destination_name || source_units->find(u':') != std::u16string::npos ||
+            destination_units->find(u':') != std::u16string::npos ||
+            source_units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR) ||
+            destination_units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "rename_child_case_only.name"});
+        auto source_opened = open_native_component(name, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                                   ChildLookupMode::NativeDefault);
+        if (!source_opened.value()) {
+            const auto& error = *source_opened.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto source = std::move(source_opened).take_value();
+        const auto source_metadata = handle_metadata(source.get(), scope_);
+        if (!source_metadata.value() || !source_metadata.value()->identity.value() ||
+            compare_identity(*source_metadata.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "rename_child_case_only.source_identity"});
+        if (source_metadata.value()->kind.value() && *source_metadata.value()->kind.value() == ObjectKind::RegularFile) {
+            FILE_STANDARD_INFO standard{};
+            if (!GetFileInformationByHandleEx(source.get(), FileStandardInfo, &standard, sizeof(standard)))
+                return failure<bool>(GetLastError(), "rename_child_case_only.standard_info");
+            if (standard.NumberOfLinks != 1)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "rename_child_case_only.hard_link"});
+        }
+
+        auto destination = open_native_component(destination_name, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                                 ChildLookupMode::NativeDefault);
+        if (!destination.value()) {
+            if (destination.unavailable_detail() && destination.unavailable_detail()->state == ObservationState::Gone)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "rename_child_case_only.native_case_proof"});
+            const auto& error = *destination.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        const auto destination_metadata = handle_metadata(destination.value()->get(), scope_);
+        if (!destination_metadata.value() || !destination_metadata.value()->identity.value())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "rename_child_case_only.destination_identity"});
+        if (compare_identity(*destination_metadata.value()->identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::PlanDecisionStale), "rename_child_case_only.destination_occupied"});
+
+        std::wstring spelling;
+        spelling.reserve(destination_units->size());
+        for (const auto unit : *destination_units) spelling.push_back(static_cast<wchar_t>(unit));
+        const auto length = spelling.size() * sizeof(WCHAR);
+        if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "rename_child_case_only.name_limit"});
+        std::vector<std::byte> buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
+        auto* info = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
+        info->ReplaceIfExists = FALSE;
+        info->RootDirectory = handle_.get();
+        info->FileNameLength = static_cast<DWORD>(length);
+        std::memcpy(info->FileName, spelling.data(), length);
+        if (!SetFileInformationByHandle(source.get(), FileRenameInfo, info, static_cast<DWORD>(buffer.size()))) {
+            const DWORD code = GetLastError();
+            if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
+                return Result::unavailable(ObservationState::Changed,
+                    {ErrorDomain::Win32, code, "rename_child_case_only.destination_occupied"});
+            if (code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED ||
+                code == ERROR_INVALID_PARAMETER)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Win32, code, "rename_child_case_only.atomic_primitive"});
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, code, "rename_child_case_only.atomic_primitive"});
+        }
+        auto renamed = open_native_component(destination_name, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                             ChildLookupMode::NativeDefault);
+        if (!renamed.value())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "rename_child_case_only.destination_identity"});
+        const auto renamed_metadata = handle_metadata(renamed.value()->get(), scope_);
+        if (!renamed_metadata.value() || !renamed_metadata.value()->identity.value() ||
+            compare_identity(*renamed_metadata.value()->identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "rename_child_case_only.destination_identity"});
+        if (!FlushFileBuffers(handle_.get()))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "rename_child_case_only.directory_flush"});
+        return Result::available(true);
+    }
     Observation<bool> publish_noreplace(HANDLE source, const NativeName& name) const {
         using Result = Observation<bool>;
         const auto* units = name.windows_units();

@@ -175,6 +175,29 @@ CK_TEST(native_operation_rename_boundary_never_emulates_unqualified_posix_rename
 #endif
 }
 
+CK_TEST(native_operation_case_only_rename_requires_native_identity_proof) {
+    const ck::testing::ScratchDirectory scratch("files-operation-case-rename-boundary", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "Source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "case-only rename remains gated until native proof exists";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("Source.bin"), EntryAccess::ContentRead));
+    const auto metadata = take(source->inspect_basic());
+    CK_CHECK(metadata.identity.value());
+    if (!metadata.identity.value()) return;
+    const auto renamed = directory->rename_child_case_only(name("Source.bin"), *metadata.identity.value(),
+                                                            name("source.bin"));
+#if defined(_WIN32)
+    CK_CHECK(renamed.value() || renamed.state() != ObservationState::Unsupported);
+#else
+    CK_CHECK(!renamed.value() && renamed.state() == ObservationState::Unsupported);
+    CK_CHECK(fs::exists(source_path) && !fs::exists(scratch.path() / "source.bin"));
+#endif
+}
+
 CK_TEST(native_operation_folder_creation_is_exclusive_and_returns_a_held_directory) {
     const ck::testing::ScratchDirectory scratch("files-operation-folder-creation", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;

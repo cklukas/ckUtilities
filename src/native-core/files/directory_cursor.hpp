@@ -87,6 +87,14 @@ public:
                                                       const ObjectIdentity& expected_identity,
                                                       const DirectoryCursor& destination,
                                                       const NativeName& destination_name) const;
+    // Worker-only case-only rename within this held directory. The adapter
+    // must prove that the destination's native lookup resolves to the same
+    // source object, reject hard-link ambiguity, use a native rename and
+    // flush the parent directory. A lexical case-fold or path-string test is
+    // not sufficient; Unsupported is required when native proof is absent.
+    virtual Observation<bool> rename_child_case_only(const NativeName& name,
+                                                     const ObjectIdentity& expected_identity,
+                                                     const NativeName& destination_name) const;
     // Worker-only creation of a new regular directory below this held
     // directory. Creation is exclusive, final links/reparse points are
     // refused, and the returned cursor owns the created directory handle.
