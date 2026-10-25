@@ -776,6 +776,20 @@ normal macOS core suite passes **664** cases. Native platform read/write,
 metadata preservation, safe publication and durable recovery remain pending;
 no mutation command is enabled.
 
+Commit `8bfca97` adds the durable journal-file boundary for both POSIX and
+Windows. It opens a named regular file relative to a verified private directory
+handle (`openat` on POSIX and `NtCreateFile` on Windows), rejects foreign name
+encodings, links, reparse points and unqualified ownership/ACLs, and retains
+the native handle for bounded read/write/flush calls. Replay reads the bounded
+file through the handle and preserves older records plus an explicit tail
+condition; append publishes the in-memory journal only after short writes and
+flush succeed. Two core and two native cases pass under normal, ASan/UBSan and
+TSan macOS builds; the complete normal macOS suites pass **666 core** and
+**163 native** cases. Windows compilation and execution remain gated by the
+unavailable mandatory `V:` workstation drive. Metadata preservation, safe
+publication, source retirement, crash recovery orchestration and mutation UI
+remain pending; no copy/move command is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
