@@ -3,6 +3,7 @@
 #include "native_filesystem.hpp"
 #include "native_operation_copy_job.hpp"
 #include "native_operation_recovery_evidence.hpp"
+#include "native_operation_recovery.hpp"
 #include "scratch_directory.hpp"
 #include "stream_copy_job.hpp"
 #include "operation_journal_file.hpp"
@@ -221,14 +222,92 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
         throw std::runtime_error("copied bytes=" + std::to_string(copied.size()) + " value=" + copied +
                                  " progress=" + std::to_string(job->progress().observed_bytes));
     CK_CHECK(journal->state(0) == OperationJournalState::Complete);
-    CK_CHECK(journal->records().size() >= 2 && !journal->records()[1].evidence.empty());
-    if (journal->records().size() >= 2) {
-        auto evidence = decode_native_operation_recovery_evidence(journal->records()[1].evidence);
+    CK_CHECK(journal->records().size() >= 3 && !journal->records()[2].evidence.empty());
+    if (journal->records().size() >= 3) {
+        auto evidence = decode_native_operation_recovery_evidence(journal->records()[2].evidence);
         CK_CHECK(evidence.value() && evidence.value()->staging_name == name(".ck-copy-staging") &&
                  evidence.value()->destination_name == destination_name &&
+                 evidence.value()->staging_identity.has_value() &&
                  evidence.value()->destination_identity.matches_live(destination_identity));
     }
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
+}
+
+CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_disposition) {
+    const ck::testing::ScratchDirectory scratch("files-native-recovery-cleanup",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    NativeFileSystem filesystem;
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto staging = take(destination->create_child_file(name(".ck-crash-staging")));
+    const std::array<std::byte, 3> bytes{std::byte{'r'}, std::byte{'e'}, std::byte{'c'}};
+    CK_CHECK(take(staging->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(staging->flush_content()));
+    const auto staging_metadata = take(staging->inspect_basic());
+    CK_CHECK(staging_metadata.identity.value());
+    if (!staging_metadata.identity.value()) return;
+    const auto destination_identity = take(destination->identity());
+    const auto staging_durable = NativeDurableIdentity::from_live(
+        *staging_metadata.identity.value());
+    const auto destination_durable = NativeDurableIdentity::from_live(destination_identity);
+    CK_CHECK(staging_durable && destination_durable);
+    if (!staging_durable || !destination_durable) return;
+    NativeOperationRecoveryCleanupRequest request{
+        {0, OperationJournalState::Copied,
+         {name(".ck-crash-staging"), name("published"),
+          *destination_durable, *destination_durable, *destination_durable, staging_durable}},
+        destination, destination_identity};
+    staging.reset();
+    auto cleaned = cleanup_native_unpublished_staging(request);
+#if defined(_WIN32)
+    if (!cleaned.value() || !*cleaned.value())
+        throw std::runtime_error("recovery cleanup unavailable: " +
+            (cleaned.unavailable_detail() ? cleaned.unavailable_detail()->error.operation : "false"));
+    if (fs::exists(scratch.path() / ".ck-crash-staging"))
+        throw std::runtime_error("recovery cleanup left staging object");
+    CK_CHECK(cleaned.value() && *cleaned.value() && !fs::exists(scratch.path() / ".ck-crash-staging"));
+#else
+    CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Unsupported &&
+             fs::exists(scratch.path() / ".ck-crash-staging"));
+#endif
+}
+
+CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) {
+    const ck::testing::ScratchDirectory scratch("files-native-recovery-substitution",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    NativeFileSystem filesystem;
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto original = take(destination->create_child_file(name(".ck-substituted-staging")));
+    const std::array<std::byte, 1> original_byte{std::byte{'o'}};
+    CK_CHECK(take(original->write_content(0, original_byte)) == original_byte.size());
+    CK_CHECK(take(original->flush_content()));
+    const auto original_metadata = take(original->inspect_basic());
+    CK_CHECK(original_metadata.identity.value());
+    if (!original_metadata.identity.value()) return;
+    const auto destination_identity = take(destination->identity());
+    const auto durable = NativeDurableIdentity::from_live(destination_identity);
+    const auto original_durable = NativeDurableIdentity::from_live(*original_metadata.identity.value());
+    CK_CHECK(durable && original_durable);
+    if (!durable || !original_durable) return;
+    original.reset();
+    fs::rename(scratch.path() / ".ck-substituted-staging", scratch.path() / ".ck-original");
+    auto replacement = take(destination->create_child_file(name(".ck-substituted-staging")));
+    const std::array<std::byte, 1> replacement_byte{std::byte{'r'}};
+    CK_CHECK(take(replacement->write_content(0, replacement_byte)) == replacement_byte.size());
+    CK_CHECK(take(replacement->flush_content()));
+    replacement.reset();
+    NativeOperationRecoveryCleanupRequest request{
+        {0, OperationJournalState::Copied,
+         {name(".ck-substituted-staging"), name("published"), *durable, *durable, *durable, original_durable}},
+        destination, destination_identity};
+    auto cleaned = cleanup_native_unpublished_staging(request);
+    CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Changed &&
+             fs::exists(scratch.path() / ".ck-substituted-staging"));
 }
 
 CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {

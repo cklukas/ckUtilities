@@ -17,13 +17,15 @@ NativeOperationRecoveryEvidence evidence(const AdapterScope& scope) {
         *NativeName::from_windows(u"report-copy.txt"),
         *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 11, 2)),
         *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 12)),
-        *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4))};
+        *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4)), {}};
 }
 }
 
 CK_TEST(native_recovery_evidence_roundtrips_native_names_and_durable_identities) {
     AdapterScope scope;
-    const auto original = evidence(scope);
+    auto original = evidence(scope);
+    original.staging_identity = *NativeDurableIdentity::from_live(
+        live_identity(scope, IdentityScheme::PosixDeviceInode, 14, 5));
     auto encoded = encode_native_operation_recovery_evidence(original);
     CK_CHECK(encoded.value() && encoded.value()->size() < 4096);
     if (!encoded.value()) return;
@@ -35,6 +37,7 @@ CK_TEST(native_recovery_evidence_roundtrips_native_names_and_durable_identities)
         CK_CHECK(decoded.value()->source_parent_identity == original.source_parent_identity);
         CK_CHECK(decoded.value()->source_identity == original.source_identity);
         CK_CHECK(decoded.value()->destination_identity == original.destination_identity);
+        CK_CHECK(decoded.value()->staging_identity == original.staging_identity);
         CK_CHECK(decoded.value()->destination_identity.matches_live(
             live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4)));
     }

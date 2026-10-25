@@ -107,9 +107,26 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
             return Observation<bool>::unavailable(ObservationState::Failed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
                  "native_operation_copy.journal_identity"});
-        auto evidence = encode_native_operation_recovery_evidence({
+        NativeOperationRecoveryEvidence recovery_evidence{
             state->request.staging_name, state->request.destination_name,
-            *source_parent, *source, *destination});
+            *source_parent, *source, *destination, {}};
+        if (state->staging) {
+            auto metadata = state->staging->inspect_basic();
+            if (!metadata.value() || !metadata.value()->identity.value() ||
+                !metadata.value()->kind.value() || *metadata.value()->kind.value() != ObjectKind::RegularFile)
+                return Observation<bool>::unavailable(
+                    metadata.value() ? ObservationState::Changed : metadata.state(),
+                    metadata.value() ? NativeError{ErrorDomain::Adapter,
+                        static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                        "native_operation_copy.journal_staging"} : metadata.unavailable_detail()->error);
+            recovery_evidence.staging_identity = NativeDurableIdentity::from_live(
+                *metadata.value()->identity.value());
+            if (!recovery_evidence.staging_identity)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                     "native_operation_copy.journal_staging_identity"});
+        }
+        auto evidence = encode_native_operation_recovery_evidence(recovery_evidence);
         if (!evidence.value())
             return Observation<bool>::unavailable(evidence.state(), evidence.unavailable_detail()->error);
         record.evidence = std::move(evidence).take_value();

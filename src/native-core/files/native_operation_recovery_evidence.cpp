@@ -10,7 +10,8 @@ namespace ck::files {
 namespace {
 constexpr std::array<std::byte, 4> magic{
     std::byte{'C'}, std::byte{'K'}, std::byte{'R'}, std::byte{'E'}};
-constexpr std::uint8_t version = 1;
+constexpr std::uint8_t version = 2;
+constexpr std::uint8_t legacy_version = 1;
 
 template <class T>
 Observation<T> invalid(AdapterError code, const char* operation,
@@ -200,7 +201,10 @@ Observation<std::vector<std::byte>> encode_native_operation_recovery_evidence(
     put_u8(result, version);
     put_u8(result, 0);
     if (!append_name(result, evidence.staging_name, limits.max_name_units) ||
-        !append_name(result, evidence.destination_name, limits.max_name_units) ||
+        !append_name(result, evidence.destination_name, limits.max_name_units))
+        return invalid<std::vector<std::byte>>(AdapterError::InvalidNativeResult, "native_recovery_evidence.encode");
+    put_u8(result, evidence.staging_identity ? 1 : 0);
+    if ((evidence.staging_identity && !append_identity(result, *evidence.staging_identity)) ||
         !append_identity(result, evidence.source_parent_identity) ||
         !append_identity(result, evidence.source_identity) ||
         !append_identity(result, evidence.destination_identity))
@@ -217,10 +221,24 @@ Observation<NativeOperationRecoveryEvidence> decode_native_operation_recovery_ev
     std::span<const std::byte> decoded_magic;
     std::uint8_t decoded_version = 0, reserved = 0;
     if (!reader.take(magic.size(), decoded_magic) || !std::equal(magic.begin(), magic.end(), decoded_magic.begin()) ||
-        !reader.u8(decoded_version) || !reader.u8(reserved) || decoded_version != version || reserved != 0)
+        !reader.u8(decoded_version) || !reader.u8(reserved) ||
+        (decoded_version != version && decoded_version != legacy_version) || reserved != 0)
         return invalid<NativeOperationRecoveryEvidence>(AdapterError::InvalidNativeResult, "native_recovery_evidence.header");
     auto staging = read_name(reader, limits.max_name_units);
     auto destination = read_name(reader, limits.max_name_units);
+    std::optional<NativeDurableIdentity> staging_identity;
+    if (decoded_version == version) {
+        std::uint8_t present = 0;
+        if (!reader.u8(present) || present > 1)
+            return invalid<NativeOperationRecoveryEvidence>(AdapterError::InvalidNativeResult, "native_recovery_evidence.staging_identity_header");
+        if (present != 0) {
+            auto decoded = read_identity(reader);
+            if (!decoded.value())
+                return Observation<NativeOperationRecoveryEvidence>::unavailable(
+                    decoded.state(), decoded.unavailable_detail()->error);
+            staging_identity = std::move(decoded).take_value();
+        }
+    }
     auto source_parent = read_identity(reader);
     auto source = read_identity(reader);
     auto destination_identity = read_identity(reader);
@@ -229,6 +247,6 @@ Observation<NativeOperationRecoveryEvidence> decode_native_operation_recovery_ev
     return Observation<NativeOperationRecoveryEvidence>::available({
         std::move(staging).take_value(), std::move(destination).take_value(),
         std::move(source_parent).take_value(), std::move(source).take_value(),
-        std::move(destination_identity).take_value()});
+        std::move(destination_identity).take_value(), std::move(staging_identity)});
 }
 } // namespace ck::files

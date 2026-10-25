@@ -34,6 +34,9 @@ struct NativeOperationRecoveryEvidence final {
     NativeDurableIdentity source_parent_identity;
     NativeDurableIdentity source_identity;
     NativeDurableIdentity destination_identity;
+    // Absent for Planned/Prepared records because the staging object may not
+    // exist yet. Recovery must not clean a name without this identity.
+    std::optional<NativeDurableIdentity> staging_identity;
 };
 
 struct NativeOperationRecoveryEvidenceLimits final {
