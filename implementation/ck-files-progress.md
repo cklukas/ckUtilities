@@ -318,6 +318,29 @@ CTest entry at 10:07:16–10:07:19 UTC. Output hashes are:
 * `ck_vision_files_tests` — `83df111ab08280d82f1397e8e1d742c3b53f8f1328745b9610306219078797b5`
 * `ck_files_core_tests` — `4fc4c863484bbb8d20eb054fc7e96206de2bbd5e9a520223f75cf576225dfca1`
 
+## WP-03 — source capability projection from completed object inventory
+
+Added `SourceCapabilityProjection`, a UI-independent adapter from immutable
+`ObjectInventoryData` observations to bounded `SourceCapabilityEvidence`.
+Windows stream catalogs, macOS resource-fork catalogs, attributes and values,
+security observations, symbolic links, hard-link counts, and the explicitly
+reported sparse/compression/encryption storage flags retain their native
+coverage and map only to declared destination capability families. Unknown,
+denied, changed and malformed evidence remains hard or fails closed; explicit
+unsupported query families are omitted as not applicable. Unknown channel
+namespaces and opaque/mount-point reparse kinds are refused rather than
+relabeled, and no path reopening, native I/O, filesystem-label inference or
+normalization occurs.
+
+Four focused tests cover complete mappings, hard unknown/denied evidence,
+unsupported-family omission, malformed attribute indexes, unmappable channel
+and reparse namespaces, and invalid limits. The strict macOS core target
+passed the focused four cases and the full `ck_files_core_tests` suite passed
+**633** cases at 10:09:58–10:09:59 UTC; the Files UI suite passed **186**
+cases at 10:10:02–10:10:05 UTC. This adapter does not yet construct a full
+operation coordinator or authorize mutation; destination assessment and
+execution-time revalidation remain mandatory.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
