@@ -453,6 +453,24 @@ The verified Linux output hashes are:
 * `ck_vision_files_tests` — `2aa78e860f3ebf7100cee53a278e5e1a82a8e251214bb8c3acd471f252d6c254`
 * `ck_files_core_tests` — `ce090edf2ac8f70810f29baf16add13203faae433e4155469d37e169cb29c9d4`
 
+## WP-03 — worker topology projection
+
+Added `OperationTopologyProjection` to convert completed source-target and
+ancestor-walk observations into plan topology values. Same native identity is
+reported as `SameObject`; an observed ancestor witness reports
+`DestinationInsideSource`; a regular file proven different from its target or
+missing at the destination is `Disjoint`. Directory rows without a complete
+safe ancestry witness, repeated ancestor walks, denied targets and other
+unknowns remain `Unknown`, which the plan boundary rejects. The adapter does
+no native I/O or path reopening.
+
+Three focused Mac cases cover same-object, descendant, file-disjoint,
+missing/unknown target, malformed kind, shape and limit behavior. The full
+strict Mac core suite passes **646** cases and the Files UI suite passes
+**186** cases at 10:42:35–10:42:39 UTC. Linux qualification, sanitizer/race
+checks and the mandatory Windows gate remain pending for this slice. No
+mutation or production GUI launch is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
