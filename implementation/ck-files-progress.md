@@ -626,6 +626,38 @@ installed-package consumer configured, built and passed its CTest entry at
 Windows remains blocked by the mandatory unavailable `V:` development drive;
 no Windows source, build, cache or temporary artifact was created.
 
+## WP-03 — native evidence to planning-worker integration
+
+`FilesOperationPlanningService` now accepts a separate native-preparation
+request from a worker-owned composition root. The planning worker runs the
+read-only `OperationEvidenceJob`, consumes its completed evidence bundle, and
+then performs the existing value-only plan/review assembly under the same
+serialized ticket, cancellation and fault boundary. Native owners remain
+worker-retired; no handle, path reopen or native call crosses into UI state.
+An integration case confirms that directory ancestry which cannot prove a safe
+topology fails with `PlanTopologyUnsafe` and publishes no plan or review.
+
+The strict macOS Files UI target passed **191** cases. The focused native
+planning-service suite passed **4** cases under normal, ASan/UBSan and TSan
+builds; the known full UI sanitizer gate remains the pinned ckVision
+`Desktop::install_default_handler` defect recorded above. The normal UI output
+hash is `900d179dbc32afb081c1305cbcd4cb548e7d34ad0946a43478c918973678c025`.
+
+Linux requalification of commit `bcded97` used the fresh remote root
+`/tmp/ckutilities-wp03-linux-native-planning-bcded97` and the unchanged pinned
+ckVision/llama.cpp inputs. GCC 14.2/aarch64 configured and built all current
+core, production and Files UI targets at 11:47:15–11:54:31 UTC; the core suite
+passed **650** cases and the Files UI suite passed **191**. A fresh
+installed-package consumer also passed its CTest entry. Verified Linux hashes:
+
+* `ck-files` — `82c968c0e76fe3e9f500dc3f7bdf14c713f7872d1355b234e346eb8d4cf25920`
+* `ck_vision_files_tests` — `a10187ec112f0249dbe190711e0d8cffed396816439dfd9c714eeb63ee3d9b34`
+* `ck_files_core_tests` — `84b2f3125401527effdfe750619150e9a273af436c730133e2b835b3dff03474`
+
+Windows remains gated by the unavailable mandatory `V:` development drive.
+No mutation command is enabled; this is still evidence collection, planning
+and explicit consent only.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
