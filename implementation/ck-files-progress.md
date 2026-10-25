@@ -31,6 +31,16 @@ qualification root (`/home/klukas/tmp/ckutilities-linux-qualification-20261025-0
 task-local `TMPDIR`). All Windows project/build/temp paths remained on `V:`;
 no system temporary path or source fallback was used.
 
+The retained macOS Release target was relinked after the native-core rebuild at
+2026-10-25T21:23:40Z, and its full current-source `ctest -L files` run passed
+**106/106** in 13.77 seconds. The verified executable remains
+`/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/bin/ck-files`
+with SHA-256
+`295e0111217c3cec7763cee2debb7f5262f2a52cbbc5a228ce02125c6ea4ee20`. The
+incremental relink was expected because the core and native test targets had
+already rebuilt the changed source; no stale object was used by the final
+link, and the complete matrix passed against that build tree.
+
 ## WP-02 — cross-platform qualification and production-host checkpoint
 
 The earlier qualification note below is retained as historical evidence. The
