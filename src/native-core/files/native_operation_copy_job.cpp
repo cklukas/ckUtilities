@@ -3,6 +3,7 @@
 #include "native_operation_copy_job.hpp"
 
 #include "directory_cursor.hpp"
+#include "native_operation_recovery_evidence.hpp"
 #include "opened_entry.hpp"
 
 #include <cstdint>
@@ -84,6 +85,9 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
         request.source_identity.scheme == IdentityScheme::Unknown ||
         !request.destination_identity.scope.is_valid() ||
         request.destination_identity.scheme == IdentityScheme::Unknown ||
+        !NativeDurableIdentity::from_live(request.source_parent_identity) ||
+        !NativeDurableIdentity::from_live(request.source_identity) ||
+        !NativeDurableIdentity::from_live(request.destination_identity) ||
         !request.prepare_metadata || !request.copy_limits.valid())
         return rejected<Pointer>(AdapterError::PlanInvalid, "native_operation_copy.request");
     const auto source_parent_identity = request.source_parent->identity();
@@ -96,6 +100,19 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
 
     auto state = std::make_shared<State>(std::move(request));
     const auto append = [state](OperationJournalRecord record) {
+        const auto source_parent = NativeDurableIdentity::from_live(state->request.source_parent_identity);
+        const auto source = NativeDurableIdentity::from_live(state->request.source_identity);
+        const auto destination = NativeDurableIdentity::from_live(state->request.destination_identity);
+        if (!source_parent || !source || !destination)
+            return Observation<bool>::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                 "native_operation_copy.journal_identity"});
+        auto evidence = encode_native_operation_recovery_evidence({
+            state->request.staging_name, state->request.destination_name,
+            *source_parent, *source, *destination});
+        if (!evidence.value())
+            return Observation<bool>::unavailable(evidence.state(), evidence.unavailable_detail()->error);
+        record.evidence = std::move(evidence).take_value();
         return append_operation_journal_file(*state->request.journal_file, *state->request.journal,
                                              std::move(record));
     };

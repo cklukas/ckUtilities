@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "native_operation_copy_job.hpp"
+#include "native_operation_recovery_evidence.hpp"
 #include "scratch_directory.hpp"
 #include "stream_copy_job.hpp"
 #include "operation_journal_file.hpp"
@@ -220,6 +221,13 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
         throw std::runtime_error("copied bytes=" + std::to_string(copied.size()) + " value=" + copied +
                                  " progress=" + std::to_string(job->progress().observed_bytes));
     CK_CHECK(journal->state(0) == OperationJournalState::Complete);
+    CK_CHECK(journal->records().size() >= 2 && !journal->records()[1].evidence.empty());
+    if (journal->records().size() >= 2) {
+        auto evidence = decode_native_operation_recovery_evidence(journal->records()[1].evidence);
+        CK_CHECK(evidence.value() && evidence.value()->staging_name == name(".ck-copy-staging") &&
+                 evidence.value()->destination_name == destination_name &&
+                 evidence.value()->destination_identity.matches_live(destination_identity));
+    }
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
 }
 
