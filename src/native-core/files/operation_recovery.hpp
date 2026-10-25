@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "native_operation_recovery_evidence.hpp"
 #include "operation_journal.hpp"
 #include "operation_journal_file.hpp"
 
@@ -33,12 +34,32 @@ struct OperationRecoveryReport final {
     bool has_untrusted_tail = false;
 };
 
+struct NativeOperationRecoveryArtifact final {
+    std::size_t item = 0;
+    OperationJournalState state = OperationJournalState::Planned;
+    NativeOperationRecoveryEvidence evidence;
+};
+
+struct NativeOperationRecoveryInspection final {
+    OperationRecoveryReport report;
+    std::vector<NativeOperationRecoveryArtifact> artifacts;
+    bool has_untrusted_evidence = false;
+};
+
 // Pure startup inspection. It never opens, deletes, replaces, resumes or
 // retires a native object. A caller must obtain fresh held-object identity and
 // digest evidence before turning any non-terminal action into a mutation.
 Observation<OperationRecoveryReport> inspect_operation_recovery(
     const OperationJournal& journal,
     std::optional<UnavailableObservation> tail = std::nullopt);
+
+// Read-only native projection. It decodes evidence only for items whose
+// generic recovery action needs an artifact. Missing or malformed evidence
+// changes that item to RequireReview; no path, handle or mutation is produced.
+Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery_evidence(
+    const OperationJournal& journal,
+    std::optional<UnavailableObservation> tail = std::nullopt,
+    NativeOperationRecoveryEvidenceLimits evidence_limits = {});
 
 // Read-only startup composition. The file remains worker-owned; a successful
 // result contains the decoded journal and any untrusted tail projected into

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_recovery.hpp"
+#include "native_operation_recovery_evidence.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
@@ -75,4 +76,49 @@ CK_TEST(operation_recovery_requires_review_for_untrusted_tail_and_reconciliation
     if (report.value())
         CK_CHECK(report.value()->items[0].action == OperationRecoveryAction::IgnoreTerminal &&
                  report.value()->items[0].requires_reconciliation);
+}
+
+CK_TEST(native_operation_recovery_projection_decodes_evidence_without_authorizing_mutation) {
+    AdapterScope scope;
+    OperationJournalId id;
+    id.bytes[0] = std::byte{0x73};
+    auto created = OperationJournal::create(FileOperation::Copy, id, {4, 32, 4096});
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto value = std::move(created).take_value();
+    CK_CHECK(value->append({1, 0, OperationJournalState::Planned, {}}).value());
+    const auto identity = *NativeDurableIdentity::from_live(
+        {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(7),
+         NativeIdentifier::from_u64(8), {}});
+    NativeOperationRecoveryEvidence evidence{
+        *NativeName::from_posix(".ck-stage"), *NativeName::from_posix("destination"),
+        identity, identity, identity};
+    const auto encoded = encode_native_operation_recovery_evidence(evidence);
+    CK_CHECK(encoded.value());
+    if (!encoded.value()) return;
+    CK_CHECK(value->append({2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
+    auto inspection = inspect_native_operation_recovery_evidence(*value);
+    CK_CHECK(inspection.value() && inspection.value()->artifacts.size() == 1 &&
+             !inspection.value()->has_untrusted_evidence);
+    if (inspection.value()) {
+        CK_CHECK(inspection.value()->artifacts[0].evidence.staging_name == evidence.staging_name);
+        CK_CHECK(inspection.value()->report.items[0].action == OperationRecoveryAction::InspectUnpublishedStaging);
+    }
+}
+
+CK_TEST(native_operation_recovery_projection_requires_review_for_missing_or_corrupt_evidence) {
+    OperationJournalId id;
+    id.bytes[0] = std::byte{0x74};
+    auto created = OperationJournal::create(FileOperation::Copy, id, {4, 32, 4096});
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto value = std::move(created).take_value();
+    CK_CHECK(value->append({1, 0, OperationJournalState::Planned, {}}).value());
+    CK_CHECK(value->append({2, 0, OperationJournalState::Prepared, {std::byte{0xFF}}}).value());
+    auto inspection = inspect_native_operation_recovery_evidence(*value);
+    CK_CHECK(inspection.value() && inspection.value()->has_untrusted_evidence &&
+             inspection.value()->report.requires_reconciliation &&
+             inspection.value()->artifacts.empty());
+    if (inspection.value())
+        CK_CHECK(inspection.value()->report.items[0].action == OperationRecoveryAction::RequireReview);
 }

@@ -3,6 +3,8 @@
 #include "operation_recovery.hpp"
 
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace ck::files {
 namespace {
@@ -70,6 +72,48 @@ Observation<OperationRecoveryReport> inspect_operation_recovery(
     if (report.items.empty())
         return rejected<OperationRecoveryReport>(AdapterError::PlanInvalid, "operation_recovery.no_items");
     return Observation<OperationRecoveryReport>::available(std::move(report));
+}
+
+Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery_evidence(
+    const OperationJournal& journal, std::optional<UnavailableObservation> tail,
+    NativeOperationRecoveryEvidenceLimits evidence_limits) {
+    auto generic = inspect_operation_recovery(journal, tail);
+    if (!generic.value())
+        return Observation<NativeOperationRecoveryInspection>::unavailable(
+            generic.state(), generic.unavailable_detail()->error);
+
+    std::vector<const OperationJournalRecord*> latest(journal.limits().max_items);
+    for (const auto& record : journal.records()) {
+        if (record.item >= latest.size())
+            return rejected<NativeOperationRecoveryInspection>(AdapterError::InvalidNativeResult,
+                                                               "native_recovery_evidence.item");
+        latest[record.item] = &record;
+    }
+
+    NativeOperationRecoveryInspection result;
+    result.report = std::move(generic).take_value();
+    result.has_untrusted_evidence = result.report.has_untrusted_tail;
+    for (auto& item : result.report.items) {
+        if (item.action == OperationRecoveryAction::IgnoreTerminal) continue;
+        const auto* record = latest[item.item];
+        if (!record || record->evidence.empty()) {
+            item.action = OperationRecoveryAction::RequireReview;
+            item.requires_reconciliation = true;
+            result.report.requires_reconciliation = true;
+            result.has_untrusted_evidence = true;
+            continue;
+        }
+        auto evidence = decode_native_operation_recovery_evidence(record->evidence, evidence_limits);
+        if (!evidence.value()) {
+            item.action = OperationRecoveryAction::RequireReview;
+            item.requires_reconciliation = true;
+            result.report.requires_reconciliation = true;
+            result.has_untrusted_evidence = true;
+            continue;
+        }
+        result.artifacts.push_back({item.item, item.state, std::move(evidence).take_value()});
+    }
+    return Observation<NativeOperationRecoveryInspection>::available(std::move(result));
 }
 
 Observation<OperationRecoveryReport> inspect_native_operation_recovery(
