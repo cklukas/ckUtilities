@@ -35,6 +35,7 @@ struct OperationCopyRequest final {
 
 struct OperationCopyResult final {
     OperationCopyState state = OperationCopyState::Ready;
+    std::uint64_t observed_bytes = 0;
     std::optional<UnavailableObservation> failure;
 };
 

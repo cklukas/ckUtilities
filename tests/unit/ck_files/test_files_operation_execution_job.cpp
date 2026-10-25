@@ -107,9 +107,11 @@ CK_TEST(operation_execution_job_does_not_construct_commit_until_copy_is_verified
     CK_CHECK(created.value());
     if (!created.value()) return;
     auto job = std::move(created).take_value();
+    CK_CHECK(job->progress().observed_bytes == 0 && !job->progress().total_bytes.has_value());
     for (unsigned step = 0; step != 40 && job->state() != OperationExecutionState::Complete &&
          job->state() != OperationExecutionState::Failed; ++step) job->advance();
     CK_CHECK(job->state() == OperationExecutionState::Complete && commit_preparations == 1 && publications == 1);
+    CK_CHECK(job->progress().observed_bytes == memory.source.size() && !job->progress().total_bytes.has_value());
     CK_CHECK(value->state(0) == OperationJournalState::Complete && memory.destination == memory.source);
 }
 

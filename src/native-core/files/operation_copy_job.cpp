@@ -90,6 +90,7 @@ OperationCopyState OperationCopyJob::advance(std::stop_token stop) {
     }
     if (result_.state == OperationCopyState::Copying) {
         const auto copied = copy_->advance(stop);
+        result_.observed_bytes = copy_->result().source_bytes;
         if (copied == StreamCopyState::Cancelled) {
             if (append(OperationJournalState::Cancelled)) result_.state = OperationCopyState::Cancelled;
         } else if (copied == StreamCopyState::Failed) {

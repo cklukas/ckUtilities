@@ -29,6 +29,15 @@ void OperationExecutionJob::fail(UnavailableObservation detail, OperationExecuti
     result_.state = state;
 }
 
+OperationProgress OperationExecutionJob::progress() const noexcept {
+    OperationProgress progress{result_.state, 0, std::nullopt};
+    if (request_.copy) {
+        const auto& copy = request_.copy->result();
+        progress.observed_bytes = copy.observed_bytes;
+    }
+    return progress;
+}
+
 OperationExecutionState OperationExecutionJob::advance(std::stop_token stop) {
     if (result_.state == OperationExecutionState::Complete || result_.state == OperationExecutionState::Failed ||
         result_.state == OperationExecutionState::Cancelled || result_.state == OperationExecutionState::RetainedSource ||

@@ -6,6 +6,7 @@
 #include "operation_copy_job.hpp"
 
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <stop_token>
@@ -14,6 +15,15 @@ namespace ck::files {
 
 enum class OperationExecutionState { Copying, PreparingCommit, Committing, Complete, Failed, Cancelled,
                                      RetainedSource, NeedsReconciliation };
+
+struct OperationProgress final {
+    OperationExecutionState state = OperationExecutionState::Copying;
+    std::uint64_t observed_bytes = 0;
+    // A total is optional by design. A source size observed before copying is
+    // not a snapshot guarantee, so callers must not turn its absence into a
+    // guessed percentage or an exact completion estimate.
+    std::optional<std::uint64_t> total_bytes;
+};
 
 struct OperationExecutionRequest final {
     OperationCopyJob::Pointer copy;
@@ -39,6 +49,7 @@ public:
     OperationExecutionState state() const noexcept { return result_.state; }
     const OperationExecutionResult& result() const noexcept { return result_; }
     const std::optional<UnavailableObservation>& failure() const noexcept { return result_.failure; }
+    OperationProgress progress() const noexcept;
     OperationExecutionState advance(std::stop_token stop = {});
 
 private:
