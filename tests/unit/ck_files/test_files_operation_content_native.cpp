@@ -127,3 +127,27 @@ CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_c
     CK_CHECK(!changed.value() && changed.state() == ObservationState::Changed &&
              fs::exists(scratch.path() / "substituted.retired") && fs::exists(scratch.path() / "substituted.bin"));
 }
+
+CK_TEST(native_operation_source_retirement_refuses_unqualified_posix_compare_delete) {
+    const ck::testing::ScratchDirectory scratch("files-operation-retirement-boundary", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "source.bin";
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "source remains until a qualified retirement adapter exists";
+    }
+    NativeFileSystem filesystem;
+    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto source = take(directory->open_child(name("source.bin"), EntryAccess::ContentRead));
+    const auto metadata = take(source->inspect_basic());
+    CK_CHECK(metadata.identity.value());
+    if (!metadata.identity.value()) return;
+    const auto retired = directory->retire_child(name("source.bin"), *metadata.identity.value());
+#if defined(_WIN32)
+    // The Windows handle-disposition adapter is qualified separately on the
+    // mandatory workstation; this host-side source test is POSIX-only.
+    CK_CHECK(retired.value() || retired.state() != ObservationState::Unsupported);
+#else
+    CK_CHECK(!retired.value() && retired.state() == ObservationState::Unsupported);
+    CK_CHECK(fs::exists(source_path));
+#endif
+}

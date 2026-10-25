@@ -70,6 +70,13 @@ public:
     // results are refused. The returned handle is not published under a
     // destination name and must be retained by the worker.
     virtual Observation<std::unique_ptr<OpenedEntry>> create_child_file(const NativeName& name) const;
+    // Worker-only source retirement boundary. The adapter must open the exact
+    // child relative to this held directory, verify expected_identity, and
+    // use a handle/object-based disposition. A pathname unlink or a
+    // stat-then-unlink emulation is not an implementation of this contract.
+    // Unsupported is required until the platform has a qualified protocol.
+    virtual Observation<bool> retire_child(const NativeName& name,
+                                            const ObjectIdentity& expected_identity) const;
     // Live, read-only queries against this held directory. Per-field failures
     // remain explicit; successful advertisements do not authorize operations.
     virtual Observation<LocationInfo> inspect_location() const;

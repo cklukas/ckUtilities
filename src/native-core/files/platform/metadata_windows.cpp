@@ -735,6 +735,56 @@ public:
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "create_child_file.kind"});
         return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true));
     }
+    Observation<bool> retire_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {
+        using Result = Observation<bool>;
+        if (!name.is_valid() || compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "retire_child.input"});
+        // Open relative to the retained parent with DELETE access and
+        // no-reparse semantics. The resulting handle, not the basename, is
+        // the disposition target, so a rename after open cannot redirect the
+        // delete to a replacement object.
+        auto opened = open_native_component(name, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                             ChildLookupMode::NativeDefault);
+        if (!opened.value()) {
+            const auto& error = *opened.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto source = std::move(opened).take_value();
+        const auto metadata = handle_metadata(source.get(), scope_);
+        if (!metadata.value()) {
+            const auto& error = *metadata.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        if (!metadata.value()->identity.value() ||
+            compare_identity(*metadata.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "retire_child.identity"});
+        if (!metadata.value()->kind.value() || *metadata.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "retire_child.kind"});
+
+        FILE_STANDARD_INFO standard{};
+        if (!GetFileInformationByHandleEx(source.get(), FileStandardInfo, &standard, sizeof(standard)))
+            return failure<bool>(GetLastError(), "retire_child.standard_info");
+        // A selected hard-link alias is not a removable single-source object;
+        // preserve the link group until the planner supplies its full policy.
+        if (standard.NumberOfLinks != 1)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "retire_child.hard_link"});
+
+        FILE_DISPOSITION_INFO disposition{};
+        disposition.DeleteFile = TRUE;
+        if (!SetFileInformationByHandle(source.get(), FileDispositionInfo, &disposition, sizeof(disposition))) {
+            const DWORD code = GetLastError();
+            return Result::unavailable(code == ERROR_IO_PENDING ? ObservationState::Unknown : error_state(code),
+                {ErrorDomain::Win32, code, "retire_child.disposition"});
+        }
+        if (!FlushFileBuffers(handle_.get()))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "retire_child.directory_flush"});
+        return Result::available(true);
+    }
     Observation<bool> publish_noreplace(HANDLE source, const NativeName& name) const {
         using Result = Observation<bool>;
         const auto* units = name.windows_units();

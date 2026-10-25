@@ -95,6 +95,18 @@ Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::create_child_file(con
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_child_file.native_query"});
 }
 
+Observation<bool> DirectoryCursor::retire_child(const NativeName& name,
+                                                const ObjectIdentity& expected_identity) const {
+    if (!name.is_valid())
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "retire_child.name"});
+    if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "retire_child.identity"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "retire_child.native_query"});
+}
+
 Observation<LocationInfo> DirectoryCursor::inspect_location() const {
     return Observation<LocationInfo>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "location.native_query"});
