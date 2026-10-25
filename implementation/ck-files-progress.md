@@ -440,6 +440,19 @@ passes **643** cases and the Files UI suite passes **186** cases at
 mandatory Windows gate remain pending for this slice. No mutation or
 production GUI launch is enabled.
 
+Linux requalification of commit `9affc32` used the fresh source/build root
+`/tmp/ckutilities-wp03-linux-9affc32` with the unchanged pinned ckVision and
+llama.cpp inputs. Strict configure ran at 10:35:47–10:35:55 UTC and the
+project target build ran at 10:35:55–10:41:08 UTC under GCC 14. The rebuilt
+core suite passed **643** cases at 10:41:11 and the Files UI suite passed
+**186** cases at 10:41:11–10:41:14. The independent installed-package
+consumer configured, built and passed its CTest entry at 10:41:17–10:41:19.
+The verified Linux output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `2aa78e860f3ebf7100cee53a278e5e1a82a8e251214bb8c3acd471f252d6c254`
+* `ck_files_core_tests` — `ce090edf2ac8f70810f29baf16add13203faae433e4155469d37e169cb29c9d4`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
