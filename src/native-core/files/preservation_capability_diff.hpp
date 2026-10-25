@@ -11,6 +11,8 @@
 
 namespace ck::files {
 
+class DestinationDirectoryAssessment;
+
 // These are worker-owned facts, not filesystem probes. Main-data verification
 // and destination creation are separate requirements; this adapter compares
 // only source features that have an explicit destination feature mapping.
@@ -45,6 +47,11 @@ public:
         std::span<const SourceCapabilityEvidence> source,
         std::span<const DestinationCapabilityEvidence> destination,
         PreservationDiffLimits limits = {});
+
+    // Copies only the already-published worker observations. It does not query
+    // the assessment's held directory or infer capabilities from labels.
+    static std::vector<DestinationCapabilityEvidence> from_destination_assessment(
+        const DestinationDirectoryAssessment& assessment);
 };
 
 } // namespace ck::files

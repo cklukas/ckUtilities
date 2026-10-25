@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "preservation_capability_diff.hpp"
 
+#include "destination_directory_assessment.hpp"
+
 #include <algorithm>
 #include <cstdint>
 
@@ -101,6 +103,15 @@ Observation<std::vector<PreservationIssue>> PreservationCapabilityDiff::compare(
         issues.push_back(PreservationIssue{evidence.item, evidence.feature, state, evidence.consequence, hard});
     }
     return Result::available(std::move(issues));
+}
+
+std::vector<DestinationCapabilityEvidence> PreservationCapabilityDiff::from_destination_assessment(
+    const DestinationDirectoryAssessment& assessment) {
+    std::vector<DestinationCapabilityEvidence> result;
+    result.reserve(destination_advertised_features.size());
+    for (const auto feature : destination_advertised_features)
+        result.push_back({feature, assessment.advertisement(feature)});
+    return result;
 }
 
 } // namespace ck::files

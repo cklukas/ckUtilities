@@ -151,6 +151,18 @@ regeneration. `test_files_operation_review` passed, and the complete
 presentation and worker-fed review snapshots remain follow-up integration
 work.
 
+## WP-03 — destination capability snapshot adapter
+
+`PreservationCapabilityDiff::from_destination_assessment` now adapts the
+existing worker-owned `DestinationDirectoryAssessment` into the explicit
+capability evidence consumed by planning. It copies the published feature
+observations only; the adapter performs no new native calls, path reopening,
+label inference or capability upgrades.
+
+The macOS strict target rebuild ran at 08:47:03–08:47:07 CET. The destination
+assessment and capability-diff suites passed, and the complete
+`ck_files_core_tests` binary passed all 621 cases.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

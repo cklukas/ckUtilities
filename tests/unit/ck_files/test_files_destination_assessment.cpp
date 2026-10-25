@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "destination_directory_assessment.hpp"
+#include "preservation_capability_diff.hpp"
 #include "manual_monotonic_clock.hpp"
 #include "cvision/testing/cktest.hpp"
 #include <functional>
@@ -136,6 +137,20 @@ CK_TEST(destination_assessment_binds_feature_reports_without_IO_or_operation_per
     CK_CHECK(s->live == 1);
     report.reset();
     CK_CHECK(s->live == 0);
+}
+
+CK_TEST(destination_assessment_capability_snapshot_copies_only_published_feature_observations) {
+    auto s = std::make_shared<Script>();
+    const auto report = assess(s);
+    const auto calls = s->calls;
+    const auto snapshot = PreservationCapabilityDiff::from_destination_assessment(*report);
+    CK_CHECK(snapshot.size() == destination_advertised_features.size() && s->calls == calls);
+    for (std::size_t index = 0; index < snapshot.size(); ++index) {
+        CK_CHECK(snapshot[index].feature == destination_advertised_features[index]);
+        CK_CHECK(snapshot[index].advertisement.state() == report->advertisement(snapshot[index].feature).state());
+        if (snapshot[index].advertisement.value())
+            CK_CHECK(*snapshot[index].advertisement.value() == *report->advertisement(snapshot[index].feature).value());
+    }
 }
 CK_TEST(destination_assessment_darwin_and_linux_do_not_infer_features_from_filesystem_labels) {
     for (const auto family : {LocationQueryFamily::DarwinDescriptor, LocationQueryFamily::LinuxDescriptor}) {
