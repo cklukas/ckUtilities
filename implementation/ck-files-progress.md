@@ -984,6 +984,16 @@ unrelated items after a failed or reconciliation-required item, and does not
 start pending items after cancellation. The new partial-outcome and
 pending-cancellation cases pass under normal, ASan and TSan macOS builds.
 
+Commit `f63e72f` adds the same-filesystem no-replace rename boundary. The
+contract requires held source and destination parents, source identity
+revalidation, native no-clobber publication, destination identity verification
+and parent-directory flushes. Windows has the handle-based implementation;
+POSIX deliberately remains `Unsupported` because pathname stat-then-rename is
+not an identity-bound protocol. The native safety-gate case passes under
+normal, ASan and TSan macOS builds, and does not mutate the POSIX fixture.
+Windows compilation and execution remain gated by the mandatory unavailable
+`V:` workstation.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
