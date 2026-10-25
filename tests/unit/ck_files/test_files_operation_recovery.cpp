@@ -92,7 +92,7 @@ CK_TEST(native_operation_recovery_projection_decodes_evidence_without_authorizin
          NativeIdentifier::from_u64(8), {}});
     NativeOperationRecoveryEvidence evidence{
         *NativeName::from_posix(".ck-stage"), *NativeName::from_posix("destination"),
-        identity, identity, identity};
+        identity, identity, identity, {}};
     const auto encoded = encode_native_operation_recovery_evidence(evidence);
     CK_CHECK(encoded.value());
     if (!encoded.value()) return;
