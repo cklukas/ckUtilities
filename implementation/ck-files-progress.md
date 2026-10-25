@@ -471,6 +471,19 @@ strict Mac core suite passes **646** cases and the Files UI suite passes
 checks and the mandatory Windows gate remain pending for this slice. No
 mutation or production GUI launch is enabled.
 
+Linux requalification of commit `bcafb96` used the fresh source/build root
+`/tmp/ckutilities-wp03-linux-bcafb96` with the unchanged pinned ckVision and
+llama.cpp inputs. Strict configure ran at 10:42:56–10:43:03 UTC and the
+project target build ran at 10:43:03–10:49:58 UTC under GCC 14. The rebuilt
+core suite passed **646** cases at 10:50:03 and the Files UI suite passed
+**186** cases at 10:50:03–10:50:06. The independent installed-package
+consumer configured, built and passed its CTest entry at 10:50:10–10:50:12.
+The verified Linux output hashes are:
+
+* `ck-files` — `4da2057e7fc5d1026f67b56b39b7a7a0259526a74af163191a5fc3c13e6f489f`
+* `ck_vision_files_tests` — `5eb37d11f000e135e08f92db1180471ab097141b452ac26ed0161ee416c19473`
+* `ck_files_core_tests` — `8435c83cb99a855d3316929b3bb857d4696f4c07dc9b04e38c467f628d02a0cf`
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
