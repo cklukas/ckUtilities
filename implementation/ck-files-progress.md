@@ -891,6 +891,18 @@ Post-checkpoint normal qualification passes all **104** registered Files CTest
 tests, representing **681 core** and **169 native** cktest cases; no app was
 launched and no mutation command was enabled.
 
+Commit `0d89293` tightens the Move retirement gate with an explicit source
+stability proof. After destination publication, the job still revalidates the
+held source identity, then requires an adapter-supplied snapshot or enforced-
+exclusion guarantee before invoking any source-retirement callback. A negative
+or unavailable stability result durably records `RetainedSource`; it never
+guesses that before/after observations make deletion safe. Two new cases cover
+both refusal paths. Normal macOS Files CTest remains **104/104**; the
+operation-commit job passes the focused macOS ASan/UBSan and TSan runs. Native
+source retirement is still not enabled: POSIX compare-delete remains
+unqualified, and Windows qualification remains gated by the unavailable
+mandatory `V:` workstation drive.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
