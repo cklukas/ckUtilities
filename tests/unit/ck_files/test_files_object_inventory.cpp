@@ -569,7 +569,7 @@ CK_TEST(held_child_bad_access_rejects_before_IO_and_native_open_or_metadata_erro
     Fixture f;
     auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
     const auto opens = f.calls(Op::OpenChild);
-    for (const auto access : {static_cast<EntryAccess>(32), static_cast<EntryAccess>(4)}) {
+    for (const auto access : {static_cast<EntryAccess>(64), static_cast<EntryAccess>(4)}) {
         const auto reply = HeldChild::observe_with_access(parent, name(), access);
         CK_CHECK(!reply.value() && reply.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidAccess));
     }

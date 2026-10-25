@@ -77,6 +77,30 @@ test data was created on either exposed drive. The current ck-files production
 binary and repository remain unchanged, with no running ck-files or Files test
 process owned by this task.
 
+## WP-03 — operation-plan and consent-binding foundation
+
+The first WP-03 implementation slice adds the UI-independent
+`OperationPlan`. It rejects unqualified or mixed-adapter source identities,
+duplicate source objects, and any non-disjoint/unknown source-target topology
+before a plan can exist. Preservation issues distinguish feature family,
+observed state and consequence; hard failures and unknown preservation cannot
+be authorized by `ContinueWithListedLosses`. Destination conflicts require
+type-specific `Replace` or `MergeDirectories` decisions, while cancellation
+is always available.
+
+Consent receipts retain an opaque immutable plan identity and are revalidated
+against the action-specific policy, so a receipt from a rebuilt or changed
+plan cannot authorize a later operation. This layer is a review result only;
+it performs no filesystem mutation and does not claim that recursive inventory,
+capability comparison, dialogs or execution revalidation are complete yet.
+
+The macOS strict build compiled the new core and test target at
+08:38:37–08:41:02 CET. The focused `test_files_operation_consent` entry passed,
+and the complete `ck_files_core_tests` binary passed all 609 cases. The access
+contract tests were also corrected to cover the already-implemented bounded
+`ContentRead` permission used by preview; the invalid value remains an
+out-of-range access mask.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

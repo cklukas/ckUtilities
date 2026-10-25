@@ -1,0 +1,95 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "operation_consent.hpp"
+
+#include "cvision/testing/cktest.hpp"
+
+#include <stdexcept>
+#include <utility>
+
+namespace {
+using namespace ck::files;
+
+FrozenOperationItem item(std::uint64_t id, ObjectKind kind = ObjectKind::RegularFile,
+    SourceTargetTopology topology = SourceTargetTopology::Disjoint) {
+    return {ObjectIdentity{AdapterScope{}, IdentityScheme::PosixDeviceInode,
+        NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(id), {}}, kind, topology};
+}
+
+template <class T>
+T take(Observation<T> value) {
+    if (!value.value()) throw std::runtime_error("operation consent fixture unavailable");
+    return std::move(value).take_value();
+}
+
+OperationPlan::Pointer plan(std::vector<FrozenOperationItem> items,
+    std::vector<PreservationIssue> issues = {}, std::vector<DestinationConflict> conflicts = {}) {
+    return take(OperationPlan::create(FileOperation::Copy, std::move(items), std::move(issues), std::move(conflicts)));
+}
+} // namespace
+
+CK_TEST(operation_plan_requires_qualified_disjoint_unique_sources) {
+    const auto duplicate = item(4);
+    const auto duplicate_result = OperationPlan::create(FileOperation::Copy, {duplicate, duplicate});
+    CK_CHECK(duplicate_result.state() == ObservationState::Failed);
+    CK_CHECK(duplicate_result.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::PlanInvalid));
+
+    const auto unsafe = OperationPlan::create(FileOperation::Move, {item(5, ObjectKind::Directory,
+        SourceTargetTopology::DestinationInsideSource)});
+    CK_CHECK(unsafe.state() == ObservationState::Failed);
+    CK_CHECK(unsafe.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::PlanTopologyUnsafe));
+
+    auto unqualified = item(6);
+    unqualified.source.scheme = IdentityScheme::Unknown;
+    const auto unqualified_result = OperationPlan::create(FileOperation::Copy, {unqualified});
+    CK_CHECK(unqualified_result.state() == ObservationState::Failed);
+    CK_CHECK(unqualified_result.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity));
+}
+
+CK_TEST(operation_consent_cancel_is_always_safe_and_continue_requires_complete_known_review) {
+    const std::vector issues{
+        PreservationIssue{0, PreservationFeature::AdditionalChannels, PreservationIssueState::Missing,
+            PreservationConsequence::DataLoss, false},
+        PreservationIssue{0, PreservationFeature::TimesAndFlags, PreservationIssueState::Changed,
+            PreservationConsequence::MetadataLoss, false}};
+    const auto operation = plan({item(7)}, issues);
+    const auto cancel = take(operation->bind(ConsentAction::Cancel));
+    CK_CHECK(operation->receipt_matches(cancel) && cancel.action == ConsentAction::Cancel);
+    CK_CHECK(operation->bind(ConsentAction::ContinueWithListedLosses, {0}).state() == ObservationState::Failed);
+
+    const auto accepted = take(operation->bind(ConsentAction::ContinueWithListedLosses, {1, 0}));
+    CK_CHECK(operation->receipt_matches(accepted) && accepted.reviewed_issues.size() == 2);
+    auto forged = accepted;
+    forged.action = ConsentAction::Cancel;
+    CK_CHECK(!operation->receipt_matches(forged));
+
+    const auto uncertain = plan({item(8)}, {PreservationIssue{0, PreservationFeature::MainData,
+        PreservationIssueState::Unknown, PreservationConsequence::Uncertain, true}});
+    CK_CHECK(uncertain->bind(ConsentAction::ContinueWithListedLosses, {0}).state() == ObservationState::Failed);
+    CK_CHECK(uncertain->bind(ConsentAction::ChooseAnotherDestination).value());
+}
+
+CK_TEST(operation_consent_receipts_are_bound_to_the_immutable_plan_identity) {
+    const auto first = plan({item(9)});
+    const auto receipt = take(first->bind(ConsentAction::Cancel));
+    const auto second = plan({item(10)});
+    CK_CHECK(first->receipt_matches(receipt));
+    CK_CHECK(!second->receipt_matches(receipt));
+    CK_CHECK(first->identity() == first->identity());
+    CK_CHECK(first->identity() != second->identity());
+}
+
+CK_TEST(operation_consent_conflicts_require_type_specific_review) {
+    const auto file_conflict = plan({item(11)}, {}, {{0, DestinationConflictKind::ExistingFile}});
+    CK_CHECK(file_conflict->bind(ConsentAction::Replace, {}, {0}).value());
+    CK_CHECK(!file_conflict->bind(ConsentAction::MergeDirectories, {}, {0}).value());
+
+    const auto directory_conflict = plan({item(12, ObjectKind::Directory)}, {},
+        {{0, DestinationConflictKind::ExistingDirectory}});
+    CK_CHECK(directory_conflict->bind(ConsentAction::MergeDirectories, {}, {0}).value());
+    CK_CHECK(!directory_conflict->bind(ConsentAction::Replace, {}, {0}).value());
+
+    const auto mismatch = plan({item(13)}, {}, {{0, DestinationConflictKind::TypeMismatch}});
+    CK_CHECK(!mismatch->bind(ConsentAction::Replace, {}, {0}).value());
+    CK_CHECK(mismatch->bind(ConsentAction::SkipConflict, {}, {0}).value());
+}

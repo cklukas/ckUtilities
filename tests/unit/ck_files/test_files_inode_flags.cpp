@@ -89,7 +89,7 @@ CK_TEST(inode_flags_subject_preserves_all_unavailable_metadata_kind_and_identity
 CK_TEST(inode_flags_access_is_independent_of_layout_attributes_and_security) {
     for (unsigned bits_value = 0; bits_value < 64; ++bits_value) {
         const auto access = static_cast<EntryAccess>(bits_value);
-        CK_CHECK(valid_entry_access(access) == ((bits_value & ~31U) == 0 && ((bits_value & 4U) == 0 || (bits_value & 2U) != 0)));
+        CK_CHECK(valid_entry_access(access) == ((bits_value & ~63U) == 0 && ((bits_value & 4U) == 0 || (bits_value & 2U) != 0)));
         CK_CHECK(requests_inode_flags(access) == ((bits_value & 16U) != 0));
         CK_CHECK(requests_layout(access) == ((bits_value & 8U) != 0));
     }
