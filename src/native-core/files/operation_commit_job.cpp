@@ -90,6 +90,31 @@ bool OperationCommitJob::invoke_revalidation(
     return true;
 }
 
+bool OperationCommitJob::invoke_source_stability(std::stop_token stop) {
+    const auto retain = [this](UnavailableObservation error) {
+        result_.failure = std::move(error);
+        if (append(OperationJournalState::RetainedSource))
+            result_.state = OperationCommitState::RetainedSource;
+        return false;
+    };
+    if (stop.stop_requested())
+        return retain(detail(AdapterError::InterruptedRead, "operation_commit.source_stability_cancelled"));
+    try {
+        const auto result = request_.verify_source_stability(stop);
+        if (!result.value()) {
+            const auto& error = *result.unavailable_detail();
+            return retain(error);
+        }
+        if (*result.value() == SourceStabilityGuarantee::BeforeAfterObservation)
+            return retain(detail(AdapterError::PlanDecisionStale,
+                                 "operation_commit.source_stability_observation_only"));
+    } catch (...) {
+        return retain(detail(AdapterError::InvalidNativeResult,
+                             "operation_commit.source_stability_exception"));
+    }
+    return true;
+}
+
 OperationCommitState OperationCommitJob::advance(std::stop_token stop) {
     if (result_.state == OperationCommitState::Complete || result_.state == OperationCommitState::Failed ||
         result_.state == OperationCommitState::Cancelled || result_.state == OperationCommitState::RetainedSource ||
@@ -149,9 +174,7 @@ OperationCommitState OperationCommitJob::advance(std::stop_token stop) {
     // A held identity and a pair of observations do not prove that a writer
     // could not have changed content. Require the adapter's explicit snapshot
     // or enforced-exclusion guarantee before entering source retirement.
-    if (!invoke_revalidation(request_.verify_source_stability, stop,
-                             "operation_commit.source_unstable_before_retire",
-                             OperationJournalState::RetainedSource))
+    if (!invoke_source_stability(stop))
         return result_.state;
     try {
         auto retired = request_.retire_source(stop);

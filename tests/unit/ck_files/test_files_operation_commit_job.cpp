@@ -33,7 +33,9 @@ OperationCommitRequest request(FileOperation operation, OperationJournal::Pointe
     result.journal = std::move(value);
     result.revalidate_source = [](std::stop_token) { return Observation<bool>::available(true); };
     result.revalidate_destination = [](std::stop_token) { return Observation<bool>::available(true); };
-    result.verify_source_stability = [](std::stop_token) { return Observation<bool>::available(true); };
+    result.verify_source_stability = [](std::stop_token) {
+        return Observation<SourceStabilityGuarantee>::available(SourceStabilityGuarantee::Snapshot);
+    };
     result.commit_destination = [](std::stop_token) { return Observation<bool>::available(true); };
     result.retire_source = [](std::stop_token) { return Observation<bool>::available(true); };
     const auto journal_copy = result.journal;
@@ -168,7 +170,9 @@ CK_TEST(operation_commit_job_move_requires_source_stability_before_retirement) {
     auto value = journal(FileOperation::Move);
     unsigned retirements = 0;
     auto request_value = request(FileOperation::Move, value);
-    request_value.verify_source_stability = [](std::stop_token) { return Observation<bool>::available(false); };
+    request_value.verify_source_stability = [](std::stop_token) {
+        return Observation<SourceStabilityGuarantee>::available(SourceStabilityGuarantee::BeforeAfterObservation);
+    };
     request_value.retire_source = [&](std::stop_token) {
         ++retirements;
         return Observation<bool>::available(true);
@@ -188,7 +192,7 @@ CK_TEST(operation_commit_job_move_unavailable_source_stability_retains_source) {
     unsigned retirements = 0;
     auto request_value = request(FileOperation::Move, value);
     request_value.verify_source_stability = [](std::stop_token) {
-        return Observation<bool>::unavailable(ObservationState::Unknown,
+        return Observation<SourceStabilityGuarantee>::unavailable(ObservationState::Unknown,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
              "test.source_stability"});
     };

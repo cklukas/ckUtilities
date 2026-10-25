@@ -22,6 +22,12 @@ enum class OperationCommitState {
     NeedsReconciliation
 };
 
+enum class SourceStabilityGuarantee {
+    Snapshot,
+    EnforcedExclusion,
+    BeforeAfterObservation
+};
+
 struct OperationCommitRequest final {
     FileOperation operation = FileOperation::Copy;
     std::size_t item = 0;
@@ -34,11 +40,10 @@ struct OperationCommitRequest final {
     // reconciliation rather than guessing what the filesystem did.
     std::function<Observation<bool>(std::stop_token)> revalidate_source;
     std::function<Observation<bool>(std::stop_token)> revalidate_destination;
-    // Move source retirement requires a positive content-stability proof after
-    // destination commit. An identity check or before/after observation alone
-    // is not such a proof; platform adapters must report false/unknown when
-    // their supported snapshot or enforced-exclusion guarantee is absent.
-    std::function<Observation<bool>(std::stop_token)> verify_source_stability;
+    // Move source retirement requires a typed content-stability proof after
+    // destination commit. Before/after observation is deliberately a distinct
+    // value and never authorizes source removal.
+    std::function<Observation<SourceStabilityGuarantee>(std::stop_token)> verify_source_stability;
     std::function<Observation<bool>(std::stop_token)> commit_destination;
     std::function<Observation<bool>(std::stop_token)> retire_source;
 
@@ -75,6 +80,7 @@ private:
     bool invoke_revalidation(const std::function<Observation<bool>(std::stop_token)>& callback,
                              std::stop_token stop, const char* operation,
                              OperationJournalState terminal_state);
+    bool invoke_source_stability(std::stop_token stop);
 
     OperationCommitRequest request_;
     OperationCommitResult result_;
