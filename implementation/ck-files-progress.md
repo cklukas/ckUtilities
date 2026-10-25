@@ -748,9 +748,18 @@ The journal codec uses bounded little-endian frames with a checksum. Intact
 records round-trip; a truncated or corrupt tail returns all older records plus
 an explicit reconciliation condition, so recovery cannot silently discard the
 last known durable state. Six new cases pass; the complete macOS core suite
-passes **658** cases. The six journal cases pass under both macOS ASan/UBSan
+passes **658** cases. The eight journal cases pass under both macOS ASan/UBSan
 and TSan. Durable private-file storage, native streaming, verification,
 publication and crash-recovery adapters remain the next WP-04 gates.
+
+Commit `37f2887` adds the pre-durable sink boundary. It validates the next
+record without mutation, requires the append offset to equal the encoded
+journal end, handles short writes, requires a successful flush, and publishes
+the in-memory state only after those steps. Injected write-count and flush
+failures leave the in-memory journal unchanged and therefore require explicit
+reconciliation. Eight journal tests pass under normal, ASan/UBSan and TSan
+core builds; the complete normal macOS core suite passes **660** cases. No
+platform file, rename, source removal or mutation command is enabled yet.
 
 Windows remains gated by the unavailable mandatory `V:` development drive;
 no Windows checkout, build, cache or temporary artifact was created. No copy,
