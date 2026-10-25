@@ -1015,6 +1015,12 @@ ASan/UBSan and TSan macOS builds. The Release Files regression remains
 existing 100,000-record index case takes 158.5 seconds and exceeds its fixed
 60-second CTest timeout.
 
+Commit `a95b4c5` completes the commit-side injection matrix for the
+post-publication `Complete` record and the move-only `SourceRemovalIntended`
+record. Both unknown journal failures leave the durable predecessor state,
+report `NeedsReconciliation`, and invoke no source retirement; the ten commit
+job cases pass under normal, ASan/UBSan and TSan macOS builds.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
