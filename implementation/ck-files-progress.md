@@ -136,6 +136,21 @@ regeneration. `test_files_preservation_capability_diff` passed, and the
 complete `ck_files_core_tests` binary passed all 617 cases. Review dialogs and
 the worker adapter that supplies this snapshot remain follow-up work.
 
+## WP-03 — review projection for explicit consent
+
+`OperationReviewModel` now projects immutable plan issues and conflicts into
+bounded rows and a summary of data loss, security change, metadata loss,
+representation change, uncertainty, hard failures and conflicts. Cancellation
+is exposed as the default safe action. Dialog code supplies the exact reviewed
+row indices, while the model delegates binding to `OperationPlan`; it cannot
+invent a policy or execute a filesystem operation.
+
+The macOS strict target rebuild ran at 08:46:20–08:46:35 CET after CMake
+regeneration. `test_files_operation_review` passed, and the complete
+`ck_files_core_tests` binary passed all 620 cases. Actual ckVision dialog
+presentation and worker-fed review snapshots remain follow-up integration
+work.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
