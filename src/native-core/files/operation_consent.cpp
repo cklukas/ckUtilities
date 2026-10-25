@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_consent.hpp"
+#include "frozen_inventory.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -40,10 +41,20 @@ Observation<OperationPlan::Pointer> OperationPlan::create(FileOperation operatio
         if (item.topology != SourceTargetTopology::Disjoint)
             return rejected<Pointer>(AdapterError::PlanTopologyUnsafe, "operation_plan.topology");
         for (std::size_t prior = 0; prior < index; ++prior) {
-            if (compare_identity(items[prior].source, item.source) == IdentityComparison::Same)
-                return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.duplicate_source");
+            if (compare_identity(items[prior].source, item.source) == IdentityComparison::Same) {
+                if (!items[prior].hard_link_group || !item.hard_link_group ||
+                    *items[prior].hard_link_group != *item.hard_link_group)
+                    return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.duplicate_source");
+            }
         }
     }
+    for (std::size_t index = 0; index < items.size(); ++index)
+        if (items[index].hard_link_group) {
+            for (std::size_t prior = 0; prior < index; ++prior)
+                if (items[prior].hard_link_group && *items[prior].hard_link_group == *items[index].hard_link_group &&
+                    compare_identity(items[prior].source, items[index].source) != IdentityComparison::Same)
+                    return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.hard_link_group");
+        }
     for (const auto& issue : issues)
         if (issue.item >= items.size()) return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.issue_item");
     for (const auto& conflict : conflicts)
@@ -51,6 +62,27 @@ Observation<OperationPlan::Pointer> OperationPlan::create(FileOperation operatio
 
     return Observation<Pointer>::available(Pointer(new OperationPlan(std::move(operation), std::move(items),
         std::move(issues), std::move(conflicts))));
+}
+
+Observation<OperationPlan::Pointer> OperationPlan::create_from_inventory(FileOperation operation,
+    std::shared_ptr<const FrozenInventory> inventory, std::span<const SourceTargetTopology> topologies,
+    std::vector<PreservationIssue> issues, std::vector<DestinationConflict> conflicts, OperationPlanLimits limits) {
+    if (!inventory || inventory->entries().empty() || topologies.size() != inventory->entries().size() ||
+        inventory->hard_link_groups().size() != inventory->entries().size())
+        return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.inventory_shape");
+
+    std::vector<FrozenOperationItem> items;
+    items.reserve(inventory->entries().size());
+    for (std::size_t index = 0; index < inventory->entries().size(); ++index) {
+        const auto group = inventory->hard_link_groups()[index];
+        if (group > index || group >= inventory->entries().size() ||
+            compare_identity(inventory->entries()[group].identity, inventory->entries()[index].identity) !=
+                IdentityComparison::Same)
+            return rejected<Pointer>(AdapterError::PlanInvalid, "operation_plan.inventory_group");
+        items.push_back({inventory->entries()[index].identity, inventory->entries()[index].kind,
+            topologies[index], group});
+    }
+    return create(operation, std::move(items), std::move(issues), std::move(conflicts), limits);
 }
 
 OperationPlan::OperationPlan(FileOperation operation, std::vector<FrozenOperationItem> items,

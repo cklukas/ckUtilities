@@ -13,7 +13,7 @@ using namespace ck::files;
 FrozenOperationItem item(std::uint64_t id, ObjectKind kind = ObjectKind::RegularFile) {
     return {ObjectIdentity{AdapterScope{}, IdentityScheme::PosixDeviceInode,
         NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(id), {}}, kind,
-        SourceTargetTopology::Disjoint};
+        SourceTargetTopology::Disjoint, std::nullopt};
 }
 
 OperationPlan::Pointer plan() {

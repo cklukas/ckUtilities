@@ -1,9 +1,11 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "operation_consent.hpp"
+#include "frozen_inventory.hpp"
 
 #include "cvision/testing/cktest.hpp"
 
+#include <array>
 #include <stdexcept>
 #include <utility>
 
@@ -13,7 +15,7 @@ using namespace ck::files;
 FrozenOperationItem item(std::uint64_t id, ObjectKind kind = ObjectKind::RegularFile,
     SourceTargetTopology topology = SourceTargetTopology::Disjoint) {
     return {ObjectIdentity{AdapterScope{}, IdentityScheme::PosixDeviceInode,
-        NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(id), {}}, kind, topology};
+        NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(id), {}}, kind, topology, std::nullopt};
 }
 
 template <class T>
@@ -25,6 +27,22 @@ T take(Observation<T> value) {
 OperationPlan::Pointer plan(std::vector<FrozenOperationItem> items,
     std::vector<PreservationIssue> issues = {}, std::vector<DestinationConflict> conflicts = {}) {
     return take(OperationPlan::create(FileOperation::Copy, std::move(items), std::move(issues), std::move(conflicts)));
+}
+
+FrozenInventory::Pointer inventory_with_hard_link_aliases() {
+    FrozenInventoryBuilder builder(InventoryMountPolicy::StayOnRootMount, InventoryLinkPolicy::PreserveLinks);
+    const AdapterScope scope;
+    const auto make = [&](const char* text, std::uint64_t object) {
+        auto native = NativeAbsolutePath::from_posix(text);
+        if (!native.value()) throw std::runtime_error("operation inventory fixture path unavailable");
+        return FrozenInventoryEntry{std::move(native).take_value(),
+            ObjectIdentity{scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
+                NativeIdentifier::from_u64(object), {}}, ObjectKind::RegularFile,
+            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}};
+    };
+    if (!builder.add(make("/source/a", 9)) || !builder.add(make("/source/alias", 9)) || !builder.seal())
+        throw std::runtime_error("operation inventory fixture unavailable");
+    return std::move(builder.completed()).take_value();
 }
 } // namespace
 
@@ -92,4 +110,27 @@ CK_TEST(operation_consent_conflicts_require_type_specific_review) {
     const auto mismatch = plan({item(13)}, {}, {{0, DestinationConflictKind::TypeMismatch}});
     CK_CHECK(!mismatch->bind(ConsentAction::Replace, {}, {0}).value());
     CK_CHECK(mismatch->bind(ConsentAction::SkipConflict, {}, {0}).value());
+}
+
+CK_TEST(operation_plan_from_frozen_inventory_preserves_hard_link_aliases) {
+    const auto inventory = inventory_with_hard_link_aliases();
+    const std::array topologies{SourceTargetTopology::Disjoint, SourceTargetTopology::Disjoint};
+    const auto result = OperationPlan::create_from_inventory(FileOperation::Copy, inventory, topologies);
+    CK_CHECK(result.value() && (*result.value())->items().size() == 2);
+    CK_CHECK((*result.value())->items()[0].hard_link_group && (*result.value())->items()[1].hard_link_group &&
+        *(*result.value())->items()[0].hard_link_group == *(*result.value())->items()[1].hard_link_group);
+
+    const auto unsafe = std::array{SourceTargetTopology::DestinationInsideSource,
+        SourceTargetTopology::Disjoint};
+    CK_CHECK(OperationPlan::create_from_inventory(FileOperation::Move, inventory, unsafe).state() ==
+        ObservationState::Failed);
+}
+
+CK_TEST(operation_plan_from_frozen_inventory_rejects_incomplete_topology_evidence) {
+    const auto inventory = inventory_with_hard_link_aliases();
+    auto groups = inventory->hard_link_groups();
+    (void)groups;
+    const std::array topologies{SourceTargetTopology::Disjoint};
+    CK_CHECK(OperationPlan::create_from_inventory(FileOperation::Copy, inventory, topologies).state() ==
+        ObservationState::Failed);
 }

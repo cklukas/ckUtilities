@@ -163,6 +163,24 @@ The macOS strict target rebuild ran at 08:47:03–08:47:07 CET. The destination
 assessment and capability-diff suites passed, and the complete
 `ck_files_core_tests` binary passed all 621 cases.
 
+## WP-03 — sealed-inventory to operation-plan bridge
+
+`OperationPlan::create_from_inventory` now consumes a completed immutable
+`FrozenInventory` and exact per-entry topology evidence. It refuses incomplete
+topology vectors or malformed hard-link group mappings, carries each qualified
+inventory entry into the plan, and preserves hard-link aliases as an explicit
+group rather than treating the same native object as an accidental duplicate.
+Ordinary plan construction still rejects duplicate identities without that
+worker-qualified group evidence, and every non-disjoint or unknown topology is
+refused before a plan exists. This remains a UI-independent planning boundary:
+it performs no path reopening, capability upgrade, mutation or execution
+authorization.
+
+The macOS strict target rebuilt at 08:49:22–08:49:25 CET. The focused consent
+CTest entry passed, and the complete `ck_files_core_tests` binary passed all
+623 cases. The review dialog presentation, recursive worker adapter and
+execution-time revalidation remain open WP-03 work.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary

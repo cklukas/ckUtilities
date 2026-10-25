@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <span>
 #include <vector>
 
 namespace ck::files {
@@ -68,9 +70,15 @@ struct FrozenOperationItem final {
     ObjectIdentity source;
     ObjectKind kind = ObjectKind::Other;
     SourceTargetTopology topology = SourceTargetTopology::Unknown;
+    // A recursive inventory may contain several names for one hard-linked
+    // object. The inventory supplies this group only after qualifying each
+    // name; an ordinary selection leaves it absent and duplicate identities
+    // remain invalid.
+    std::optional<std::size_t> hard_link_group;
 };
 
 struct PlanToken;
+class FrozenInventory;
 
 class PlanIdentity final {
 public:
@@ -95,6 +103,13 @@ public:
     using Pointer = std::shared_ptr<const OperationPlan>;
 
     static Observation<Pointer> create(FileOperation operation, std::vector<FrozenOperationItem> items,
+        std::vector<PreservationIssue> issues = {}, std::vector<DestinationConflict> conflicts = {},
+        OperationPlanLimits limits = {});
+    // Builds one item per sealed inventory entry. Hard-link aliases retain
+    // their entry identity and group instead of being silently deduplicated;
+    // the execution layer can use that mapping when preserving names.
+    static Observation<Pointer> create_from_inventory(FileOperation operation,
+        std::shared_ptr<const FrozenInventory> inventory, std::span<const SourceTargetTopology> topologies,
         std::vector<PreservationIssue> issues = {}, std::vector<DestinationConflict> conflicts = {},
         OperationPlanLimits limits = {});
 
