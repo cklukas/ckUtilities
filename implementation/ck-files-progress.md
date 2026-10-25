@@ -423,6 +423,23 @@ The verified Linux output hashes are:
 * `ck_vision_files_tests` — `8209a0752920f41c2306dda6939cf64fae5ff36abcb749203e420bfa93cc4b95`
 * `ck_files_core_tests` — `a7bcbd1871ebb931a7471ee85147e0f6fbf7eee60ce16b51800be6f1752fd566`
 
+## WP-03 — destination conflict projection
+
+Added `DestinationConflictProjection`, a value-only adapter from a completed
+native destination batch to explicit plan conflicts. It distinguishes existing
+files, existing directories, file/directory type mismatches and exact native
+name collisions. Mapping failures, malformed lookup states and unreadable
+target metadata remain unavailable or become an explicit unknown conflict;
+none is treated as a missing target. The adapter performs no new native lookup,
+path reopening, normalization, probing or mutation.
+
+Three focused Mac cases cover the conflict classes, exact collisions,
+unreadable targets, shape validation and limits. The full strict Mac core suite
+passes **643** cases and the Files UI suite passes **186** cases at
+10:35:31–10:35:35 UTC. Linux qualification, sanitizer/race checks and the
+mandatory Windows gate remain pending for this slice. No mutation or
+production GUI launch is enabled.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
