@@ -1,0 +1,91 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include "files_pane_service.hpp"
+#include "operation_planning_coordinator.hpp"
+#include "operation_review.hpp"
+
+#include <functional>
+#include <memory>
+#include <optional>
+#include <vector>
+
+namespace ck::vision {
+
+// All native work that produced this request has already completed on a
+// worker. The planning service only joins immutable values and never reopens
+// paths, probes targets, performs native I/O or mutates the filesystem.
+struct FilesOperationPlanningRequest final {
+    ck::files::FileOperation operation = ck::files::FileOperation::Copy;
+    std::shared_ptr<const ck::files::FrozenInventory> inventory;
+    std::vector<ck::files::SourceTargetInspection> source_target;
+    std::vector<ck::files::Observation<ck::files::AncestorWalkWitness>> ancestry;
+    std::vector<ck::files::ObjectInventoryData> source_objects;
+    std::shared_ptr<const ck::files::CompletedDestinationBatch> destination_batch;
+    std::vector<ck::files::DestinationCapabilityEvidence> destination_capabilities;
+    ck::files::SourceCapabilityProjectionPolicy projection_policy;
+    ck::files::OperationPlanningCoordinatorLimits limits;
+    ck::files::OperationReviewLimits review_limits;
+};
+
+enum class FilesOperationPlanningSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
+enum class FilesOperationPlanningReplyState { Ready, Failed, Cancelled, LimitExceeded, WorkerFault };
+
+struct FilesOperationPlanningTicket final {
+    FilesOperationPlanningTicket() = default;
+    std::uint64_t number() const noexcept { return identity_ ? *identity_ : 0; }
+    bool valid() const noexcept { return identity_ != nullptr; }
+    friend bool operator==(const FilesOperationPlanningTicket&, const FilesOperationPlanningTicket&) = default;
+
+private:
+    friend class FilesOperationPlanningService;
+    explicit FilesOperationPlanningTicket(std::uint64_t number)
+        : identity_(std::make_shared<const std::uint64_t>(number)) {}
+    std::shared_ptr<const std::uint64_t> identity_;
+};
+
+struct FilesOperationPlanningSubmitted final {
+    FilesOperationPlanningSubmission state;
+    FilesOperationPlanningTicket ticket;
+};
+
+struct FilesOperationPlanningReply final {
+    FilesOperationPlanningTicket request;
+    FilesOperationPlanningReplyState state = FilesOperationPlanningReplyState::Failed;
+    ck::files::OperationPlan::Pointer plan;
+    ck::files::OperationReviewModel::Pointer review;
+    std::optional<ck::files::UnavailableObservation> error;
+    FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
+};
+
+// One serialized, value-only planning worker. The request owns every copied
+// value needed for assembly and retains the completed destination batch until
+// the worker has finished with it. A reply is delivered only when its exact
+// ticket is still current. The wake callback carries no reply and must be
+// lifetime-checked by the UI composition root.
+class FilesOperationPlanningService final {
+public:
+    explicit FilesOperationPlanningService(std::function<void()> wake = {});
+    ~FilesOperationPlanningService();
+    FilesOperationPlanningService(const FilesOperationPlanningService&) = delete;
+    FilesOperationPlanningService& operator=(const FilesOperationPlanningService&) = delete;
+
+    FilesOperationPlanningSubmitted request(FilesOperationPlanningRequest request);
+    bool cancel(const FilesOperationPlanningTicket& request);
+    std::optional<FilesOperationPlanningReply> take();
+    void request_stop() noexcept;
+    void join();
+    bool running() const noexcept;
+    bool working() const;
+    FilesPaneWorkerFault fault() const noexcept;
+
+private:
+    struct State;
+    static FilesOperationPlanningTicket ticket(std::uint64_t number) {
+        return FilesOperationPlanningTicket(number);
+    }
+    std::unique_ptr<State> state_;
+};
+
+} // namespace ck::vision

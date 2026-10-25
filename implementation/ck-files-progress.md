@@ -514,6 +514,52 @@ The verified Linux output hashes are:
 * `ck_vision_files_tests` — `f5ee2c98ee54316f3257c14df4bf235376c0775617cd3f865ac2f192ea3606f3`
 * `ck_files_core_tests` — `76c7fd98067818c5b75ba559537852ac8832ca7e164231f8d6f2ecf21712ed41`
 
+## WP-03 — worker-owned planning service
+
+Added `FilesOperationPlanningService`, a serialized worker boundary that owns
+the request copies and completed destination-batch lifetime while composing
+the immutable `OperationPlan` and `OperationReviewModel`. It accepts only
+already-completed worker evidence, publishes exact-ticket replies, bounds
+review construction through the configured limits, supports cooperative
+cancellation including unread-ready-reply cancellation, and reports terminal
+worker faults. It performs no native I/O, path reopening, probing,
+normalization, mutation or execution authorization; the existing review
+revalidation callback remains mandatory before any accepted receipt can leave
+the UI.
+
+The fresh strict macOS build root
+`/Volumes/S8T/tmp/ckutilities-wp03-planning-service-20261025-01/build` was
+configured and built for `ck_files_core_tests`, `ck_vision_files_tests` and
+`ckfiles_ckvision`. The core suite passed **648** tests and the Files UI suite
+passed **189** tests. The verified outputs were:
+
+* `ck-files` — `6ce36d2e988ec856cc04fa40d02c374012879871346a5863bef73281a19fc7df`
+* `ck_vision_files_tests` — `205862a1b70aed62011e11a1c8d75e49677f7311487dd0b7197d8f1914738a10`
+* `ck_files_core_tests` — `a6d122ed974e8bf8090a8031c35f3654591c7b775351e8eb25a5d449b74127fa`
+
+The focused planning-service suite passed **3** cases under both macOS
+ASan/UBSan and ThreadSanitizer. The full macOS ASan/UBSan core suite passed
+**648** cases. The full UI sanitizer run remains blocked by the previously
+known pinned ckVision `v1.4.0` `Desktop::install_default_handler` heap-buffer
+overflow in an unrelated modal test; that SDK defect was not suppressed or
+worked around.
+
+Linux requalification used the fresh remote root
+`/tmp/ckutilities-wp03-linux-planning-service-20261025-01`, with the unchanged
+pinned ckVision and llama.cpp inputs. GCC 14 configured and built the
+production target, core suite and Files UI suite; core passed **648** tests,
+the Files UI suite passed **189**, and the independent installed-package
+consumer passed its CTest entry. Verified Linux output hashes are:
+
+* `ck-files` — `6dafc1c87d32f871132f5287b65a0a25a194f92d53bc501721abdee0315df7ad`
+* `ck_vision_files_tests` — `70200a945e1dfd85527097cb2001cc7f4b71223a380960859cba8be2fc838a71`
+* `ck_files_core_tests` — `8ec7f1d6c5aa4d6a2b86f1647e6ff9fd8c8a8033bc72e821452797171b4cbf7a`
+
+Windows qualification remains gated because the mandatory `V:` development
+drive is unavailable; no Windows checkout, build or temporary artifact was
+created. No mutation command or production operation-flow invocation is
+enabled by this slice.
+
 ## 2026-10-24 — WP-02 real-terminal and current-source race qualification
 
 The exact production binary
