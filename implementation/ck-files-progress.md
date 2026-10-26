@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — ee47e6c recursive directory planning handoff
+
+The real pane worker handoff now distinguishes flat selections from one
+selected directory. Directory planning retains the held root source, an
+identity-checked held root cursor and the exact native source path, allowing
+the existing recursive evidence job to run without reopening a display path.
+Regular-file F5 remains unchanged, and the UI still refuses directory copy
+execution until recursive copy and destination merge/replacement semantics are
+implemented and qualified.
+
+Linux ARM64 built the current UI target and passed the focused worker handoff
+case. The focused native recursive evidence cases remain green. macOS built
+the current target and passed the deterministic native cases, but its focused
+UI case remains uncounted because the existing private-index test environment
+does not enter its gate reliably. Windows remains blocked by the missing v143
+toolset on the V: workstation.
+
+Evidence: [ee47e6c recursive handoff qualification record](evidence/ck-files-ee47e6c-recursive-handoff-20261026.json).
+
 ## 2026-10-26 — 638b093 parent-identity collision qualification
 
 Destination exact-name collision grouping now uses qualified held parent

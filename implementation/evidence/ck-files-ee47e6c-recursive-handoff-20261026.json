@@ -1,0 +1,51 @@
+{
+  "commit": "ee47e6c",
+  "scope": "WP-03 recursive directory planning handoff",
+  "macos": {
+    "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "build": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp03-pane-recursive-20261026-01/tmp",
+    "configuration": "Release",
+    "target": "ck_vision_files_tests",
+    "output": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build/src/vision/files/ck_vision_files_tests",
+    "output_sha256": "8b99fd4d906910e4fa79069bec35e9232e6d259259fea824e6ac7963d9050ec5",
+    "build_start_utc": "2026-10-26T03:53:49Z",
+    "build_end_utc": "2026-10-26T03:53:49Z",
+    "build_result": "success",
+    "focused_ui_case": "files_service_operation_handoffs_keep_native_sources_on_the_worker",
+    "focused_ui_result": "blocked by the existing macOS test-environment gate behavior; no pass claimed",
+    "focused_core_cases": 4,
+    "focused_core_result": "4/4 passed"
+  },
+  "linux_arm64": {
+    "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp03-recursive-handoff-20261026-01",
+    "configuration": "Release",
+    "target": "ck_vision_files_tests",
+    "output": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/files/ck_vision_files_tests",
+    "output_sha256": "76c7b4c14f85613d6ae1712b9caf77b56214e63aa98e76fa311e69fdf8fc3164",
+    "focused_ui_case": "files_service_operation_handoffs_keep_native_sources_on_the_worker",
+    "focused_ui_result": "1/1 passed",
+    "focused_core_result": "the previously qualified recursive evidence cases remain 4/4 passed"
+  },
+  "windows_x64": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-wp03-recursive-handoff-20261026-01",
+    "configuration": "Release",
+    "target": "ck_vision_files_tests",
+    "qualification_status": "blocked",
+    "reason": "The workstation has no v143 build tools; MSBuild rejects the generated project before compiling this commit."
+  },
+  "implementation_effect": [
+    "A single selected directory now reaches the worker-owned recursive evidence path with its held root source, held root cursor and exact native source path.",
+    "Flat regular-file selections retain the existing source-vector shape.",
+    "The application still keeps F5 directory execution disabled until recursive copy, replacement/merge and recovery semantics are qualified."
+  ],
+  "limitations": [
+    "This is a planning handoff only. Recursive copy execution, directory merge/replacement policy, move, Trash/delete, recovery execution and final release gates remain open.",
+    "The macOS focused UI case needs a clean private-index test environment before it can be counted.",
+    "Windows qualification must be rerun after the V: workstation toolchain is repaired."
+  ]
+}
