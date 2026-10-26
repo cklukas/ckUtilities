@@ -25,6 +25,10 @@ recursive-copy and same-filesystem move acceptance cases passed on all three
 platforms. Windows used the mandatory `V:` source, build and temporary roots;
 the verified executable was
 `V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe`.
+That exact executable is installed at
+`V:\\dev\\ckutilities-install\\bin\\ck-files.exe`; both files are 2,862,080
+bytes with SHA-256
+`A13ABF6BE158F2C6ED8DF1BEFED0B1C9A0B33461D92260A21D35601C5869A20E`.
 
 Evidence: [recursive move and terminal qualification record](evidence/ck-files-recursive-move-terminal-qualification-20261026.json).
 

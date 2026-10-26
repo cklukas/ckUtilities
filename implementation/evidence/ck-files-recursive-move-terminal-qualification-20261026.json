@@ -32,7 +32,11 @@
     "build_root": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
     "temporary_root": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\tmp",
     "executable": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe",
-    "toolset": "MSVC v143 14.44.35207"
+    "toolset": "MSVC v143 14.44.35207",
+    "installed_executable": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
+    "verified_bytes": 2862080,
+    "verified_sha256": "A13ABF6BE158F2C6ED8DF1BEFED0B1C9A0B33461D92260A21D35601C5869A20E",
+    "running_instances": 0
   },
   "not_claimed": [
     "per-entry interrupted-tree recovery execution",
