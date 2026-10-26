@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-26",
+  "source_base_commit": "769f777",
+  "changed_file": "src/vision/files/main.cpp",
+  "changed_file_sha256": "18c5c0c96d471968806745eea3fc8263ccdbfb8da6f4127f78afd9d3a02841b1",
+  "behavior": "ck-files --version uses the shared CK Utilities and ckVision version formatter; --help remains noninteractive.",
+  "macos": {
+    "build": "/Volumes/S8T/tmp/ckutilities-tsan-20261026-01/build",
+    "configuration": "RelWithDebInfo with ThreadSanitizer",
+    "output_sha256": "7f47d69ace8b1228ec1e7c873793bd048d1a3eb00558e17fa938f51e834e26dc",
+    "version_output": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "help_exit": 0
+  },
+  "windows": {
+    "host": "workstation",
+    "source": "V:\\dev\\ckutilities-goal-20261026",
+    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build",
+    "install": "V:\\dev\\ckutilities-install-goal-20261026",
+    "build_start": "2026-10-26T13:26:50.4358391Z",
+    "build_end": "2026-10-26T13:27:10.7688418Z",
+    "elapsed_seconds": 20.33,
+    "source_sha256": "18C5C0C96D471968806745EEA3FC8263CCDBFB8DA6F4127F78AFD9D3A02841B1",
+    "installed_binary_sha256": "3F328D19BD5909999A32308F1812818BDD5F7036BCD2FE26148F7C7D57D35DA8",
+    "version_output": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "help_exit": 0,
+    "docs_installed": {"guides": 10, "screenshots": 28}
+  }
+}

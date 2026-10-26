@@ -6483,3 +6483,16 @@ Exact configure/build/test times, flags, output path and executable hashes are
 recorded in [ThreadSanitizer evidence](evidence/ck-files-tsan-20261026.json).
 The remaining release blockers are the filesystem/driver matrix, controlled
 fault testing and real interactive acceptance.
+
+
+## 2026-10-26 — WP-08 Files CLI and Windows install checkpoint
+
+The release audit found that `ck-files` documented `--version` but its host
+only implemented `--help`. The host now uses the shared version formatter and
+reports `ck-files 0.2.0 (ckVision 1.4.0)` without opening the UI. The current
+Mac build and the installed Windows binary both pass `--version` and `--help`.
+
+The Windows source hash, `V:` build/install paths, exact incremental build
+interval, installed executable hash, and installed documentation counts are in
+[Files CLI evidence](evidence/ck-files-cli-version-20261026.json). The full
+filesystem/interactive release matrix remains open.

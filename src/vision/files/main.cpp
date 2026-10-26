@@ -7,6 +7,7 @@
 #include "files_app.hpp"
 
 #include "ck/vision/keymap.hpp"
+#include "host_about.hpp"
 #include "native_host.hpp"
 #include "operation_journal_file.hpp"
 
@@ -44,6 +45,10 @@ bool make_private_directory(const std::filesystem::path &path) {
 }
 
 int run(const std::vector<std::string> &args) {
+    if (args.size() > 1 && args[1] == "--version") {
+        std::printf("%s\n", ck::host::version_line("ck-files").c_str());
+        return 0;
+    }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h")) {
         std::printf("Usage: %s [LEFT_DIRECTORY [RIGHT_DIRECTORY]]\n",
                     args.empty() ? "ck-files" : args[0].c_str());
