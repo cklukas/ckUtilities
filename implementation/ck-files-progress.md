@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 59f7fc5 cross-platform operation handoff checkpoint
+
+The worker-to-worker source/destination handoffs now wait until both pane
+workers publish a terminal result, an actual handoff failure is received, or
+the execution/planning worker is cancelled. The prior one-shot 10 ms wait
+could report a valid slower Linux handoff as `handoff_cancelled`; no timeout
+is treated as completion or failure anymore. The new Files app F6 move
+acceptance test exercises review, execution, source retirement and both-pane
+refresh.
+
+The focused F6 acceptance passed on macOS, Linux ARM64 and Windows x64. The
+Windows workstation is now qualified with MSVC v143 14.44.35207 on the
+mandatory `V:` development drive; it is no longer blocked by the missing
+toolset. This remains a same-filesystem move checkpoint: cross-filesystem
+move, Trash/delete, recursive move, recovery execution, sanitizer/race gates
+and real-window release acceptance remain open.
+
+Evidence: [operation handoff qualification record](evidence/ck-files-operation-handoff-20261026.json).
+
 ## 2026-10-26 — d969d67 cross-platform recursive-copy publication boundary
 
 The worker-owned recursive copy engine now releases all staged descendant

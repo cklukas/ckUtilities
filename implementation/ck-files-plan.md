@@ -6,7 +6,8 @@ macOS, Linux and Windows. Final WP-02 acceptance remains open for interactive
 real-window acceptance and sanitizer/runtime gates documented in the
 [implementation evidence](ck-files-progress.md). The production `ck-files`
 executable is integrated and has passed the available real-terminal checks on
-macOS and Linux.
+macOS and Linux. Windows v143 qualification is now available on the
+mandatory `V:` workstation development drive.
 Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
 
 Execution: WP-00 and WP-01 complete; WP-02 feature implementation is complete

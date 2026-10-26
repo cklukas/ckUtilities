@@ -1,0 +1,60 @@
+{
+  "milestone": "WP-05 cross-platform operation handoff checkpoint",
+  "source_commit": "59f7fc5",
+  "date": "2026-10-26",
+  "scope": {
+    "change": "Planning and execution pane handoffs wait for terminal worker results instead of treating one 10 ms interval as a terminal timeout.",
+    "safety": "A handoff is accepted only after both source and destination results are published. Cancellation and failure remain explicit; no filesystem mutation is performed by the wait loop.",
+    "ui_acceptance": "F6 move review, execution, source retirement and both-pane refresh for one regular file."
+  },
+  "qualification": {
+    "macos": {
+      "host": "macOS",
+      "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "build": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp",
+      "command": "TMPDIR=/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp cmake --build /Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build --target ck_vision_files_tests --parallel 4 && /Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/src/vision/files/ck_vision_files_tests --filter files_app_move_acceptance_executes_after_review_and_refreshes_both_panes",
+      "result": "1 test passed",
+      "artifact": {
+        "path": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/src/vision/files/ck_vision_files_tests",
+        "built": "2026-10-26T08:27:38+0100",
+        "bytes": 20385816,
+        "sha256": "3324a7122312a642360112092349a66716aabbbb83902b5662e9842d9401d476"
+      }
+    },
+    "linux_arm64": {
+      "host": "rpi4",
+      "source": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/source",
+      "build": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
+      "tmpdir": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/tmp",
+      "command": "TMPDIR=/home/klukas/tmp/ckutilities-wp05-move-20261026-01/tmp cmake --build /home/klukas/tmp/ckutilities-wp05-move-20261026-01/build --target ck_vision_files_tests -j4 && /home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/src/vision/files/ck_vision_files_tests --filter files_app_move_acceptance_executes_after_review_and_refreshes_both_panes",
+      "result": "1 test passed",
+      "artifact": {
+        "path": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/src/vision/files/ck_vision_files_tests",
+        "built": "2026-10-26T08:29:11+0100",
+        "bytes": 88376960,
+        "sha256": "a644f951b786aefb6344e8d097d71292cc071e61757a094db727d908d9b8a071"
+      }
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "toolset": "MSVC v143 14.44.35207",
+      "source": "V:\\dev\\ckutilities",
+      "build": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+      "tmpdir": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\tmp",
+      "command": "cmake --build V:\\tmp\\ckutilities-wp05-move-20261026-01\\build --target ck_vision_files_tests --config Release --parallel 4 && V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe --filter files_app_move_acceptance_executes_after_review_and_refreshes_both_panes",
+      "result": "1 test passed",
+      "artifact": {
+        "path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+        "built": "2026-10-26T07:28:57.8736827Z",
+        "bytes": 3625472,
+        "sha256": "F39295B436134696C0FFDE42B352CB1E7FEA96D0CCC72F7BD3C1586C74FA97D4"
+      }
+    }
+  },
+  "remaining_scope": [
+    "Same-filesystem move is qualified; cross-filesystem copy-verify-retire is not implemented.",
+    "Recursive move, native Trash/Recycle Bin, explicit permanent deletion and recovery execution remain open.",
+    "Sanitizer/race qualification and real-window release acceptance remain open."
+  ]
+}
