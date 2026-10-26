@@ -1524,7 +1524,8 @@ private:
                  "publish_noreplace.directory_scheme"});
         }
         OwnedHandle opened(OpenFileById(handle_.get(), &descriptor,
-            FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD |
+                FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL));
         if (opened.get() == nullptr || opened.get() == INVALID_HANDLE_VALUE)

@@ -832,6 +832,12 @@ OperationExecutionState NativeOperationCopyTreeJob::advance(std::stop_token stop
                             "native_operation_copy_tree.publish_handle"), true);
             return state_;
         }
+        // Windows refuses to rename a directory tree while descendant
+        // directory handles remain open. Verification has completed, and
+        // rename_child_noreplace reopens the root by its qualified name and
+        // identity, so release traversal handles before publication.
+        state_data_->directories.clear();
+        state_data_->staging_root.reset();
         auto published = state_data_->request.destination->rename_child_noreplace(
             state_data_->staging_name, *state_data_->staging_identity,
             *state_data_->request.destination, state_data_->request.destination_name);
