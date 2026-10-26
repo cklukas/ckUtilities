@@ -5,6 +5,7 @@
 #include <optional>
 #include <vector>
 #include <cstdlib>
+#include <exception>
 #include "scratch_directory.hpp"
 #include "cvision/testing/cktest.hpp"
 #include <fstream>

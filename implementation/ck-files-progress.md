@@ -6445,3 +6445,25 @@ cross-filesystem copy-move, sanitizer/race qualification, and interactive F6
 acceptance remain open; this is not yet Norton Commander or Midnight Commander
 feature parity. Exact commands, roots, output paths, timestamps, and hashes are
 recorded in [move qualification evidence](evidence/ck-files-move-20261026.json).
+
+
+## 2026-10-26 — WP-07 sanitizer and fuzz checkpoint
+
+The LLVM Clang RelWithDebInfo build used AddressSanitizer and UndefinedBehaviorSanitizer
+on a fresh task-owned Ninja tree. It initially exposed a missing direct `<exception>`
+include for `std::terminate()` in the native path test; that portability fix is
+included in this checkpoint. The private index fixture was run on the owner-enabled
+PRO-BLADE APFS volume because the S8T volume intentionally has ownership disabled.
+
+The complete Files label passed **107/107** with ASan/UBSan enabled. The two
+libFuzzer corpus tests passed, and `fuzz_todo_codec` plus `fuzz_sysmon` each ran
+for 20 seconds of mutation without a finding. Leak detection remains disabled
+for the UI aggregate only because the pinned ckVision SDK reports third-party
+dialog allocation leaks; the native/core checks were also clean with leak
+detection enabled. Exact build inputs, output hashes, timestamps and command
+scope are recorded in [sanitizer and fuzz evidence](evidence/ck-files-sanitizer-fuzz-20261026.json).
+
+The documentation gate is also covered: all ten utility guides contain feature
+lists and embed generated ckVision screenshots; the committed screenshot set
+contains 28 SVGs. ThreadSanitizer/race qualification, the full filesystem
+matrix, controlled fault testing and interactive acceptance remain open.

@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-26",
+  "source_base_commit": "a1f424a4be72870fdd2b56704a4608933acfaf46",
+  "source_change": {
+    "path": "tests/unit/ck_files/test_files_path_native.cpp",
+    "change": "Include <exception> for the direct std::terminate() use exposed by LLVM Clang.",
+    "sha256": "3e9dc6f94a0107c4c588651a023ea98e026d9235e9ccfb74e84ef99b19f5e957"
+  },
+  "host": "macOS arm64",
+  "temporary_root": "/Volumes/S8T/tmp/ckutilities-sanitizers-20261026-01",
+  "private_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-sanitizers-20261026-01-private",
+  "build": {
+    "start": "2026-10-26T13:18:17Z",
+    "end": "2026-10-26T13:19:24Z",
+    "elapsed_seconds": 67,
+    "configuration": "RelWithDebInfo",
+    "generator": "Ninja",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (Clang 23.1.4)",
+    "flags": ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"],
+    "targets": ["ck_files_core_tests", "ck_files_native_tests", "ck_vision_files_tests", "fuzz_todo_codec", "fuzz_sysmon"],
+    "output": "/Volumes/S8T/tmp/ckutilities-sanitizers-20261026-01/build"
+  },
+  "qualification": {
+    "files_ctest": {
+      "result": "107/107 passed",
+      "start": "2026-10-26T13:20:01Z",
+      "end": "2026-10-26T13:20:27Z",
+      "asan": "enabled; detect_leaks=0 for the UI aggregate because pinned ckVision reports third-party dialog allocation leaks",
+      "ubsan": "enabled; halt_on_error=1"
+    },
+    "fuzz_corpus_ctest": "2/2 passed",
+    "fuzz_mutation_runs": {"fuzz_todo_codec": "20 seconds, no finding", "fuzz_sysmon": "20 seconds, no finding"},
+    "binary_sha256": {
+      "ck_files_core_tests": "f6cb480fac2a3b3dee1926384db55e9cddefa175dc881856a091d7dfadf6b792",
+      "ck_files_native_tests": "8be231ab2a76040cc5942fca2f996a450bd2929bb9a6788b21a1020e422bac2b",
+      "ck_vision_files_tests": "435a271b69c4fffbc76941a9d114bb8d255bca75b4c5290c15790bf0ab6f7c03",
+      "fuzz_todo_codec": "4aae5075a1a920c8be00e2f7d98bed99fbac6e8887bdf2ab202fe52f9dbea6f55",
+      "fuzz_sysmon": "9a71310f9a8a0ce3d36659e4f1103e4ae93e9c78c577de13c7231fdc5e98a6ec"
+    }
+  },
+  "documentation_coverage": {
+    "utility_guides": 10,
+    "generated_screenshots": 28,
+    "requirement": "Every utility guide embeds at least one generated ckVision screenshot and contains a feature list."
+  },
+  "remaining_gate": "ThreadSanitizer/race qualification and the full filesystem/interactive acceptance matrix remain open."
+}
