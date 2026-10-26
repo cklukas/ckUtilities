@@ -8,6 +8,7 @@
 #include <cvision/ui/application.hpp>
 
 #include "ck/vision/keymap.hpp"
+#include "host_about.hpp"
 #include "native_host.hpp"
 #include "disk_usage_app.hpp"
 #include "disk_usage_options.hpp"
@@ -17,6 +18,11 @@ namespace
 
 int run(const std::vector<std::string> &args)
 {
+    if (args.size() > 1 && args[1] == "--version")
+    {
+        std::printf("%s\n", ck::host::version_line("ck-du").c_str());
+        return 0;
+    }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
         std::printf("Usage: %s [DIRECTORY]\n", args.empty() ? "ck-du" : args[0].c_str());

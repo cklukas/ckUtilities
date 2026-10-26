@@ -6496,3 +6496,17 @@ The Windows source hash, `V:` build/install paths, exact incremental build
 interval, installed executable hash, and installed documentation counts are in
 [Files CLI evidence](evidence/ck-files-cli-version-20261026.json). The full
 filesystem/interactive release matrix remains open.
+
+
+## 2026-10-26 — package-wide CLI metadata checkpoint
+
+The same noninteractive `--version` contract is now implemented for all eight
+remaining hosts (`ck-chat`, `ck-config`, `ck-du`, `ck-edit`, `ck-find`,
+`ck-json-view`, `ck-utilities`, and `ck-files`). A clean macOS Release build
+passed all eight version and help checks. The Windows `V:` checkout was
+rebuilt and installed; all eight version and help checks passed there too, and
+the installed documentation contains 10 guides and 28 screenshots.
+
+Exact build intervals, absolute V: paths, executable hashes, and check counts
+are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matrix-20261026.json).
+Launcher launch/return and real interactive terminal acceptance remain open.

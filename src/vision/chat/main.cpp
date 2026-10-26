@@ -7,6 +7,7 @@
 #include "ck/ai/model_manager.hpp"
 #include "ck/ai/system_prompt_manager.hpp"
 #include "ck/vision/keymap.hpp"
+#include "host_about.hpp"
 #include "native_host.hpp"
 #include "chat_app.hpp"
 #include "chat_options.hpp"
@@ -17,6 +18,11 @@ namespace
 
 int run(const std::vector<std::string> &args)
 {
+    if (args.size() > 1 && args[1] == "--version")
+    {
+        std::printf("%s\n", ck::host::version_line("ck-chat").c_str());
+        return 0;
+    }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
         std::printf("Usage: %s\n", args.empty() ? "ck-chat" : args[0].c_str());

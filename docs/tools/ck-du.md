@@ -13,7 +13,8 @@ ck-du [DIRECTORY]
 ```
 
 `DIRECTORY` defaults to the current directory. Use `--help` (or `-h`) to show
-the command-line usage.
+the command-line usage, or `--version` to print package metadata without
+starting a scan.
 
 ## Features
 

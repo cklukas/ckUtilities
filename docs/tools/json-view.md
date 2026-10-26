@@ -15,7 +15,8 @@ ck-json-view [JSON_FILE ...]
 
 Pass one or more JSON files to open them at startup. Without a path, choose
 **File → Open JSON** in the native interface. Use `--help` (or `-h`) to show
-the command-line usage.
+the command-line usage, or `--version` to print package metadata without
+opening a document.
 
 ## Features
 

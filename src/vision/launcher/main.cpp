@@ -14,6 +14,7 @@
 #include "ck/launcher.hpp"
 #include "ck/launcher/cli_utils.hpp"
 #include "ck/vision/keymap.hpp"
+#include "host_about.hpp"
 #include "launcher_platform.hpp"
 #include "native_host.hpp"
 
@@ -74,6 +75,11 @@ int run(const std::vector<std::string> &args)
 {
     const std::filesystem::path tool_directory = ck::vision::launcher_tool_directory(args.empty() ? std::string() : args[0]);
     const char *self = args.empty() ? "ck-utilities" : args[0].c_str();
+    if (args.size() > 1 && args[1] == "--version")
+    {
+        std::printf("%s\n", ck::host::version_line("ck-utilities").c_str());
+        return EXIT_SUCCESS;
+    }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
         std::printf("Usage: %s [--launch TOOL [ARGS...]]\n", self);

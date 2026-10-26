@@ -32,5 +32,6 @@ ck-chat
 
 Copy `configs/ckai.example.toml` to `~/.config/cktools/ckai.toml`
 (`%APPDATA%\cktools\ckai.toml` on Windows) and set a
-valid local GGUF path before sending a response. Use `ck-chat --help` for the
-command-line synopsis; prompts are entered through the native interface.
+valid local GGUF path before sending a response. Use `ck-chat --help` or
+`ck-chat --version` for noninteractive package metadata; prompts are entered
+through the native interface.

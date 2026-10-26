@@ -5,6 +5,7 @@
 
 
 #include "ck/vision/keymap.hpp"
+#include "host_about.hpp"
 #include "native_host.hpp"
 #include "chat_options.hpp"
 #include "config_app.hpp"
@@ -15,6 +16,11 @@ namespace
 
 int run(const std::vector<std::string> &args)
 {
+    if (args.size() > 1 && args[1] == "--version")
+    {
+        std::printf("%s\n", ck::host::version_line("ck-config").c_str());
+        return 0;
+    }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h"))
     {
         std::printf("Usage: %s\n", args.empty() ? "ck-config" : args[0].c_str());

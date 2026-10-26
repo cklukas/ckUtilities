@@ -17,7 +17,8 @@ ck-find
 
 Use `ck-find --help` for the command-line synopsis. Search creation, loading,
 saving, previewing, running, and cancellation are available from the native
-menus and status line.
+menus and status line. Use `ck-find --version` for package metadata without
+opening the search interface.
 
 ## Features
 

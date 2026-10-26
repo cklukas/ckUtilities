@@ -22,7 +22,8 @@ ck-utilities --launch ck-du .
 ```
 
 Use `--help` (or `-h`) to show the command-line usage. An unknown tool or a
-missing `--launch` argument fails before a child process is started.
+missing `--launch` argument fails before a child process is started. Use
+`--version` to print package metadata without opening the launcher.
 
 ## Features
 

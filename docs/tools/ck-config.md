@@ -12,7 +12,8 @@ keyboard shortcut schemes.
 ck-config
 ```
 
-Use `--help` (or `-h`) to show the command-line usage.
+Use `--help` (or `-h`) to show the command-line usage, or `--version` to print
+the suite and ckVision versions without opening the editor.
 
 ## Features
 

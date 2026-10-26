@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-26",
+  "source_base_commit": "dd35dcf",
+  "host": "macOS arm64",
+  "release_build": {
+    "start": "2026-10-26T13:27:59Z",
+    "end": "2026-10-26T13:28:06Z",
+    "configuration": "Release",
+    "output": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/bin",
+    "result": "8/8 production CLI targets built"
+  },
+  "macos_version_and_help": {
+    "ck-chat": "ck-chat 0.2.0 (ckVision 1.4.0)",
+    "ck-config": "ck-config 0.2.0 (ckVision 1.4.0)",
+    "ck-du": "ck-du 0.2.0 (ckVision 1.4.0)",
+    "ck-edit": "ck-edit 0.2.0 (ckVision 1.4.0)",
+    "ck-find": "ck-find 0.2.0 (ckVision 1.4.0)",
+    "ck-json-view": "ck-json-view 0.2.0 (ckVision 1.4.0)",
+    "ck-utilities": "ck-utilities 0.2.0 (ckVision 1.4.0)",
+    "ck-files": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "help_exit_codes": "8/8 passed"
+  },
+  "windows": {
+    "host": "workstation",
+    "source": "V:\\dev\\ckutilities-goal-20261026",
+    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build",
+    "install": "V:\\dev\\ckutilities-install-goal-20261026",
+    "start": "2026-10-26T13:29:04.1160567Z",
+    "end": "2026-10-26T13:29:40.8728971Z",
+    "elapsed_seconds": 36.76,
+    "version_and_help": "8/8 version checks and 8/8 help checks passed",
+    "guides": 10,
+    "screenshots": 28,
+    "binary_sha256": {
+      "ck-chat": "2BB61603824464F9438CA20ACC48061BA73062C0EDAEBA20F9EACD7ADDCA5293",
+      "ck-config": "030E5DFB597B594F2BD1EE65C04824AA70D76649A9564CB89D8AA84519CD024D",
+      "ck-du": "5A242324784F63770860F711634FF865EFCF68A1512F33D0EFC86FB1C144042E",
+      "ck-edit": "58479D939F6B916A2540E5B16990409A5F92DE43E8F640E378D888C407DC76F2",
+      "ck-find": "B9EFA890DAFF4E68598296D11A25DED71E68B89BCDFE188DC44ECE708373FACE",
+      "ck-json-view": "233EEB8D8E008135725ABE1EC5B45422ECB00A5C3540373B9BC354E5EE2F6373",
+      "ck-utilities": "4FD29F23FB49CD2F4A7B9E106FFA9D46AF95513715C19EC6AB1E389F5109E38C",
+      "ck-files": "3F328D19BD5909999A32308F1812818BDD5F7036BCD2FE26148F7C7D57D35DA8"
+    }
+  },
+  "remaining_gate": "Launcher launch/return and real interactive terminal acceptance remain open."
+}

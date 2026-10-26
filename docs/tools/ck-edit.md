@@ -13,7 +13,8 @@ ck-edit [MARKDOWN_FILE]
 ```
 
 Pass a Markdown file to open it at startup, or use **File → Open document**.
-Use `--help` (or `-h`) to show the command-line usage.
+Use `--help` (or `-h`) to show the command-line usage, or `--version` to print
+package metadata without opening the editor.
 
 ## Features
 
