@@ -28,7 +28,6 @@ bool available_kind(const Observation<ObjectKind>& kind) noexcept {
 
 bool available_mount(const Observation<std::uint64_t>& mount) noexcept { return mount.value() != nullptr; }
 
-bool available_size(const Observation<std::uint64_t>& size) noexcept { return size.value() != nullptr; }
 } // namespace
 
 RecursiveInventoryJob::RecursiveInventoryJob(std::shared_ptr<DirectoryCursor> root,
@@ -81,11 +80,16 @@ bool RecursiveInventoryJob::add_metadata(const NativeAbsolutePath& path, const B
         const auto& detail = *metadata.mount_id.unavailable_detail();
         return fail({detail.state, detail.error});
     }
-    if (!available_size(metadata.logical_size)) return fail(AdapterError::InvalidNativeResult, "recursive_inventory.logical_size");
+    std::uint64_t logical_size = 0;
+    if (metadata.logical_size.value()) {
+        logical_size = *metadata.logical_size.value();
+    } else if (*metadata.kind.value() != ObjectKind::Directory) {
+        return fail(AdapterError::InvalidNativeResult, "recursive_inventory.logical_size");
+    }
     auto relative = path.relative_components_from(root_path_);
     if (!relative.value()) return fail(*relative.unavailable_detail());
     FrozenInventoryEntry entry{path, *metadata.identity.value(), *metadata.kind.value(), metadata.mount_id,
-        *metadata.logical_size.value(), link, {}, std::move(relative).take_value()};
+        logical_size, link, {}, std::move(relative).take_value()};
     if (!builder_->add(std::move(entry))) {
         if (builder_->failure()) return fail(*builder_->failure());
         return fail(AdapterError::InvalidNativeResult, "recursive_inventory.builder");
@@ -115,7 +119,7 @@ RecursiveInventoryState RecursiveInventoryJob::advance(std::stop_token stop) {
                 auto root_metadata = root_->inspect_basic();
                 if (!root_metadata.value()) { const auto& detail = *root_metadata.unavailable_detail(); fail(detail); return state_; }
                 const auto& metadata = *root_metadata.value();
-                if (!available_identity(metadata.identity) || !available_size(metadata.logical_size)) {
+                if (!available_identity(metadata.identity)) {
                     fail(AdapterError::InvalidNativeResult, "recursive_inventory.root"); return state_;
                 }
                 const auto* root_kind = metadata.kind.value();

@@ -13,6 +13,7 @@
 #include <array>
 #include <fstream>
 #include <filesystem>
+#include <iterator>
 #include <stdexcept>
 #include <span>
 #include <string>
@@ -572,6 +573,106 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     };
     const auto rejected_directory = create_native_operation_copy_batch(std::move(unsupported));
     CK_CHECK(!rejected_directory.value() && rejected_directory.state() == ObservationState::Unsupported);
+}
+
+CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_replace) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-copy-tree",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_path = scratch.path() / "source";
+    const auto destination_path = scratch.path() / "destination";
+    fs::create_directory(source_path);
+    fs::create_directory(destination_path);
+    fs::create_directory(source_path / "nested");
+    {
+        std::ofstream first(source_path / "root.bin", std::ios::binary);
+        first << "recursive root payload";
+        std::ofstream second(source_path / "nested" / "child.bin", std::ios::binary);
+        second << "recursive child payload";
+    }
+
+    NativeFileSystem filesystem;
+    auto fixture_root = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto root_source = take(HeldChild::observe_with_access(fixture_root, name("source"), EntryAccess::MetadataOnly));
+    auto source_root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_directory(source_path)));
+    auto source_native_path = take(NativeAbsolutePath::from_host(source_path));
+    RecursiveInventoryJob inventory(source_root, source_native_path, InventoryMountPolicy::StayOnRootMount,
+                                    InventoryLinkPolicy::PreserveLinks, {}, system_monotonic_clock(), root_source);
+    for (unsigned step = 0; step != 200 && inventory.state() != RecursiveInventoryState::Complete &&
+         inventory.state() != RecursiveInventoryState::Failed; ++step)
+        inventory.advance();
+    if (inventory.state() != RecursiveInventoryState::Complete) {
+        const auto completed_probe = inventory.completed();
+        throw std::runtime_error("recursive inventory state=" + std::to_string(static_cast<int>(inventory.state())) +
+                                 (inventory.failure() ? " failure=" + inventory.failure()->error.operation : "") +
+                                 (completed_probe.unavailable_detail() ?
+                                      " completed=" + completed_probe.unavailable_detail()->error.operation : ""));
+    }
+    const auto completed = take(inventory.completed_sources());
+    CK_CHECK(completed->inventory()->entries().size() == 4);
+
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_path)));
+    NativeOperationCopyTreeRequest request(name("source-copy"));
+    request.inventory = completed;
+    request.destination = destination;
+    request.journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    request.journal_id.bytes[0] = std::byte{0x73};
+    request.policy.allow_unhandled_metadata_loss = true;
+    request.policy.copy_limits.chunk_bytes = 4;
+    request.policy.copy_limits.max_bytes = 1024;
+    request.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    auto created = create_native_operation_copy_tree(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 1000 && job->state() != OperationExecutionState::Complete &&
+         job->state() != OperationExecutionState::Failed &&
+         job->state() != OperationExecutionState::Cancelled &&
+         job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        job->advance();
+    if (job->state() != OperationExecutionState::Complete) {
+        throw std::runtime_error("tree copy state=" + std::to_string(static_cast<int>(job->state())) +
+                                 (job->result().failure ? " failure=" + job->result().failure->error.operation +
+                                      " code=" + std::to_string(job->result().failure->error.code) : ""));
+    }
+    CK_CHECK(fs::is_directory(destination_path / "source-copy"));
+    CK_CHECK(fs::is_regular_file(destination_path / "source-copy" / "root.bin"));
+    CK_CHECK(fs::is_regular_file(destination_path / "source-copy" / "nested" / "child.bin"));
+    std::ifstream root_input(destination_path / "source-copy" / "root.bin", std::ios::binary);
+    std::string root_content((std::istreambuf_iterator<char>(root_input)), std::istreambuf_iterator<char>());
+    CK_CHECK(root_content == "recursive root payload");
+    std::ifstream child_input(destination_path / "source-copy" / "nested" / "child.bin", std::ios::binary);
+    std::string child_content((std::istreambuf_iterator<char>(child_input)), std::istreambuf_iterator<char>());
+    CK_CHECK(child_content == "recursive child payload");
+    CK_CHECK(job->cleanup_unpublished_staging().state() == ObservationState::Unsupported);
+
+    NativeOperationCopyTreeRequest collision_request(name("source-copy"));
+    collision_request.inventory = completed;
+    collision_request.destination = destination;
+    collision_request.journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    collision_request.journal_id.bytes[0] = std::byte{0x74};
+    collision_request.policy.allow_unhandled_metadata_loss = true;
+    collision_request.policy.copy_limits.chunk_bytes = 4;
+    collision_request.policy.copy_limits.max_bytes = 1024;
+    collision_request.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    auto collision_created = create_native_operation_copy_tree(std::move(collision_request));
+    CK_CHECK(collision_created.value());
+    if (!collision_created.value()) return;
+    auto collision_job = std::move(collision_created).take_value();
+    for (unsigned step = 0; step != 1000 && collision_job->state() != OperationExecutionState::Complete &&
+         collision_job->state() != OperationExecutionState::Failed &&
+         collision_job->state() != OperationExecutionState::Cancelled &&
+         collision_job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        collision_job->advance();
+    CK_CHECK(collision_job->state() == OperationExecutionState::Failed);
+    CK_CHECK(fs::is_regular_file(destination_path / "source-copy" / "root.bin"));
+    CK_CHECK(fs::is_directory(destination_path / ".ck-tree-staging-74000000000000000000000000000000-0"));
 }
 
 CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {

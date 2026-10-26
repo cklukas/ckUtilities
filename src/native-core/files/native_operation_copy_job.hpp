@@ -6,10 +6,12 @@
 #include "operation_batch_job.hpp"
 #include "operation_journal_file.hpp"
 #include "held_child.hpp"
+#include "recursive_inventory_job.hpp"
 
 #include <functional>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace ck::files {
@@ -110,5 +112,54 @@ Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
 // per-item journal or failure semantics. The batch remains strictly ordered.
 Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
     std::vector<NativeOperationCopyJob::Pointer> jobs);
+
+// Worker-only recursive directory copy. The completed inventory and every
+// HeldChild remain native worker state; relative_components are consumed as
+// exact NativeName values and are never reconstructed from display paths.
+// The root is built below a private directory name and published with the
+// qualified no-replace directory rename primitive. Recursive cleanup is
+// intentionally not guessed: an interrupted or failed tree remains retained
+// for explicit reconciliation.
+struct NativeOperationCopyTreeRequest final {
+    explicit NativeOperationCopyTreeRequest(NativeName name) : destination_name(std::move(name)) {}
+
+    std::shared_ptr<const CompletedRecursiveInventory> inventory;
+    std::shared_ptr<const DirectoryCursor> destination;
+    NativeName destination_name;
+    std::optional<NativeAbsolutePath> journal_root;
+    OperationJournalId journal_id{};
+    NativeOperationCopyBatchPolicy policy{};
+    std::function<Observation<std::unique_ptr<OperationJournalFile>>(
+        const NativeAbsolutePath&, const NativeName&, bool)> open_journal;
+};
+
+class NativeOperationCopyTreeJob final {
+public:
+    using Pointer = std::unique_ptr<NativeOperationCopyTreeJob>;
+
+    static Observation<Pointer> create(NativeOperationCopyTreeRequest request);
+
+    OperationExecutionState state() const noexcept { return state_; }
+    OperationProgress progress() const noexcept;
+    const OperationExecutionResult& result() const noexcept { return result_; }
+    OperationExecutionState advance(std::stop_token stop = {});
+
+    // There is no safe recursive directory disposition in the current native
+    // contract. This API therefore refuses cleanup and leaves the private
+    // tree available for recovery inspection.
+    Observation<bool> cleanup_unpublished_staging();
+
+private:
+    struct State;
+    explicit NativeOperationCopyTreeJob(std::shared_ptr<State> state) noexcept
+        : state_data_(std::move(state)) {}
+
+    std::shared_ptr<State> state_data_;
+    OperationExecutionState state_ = OperationExecutionState::Copying;
+    OperationExecutionResult result_;
+};
+
+Observation<NativeOperationCopyTreeJob::Pointer> create_native_operation_copy_tree(
+    NativeOperationCopyTreeRequest request);
 
 } // namespace ck::files

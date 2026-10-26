@@ -6,8 +6,10 @@
 #include "native_operation_recovery_evidence.hpp"
 #include "opened_entry.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 namespace ck::files {
 namespace {
@@ -54,6 +56,16 @@ OperationJournalId item_journal_id(OperationJournalId base, std::size_t item) no
     const auto value = static_cast<std::uint64_t>(item);
     for (unsigned byte = 0; byte != sizeof(value); ++byte)
         base.bytes[8 + byte] = std::byte{static_cast<unsigned char>(value >> (byte * 8U))};
+    return base;
+}
+
+OperationJournalId tree_child_journal_id(OperationJournalId base, std::size_t item) noexcept {
+    // The regular batch factory reserves bytes 8..15 for its local item
+    // number. Keep the recursive entry number in the preceding bytes so each
+    // child journal remains unique even though every child batch has one item.
+    const auto value = static_cast<std::uint64_t>(item);
+    for (unsigned byte = 0; byte != sizeof(value) - 1; ++byte)
+        base.bytes[1 + byte] = std::byte{static_cast<unsigned char>(value >> (byte * 8U))};
     return base;
 }
 
@@ -408,6 +420,456 @@ Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
         jobs.push_back(std::move(created).take_value());
     }
     return create_native_operation_copy_batch(std::move(jobs));
+}
+
+struct NativeOperationCopyTreeJob::State final {
+    explicit State(NativeOperationCopyTreeRequest value,
+                   OperationJournal::Pointer root_journal,
+                   std::shared_ptr<OperationJournalFile> root_journal_file,
+                   NativeName root_staging_name,
+                   ObjectIdentity root_destination_identity)
+        : request(std::move(value)), journal(std::move(root_journal)),
+          journal_file(std::move(root_journal_file)), staging_name(std::move(root_staging_name)),
+          destination_identity(std::move(root_destination_identity)) {}
+
+    NativeOperationCopyTreeRequest request;
+    OperationJournal::Pointer journal;
+    std::shared_ptr<OperationJournalFile> journal_file;
+    NativeName staging_name;
+    ObjectIdentity destination_identity;
+    std::shared_ptr<const DirectoryCursor> staging_root;
+    std::optional<ObjectIdentity> staging_identity;
+    std::vector<std::shared_ptr<const DirectoryCursor>> directories;
+    OperationBatchJob::Pointer child_batch;
+    std::size_t next_entry = 1;
+    std::uint64_t observed_bytes = 0;
+
+    const FrozenInventory& inventory() const noexcept { return *request.inventory->inventory(); }
+    const std::vector<HeldChild::Pointer>& sources() const noexcept {
+        return request.inventory->sources();
+    }
+
+    std::optional<std::size_t> parent_index(std::size_t entry) const noexcept {
+        const auto& components = inventory().entries()[entry].relative_components;
+        if (components.empty()) return std::nullopt;
+        const auto prefix_size = components.size() - 1;
+        for (std::size_t candidate = 0; candidate != entry; ++candidate) {
+            const auto& candidate_components = inventory().entries()[candidate].relative_components;
+            if (inventory().entries()[candidate].kind != ObjectKind::Directory ||
+                candidate_components.size() != prefix_size)
+                continue;
+            if (std::equal(candidate_components.begin(), candidate_components.end(), components.begin()))
+                return candidate;
+        }
+        return std::nullopt;
+    }
+
+    Observation<bool> append(OperationJournalState state) {
+        NativeOperationRecoveryEvidence evidence{
+            staging_name,
+            request.destination_name,
+            {},
+            {},
+            {},
+            {}};
+        const auto& root_source = sources().front();
+        const auto& root_metadata = inventory().entries().front();
+        if (!root_source || !root_source->parent_identity().value() ||
+            !root_metadata.identity.scope.is_valid() || !destination_identity.scope.is_valid())
+            return rejected<bool>(AdapterError::UnqualifiedIdentity,
+                                  "native_operation_copy_tree.journal_identity");
+        const auto source_parent = NativeDurableIdentity::from_live(*root_source->parent_identity().value());
+        const auto source = NativeDurableIdentity::from_live(root_metadata.identity);
+        const auto destination = NativeDurableIdentity::from_live(destination_identity);
+        if (!source_parent || !source || !destination)
+            return rejected<bool>(AdapterError::UnqualifiedIdentity,
+                                  "native_operation_copy_tree.journal_identity");
+        evidence.source_parent_identity = *source_parent;
+        evidence.source_identity = *source;
+        evidence.destination_identity = *destination;
+        if (staging_identity) {
+            const auto durable_staging = NativeDurableIdentity::from_live(*staging_identity);
+            if (!durable_staging)
+                return rejected<bool>(AdapterError::UnqualifiedIdentity,
+                                      "native_operation_copy_tree.journal_staging_identity",
+                                      ObservationState::Unknown);
+            evidence.staging_identity = *durable_staging;
+        }
+        auto encoded = encode_native_operation_recovery_evidence(evidence);
+        if (!encoded.value())
+            return Observation<bool>::unavailable(encoded.unavailable_detail()->state,
+                                                  encoded.unavailable_detail()->error);
+        const auto sequence = static_cast<std::uint64_t>(journal->records().size()) + 1;
+        return append_operation_journal_file(*journal_file, *journal,
+            {sequence, 0, state, std::move(encoded).take_value()});
+    }
+
+    Observation<bool> verify() const {
+        const auto destination = request.destination->identity();
+        if (!destination.value()) return unavailable_bool(*destination.unavailable_detail());
+        if (!same(*destination.value(), destination_identity)) return Observation<bool>::available(false);
+        if (!staging_root || !staging_identity) return rejected<bool>(
+            AdapterError::InvalidNativeResult, "native_operation_copy_tree.verify_staging");
+        const auto staged = staging_root->inspect_basic();
+        if (!staged.value()) return unavailable_bool(*staged.unavailable_detail());
+        if (!staged.value()->identity.value() || !staged.value()->kind.value() ||
+            *staged.value()->kind.value() != ObjectKind::Directory ||
+            !same(*staged.value()->identity.value(), *staging_identity))
+            return Observation<bool>::available(false);
+        const auto& entries = inventory().entries();
+        for (std::size_t index = 0; index != entries.size(); ++index) {
+            const auto current = sources()[index]->inspect_basic();
+            if (!current.value()) return unavailable_bool(*current.unavailable_detail());
+            if (!current.value()->identity.value() || !current.value()->kind.value() ||
+                !same(*current.value()->identity.value(), entries[index].identity) ||
+                *current.value()->kind.value() != entries[index].kind)
+                return Observation<bool>::available(false);
+            if (entries[index].kind == ObjectKind::RegularFile &&
+                (!current.value()->logical_size.value() ||
+                 *current.value()->logical_size.value() != entries[index].logical_size))
+                return Observation<bool>::available(false);
+        }
+        for (std::size_t index = 0; index != directories.size(); ++index) {
+            if (!directories[index]) continue;
+            const auto current = directories[index]->inspect_basic();
+            if (!current.value()) return unavailable_bool(*current.unavailable_detail());
+            if (!current.value()->identity.value() || !current.value()->kind.value() ||
+                *current.value()->kind.value() != ObjectKind::Directory)
+                return Observation<bool>::available(false);
+        }
+        return Observation<bool>::available(true);
+    }
+};
+
+namespace {
+
+bool tree_terminal(OperationBatchState state) noexcept {
+    return state == OperationBatchState::Complete || state == OperationBatchState::Failed ||
+        state == OperationBatchState::Cancelled || state == OperationBatchState::RetainedSource ||
+        state == OperationBatchState::NeedsReconciliation;
+}
+
+UnavailableObservation tree_error(AdapterError code, const char* operation,
+                                  ObservationState state = ObservationState::Failed) {
+    return {state, {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
+}
+
+} // namespace
+
+Observation<NativeOperationCopyTreeJob::Pointer> NativeOperationCopyTreeJob::create(
+    NativeOperationCopyTreeRequest request) {
+    if (!request.inventory || !request.inventory->inventory() || !request.destination ||
+        !request.destination_name.is_valid() || !request.journal_root ||
+        !request.journal_root->is_valid() || !request.open_journal ||
+        !request.policy.copy_limits.valid())
+        return rejected<Pointer>(AdapterError::PlanInvalid, "native_operation_copy_tree.request");
+
+    const auto& inventory = *request.inventory->inventory();
+    const auto& entries = inventory.entries();
+    const auto& sources = request.inventory->sources();
+    if (entries.empty() || entries.size() != sources.size() ||
+        entries.size() > request.policy.journal_limits.max_items ||
+        entries.front().kind != ObjectKind::Directory || !entries.front().relative_components.empty() ||
+        inventory.link_policy() != InventoryLinkPolicy::PreserveLinks)
+        return rejected<Pointer>(AdapterError::PlanInvalid, "native_operation_copy_tree.inventory");
+    const auto destination_identity = request.destination->identity();
+    if (!destination_identity.value() || !NativeDurableIdentity::from_live(*destination_identity.value()))
+        return rejected<Pointer>(AdapterError::UnqualifiedIdentity,
+                                "native_operation_copy_tree.destination");
+
+    std::unordered_set<std::size_t> hard_link_groups;
+    for (std::size_t index = 0; index != entries.size(); ++index) {
+        const auto& entry = entries[index];
+        const auto& source = sources[index];
+        if (!source || entry.identity.scheme == IdentityScheme::Unknown ||
+            !NativeDurableIdentity::from_live(entry.identity) || !source->metadata().identity.value() ||
+            !source->metadata().kind.value() ||
+            !same(*source->metadata().identity.value(), entry.identity) ||
+            *source->metadata().kind.value() != entry.kind || entry.link != LinkTraversalEvidence::NotLink)
+            return rejected<Pointer>(AdapterError::PlanDecisionStale,
+                                     "native_operation_copy_tree.source_identity", ObservationState::Changed);
+        if (index != 0 && (entry.relative_components.empty() ||
+                           entry.relative_components.back().encoding() != request.destination_name.encoding()))
+            return rejected<Pointer>(AdapterError::UnsupportedQuery,
+                                     "native_operation_copy_tree.name_encoding",
+                                     ObservationState::Unsupported);
+        if (entry.kind != ObjectKind::Directory && entry.kind != ObjectKind::RegularFile)
+            return rejected<Pointer>(AdapterError::UnsupportedQuery,
+                                     "native_operation_copy_tree.entry_kind",
+                                     ObservationState::Unsupported);
+        if (entry.kind == ObjectKind::RegularFile && index != 0) {
+            const auto group = inventory.hard_link_groups()[index];
+            if (!hard_link_groups.insert(group).second)
+                return rejected<Pointer>(AdapterError::UnsupportedQuery,
+                                         "native_operation_copy_tree.hard_link_alias",
+                                         ObservationState::Unsupported);
+        }
+        if (!entry.relative_components.empty() && entry.relative_components.back().encoding() !=
+                                                   source->name().encoding())
+            return rejected<Pointer>(AdapterError::PlanInvalid,
+                                     "native_operation_copy_tree.source_name_encoding");
+    }
+    if (!sources.front()->parent_identity().value() ||
+        !NativeDurableIdentity::from_live(*sources.front()->parent_identity().value()))
+        return rejected<Pointer>(AdapterError::UnqualifiedIdentity,
+                                 "native_operation_copy_tree.source_parent");
+    if (!request.policy.allow_unhandled_metadata_loss)
+        return rejected<Pointer>(AdapterError::ProviderReviewRequired,
+                                 "native_operation_copy_tree.metadata_loss_consent",
+                                 ObservationState::Unsupported);
+
+    const auto root_staging_name = generated_name(request.destination_name.encoding(), ".ck-tree-staging-",
+                                                   request.journal_id, 0);
+    const auto journal_name = generated_name(request.journal_root->encoding(), ".ck-tree-journal-",
+                                             request.journal_id, 0);
+    if (!root_staging_name || !journal_name)
+        return rejected<Pointer>(AdapterError::UnrepresentableName,
+                                 "native_operation_copy_tree.generated_name");
+    auto journal_file = request.open_journal(*request.journal_root, *journal_name, true);
+    if (!journal_file.value())
+        return Observation<Pointer>::unavailable(journal_file.unavailable_detail()->state,
+                                                 journal_file.unavailable_detail()->error);
+    auto journal = OperationJournal::create(FileOperation::Copy, request.journal_id,
+                                            request.policy.journal_limits);
+    if (!journal.value())
+        return Observation<Pointer>::unavailable(journal.unavailable_detail()->state,
+                                                 journal.unavailable_detail()->error);
+    auto journal_pointer = std::move(journal).take_value();
+    auto journal_handle = std::shared_ptr<OperationJournalFile>(std::move(journal_file).take_value());
+    auto planned = append_operation_journal_file(*journal_handle, *journal_pointer,
+        {1, 0, OperationJournalState::Planned, {}});
+    if (!planned.value())
+        return Observation<Pointer>::unavailable(planned.unavailable_detail()->state,
+                                                 planned.unavailable_detail()->error);
+    auto state = std::make_shared<State>(std::move(request), std::move(journal_pointer),
+                                         std::move(journal_handle), std::move(*root_staging_name),
+                                         *destination_identity.value());
+    return Observation<Pointer>::available(Pointer(new NativeOperationCopyTreeJob(std::move(state))));
+}
+
+OperationProgress NativeOperationCopyTreeJob::progress() const noexcept {
+    const auto total = state_data_ && state_data_->request.inventory && state_data_->request.inventory->inventory()
+        ? std::optional<std::uint64_t>(state_data_->request.inventory->inventory()->logical_bytes())
+        : std::nullopt;
+    return {state_, state_data_ ? state_data_->observed_bytes : 0, total};
+}
+
+OperationExecutionState NativeOperationCopyTreeJob::advance(std::stop_token stop) {
+    if (state_ == OperationExecutionState::Complete || state_ == OperationExecutionState::Failed ||
+        state_ == OperationExecutionState::Cancelled || state_ == OperationExecutionState::NeedsReconciliation)
+        return state_;
+
+    auto fail = [&](UnavailableObservation detail, bool force_reconciliation = false) {
+        const auto desired = force_reconciliation || detail.state == ObservationState::Unknown
+            ? OperationJournalState::NeedsReconciliation : OperationJournalState::Failed;
+        const auto appended = state_data_->append(desired);
+        if (!appended.value()) {
+            result_.failure = *appended.unavailable_detail();
+            state_ = result_.state = OperationExecutionState::NeedsReconciliation;
+            return;
+        }
+        result_.failure = std::move(detail);
+        state_ = result_.state = desired == OperationJournalState::NeedsReconciliation
+            ? OperationExecutionState::NeedsReconciliation : OperationExecutionState::Failed;
+    };
+    auto cancel = [&] {
+        const auto appended = state_data_->append(OperationJournalState::Cancelled);
+        if (!appended.value()) {
+            result_.failure = *appended.unavailable_detail();
+            state_ = result_.state = OperationExecutionState::NeedsReconciliation;
+        } else {
+            state_ = result_.state = OperationExecutionState::Cancelled;
+        }
+    };
+    auto journal_failure = [&](UnavailableObservation detail) {
+        result_.failure = std::move(detail);
+        state_ = result_.state = OperationExecutionState::NeedsReconciliation;
+    };
+
+    // The phase is encoded by the durable journal state and the retained
+    // native owners: Planned means root creation, Prepared means entries,
+    // Copied means verification, and Verified means publish preparation.
+    const auto journal_state = state_data_->journal->state(0);
+    if (!journal_state) {
+        fail(tree_error(AdapterError::InvalidNativeResult, "native_operation_copy_tree.journal_state"), true);
+        return state_;
+    }
+    if (stop.stop_requested()) {
+        if (*journal_state == OperationJournalState::Complete ||
+            *journal_state == OperationJournalState::DestinationCommitted) return state_;
+        cancel();
+        return state_;
+    }
+
+    if (*journal_state == OperationJournalState::Planned) {
+        auto created = state_data_->request.destination->create_child_directory(state_data_->staging_name);
+        if (!created.value()) {
+            fail(*created.unavailable_detail());
+            return state_;
+        }
+        state_data_->staging_root = std::shared_ptr<const DirectoryCursor>(std::move(created).take_value());
+        const auto metadata = state_data_->staging_root->inspect_basic();
+        if (!metadata.value() || !metadata.value()->identity.value() || !metadata.value()->kind.value() ||
+            *metadata.value()->kind.value() != ObjectKind::Directory) {
+            fail(metadata.value() ? tree_error(AdapterError::InvalidNativeResult,
+                                               "native_operation_copy_tree.staging_kind", ObservationState::Unknown)
+                                  : *metadata.unavailable_detail(), true);
+            return state_;
+        }
+        state_data_->staging_identity = *metadata.value()->identity.value();
+        state_data_->directories.resize(state_data_->inventory().entries().size());
+        state_data_->directories[0] = state_data_->staging_root;
+        const auto appended = state_data_->append(OperationJournalState::Prepared);
+        if (!appended.value()) {
+            journal_failure(*appended.unavailable_detail());
+            return state_;
+        }
+        return state_;
+    }
+
+    if (*journal_state == OperationJournalState::Prepared) {
+        if (state_data_->child_batch) {
+            const auto child_state = state_data_->child_batch->advance(stop);
+            if (!tree_terminal(child_state))
+                return state_;
+            const auto& items = state_data_->child_batch->result().items;
+            if (child_state != OperationBatchState::Complete) {
+                if (!items.empty() && items.front().failure)
+                    fail(*items.front().failure, child_state == OperationBatchState::NeedsReconciliation);
+                else
+                    fail(tree_error(AdapterError::InvalidNativeResult,
+                                    "native_operation_copy_tree.child_failure"),
+                         child_state == OperationBatchState::NeedsReconciliation);
+                return state_;
+            }
+            state_data_->child_batch.reset();
+            ++state_data_->next_entry;
+            return state_;
+        }
+        const auto& entries = state_data_->inventory().entries();
+        if (state_data_->next_entry >= entries.size()) {
+            const auto appended = state_data_->append(OperationJournalState::Copied);
+            if (!appended.value()) {
+                journal_failure(*appended.unavailable_detail());
+                return state_;
+            }
+            return state_;
+        }
+        const auto index = state_data_->next_entry;
+        const auto parent = state_data_->parent_index(index);
+        if (!parent || *parent >= state_data_->directories.size() || !state_data_->directories[*parent]) {
+            fail(tree_error(AdapterError::PlanTopologyUnsafe,
+                            "native_operation_copy_tree.parent_mapping"));
+            return state_;
+        }
+        const auto& component = entries[index].relative_components.back();
+        if (entries[index].kind == ObjectKind::Directory) {
+            auto created = state_data_->directories[*parent]->create_child_directory(component);
+            if (!created.value()) {
+                fail(*created.unavailable_detail());
+                return state_;
+            }
+            state_data_->directories[index] = std::shared_ptr<const DirectoryCursor>(std::move(created).take_value());
+            const auto metadata = state_data_->directories[index]->inspect_basic();
+            if (!metadata.value() || !metadata.value()->identity.value() || !metadata.value()->kind.value() ||
+                *metadata.value()->kind.value() != ObjectKind::Directory) {
+                fail(metadata.value() ? tree_error(AdapterError::InvalidNativeResult,
+                                                   "native_operation_copy_tree.directory_kind", ObservationState::Unknown)
+                                      : *metadata.unavailable_detail(), true);
+                return state_;
+            }
+            ++state_data_->next_entry;
+            return state_;
+        }
+        NativeOperationCopyBatchRequest child_request;
+        child_request.sources = {state_data_->sources()[index]};
+        child_request.destination = state_data_->directories[*parent];
+        child_request.destination_names = {component};
+        child_request.journal_root = state_data_->request.journal_root;
+        child_request.journal_id = tree_child_journal_id(state_data_->request.journal_id, index);
+        child_request.policy = state_data_->request.policy;
+        child_request.open_journal = state_data_->request.open_journal;
+        auto child = create_native_operation_copy_batch(std::move(child_request));
+        if (!child.value()) {
+            fail(*child.unavailable_detail(), true);
+            return state_;
+        }
+        state_data_->child_batch = std::move(child).take_value();
+        return state_;
+    }
+
+    if (*journal_state == OperationJournalState::Copied) {
+        const auto verified = state_data_->verify();
+        if (!verified.value()) {
+            fail(*verified.unavailable_detail(), verified.state() == ObservationState::Unknown);
+            return state_;
+        }
+        if (!*verified.value()) {
+            fail(tree_error(AdapterError::PlanDecisionStale,
+                            "native_operation_copy_tree.verify", ObservationState::Changed));
+            return state_;
+        }
+        const auto appended = state_data_->append(OperationJournalState::Verified);
+        if (!appended.value()) {
+            journal_failure(*appended.unavailable_detail());
+            return state_;
+        }
+        return state_;
+    }
+
+    if (*journal_state == OperationJournalState::Verified) {
+        const auto appended = state_data_->append(OperationJournalState::CommitIntended);
+        if (!appended.value()) {
+            journal_failure(*appended.unavailable_detail());
+            return state_;
+        }
+        return state_;
+    }
+
+    if (*journal_state == OperationJournalState::CommitIntended) {
+        if (!state_data_->staging_root || !state_data_->staging_identity) {
+            fail(tree_error(AdapterError::InvalidNativeResult,
+                            "native_operation_copy_tree.publish_handle"), true);
+            return state_;
+        }
+        auto published = state_data_->request.destination->rename_child_noreplace(
+            state_data_->staging_name, *state_data_->staging_identity,
+            *state_data_->request.destination, state_data_->request.destination_name);
+        if (!published.value()) {
+            fail(*published.unavailable_detail(), published.state() == ObservationState::Unknown);
+            return state_;
+        }
+        if (!*published.value()) {
+            fail(tree_error(AdapterError::InvalidNativeResult,
+                            "native_operation_copy_tree.publish_result"), true);
+            return state_;
+        }
+        const auto appended = state_data_->append(OperationJournalState::DestinationCommitted);
+        if (!appended.value()) {
+            journal_failure(*appended.unavailable_detail());
+            return state_;
+        }
+        const auto complete = state_data_->append(OperationJournalState::Complete);
+        if (!complete.value()) {
+            journal_failure(*complete.unavailable_detail());
+            return state_;
+        }
+        state_ = result_.state = OperationExecutionState::Complete;
+        return state_;
+    }
+
+    fail(tree_error(AdapterError::InvalidNativeResult, "native_operation_copy_tree.state"), true);
+    return state_;
+}
+
+Observation<bool> NativeOperationCopyTreeJob::cleanup_unpublished_staging() {
+    return rejected<bool>(AdapterError::UnsupportedQuery,
+                          "native_operation_copy_tree.cleanup_recursive", ObservationState::Unsupported);
+}
+
+Observation<NativeOperationCopyTreeJob::Pointer> create_native_operation_copy_tree(
+    NativeOperationCopyTreeRequest request) {
+    return NativeOperationCopyTreeJob::create(std::move(request));
 }
 
 } // namespace ck::files

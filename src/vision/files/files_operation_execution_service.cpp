@@ -162,10 +162,92 @@ struct FilesOperationExecutionService::State final {
             fail(error(ck::files::AdapterError::PlanInvalid, "files_execution.handoff_shape"));
             return;
         }
-        if (handoff->sources->root_source || handoff->sources->source_root || handoff->sources->source_path) {
-            fail(error(ck::files::AdapterError::UnsupportedQuery,
-                       "files_execution.recursive_copy_unavailable",
-                       ck::files::ObservationState::Unsupported));
+        const bool recursive = handoff->sources->root_source && handoff->sources->source_root &&
+            handoff->sources->source_path && handoff->sources->source_path->is_valid() &&
+            handoff->sources->sources.empty() && handoff->sources->paths.empty();
+        const bool flat = !handoff->sources->root_source && !handoff->sources->source_root &&
+            !handoff->sources->source_path && !handoff->sources->sources.empty() &&
+            handoff->sources->sources.size() == handoff->sources->names.size();
+        if (!recursive && !flat) {
+            fail(error(ck::files::AdapterError::PlanInvalid,
+                       "files_execution.source_handoff_shape"));
+            return;
+        }
+        if (recursive) {
+            ck::files::RecursiveInventoryLimits limits;
+            limits.inventory.max_entries = value.source_limits.held_entries;
+            auto inventory_job = std::make_unique<ck::files::RecursiveInventoryJob>(
+                std::move(handoff->sources->source_root),
+                std::move(*handoff->sources->source_path),
+                ck::files::InventoryMountPolicy::StayOnRootMount,
+                ck::files::InventoryLinkPolicy::PreserveLinks,
+                limits, ck::files::system_monotonic_clock(),
+                std::move(handoff->sources->root_source));
+            while (inventory_job->state() != ck::files::RecursiveInventoryState::Complete &&
+                   inventory_job->state() != ck::files::RecursiveInventoryState::Failed) {
+                if (stop_token.stop_requested()) {
+                    fail(error(ck::files::AdapterError::InterruptedRead,
+                               "files_execution.recursive_inventory_cancelled",
+                               ck::files::ObservationState::Unknown));
+                    return;
+                }
+                inventory_job->advance(stop_token);
+            }
+            if (inventory_job->state() != ck::files::RecursiveInventoryState::Complete) {
+                if (inventory_job->failure()) fail(*inventory_job->failure());
+                else fail(error(ck::files::AdapterError::InvalidNativeResult,
+                                "files_execution.recursive_inventory"));
+                return;
+            }
+            auto completed = inventory_job->completed_sources();
+            if (!completed.value()) {
+                fail(completed.unavailable_detail() ? *completed.unavailable_detail() :
+                     error(ck::files::AdapterError::InvalidNativeResult,
+                           "files_execution.recursive_inventory_result"));
+                return;
+            }
+            ck::files::NativeOperationCopyTreeRequest tree_request(
+                (*completed.value())->sources().front()->name());
+            tree_request.inventory = std::move(completed).take_value();
+            tree_request.destination = std::move(*handoff->destination_cursor);
+            tree_request.journal_root = std::move(value.journal_root);
+            tree_request.journal_id = value.journal_id;
+            tree_request.policy = value.policy;
+            tree_request.open_journal = std::move(value.open_journal);
+            auto tree = ck::files::create_native_operation_copy_tree(std::move(tree_request));
+            if (!tree.value()) {
+                fail(*tree.unavailable_detail());
+                return;
+            }
+            auto job = std::move(tree).take_value();
+            while (job->state() != ck::files::OperationExecutionState::Complete &&
+                   job->state() != ck::files::OperationExecutionState::Failed &&
+                   job->state() != ck::files::OperationExecutionState::Cancelled &&
+                   job->state() != ck::files::OperationExecutionState::NeedsReconciliation)
+                job->advance(stop_token);
+            const auto tree_state = job->state();
+            const auto outcome = tree_state == ck::files::OperationExecutionState::Complete
+                ? ck::files::OperationItemOutcome::Complete
+                : tree_state == ck::files::OperationExecutionState::Cancelled
+                    ? ck::files::OperationItemOutcome::Cancelled
+                    : tree_state == ck::files::OperationExecutionState::NeedsReconciliation
+                        ? ck::files::OperationItemOutcome::NeedsReconciliation
+                        : ck::files::OperationItemOutcome::Failed;
+            result.result.items.push_back({0, outcome, job->result().failure});
+            result.result.state = outcome == ck::files::OperationItemOutcome::Complete
+                ? ck::files::OperationBatchState::Complete
+                : outcome == ck::files::OperationItemOutcome::Cancelled
+                    ? ck::files::OperationBatchState::Cancelled
+                    : outcome == ck::files::OperationItemOutcome::NeedsReconciliation
+                        ? ck::files::OperationBatchState::NeedsReconciliation
+                        : ck::files::OperationBatchState::Failed;
+            result.state = outcome == ck::files::OperationItemOutcome::Complete
+                ? FilesOperationExecutionState::Complete
+                : stop_token.stop_requested() || outcome == ck::files::OperationItemOutcome::Cancelled
+                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            if (result.state != FilesOperationExecutionState::Complete)
+                result.error = job->result().failure;
+            emit(std::move(result));
             return;
         }
         ck::files::NativeOperationCopyBatchRequest copy;

@@ -143,6 +143,13 @@ Observation<BasicMetadata> handle_metadata(HANDLE handle, const AdapterScope& sc
         return failure<BasicMetadata>(GetLastError(), "FileBasicInfo");
     BasicMetadata result;
     result.identity = identity(handle, scope);
+    if (result.identity.value()) {
+        std::uint64_t mount = 0;
+        for (unsigned byte = 0; byte != sizeof(mount); ++byte)
+            mount |= static_cast<std::uint64_t>(std::to_integer<unsigned char>(
+                result.identity.value()->volume.bytes[byte])) << (byte * 8U);
+        result.mount_id = Observation<std::uint64_t>::available(mount);
+    }
     result.windows_attributes = Observation<std::uint32_t>::available(native.FileAttributes);
     result.accessed = timestamp(native.LastAccessTime);
     result.modified = timestamp(native.LastWriteTime);

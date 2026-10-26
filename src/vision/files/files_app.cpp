@@ -926,8 +926,10 @@ struct FilesApp::State {
         if (!execution_service || !operation_journal_root || active > 1 ||
             operation_execution_request || !ready(active) || !ready(1 - active))
             return false;
-        return panes[active].model.target().has_value() &&
-               panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile;
+        if (!panes[active].model.target().has_value())
+            return false;
+        const auto kind = panes[active].model.cursor_kind();
+        return kind == ck::files::ObjectKind::RegularFile || kind == ck::files::ObjectKind::Directory;
     }
     void prepare_copy(ck::files::FileOperation operation) {
         if (operation != ck::files::FileOperation::Copy || !can_prepare_copy())

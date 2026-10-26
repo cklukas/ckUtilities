@@ -118,6 +118,10 @@ Observation<BasicMetadata> stat_metadata(int descriptor, const char* path, bool 
     result.identity = Observation<ObjectIdentity>::available({scope, IdentityScheme::PosixDeviceInode,
         NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_dev)),
         NativeIdentifier::from_u64(static_cast<std::uint64_t>(native.st_ino)), generation});
+    // st_dev is the portable POSIX mount/volume discriminator used by the
+    // recursive inventory confinement check. Linux statx may provide the
+    // finer mount-id below; this fallback keeps Darwin's native path honest.
+    result.mount_id = Observation<std::uint64_t>::available(static_cast<std::uint64_t>(native.st_dev));
     result.kind = Observation<ObjectKind>::available(kind(native.st_mode));
     result.posix_permissions = Observation<std::uint32_t>::available(static_cast<std::uint32_t>(native.st_mode) & 07777U);
     result.posix_uid = Observation<std::uint64_t>::available(native.st_uid);
