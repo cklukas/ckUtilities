@@ -1,0 +1,51 @@
+{
+  "commit": "638b0936bec3453eec36b5bab069b962059ad797",
+  "scope": "WP-03 parent-identity-scoped destination collision evidence",
+  "macos": {
+    "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "build": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/tmp",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "ec7699c34ab3c9c8559b128ef42c637671571409fbe8e54782d1735bb5ebbc0d",
+    "build_start_utc": "2026-10-26T03:38:37Z",
+    "build_end_utc": "2026-10-26T03:38:38Z",
+    "build_elapsed_seconds": 1,
+    "focused_tests": "test_files_destination_batch, test_files_operation_evidence, test_files_destination_conflict_projection",
+    "focused_result": "3/3 passed"
+  },
+  "linux_arm64": {
+    "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp03-parent-20261026-01",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "cf3d0018e9207176b8f8d0adbfedc7599e741d51e08fcbb21bba278075e5efba",
+    "build_start_utc": "2026-10-26T03:35:07Z",
+    "build_end_utc": "2026-10-26T03:38:32Z",
+    "build_elapsed_seconds": 205,
+    "focused_tests": "test_files_destination_batch, test_files_operation_evidence, test_files_destination_conflict_projection",
+    "focused_result": "3/3 passed"
+  },
+  "windows_x64": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-wp03-parent-20261026-01",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_core_tests.exe",
+    "qualification_status": "blocked",
+    "reason": "The configured v143 toolset and the alternate configured LLVM 19.1.5 toolset are unavailable; the available executable predates this commit and is not counted."
+  },
+  "implementation_effect": [
+    "Parent-scoped exact-name grouping now compares qualified held parent identities, so independent cursors for the same directory still share collision evidence.",
+    "Rows with unavailable parent identity do not merge exact-name groups, avoiding an unsupported collision claim.",
+    "Different parent identities remain distinct even when their requested destination basenames match."
+  ],
+  "limitations": [
+    "This remains read-only planning evidence. Recursive copy execution, directory merge/replacement policy, move, Trash/delete, recovery execution and final release gates remain open.",
+    "Windows qualification must be rerun when the workstation toolchain is repaired."
+  ]
+}

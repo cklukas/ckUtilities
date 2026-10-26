@@ -3,6 +3,22 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 638b093 parent-identity collision qualification
+
+Destination exact-name collision grouping now uses qualified held parent
+identity rather than cursor address. Independently opened cursors for the same
+directory still share collision evidence; different directories remain
+distinct; unavailable parent identity does not manufacture a collision.
+
+The focused destination-batch, operation-evidence and conflict-projection
+tests pass on macOS and Linux ARM64. Windows remains unqualified for this
+commit because the workstation lacks both the generated project’s v143 toolset
+and its configured LLVM 19.1.5 toolset; the older executable was not reused as
+current evidence.
+
+Evidence: [638b093 parent-identity qualification record](evidence/ck-files-638b093-parent-identity-20261026.json).
+
+
 ## 2026-10-26 — 48410d5 destination-tree evidence
 
 WP-03 operation evidence now resolves recursive destination rows beneath their
