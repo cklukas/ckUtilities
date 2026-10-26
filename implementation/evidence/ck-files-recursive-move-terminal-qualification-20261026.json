@@ -1,0 +1,45 @@
+{
+  "milestone": "WP-05 recursive move and WP-02 Windows terminal acceptance",
+  "date": "2026-10-26",
+  "source_commits": ["e959a08", "d51b53e"],
+  "recursive_move": {
+    "same_filesystem": "identity-bound native directory rename",
+    "cross_filesystem": "verified recursive tree publication followed by reverse-order source retirement",
+    "windows": "qualified source retirement on the V: workstation",
+    "macos_linux": "source retained because the current source-retirement adapter is explicitly Unsupported",
+    "recovery_claim": "no automatic interrupted-tree recovery claimed"
+  },
+  "qualification": {
+    "macos": {
+      "native_operation_content": "19/19",
+      "full_native": "185/185",
+      "focused_files_app_recursive_and_move": "passed"
+    },
+    "linux_arm64": {
+      "native_operation_content": "20/20",
+      "full_native": "189/189",
+      "focused_files_app_recursive_and_move": "passed"
+    },
+    "windows_x64": {
+      "native_operation_content": "19/19",
+      "full_native": "184/184",
+      "focused_files_app_recursive_and_move": "passed",
+      "conpty": "10 tools started, rendered and quit; 1/1 contract test passed"
+    }
+  },
+  "windows_environment": {
+    "source_root": "V:\\dev\\ckutilities",
+    "build_root": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\tmp",
+    "executable": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe",
+    "toolset": "MSVC v143 14.44.35207"
+  },
+  "not_claimed": [
+    "per-entry interrupted-tree recovery execution",
+    "native macOS or Linux Trash",
+    "sanitizer and race qualification",
+    "Linux or macOS real-terminal acceptance",
+    "full filesystem feature matrix",
+    "release packaging and final documentation"
+  ]
+}

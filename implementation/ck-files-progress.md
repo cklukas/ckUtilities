@@ -3,6 +3,36 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — e959a08 / d51b53e recursive move and terminal acceptance checkpoints
+
+Recursive directory Move is now routed through the qualified operation path. A
+same-filesystem directory uses identity-bound native rename; a cross-filesystem
+directory stages and verifies the complete tree, durably publishes the
+destination, then attempts reverse-order source retirement. Windows qualifies
+the handle-bound retirement path; macOS and Linux retain the source because
+their current source-retirement adapter explicitly reports Unsupported. The
+tree journal remains reviewable after interruption; this does not claim
+automatic recovery or global atomicity.
+
+The Windows real-ConPTY contract now includes `ck-files` and uses the
+configuration-specific multi-config output directory. The fresh Release
+contract started, rendered and quit all ten tools, including the two-pane
+Files executable, with `cktest: 1 tests, all passed`.
+
+Qualification: macOS passed 185 native tests, Linux ARM64 passed 189 native
+tests, and Windows x64 passed 184 native tests. The focused Files app
+recursive-copy and same-filesystem move acceptance cases passed on all three
+platforms. Windows used the mandatory `V:` source, build and temporary roots;
+the verified executable was
+`V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe`.
+
+Evidence: [recursive move and terminal qualification record](evidence/ck-files-recursive-move-terminal-qualification-20261026.json).
+
+This remains an implementation checkpoint. Per-entry interrupted-tree
+recovery execution, native macOS/Linux Trash, sanitizer/race qualification,
+POSIX real-terminal acceptance, filesystem-matrix coverage, packaging and
+release documentation remain open.
+
 ## 2026-10-26 — 11109d5 / f7e9de2 native Trash boundary and Windows qualification
 
 The Files app now exposes a separate `Move to Trash / Recycle Bin...` command
