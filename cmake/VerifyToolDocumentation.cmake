@@ -40,7 +40,7 @@ foreach(_guide IN LISTS _guides)
     message(FATAL_ERROR "${_guide} has no non-empty Features section")
   endif()
 
-  string(REGEX MATCHALL "\.\./generated/screenshots/[^) \t\r\n]+\.svg" _references "${_contents}")
+  string(REGEX MATCHALL "[.][.]/generated/screenshots/[^) \t\r\n]+[.]svg" _references "${_contents}")
   if(NOT _references)
     message(FATAL_ERROR "${_guide} has no embedded generated screenshot")
   endif()
