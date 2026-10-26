@@ -68,9 +68,8 @@ struct FilesOperationExecutionService::State final {
 
         bool wait(std::stop_token stop_token) {
             std::unique_lock lock(mutex);
-            condition.wait_for(lock, std::chrono::milliseconds(10), [&] {
-                return failure || (source_done && destination_done) || stop_token.stop_requested();
-            });
+            while (!failure && !(source_done && destination_done) && !stop_token.stop_requested())
+                condition.wait_for(lock, std::chrono::milliseconds(10));
             return !stop_token.stop_requested() && !failure && source_done && destination_done;
         }
     };

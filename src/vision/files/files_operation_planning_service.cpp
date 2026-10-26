@@ -102,9 +102,8 @@ struct FilesOperationPlanningService::State final {
 
         bool wait(std::stop_token stop) {
             std::unique_lock lock(mutex);
-            condition.wait_for(lock, std::chrono::milliseconds(10), [&] {
-                return failure || (source_done && destination_done) || stop.stop_requested();
-            });
+            while (!failure && !(source_done && destination_done) && !stop.stop_requested())
+                condition.wait_for(lock, std::chrono::milliseconds(10));
             return !stop.stop_requested() && !failure && source_done && destination_done;
         }
     };
