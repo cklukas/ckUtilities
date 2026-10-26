@@ -562,6 +562,45 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
 }
+CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    for (std::size_t row = 0; row != f.app->model(0).row_count() &&
+         f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.loaded();
+    }
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1 && !checks.empty());
+    for (auto *check : checks)
+        check->set_checked(0, true);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(apply != nullptr);
+    combos.front()->set_selected_index(2); // Continue with listed losses.
+    CK_CHECK(apply->activate_mnemonic("a"));
+    f.until([&] {
+        return std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "inside.txt") &&
+               std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "nested" / "leaf.txt") &&
+               !f.app->pending(0) && !f.app->pending(1) &&
+               f.app->status(0).find("Copying") == std::string::npos &&
+               f.app->status(1).find("Copying") == std::string::npos;
+    });
+    CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
+    CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+}
 CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
     Fixture f;
     f.loaded();
