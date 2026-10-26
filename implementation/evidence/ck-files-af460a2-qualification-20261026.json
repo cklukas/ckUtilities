@@ -1,0 +1,52 @@
+{
+  "commit": "af460a23f5e96d824fbfebd370fa0e4df1fdb88c",
+  "scope": "Cross-platform F5 held-file copy planning, consent, execution and journal-root preparation",
+  "normal_files_ctest": {
+    "macos": {
+      "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+      "build": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-copy-ui-20261026-01",
+      "command": "ctest --test-dir /Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build -C Release --output-on-failure -L files",
+      "result": "107/107 passed",
+      "ui_test_sha256": "c91a21ecbd1bebdc0341e027b7a1e6f3566bc3f585a0244490e9a219cc44ac94"
+    },
+    "linux_arm64": {
+      "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+      "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+      "tmpdir": "/home/klukas/tmp/ckutilities-linux-execution-service-20261026-01",
+      "command": "ctest -C Release --output-on-failure -L files",
+      "result": "107/107 passed"
+    },
+    "windows_x64": {
+      "source": "V:\\dev\\ckutilities",
+      "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "tmpdir": "V:\\tmp\\ckutilities-copy-ui-20261026-01",
+      "command": "ctest --test-dir V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build -C Release --output-on-failure -L files",
+      "result": "107/107 passed"
+    }
+  },
+  "macos_sanitizers": {
+    "build": "/Volumes/S8T/tmp/ckutilities-af460a2-sanitizer-20261026-01/build",
+    "native_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-af460a2-sanitizer-20261026-01-test-scratch",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-af460a2-sanitizer-20261026-01/tmp",
+    "address_undefined": {
+      "options": "ASAN_OPTIONS=detect_leaks=0:halt_on_error=1; UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1",
+      "core_cases": 706,
+      "native_cases": 180,
+      "core_sha256": "4d42fa6442a213bf9f3a50de2aecb0757ac186c30dd36a9d2ab4fec8a03f6e8d",
+      "native_sha256": "331827d35b773089c705c60c3a8689e4a65e59fff704b5914763cb1428744086"
+    },
+    "thread": {
+      "build": "/Volumes/S8T/tmp/ckutilities-af460a2-tsan-20261026-01/build",
+      "native_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-af460a2-tsan-20261026-01-test-scratch",
+      "options": "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1",
+      "core_cases": 706,
+      "native_cases": 180
+    }
+  },
+  "limitations": [
+    "Apple's AddressSanitizer runtime does not support detect_leaks=1; leak detection was disabled for the supported macOS run.",
+    "The full UI sanitizer remains separately blocked by the pinned ckVision Desktop::install_default_handler defect.",
+    "This evidence does not close recursive copy, move, Trash/delete, recovery execution, or real-window release acceptance."
+  ]
+}

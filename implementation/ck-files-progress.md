@@ -3,6 +3,26 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — af460a2 cross-platform copy and sanitizer qualification
+
+Commit `af460a2` hardens the F5 held-file copy path across platform name
+encodings, known preservation-loss consent, and private operation-journal root
+preparation. The current-source Files CTest label passed **107/107** on
+macOS, Linux ARM and Windows x64. The marked-batch acceptance now acknowledges
+all platform-disclosed review rows instead of assuming a fixed row count.
+
+Fresh macOS ASan/UBSan runs passed **706 core** and **180 native** cases;
+fresh macOS ThreadSanitizer runs passed the same **706 core** and **180 native**
+cases. The native sanitizer fixtures used the explicit APFS-backed
+`/Volumes/PRO-BLADE/tmp` root, while build and compiler temporary data stayed
+under `/Volumes/S8T/tmp`. Apple ASan leak detection is unavailable on this
+host, so `detect_leaks=0` is recorded in the evidence. The full UI sanitizer
+remains blocked by the previously documented pinned ckVision defect.
+
+Evidence: [af460a2 qualification record](evidence/ck-files-af460a2-qualification-20261026.json).
+This is a cross-platform qualification checkpoint, not completion of recursive
+copy, move, Trash/delete, recovery execution, or interactive release acceptance.
+
 ## 2026-10-26 — WP-02 F5 held-file copy integration checkpoint
 
 Commit `42930a6` connects the worker-owned held-source copy factory to the
