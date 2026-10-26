@@ -3,6 +3,22 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — documentation contract and POSIX Trash boundary checkpoint
+
+The release build now has a cross-platform CTest contract for the explicit
+utility set. It requires exactly ten guides, a non-empty `## Features` section
+in every guide, and at least one embedded SVG screenshot whose referenced file
+exists in `docs/generated/screenshots`. The contract passes on macOS ARM64,
+Linux ARM64, and Windows x64; the current source suite passes **224/224** on
+macOS, including **107/107** Files-labelled tests.
+
+The native POSIX Trash boundary test was corrected to match the now-qualified
+implementation: isolated HOME/XDG roots are used, native source retirement is
+asserted, and the freedesktop/macOS restore metadata is checked before the
+fixture roots are removed. The focused native test passes on macOS and Linux.
+
+Evidence: [documentation and Trash boundary record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-26 — 67ac33b POSIX native Trash checkpoint
 
 Commit `f335aa0` implements the POSIX worker-side Trash transaction for macOS

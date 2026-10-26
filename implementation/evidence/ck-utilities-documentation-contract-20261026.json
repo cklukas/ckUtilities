@@ -1,0 +1,39 @@
+{
+  "implementation_commits": ["2e1dd08", "1020591", "486d48d"],
+  "contract": {
+    "expected_utilities": [
+      "ck-utilities",
+      "ck-json-view",
+      "ck-find",
+      "ck-du",
+      "ck-files",
+      "ck-edit",
+      "ck-chat",
+      "ck-todo",
+      "ck-sysmon",
+      "ck-config"
+    ],
+    "guides": 10,
+    "screenshots_svg": 28,
+    "each_guide_has_nonempty_features_section": true,
+    "each_guide_has_existing_embedded_screenshot": true
+  },
+  "macos_arm64": {
+    "build": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build",
+    "documentation_contract": "1/1 passed",
+    "full_ctest": "224/224 passed",
+    "files_native_trash": "1/1 passed"
+  },
+  "linux_arm64_rpi4": {
+    "source": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/source",
+    "build": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build",
+    "documentation_contract_and_native_trash": "2/2 passed"
+  },
+  "windows_x64_workstation": {
+    "source": "V:\\dev\\ckutilities-goal-20261026",
+    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build",
+    "development_drive": "V:",
+    "documentation_contract": "1/1 passed",
+    "note": "The installed runtime package remains recorded separately; this checkpoint verifies the current source contract in the V: build tree."
+  }
+}
