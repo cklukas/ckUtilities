@@ -40,10 +40,10 @@ private:
     Observation<AncestorWalkWitness> outcome_;
 };
 enum class AncestorWalkState { Collecting, Paused, Complete, Failed, Abandoned };
-// Worker-only native parent observations. A DisjointBoundary result is emitted
-// only when the native parent of the current directory is the same held object
-// (the filesystem/provider root boundary) and the source was not observed.
-// Other repeated directories remain ambiguous. Retains all observed owners;
+// Worker-only native parent observations. A DisjointBoundary result is reserved
+// for a separate, platform-qualified provider-root proof; this walker does not
+// infer it from a repeated identity. Every repeated directory remains ambiguous.
+// Retains all observed owners;
 // native calls can block. No paths, recursion or mutation.
 class AncestorWalkJob final {
 public:

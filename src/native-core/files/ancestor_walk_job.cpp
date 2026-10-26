@@ -91,10 +91,12 @@ void AncestorWalkJob::step() {
         }
         const auto compared = compare_identity(*directories_[index].metadata.value()->identity.value(), *directories_[repeated_].metadata.value()->identity.value());
         if (compared == IdentityComparison::Same) {
-            outcome_ = Observation<AncestorWalkWitness>::available({
-                repeated_ == 0 && repeated_ + 1 == index ? AncestorWalkEnd::DisjointBoundary
-                                                          : AncestorWalkEnd::RepeatedDirectory,
-                index, repeated_}); phase_ = Phase::Seal;
+            // A repeated identity, including a root-looking self-parent, is
+            // only a walk witness. Provider-root status needs a separate,
+            // platform-qualified proof; identity repetition alone cannot
+            // certify that the destination is outside the source.
+            outcome_ = Observation<AncestorWalkWitness>::available({AncestorWalkEnd::RepeatedDirectory, index, repeated_});
+            phase_ = Phase::Seal;
         } else if (compared == IdentityComparison::Unknown) unavailable(error(ObservationState::Unknown, AdapterError::UnqualifiedIdentity, "ancestor.repeat_identity"));
         else ++repeated_;
         break;
