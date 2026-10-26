@@ -477,6 +477,31 @@ CK_TEST(files_app_refresh_is_an_async_reopen_and_properties_use_acknowledged_row
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->properties_pending());
 }
+CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.create_directory"));
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::InputLine *> inputs;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), inputs);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(inputs.size() == 1);
+    CK_CHECK(buttons.size() == 2);
+    inputs.front()->set_text("created-by-app");
+    f.application.set_focus(inputs.front());
+    ckv::widgets::Button *create = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Create")
+            create = button;
+    CK_CHECK(create != nullptr && create->activate_mnemonic("c"));
+    f.until([&] { return !f.app->pending(0); });
+
+    CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "created-by-app"));
+    CK_CHECK(f.app->model(0).row_count() == 101);
+    CK_CHECK(f.app->status(0) == "Last scan: 101 items");
+}
 CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
     Fixture f;
     f.loaded();

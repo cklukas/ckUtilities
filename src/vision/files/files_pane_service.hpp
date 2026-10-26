@@ -52,7 +52,7 @@ struct FilesPanePreview {
     std::vector<std::byte> bytes;
     bool complete = false;
 };
-enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Fault };
+enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Mutation, Fault };
 enum class FilesPaneChangeOutcome { NotRequested, NotApplied, Applied, Unknown };
 struct FilesPaneReply {
     FilesPaneTicket request, navigation;
@@ -60,6 +60,10 @@ struct FilesPaneReply {
     ck::files::PaneStateStamp stamp;
     std::shared_ptr<const ck::files::IndexedPanePage> page;
     std::shared_ptr<const FilesPanePreview> preview;
+    // A worker-owned mutation outcome. No native owner or path authority is
+    // published; a successful mutation requires a subsequent refresh before
+    // the UI treats the listing as current.
+    std::optional<bool> mutation_applied;
     // Exact requested routes, never held objects or mutable-entry targets.
     // Failed/cancelled navigation retains the active route. A child request's
     // requested route stays absent until its scoped row is actually resolved.
@@ -147,6 +151,12 @@ class FilesPaneService final {
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
     FilesPaneSubmitted preview(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, ck::files::PaneRowId row,
                                FilesPanePreviewLimits limits = {});
+    // Create one exact native directory component relative to the currently
+    // held pane directory. The worker validates the navigation stamp and
+    // performs exclusive native creation; callers must refresh after success.
+    FilesPaneSubmitted create_directory(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                        ck::files::NativeName name,
+                                        FilesPaneReadRange range = {});
     // One acknowledged local-state command; Busy while any work/result is
     // outstanding. It is never coalesced with another change or page request.
     // Navigation may supersede it; cancellation cannot undo a committed change.

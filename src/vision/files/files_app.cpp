@@ -3,6 +3,7 @@
 #include "files_app.hpp"
 #include "files_location_dialog.hpp"
 #include "ck/vision/keymap.hpp"
+#include "name_mapping.hpp"
 #include <cvision/core/text.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/splitter.hpp>
@@ -128,6 +129,20 @@ std::string preview_text(const FilesPanePreview &preview) {
         out << "[Preview limited to the configured byte bound.]\n";
     return out.str();
 }
+std::optional<ck::files::NativeName> parse_directory_component(std::string text,
+                                                               ck::files::NameEncoding encoding) {
+    auto posix = ck::files::NativeName::from_posix(std::move(text));
+    if (!posix)
+        return std::nullopt;
+    if (encoding == ck::files::NameEncoding::PosixBytes)
+        return std::move(*posix);
+    if (encoding != ck::files::NameEncoding::WindowsUtf16)
+        return std::nullopt;
+    auto mapped = ck::files::map_native_name(*posix, encoding, {});
+    if (!mapped.value())
+        return std::nullopt;
+    return std::move(mapped).take_value();
+}
 } // namespace
 struct FilesApp::State {
     struct Pane {
@@ -138,7 +153,7 @@ struct FilesApp::State {
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
-        bool change_error = false, cancelling = false, preparing_cursor = false;
+        bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -174,6 +189,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
@@ -188,8 +204,11 @@ struct FilesApp::State {
     std::weak_ptr<void> properties_dialog_lifetime;
     ckv::widgets::Window *preview_dialog_window = nullptr;
     std::weak_ptr<void> preview_dialog_lifetime;
+    ckv::widgets::Window *create_directory_window = nullptr;
+    std::weak_ptr<void> create_directory_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -274,6 +293,8 @@ struct FilesApp::State {
                     return ready(active) && panes[active].model.target() &&
                            panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory;
                 });
+            create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
+                                      [this] { return ready(active); });
             const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -319,7 +340,7 @@ struct FilesApp::State {
             };
             SuiteShellOptions options;
             options.application_name = "Files";
-            options.about_text = "Two independent read-only file locations.";
+            options.about_text = "Two independent file locations with worker-owned folder creation.";
             options.theme = theme;
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
@@ -333,6 +354,7 @@ struct FilesApp::State {
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
+                ckv::widgets::MenuBarItem{"&Operations", {item(create_directory_id, "&New folder...")}},
                 ckv::widgets::MenuBarItem{
                     "&Marks",
                     {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
@@ -399,6 +421,8 @@ struct FilesApp::State {
         view_dialog.reset();
         properties_dialog.reset();
         preview_dialog.reset();
+        create_directory_dialog.reset();
+        create_directory_window = nullptr;
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_planning_encoding.reset();
@@ -480,13 +504,16 @@ struct FilesApp::State {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
+               (create_directory_dialog && !create_directory_dialog->completed()) ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
     bool can_edit_location(std::size_t i) const {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
-    static bool pending(const Pane &p) { return p.navigating || p.reading || p.changing || p.queued_view || p.previewing; }
+    static bool pending(const Pane &p) {
+        return p.navigating || p.reading || p.changing || p.queued_view || p.previewing || p.mutating;
+    }
     bool ready(std::size_t i, bool continuation = false) const {
         return i < 2 && !closing && (continuation || !modal_pending()) && !pending(panes[i]) && panes[i].active &&
                panes[i].model.current() && services[i]->running();
@@ -502,6 +529,8 @@ struct FilesApp::State {
             text = "Reading current row for view change...";
         else if (p.previewing)
             text = "Reading preview...";
+        else if (p.mutating)
+            text = "Creating folder...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
@@ -696,6 +725,27 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool create_directory(std::size_t i, ck::files::NativeName name) {
+        if (!ready(i) || !name.is_valid())
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->create_directory(p.navigation, p.stamp, std::move(name),
+                                                              {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Folder creation request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
     bool begin_change(std::size_t i, FilesPaneChange command, bool continuation = false) {
         if (!ready(i, continuation))
             return false;
@@ -765,6 +815,55 @@ struct FilesApp::State {
             return true;
         }
         return begin_change(i, FilesPaneChangeView{std::move(view)});
+    }
+    void show_create_directory() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto encoding = panes[pane].encoding;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Create folder";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "&Name:",
+                .validate = [encoding](const std::string &value) {
+                    return parse_directory_component(value, encoding).has_value();
+                },
+                .description = encoding == ck::files::NameEncoding::WindowsUtf16
+                                   ? "Strict UTF-8 input; names that cannot be represented as Windows UTF-16 are refused."
+                                   : "One exact native component; separators, dot names and empty input are refused."},
+            ckv::widgets::FieldDescriptor{.label = "Creation is exclusive and is performed relative to the held pane directory.",
+                                          .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        create_directory_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        create_directory_window = shell->desktop().active_window();
+        create_directory_lifetime = create_directory_window->lifetime_token();
+        create_directory_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, encoding](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                create_directory_window = nullptr;
+                if (!result.accepted) {
+                    create_directory_dialog.reset();
+                    return;
+                }
+                if (result.values.size() != 2 || panes[pane].navigation != navigation) {
+                    panes[pane].error = "Location changed while folder creation was open";
+                    create_directory_dialog.reset();
+                    labels();
+                    return;
+                }
+                auto name = parse_directory_component(result.values[0], encoding);
+                create_directory_dialog.reset();
+                if (!name || !create_directory(pane, std::move(*name))) {
+                    panes[pane].error = "Folder name is not representable or the location changed";
+                    labels();
+                }
+            });
     }
     void show_location() {
         if (!can_edit_location(active))
@@ -1016,6 +1115,26 @@ struct FilesApp::State {
             consume_preview(i, std::move(reply));
             return;
         }
+        if (reply.kind == FilesPaneReplyKind::Mutation) {
+            if (reply.navigation != p.navigation || reply.request != p.request)
+                return;
+            p.cancelling = false;
+            p.mutating = false;
+            p.model.set_input_locked(false);
+            if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
+                p.error.clear();
+                // The old page is not a current listing after a successful
+                // mutation. Reopen the retained route through the worker so
+                // the UI never presents a stale post-mutation page.
+                if (!refresh(i))
+                    p.error = "Directory created; refresh could not be started";
+            } else {
+                p.error = reply.state == FilesPaneReplyState::Ready ? "Directory creation outcome unavailable"
+                                                                      : failure(reply);
+            }
+            labels();
+            return;
+        }
         if (reply.navigation != p.navigation || reply.request != p.request)
             return;
         const bool navigation = reply.request == reply.navigation;
@@ -1261,6 +1380,11 @@ struct FilesApp::State {
                 preview_dialog_window->close();
             return;
         }
+        if (create_directory_dialog && !create_directory_dialog->completed()) {
+            if (create_directory_window && !create_directory_lifetime.expired())
+                create_directory_window->close();
+            return;
+        }
         if (operation_review_dialog && !operation_review_dialog->completed()) {
             operation_review_dialog->close();
             return;
@@ -1372,6 +1496,9 @@ bool FilesApp::remove_bookmark(std::size_t pane) { return state_->remove_bookmar
 bool FilesApp::navigate_bookmark(std::size_t pane, std::size_t bookmark) {
     return state_->navigate_bookmark(pane, bookmark);
 }
+bool FilesApp::create_directory(std::size_t pane, ck::files::NativeName name) {
+    return state_->create_directory(pane, std::move(name));
+}
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
 }
@@ -1434,7 +1561,7 @@ bool FilesApp::pending(std::size_t pane) const {
 std::string FilesApp::status(std::size_t pane) const { return state_->status(pane); }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || p.navigating || p.changing || p.queued_view || p.previewing ||
+    if (state_->closing || p.navigating || p.changing || p.queued_view || p.previewing || p.mutating ||
         !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())

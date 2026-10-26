@@ -31,7 +31,8 @@ struct FilesAppTarget {
     FilesPaneTicket navigation;
     FilesPaneRowTarget row;
 };
-// Real read-only two-pane presentation. The composition root exclusively lends
+// Real two-pane presentation. Read operations and mutation requests stay on
+// workers; the composition root exclusively lends
 // two services and the standard Quit handler. It joins services OUTSIDE dispatch
 // after this controller withdraws callbacks. The host callback is restored on
 // destruction and must request outer-loop exit without joining workers itself.
@@ -61,6 +62,9 @@ class FilesApp final {
     bool add_bookmark(std::size_t pane);
     bool remove_bookmark(std::size_t pane);
     bool navigate_bookmark(std::size_t pane, std::size_t bookmark);
+    // Creates one exact native directory component relative to the pane's
+    // currently acknowledged route, then refreshes only after worker success.
+    bool create_directory(std::size_t pane, ck::files::NativeName name);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);
