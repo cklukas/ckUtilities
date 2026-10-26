@@ -92,6 +92,11 @@ class Source final : public BasicFileSystem {
   public:
     explicit Source(std::shared_ptr<Trace> trace) : trace_(std::move(trace)) {
         trace_->check();
+        // The production destination handoff explicitly opens the adapter's
+        // lexical namespace root for ancestry qualification. Keep the
+        // simulated backend rooted as well; binding only child paths would
+        // make a valid root proof look like a missing directory.
+        fs_.bind(take(address("").host_path()), fs_.make_node(ObjectKind::Directory));
         for (auto name : {"one", "two"}) {
             auto root = fs_.make_node(ObjectKind::Directory);
             fs_.bind(take(address(name).host_path()), root);
@@ -230,6 +235,7 @@ class ChildSource final : public BasicFileSystem {
   public:
     explicit ChildSource(std::shared_ptr<Trace> trace) : trace_(std::move(trace)) {
         trace_->check();
+        fs_.bind(take(address("").host_path()), fs_.make_node(ObjectKind::Directory));
         for (const auto root_name : {"one", "two"}) {
             auto root = fs_.make_node(ObjectKind::Directory);
             fs_.bind(take(address(root_name).host_path()), root);
