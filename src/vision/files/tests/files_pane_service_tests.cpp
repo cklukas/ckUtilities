@@ -1600,9 +1600,16 @@ CK_TEST(files_service_operation_handoffs_keep_native_sources_on_the_worker) {
         [&](Observation<FilesPaneOperationSources> result) {
             std::lock_guard lock(mutex);
             source_thread = std::this_thread::get_id();
-            source_ok = result.value() && result.value()->sources.size() == 1 &&
-                result.value()->sources.size() == result.value()->paths.size() &&
-                result.value()->sources.size() == result.value()->names.size();
+            source_ok = result.value() &&
+                ((result.value()->sources.size() == 1 &&
+                  result.value()->sources.size() == result.value()->paths.size() &&
+                  result.value()->sources.size() == result.value()->names.size() &&
+                  !result.value()->root_source && !result.value()->source_root &&
+                  !result.value()->source_path) ||
+                 (result.value()->sources.empty() && result.value()->paths.empty() &&
+                  result.value()->root_source && result.value()->source_root &&
+                  result.value()->source_path && result.value()->source_path->is_valid() &&
+                  result.value()->names.size() == 1));
             ++callbacks;
             condition.notify_all();
         });
