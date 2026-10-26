@@ -6523,6 +6523,17 @@ source tree, exact paths, and the task-owned `TMPDIR` are recorded in [macOS
 full-suite evidence](evidence/ck-utilities-macos-full-suite-20261026.json).
 
 
+## 2026-10-26 — macOS archive and all-utility terminal checkpoint
+
+The verified macOS Release tree produced a `ck-utilities-0.2.0-macos.tar.gz`
+archive. Extraction found ten executables, ten utility guides, and all 28
+generated screenshots; every executable passed `--version`. The real-PTY
+contract then passed **30/30** archive runs: all ten utilities under
+`xterm-256color`, `xterm`, and `vt100`, with resize, visible draw, `Alt+X`
+clean exit, and terminal-mode restoration. Archive provenance, hashes, exact
+paths, and the task-owned temporary root are in [macOS package evidence](evidence/ck-utilities-macos-package-20261026.json).
+
+
 ## 2026-10-26 — WP-08 interactive terminal checkpoint
 
 The project terminal-smoke verifier qualified the current `ck-files` Release

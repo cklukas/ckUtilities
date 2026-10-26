@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "75f6f7c49293262c4a6a54ab28f8ca820d2479c4",
+  "host": "macOS arm64",
+  "package": {
+    "path": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/ck-utilities-0.2.0-macos.tar.gz",
+    "sha256": "50d341490cacd47f675e6db220902fa7ac602f910d2ac80f24294a237a4e6ef9",
+    "bytes": 11696252,
+    "build_start": "2026-10-26T14:39:06+01:00",
+    "build_end": "2026-10-26T14:39:08+01:00",
+    "elapsed_seconds": 2
+  },
+  "temporary_root": "/Volumes/S8T/tmp/ckutilities-macos-package-20261026-01",
+  "extracted_root": "/Volumes/S8T/tmp/ckutilities-macos-package-20261026-01/extracted/ck-utilities-0.2.0-macos",
+  "payload": {
+    "executables": 10,
+    "guides": 10,
+    "screenshots": 28,
+    "version_checks": "10/10 passed"
+  },
+  "terminal_contract": {
+    "utilities": ["ck-utilities", "ck-json-view", "ck-find", "ck-du", "ck-config", "ck-edit", "ck-chat", "ck-todo", "ck-sysmon", "ck-files"],
+    "profiles": ["xterm-256color", "xterm", "vt100"],
+    "runs": 30,
+    "passed": 30,
+    "checks": ["real PTY launch", "visible draw", "30x100 resize", "Alt+X clean exit", "terminal mode restoration"]
+  },
+  "result": "passed"
+}
