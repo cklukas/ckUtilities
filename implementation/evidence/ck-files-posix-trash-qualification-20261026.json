@@ -1,0 +1,50 @@
+{
+  "milestone": "POSIX native Trash transaction and mount-specific location checkpoint",
+  "implementation_commits": ["f335aa0", "67ac33b"],
+  "date": "2026-10-26",
+  "contract": [
+    "Trash is a separate worker mutation and never falls back to permanent deletion.",
+    "The source name is resolved relative to a held directory descriptor with final-link refusal and expected-identity revalidation.",
+    "The POSIX adapter publishes restore metadata before the native no-replace rename and retains the source if preparation fails.",
+    "Home/XDG Trash and mount-specific .Trash-$uid/.Trashes/$uid locations are selected only after a same-device check; unsupported or uncertain locations remain explicit."
+  ],
+  "qualification": {
+    "macos": {
+      "build_output": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build",
+      "build_window": "2026-10-26T16:23:46+01:00 to 2026-10-26T16:23:50+01:00",
+      "tests": [
+        "ck_vision_files_tests: 223/223 passed",
+        "files_service_trash_uses_native_metadata_and_removes_source: passed"
+      ],
+      "fixture": "isolated HOME under /Volumes/S8T/tmp; source remained outside the fake home on the same APFS volume",
+      "trash_behavior": "Qualified for the home-volume macOS Trash layout with restore metadata and verified source identity after publication"
+    },
+    "linux_arm64_rpi4": {
+      "build_output": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build",
+      "build_window": "2026-10-26T16:24:24+01:00 to 2026-10-26T16:25:44+01:00",
+      "tests": [
+        "ck_vision_files_tests: focused Trash case passed",
+        "full CTest: 222/222 passed",
+        "files_service_trash_uses_native_metadata_and_removes_source: passed"
+      ],
+      "fixture": "isolated HOME and XDG_DATA_HOME under the task scratch tree",
+      "trash_behavior": "Qualified for the same-device freedesktop Trash layout with files/info and .trashinfo restore metadata; mount-specific code is implemented but requires an independently provisioned writable foreign-volume fixture"
+    },
+    "windows_x64_workstation": {
+      "toolset": "MSVC v143 14.44.35207",
+      "development_drive": "V:",
+      "installed_application": "V:\\dev\\ckutilities-install-goal-20261026\\bin\\ck-files.exe",
+      "verification": [
+        "V: available with TEMP/TMP/TMPDIR under V:\\tmp\\ckutilities-trash-20261026-01",
+        "10 installed utility executables report version 0.2.0 (ckVision 1.4.0)",
+        "installed documentation contains 10 tool guides and 28 SVG screenshots"
+      ],
+      "trash_behavior": "Windows Recycle Bin qualification remains recorded in the prior package evidence"
+    }
+  },
+  "remaining_scope": [
+    "Provision and qualify writable foreign-volume fixtures for Linux .Trash-$uid and macOS .Trashes/$uid paths.",
+    "Qualify native restore/recovery execution, controlled fault injection, sanitizer/race runs, and full filesystem-driver coverage.",
+    "Complete final mouse/restricted-key and real-window interactive acceptance."
+  ]
+}

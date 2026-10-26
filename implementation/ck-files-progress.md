@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 67ac33b POSIX native Trash checkpoint
+
+Commit `f335aa0` implements the POSIX worker-side Trash transaction for macOS
+and Linux. Commit `67ac33b` adds same-device selection for the home/XDG Trash
+and mount-specific `.Trash-$uid` / `.Trashes/$uid` layouts. The adapter walks
+absolute Trash components through held directory descriptors with
+`O_NOFOLLOW`, writes restore metadata before mutation, uses the native
+no-replace rename primitive, verifies the published identity, and never falls
+back to permanent deletion.
+
+Qualification passed on macOS with the isolated HOME fixture: the focused
+Trash service case and the full current **223/223** CTest suite. Linux ARM64
+passed the focused case and the full current **222/222** CTest suite. The
+Windows `V:` workstation install was rechecked with all ten utility versions,
+ten guides, and 28 screenshots present. A writable foreign-volume fixture is
+still required before claiming the mount-specific branches qualified.
+
+Evidence: [POSIX Trash qualification record](evidence/ck-files-posix-trash-qualification-20261026.json).
+
 ## 2026-10-26 — e959a08 / d51b53e recursive move and terminal acceptance checkpoints
 
 Recursive directory Move is now routed through the qualified operation path. A

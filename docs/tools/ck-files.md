@@ -84,15 +84,17 @@ ckVision's Right-to-accept behavior.
 The Files implementation is cross-platform and refuses unsupported operations
 explicitly. Current qualification records document the exact platform matrix:
 Windows has qualified Recycle Bin and regular-file/empty-directory retirement;
-the current macOS and Linux adapters retain sources for unsupported Trash or
-permanent source-retirement paths. The current macOS terminal verifier has
+macOS and Linux now qualify same-device native Trash transactions with restore
+metadata; foreign-volume mount-specific paths are implemented but still need
+dedicated writable-volume qualification. POSIX permanent source-retirement
+remains explicitly unsupported. The current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
 profiles pass for all ten utilities in the Linux aarch64 archive. This is still
 an implementation checkpoint, not a claim that every release gate is complete:
-native macOS/Linux Trash, recovery execution, full filesystem-matrix coverage,
-and final mouse/restricted-key acceptance remain tracked work.
+foreign-volume Trash qualification, recovery execution, full filesystem-matrix
+coverage, and final mouse/restricted-key acceptance remain tracked work.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and
