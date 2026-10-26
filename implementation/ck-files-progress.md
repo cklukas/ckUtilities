@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — macOS real-terminal `ck-files` move smoke
+
+The exact freshly built executable
+`/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/bin/ck-files`
+was launched once in a real PTY with two task-owned directories. The actual
+terminal UI rendered both panes and the Files menu; F6 opened the review
+dialog, the reviewed move completed, and the process exited through the
+application quit path. Independent filesystem inspection found the source
+absent and the destination present, and exact-process inspection found no
+remaining instance.
+
+This is a macOS terminal smoke acceptance, not release completion. Windows
+and Linux real-terminal acceptance, full interactive workflows, Trash/delete,
+recursive operations, recovery execution and sanitizer/race gates remain open.
+
+Evidence: [macOS interactive move record](evidence/ck-files-interactive-move-20261026.json).
+
 ## 2026-10-26 — b92aca0 worker-owned rename acceptance checkpoint
 
 The Files app now has an end-to-end acceptance case for Rename: the strict

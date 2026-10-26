@@ -1,0 +1,25 @@
+{
+  "milestone": "WP-02/WP-05 macOS real-terminal Files smoke",
+  "date": "2026-10-26",
+  "executable": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/bin/ck-files",
+  "source_commit": "5b3575a",
+  "fixture": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/interactive-20261026-01",
+  "environment": {
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp",
+    "left": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/interactive-20261026-01/left",
+    "right": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/interactive-20261026-01/right"
+  },
+  "checks": [
+    "Fresh target built after the current source checkpoint.",
+    "The exact executable launched in a PTY and rendered the two-pane Files UI.",
+    "F6 opened the visible review dialog.",
+    "The reviewed move removed left/demo.txt and created right/demo.txt.",
+    "The exact executable exited through the application quit path; no matching process remained."
+  ],
+  "result": "passed",
+  "not_claimed": [
+    "Windows or Linux real-terminal acceptance",
+    "Release packaging or installed executable verification",
+    "Recursive operations, Trash/delete, recovery execution or sanitizer/race gates"
+  ]
+}
