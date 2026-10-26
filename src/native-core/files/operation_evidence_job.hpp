@@ -31,9 +31,9 @@ struct OperationEvidenceJobLimits final {
 
 // All native owners in this request must already be held by the worker that
 // creates it. The job never reconstructs a path from display text and never
-// performs a mutation. destination_names are exact native components in the
-// same order as the eventual recursive inventory entries; mapping policy is
-// supplied explicitly by the caller.
+// performs a mutation. For a recursive request destination_names contains the
+// one exact native destination name for the source root; descendant names are
+// retained by the frozen inventory and mapped under their resolved parent.
 struct OperationEvidenceJobRequest final {
     FileOperation operation = FileOperation::Copy;
     HeldChild::Pointer root_source;
@@ -103,7 +103,7 @@ public:
 
 private:
     enum class Phase { FlatInventory, Recursive, Object, DestinationInventory, DestinationAssessment,
-        DestinationBatch, SourceTarget, Ancestry, Seal };
+        DestinationParentMapping, DestinationBatch, SourceTarget, Ancestry, Seal };
 
     void fail(UnavailableObservation failure) noexcept;
     void release_staging() noexcept;
@@ -111,6 +111,7 @@ private:
     void advance_flat_inventory();
     void advance_object(std::stop_token stop);
     void advance_destination_inventory(std::stop_token stop);
+    void advance_destination_parent_mapping(std::stop_token stop);
     void advance_destination_batch(std::stop_token stop);
     void advance_source_target(std::stop_token stop);
     void advance_ancestry(std::stop_token stop);
@@ -124,6 +125,9 @@ private:
     std::unique_ptr<DirectoryInventoryJob> destination_inventory_;
     DirectoryInventoryJob::Result destination_inventory_result_;
     DestinationDirectoryAssessment::Pointer destination_assessment_;
+    std::vector<std::shared_ptr<const DirectoryCursor>> destination_parent_directories_;
+    std::vector<std::shared_ptr<const DirectoryCursor>> destination_directory_children_;
+    std::vector<NativeName> destination_leaf_names_;
     std::unique_ptr<DestinationBatchJob> destination_batch_;
     DestinationBatchJob::Result destination_batch_result_;
     std::unique_ptr<SourceTargetJob> source_target_;
@@ -133,6 +137,7 @@ private:
     std::vector<DestinationCapabilityEvidence> destination_capabilities_;
     std::size_t next_object_ = 0;
     std::size_t next_flat_ = 0;
+    std::size_t next_destination_parent_ = 0;
     std::size_t next_ancestry_ = 0;
     Phase phase_ = Phase::Recursive;
     OperationEvidenceJobState state_ = OperationEvidenceJobState::Collecting;

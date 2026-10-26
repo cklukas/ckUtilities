@@ -8,6 +8,11 @@ namespace {
 UnavailableObservation limit_error(const char* operation) {
     return {ObservationState::Failed, {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), operation}};
 }
+std::shared_ptr<const DirectoryCursor> first_parent(
+    const std::vector<std::shared_ptr<const DirectoryCursor>>& parents) {
+    for (const auto& parent : parents) if (parent) return parent;
+    return {};
+}
 }
 const DestinationEntryInspection* CompletedDestinationBatch::leader(std::size_t row) const noexcept {
     if (row >= entries_.size() || !entries_[row].exact_name_leader) return nullptr;
@@ -27,8 +32,22 @@ std::optional<std::size_t> CompletedDestinationBatch::reported_object_leader(std
 }
 DestinationBatchJob::DestinationBatchJob(std::shared_ptr<const DirectoryCursor> directory, std::vector<NativeName> names,
     NameEncoding destination_encoding, DestinationBatchLimits limits, std::shared_ptr<const MonotonicClock> clock)
-    : directory_(std::move(directory)), names_(std::move(names)), encoding_(destination_encoding), limits_(limits), clock_(std::move(clock)) {
-    if (!directory_ || !clock_ || (encoding_ != NameEncoding::PosixBytes && encoding_ != NameEncoding::WindowsUtf16) ||
+    : parent_directories_(names.size(), directory), root_directory_(directory), names_(std::move(names)), encoding_(destination_encoding),
+      limits_(limits), clock_(std::move(clock)) {
+    if (!directory || !clock_ || (encoding_ != NameEncoding::PosixBytes && encoding_ != NameEncoding::WindowsUtf16) ||
+        limits.rows == 0 || limits.rows > DestinationBatchLimits::hard_rows || limits.name_bytes == 0 ||
+        limits.name_bytes > DestinationBatchLimits::hard_name_bytes || limits.component_bytes == 0 ||
+        limits.component_bytes > NameMappingLimits::hard_native_bytes || limits.time_slice <= MonotonicClock::Duration::zero() ||
+        limits.time_slice > std::chrono::seconds(1)) throw std::invalid_argument("invalid destination batch job");
+    if (names_.size() > limits.rows) fail(limit_error("destination_batch.rows"));
+}
+DestinationBatchJob::DestinationBatchJob(std::vector<std::shared_ptr<const DirectoryCursor>> parent_directories,
+    std::vector<NativeName> names, NameEncoding destination_encoding, DestinationBatchLimits limits,
+    std::shared_ptr<const MonotonicClock> clock)
+    : parent_directories_(std::move(parent_directories)), root_directory_(first_parent(parent_directories_)),
+      names_(std::move(names)), encoding_(destination_encoding),
+      limits_(limits), clock_(std::move(clock)) {
+    if (parent_directories_.size() != names_.size() || !clock_ || (encoding_ != NameEncoding::PosixBytes && encoding_ != NameEncoding::WindowsUtf16) ||
         limits.rows == 0 || limits.rows > DestinationBatchLimits::hard_rows || limits.name_bytes == 0 ||
         limits.name_bytes > DestinationBatchLimits::hard_name_bytes || limits.component_bytes == 0 ||
         limits.component_bytes > NameMappingLimits::hard_native_bytes || limits.time_slice <= MonotonicClock::Duration::zero() ||
@@ -36,7 +55,9 @@ DestinationBatchJob::DestinationBatchJob(std::shared_ptr<const DirectoryCursor> 
     if (names_.size() > limits.rows) fail(limit_error("destination_batch.rows"));
 }
 void DestinationBatchJob::release_staging() noexcept {
-    directory_.reset(); std::vector<NativeName>{}.swap(names_); std::vector<DestinationEntryInspection>{}.swap(entries_);
+    std::vector<std::shared_ptr<const DirectoryCursor>>{}.swap(parent_directories_);
+    root_directory_.reset();
+    std::vector<NativeName>{}.swap(names_); std::vector<DestinationEntryInspection>{}.swap(entries_);
     names_index_.clear(); objects_.clear(); bucket_ = nullptr;
 }
 void DestinationBatchJob::fail(UnavailableObservation detail) noexcept {
@@ -75,12 +96,17 @@ void DestinationBatchJob::step(std::stop_token stop) {
         DestinationEntryInspection entry(std::move(names_[next_]));
         if (mapped.value()) {
             if (!retain_name(*mapped.value())) return;
-            const auto found = names_index_.find(*mapped.value());
+            const auto found = parent_directories_[next_]
+                ? names_index_.find(ScopedNameKey{parent_directories_[next_].get(), *mapped.value()})
+                : names_index_.end();
             if (found == names_index_.end()) {
                 // Reserve once during mapping, never again on a paused retry.
                 // Index key + probe requested name + lookup context name.
                 for (int copy = 0; copy < 3; ++copy) if (!retain_name(*mapped.value())) return;
-                names_index_.emplace(*mapped.value(), next_); entry.exact_name_leader = next_; entry.exact_name_count = 1;
+                if (parent_directories_[next_]) {
+                    names_index_.emplace(ScopedNameKey{parent_directories_[next_].get(), *mapped.value()}, next_);
+                }
+                entry.exact_name_leader = next_; entry.exact_name_count = 1;
             } else { entry.exact_name_leader = found->second; ++entries_[found->second].exact_name_count; }
         }
         entry.mapped = std::move(mapped); entries_.push_back(std::move(entry)); ++next_; break;
@@ -89,8 +115,15 @@ void DestinationBatchJob::step(std::stop_token stop) {
         if (next_ == entries_.size()) { next_ = 0; phase_ = Phase::Group; break; }
         auto& entry = entries_[next_];
         if (entry.exact_name_leader && *entry.exact_name_leader == next_) {
-            auto probed = DirectoryEntryProbe::inspect(directory_, *entry.mapped.value(), ChildLookupMode::NativeDefault,
-                {limits_.component_bytes}, stop);
+            if (!parent_directories_[next_]) {
+                entry.probe_failure = {ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable),
+                     "destination_batch.parent_unavailable"}};
+                ++next_;
+                break;
+            }
+            auto probed = DirectoryEntryProbe::inspect(parent_directories_[next_], *entry.mapped.value(),
+                ChildLookupMode::NativeDefault, {limits_.component_bytes}, stop);
             if (!probed.value() && stop.stop_requested()) { state_ = DestinationBatchState::Paused; return; }
             if (probed.value()) entry.probe = std::move(probed).take_value();
             else entry.probe_failure = *probed.unavailable_detail();
@@ -127,7 +160,8 @@ DestinationBatchState DestinationBatchJob::advance(std::stop_token stop) {
             state_ = DestinationBatchState::Collecting;
             if (*expired.value()) return state_;
             if (phase_ == Phase::Seal) {
-                completed_ = Result(new const CompletedDestinationBatch(directory_, std::move(entries_)));
+                completed_ = Result(new const CompletedDestinationBatch(std::move(root_directory_),
+                    std::move(parent_directories_), std::move(entries_)));
                 release_staging(); state_ = DestinationBatchState::Complete; return state_;
             }
             step(stop); if (state_ != DestinationBatchState::Collecting) return state_;

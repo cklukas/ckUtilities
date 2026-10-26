@@ -60,7 +60,7 @@ CK_TEST(operation_evidence_job_composes_recursive_objects_destination_and_topolo
     request.source_root = std::move(source_cursor);
     request.source_path = path("/operation-evidence-source/root");
     request.destination = std::move(destination_cursor);
-    request.destination_names = {name("root"), name("file")};
+    request.destination_names = {name("root")};
     request.clock = fs.clock();
     request.limits.max_items = 2;
     request.limits.destination_batch.rows = 2;
@@ -71,9 +71,106 @@ CK_TEST(operation_evidence_job_composes_recursive_objects_destination_and_topolo
     CK_CHECK(result->inventory() && result->inventory()->entries().size() == 2);
     CK_CHECK(result->source_objects().size() == 2);
     CK_CHECK(result->destination_batch() && result->destination_batch()->entries().size() == 2);
+    CK_CHECK(result->destination_batch()->parent_directories().size() == 2);
+    CK_CHECK(result->destination_batch()->parent_directories()[0] == result->destination_batch()->pin_directory());
+    CK_CHECK(!result->destination_batch()->parent_directories()[1]);
+    CK_CHECK(result->destination_batch()->probe_failure(1));
     CK_CHECK(result->source_target().size() == 2 && result->ancestry().size() == 2);
     CK_CHECK(result->destination_capabilities().size() == destination_advertised_features.size());
     CK_CHECK(job.advance() == OperationEvidenceJobState::Complete);
+}
+
+CK_TEST(operation_evidence_job_maps_recursive_rows_under_their_held_destination_parents) {
+    FS fs;
+    auto source_parent = fs.make_node(ObjectKind::Directory);
+    auto source_root = fs.make_node(ObjectKind::Directory);
+    auto source_directory = fs.make_node(ObjectKind::Directory);
+    auto source_file = fs.make_node(ObjectKind::RegularFile);
+    auto destination = fs.make_node(ObjectKind::Directory);
+    auto destination_root = fs.make_node(ObjectKind::Directory);
+    auto destination_directory = fs.make_node(ObjectKind::Directory);
+    auto destination_file = fs.make_node(ObjectKind::RegularFile);
+    fs.bind("/operation-evidence-tree-source", source_parent);
+    fs.bind("/operation-evidence-tree-destination", destination);
+    fs.put(source_parent, name("root"), source_root);
+    fs.put(source_root, name("directory"), source_directory);
+    fs.put(source_directory, name("file"), source_file);
+    fs.put(destination, name("root"), destination_root);
+    fs.put(destination_root, name("directory"), destination_directory);
+    fs.put(destination_directory, name("file"), destination_file);
+    for (const auto& node : {source_root, source_directory, source_file}) {
+        fs.metadata(node).logical_size = Observation<std::uint64_t>::available(0);
+        fs.metadata(node).mount_id = Observation<std::uint64_t>::available(1);
+    }
+    fs.metadata(source_file).logical_size = Observation<std::uint64_t>::available(4);
+
+    std::shared_ptr<const DirectoryCursor> source_parent_cursor(take(fs.open_directory("/operation-evidence-tree-source")));
+    auto root_source = take(HeldChild::observe(source_parent_cursor, name("root")));
+    auto source_cursor = std::shared_ptr<DirectoryCursor>(take(source_parent_cursor->open_directory_child(name("root"))));
+    std::shared_ptr<const DirectoryCursor> destination_cursor(take(fs.open_directory("/operation-evidence-tree-destination")));
+
+    OperationEvidenceJobRequest request;
+    request.root_source = std::move(root_source);
+    request.source_root = std::move(source_cursor);
+    request.source_path = path("/operation-evidence-tree-source/root");
+    request.destination = std::move(destination_cursor);
+    request.destination_names = {name("root")};
+    request.clock = fs.clock();
+    request.limits.max_items = 3;
+    request.limits.destination_batch.rows = 3;
+    request.limits.source_target.rows = 3;
+
+    OperationEvidenceJob job(std::move(request));
+    const auto result = finish(job);
+    const auto& batch = *result->destination_batch();
+    CK_CHECK(batch.entries().size() == 3);
+    CK_CHECK(batch.parent_directories().size() == 3);
+    CK_CHECK(batch.parent_directories()[0] == batch.pin_directory());
+    CK_CHECK(batch.parent_directories()[1] && batch.parent_directories()[1] != batch.pin_directory());
+    CK_CHECK(batch.parent_directories()[2] && batch.parent_directories()[2] != batch.parent_directories()[1]);
+    CK_CHECK(batch.probe(0) && batch.probe(0)->lookup().value()->state() == ChildLookupState::Found);
+    CK_CHECK(batch.probe(1) && batch.probe(1)->lookup().value()->state() == ChildLookupState::Found);
+    CK_CHECK(batch.probe(2) && batch.probe(2)->lookup().value()->state() == ChildLookupState::Found);
+}
+
+CK_TEST(operation_evidence_job_keeps_descendants_unknown_when_a_destination_parent_is_a_file) {
+    FS fs;
+    auto source_parent = fs.make_node(ObjectKind::Directory);
+    auto source_root = fs.make_node(ObjectKind::Directory);
+    auto source_file = fs.make_node(ObjectKind::RegularFile);
+    auto destination = fs.make_node(ObjectKind::Directory);
+    auto blocking_file = fs.make_node(ObjectKind::RegularFile);
+    fs.bind("/operation-evidence-blocking-source", source_parent);
+    fs.bind("/operation-evidence-blocking-destination", destination);
+    fs.put(source_parent, name("root"), source_root);
+    fs.put(source_root, name("file"), source_file);
+    fs.put(destination, name("root"), blocking_file);
+    for (const auto& node : {source_root, source_file}) {
+        fs.metadata(node).logical_size = Observation<std::uint64_t>::available(0);
+        fs.metadata(node).mount_id = Observation<std::uint64_t>::available(1);
+    }
+
+    std::shared_ptr<const DirectoryCursor> source_parent_cursor(take(fs.open_directory("/operation-evidence-blocking-source")));
+    auto root_source = take(HeldChild::observe(source_parent_cursor, name("root")));
+    auto source_cursor = std::shared_ptr<DirectoryCursor>(take(source_parent_cursor->open_directory_child(name("root"))));
+    std::shared_ptr<const DirectoryCursor> destination_cursor(take(fs.open_directory("/operation-evidence-blocking-destination")));
+    OperationEvidenceJobRequest request;
+    request.root_source = std::move(root_source);
+    request.source_root = std::move(source_cursor);
+    request.source_path = path("/operation-evidence-blocking-source/root");
+    request.destination = std::move(destination_cursor);
+    request.destination_names = {name("root")};
+    request.clock = fs.clock();
+    request.limits.max_items = 2;
+    request.limits.destination_batch.rows = 2;
+    request.limits.source_target.rows = 2;
+
+    OperationEvidenceJob job(std::move(request));
+    const auto result = finish(job);
+    const auto& batch = *result->destination_batch();
+    CK_CHECK(batch.probe(0) && batch.probe(0)->existing_metadata().value()->kind.value() &&
+        *batch.probe(0)->existing_metadata().value()->kind.value() == ObjectKind::RegularFile);
+    CK_CHECK(!batch.parent_directories()[1] && batch.probe_failure(1));
 }
 
 CK_TEST(operation_evidence_job_composes_direct_held_sources_without_reopening_paths) {

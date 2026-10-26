@@ -21,6 +21,13 @@ Observation<T> unavailable(const UnavailableObservation& detail) {
     return Observation<T>::unavailable(detail.state, detail.error);
 }
 
+bool same_components(const std::vector<NativeName>& left, const std::vector<NativeName>& right) noexcept {
+    if (left.size() != right.size()) return false;
+    for (std::size_t index = 0; index < left.size(); ++index)
+        if (left[index] != right[index]) return false;
+    return true;
+}
+
 } // namespace
 
 OperationEvidenceJob::OperationEvidenceJob(OperationEvidenceJobRequest request)
@@ -56,6 +63,9 @@ void OperationEvidenceJob::release_staging() noexcept {
     destination_inventory_.reset();
     destination_inventory_result_.reset();
     destination_assessment_.reset();
+    destination_parent_directories_.clear();
+    destination_directory_children_.clear();
+    destination_leaf_names_.clear();
     destination_batch_.reset();
     destination_batch_result_.reset();
     source_target_.reset();
@@ -63,7 +73,7 @@ void OperationEvidenceJob::release_staging() noexcept {
     ancestry_.reset();
     ancestry_results_.clear();
     destination_capabilities_.clear();
-    next_object_ = next_flat_ = next_ancestry_ = 0;
+    next_object_ = next_flat_ = next_destination_parent_ = next_ancestry_ = 0;
 }
 
 void OperationEvidenceJob::fail(UnavailableObservation failure) noexcept {
@@ -95,7 +105,7 @@ void OperationEvidenceJob::advance_recursive(std::stop_token stop) {
     recursive_result_ = std::move(completed).take_value();
     if (!recursive_result_->inventory() ||
         recursive_result_->sources().size() != recursive_result_->inventory()->entries().size() ||
-        request_.destination_names.size() != recursive_result_->inventory()->entries().size()) {
+        request_.destination_names.size() != 1) {
         fail(error(AdapterError::PlanInvalid, "operation_evidence.inventory_shape"));
         return;
     }
@@ -110,6 +120,24 @@ void OperationEvidenceJob::advance_recursive(std::stop_token stop) {
         fail(error(AdapterError::InventoryLimit, "operation_evidence.stage_rows", ObservationState::Unknown));
         return;
     }
+    destination_leaf_names_.reserve(recursive_result_->inventory()->entries().size());
+    for (std::size_t item = 0; item < recursive_result_->inventory()->entries().size(); ++item) {
+        const auto& relative = recursive_result_->inventory()->entries()[item].relative_components;
+        if (item == 0) {
+            if (!relative.empty()) {
+                fail(error(AdapterError::PlanInvalid, "operation_evidence.root_components"));
+                return;
+            }
+            destination_leaf_names_.push_back(request_.destination_names.front());
+        } else if (relative.empty() || !relative.back().is_valid()) {
+            fail(error(AdapterError::PlanInvalid, "operation_evidence.destination_components"));
+            return;
+        } else {
+            destination_leaf_names_.push_back(relative.back());
+        }
+    }
+    destination_parent_directories_.assign(destination_leaf_names_.size(), {});
+    destination_directory_children_.assign(destination_leaf_names_.size(), {});
     source_objects_.reserve(recursive_result_->sources().size());
     phase_ = Phase::Object;
 }
@@ -217,6 +245,72 @@ void OperationEvidenceJob::advance_destination_inventory(std::stop_token stop) {
     }
     destination_inventory_result_ = std::move(completed).take_value();
     phase_ = Phase::DestinationAssessment;
+}
+
+void OperationEvidenceJob::advance_destination_parent_mapping(std::stop_token stop) {
+    if (next_destination_parent_ == destination_leaf_names_.size()) {
+        destination_batch_ = std::make_unique<DestinationBatchJob>(std::move(destination_parent_directories_),
+            std::move(destination_leaf_names_), request_.destination_encoding,
+            request_.limits.destination_batch, request_.clock);
+        phase_ = Phase::DestinationBatch;
+        return;
+    }
+    if (stop.stop_requested()) {
+        state_ = OperationEvidenceJobState::Paused;
+        return;
+    }
+
+    const auto& entries = recursive_result_->inventory()->entries();
+    const auto item = next_destination_parent_;
+    const auto& relative = entries[item].relative_components;
+    std::shared_ptr<const DirectoryCursor> parent;
+    if (item == 0) {
+        parent = request_.destination;
+    } else {
+        if (relative.empty()) {
+            fail(error(AdapterError::PlanInvalid, "operation_evidence.destination_parent"));
+            return;
+        }
+        std::vector<NativeName> parent_components(relative.begin(), relative.end() - 1);
+        std::optional<std::size_t> parent_item;
+        for (std::size_t candidate = 0; candidate < item; ++candidate) {
+            if (entries[candidate].kind == ObjectKind::Directory &&
+                same_components(entries[candidate].relative_components, parent_components)) {
+                parent_item = candidate;
+                break;
+            }
+        }
+        if (parent_item) parent = destination_directory_children_[*parent_item];
+    }
+    destination_parent_directories_[item] = parent;
+
+    if (parent && entries[item].kind == ObjectKind::Directory) {
+        auto mapped = map_native_name(destination_leaf_names_[item], request_.destination_encoding,
+            {request_.limits.destination_batch.component_bytes});
+        if (mapped.value()) {
+            auto probe = DirectoryEntryProbe::inspect(parent, *mapped.value(), ChildLookupMode::NativeDefault,
+                {request_.limits.destination_batch.component_bytes}, stop);
+            if (!probe.value() && stop.stop_requested()) {
+                state_ = OperationEvidenceJobState::Paused;
+                return;
+            }
+            const auto* inspected = probe.value() ? probe.value()->get() : nullptr;
+            if (inspected && inspected->lookup().value() &&
+                inspected->lookup().value()->state() == ChildLookupState::Found &&
+                inspected->lookup().value()->entry() && inspected->existing_metadata().value() &&
+                inspected->existing_metadata().value()->kind.value() &&
+                *inspected->existing_metadata().value()->kind.value() == ObjectKind::Directory) {
+                auto child = parent->open_directory_child(*mapped.value());
+                if (child.value() && (*child.value())->identity().value() &&
+                    inspected->existing_metadata().value()->identity.value() &&
+                    compare_identity(*(*child.value())->identity().value(),
+                        *inspected->existing_metadata().value()->identity.value()) == IdentityComparison::Same) {
+                    destination_directory_children_[item] = std::shared_ptr<const DirectoryCursor>(std::move(child).take_value());
+                }
+            }
+        }
+    }
+    ++next_destination_parent_;
 }
 
 void OperationEvidenceJob::advance_destination_batch(std::stop_token stop) {
@@ -333,9 +427,12 @@ OperationEvidenceJobState OperationEvidenceJob::advance(std::stop_token stop) {
             }
             destination_assessment_ = std::move(assessment).take_value();
             destination_capabilities_ = PreservationCapabilityDiff::from_destination_assessment(*destination_assessment_);
-            phase_ = Phase::DestinationBatch;
+            phase_ = request_.root_source ? Phase::DestinationParentMapping : Phase::DestinationBatch;
             break;
         }
+        case Phase::DestinationParentMapping:
+            advance_destination_parent_mapping(stop);
+            break;
         case Phase::DestinationBatch:
             advance_destination_batch(stop);
             break;
@@ -367,6 +464,7 @@ OperationEvidenceJobState OperationEvidenceJob::advance(std::stop_token stop) {
         case Phase::Object: operation = "operation_evidence.object_exception"; break;
         case Phase::DestinationInventory: operation = "operation_evidence.destination_inventory_exception"; break;
         case Phase::DestinationAssessment: operation = "operation_evidence.destination_assessment_exception"; break;
+        case Phase::DestinationParentMapping: operation = "operation_evidence.destination_parent_exception"; break;
         case Phase::DestinationBatch: operation = "operation_evidence.destination_batch_exception"; break;
         case Phase::SourceTarget: operation = "operation_evidence.source_target_exception"; break;
         case Phase::Ancestry: operation = "operation_evidence.ancestry_exception"; break;

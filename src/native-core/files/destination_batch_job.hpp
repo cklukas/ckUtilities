@@ -4,6 +4,7 @@
 #include "directory_entry_probe.hpp"
 #include "name_mapping.hpp"
 #include "monotonic_clock.hpp"
+#include <functional>
 #include <map>
 #include <tuple>
 
@@ -42,13 +43,20 @@ public:
     std::optional<std::size_t> reported_object_leader(std::size_t row) const noexcept;
     // Retains the actual parent even when all lookups are Missing/unavailable.
     // Queries and final owner retirement belong on workers.
-    std::shared_ptr<const DirectoryCursor> pin_directory() const { return directory_; }
+    std::shared_ptr<const DirectoryCursor> pin_directory() const { return root_directory_; }
+    const std::vector<std::shared_ptr<const DirectoryCursor>>& parent_directories() const noexcept {
+        return parent_directories_;
+    }
 private:
     friend class DestinationBatchJob;
-    CompletedDestinationBatch(std::shared_ptr<const DirectoryCursor> directory, std::vector<DestinationEntryInspection> entries) noexcept
-        : directory_(std::move(directory)), entries_(std::move(entries)) {}
+    CompletedDestinationBatch(std::shared_ptr<const DirectoryCursor> root_directory,
+        std::vector<std::shared_ptr<const DirectoryCursor>> parent_directories,
+        std::vector<DestinationEntryInspection> entries) noexcept
+        : root_directory_(std::move(root_directory)), parent_directories_(std::move(parent_directories)),
+          entries_(std::move(entries)) {}
     const DestinationEntryInspection* leader(std::size_t row) const noexcept;
-    std::shared_ptr<const DirectoryCursor> directory_;
+    std::shared_ptr<const DirectoryCursor> root_directory_;
+    std::vector<std::shared_ptr<const DirectoryCursor>> parent_directories_;
     std::vector<DestinationEntryInspection> entries_;
 };
 enum class DestinationBatchState { Collecting, Paused, Complete, Failed, Abandoned };
@@ -64,6 +72,9 @@ public:
     DestinationBatchJob(std::shared_ptr<const DirectoryCursor> directory, std::vector<NativeName> names,
         NameEncoding destination_encoding, DestinationBatchLimits limits = {},
         std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
+    DestinationBatchJob(std::vector<std::shared_ptr<const DirectoryCursor>> parent_directories,
+        std::vector<NativeName> names, NameEncoding destination_encoding, DestinationBatchLimits limits = {},
+        std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
     DestinationBatchJob(const DestinationBatchJob&) = delete;
     DestinationBatchJob& operator=(const DestinationBatchJob&) = delete;
     DestinationBatchState advance(std::stop_token stop = {});
@@ -76,19 +87,30 @@ private:
     // Scope is deliberately not ordered or hashed. Exact key buckets are only
     // an index; compare_identity still qualifies every positive match.
     using IdentityKey = std::tuple<IdentityScheme, std::array<std::byte, 16>, std::array<std::byte, 16>, std::optional<std::uint64_t>>;
+    struct ScopedNameKey final {
+        const DirectoryCursor* parent = nullptr;
+        NativeName name;
+    };
+    struct ScopedNameLess final {
+        bool operator()(const ScopedNameKey& left, const ScopedNameKey& right) const noexcept {
+            if (left.parent != right.parent) return std::less<const DirectoryCursor*>{}(left.parent, right.parent);
+            return compare_native_names(left.name, right.name) < 0;
+        }
+    };
     void fail(UnavailableObservation error) noexcept;
     void release_staging() noexcept;
     bool retain_name(const NativeName& name);
     const ObjectIdentity* identity(std::size_t row) const noexcept;
     void step(std::stop_token stop);
-    std::shared_ptr<const DirectoryCursor> directory_;
+    std::vector<std::shared_ptr<const DirectoryCursor>> parent_directories_;
+    std::shared_ptr<const DirectoryCursor> root_directory_;
     std::vector<NativeName> names_;
     NameEncoding encoding_;
     DestinationBatchLimits limits_;
     std::shared_ptr<const MonotonicClock> clock_;
     std::optional<MonotonicClock::TimePoint> last_reading_;
     std::vector<DestinationEntryInspection> entries_;
-    std::map<NativeName, std::size_t, NativeNameLess> names_index_;
+    std::map<ScopedNameKey, std::size_t, ScopedNameLess> names_index_;
     std::map<IdentityKey, std::vector<std::size_t>> objects_;
     std::vector<std::size_t>* bucket_ = nullptr;
     std::size_t next_ = 0, candidate_ = 0, bytes_ = 0;
