@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "host": "Windows workstation",
+  "toolset": "MSVC v143 14.44.35207",
+  "source": "V:\\dev\\ckutilities",
+  "build": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe",
+  "install": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
+  "build_configuration": "Release/Visual Studio 17 2022 x64",
+  "build_timestamp": "2026-10-26 10:07 AM",
+  "sha256": "fbade64b25823fcfb6f001e0a12a86913c8b9c1b6abe82a15bbe5483129b12a3",
+  "build_size_bytes": 2796544,
+  "installed_size_bytes": 2796544,
+  "byte_identity_verified": true,
+  "install_note": "The Runtime install placed ck-files.exe and other completed runtime targets successfully, then returned nonzero because unrelated ck-chat.exe had not been built. The requested ck-files.exe installation was independently verified by matching size and SHA-256."
+}

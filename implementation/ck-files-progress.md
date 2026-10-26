@@ -3,6 +3,19 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — Windows workstation v143 install
+
+The production `ck-files.exe` was rebuilt with MSVC v143 14.44.35207 using
+source, build, temporary and install paths on `V:`. It is installed at
+`V:\\dev\\ckutilities-install\\bin\\ck-files.exe`; the installed file has
+the same 2,796,544-byte size and SHA-256 as the fresh Release build. The
+multi-target CMake Runtime install returned nonzero only after installing
+`ck-files.exe`, when it reached an unrelated unbuilt `ck-chat.exe`; that
+component error is retained in the evidence and is not treated as a Files app
+success signal.
+
+Evidence: [Windows install record](evidence/ck-files-windows-install-20261026.json).
+
 ## 2026-10-26 — 014b9ad / 204c653 index qualification checkpoint
 
 The directory-index CRC32C codec now uses a portable constexpr lookup table.
