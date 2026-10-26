@@ -55,8 +55,10 @@ execute files or provide an embedded shell.
   sparse/compressed storage, names, provider-managed objects, and filesystem
   boundaries. Unknown or unavailable preservation is a reason to stop, skip,
   or choose another destination—not a silent success.
-- Shared suite help, themes, settings, launcher registration, configurable
-  shortcuts, visible menu alternatives, and CLI help/version behavior.
+- Shared suite help, themes, configurable shortcuts, visible menu alternatives,
+  session-local layout/display settings and bookmarks, and CLI help/version
+  behavior. Durable Files preference persistence is not advertised by this
+  release checkpoint yet.
 
 ## Default commands
 
@@ -84,10 +86,11 @@ ckVision's Right-to-accept behavior.
 The Files implementation is cross-platform and refuses unsupported operations
 explicitly. Current qualification records document the exact platform matrix:
 Windows has qualified Recycle Bin and regular-file/empty-directory retirement;
-macOS and Linux now qualify same-device native Trash transactions with restore
-metadata; foreign-volume mount-specific paths are implemented but still need
-dedicated writable-volume qualification. POSIX permanent source-retirement
-remains explicitly unsupported. The current macOS terminal verifier has
+macOS and Linux qualify same-device native Trash transactions with restore
+metadata, and the mount-specific paths are qualified on macOS against a
+write/search-only `.Trashes` root and on Linux against a foreign `/dev/shm`
+volume. POSIX permanent source-retirement remains explicitly unsupported. The
+current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
