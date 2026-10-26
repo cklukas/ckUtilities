@@ -68,6 +68,10 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
         spec.profile.cells = {100, 30};
         spec.profile.query_policy = ckv::term::TerminalQueryPolicy::NoResponse;
         auto child = ckv::term::WindowsTerminalSubsession::launch(std::move(spec));
+        if (child->state() == ckv::term::TerminalSubsessionState::Failed) {
+            for (const auto &diagnostic : child->diagnostics())
+                std::fprintf(stderr, "ConPTY diagnostic: %s\n", diagnostic.message.c_str());
+        }
         CK_CHECK(child->state() != ckv::term::TerminalSubsessionState::Failed);
 
         const auto pump = [&](bool until_exit) {
