@@ -1,6 +1,6 @@
 {
   "date": "2026-10-26",
-  "source_commit": "c62e4a3",
+  "source_commit": "6a1717b",
   "scope": "Current-source Windows Release build, install, and qualification",
   "host": "ssh workstation",
   "toolchain": {
@@ -22,17 +22,18 @@
     "ckvision_sdk": "configured, built, and installed from the pinned source",
     "ckutilities_targets": "458/458",
     "installed_consumer": "1/1",
-    "full_ctest": "218/222 passed",
-    "full_ctest_failures": [
+    "full_ctest": "222/222 passed",
+    "full_ctest_elapsed": "40.87 seconds",
+    "initial_staging_findings": [
       "ck_vision_only_check and ck_ui_boundary_check initially scanned AppleDouble ._* transfer artifacts; after removing those task-owned staging artifacts both passed",
-      "ck_sysmon_sample initially timed out under the parallel full run; isolated rerun passed",
-      "ck_windows_tools_contract still fails for all ten tools before drawing; the contract test does not currently print the ConPTY launch diagnostic, so no success is claimed"
+      "ck_sysmon_sample initially timed out under the first parallel run; the isolated rerun and final full run passed",
+      "ck_windows_tools_contract initially failed because its CMake definition appended /Release while Ninja emitted tools directly under /bin; the test now uses the actual cross-platform output directory and reports launch diagnostics"
     ],
     "isolated_reruns": {
       "ck_vision_only_check": "passed",
       "ck_ui_boundary_check": "passed",
       "ck_sysmon_sample": "passed",
-      "ck_windows_tools_contract": "failed"
+      "ck_windows_tools_contract": "passed"
     }
   },
   "install": {
@@ -53,7 +54,6 @@
   },
   "production_executable_launched": false,
   "remaining": [
-    "ConPTY contract diagnosis and pass",
     "sanitizer/race qualification",
     "interactive Files acceptance"
   ]

@@ -6304,14 +6304,17 @@ were set to its task directory.
 
 The current revision is installed at
 `V:\\dev\\ckutilities-install-goal-20261026`; all ten installed executables
-passed `--help`. The isolated checker and sysmon reruns pass. The full CTest
-run had 218/222 passes: the initial checker failures came from macOS
-AppleDouble `._*` artifacts in the transferred staging tree and passed after
-those task-owned artifacts were removed; the isolated sysmon sample passed.
-The remaining failure is the Windows ConPTY contract, where all ten launches
-fail before drawing. The test does not currently expose the underlying launch
-diagnostic, so no Windows interactive success is claimed. Exact executable
-hashes and paths are recorded in [current Windows evidence](evidence/ck-files-windows-current-20261026.json).
+passed `--help`. The initial checker failures came from macOS AppleDouble
+`._*` artifacts in the transferred staging tree and passed after those
+task-owned artifacts were removed; the initial sysmon timeout passed in
+isolation. The Windows contract then exposed a real CMake/test integration
+defect: it appended `/$<CONFIG>` while Ninja emitted tools directly under
+`bin`. Commit `6a1717b` uses the actual cross-platform output directory and
+prints the ConPTY diagnostic on launch failure. The final full workstation
+CTest run passed **222/222** in 40.87 seconds, including the ConPTY contract,
+both architecture checks, the sysmon sample, and the complete Files/native
+matrix. Exact executable hashes and paths are recorded in [current Windows
+evidence](evidence/ck-files-windows-current-20261026.json).
 
 
 ## 2026-10-26 — WP-02 worker-owned rename boundary checkpoint
