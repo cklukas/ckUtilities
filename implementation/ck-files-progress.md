@@ -5909,3 +5909,21 @@ Windows and Linux. Exact roots, times, output paths and fingerprints are in
 [POSIX rename qualification evidence](evidence/ck-files-posix-rename-20261026.json).
 No production executable was launched. Cross-directory move, copy, Trash/delete,
 sanitizer/race qualification and interactive acceptance remain open.
+
+
+## 2026-10-26 — WP-02 case-only rename proof checkpoint
+
+Commit `08b3110` adds the native case-only fallback used after a no-replace
+rename reports an occupied destination. The POSIX adapter proceeds only when
+the destination spelling resolves to the same source identity, then uses
+`renameat`, verifies the result and flushes the parent. A case-sensitive POSIX
+volume therefore reports explicit Unsupported for this specialized proof, while
+ordinary rename remains fully supported through the no-replace primitive.
+
+Focused native and Files suites passed on macOS (**179/179**, **196/196**),
+Windows (**178/178**, **196/196**) and Linux (**182/182**, **196/196**). The
+complete Files matrix passed **107/107** on each host. Build roots, timing,
+output hashes and the exact qualification scope are recorded in [case-only
+rename evidence](evidence/ck-files-case-only-rename-20261026.json).
+No production executable was launched. Copy/move execution, Trash/delete,
+sanitizer/race qualification and interactive acceptance remain open.

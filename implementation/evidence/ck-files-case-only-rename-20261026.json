@@ -1,0 +1,66 @@
+{
+  "checkpoint": "WP-02 native case-only rename fallback",
+  "source_commit": "08b3110",
+  "source_fingerprint": "git:08b3110",
+  "asset_changes": "none",
+  "focused": {
+    "macos": {"native_tests": "179/179 passed", "files_tests": "196/196 passed"},
+    "windows": {"native_tests": "178/178 passed", "files_tests": "196/196 passed"},
+    "linux": {"native_tests": "182/182 passed", "files_tests": "196/196 passed"}
+  },
+  "qualification": {
+    "macos": {
+      "build_tree": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build",
+      "tmpdir": "/Volumes/PRO-BLADE/tmp/ckutilities-case-rename-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T01:09:03Z",
+      "ended": "2026-10-26T01:09:20Z",
+      "result": "107/107 passed",
+      "outputs": {
+        "native": {"path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_native_tests", "sha256": "a3cb5dba3700358a2ec5f7840dbfff415fcb9c33a380f8dce91f42584049c2a2", "mtime": "2026-10-26T02:06:02+0100", "bytes": 2533784},
+        "files": {"path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/src/vision/files/ck_vision_files_tests", "sha256": "6bae6a54f08e64c1e11ab26477813d7a91594207819fc151fdda9b45c9b77684", "mtime": "2026-10-26T02:05:38+0100", "bytes": 5963592}
+      }
+    },
+    "windows": {
+      "build_tree": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "tmpdir": "V:\\tmp\\ckutilities-rename-boundary-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T02:09:08+01:00",
+      "ended": "2026-10-26T02:09:35+01:00",
+      "result": "107/107 passed",
+      "outputs": {
+        "native": {"path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_native_tests.exe", "sha256": "36840E9009A1CA378628447093CBAAB0B9E7940F681CC96DBCE3759A79E3B296"},
+        "files": {"path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe", "sha256": "3AB5BA446F779CB1D02CE5437B83055A42F2A5C5C58394E74DAB2C1F6DA219CA"}
+      }
+    },
+    "linux": {
+      "build_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+      "tmpdir": "/home/klukas/tmp/ckutilities-linux-rename-boundary-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T01:09:04Z",
+      "ended": "2026-10-26T01:09:49Z",
+      "result": "107/107 passed",
+      "outputs": {
+        "native": {"path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "54764690dc8be8e9c3c302e50ff4d48671172a21fc4478be9287c811fc1a81a3", "mtime": "2026-10-26 02:08:15.273114938 +0100", "bytes": 3140944},
+        "files": {"path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/files/ck_vision_files_tests", "sha256": "43d5b61697a1e84a51bdf61c354c3bb634a282f1d01a3ae7e27676b6f39624c7", "mtime": "2026-10-26 02:07:35.513720463 +0100", "bytes": 5765984}
+      }
+    }
+  },
+  "semantics": [
+    "the service retries the native case-only proof only after a no-replace destination collision",
+    "POSIX case-only rename requires the destination spelling to resolve to the same identity",
+    "renameat is used only after that identity proof, followed by destination identity verification and parent fsync",
+    "case-sensitive POSIX volumes explicitly report Unsupported because the required native proof is absent"
+  ],
+  "not_claimed": [
+    "cross-directory move",
+    "copy execution",
+    "Trash/delete",
+    "sanitizer/race qualification",
+    "production executable or interactive-window acceptance",
+    "full Norton Commander or Midnight Commander mutation feature set"
+  ]
+}
