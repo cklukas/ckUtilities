@@ -206,7 +206,7 @@ OperationExecutionState NativeOperationMoveJob::advance(std::stop_token stop) {
             std::pair{OperationJournalState::SourceRemovalIntended, "native_operation_move.append_source_removal_intended"},
             std::pair{OperationJournalState::SourceRetired, "native_operation_move.append_source_retired"},
             std::pair{OperationJournalState::Complete, "native_operation_move.append_complete"}};
-        for (const auto [next, diagnostic] : transitions) {
+        for (const auto &[next, diagnostic] : transitions) {
             const auto appended = state_->append(next);
             if (!appended.value()) {
                 result_.failure = *appended.unavailable_detail();
