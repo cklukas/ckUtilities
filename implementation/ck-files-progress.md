@@ -15,7 +15,11 @@ macOS, including **107/107** Files-labelled tests.
 The native POSIX Trash boundary test was corrected to match the now-qualified
 implementation: isolated HOME/XDG roots are used, native source retirement is
 asserted, and the freedesktop/macOS restore metadata is checked before the
-fixture roots are removed. The focused native test passes on macOS and Linux.
+fixture roots are removed. Commit `c71f906` qualifies the mount-specific
+branch as well: macOS passes against a foreign volume with the write/search-only
+`.Trashes` root, and Linux ARM64 passes against a foreign `/dev/shm` volume.
+The focused native test passes on macOS and Linux, and the default macOS suite
+remains green at **224/224**.
 
 Evidence: [documentation and Trash boundary record](evidence/ck-utilities-documentation-contract-20261026.json).
 
