@@ -32,6 +32,14 @@ void write_file(const fs::path& path, const std::string& bytes) {
     stream.close();
     if (!stream) throw std::runtime_error("cannot create native fixture");
 }
+
+#if !defined(_WIN32)
+NativeName component(const char *text) {
+    auto result = NativeName::from_posix(text);
+    if (!result) throw std::runtime_error("cannot construct native test component");
+    return std::move(*result);
+}
+#endif
 }
 
 CK_TEST(native_inspection_reports_missing_and_invalid_paths_without_cwd_fallback) {
@@ -78,6 +86,27 @@ CK_TEST(native_regular_files_and_directories_have_explicit_applicable_metadata) 
     CK_CHECK(metadata.windows_attributes.state() == ObservationState::Unsupported);
 #endif
 }
+
+#if !defined(_WIN32)
+CK_TEST(native_trash_boundary_refuses_unsupported_platforms_without_retiring_source) {
+    const ck::testing::ScratchDirectory scratch("files-trash-boundary");
+    write_file(scratch.path() / "source", "must remain");
+    NativeFileSystem filesystem;
+    auto directory = filesystem.open_directory(scratch.path());
+    CK_CHECK(directory.value());
+    if (!directory.value()) return;
+    auto child = (*directory.value())->open_child(component("source"), EntryAccess::MetadataOnly);
+    CK_CHECK(child.value());
+    if (!child.value()) return;
+    const auto metadata = (*child.value())->inspect_basic();
+    CK_CHECK(metadata.value() && metadata.value()->identity.value());
+    if (!metadata.value() || !metadata.value()->identity.value()) return;
+    const auto moved = (*directory.value())->trash_child(component("source"),
+                                                          *metadata.value()->identity.value());
+    CK_CHECK(!moved.value() && moved.state() == ObservationState::Unsupported);
+    CK_CHECK(fs::exists(scratch.path() / "source"));
+}
+#endif
 
 CK_TEST(native_hard_links_share_identity_but_adapter_scopes_do_not) {
     const ck::testing::ScratchDirectory scratch("files-identity");

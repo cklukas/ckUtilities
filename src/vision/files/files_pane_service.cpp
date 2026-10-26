@@ -63,6 +63,12 @@ struct DeleteChild {
     PaneRowId row;
     FilesPaneReadRange range;
 };
+struct TrashChild {
+    FilesPaneTicket ticket, navigation;
+    PaneStateStamp stamp;
+    PaneRowId row;
+    FilesPaneReadRange range;
+};
 struct OperationSources {
     FilesPaneTicket ticket, navigation;
     PaneStateStamp stamp;
@@ -74,7 +80,7 @@ struct OperationDestination {
     PaneStateStamp stamp;
     FilesPaneOperationDestinationHandoff handoff;
 };
-using Operation = std::variant<OperationSources, OperationDestination, CreateDirectory, RenameChild, DeleteChild>;
+using Operation = std::variant<OperationSources, OperationDestination, CreateDirectory, RenameChild, DeleteChild, TrashChild>;
 bool valid(FilesPaneServiceLimits l) {
     return l.path_bytes && l.path_bytes <= NativePathLimits::hard_native_bytes && l.page_rows && l.page_rows <= 4096 &&
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
@@ -722,7 +728,8 @@ struct FilesPaneService::State {
                                 }
                             }
                             emit(std::move(result), false);
-                        } else if constexpr (std::is_same_v<Request, DeleteChild>) {
+                        } else if constexpr (std::is_same_v<Request, DeleteChild> ||
+                                             std::is_same_v<Request, TrashChild>) {
                             FilesPaneReply result;
                             result.kind = FilesPaneReplyKind::Mutation;
                             result.request = request.ticket;
@@ -751,8 +758,14 @@ struct FilesPaneService::State {
                                         result.state = FilesPaneReplyState::Failed;
                                         result.error = *parent.unavailable_detail();
                                     } else {
-                                        auto retired = (*parent.value())->retire_child(
-                                            opened.value()->name, *opened.value()->child->metadata().identity.value());
+                                        auto retired = [&] {
+                                            if constexpr (std::is_same_v<Request, TrashChild>)
+                                                return (*parent.value())->trash_child(
+                                                    opened.value()->name, *opened.value()->child->metadata().identity.value());
+                                            else
+                                                return (*parent.value())->retire_child(
+                                                    opened.value()->name, *opened.value()->child->metadata().identity.value());
+                                        }();
                                         if (!retired.value()) {
                                             result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled
                                                                                   : FilesPaneReplyState::Failed;
@@ -1223,6 +1236,28 @@ FilesPaneSubmitted FilesPaneService::permanently_delete(FilesPaneTicket navigati
         return {FilesPaneSubmission::Exhausted, {}};
     const auto request = ticket(state_->next++);
     state_->operation.emplace(DeleteChild{request, navigation, std::move(stamp), row, range});
+    state_->latest_request = request;
+    state_->cancelled = {};
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
+FilesPaneSubmitted FilesPaneService::trash(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
+                                            FilesPaneReadRange range) {
+    if (!navigation.valid() || !stamp.current() || !row.number || !range.rows ||
+        range.rows > state_->limits.page_rows)
+        return {FilesPaneSubmission::Invalid, {}};
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping || !state_->alive.load())
+        return {FilesPaneSubmission::Stopped, {}};
+    if (navigation != state_->latest_navigation)
+        return {FilesPaneSubmission::Invalid, {}};
+    if (state_->busy || state_->navigation || state_->read || state_->change || state_->preview ||
+        state_->operation || state_->reply)
+        return {FilesPaneSubmission::Busy, {}};
+    if (!state_->next)
+        return {FilesPaneSubmission::Exhausted, {}};
+    const auto request = ticket(state_->next++);
+    state_->operation.emplace(TrashChild{request, navigation, std::move(stamp), row, range});
     state_->latest_request = request;
     state_->cancelled = {};
     state_->condition.notify_one();

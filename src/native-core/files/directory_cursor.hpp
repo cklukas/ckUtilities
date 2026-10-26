@@ -82,6 +82,13 @@ public:
     // handle; a pathname unlink/stat sequence is not an implementation.
     virtual Observation<bool> discard_child(const NativeName& name,
                                              const ObjectIdentity& expected_identity) const;
+    // Worker-only native Trash/Recycle Bin disposition. The adapter must
+    // verify expected_identity, preserve native restore metadata, and publish
+    // through the platform facility without following a final link/reparse
+    // point. Unsupported is required when that facility cannot be qualified;
+    // callers must not silently fall back to permanent deletion.
+    virtual Observation<bool> trash_child(const NativeName& name,
+                                           const ObjectIdentity& expected_identity) const;
     // Worker-only same-filesystem no-replace rename below held parents. The
     // adapter must verify the source identity at use, reject an occupied
     // destination, publish through a native no-clobber primitive, verify the

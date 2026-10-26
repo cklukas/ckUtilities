@@ -181,6 +181,11 @@ class FilesPaneService final {
     // unsupported platforms report an explicit worker failure.
     FilesPaneSubmitted permanently_delete(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                           ck::files::PaneRowId row, FilesPaneReadRange range = {});
+    // Move one stamped visible row to the platform Trash/Recycle Bin. The
+    // worker reports native unavailability explicitly; it never falls back to
+    // permanent deletion.
+    FilesPaneSubmitted trash(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                             ck::files::PaneRowId row, FilesPaneReadRange range = {});
     // One acknowledged local-state command; Busy while any work/result is
     // outstanding. It is never coalesced with another change or page request.
     // Navigation may supersede it; cancellation cannot undo a committed change.

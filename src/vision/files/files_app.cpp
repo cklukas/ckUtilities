@@ -75,7 +75,9 @@ std::string failure(const FilesPaneReply &reply) {
                              : e.error.domain == ck::files::ErrorDomain::NtStatus ? "NTSTATUS"
                                                                                   : "Adapter";
         const char *message = e.state == ck::files::ObservationState::Denied        ? "Access denied"
-                              : e.state == ck::files::ObservationState::Unsupported ? "Read unsupported"
+                              : e.state == ck::files::ObservationState::Unsupported
+                                    ? (reply.kind == FilesPaneReplyKind::Mutation ? "Operation unsupported"
+                                                                                   : "Read unsupported")
                               : e.state == ck::files::ObservationState::Unknown     ? "Read could not be determined"
                               : e.state == ck::files::ObservationState::Gone        ? "Location disappeared"
                               : e.state == ck::files::ObservationState::Changed     ? "Location changed while reading"
@@ -154,7 +156,7 @@ struct FilesApp::State {
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
-             deleting = false;
+             deleting = false, trashing = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -194,6 +196,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
@@ -215,12 +218,15 @@ struct FilesApp::State {
     std::weak_ptr<void> create_directory_lifetime;
     ckv::widgets::Window *rename_window = nullptr;
     std::weak_ptr<void> rename_lifetime;
+    ckv::widgets::Window *trash_window = nullptr;
+    std::weak_ptr<void> trash_lifetime;
     ckv::widgets::Window *delete_window = nullptr;
     std::weak_ptr<void> delete_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId trash_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId copy_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId move_id = ckv::ui::kInvalidCommand;
@@ -320,6 +326,9 @@ struct FilesApp::State {
             rename_id = own("ck.files.rename", [this] { show_rename(); }, [this] {
                 return ready(active) && panes[active].model.target().has_value();
             });
+            trash_id = own("ck.files.trash", [this] { show_trash(); }, [this] {
+                return ready(active) && panes[active].model.target().has_value();
+            });
             delete_id = own("ck.files.permanently_delete", [this] { show_delete(); }, [this] {
                 return ready(active) && panes[active].model.target().has_value();
             });
@@ -388,6 +397,7 @@ struct FilesApp::State {
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_directory_id, "&New folder..."),
+                                                            item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
                                                             item(copy_id, "&Copy to other pane"),
                                                             item(move_id, "&Move to other pane")}},
@@ -461,6 +471,8 @@ struct FilesApp::State {
         create_directory_window = nullptr;
         rename_dialog.reset();
         rename_window = nullptr;
+        trash_dialog.reset();
+        trash_window = nullptr;
         delete_dialog.reset();
         delete_window = nullptr;
         operation_review_dialog.reset();
@@ -550,6 +562,7 @@ struct FilesApp::State {
                (preview_dialog && !preview_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
                (rename_dialog && !rename_dialog->completed()) ||
+               (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
@@ -580,7 +593,8 @@ struct FilesApp::State {
         else if (p.previewing)
             text = "Reading preview...";
         else if (p.mutating)
-            text = p.renaming ? "Renaming..." : p.deleting ? "Deleting permanently..." : "Creating folder...";
+            text = p.renaming ? "Renaming..." : p.trashing ? "Moving to Trash / Recycle Bin..."
+                              : p.deleting ? "Deleting permanently..." : "Creating folder...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
@@ -818,6 +832,30 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool trash(std::size_t i, FilesPaneRowTarget target) {
+        if (!ready(i))
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->trash(p.navigation, target.stamp, target.row,
+                                                   {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Trash / Recycle Bin request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.renaming = false;
+        p.trashing = true;
+        p.deleting = false;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
     bool permanently_delete(std::size_t i, FilesPaneRowTarget target) {
         if (!ready(i))
             return false;
@@ -833,6 +871,7 @@ struct FilesApp::State {
         p.request = submitted.ticket;
         p.mutating = true;
         p.renaming = false;
+        p.trashing = false;
         p.deleting = true;
         p.cancelling = false;
         p.error.clear();
@@ -1103,6 +1142,53 @@ struct FilesApp::State {
                 rename_dialog.reset();
                 if (!name || !rename(pane, *current, std::move(*name))) {
                     panes[pane].error = "Entry name is not representable or the entry changed";
+                    labels();
+                }
+            });
+    }
+    void show_trash() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto target = panes[pane].model.target();
+        if (!target)
+            return;
+        const auto row = target->row;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Move entry to Trash / Recycle Bin";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "The platform Trash / Recycle Bin will receive the selected entry when supported. No permanent-delete fallback is used.",
+                .kind = ckv::widgets::FieldKind::Note},
+            ckv::widgets::FieldDescriptor{.label = "The worker will revalidate the selected entry identity before moving it.",
+                                          .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Move to Trash", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        trash_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        trash_window = shell->desktop().active_window();
+        trash_lifetime = trash_window->lifetime_token();
+        trash_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                trash_window = nullptr;
+                if (!result.accepted) {
+                    trash_dialog.reset();
+                    return;
+                }
+                const auto current = panes[pane].model.target();
+                if (panes[pane].navigation != navigation || !current || current->row != row) {
+                    panes[pane].error = "Entry changed while Trash / Recycle Bin was open";
+                    trash_dialog.reset();
+                    labels();
+                    return;
+                }
+                trash_dialog.reset();
+                if (!trash(pane, *current)) {
+                    panes[pane].error = "Trash / Recycle Bin request was rejected";
                     labels();
                 }
             });
@@ -1410,8 +1496,10 @@ struct FilesApp::State {
             p.cancelling = false;
             p.mutating = false;
             const bool was_rename = p.renaming;
+            const bool was_trash = p.trashing;
             const bool was_delete = p.deleting;
             p.renaming = false;
+            p.trashing = false;
             p.deleting = false;
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
@@ -1421,11 +1509,13 @@ struct FilesApp::State {
                 // the UI never presents a stale post-mutation page.
                 if (!refresh(i))
                     p.error = was_delete ? "Entry permanently deleted; refresh could not be started"
+                                         : was_trash ? "Entry moved to Trash / Recycle Bin; refresh could not be started"
                                          : was_rename ? "Entry renamed; refresh could not be started"
                                                       : "Directory created; refresh could not be started";
             } else {
                 p.error = reply.state == FilesPaneReplyState::Ready
                               ? (was_delete ? "Permanent deletion outcome unavailable"
+                                            : was_trash ? "Trash / Recycle Bin outcome unavailable"
                                             : was_rename ? "Rename outcome unavailable"
                                                          : "Directory creation outcome unavailable")
                               : failure(reply);
@@ -1629,7 +1719,7 @@ struct FilesApp::State {
                     panes[i].navigating = panes[i].reading = false;
                     panes[i].previewing = false;
                     panes[i].preview_request.reset();
-                    panes[i].mutating = panes[i].renaming = false;
+                    panes[i].mutating = panes[i].renaming = panes[i].trashing = false;
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
                     panes[i].model.set_input_locked(false);
@@ -1733,6 +1823,11 @@ struct FilesApp::State {
         if (rename_dialog && !rename_dialog->completed()) {
             if (rename_window && !rename_lifetime.expired())
                 rename_window->close();
+            return;
+        }
+        if (trash_dialog && !trash_dialog->completed()) {
+            if (trash_window && !trash_lifetime.expired())
+                trash_window->close();
             return;
         }
         if (delete_dialog && !delete_dialog->completed()) {
@@ -1862,6 +1957,12 @@ bool FilesApp::rename(std::size_t pane, ck::files::NativeName name) {
     if (!target)
         return false;
     return state_->rename(pane, *target, std::move(name));
+}
+bool FilesApp::trash(std::size_t pane) {
+    const auto target = state_->panes.at(pane).model.target();
+    if (!target)
+        return false;
+    return state_->trash(pane, *target);
 }
 bool FilesApp::permanently_delete(std::size_t pane) {
     const auto target = state_->panes.at(pane).model.target();

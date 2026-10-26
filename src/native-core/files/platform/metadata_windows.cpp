@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <winternl.h>
 #include <winioctl.h>
+#include <sddl.h>
 
 #include <bit>
 #include <set>
@@ -27,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <atomic>
 
 namespace ck::files {
 namespace {
@@ -37,6 +39,8 @@ struct HandleCloser {
     }
 };
 
+using OwnedHandle = std::unique_ptr<void, HandleCloser>;
+
 ObservationState error_state(DWORD code) noexcept {
     if (code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND) return ObservationState::Gone;
     if (code == ERROR_ACCESS_DENIED || code == ERROR_PRIVILEGE_NOT_HELD ||
@@ -46,6 +50,51 @@ ObservationState error_state(DWORD code) noexcept {
         code == ERROR_CALL_NOT_IMPLEMENTED || code == ERROR_INVALID_LEVEL || code == ERROR_INVALID_PARAMETER)
         return ObservationState::Unsupported;
     return ObservationState::Failed;
+}
+
+template <class T>
+Observation<T> failure(DWORD code, const char* operation);
+
+Observation<std::wstring> final_path(HANDLE handle, const char* operation) {
+    using Result = Observation<std::wstring>;
+    const DWORD required = GetFinalPathNameByHandleW(handle, nullptr, 0, FILE_NAME_NORMALIZED);
+    if (!required) return failure<std::wstring>(GetLastError(), operation);
+    std::wstring path(required, L'\0');
+    const DWORD written = GetFinalPathNameByHandleW(handle, path.data(), required + 1, FILE_NAME_NORMALIZED);
+    if (!written || written > required)
+        return failure<std::wstring>(GetLastError(), operation);
+    path.resize(written);
+    return Result::available(std::move(path));
+}
+
+Observation<std::wstring> current_user_sid() {
+    using Result = Observation<std::wstring>;
+    HANDLE raw = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw))
+        return failure<std::wstring>(GetLastError(), "trash.open_process_token");
+    OwnedHandle token(raw);
+    DWORD bytes = 0;
+    GetTokenInformation(token.get(), TokenUser, nullptr, 0, &bytes);
+    if (!bytes || GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+        return failure<std::wstring>(GetLastError(), "trash.token_user_size");
+    std::vector<std::byte> buffer(bytes);
+    if (!GetTokenInformation(token.get(), TokenUser, buffer.data(), bytes, &bytes))
+        return failure<std::wstring>(GetLastError(), "trash.token_user");
+    auto* user = reinterpret_cast<const TOKEN_USER*>(buffer.data());
+    LPWSTR text = nullptr;
+    if (!ConvertSidToStringSidW(user->User.Sid, &text))
+        return failure<std::wstring>(GetLastError(), "trash.sid");
+    std::wstring result(text);
+    LocalFree(text);
+    return Result::available(std::move(result));
+}
+
+std::wstring hex_suffix(std::uint64_t value) {
+    constexpr wchar_t digits[] = L"0123456789abcdef";
+    std::wstring result(16, L'0');
+    for (std::size_t index = 0; index != result.size(); ++index)
+        result[result.size() - index - 1] = digits[(value >> (index * 4U)) & 0xfU];
+    return result;
 }
 
 template <class T>
@@ -195,7 +244,6 @@ Observation<BasicMetadata> handle_metadata(HANDLE handle, const AdapterScope& sc
     return Observation<BasicMetadata>::available(std::move(result));
 }
 
-using OwnedHandle = std::unique_ptr<void, HandleCloser>;
 // Public native-system-service ABI: ZwQueryEaFile contract, Nt user-mode
 // entry point. No private information class or hard-coded syscall number.
 using QueryEa = NTSTATUS (NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, BOOLEAN, PVOID, ULONG, PULONG, BOOLEAN);
@@ -1089,6 +1137,195 @@ public:
         // source retirement, but is exposed separately so callers cannot
         // mistake cleanup for an authorized Move operation.
         return retire_child(name, expected_identity);
+    }
+    Observation<bool> trash_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {
+        using Result = Observation<bool>;
+        const auto* units = name.windows_units();
+        if (!name.is_valid() || !units || units->find(u':') != std::u16string::npos ||
+            units->find(u'\\') != std::u16string::npos || units->find(u'/') != std::u16string::npos ||
+            units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR) ||
+            compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "trash_child.input"});
+
+        // The source handle denies concurrent writers and namespace deletion.
+        // The handle, rather than the original basename, is the object moved
+        // into the Recycle Bin. This is the race boundary that a shell/path
+        // based recycle call cannot provide.
+        auto opened = open_native_component(name, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                             ChildLookupMode::NativeDefault, true);
+        if (!opened.value()) {
+            const auto& error = *opened.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto source = std::move(opened).take_value();
+        const auto metadata = handle_metadata(source.get(), scope_);
+        if (!metadata.value() || !metadata.value()->identity.value() ||
+            compare_identity(*metadata.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "trash_child.identity"});
+        if (!metadata.value()->kind.value() ||
+            (*metadata.value()->kind.value() != ObjectKind::RegularFile &&
+             *metadata.value()->kind.value() != ObjectKind::Directory))
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "trash_child.kind"});
+        FILE_STANDARD_INFO standard{};
+        if (!GetFileInformationByHandleEx(source.get(), FileStandardInfo, &standard, sizeof(standard)))
+            return failure<bool>(GetLastError(), "trash_child.standard_info");
+        if (*metadata.value()->kind.value() == ObjectKind::RegularFile && standard.NumberOfLinks != 1)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "trash_child.hard_link"});
+
+        auto parent_path = final_path(handle_.get(), "trash_child.parent_path");
+        if (!parent_path.value()) return Result::unavailable(parent_path.unavailable_detail()->state,
+                                                             parent_path.unavailable_detail()->error);
+        std::wstring original_path = *parent_path.value();
+        if (original_path.empty() || original_path.size() > std::numeric_limits<std::size_t>::max() - units->size())
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "trash_child.original_path"});
+        if (original_path.back() != L'\\') original_path.push_back(L'\\');
+        original_path.append(units->begin(), units->end());
+        // Recycle Bin v2 stores a fixed 260-WCHAR original path field.
+        if (original_path.size() >= 260)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "trash_child.original_path_limit"});
+
+        wchar_t volume[MAX_PATH]{};
+        if (!GetVolumePathNameW(parent_path.value()->c_str(), volume, ARRAYSIZE(volume)))
+            return failure<bool>(GetLastError(), "trash_child.volume_path");
+        std::wstring recycle_root(volume);
+        if (recycle_root.empty() || recycle_root.back() != L'\\') recycle_root.push_back(L'\\');
+        recycle_root += L"$Recycle.Bin";
+        if (!CreateDirectoryW(recycle_root.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+            return failure<bool>(GetLastError(), "trash_child.recycle_root");
+        auto sid = current_user_sid();
+        if (!sid.value()) return Result::unavailable(sid.unavailable_detail()->state,
+                                                     sid.unavailable_detail()->error);
+        const std::wstring recycle_directory_path = recycle_root + L"\\" + *sid.value();
+        if (!CreateDirectoryW(recycle_directory_path.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+            return failure<bool>(GetLastError(), "trash_child.recycle_user_directory");
+
+        auto open_recycle_directory = [&]() -> Observation<OwnedHandle> {
+            HANDLE raw = CreateFileW(recycle_directory_path.c_str(),
+                FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (raw == INVALID_HANDLE_VALUE) return failure<OwnedHandle>(GetLastError(), "trash_child.recycle_directory");
+            OwnedHandle directory(raw);
+            FILE_BASIC_INFO basic{};
+            if (!GetFileInformationByHandleEx(directory.get(), FileBasicInfo, &basic, sizeof(basic)))
+                return failure<OwnedHandle>(GetLastError(), "trash_child.recycle_directory_info");
+            if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+                (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                return Observation<OwnedHandle>::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable),
+                     "trash_child.recycle_directory_kind"});
+            return Observation<OwnedHandle>::available(std::move(directory));
+        };
+        auto recycle_directory = open_recycle_directory();
+        if (!recycle_directory.value()) return Result::unavailable(recycle_directory.unavailable_detail()->state,
+                                                                    recycle_directory.unavailable_detail()->error);
+
+        static std::atomic<std::uint64_t> sequence{1};
+        const auto seed = static_cast<std::uint64_t>(GetTickCount64()) ^
+            (static_cast<std::uint64_t>(GetCurrentProcessId()) << 32U);
+        OwnedHandle metadata_file;
+        std::wstring r_name;
+        std::wstring i_name;
+        std::wstring r_path;
+        std::wstring i_path;
+        for (unsigned attempt = 0; attempt != 32 && !metadata_file; ++attempt) {
+            const auto suffix = hex_suffix(seed ^ sequence.fetch_add(1, std::memory_order_relaxed) ^ attempt);
+            r_name = L"$R" + suffix;
+            i_name = L"$I" + suffix;
+            r_path = recycle_directory_path + L"\\" + r_name;
+            i_path = recycle_directory_path + L"\\" + i_name;
+            HANDLE existing = CreateFileW(r_path.c_str(), FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+            if (existing != INVALID_HANDLE_VALUE) {
+                CloseHandle(existing);
+                continue;
+            }
+            const DWORD existing_error = GetLastError();
+            if (existing_error != ERROR_FILE_NOT_FOUND && existing_error != ERROR_PATH_NOT_FOUND)
+                return failure<bool>(existing_error, "trash_child.recycle_name_probe");
+            HANDLE raw = CreateFileW(i_path.c_str(), GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW,
+                FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM, nullptr);
+            if (raw != INVALID_HANDLE_VALUE) metadata_file.reset(raw);
+            else if (GetLastError() != ERROR_FILE_EXISTS && GetLastError() != ERROR_ALREADY_EXISTS)
+                return failure<bool>(GetLastError(), "trash_child.metadata_create");
+        }
+        if (!metadata_file)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit),
+                 "trash_child.recycle_name_exhausted"});
+
+        std::array<std::byte, 544> metadata_bytes{};
+        auto put_u64 = [&metadata_bytes](std::size_t offset, std::uint64_t value) {
+            for (unsigned byte = 0; byte != 8; ++byte)
+                metadata_bytes[offset + byte] = static_cast<std::byte>((value >> (byte * 8U)) & 0xffU);
+        };
+        put_u64(0, 2); // Recycle Bin v2 metadata.
+        const auto file_size = *metadata.value()->kind.value() == ObjectKind::RegularFile && standard.EndOfFile.QuadPart >= 0
+            ? static_cast<std::uint64_t>(standard.EndOfFile.QuadPart) : 0;
+        put_u64(8, file_size);
+        FILETIME deletion_time{};
+        GetSystemTimeAsFileTime(&deletion_time);
+        put_u64(16, (static_cast<std::uint64_t>(deletion_time.dwHighDateTime) << 32U) |
+            deletion_time.dwLowDateTime);
+        std::memcpy(metadata_bytes.data() + 24, original_path.data(), original_path.size() * sizeof(wchar_t));
+        DWORD written = 0;
+        if (!WriteFile(metadata_file.get(), metadata_bytes.data(), static_cast<DWORD>(metadata_bytes.size()), &written, nullptr) ||
+            written != metadata_bytes.size() || !FlushFileBuffers(metadata_file.get())) {
+            const DWORD code = GetLastError();
+            FILE_DISPOSITION_INFO cleanup{TRUE};
+            SetFileInformationByHandle(metadata_file.get(), FileDispositionInfo, &cleanup, sizeof(cleanup));
+            return failure<bool>(code, "trash_child.metadata_write");
+        }
+
+        const auto length = r_name.size() * sizeof(WCHAR);
+        if (length > std::numeric_limits<ULONG>::max() - offsetof(FILE_RENAME_INFO, FileName))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidLimit), "trash_child.recycle_name_limit"});
+        std::vector<std::byte> rename_buffer(offsetof(FILE_RENAME_INFO, FileName) + length);
+        auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(rename_buffer.data());
+        rename->ReplaceIfExists = FALSE;
+        rename->RootDirectory = recycle_directory.value()->get();
+        rename->FileNameLength = static_cast<DWORD>(length);
+        std::memcpy(rename->FileName, r_name.data(), length);
+        if (!set_file_rename_information(source.get(), rename, static_cast<ULONG>(rename_buffer.size()))) {
+            const DWORD code = GetLastError();
+            FILE_DISPOSITION_INFO cleanup{TRUE};
+            if (!SetFileInformationByHandle(metadata_file.get(), FileDispositionInfo, &cleanup, sizeof(cleanup)))
+                return Result::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Win32, GetLastError(), "trash_child.metadata_cleanup"});
+            return Result::unavailable(error_state(code), {ErrorDomain::Win32, code, "trash_child.native_rename"});
+        }
+
+        HANDLE raw_published = CreateFileW(r_path.c_str(), FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (raw_published == INVALID_HANDLE_VALUE)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "trash_child.recycle_identity"});
+        OwnedHandle published(raw_published);
+        const auto published_identity = ::ck::files::identity(published.get(), scope_);
+        if (!published_identity.value() ||
+            compare_identity(*published_identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                 "trash_child.recycle_identity"});
+        auto parent_access = open_namespace_write_handle();
+        if (!parent_access.value())
+            return Result::unavailable(ObservationState::Unknown,
+                parent_access.unavailable_detail()->error);
+        if (!FlushFileBuffers(parent_access.value()->get()) ||
+            !FlushFileBuffers(recycle_directory.value()->get()))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "trash_child.directory_flush"});
+        return Result::available(true);
     }
     Observation<bool> rename_child_noreplace(const NativeName& name, const ObjectIdentity& expected_identity,
                                               const DirectoryCursor& destination,

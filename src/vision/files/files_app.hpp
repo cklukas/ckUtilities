@@ -71,6 +71,7 @@ class FilesApp final {
     // Renames the currently acknowledged target through the worker's native
     // identity protocol, then refreshes only after success.
     bool rename(std::size_t pane, ck::files::NativeName name);
+    bool trash(std::size_t pane);
     bool permanently_delete(std::size_t pane);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
