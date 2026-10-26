@@ -1,0 +1,49 @@
+{
+  "milestone": "Worker-created provider-root proof for recursive operation handoff",
+  "implementation_commit": "6d5998b",
+  "fixture_commit": "b966514",
+  "date": "2026-10-26",
+  "source_fingerprint": "git commit 6d5998b with qualification fixture commit b966514",
+  "change": [
+    "Pane destination handoff carries the held destination and an independently opened lexical namespace root.",
+    "AncestorWalkJob emits DisjointBoundary only after repeated identity matches the explicit provider-root identity.",
+    "Root-looking repeats without that proof remain RepeatedDirectory."
+  ],
+  "build_records": [
+    {
+      "host": "macOS",
+      "configuration": "Debug/Ninja",
+      "build_start_utc": "2026-10-26T07:52:42Z",
+      "build_end_utc": "2026-10-26T07:52:57Z",
+      "output": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "targets": ["ck_files_core_tests", "ck_files_native_tests", "ck_vision_files_tests"]
+    },
+    {
+      "host": "Linux ARM64 rpi4",
+      "configuration": "Debug/Ninja",
+      "build_start_utc": "2026-10-26T07:53:45Z",
+      "build_end_utc": "2026-10-26T08:12:22Z",
+      "output": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
+      "targets": ["ck_files_core_tests", "ck_vision_files_tests"]
+    },
+    {
+      "host": "Windows x64 workstation",
+      "configuration": "Release/Visual Studio 17 2022 x64",
+      "toolset": "MSVC v143 14.44.35207",
+      "output": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+      "temporary": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\tmp",
+      "targets": ["ck_files_core_tests", "ck_vision_files_tests"]
+    }
+  ],
+  "focused_results": {
+    "macos": "20 ancestor, 6 evidence, 53 pane-service and 65 app tests passed",
+    "linux_arm64": "20 ancestor, 6 evidence, 53 pane-service and 65 app tests passed",
+    "windows_x64": "20 ancestor, 6 evidence, 53 pane-service and 65 app tests passed"
+  },
+  "recursive_copy_acceptance": "Passed in the Files app suite on all three platforms",
+  "remaining_scope": [
+    "Cross-filesystem move, recursive move, Trash/Recycle Bin and permanent deletion remain open.",
+    "Recovery execution, full interactive release-window acceptance and race qualification remain open.",
+    "Full UI sanitizer qualification remains blocked by the upstream ckVision headless fixture defect recorded in the safety/sanitizer evidence."
+  ]
+}

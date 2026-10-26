@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 6d5998b / b966514 provider-root recursive-copy checkpoint
+
+Recursive operation handoff now carries a worker-created destination cursor
+and an independently opened lexical provider-root cursor. The ancestry job
+projects `DisjointBoundary` only when a repeated native identity matches that
+explicit root witness; ordinary repeats remain `RepeatedDirectory` and are
+still rejected as ambiguous. The simulated pane fixtures now bind their
+namespace root so the test backend models the production proof requirement.
+
+The focused qualification passed on macOS, Linux ARM64 and Windows x64:
+20 ancestor tests, 6 evidence tests, 53 pane-service tests and 65 Files app
+tests per platform. The app recursive-copy acceptance is included in the
+65-app-test result. Windows used the installed MSVC v143 14.44.35207 toolset
+with all source, build and temporary paths on `V:`.
+
+Evidence: [provider-root qualification record](evidence/ck-files-provider-root-qualification-20261026.json).
+
 ## 2026-10-26 — 5cad04a repeated-root safety correction and sanitizer checkpoint
 
 The ancestor walker no longer converts an identity repeat into
