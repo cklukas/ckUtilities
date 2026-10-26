@@ -38,7 +38,7 @@ FrozenInventory::Pointer inventory_with_hard_link_aliases() {
         return FrozenInventoryEntry{std::move(native).take_value(),
             ObjectIdentity{scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(object), {}}, ObjectKind::RegularFile,
-            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}};
+            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}, {}};
     };
     if (!builder.add(make("/source/a", 9)) || !builder.add(make("/source/alias", 9)) || !builder.seal())
         throw std::runtime_error("operation inventory fixture unavailable");

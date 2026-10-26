@@ -137,6 +137,12 @@ CK_TEST(recursive_inventory_seals_exact_native_tree_and_preserves_hard_link_grou
     CK_CHECK(result->entries()[3].source_path == path("/root/file"));
     CK_CHECK(result->entries()[4].source_path == path("/root/alias"));
     CK_CHECK(result->entries()[5].source_path == path("/root/link"));
+    CK_CHECK(result->entries()[0].relative_components.empty());
+    CK_CHECK(result->entries()[1].relative_components.size() == 1 &&
+        *result->entries()[1].relative_components[0].posix_bytes() == "dir");
+    CK_CHECK(result->entries()[2].relative_components.size() == 2 &&
+        *result->entries()[2].relative_components[0].posix_bytes() == "dir" &&
+        *result->entries()[2].relative_components[1].posix_bytes() == "nested");
     CK_CHECK(result->hard_link_groups()[3] == result->hard_link_groups()[4]);
     CK_CHECK(result->entries()[5].link == LinkTraversalEvidence::NotFollowed);
     CK_CHECK(job.advance() == RecursiveInventoryState::Complete);

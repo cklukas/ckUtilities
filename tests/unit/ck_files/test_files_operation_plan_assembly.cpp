@@ -20,7 +20,7 @@ FrozenInventory::Pointer inventory_with_aliases() {
         return builder.add({std::move(path).take_value(),
             {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(object), {}}, ObjectKind::RegularFile,
-            Observation<std::uint64_t>::available(4), 1, LinkTraversalEvidence::NotLink, {}});
+            Observation<std::uint64_t>::available(4), 1, LinkTraversalEvidence::NotLink, {}, {}});
     };
     if (!add("/source/a", 7) || !add("/source/alias", 7) || !builder.seal())
         throw std::runtime_error("operation assembly inventory fixture unavailable");

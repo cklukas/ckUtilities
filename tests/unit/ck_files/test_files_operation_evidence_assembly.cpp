@@ -43,7 +43,7 @@ FrozenInventory::Pointer inventory_with_two_entries() {
         return builder.add({std::move(path).take_value(),
             {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(object), {}}, ObjectKind::RegularFile,
-            Observation<std::uint64_t>::available(4), 1, LinkTraversalEvidence::NotLink, {}});
+            Observation<std::uint64_t>::available(4), 1, LinkTraversalEvidence::NotLink, {}, {}});
     };
     if (!add("/source/a", 7) || !add("/source/b", 8) || !builder.seal())
         throw std::runtime_error("operation evidence inventory fixture unavailable");

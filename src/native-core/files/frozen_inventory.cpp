@@ -33,8 +33,13 @@ bool FrozenInventoryBuilder::fail(AdapterError code, const char* operation, Obse
 }
 
 bool FrozenInventoryBuilder::valid_entry(const FrozenInventoryEntry& entry) const noexcept {
-    return entry.source_path.is_valid() && entry.identity.scheme != IdentityScheme::Unknown &&
-        entry.identity.volume != NativeIdentifier{} && entry.identity.object != NativeIdentifier{};
+    if (!entry.source_path.is_valid() || entry.identity.scheme == IdentityScheme::Unknown ||
+        entry.identity.volume == NativeIdentifier{} || entry.identity.object == NativeIdentifier{})
+        return false;
+    for (const auto& component : entry.relative_components)
+        if (!component.is_valid() || component.encoding() != entry.source_path.encoding())
+            return false;
+    return true;
 }
 
 bool FrozenInventoryBuilder::valid_link(const FrozenInventoryEntry& entry) const noexcept {

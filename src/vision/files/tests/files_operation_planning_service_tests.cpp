@@ -33,7 +33,7 @@ FrozenInventory::Pointer inventory() {
             {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(1), {}},
             ObjectKind::RegularFile, Observation<std::uint64_t>::available(1), 1,
-            LinkTraversalEvidence::NotLink, {}}) ||
+            LinkTraversalEvidence::NotLink, {}, {}}) ||
         !builder.seal())
         throw std::runtime_error("planning service inventory unavailable");
     return take(builder.completed());

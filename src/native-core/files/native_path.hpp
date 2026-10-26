@@ -4,6 +4,7 @@
 #include "native_name.hpp"
 #include "observation.hpp"
 #include <filesystem>
+#include <vector>
 namespace ck::files {
 struct NativePathLimits {
     std::size_t max_native_bytes = 256 * 1024;
@@ -37,6 +38,11 @@ public:
     // Parent of a namespace root is that root. Invalid/moved values refuse.
     Observation<NativeAbsolutePath> parent_address() const;
     Observation<NativeAbsolutePath> namespace_root() const;
+    // Return exact native components below an exact lexical ancestor. This is
+    // a requested-address relation only: it performs no canonicalization,
+    // link resolution, case folding or filesystem access.
+    Observation<std::vector<NativeName>> relative_components_from(
+        const NativeAbsolutePath& ancestor) const;
     bool is_valid() const noexcept;
     NameEncoding encoding() const noexcept;
     const std::string* posix_bytes() const noexcept;

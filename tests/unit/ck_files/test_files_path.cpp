@@ -171,3 +171,24 @@ CK_TEST(path_child_address_preserves_native_units_and_refuses_foreign_or_oversiz
     CK_CHECK(!moved.child_address(*NativeName::from_posix("x")).value());
     CK_CHECK(empty.child_address(*NativeName::from_posix("x")).value());
 }
+
+CK_TEST(path_relative_components_are_exact_and_refuse_non_ancestors_or_foreign_encodings) {
+    const auto root = take(NativeAbsolutePath::from_posix("/source/root"));
+    const auto nested = take(NativeAbsolutePath::from_posix("/source/root/dir/raw"));
+    const auto components = take(nested.relative_components_from(root));
+    CK_CHECK(components.size() == 2 && *components[0].posix_bytes() == "dir" &&
+        *components[1].posix_bytes() == "raw");
+    CK_CHECK(take(root.relative_components_from(root)).empty());
+    CK_CHECK(nested.relative_components_from(take(NativeAbsolutePath::from_posix("/source/other"))).state() ==
+        ObservationState::Changed);
+    CK_CHECK(nested.relative_components_from(take(NativeAbsolutePath::from_posix("/source/rootish"))).state() ==
+        ObservationState::Changed);
+    CK_CHECK(nested.relative_components_from(take(NativeAbsolutePath::from_windows(u"V:\\source\\root"))).state() ==
+        ObservationState::Unsupported);
+
+    const auto windows_root = take(NativeAbsolutePath::from_windows(u"V:\\source\\root"));
+    const auto windows_nested = take(NativeAbsolutePath::from_windows(u"V:\\source\\root\\dir\\raw"));
+    const auto windows_components = take(windows_nested.relative_components_from(windows_root));
+    CK_CHECK(windows_components.size() == 2 && *windows_components[0].windows_units() == u"dir" &&
+        *windows_components[1].windows_units() == u"raw");
+}

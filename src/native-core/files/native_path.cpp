@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_path.hpp"
 #include "windows_name.hpp"
+#include <algorithm>
 #include <type_traits>
+#include <vector>
 namespace ck::files {
 namespace {
 template<class T> Observation<T> error(ObservationState state, AdapterError code, const char* operation) {
@@ -73,6 +75,67 @@ Observation<std::monostate> budget(std::size_t units, std::size_t width, NativeP
 Observation<NativeAbsolutePath> refuse(const UnavailableObservation& e) {
     return Observation<NativeAbsolutePath>::unavailable(e.state, e.error);
 }
+
+std::size_t root_size(std::string_view path);
+std::size_t root_size(std::u16string_view path);
+template <class Text>
+std::size_t normalized_root_size(const Text& text);
+
+template <class Text>
+std::vector<std::basic_string_view<typename Text::value_type>> split_components(const Text& text,
+    std::size_t root, bool windows) {
+    using View = std::basic_string_view<typename Text::value_type>;
+    const View view(text);
+    std::vector<View> result;
+    std::size_t begin = root;
+    const auto is_separator = [windows](typename Text::value_type c) {
+        if constexpr (std::is_same_v<typename Text::value_type, char>) {
+            (void)windows;
+            return c == '/';
+        }
+        else return c == u'\\' || (windows && c == u'/');
+    };
+    while (begin < view.size()) {
+        while (begin < view.size() && is_separator(view[begin])) ++begin;
+        if (begin == view.size()) break;
+        std::size_t end = begin;
+        while (end < view.size() && !is_separator(view[end])) ++end;
+        result.push_back(view.substr(begin, end - begin));
+        begin = end;
+    }
+    return result;
+}
+
+template <class Text>
+Observation<std::vector<NativeName>> relative_components(const Text& value, const Text& ancestor,
+    std::size_t value_root, std::size_t ancestor_root, bool windows) {
+    using Result = Observation<std::vector<NativeName>>;
+    if (value.substr(0, value_root) != ancestor.substr(0, ancestor_root))
+        return error<std::vector<NativeName>>(ObservationState::Changed, AdapterError::PlanTopologyUnsafe,
+            "native_path.relative_root");
+    const auto value_parts = split_components(value, value_root, windows);
+    const auto ancestor_parts = split_components(ancestor, ancestor_root, windows);
+    if (ancestor_parts.size() > value_parts.size() ||
+        !std::equal(ancestor_parts.begin(), ancestor_parts.end(), value_parts.begin()))
+        return error<std::vector<NativeName>>(ObservationState::Changed, AdapterError::PlanTopologyUnsafe,
+            "native_path.relative_ancestor");
+    std::vector<NativeName> result;
+    result.reserve(value_parts.size() - ancestor_parts.size());
+    for (std::size_t index = ancestor_parts.size(); index < value_parts.size(); ++index) {
+        if constexpr (std::is_same_v<typename Text::value_type, char>) {
+            auto name = NativeName::from_posix(std::string(value_parts[index]));
+            if (!name) return error<std::vector<NativeName>>(ObservationState::Failed,
+                AdapterError::InvalidIdentifier, "native_path.relative_component");
+            result.push_back(std::move(*name));
+        } else {
+            auto name = NativeName::from_windows(std::u16string(value_parts[index]));
+            if (!name) return error<std::vector<NativeName>>(ObservationState::Failed,
+                AdapterError::InvalidIdentifier, "native_path.relative_component");
+            result.push_back(std::move(*name));
+        }
+    }
+    return Result::available(std::move(result));
+}
 std::size_t root_size(std::string_view path) {
     // Retain all leading slashes, including POSIX's special // spelling.
     return path.find_first_not_of('/');
@@ -88,6 +151,11 @@ std::size_t root_size(std::u16string_view path) {
     const auto server_end = path.find_first_of(delimiters, start);
     const auto share_end = path.find_first_of(delimiters, server_end + 1);
     return share_end == path.npos ? path.size() : share_end + 1;
+}
+template <class Text>
+std::size_t normalized_root_size(const Text& text) {
+    auto root = root_size(text);
+    return root == Text::npos ? text.size() : root;
 }
 template<class Text> std::size_t parent_size(const Text& text, std::size_t root) {
     const auto is_separator = [&](std::size_t i) {
@@ -119,6 +187,25 @@ Observation<NativeAbsolutePath> NativeAbsolutePath::parent_address() const {
     }
     const auto& units = *windows_units();
     return from_windows(units.substr(0, parent_size(units, root_size(std::u16string_view(units)))), {NativePathLimits::hard_native_bytes});
+}
+Observation<std::vector<NativeName>> NativeAbsolutePath::relative_components_from(
+    const NativeAbsolutePath& ancestor) const {
+    if (!is_valid() || !ancestor.is_valid())
+        return error<std::vector<NativeName>>(ObservationState::Failed, AdapterError::InvalidPath,
+            "native_path.relative_invalid");
+    if (encoding() != ancestor.encoding())
+        return error<std::vector<NativeName>>(ObservationState::Unsupported, AdapterError::NotApplicable,
+            "native_path.relative_encoding");
+    if (const auto* bytes = posix_bytes()) {
+        const auto* parent = ancestor.posix_bytes();
+        return relative_components(*bytes, *parent, normalized_root_size(*bytes),
+            normalized_root_size(*parent), false);
+    }
+    const auto* units = windows_units();
+    const auto* parent = ancestor.windows_units();
+    const bool extended = units->starts_with(u"\\\\?\\");
+    return relative_components(*units, *parent, root_size(std::u16string_view(*units)),
+        root_size(std::u16string_view(*parent)), !extended);
 }
 Observation<NativeAbsolutePath> NativeAbsolutePath::from_posix(std::string_view bytes, NativePathLimits limits) {
     const auto bounded = budget(bytes.size(), 1, limits);

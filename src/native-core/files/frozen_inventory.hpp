@@ -39,6 +39,10 @@ struct FrozenInventoryEntry final {
     std::uint64_t logical_size = 0;
     LinkTraversalEvidence link = LinkTraversalEvidence::NotLink;
     std::optional<ObjectIdentity> link_target;
+    // Recursive inventories retain the exact lexical components below their
+    // held root. Direct-object inventories leave this empty because they have
+    // no tree relation. Components are native values, never display text.
+    std::vector<NativeName> relative_components;
 };
 
 class FrozenInventory final {

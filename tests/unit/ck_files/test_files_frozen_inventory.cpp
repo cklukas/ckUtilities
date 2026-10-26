@@ -25,7 +25,7 @@ FrozenInventoryEntry entry(const AdapterScope& scope, const char* value, std::ui
     ObjectKind kind = ObjectKind::RegularFile, std::uint64_t mount = 4,
     LinkTraversalEvidence link = LinkTraversalEvidence::NotLink, std::optional<ObjectIdentity> target = {}) {
     return {path(value), identity(scope, object), kind, Observation<std::uint64_t>::available(mount), 10, link,
-        std::move(target)};
+        std::move(target), {}};
 }
 
 FrozenInventory::Pointer take(FrozenInventoryBuilder& builder) {
@@ -72,6 +72,15 @@ CK_TEST(frozen_inventory_direct_objects_preserve_unknown_mount_without_traversal
     CK_CHECK(direct.add(std::move(value)) && direct.seal());
     const auto result = take(direct);
     CK_CHECK(result->entries().size() == 1 && !result->entries().front().mount_id.value());
+}
+
+CK_TEST(frozen_inventory_rejects_relative_components_with_foreign_native_encoding) {
+    const AdapterScope scope;
+    FrozenInventoryBuilder builder(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+    auto value = entry(scope, "/direct/file", 1);
+    value.relative_components.push_back(*NativeName::from_windows(u"foreign"));
+    CK_CHECK(!builder.add(std::move(value)) && builder.failure());
+    CK_CHECK(builder.failure()->error.code == static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity));
 }
 
 CK_TEST(frozen_inventory_link_policy_never_follows_without_explicit_target_evidence) {

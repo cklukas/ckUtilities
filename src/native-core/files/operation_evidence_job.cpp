@@ -128,7 +128,7 @@ void OperationEvidenceJob::advance_flat_inventory() {
         }
         if (!flat_builder_->add({request_.direct_source_paths[next_flat_], *metadata.identity.value(),
                 *metadata.kind.value(), metadata.mount_id, *metadata.logical_size.value(),
-                LinkTraversalEvidence::NotLink, {}})) {
+                LinkTraversalEvidence::NotLink, {}, {}})) {
             if (flat_builder_->failure()) fail(*flat_builder_->failure());
             else fail(error(AdapterError::PlanInvalid, "operation_evidence.direct_inventory"));
             return;

@@ -36,7 +36,7 @@ FrozenInventory::Pointer inventory() {
     if (!source.value() || !builder.add({std::move(source).take_value(),
             {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(1), {}}, ObjectKind::RegularFile,
-            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}}) ||
+            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}, {}}) ||
         !builder.seal())
         throw std::runtime_error("planning coordinator inventory unavailable");
     return take(builder.completed());

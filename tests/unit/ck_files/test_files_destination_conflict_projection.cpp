@@ -46,7 +46,7 @@ FrozenInventory::Pointer inventory(std::initializer_list<ObjectKind> kinds) {
         if (!builder.add({std::move(source).take_value(),
             {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(1),
                 NativeIdentifier::from_u64(index + 1), {}}, kind,
-            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}}))
+            Observation<std::uint64_t>::available(1), 1, LinkTraversalEvidence::NotLink, {}, {}}))
             throw std::runtime_error("destination conflict inventory unavailable");
         ++index;
     }

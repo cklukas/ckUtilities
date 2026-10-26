@@ -82,8 +82,10 @@ bool RecursiveInventoryJob::add_metadata(const NativeAbsolutePath& path, const B
         return fail({detail.state, detail.error});
     }
     if (!available_size(metadata.logical_size)) return fail(AdapterError::InvalidNativeResult, "recursive_inventory.logical_size");
+    auto relative = path.relative_components_from(root_path_);
+    if (!relative.value()) return fail(*relative.unavailable_detail());
     FrozenInventoryEntry entry{path, *metadata.identity.value(), *metadata.kind.value(), metadata.mount_id,
-        *metadata.logical_size.value(), link, {}};
+        *metadata.logical_size.value(), link, {}, std::move(relative).take_value()};
     if (!builder_->add(std::move(entry))) {
         if (builder_->failure()) return fail(*builder_->failure());
         return fail(AdapterError::InvalidNativeResult, "recursive_inventory.builder");
