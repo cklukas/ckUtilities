@@ -22,7 +22,8 @@ set(_cktools_native_executables
     ck-edit
     ck-chat
     ck-todo
-    ck-sysmon)
+    ck-sysmon
+    ck-files)
 set(_cktools_terminal_profiles xterm-256color xterm vt100)
 
 file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")

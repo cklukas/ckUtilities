@@ -25,11 +25,11 @@ if(WIN32)
   add_executable(ck_windows_tools_contract windows/windows_tools_contract.cpp)
   target_link_libraries(ck_windows_tools_contract PRIVATE ck_vision_cktest_main ckvision::cvision)
   target_compile_definitions(ck_windows_tools_contract PRIVATE
-    CKTOOLS_TOOL_BINARY_DIR="${PROJECT_BINARY_DIR}/bin")
+    CKTOOLS_TOOL_BINARY_DIR="${PROJECT_BINARY_DIR}/bin/$<CONFIG>")
   cktools_strict(ck_windows_tools_contract)
   add_dependencies(ck_windows_tools_contract
     ckutilities_ckvision ckjsonview_ckvision ckfind_ckvision ckdu_ckvision ckedit_ckvision
-    ckchat_ckvision cktodo_ckvision cksysmon_ckvision ckconfig_ckvision)
+    ckchat_ckvision cktodo_ckvision cksysmon_ckvision ckconfig_ckvision ckfiles_ckvision)
   add_test(NAME ck_windows_tools_contract COMMAND ck_windows_tools_contract)
   set_tests_properties(ck_windows_tools_contract PROPERTIES
     LABELS "platform;windows;native" TIMEOUT 300)

@@ -35,12 +35,16 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
     const auto home = scratch.path() / std::filesystem::path(u8"Données-日本");
     std::filesystem::create_directories(home / "AppData" / "Roaming");
     std::filesystem::create_directories(home / "AppData" / "Local");
+    const auto files_left = home / "FilesLeft";
+    const auto files_right = home / "FilesRight";
+    std::filesystem::create_directories(files_left);
+    std::filesystem::create_directories(files_right);
     const std::string home_text = utf8(home);
 
     ckv::term::WindowsClock clock;
     ckv::term::WindowsWaitSet waits(clock);
     for (const char *name : {"ck-utilities", "ck-json-view", "ck-find", "ck-du", "ck-edit", "ck-chat", "ck-todo",
-                             "ck-sysmon", "ck-config"})
+                             "ck-sysmon", "ck-config", "ck-files"})
     {
         std::fprintf(stderr, "Tool: %s\n", name);
         const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / (std::string(name) + ".exe"));
@@ -59,6 +63,8 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
         // Disk Usage scans the isolated folder, not the working tree.
         if (std::string_view(name) == "ck-du")
             spec.arguments = {home_text};
+        if (std::string_view(name) == "ck-files")
+            spec.arguments = {utf8(files_left), utf8(files_right)};
         spec.profile.cells = {100, 30};
         spec.profile.query_policy = ckv::term::TerminalQueryPolicy::NoResponse;
         auto child = ckv::term::WindowsTerminalSubsession::launch(std::move(spec));
