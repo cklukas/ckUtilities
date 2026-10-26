@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — a3d8c29 exact recursive inventory components
+
+WP-03 recursive inventory records now retain exact native components relative
+to the held source root. The relation is lexical and same-encoding only; it
+does not canonicalize, follow links, fold case, reopen paths or perform I/O.
+Frozen inventories validate the component encoding, while direct-object
+inventories remain flat. This supplies the identity-safe input needed for
+destination-tree planning without enabling recursive mutation prematurely.
+
+The focused path, recursive-inventory and frozen-inventory tests passed on
+macOS, Linux ARM64 and Windows x64. The changed core/test target compiled on
+all three platforms. A full local Files-label attempt is recorded as
+non-green because two environment-sensitive tests aborted; it is not counted
+as a full-label qualification.
+
+Evidence: [a3d8c29 recursive-components qualification record](evidence/ck-files-a3d8c29-recursive-components-20261026.json).
+Destination-tree conflict mapping, recursive copy execution, move, Trash/delete,
+recovery execution and final release gates remain open.
+
 ## 2026-10-26 — Windows real-terminal acceptance of the F5 copy slice
 
 The exact verified Windows Release executable at

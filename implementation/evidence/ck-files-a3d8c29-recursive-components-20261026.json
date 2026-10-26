@@ -1,0 +1,60 @@
+{
+  "commit": "a3d8c29a9207a809cdf451797baace434829b4c8",
+  "scope": "WP-03 recursive inventory exact native relative-component retention",
+  "macos": {
+    "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "build": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/tmp",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "abc0dc898d0994549324ebacba3673eff6d253b8a7b00cc193b4a4a474e513ee",
+    "build_start_utc": "2026-10-26T03:21:05Z",
+    "build_end_utc": "2026-10-26T03:21:42Z",
+    "build_elapsed_seconds": 37,
+    "focused_tests": "test_files_path, test_files_recursive_inventory, test_files_frozen_inventory",
+    "focused_result": "3/3 passed"
+  },
+  "linux_arm64": {
+    "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp03-relative-20261026-01",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "39e8b735907f035d176d20ddce3ee40d1dbfe771a549269342a886478e5c4aa5",
+    "build_start_utc": "2026-10-26T03:21:05Z",
+    "build_end_utc": "2026-10-26T03:21:05Z",
+    "build_elapsed_seconds": 0,
+    "focused_tests": "test_files_path, test_files_recursive_inventory, test_files_frozen_inventory",
+    "focused_result": "3/3 passed"
+  },
+  "windows_x64": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-wp03-relative-20261026-01\\tmp",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_core_tests.exe",
+    "output_sha256": "4E18A7B1032C91F9FF1172654E03B6EA8E291DDF17625E0A782BFA0ADF9DDFFC",
+    "build_start_utc": "2026-10-26T03:21:09.7136750Z",
+    "build_end_utc": "2026-10-26T03:21:11.5920586Z",
+    "build_elapsed_seconds": 2,
+    "focused_tests": "test_files_path, test_files_path_native, test_files_recursive_inventory, test_files_frozen_inventory",
+    "focused_result": "4/4 passed"
+  },
+  "full_files_label_attempt": {
+    "macos": "105/107 passed; ck_vision_files_tests and test_files_index_file_native aborted in environment-sensitive fixtures",
+    "qualification_status": "not accepted as a full-label pass"
+  },
+  "implementation_effect": [
+    "NativeAbsolutePath can return exact lexical components below an exact same-encoding ancestor without I/O, normalization, link resolution or case folding.",
+    "Recursive inventory entries retain those native components and reject foreign-encoding components at the frozen-inventory boundary.",
+    "Direct-object inventories remain flat and do not fabricate a tree relation."
+  ],
+  "limitations": [
+    "This is planning evidence only; it does not enable recursive copy or directory mutation.",
+    "Destination-tree conflict mapping and recursive execution remain open.",
+    "A clean Windows reconfigure is currently blocked by the workstation-installed ckVision 1.3.0 package while this source requires 1.4.0; the existing correctly configured Release build tree compiled the changed targets successfully."
+  ]
+}
