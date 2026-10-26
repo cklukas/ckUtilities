@@ -3,6 +3,61 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — WP-05 worker-owned folder creation checkpoint
+
+Commit `07bbfd8` adds the first user-visible mutation path to `ck-files`:
+`F7` and the Operations menu open a strict `New folder` dialog, and the
+accepted name is submitted as one exact `NativeName` to the active pane's
+worker. The worker revalidates the navigation ticket, pane stamp, route
+encoding and cancellation state, then creates the child relative to its held
+directory using the platform-exclusive native primitive. The UI receives an
+owner-free mutation outcome and starts a fresh worker navigation only after a
+successful creation, so a stale listing cannot be presented as current.
+Invalid, empty, dot, separator-containing or unrepresentable names are
+refused before native mutation; duplicate creation remains an explicit native
+failure. No path is reconstructed from display text and no native handle is
+published to the UI.
+
+The source-slice fingerprint for the seven changed source files is
+`905e9f0712f4366e0389bb2e7f53c7bf3ac26dbaf558c717d0e8dce212b18656`. Release
+focused-target qualification used the current source on all three platforms:
+
+- macOS build started at `2026-10-26T00:29:39Z`, ended at
+  `2026-10-26T00:29:57Z` (18 seconds), with `TMPDIR` under
+  `/Volumes/PRO-BLADE/tmp/ckutilities-create-directory-20261026-01` and
+  output under
+  `/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build`.
+  `ck_vision_files_tests` passed **194/194** and the keymap executable exited
+  0. The verified hashes are
+  `1a4e92b13bba4ca4f41189433e32268015dc173e27aba146728441e47cc0dd8e` for
+  `src/vision/files/ck_vision_files_tests` and
+  `ffee03f1eb10cb752065212ce0d710503704d92737b40d0c31079c6134c1d00c` for
+  `src/vision/keymap/ck_vision_keymap_tests`.
+- Windows build started at `2026-10-26T00:33:45.2723194Z`, ended at
+  `2026-10-26T00:34:05.9354845Z` (20.7 seconds), with source under
+  `V:\dev\ckutilities`, build/output under
+  `V:\tmp\ckutilities-windows-qualification-20261025-01\build`, and
+  `TEMP`, `TMP` and `TMPDIR` under
+  `V:\tmp\ckutilities-create-directory-20261026-01`. `ck_vision_files_tests`
+  passed **194/194** and the keymap executable exited 0. The verified hashes
+  are `6982106F26D81E676A05124E2539C14B6F20F43FF0747856EEA293CC6036375D`
+  and `DC40D53B7FE055E194674F9C7B757BCD319281A09974FEEC03B292B4E9B58F58`.
+- Linux ARM build started at `2026-10-26T00:33:41Z` and completed after the
+  corrected test-source compile at approximately `2026-10-26T00:35:17Z`
+  (about 96 seconds), with source/build under
+  `/home/klukas/tmp/ckutilities-linux-qualification-20261025-01` and
+  `TMPDIR` under `/home/klukas/tmp/ckutilities-create-directory-20261026-01`.
+  `ck_vision_files_tests` passed **194/194** and the keymap executable exited
+  0. The verified hashes are
+  `ad3e8ee3bf1ca4504ffa0cb5d001b81bfb49d6d1c926535aa550a8485f18decb` and
+  `4ea0afd88e628893f0e24b40f88bdb40ffc57e27ffe2785ab8f062d746370256`.
+
+No application instance was launched. This is a folder-creation checkpoint,
+not a complete Norton Commander/Midnight Commander replacement: copy, move,
+delete/Trash, rename, batch execution, metadata/security replay, recovery
+execution, fault-injection/process-crash qualification, sanitizer/race checks
+and interactive acceptance remain open.
+
 ## 2026-10-26 — WP-04 reviewed non-security attribute replay boundary checkpoint
 
 Commit `693e194` adds the worker-only
