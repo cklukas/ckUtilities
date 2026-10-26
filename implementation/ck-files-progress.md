@@ -6467,3 +6467,19 @@ The documentation gate is also covered: all ten utility guides contain feature
 lists and embed generated ckVision screenshots; the committed screenshot set
 contains 28 SVGs. ThreadSanitizer/race qualification, the full filesystem
 matrix, controlled fault testing and interactive acceptance remain open.
+
+
+## 2026-10-26 — WP-07 ThreadSanitizer checkpoint
+
+The fresh macOS arm64 LLVM build passed the complete Files label under
+ThreadSanitizer: **106/106** native/core tests and **1/1** UI aggregate. The
+worker-owned completion, planning, journal, copy, recovery and native index
+tests were included; no TSan data race or deadlock report occurred. The build
+used `-fsanitize=thread` and a task-owned S8T output tree, with the private
+index fixture on owner-enabled PRO-BLADE APFS for the same reason recorded in
+the sanitizer evidence.
+
+Exact configure/build/test times, flags, output path and executable hashes are
+recorded in [ThreadSanitizer evidence](evidence/ck-files-tsan-20261026.json).
+The remaining release blockers are the filesystem/driver matrix, controlled
+fault testing and real interactive acceptance.

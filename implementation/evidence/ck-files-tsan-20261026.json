@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "770d73fd756ded11d5b99f92df951b1240001624",
+  "host": "macOS arm64",
+  "temporary_root": "/Volumes/S8T/tmp/ckutilities-tsan-20261026-01",
+  "private_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-tsan-20261026-01-private",
+  "build": {
+    "configure_start": "2026-10-26T13:22:06Z",
+    "configure_end": "2026-10-26T13:23:02Z",
+    "build_start": "2026-10-26T13:23:05Z",
+    "build_end": "2026-10-26T13:24:03Z",
+    "configuration": "RelWithDebInfo",
+    "generator": "Ninja",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (Clang 23.1.4)",
+    "flags": ["-fsanitize=thread", "-fno-omit-frame-pointer"],
+    "output": "/Volumes/S8T/tmp/ckutilities-tsan-20261026-01/build"
+  },
+  "qualification": {
+    "native_core_files": {
+      "result": "106/106 passed",
+      "start": "2026-10-26T13:24:07Z",
+      "end": "2026-10-26T13:25:03Z",
+      "tsan_options": "halt_on_error=1; second_deadlock_stack=1; history_size=7; report_signal_unsafe=0"
+    },
+    "ui_files": {
+      "result": "1/1 passed",
+      "start": "2026-10-26T13:25:23Z",
+      "end": "2026-10-26T13:25:30Z"
+    },
+    "total_files_result": "107/107 passed",
+    "binary_sha256": {
+      "ck_files_core_tests": "706f9999497a9d7701ec159f81683f0362df76f51a41fea99323765e833f6e1e",
+      "ck_files_native_tests": "89197045a7c8ed349e349ad2b9d1f1584d1fc4b5f4edbae5e161f7fbf257e876",
+      "ck_vision_files_tests": "ef5de21381719d3dea1f716f042919583de172d51465180ef54fb02baf65eb51"
+    }
+  },
+  "remaining_gate": "The filesystem/interactive acceptance matrix and controlled fault testing remain open."
+}
