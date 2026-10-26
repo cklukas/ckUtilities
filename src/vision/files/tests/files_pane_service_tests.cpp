@@ -9,6 +9,7 @@
 #include <atomic>
 #include <algorithm>
 #include <condition_variable>
+#include <cstdlib>
 #include <mutex>
 #include <thread>
 #include <fstream>
@@ -1110,9 +1111,26 @@ CK_TEST(files_service_permanent_delete_is_identity_bound_and_has_no_posix_fallba
     f.stopped();
 }
 #if !defined(_WIN32)
-CK_TEST(files_service_trash_reports_unsupported_without_permanent_delete_fallback) {
+CK_TEST(files_service_trash_uses_native_metadata_and_removes_source) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-trash");
+    ck::testing::ScratchDirectory trash_home("files-service-trash-home");
+#if defined(__APPLE__)
+    const char *previous_home = std::getenv("HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const bool had_home = previous_home != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+#else
+    ck::testing::ScratchDirectory trash_data("files-service-trash-data");
+    const char *previous_home = std::getenv("HOME");
+    const char *previous_xdg = std::getenv("XDG_DATA_HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const std::string previous_xdg_value = previous_xdg ? previous_xdg : "";
+    const bool had_home = previous_home != nullptr;
+    const bool had_xdg = previous_xdg != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+    CK_CHECK(::setenv("XDG_DATA_HOME", trash_data.path().c_str(), 1) == 0);
+#endif
     {
         std::ofstream file(source.path() / "to-trash", std::ios::binary);
         file << "retain when Trash is unavailable";
@@ -1127,11 +1145,28 @@ CK_TEST(files_service_trash_reports_unsupported_without_permanent_delete_fallbac
     const auto request = f.service->trash(before.navigation, before.stamp, before.page->rows()[0].id);
     CK_CHECK(request.state == FilesPaneSubmission::Accepted);
     const auto result = f.reply();
-    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
-             result.error->state == ObservationState::Unsupported &&
-             result.error->error.operation == "trash_child.native_query");
-    CK_CHECK(std::filesystem::exists(source.path() / "to-trash"));
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
+    CK_CHECK(!std::filesystem::exists(source.path() / "to-trash"));
+#if defined(__APPLE__)
+    const auto trash_root = trash_home.path() / ".Trash";
+#else
+    const auto trash_root = trash_data.path() / "Trash";
+#endif
+    CK_CHECK(std::filesystem::exists(trash_root / "files" / "to-trash"));
+    std::ifstream info(trash_root / "info" / "to-trash.trashinfo");
+    const std::string metadata((std::istreambuf_iterator<char>(info)), std::istreambuf_iterator<char>());
+    CK_CHECK(metadata.find("[Trash Info]") != std::string::npos && metadata.find("Path=file://") != std::string::npos &&
+             metadata.find("DeletionDate=") != std::string::npos);
     f.stopped();
+#if defined(__APPLE__)
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+#else
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+    if (had_xdg) CK_CHECK(::setenv("XDG_DATA_HOME", previous_xdg_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("XDG_DATA_HOME") == 0);
+#endif
 }
 #endif
 CK_TEST(files_service_permanent_delete_only_removes_empty_directories_on_windows) {

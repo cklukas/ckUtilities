@@ -4,13 +4,20 @@
 #define _GNU_SOURCE 1
 #endif
 #include "native_filesystem.hpp"
+#include "native_home.hpp"
 
 #include <algorithm>
 #include <iterator>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
+#include <ctime>
+#include <cstdlib>
+#include <iomanip>
+#include <limits.h>
 #include <memory>
+#include <sstream>
 #include <string_view>
 #include <cstdint>
 #include <limits>
@@ -203,11 +210,177 @@ public:
     OwnedDescriptor(const OwnedDescriptor&) = delete;
     OwnedDescriptor& operator=(const OwnedDescriptor&) = delete;
     OwnedDescriptor(OwnedDescriptor&& other) noexcept : descriptor_(std::exchange(other.descriptor_, -1)) {}
+    OwnedDescriptor& operator=(OwnedDescriptor&& other) noexcept {
+        if (this != &other) {
+            if (descriptor_ >= 0) close(descriptor_);
+            descriptor_ = std::exchange(other.descriptor_, -1);
+        }
+        return *this;
+    }
     int get() const noexcept { return descriptor_; }
     void release() noexcept { descriptor_ = -1; }
 private:
     int descriptor_;
 };
+
+Observation<std::string> descriptor_path(int descriptor, const char* operation) {
+#if defined(__linux__)
+    constexpr std::size_t limit = 1024 * 1024;
+    std::string link = "/proc/self/fd/" + std::to_string(descriptor);
+    std::string result(limit, '\0');
+    const auto length = readlink(link.c_str(), result.data(), result.size());
+    if (length < 0)
+        return Observation<std::string>::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    if (static_cast<std::size_t>(length) >= result.size())
+        return Observation<std::string>::unavailable(ObservationState::Unknown,
+            adapter_error(AdapterError::InventoryLimit, operation));
+    result.resize(static_cast<std::size_t>(length));
+    if (result.size() >= 10 && result.compare(result.size() - 10, 10, " (deleted)") == 0)
+        return Observation<std::string>::unavailable(ObservationState::Changed,
+            adapter_error(AdapterError::MetadataChanged, operation));
+    return Observation<std::string>::available(std::move(result));
+#elif defined(__APPLE__)
+    std::string result(PATH_MAX, '\0');
+    if (fcntl(descriptor, F_GETPATH, result.data()) != 0)
+        return Observation<std::string>::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    result.resize(std::strlen(result.c_str()));
+    return Observation<std::string>::available(std::move(result));
+#else
+    return Observation<std::string>::unavailable(ObservationState::Unsupported,
+        adapter_error(AdapterError::UnsupportedQuery, operation));
+#endif
+}
+
+struct TrashDirectories final {
+    OwnedDescriptor files;
+    OwnedDescriptor info;
+};
+
+Observation<OwnedDescriptor> open_directory_path(std::string_view path, bool create, const char* operation) {
+    using Result = Observation<OwnedDescriptor>;
+    if (path.empty() || path.front() != '/')
+        return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation));
+    OwnedDescriptor current(open("/", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    if (current.get() < 0)
+        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    std::size_t begin = 1;
+    while (begin < path.size()) {
+        const auto end = path.find('/', begin);
+        const auto length = end == std::string_view::npos ? path.size() - begin : end - begin;
+        const auto component = path.substr(begin, length);
+        if (component.empty() || component == "." || component == ".." || component.find('\0') != std::string_view::npos)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::UnsupportedQuery, operation));
+
+        OwnedDescriptor next(openat(current.get(), std::string(component).c_str(),
+            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (next.get() < 0 && create && errno == ENOENT) {
+            if (mkdirat(current.get(), std::string(component).c_str(), 0700) != 0 && errno != EEXIST)
+                return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+            if (fsync(current.get()) != 0)
+                return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, errno, operation});
+            next = OwnedDescriptor(openat(current.get(), std::string(component).c_str(),
+                O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        }
+        if (next.get() < 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+        current = std::move(next);
+        if (end == std::string_view::npos) break;
+        begin = end + 1;
+    }
+    return Result::available(std::move(current));
+}
+
+Observation<TrashDirectories> open_trash_directories(const struct stat& source_parent, const char* operation) {
+    using Result = Observation<TrashDirectories>;
+    const auto home = native_home_address();
+    if (!home.value()) {
+        const auto& e = *home.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    const auto home_path = home.value()->posix_bytes();
+    if (!home_path || home_path->empty() || home_path->front() != '/')
+        return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation));
+
+    std::string data_root;
+#if defined(__APPLE__)
+    data_root = *home_path + "/.Trash";
+#else
+    const char* configured = std::getenv("XDG_DATA_HOME");
+    if (configured && configured[0] == '/') data_root = configured;
+    else data_root = *home_path + "/.local/share";
+    data_root += "/Trash";
+#endif
+    auto root = open_directory_path(data_root, true, operation);
+    if (!root.value()) {
+        const auto& e = *root.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    struct stat trash_stat{};
+    if (fstat(root.value()->get(), &trash_stat) != 0)
+        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    if (trash_stat.st_dev != source_parent.st_dev)
+        return Result::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "trash_child.mount_specific_trash"));
+
+    auto files = open_directory_path(data_root + "/files", true, operation);
+    if (!files.value()) {
+        const auto& e = *files.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    auto info = open_directory_path(data_root + "/info", true, operation);
+    if (!info.value()) {
+        const auto& e = *info.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    return Result::available({std::move(files).take_value(), std::move(info).take_value()});
+}
+
+std::string percent_encode_path(std::string_view path) {
+    static constexpr char hex[] = "0123456789ABCDEF";
+    std::string result;
+    result.reserve(path.size() + 7);
+    constexpr auto unreserved = [](unsigned char byte) {
+        return (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') ||
+               (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '.' || byte == '~' || byte == '/';
+    };
+    for (const auto byte : path) {
+        const auto value = static_cast<unsigned char>(byte);
+        if (unreserved(value)) result.push_back(static_cast<char>(value));
+        else {
+            result.push_back('%');
+            result.push_back(hex[value >> 4]);
+            result.push_back(hex[value & 0x0f]);
+        }
+    }
+    return result;
+}
+
+std::string deletion_date() {
+    const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    std::ostringstream value;
+    value << std::setfill('0') << std::setw(4) << local.tm_year + 1900 << '-'
+          << std::setw(2) << local.tm_mon + 1 << '-' << std::setw(2) << local.tm_mday << 'T'
+          << std::setw(2) << local.tm_hour << ':' << std::setw(2) << local.tm_min << ':' << std::setw(2) << local.tm_sec;
+    return value.str();
+}
+
+int rename_noreplace(int source_parent, const char* source, int destination_parent, const char* destination) {
+#if defined(__linux__) && defined(SYS_renameat2)
+    return static_cast<int>(syscall(SYS_renameat2, source_parent, source, destination_parent, destination, 1U));
+#elif defined(__APPLE__)
+    return renameatx_np(source_parent, source, destination_parent, destination, RENAME_EXCL);
+#else
+    errno = ENOTSUP;
+    return -1;
+#endif
+}
 
 struct PosixPublicationContext final {
     PosixPublicationContext(OwnedDescriptor retained_parent, NativeName retained_name)
@@ -931,6 +1104,125 @@ public:
             NativeIdentifier::from_u64(static_cast<std::uint64_t>(actual.st_dev)),
             NativeIdentifier::from_u64(static_cast<std::uint64_t>(actual.st_ino)), generation});
         return Result::available(std::make_unique<PosixDirectoryCursor>(std::move(opened), std::move(observed), scope_));
+    }
+    Observation<bool> trash_child(const NativeName& name, const ObjectIdentity& expected_identity) const override {
+        using Result = Observation<bool>;
+        const auto* spelling = name.posix_bytes();
+        if (!name.is_valid() || !spelling)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "trash_child.name"));
+        if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::UnqualifiedIdentity, "trash_child.identity"));
+
+        const int source_parent = dirfd(directory_.get());
+        struct stat source_parent_stat{};
+        if (fstat(source_parent, &source_parent_stat) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "trash_child.parent"});
+        const auto source_path = descriptor_path(source_parent, "trash_child.original_parent");
+        if (!source_path.value()) {
+            const auto& e = *source_path.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        const auto metadata = stat_metadata(source_parent, spelling->c_str(), false, scope_);
+        if (!metadata.value() || !metadata.value()->identity.value() || !metadata.value()->kind.value()) {
+            if (!metadata.value()) {
+                const auto& e = *metadata.unavailable_detail();
+                return Result::unavailable(e.state, e.error);
+            }
+            return Result::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::UnqualifiedIdentity, "trash_child.source_metadata"));
+        }
+        if (compare_identity(*metadata.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "trash_child.source_identity"));
+        if (*metadata.value()->kind.value() == ObjectKind::Fifo || *metadata.value()->kind.value() == ObjectKind::Socket ||
+            *metadata.value()->kind.value() == ObjectKind::CharacterDevice || *metadata.value()->kind.value() == ObjectKind::BlockDevice ||
+            *metadata.value()->kind.value() == ObjectKind::Other)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "trash_child.kind"));
+        if (metadata.value()->link_count.value() && *metadata.value()->link_count.value() > 1)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::UnsupportedQuery, "trash_child.hard_link"));
+
+        const std::string original_path = *source_path.value() == "/"
+            ? "/" + *spelling : *source_path.value() + "/" + *spelling;
+        auto directories = open_trash_directories(source_parent_stat, "trash_child.directories");
+        if (!directories.value()) {
+            const auto& e = *directories.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        auto trash = std::move(directories).take_value();
+        const auto name_limit = fpathconf(trash.files.get(), _PC_NAME_MAX);
+        const std::size_t max_component = name_limit > 0 ? static_cast<std::size_t>(name_limit) : 255U;
+        const auto suffix = std::string(".ck-") + std::to_string(static_cast<unsigned long long>(getpid()));
+        const auto info_suffix = std::string(".trashinfo");
+        const auto can_use_original = spelling->size() <= max_component &&
+                                      spelling->size() + info_suffix.size() <= max_component;
+        const auto original_candidate = can_use_original ? *spelling : std::string{};
+        const auto body = std::string("[Trash Info]\nPath=file://") + percent_encode_path(original_path) +
+                          "\nDeletionDate=" + deletion_date() + "\n";
+
+        for (std::uint32_t attempt = 0; attempt < 10000; ++attempt) {
+            std::string candidate = original_candidate;
+            if (candidate.empty() || attempt != 0)
+                candidate = std::string("ckutilities") + suffix + "-" + std::to_string(attempt);
+            if (candidate.size() > max_component || candidate.size() + info_suffix.size() > max_component)
+                continue;
+            const auto info_name = candidate + info_suffix;
+            errno = 0;
+            OwnedDescriptor info(openat(trash.info.get(), info_name.c_str(),
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
+            if (info.get() < 0) {
+                if (errno == EEXIST) continue;
+                if (errno == ENAMETOOLONG) continue;
+                return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "trash_child.metadata_create"});
+            }
+            bool metadata_written = true;
+            std::size_t offset = 0;
+            while (offset < body.size()) {
+                const auto written = write(info.get(), body.data() + offset, body.size() - offset);
+                if (written < 0) {
+                    if (errno == EINTR) continue;
+                    metadata_written = false;
+                    break;
+                }
+                if (written == 0) {
+                    metadata_written = false;
+                    break;
+                }
+                offset += static_cast<std::size_t>(written);
+            }
+            if (!metadata_written || fsync(info.get()) != 0) {
+                const int code = errno;
+                unlinkat(trash.info.get(), info_name.c_str(), 0);
+                return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "trash_child.metadata_write"});
+            }
+
+            if (rename_noreplace(source_parent, spelling->c_str(), trash.files.get(), candidate.c_str()) != 0) {
+                const int code = errno;
+                unlinkat(trash.info.get(), info_name.c_str(), 0);
+                if (code == EEXIST) continue;
+                if (code == EXDEV || code == ENOSYS || code == ENOTSUP || code == EOPNOTSUPP)
+                    return Result::unavailable(ObservationState::Unsupported,
+                        {ErrorDomain::Posix, code, "trash_child.mount_or_atomic_primitive"});
+                return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "trash_child.native_rename"});
+            }
+
+            const auto published = stat_metadata(trash.files.get(), candidate.c_str(), false, scope_);
+            if (!published.value() || !published.value()->identity.value() ||
+                compare_identity(*published.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+                return Result::unavailable(ObservationState::Unknown,
+                    adapter_error(AdapterError::UnqualifiedIdentity, "trash_child.destination_identity"));
+            if (fsync(trash.files.get()) != 0 || fsync(source_parent) != 0 || fsync(trash.info.get()) != 0) {
+                const int code = errno;
+                return Result::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Posix, code, "trash_child.directory_fsync"});
+            }
+            return Result::available(true);
+        }
+        return Result::unavailable(ObservationState::Unknown,
+            adapter_error(AdapterError::InventoryLimit, "trash_child.name_exhausted"));
     }
     Observation<bool> publish_noreplace(int source_parent, const NativeName& source_name, int source_descriptor,
                                          const NativeName& destination_name) const {
