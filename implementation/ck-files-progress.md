@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — c61b9d6 cross-filesystem move safety checkpoint
+
+The native move composition now distinguishes same-volume rename from a
+cross-filesystem regular-file move. The latter uses the existing stream-copy
+verification and no-replace publication pipeline, then retires the source
+only after the adapter proves an explicit source-writer exclusion. Windows
+uses an NtCreateFile handle with read sharing only; POSIX/macOS reject that
+request as Unsupported rather than implying a stat-before-delete guarantee.
+Directories, links, recursive moves, and native Trash/Recycle Bin remain
+outside this checkpoint.
+
+The focused source-exclusion contract passed on macOS, Windows x64 with MSVC
+v143 14.44.35207, and Linux ARM64. The Windows workstation exposes only the
+permitted V: development volume for project/test data, so no real
+cross-volume Windows smoke test was claimed; the implementation remains
+gated on that qualification and the remaining move acceptance matrix.
+
+Evidence: [cross-filesystem move qualification record](evidence/ck-files-cross-filesystem-move-qualification-20261026.json).
+
 ## 2026-10-26 — f2c8107 identity-bound permanent-delete checkpoint
 
 The Files app now has a separate `Delete permanently...` command with an

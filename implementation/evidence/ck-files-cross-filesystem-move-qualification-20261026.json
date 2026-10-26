@@ -1,0 +1,50 @@
+{
+  "milestone": "Cross-filesystem move safety checkpoint",
+  "implementation_commit": "c61b9d6",
+  "date": "2026-10-26",
+  "change": [
+    "Same-volume moves retain the identity-bound native rename path.",
+    "Cross-volume regular-file moves compose copy, stream verification, durable no-replace publication, and source retirement.",
+    "Source retirement is admitted only after explicit writer exclusion; POSIX/macOS refuse the exclusion request instead of using a stat-before-delete fallback.",
+    "The operation remains regular-file-only and does not traverse links or recursively remove directories."
+  ],
+  "qualification": {
+    "macos": {
+      "build_output": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "tests": [
+        "ck_files_core_tests --filter move: 11/11 passed",
+        "ck_files_native_tests --suite test_files_security_native.cpp: 4/4 passed",
+        "ck_vision_files_tests --suite files_operation_execution_service_tests.cpp: 1/1 passed",
+        "ck_vision_files_tests --suite files_pane_service_tests.cpp: 55/55 passed"
+      ],
+      "source_exclusion": "POSIX adapter returned UnsupportedQuery and performed no open"
+    },
+    "linux_arm64_rpi4": {
+      "build_output": "/home/klukas/tmp/ckutilities-wp05-crossmove-20261026-01/build/tests/unit/ck_files/ck_files_native_tests",
+      "tests": [
+        "ck_files_native_tests --suite test_files_security_native.cpp: 3/3 passed"
+      ],
+      "source_exclusion": "POSIX adapter returned UnsupportedQuery and performed no open",
+      "scope_note": "The fresh task build compiled native_operation_move_job.cpp into the Linux test binary; the source-exclusion suite was the isolated runtime qualification."
+    },
+    "windows_x64_workstation": {
+      "toolset": "MSVC v143 14.44.35207",
+      "source": "V:\\dev\\ckutilities",
+      "build_output": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+      "tests": [
+        "ck_files_native_tests --suite test_files_security_native.cpp: 4/4 passed",
+        "ck_files_core_tests --filter move: 11/11 passed",
+        "ck_vision_files_tests --suite files_operation_execution_service_tests.cpp: 1/1 passed",
+        "ck_vision_files_tests --suite files_pane_service_tests.cpp: 55/55 passed"
+      ],
+      "source_exclusion": "Windows exclusive source handle acquisition passed",
+      "cross_volume_smoke_test": "Not claimed: workstation project/test data is constrained to the V: development volume; C:, D:, and E: were not used."
+    }
+  },
+  "remaining_scope": [
+    "Qualify a real permitted Windows cross-volume regular-file move.",
+    "Native Trash/Recycle Bin integration.",
+    "Recursive moves and directory copy/move recovery.",
+    "Full interactive acceptance, sanitizer, and race qualification."
+  ]
+}
