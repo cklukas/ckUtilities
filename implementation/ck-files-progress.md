@@ -13,7 +13,10 @@ requires a fresh object identity, holds the parent directory, and calls the
 platform `retire_child` protocol. It never falls back to pathname unlinking or
 stat-then-unlink. POSIX/macOS therefore report explicit Unsupported until a
 qualified object-bound disposition exists; Windows regular-file deletion is
-handle-bound and passed on the v143 workstation.
+handle-bound and passed on the v143 workstation. Windows now also permits
+empty-directory retirement after a relative identity check and native
+enumeration; non-empty directories are refused rather than recursively
+deleted.
 
 Focused qualification passed on macOS, Windows x64 and Linux ARM64: the
 Files app and pane service suites passed, and the new deletion case preserved
