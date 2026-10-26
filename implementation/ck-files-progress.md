@@ -6291,6 +6291,28 @@ qualification pass; they use `/home/klukas/tmp/ckutilities-linux-qualification-2
 and `TMPDIR` is set within that root. See the command output retained in the
 task session for the full CTest list and timing evidence.
 
+## 2026-10-26 — current-source Windows build and install checkpoint
+
+The current committed source (`c62e4a3`) was copied byte-for-byte into the
+task-owned permanent development checkout `V:\\dev\\ckutilities-goal-20261026`.
+The repaired MSVC v143 environment is available on the workstation
+(`19.44.35228.0`, toolset `14.44.35207`). A fresh Release build using the
+pinned ckVision source completed all 458 targets, and an independent installed
+ckVision consumer passed 1/1. All build, cache and temporary paths were under
+`V:\\tmp\\ckutilities-goal-20261026-windows-01`; `TEMP`, `TMP` and `TMPDIR`
+were set to its task directory.
+
+The current revision is installed at
+`V:\\dev\\ckutilities-install-goal-20261026`; all ten installed executables
+passed `--help`. The isolated checker and sysmon reruns pass. The full CTest
+run had 218/222 passes: the initial checker failures came from macOS
+AppleDouble `._*` artifacts in the transferred staging tree and passed after
+those task-owned artifacts were removed; the isolated sysmon sample passed.
+The remaining failure is the Windows ConPTY contract, where all ten launches
+fail before drawing. The test does not currently expose the underlying launch
+diagnostic, so no Windows interactive success is claimed. Exact executable
+hashes and paths are recorded in [current Windows evidence](evidence/ck-files-windows-current-20261026.json).
+
 
 ## 2026-10-26 — WP-02 worker-owned rename boundary checkpoint
 

@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "c62e4a3",
+  "scope": "Current-source Windows Release build, install, and qualification",
+  "host": "ssh workstation",
+  "toolchain": {
+    "visual_studio": "2022 Community / Build Tools environment",
+    "msvc": "19.44.35228.0",
+    "v143": "14.44.35207",
+    "architecture": "x64",
+    "runtime": "static CRT"
+  },
+  "source_root": "V:\\dev\\ckutilities-goal-20261026",
+  "temporary_root": "V:\\tmp\\ckutilities-goal-20261026-windows-01",
+  "build_root": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build",
+  "environment": {
+    "TEMP": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\tmp",
+    "TMP": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\tmp",
+    "TMPDIR": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\tmp"
+  },
+  "build": {
+    "ckvision_sdk": "configured, built, and installed from the pinned source",
+    "ckutilities_targets": "458/458",
+    "installed_consumer": "1/1",
+    "full_ctest": "218/222 passed",
+    "full_ctest_failures": [
+      "ck_vision_only_check and ck_ui_boundary_check initially scanned AppleDouble ._* transfer artifacts; after removing those task-owned staging artifacts both passed",
+      "ck_sysmon_sample initially timed out under the parallel full run; isolated rerun passed",
+      "ck_windows_tools_contract still fails for all ten tools before drawing; the contract test does not currently print the ConPTY launch diagnostic, so no success is claimed"
+    ],
+    "isolated_reruns": {
+      "ck_vision_only_check": "passed",
+      "ck_ui_boundary_check": "passed",
+      "ck_sysmon_sample": "passed",
+      "ck_windows_tools_contract": "failed"
+    }
+  },
+  "install": {
+    "root": "V:\\dev\\ckutilities-install-goal-20261026",
+    "help_smoke": "10/10 installed executables passed --help",
+    "executables": {
+      "ck-utilities.exe": "504EF106CD1A8207DD1812F3045EAD140E175BE7A5C7A09994514410529BAA5E",
+      "ck-json-view.exe": "D4054EBB942BF24B411257AB1CE7B36114D87A25CE365064A04E143C7675B482",
+      "ck-find.exe": "9870908D046EC78F042066462DE6756A97A221CBFE0A5E3C722093BDA9B7E903",
+      "ck-du.exe": "C4C3AA91393F5C6091C33E6F9ED08A6BBF5D6382AC53F579863E15C1CA5A34AE",
+      "ck-files.exe": "7D9EC87AC4549E67C6AA22FF5BB750CA69C6EE15FCB01DFCB57FF585D7C1290C",
+      "ck-edit.exe": "DA984108DD15349F37E723148D1570B0166E3147D0C697DF66027B00FF2C167C",
+      "ck-chat.exe": "CFFD3A52A439A3510A487E43DC5ABA0F8CF02DA9F63B67B29744FE0A80DF4190",
+      "ck-todo.exe": "F0CA70C958C20219465DEEBCC3D04E723C89E969F5EDF475CC00D91EECF7C388",
+      "ck-sysmon.exe": "EC8B65B74F17CAFB0C227ECEA147BC4C2F65CB548E75E3F9F2DBFBF57DAF7FFA",
+      "ck-config.exe": "0BB63A6E13D28D7325046ACB4C257890DC7178388375B3DE81E23F4ED4BDD8CF"
+    }
+  },
+  "production_executable_launched": false,
+  "remaining": [
+    "ConPTY contract diagnosis and pass",
+    "sanitizer/race qualification",
+    "interactive Files acceptance"
+  ]
+}
