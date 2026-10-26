@@ -1,40 +1,100 @@
 {
-  "milestone": "WP-05 Files app rename acceptance",
-  "source_commit": "b92aca0",
-  "date": "2026-10-26",
-  "behavior": {
-    "dialog": "Strict native-name validation",
-    "mutation": "Stamped row and identity-bound worker rename",
-    "publication": "Async pane refresh before the listing is reported current",
-    "destructive_fallback": false
-  },
+  "checkpoint": "WP-02 worker-owned rename boundary",
+  "source_commit": "c0af279",
+  "source_fingerprint": "git:c0af279",
+  "asset_changes": "none",
   "qualification": {
     "macos": {
       "host": "macOS",
-      "build": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
-      "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp",
-      "command": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/src/vision/files/ck_vision_files_tests --filter files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing",
-      "result": "1 test passed"
+      "build_tree": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build",
+      "tmpdir": "/Volumes/PRO-BLADE/tmp/ckutilities-rename-boundary-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T00:51:58Z",
+      "ended": "2026-10-26T00:52:22Z",
+      "result": "107/107 passed",
+      "internal_files_tests": "196/196 passed",
+      "outputs": {
+        "files": {
+          "path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/src/vision/files/ck_vision_files_tests",
+          "sha256": "e35200806c36e4694c85c8a566e7c3d77cfd5014c2f2f3d5b5e6832895c48bad",
+          "mtime": "2026-10-26T01:50:33+0100",
+          "bytes": 5963160
+        },
+        "keymap": {
+          "path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/src/vision/keymap/ck_vision_keymap_tests",
+          "sha256": "ffee03f1eb10cb752065212ce0d710503704d92737b40d0c31079c6134c1d00c",
+          "mtime": "2026-10-26T01:40:59+0100",
+          "bytes": 611720
+        }
+      }
     },
-    "linux_arm64": {
-      "host": "rpi4",
-      "build": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
-      "tmpdir": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/tmp",
-      "command": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/src/vision/files/ck_vision_files_tests --filter files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing",
-      "result": "1 test passed"
+    "windows": {
+      "host": "Windows workstation via ssh workstation",
+      "build_tree": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "tmpdir": "V:\\tmp\\ckutilities-rename-boundary-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T01:53:09+01:00",
+      "ended": "2026-10-26T01:53:37+01:00",
+      "result": "107/107 passed",
+      "internal_files_tests": "196/196 passed",
+      "outputs": {
+        "files": {
+          "path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+          "sha256": "F1EA6693BF956A7E4C128BD6C62FC89A74A4F2AD22F961C296ABF5EF069F9A36",
+          "mtime": "2026-10-26T01:51:46+01:00",
+          "bytes": 3341312
+        },
+        "keymap": {
+          "path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\src\\vision\\keymap\\Release\\ck_vision_keymap_tests.exe",
+          "sha256": "FCC9E08B89EDE810E22652BFF4D40415BF580175D2354E68C229040B00E3D9C4",
+          "mtime": "2026-10-26T01:51:47+01:00",
+          "bytes": 263168
+        }
+      }
     },
-    "windows_x64": {
-      "host": "workstation",
-      "toolset": "MSVC v143 14.44.35207",
-      "build": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
-      "tmpdir": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\tmp",
-      "command": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe --filter files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing",
-      "result": "1 test passed"
+    "linux": {
+      "host": "Debian aarch64 rpi4 via ssh rpi4",
+      "build_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+      "tmpdir": "/home/klukas/tmp/ckutilities-linux-rename-boundary-20261026-01",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T00:53:51Z",
+      "ended": "2026-10-26T00:54:25Z",
+      "result": "107/107 passed",
+      "internal_files_tests": "196/196 passed",
+      "outputs": {
+        "files": {
+          "path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/files/ck_vision_files_tests",
+          "sha256": "759c0f15e0d746357695006431907041c1c1f227f32dad2abc4a73d288efd9af",
+          "mtime": "2026-10-26 01:50:30.313195585 +0100",
+          "bytes": 5765888
+        },
+        "keymap": {
+          "path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/keymap/ck_vision_keymap_tests",
+          "sha256": "4ea0afd88e628893f0e24b40f88bdb40ffc57e27ffe2785ab8f062d746370256",
+          "mtime": "2026-10-26 01:50:29.177212443 +0100",
+          "bytes": 647792
+        }
+      }
     }
   },
-  "remaining_scope": [
-    "Case-only rename still depends on qualified native identity proof.",
-    "Trash/Recycle Bin and permanent deletion remain unimplemented on platforms without a qualified disposition protocol.",
-    "Cross-filesystem move, recursive move, recovery execution, sanitizer/race gates and real-window release acceptance remain open."
-  ]
+  "scope": {
+    "implemented": [
+      "worker re-resolves the stamped row and native identity",
+      "Windows no-replace rename acquires a write-capable source parent before mutation and flushes both parents",
+      "strict exact-name Rename dialog and F2 keymap command",
+      "refresh is requested only after acknowledged mutation",
+      "POSIX protocols remain explicit Unsupported with no path-based fallback"
+    ],
+    "not_claimed": [
+      "case-only rename",
+      "cross-directory move",
+      "Trash/delete",
+      "full Norton Commander or Midnight Commander mutation feature set",
+      "sanitizer/race qualification",
+      "production executable or interactive-window acceptance"
+    ]
+  }
 }
