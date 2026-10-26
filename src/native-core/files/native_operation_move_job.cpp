@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_operation_move_job.hpp"
+#include "native_operation_copy_job.hpp"
 #include "native_operation_recovery_evidence.hpp"
 
 #include <array>
@@ -21,9 +22,9 @@ bool same(const ObjectIdentity &left, const ObjectIdentity &right) noexcept {
     return compare_identity(left, right) == IdentityComparison::Same;
 }
 
-std::optional<NativeName> generated_name(NameEncoding encoding, const OperationJournalId &id,
-                                         std::size_t item) {
-    std::string text = ".ck-move-journal-";
+std::optional<NativeName> generated_name(NameEncoding encoding, const char *prefix,
+                                         const OperationJournalId &id, std::size_t item) {
+    std::string text = prefix;
     constexpr char hex[] = "0123456789abcdef";
     for (const auto byte : id.bytes) {
         const auto value = std::to_integer<unsigned char>(byte);
@@ -42,6 +43,28 @@ std::optional<NativeName> generated_name(NameEncoding encoding, const OperationJ
         return NativeName::from_windows(std::move(units));
     }
     return std::nullopt;
+}
+
+bool same_volume(const ObjectIdentity &left, const ObjectIdentity &right) noexcept {
+    return left.scope == right.scope && left.scheme == right.scheme && left.volume == right.volume;
+}
+
+Observation<OperationMetadataJob::Pointer> move_metadata(OpenedEntry &staging, const HeldChild &source,
+                                                          bool allow_unhandled_metadata_loss) {
+    OperationMetadataRequest request;
+    request.apply_traversal_metadata = [&staging, &source](std::stop_token) {
+        return staging.apply_portable_basic_metadata(source.metadata());
+    };
+    request.apply_security_metadata = [allow_unhandled_metadata_loss](std::stop_token) {
+        if (allow_unhandled_metadata_loss)
+            return Observation<bool>::available(true);
+        return Observation<bool>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::ProviderReviewRequired),
+             "native_operation_move.metadata_loss_consent"});
+    };
+    request.apply_final_times = [](std::stop_token) { return Observation<bool>::available(true); };
+    request.flush_destination = [&staging](std::stop_token) { return staging.flush_content(); };
+    return OperationMetadataJob::create(std::move(request));
 }
 
 OperationJournalId item_id(OperationJournalId value, std::size_t item) noexcept {
@@ -124,11 +147,72 @@ Observation<NativeOperationMoveJob::Pointer> NativeOperationMoveJob::create(
         return rejected<Pointer>(AdapterError::PlanDecisionStale, "native_operation_move.destination_identity",
                                 ObservationState::Changed);
 
+    auto source_parent_identity = request.source->parent()->identity();
+    const auto destination_identity = request.destination->identity();
+    if (!source_parent_identity.value() || !destination_identity.value())
+        return Observation<Pointer>::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+             "native_operation_move.volume_identity"});
+
+    NativeOperationCopyJob::Pointer cross_filesystem_copy;
+    if (!same_volume(*source_parent_identity.value(), *destination_identity.value())) {
+        const auto staging_name = generated_name(request.destination_name.encoding(), ".ck-move-staging-",
+                                                 request.journal->id(), request.item);
+        if (!staging_name)
+            return rejected<Pointer>(AdapterError::UnrepresentableName,
+                                     "native_operation_move.staging_name");
+        NativeOperationCopyRequest copy_request{
+            request.journal,
+            request.journal_file,
+            request.item,
+            request.source->parent(),
+            *source_parent_identity.value(),
+            request.source->name(),
+            *request.source->metadata().identity.value(),
+            request.destination,
+            *destination_identity.value(),
+            *staging_name,
+            request.destination_name,
+            request.copy_limits,
+            {},
+            FileOperation::Move};
+        const auto source = request.source;
+        copy_request.prepare_metadata = [source, allow = request.allow_unhandled_metadata_loss](
+                                            OpenedEntry &staging, std::stop_token) {
+            return move_metadata(staging, *source, allow);
+        };
+        auto copied = NativeOperationCopyJob::create(std::move(copy_request));
+        if (!copied.value())
+            return Observation<Pointer>::unavailable(copied.unavailable_detail()->state,
+                                                     copied.unavailable_detail()->error);
+        cross_filesystem_copy = std::move(copied).take_value();
+    }
     auto state = std::make_shared<State>(std::move(request));
-    return Observation<Pointer>::available(Pointer(new NativeOperationMoveJob(std::move(state))));
+    return Observation<Pointer>::available(Pointer(new NativeOperationMoveJob(std::move(state),
+                                                                                std::move(cross_filesystem_copy))));
 }
 
 OperationExecutionState NativeOperationMoveJob::advance(std::stop_token stop) {
+    if (cross_filesystem_copy_) {
+        const auto state = cross_filesystem_copy_->advance(stop);
+        switch (state) {
+        case OperationExecutionState::Complete:
+            phase_ = result_.state = OperationExecutionState::Complete;
+            break;
+        case OperationExecutionState::Failed:
+        case OperationExecutionState::Cancelled:
+        case OperationExecutionState::RetainedSource:
+        case OperationExecutionState::NeedsReconciliation:
+            phase_ = result_.state = state;
+            if (cross_filesystem_copy_->result().failure)
+                result_.failure = cross_filesystem_copy_->result().failure;
+            break;
+        default:
+            phase_ = state;
+            break;
+        }
+        return phase_;
+    }
     if (phase_ == OperationExecutionState::Complete || phase_ == OperationExecutionState::Failed ||
         phase_ == OperationExecutionState::Cancelled || phase_ == OperationExecutionState::NeedsReconciliation)
         return phase_;
@@ -305,7 +389,7 @@ Observation<NativeOperationMoveBatchJob::Pointer> create_native_operation_move_b
             return rejected<NativeOperationMoveBatchJob::Pointer>(AdapterError::PlanInvalid,
                                                         "native_operation_move_batch.source");
         const auto id = item_id(request.journal_id, item);
-        const auto journal_name = generated_name(request.journal_root->encoding(), id, item);
+        const auto journal_name = generated_name(request.journal_root->encoding(), ".ck-move-journal-", id, item);
         if (!journal_name)
             return rejected<NativeOperationMoveBatchJob::Pointer>(AdapterError::UnrepresentableName,
                                                         "native_operation_move_batch.journal_name");
@@ -325,7 +409,8 @@ Observation<NativeOperationMoveBatchJob::Pointer> create_native_operation_move_b
                                                                           appended.unavailable_detail()->error);
         NativeOperationMoveRequest move_request{
             journal_pointer, std::shared_ptr<OperationJournalFile>(std::move(file).take_value()), 0,
-            source, request.destination, *destination_identity.value(), request.destination_names[item]};
+            source, request.destination, *destination_identity.value(), request.destination_names[item],
+            request.copy_limits, request.allow_unhandled_metadata_loss};
         auto job = NativeOperationMoveJob::create(std::move(move_request));
         if (!job.value())
             return Observation<NativeOperationMoveBatchJob::Pointer>::unavailable(job.unavailable_detail()->state,

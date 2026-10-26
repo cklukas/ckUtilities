@@ -78,6 +78,30 @@ CK_TEST(native_security_query_limits_foreign_models_and_invalid_parts_remain_exp
     CK_CHECK(opened->read_security(foreign).state() == ObservationState::Unsupported);
 }
 
+CK_TEST(native_move_source_access_is_explicitly_qualified) {
+    const ck::testing::ScratchDirectory scratch("files-move-source-access");
+    write_file(scratch.path() / "file");
+    NativeFileSystem filesystem;
+    auto parent_result = filesystem.open_directory(scratch.path());
+    CK_CHECK(parent_result.value());
+    if (!parent_result.value()) return;
+    auto parent = std::move(parent_result).take_value();
+#if defined(_WIN32)
+    const auto name = NativeName::from_windows(u"file");
+#else
+    const auto name = NativeName::from_posix("file");
+#endif
+    CK_CHECK(name.has_value());
+    if (!name) return;
+    auto opened = parent->open_child(*name, EntryAccess::ContentRead | EntryAccess::MoveSource);
+#if defined(_WIN32)
+    CK_CHECK(opened.value());
+#else
+    CK_CHECK(!opened.value() && opened.state() == ObservationState::Unsupported &&
+             opened.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery));
+#endif
+}
+
 #if defined(__linux__)
 namespace {
 NativeBytes linux_acl_fixture() {

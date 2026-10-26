@@ -198,6 +198,8 @@ struct FilesOperationExecutionService::State final {
             move.journal_id = value.journal_id;
             move.journal_limits = value.policy.journal_limits;
             move.open_journal = std::move(value.open_journal);
+            move.copy_limits = value.policy.copy_limits;
+            move.allow_unhandled_metadata_loss = value.policy.allow_unhandled_metadata_loss;
             auto batch = ck::files::create_native_operation_move_batch(std::move(move));
             if (!batch.value()) {
                 fail(*batch.unavailable_detail());

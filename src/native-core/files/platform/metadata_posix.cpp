@@ -1394,6 +1394,9 @@ public:
     Observation<std::unique_ptr<OpenedEntry>> open_child(const NativeName& name, EntryAccess access = EntryAccess::MetadataOnly) const override {
         if (!valid_entry_access(access)) return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Failed,
             adapter_error(AdapterError::InvalidAccess, "open_child.access"));
+        if (requests_move_source(access))
+            return Observation<std::unique_ptr<OpenedEntry>>::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::UnsupportedQuery, "open_child.move_source_exclusion"));
         using Result = Observation<std::unique_ptr<OpenedEntry>>;
         const auto* spelling = name.posix_bytes();
         if (!spelling || !name.is_valid())

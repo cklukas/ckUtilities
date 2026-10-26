@@ -30,20 +30,24 @@ class NativeName;
 // InodeFlags independently requests a Linux regular-file readable handle.
 enum class EntryAccess : unsigned {
     MetadataOnly = 0, MetadataAndAttributes = 1, MetadataAndSecurity = 2,
-    MetadataAndFullSecurity = 6, MetadataAndLayout = 8, MetadataAndInodeFlags = 16, ContentRead = 32
+    MetadataAndFullSecurity = 6, MetadataAndLayout = 8, MetadataAndInodeFlags = 16, ContentRead = 32,
+    // Windows-only source exclusion for cross-filesystem moves. POSIX
+    // adapters refuse this request rather than imply writer exclusion.
+    MoveSource = 64
 };
 constexpr EntryAccess operator|(EntryAccess left, EntryAccess right) noexcept {
     return static_cast<EntryAccess>(static_cast<unsigned>(left) | static_cast<unsigned>(right));
 }
 constexpr bool valid_entry_access(EntryAccess access) noexcept {
     const auto bits = static_cast<unsigned>(access);
-    return (bits & ~63U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
+    return (bits & ~127U) == 0 && ((bits & 4U) == 0 || (bits & 2U) != 0);
 }
 constexpr bool requests_attributes(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 1U) != 0; }
 constexpr bool requests_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 2U) != 0; }
 constexpr bool requests_audit_security(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 4U) != 0; }
 constexpr bool requests_inode_flags(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 16U) != 0; }
 constexpr bool requests_content_read(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 32U) != 0; }
+constexpr bool requests_move_source(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 64U) != 0; }
 constexpr bool requests_layout(EntryAccess access) noexcept { return (static_cast<unsigned>(access) & 8U) != 0; }
 
 struct ContentReadLimits {

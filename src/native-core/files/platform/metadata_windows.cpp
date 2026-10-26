@@ -1488,7 +1488,7 @@ private:
         const auto rights = FILE_READ_ATTRIBUTES | SYNCHRONIZE | (requests_content_read(access) ? FILE_READ_DATA : 0) |
             (requests_attributes(access) ? FILE_READ_EA : 0) |
             (requests_security(access) ? READ_CONTROL : 0) | (requests_audit_security(access) ? ACCESS_SYSTEM_SECURITY : 0);
-        auto result = open_native_component(name, rights, mode);
+        auto result = open_native_component(name, rights, mode, requests_move_source(access));
         if (!result.value()) {
             const auto& error = *result.unavailable_detail();
             return Observation<std::unique_ptr<OpenedEntry>>::unavailable(error.state, error.error);
@@ -1563,7 +1563,8 @@ private:
                  "publish_noreplace.directory_identity"});
         return Result::available(std::move(opened));
     }
-    Observation<OwnedHandle> open_native_component(const NativeName& name, ACCESS_MASK rights, ChildLookupMode mode) const {
+    Observation<OwnedHandle> open_native_component(const NativeName& name, ACCESS_MASK rights, ChildLookupMode mode,
+                                                   bool exclusive = false) const {
         using Result = Observation<OwnedHandle>;
         const auto* units = name.windows_units();
         if (!units || !name.is_valid() || units->find(u':') != std::u16string::npos ||
@@ -1589,8 +1590,9 @@ private:
         attributes.Attributes=mode==ChildLookupMode::WindowsIgnoreCase?OBJ_CASE_INSENSITIVE:0;
         IO_STATUS_BLOCK io{};
         HANDLE raw = nullptr;
+        const auto sharing = exclusive ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
         const NTSTATUS status = NtCreateFile(&raw, rights, &attributes, &io, nullptr, 0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN,
+            sharing, FILE_OPEN,
             FILE_OPEN_REPARSE_POINT | FILE_OPEN_NO_RECALL | FILE_SYNCHRONOUS_IO_NONALERT, nullptr, 0);
         OwnedHandle opened(raw);
         if (status < 0 || status == 0x00000103L)

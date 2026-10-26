@@ -77,6 +77,7 @@ struct NativeOperationCopyJob::State final {
     NativeOperationCopyRequest request;
     std::unique_ptr<OpenedEntry> source;
     std::unique_ptr<OpenedEntry> staging;
+    bool source_exclusion = false;
 
     Observation<bool> cleanup_unpublished_staging() {
         const auto journal_state = request.journal->state(request.item);
@@ -119,7 +120,8 @@ struct NativeOperationCopyJob::State final {
 Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
     NativeOperationCopyRequest request) {
     if (!request.journal || !request.journal_file || request.item >= request.journal->limits().max_items ||
-        request.journal->operation() != FileOperation::Copy ||
+        (request.operation != FileOperation::Copy && request.operation != FileOperation::Move) ||
+        request.journal->operation() != request.operation ||
         request.journal->state(request.item) != OperationJournalState::Planned ||
         !request.source_parent || !request.destination || !request.source_name.is_valid() ||
         !request.staging_name.is_valid() ||
@@ -181,7 +183,9 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
     copy.item = state->request.item;
     copy.journal = state->request.journal;
     copy.revalidate_source = [state](std::stop_token) {
-        auto opened = state->request.source_parent->open_child(state->request.source_name, EntryAccess::ContentRead);
+        const auto access = state->request.operation == FileOperation::Move
+            ? EntryAccess::ContentRead | EntryAccess::MoveSource : EntryAccess::ContentRead;
+        auto opened = state->request.source_parent->open_child(state->request.source_name, access);
         if (!opened.value()) return unavailable_bool(*opened.unavailable_detail());
         auto metadata = (*opened.value())->inspect_basic();
         if (!metadata.value()) return unavailable_bool(*metadata.unavailable_detail());
@@ -190,6 +194,7 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
             *metadata.value()->kind.value() != ObjectKind::RegularFile)
             return Observation<bool>::available(false);
         state->source = std::move(opened).take_value();
+        state->source_exclusion = state->request.operation == FileOperation::Move;
         return Observation<bool>::available(true);
     };
     copy.revalidate_destination = [state](std::stop_token) {
@@ -246,14 +251,15 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
     };
     execution_request.prepare_commit = [state, append](std::stop_token) {
         OperationCommitRequest commit;
-        commit.operation = FileOperation::Copy;
+        commit.operation = state->request.operation;
         commit.item = state->request.item;
         commit.journal = state->request.journal;
         commit.revalidate_source = [state](std::stop_token) {
             if (!state->source) return rejected<bool>(AdapterError::InvalidNativeResult,
                                                        "native_operation_copy.commit_source_handle");
-            auto current = state->request.source_parent->open_child(state->request.source_name,
-                                                                     EntryAccess::MetadataOnly);
+            const auto access = state->request.operation == FileOperation::Move
+                ? EntryAccess::MetadataOnly | EntryAccess::MoveSource : EntryAccess::MetadataOnly;
+            auto current = state->request.source_parent->open_child(state->request.source_name, access);
             if (!current.value()) return unavailable_bool(*current.unavailable_detail());
             const auto current_metadata = (*current.value())->inspect_basic();
             if (!current_metadata.value()) return unavailable_bool(*current_metadata.unavailable_detail());
@@ -279,6 +285,25 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
             if (!published.value()) return unavailable_bool(*published.unavailable_detail());
             return Observation<bool>::available(*published.value());
         };
+        if (state->request.operation == FileOperation::Move) {
+            commit.verify_source_stability = [state](std::stop_token) {
+                if (!state->source_exclusion)
+                    return Observation<SourceStabilityGuarantee>::unavailable(ObservationState::Unsupported,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+                         "native_operation_copy.source_exclusion"});
+                return Observation<SourceStabilityGuarantee>::available(SourceStabilityGuarantee::EnforcedExclusion);
+            };
+            commit.retire_source = [state](std::stop_token) {
+                if (!state->source || !state->request.source_parent)
+                    return rejected<bool>(AdapterError::InvalidNativeResult,
+                                          "native_operation_copy.retire_source_handle");
+                auto retired = state->request.source_parent->retire_child(
+                    state->request.source_name, state->request.source_identity);
+                if (!retired.value())
+                    return unavailable_bool(*retired.unavailable_detail());
+                return Observation<bool>::available(*retired.value());
+            };
+        }
         commit.append_journal = append;
         return OperationCommitJob::create(std::move(commit));
     };
@@ -386,7 +411,8 @@ Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
             *staging_name,
             destination_name,
             request.policy.copy_limits,
-            {}};
+            {},
+            FileOperation::Copy};
         const auto held_source = source;
         const auto allow_metadata_loss = request.policy.allow_unhandled_metadata_loss;
         copy_request.prepare_metadata = [held_source, allow_metadata_loss](OpenedEntry& staging,

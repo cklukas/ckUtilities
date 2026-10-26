@@ -39,11 +39,13 @@ struct NativeOperationCopyRequest final {
     // copy path must never imply that unhandled metadata was preserved.
     std::function<Observation<OperationMetadataJob::Pointer>(OpenedEntry&, std::stop_token)>
         prepare_metadata;
+    FileOperation operation = FileOperation::Copy;
 };
 
-// Worker-only native binding of OperationCopyJob and OperationCommitJob. This
-// class deliberately supports Copy only until native metadata adapters and
-// move retirement are independently qualified.
+// Worker-only native binding of OperationCopyJob and OperationCommitJob. Move
+// is only admitted when the platform supplies an explicit source-exclusion
+// handle; otherwise the commit path retains the source and reports the
+// capability refusal.
 class NativeOperationCopyJob final {
 public:
     using Pointer = std::unique_ptr<NativeOperationCopyJob>;

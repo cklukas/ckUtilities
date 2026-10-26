@@ -3,6 +3,7 @@
 #pragma once
 
 #include "held_child.hpp"
+#include "native_operation_copy_job.hpp"
 #include "operation_batch_job.hpp"
 #include "operation_journal_file.hpp"
 
@@ -13,10 +14,10 @@
 
 namespace ck::files {
 
-// Same-filesystem, worker-owned move. The native rename primitive is the
-// commit: it must be identity checked and no-replace. Cross-filesystem moves
-// are rejected by the adapter until copy/verify/source-retirement has its own
-// qualified implementation.
+// Worker-owned move. Same-filesystem moves use an identity-checked,
+// no-replace native rename. Cross-filesystem regular-file moves use verified
+// copy, durable publication, and source retirement only where the adapter can
+// enforce source-writer exclusion; unsupported cases retain the source.
 struct NativeOperationMoveRequest final {
     OperationJournal::Pointer journal;
     std::shared_ptr<OperationJournalFile> journal_file;
@@ -25,6 +26,8 @@ struct NativeOperationMoveRequest final {
     std::shared_ptr<const DirectoryCursor> destination;
     ObjectIdentity destination_identity;
     NativeName destination_name;
+    StreamCopyLimits copy_limits{};
+    bool allow_unhandled_metadata_loss = false;
 };
 
 class NativeOperationMoveJob final {
@@ -39,9 +42,12 @@ public:
 
 private:
     struct State;
-    explicit NativeOperationMoveJob(std::shared_ptr<State> state) noexcept : state_(std::move(state)) {}
+    explicit NativeOperationMoveJob(std::shared_ptr<State> state,
+                                   NativeOperationCopyJob::Pointer cross_filesystem_copy = {}) noexcept
+        : state_(std::move(state)), cross_filesystem_copy_(std::move(cross_filesystem_copy)) {}
 
     std::shared_ptr<State> state_;
+    NativeOperationCopyJob::Pointer cross_filesystem_copy_;
     OperationExecutionState phase_ = OperationExecutionState::Copying;
     OperationExecutionResult result_;
 };
@@ -55,6 +61,8 @@ struct NativeOperationMoveBatchRequest final {
     OperationJournalLimits journal_limits{};
     std::function<Observation<std::unique_ptr<OperationJournalFile>>(
         const NativeAbsolutePath&, const NativeName&, bool)> open_journal;
+    StreamCopyLimits copy_limits{};
+    bool allow_unhandled_metadata_loss = false;
 };
 
 class NativeOperationMoveBatchJob final {
