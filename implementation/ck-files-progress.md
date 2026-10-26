@@ -6510,3 +6510,14 @@ the installed documentation contains 10 guides and 28 screenshots.
 Exact build intervals, absolute V: paths, executable hashes, and check counts
 are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matrix-20261026.json).
 Launcher launch/return and real interactive terminal acceptance remain open.
+
+
+## 2026-10-26 — Windows ZIP package checkpoint
+
+The current Windows Release ZIP was rebuilt and extracted from the task-owned
+`V:` build tree. The extracted package passed all eight `--version` checks and
+all eight `--help` checks, and contains the complete documentation payload:
+10 utility guides and 28 generated screenshots. The archive hash, exact
+rehearsal interval and package path are recorded in [Windows package evidence](evidence/ck-utilities-windows-package-20261026.json).
+
+Launcher launch/return and real interactive terminal acceptance remain open.

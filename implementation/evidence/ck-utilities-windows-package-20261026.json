@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "166cb95",
+  "host": "Windows workstation",
+  "temporary_root": "V:\\tmp\\ckutilities-goal-20261026-windows-01",
+  "package": {
+    "path": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build\\ck-utilities-0.2.0-windows-x64.zip",
+    "sha256": "8720D6404E454755F705DF1EAFC65254AEC42E10220935A2A93C2C00943532F2",
+    "rehearsal_start": "2026-10-26T13:30:14.3390596Z",
+    "rehearsal_end": "2026-10-26T13:30:26.4859330Z",
+    "elapsed_seconds": 12.15
+  },
+  "checks": {
+    "version": "8/8 passed",
+    "help": "8/8 passed",
+    "guides": 10,
+    "screenshots": 28
+  },
+  "remaining_gate": "Launcher launch/return and real interactive terminal acceptance remain open."
+}
