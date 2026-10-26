@@ -1028,7 +1028,33 @@ public:
             compare_identity(*metadata.value()->identity.value(), expected_identity) != IdentityComparison::Same)
             return Result::unavailable(ObservationState::Changed,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "retire_child.identity"});
-        if (!metadata.value()->kind.value() || *metadata.value()->kind.value() != ObjectKind::RegularFile)
+        if (!metadata.value()->kind.value())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "retire_child.kind"});
+        if (*metadata.value()->kind.value() == ObjectKind::Directory) {
+            // Directory retirement is deliberately limited to an empty
+            // directory. The probe is relative to this held parent and its
+            // identity is checked before the handle-bound disposition below;
+            // no recursive pathname deletion is attempted.
+            auto child_directory = open_directory_child(name);
+            if (!child_directory.value()) {
+                const auto &error = *child_directory.unavailable_detail();
+                return Result::unavailable(error.state, error.error);
+            }
+            const auto child_identity = (*child_directory.value())->identity();
+            if (!child_identity.value() ||
+                compare_identity(*child_identity.value(), expected_identity) != IdentityComparison::Same)
+                return Result::unavailable(ObservationState::Changed,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                     "retire_child.directory_identity"});
+            const auto entries = (*child_directory.value())->read(DirectoryCursor::max_batch_size);
+            if (entries.error)
+                return Result::unavailable(entries.error->state, entries.error->error);
+            if (!entries.names.empty() || entries.state == DirectoryReadState::More)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable),
+                     "retire_child.nonempty_directory"});
+        } else if (*metadata.value()->kind.value() != ObjectKind::RegularFile)
             return Result::unavailable(ObservationState::Unsupported,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "retire_child.kind"});
 

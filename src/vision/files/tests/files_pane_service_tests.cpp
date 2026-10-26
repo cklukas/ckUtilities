@@ -1109,6 +1109,30 @@ CK_TEST(files_service_permanent_delete_is_identity_bound_and_has_no_posix_fallba
 #endif
     f.stopped();
 }
+CK_TEST(files_service_permanent_delete_only_removes_empty_directories_on_windows) {
+    Fixture f;
+    ck::testing::ScratchDirectory source("files-service-delete-directory");
+    std::filesystem::create_directory(source.path() / "empty-directory");
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    f.service = std::make_unique<FilesPaneService>(
+        native_files_pane_backend(take(NativeAbsolutePath::from_host(f.scratch.path()))), FilesPaneServiceLimits{},
+        [t = f.trace] { t->notify(); });
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto before = f.reply();
+    CK_CHECK(before.state == FilesPaneReplyState::Ready && before.page && before.page->rows().size() == 1);
+    const auto request = f.service->permanently_delete(before.navigation, before.stamp, before.page->rows()[0].id);
+    CK_CHECK(request.state == FilesPaneSubmission::Accepted);
+    const auto result = f.reply();
+#if defined(_WIN32)
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
+    CK_CHECK(!std::filesystem::exists(source.path() / "empty-directory"));
+#else
+    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
+             result.error->state == ObservationState::Unsupported);
+    CK_CHECK(std::filesystem::is_directory(source.path() / "empty-directory"));
+#endif
+    f.stopped();
+}
 CK_TEST(files_service_short_wire_budget_never_publishes_an_incomplete_requested_viewport) {
     Fixture f;
     FilesPaneServiceLimits limits;
