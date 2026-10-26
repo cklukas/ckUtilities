@@ -23,3 +23,8 @@ foreach(suite native directory_native child_native channels_native attributes_na
   add_test(NAME test_files_${suite} COMMAND ck_files_native_tests --suite test_files_${suite}.cpp)
   set_tests_properties(test_files_${suite} PROPERTIES LABELS "files;native" TIMEOUT 60)
 endforeach()
+# The index-file case deliberately sorts 100,000 records through the private
+# native workspace. Its measured external-sort time can exceed one minute on a
+# slower task-owned volume; keep the bounded workload and give that one test a
+# measured-performance envelope instead of turning a timeout into a pass.
+set_tests_properties(test_files_index_file_native PROPERTIES TIMEOUT 240)
