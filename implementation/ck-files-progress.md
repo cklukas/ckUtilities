@@ -22,7 +22,8 @@ Files executable, with `cktest: 1 tests, all passed`.
 Qualification: macOS passed 185 native tests, Linux ARM64 passed 189 native
 tests, and Windows x64 passed 184 native tests. The focused Files app
 recursive-copy and same-filesystem move acceptance cases passed on all three
-platforms. Windows used the mandatory `V:` source, build and temporary roots;
+platforms; the full Files application suites passed 207/207 on macOS, 207/207
+on Linux ARM64 and 206/206 on Windows. Windows used the mandatory `V:` source, build and temporary roots;
 the verified executable was
 `V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe`.
 That exact executable is installed at

@@ -13,17 +13,20 @@
     "macos": {
       "native_operation_content": "19/19",
       "full_native": "185/185",
-      "focused_files_app_recursive_and_move": "passed"
+      "focused_files_app_recursive_and_move": "passed",
+      "full_files_app": "207/207"
     },
     "linux_arm64": {
       "native_operation_content": "20/20",
       "full_native": "189/189",
-      "focused_files_app_recursive_and_move": "passed"
+      "focused_files_app_recursive_and_move": "passed",
+      "full_files_app": "207/207"
     },
     "windows_x64": {
       "native_operation_content": "19/19",
       "full_native": "184/184",
       "focused_files_app_recursive_and_move": "passed",
+      "full_files_app": "206/206",
       "conpty": "10 tools started, rendered and quit; 1/1 contract test passed"
     }
   },
