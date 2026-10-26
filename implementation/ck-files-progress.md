@@ -6109,6 +6109,33 @@ No production executable was launched. Cross-directory move, copy, Trash/delete,
 sanitizer/race qualification and interactive acceptance remain open.
 
 
+## 2026-10-26 — WP-04 recursive copy topology and Windows toolchain checkpoint
+
+Commits `11f49fa` and `fb2eb58` complete the cross-pane recursive-copy safety
+qualification boundary. Native panes now share one provider comparison scope;
+independent `NativeFileSystem` adapters remain isolated. Recursive topology
+acceptance requires a verified provider-root boundary, propagates verified
+missing-root absence to descendants, and keeps ambiguous repeated ancestors
+conservative. Destination-parent absence is not reported as a collision when
+the missing parent is itself proven absent. POSIX directory link counts are no
+longer misclassified as hard-link preservation evidence.
+
+Linux ARM64 passed the recursive Files UI acceptance and the new source,
+topology, and ancestor checks. macOS passed the corresponding core checks; its
+UI acceptance remains blocked by the existing private-index fixture failure
+(`index_file.private_filesystem`), not by the recursive-copy implementation.
+Windows v143 was repaired on `workstation` using Visual Studio Build Tools
+17.14.37411.7 / MSVC 14.44.35228, with installer temporary data under
+`V:\tmp\ckutilities-v143-install-20261026-01`. Windows passed the source
+capability, topology, destination-conflict, and full ancestor focused suites
+(27 tests total).
+
+No production executable was launched. Sanitizer/race qualification, Windows
+Files UI acceptance, move/F6, Trash/delete, recovery, and full interactive
+acceptance remain open; this is not yet Norton Commander or Midnight Commander
+feature parity.
+
+
 ## 2026-10-26 — WP-02 case-only rename proof checkpoint
 
 Commit `08b3110` adds the native case-only fallback used after a no-replace

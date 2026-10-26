@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-26",
+  "scope": "WP-04 recursive copy topology, metadata safety, and workstation toolchain qualification",
+  "commits": ["11f49fa", "fb2eb58"],
+  "source_head": "fb2eb58",
+  "result": "qualified_cross_platform_safety_checkpoint",
+  "tests": {
+    "linux_recursive_files_ui": "passed",
+    "linux_source_capability_projection": "5 passed",
+    "linux_ancestor_walk": "14 passed",
+    "linux_topology_projection": "5 passed",
+    "linux_destination_conflict_projection": "3 passed",
+    "macos_source_capability_projection": "5 passed",
+    "macos_topology_projection": "5 passed",
+    "macos_recursive_files_ui": "blocked by index_file.private_filesystem fixture",
+    "windows_source_capability_projection": "5 passed",
+    "windows_topology_projection": "5 passed",
+    "windows_destination_conflict_projection": "3 passed",
+    "windows_ancestor_walk": "14 passed"
+  },
+  "artifacts": {
+    "macos_core_tests_sha256": "509237d6e9689a09e6d74408ca141630f50fea762d005879ccd5a27696735010",
+    "macos_files_tests_sha256": "1a8cbe65d6cde4e4c0a24b8bb4fc4f0ddc275fd947aef7957312c164987fa33a",
+    "linux_core_tests_sha256": "866bc9c3b542e0a1b457681c32985e8f72efeb171388abd91d37b7b5de83fcf6",
+    "linux_files_tests_sha256": "579aa9afa7260c038fd2707fd7b70e3c51841adcc9a179e8d6716de8707420cd",
+    "windows_core_tests_sha256": "e569324fcdc5269551bff96f731c4800fade7c5d7c4e4f12e5468d35c1b72c45"
+  },
+  "platforms": {
+    "macos": {
+      "build": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "temporary_root": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01"
+    },
+    "linux_arm64": {
+      "host": "rpi4",
+      "build": "/home/klukas/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "temporary_root": "/home/klukas/tmp/ckutilities-wp04-tree-20261026-01"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "compiler": "MSVC 14.44.35228 / Visual Studio Build Tools 17.14.37411.7",
+      "source": "V:\\dev\\ckutilities",
+      "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "temporary_root": "V:\\tmp\\ckutilities-v143-install-20261026-01"
+    }
+  },
+  "safety_notes": [
+    "Directory link counts are not hard-link evidence.",
+    "Only a verified provider-root boundary proves a missing recursive destination root is disjoint.",
+    "Ambiguous repeated ancestors and unknown destination observations remain non-authorizing.",
+    "No production executable was launched."
+  ]
+}
