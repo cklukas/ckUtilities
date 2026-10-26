@@ -55,6 +55,23 @@ CK_TEST(destination_batch_groups_exact_mapped_names_before_probing_and_preserves
     CK_CHECK(result->probe(0) && result->probe(0) == result->probe(1) && result->probe(0) != result->probe(2));
     CK_CHECK(f.calls(Op::LookupChild) == 2 && f.fs.live_entries() == 2 && f.fs.live_cursors() == 1);
 }
+CK_TEST(destination_batch_scopes_exact_name_groups_to_their_parent_cursor) {
+    FS fs;
+    auto first = fs.make_node(ObjectKind::Directory), second = fs.make_node(ObjectKind::Directory);
+    fs.bind("/destination-batch-scope-first", first);
+    fs.bind("/destination-batch-scope-second", second);
+    fs.put(first, name("same"), fs.make_node(ObjectKind::RegularFile));
+    fs.put(second, name("same"), fs.make_node(ObjectKind::RegularFile));
+    std::shared_ptr<const DirectoryCursor> first_cursor(take(fs.open_directory("/destination-batch-scope-first")));
+    std::shared_ptr<const DirectoryCursor> second_cursor(take(fs.open_directory("/destination-batch-scope-second")));
+    DestinationBatchJob job({first_cursor, second_cursor}, {name("same"), name("same")},
+        NameEncoding::PosixBytes, {}, fs.clock());
+    const auto result = finish(job);
+    CK_CHECK(result->entries().size() == 2);
+    CK_CHECK(result->exact_name_count(0) == 1 && result->exact_name_count(1) == 1);
+    CK_CHECK(result->entries()[0].exact_name_leader == 0 && result->entries()[1].exact_name_leader == 1);
+    CK_CHECK(result->probe(0) && result->probe(1) && result->probe(0) != result->probe(1));
+}
 CK_TEST(destination_batch_reports_hard_link_object_matches_separately_from_exact_name_groups) {
     Fixture f; auto object = f.put(name("a")); f.fs.put(f.root, name("b"), object);
     DestinationBatchJob job(f.parent(), {name("a"), name("b"), name("b")}, NameEncoding::PosixBytes, {}, f.fs.clock());
