@@ -251,6 +251,35 @@ Observation<std::string> descriptor_path(int descriptor, const char* operation) 
 #endif
 }
 
+Observation<std::string> mount_root_path(int source_descriptor, dev_t source_device, const char* operation) {
+    using Result = Observation<std::string>;
+    OwnedDescriptor current(fcntl(source_descriptor, F_DUPFD_CLOEXEC, 0));
+    if (current.get() < 0)
+        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    for (std::size_t depth = 0; depth < 4096; ++depth) {
+        struct stat current_stat{};
+        if (fstat(current.get(), &current_stat) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+        const auto parent_path = descriptor_path(current.get(), operation);
+        if (!parent_path.value()) {
+            const auto& e = *parent_path.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+        OwnedDescriptor parent(openat(current.get(), "..", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        if (parent.get() < 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+        struct stat parent_stat{};
+        if (fstat(parent.get(), &parent_stat) != 0)
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+        if (current_stat.st_dev == source_device &&
+            (parent_stat.st_dev != source_device ||
+             (parent_stat.st_dev == current_stat.st_dev && parent_stat.st_ino == current_stat.st_ino)))
+            return Result::available(*parent_path.value());
+        current = std::move(parent);
+    }
+    return Result::unavailable(ObservationState::Unknown, adapter_error(AdapterError::InventoryLimit, operation));
+}
+
 struct TrashDirectories final {
     OwnedDescriptor files;
     OwnedDescriptor info;
@@ -291,7 +320,35 @@ Observation<OwnedDescriptor> open_directory_path(std::string_view path, bool cre
     return Result::available(std::move(current));
 }
 
-Observation<TrashDirectories> open_trash_directories(const struct stat& source_parent, const char* operation) {
+Observation<TrashDirectories> open_trash_root(std::string_view root_path, dev_t source_device, const char* operation) {
+    using Result = Observation<TrashDirectories>;
+    auto root = open_directory_path(root_path, true, operation);
+    if (!root.value()) {
+        const auto& e = *root.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    struct stat trash_stat{};
+    if (fstat(root.value()->get(), &trash_stat) != 0)
+        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    if (trash_stat.st_dev != source_device)
+        return Result::unavailable(ObservationState::Unsupported,
+            adapter_error(AdapterError::UnsupportedQuery, "trash_child.mount_specific_trash"));
+    auto files = open_directory_path(std::string(root_path) + "/files", true, operation);
+    if (!files.value()) {
+        const auto& e = *files.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    auto info = open_directory_path(std::string(root_path) + "/info", true, operation);
+    if (!info.value()) {
+        const auto& e = *info.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    return Result::available({std::move(files).take_value(), std::move(info).take_value()});
+}
+
+Observation<TrashDirectories> open_trash_directories(int source_parent_descriptor,
+                                                      const struct stat& source_parent,
+                                                      const char* operation) {
     using Result = Observation<TrashDirectories>;
     const auto home = native_home_address();
     if (!home.value()) {
@@ -302,38 +359,50 @@ Observation<TrashDirectories> open_trash_directories(const struct stat& source_p
     if (!home_path || home_path->empty() || home_path->front() != '/')
         return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation));
 
-    std::string data_root;
+    auto home_directory = open_directory_path(*home_path, false, operation);
+    if (!home_directory.value()) {
+        const auto& e = *home_directory.unavailable_detail();
+        return Result::unavailable(e.state, e.error);
+    }
+    struct stat home_stat{};
+    if (fstat(home_directory.value()->get(), &home_stat) != 0)
+        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+    const auto source_device = source_parent.st_dev;
+    const bool home_matches = home_stat.st_dev == source_device;
+    std::optional<std::string> candidate;
 #if defined(__APPLE__)
-    data_root = *home_path + "/.Trash";
+    if (home_matches) candidate = *home_path + "/.Trash";
 #else
     const char* configured = std::getenv("XDG_DATA_HOME");
-    if (configured && configured[0] == '/') data_root = configured;
-    else data_root = *home_path + "/.local/share";
-    data_root += "/Trash";
+    if (configured && configured[0] == '/') {
+        auto configured_directory = open_directory_path(configured, false, operation);
+        if (configured_directory.value()) {
+            struct stat configured_stat{};
+            if (fstat(configured_directory.value()->get(), &configured_stat) != 0)
+                return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
+            if (configured_stat.st_dev == source_device) candidate = std::string(configured) + "/Trash";
+            else if (!home_matches)
+                candidate = std::nullopt;
+        } else if (configured_directory.state() != ObservationState::Gone && !home_matches) {
+            const auto& e = *configured_directory.unavailable_detail();
+            return Result::unavailable(e.state, e.error);
+        }
+    }
+    if (!candidate && home_matches) candidate = *home_path + "/.local/share/Trash";
 #endif
-    auto root = open_directory_path(data_root, true, operation);
-    if (!root.value()) {
-        const auto& e = *root.unavailable_detail();
-        return Result::unavailable(e.state, e.error);
-    }
-    struct stat trash_stat{};
-    if (fstat(root.value()->get(), &trash_stat) != 0)
-        return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
-    if (trash_stat.st_dev != source_parent.st_dev)
-        return Result::unavailable(ObservationState::Unsupported,
-            adapter_error(AdapterError::UnsupportedQuery, "trash_child.mount_specific_trash"));
+    if (candidate) return open_trash_root(*candidate, source_device, operation);
 
-    auto files = open_directory_path(data_root + "/files", true, operation);
-    if (!files.value()) {
-        const auto& e = *files.unavailable_detail();
+    const auto mount_root = mount_root_path(source_parent_descriptor, source_device, operation);
+    if (!mount_root.value()) {
+        const auto& e = *mount_root.unavailable_detail();
         return Result::unavailable(e.state, e.error);
     }
-    auto info = open_directory_path(data_root + "/info", true, operation);
-    if (!info.value()) {
-        const auto& e = *info.unavailable_detail();
-        return Result::unavailable(e.state, e.error);
-    }
-    return Result::available({std::move(files).take_value(), std::move(info).take_value()});
+#if defined(__APPLE__)
+    const auto mount_trash = *mount_root.value() + "/.Trashes/" + std::to_string(static_cast<unsigned long long>(geteuid()));
+#else
+    const auto mount_trash = *mount_root.value() + "/.Trash-" + std::to_string(static_cast<unsigned long long>(geteuid()));
+#endif
+    return open_trash_root(mount_trash, source_device, operation);
 }
 
 std::string percent_encode_path(std::string_view path) {
@@ -1147,7 +1216,7 @@ public:
 
         const std::string original_path = *source_path.value() == "/"
             ? "/" + *spelling : *source_path.value() + "/" + *spelling;
-        auto directories = open_trash_directories(source_parent_stat, "trash_child.directories");
+        auto directories = open_trash_directories(source_parent, source_parent_stat, "trash_child.directories");
         if (!directories.value()) {
             const auto& e = *directories.unavailable_detail();
             return Result::unavailable(e.state, e.error);
