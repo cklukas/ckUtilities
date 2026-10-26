@@ -1,6 +1,6 @@
 {
   "milestone": "Cross-filesystem move safety checkpoint",
-  "implementation_commit": "c61b9d6",
+  "implementation_commit": "359f72c",
   "date": "2026-10-26",
   "change": [
     "Same-volume moves retain the identity-bound native rename path.",
@@ -25,7 +25,8 @@
         "ck_files_native_tests --suite test_files_security_native.cpp: 3/3 passed"
       ],
       "source_exclusion": "POSIX adapter returned UnsupportedQuery and performed no open",
-      "scope_note": "The fresh task build compiled native_operation_move_job.cpp into the Linux test binary; the source-exclusion suite was the isolated runtime qualification."
+      "move_retention": "ck_files_native_tests --suite test_files_operation_content_native.cpp: 19/19 passed, including /home to /dev/shm; source remained and destination was not published",
+      "scope_note": "The fresh task build compiled native_operation_move_job.cpp and the current journal implementation into the Linux test binary."
     },
     "windows_x64_workstation": {
       "toolset": "MSVC v143 14.44.35207",
