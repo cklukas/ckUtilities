@@ -3,6 +3,35 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — WP-02 held-source native copy batch factory checkpoint
+
+Commit `6fa55d2` adds a worker-only factory that composes the existing native
+regular-file copy job from held source children and a held destination cursor.
+The factory rejects missing or unqualified identities and non-regular sources,
+opens one exact-native durable journal per item through an injected platform
+adapter, durably records `Planned` before execution, and scopes staging and
+journal names to the operation ID. It retains prior journal evidence if a
+later item cannot be composed. Portable-basic metadata is applied through the
+held staging object; security and other unhandled metadata loss is an explicit
+consent decision rather than an implied preservation claim. The portable core
+does not link directly to the POSIX or Windows journal opener.
+
+Focused copy, batch, and native-content tests passed **3/3** on macOS and
+Linux ARM. The full current-source `ctest -C Release -L files` matrix passed
+**107/107** on macOS (01:32:17–01:32:45 UTC) and Linux ARM
+(01:32:47–01:33:21 UTC). The same source was synchronized to the mandatory
+Windows `V:\\dev\\ckutilities` workspace, but qualification could not start:
+the existing Visual Studio build tree reports MSB8020 for the required v143
+toolset. The workstation has `cl.exe` 14.44.35207, but its MSBuild toolset
+registration is incomplete; no Windows result is claimed for this checkpoint.
+Evidence and output fingerprints are in
+`implementation/evidence/ck-files-copy-factory-20261026.json`.
+
+This remains an engine checkpoint, not a working Norton Commander/Midnight
+Commander replacement: F5/F6 UI execution, recursive directory operations,
+move source retirement, Trash/delete, recovery execution, sanitizer/race
+gates and interactive acceptance remain open.
+
 ## 2026-10-26 — WP-05 worker-owned folder creation checkpoint
 
 Commit `07bbfd8` adds the first user-visible mutation path to `ck-files`:

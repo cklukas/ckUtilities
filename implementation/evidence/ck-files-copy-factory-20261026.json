@@ -1,0 +1,71 @@
+{
+  "checkpoint": "WP-02 worker-owned held-source native copy batch factory",
+  "source_commit": "6fa55d2",
+  "source_fingerprint": "git:6fa55d2",
+  "asset_changes": "none",
+  "focused": {
+    "macos": {
+      "tests": "test_files_operation_copy_job, test_files_operation_batch_job, test_files_operation_content_native: 3/3 passed",
+      "tmpdir": "/Volumes/S8T/tmp/ckutilities-copy-factory-20261026-01"
+    },
+    "linux": {
+      "tests": "test_files_operation_copy_job, test_files_operation_batch_job, test_files_operation_content_native: 3/3 passed",
+      "tmpdir": "/home/klukas/tmp/ckutilities-linux-copy-factory-20261026-01"
+    },
+    "windows": {
+      "result": "not qualified",
+      "reason": "the workstation build tree requires the v143 MSVC toolset, but the installed Visual Studio environment reports MSB8020 even though cl.exe 14.44.35207 is present"
+    }
+  },
+  "qualification": {
+    "macos": {
+      "build_tree": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T01:32:17Z",
+      "ended": "2026-10-26T01:32:45Z",
+      "result": "107/107 passed",
+      "outputs": {
+        "core": {"path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_core_tests", "sha256": "25b144aeb84787181dad53fccd1313b14b3700e3aba3c347e3d35729d1e72cd2", "mtime": "2026-10-26T02:15:28+0100", "bytes": 5722992},
+        "native": {"path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_native_tests", "sha256": "569e3aa7fea691c030260b94083b16729a1791cc3983bcb6b524edecc498e1bb", "mtime": "2026-10-26T02:15:29+0100", "bytes": 2581944}
+      }
+    },
+    "linux": {
+      "source_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+      "build_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+      "target": "Release",
+      "ctest": "ctest -C Release -L files",
+      "started": "2026-10-26T01:32:47Z",
+      "ended": "2026-10-26T01:33:21Z",
+      "result": "107/107 passed",
+      "outputs": {
+        "core": {"path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_core_tests", "sha256": "421f5ff900ab419286435464a5cfac52405d071126e03d4c48e677c78c948775", "mtime": "2026-10-26 02:32:00.007417702 +0100", "bytes": 5492616},
+        "native": {"path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "39b049607fe2e80f8ebc4ee73e700a59ba1f2dc18c9832a47d6c40183456c39c", "mtime": "2026-10-26 02:32:09.735269218 +0100", "bytes": 3150840}
+      }
+    },
+    "windows": {
+      "source_tree": "V:\\dev\\ckutilities",
+      "build_tree": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "tmpdir": "V:\\tmp\\ckutilities-copy-factory-20261026-01",
+      "attempted": "2026-10-26T02:16:14+01:00 through 2026-10-26T02:17:47+01:00",
+      "result": "not qualified",
+      "diagnostic": "MSB8020: The build tools for v143 (Platform Toolset = v143) cannot be found"
+    }
+  },
+  "semantics": [
+    "the factory consumes held source children and a held destination cursor; it does not rebuild operation targets from display paths",
+    "only regular-file sources are accepted by this incremental factory; recursive directory composition remains a separate boundary",
+    "each item receives an operation-ID-scoped staging name and journal name, and earlier durable journals remain if later composition fails",
+    "portable-basic metadata is applied through the held staging object; security and other unhandled metadata loss requires explicit consent",
+    "journal opening is injected as a platform adapter so the portable core does not link directly to POSIX or Windows implementations"
+  ],
+  "not_claimed": [
+    "user-visible F5 copy or F6 move commands",
+    "directory-recursive copy or move",
+    "source retirement for move",
+    "Trash/delete",
+    "sanitizer/race qualification",
+    "production executable or interactive-window acceptance",
+    "full Norton Commander or Midnight Commander mutation feature set"
+  ]
+}
