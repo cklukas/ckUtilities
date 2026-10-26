@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "2297ae8",
+  "previous_implementation_commit": "c35b1a5",
+  "scope": "WP-05 same-filesystem worker-owned move boundary",
+  "safety_boundary": {
+    "same_filesystem_native_no_replace_rename": true,
+    "source_and_destination_identity_revalidated": true,
+    "journaled_commit_and_retirement": true,
+    "cross_filesystem_move": "refused_until_copy_verify_retire_is_qualified",
+    "path_based_fallback": false,
+    "production_executable_launched": false
+  },
+  "macos": {
+    "host": "macOS arm64",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp",
+    "private_index_root": "/Volumes/PRO-BLADE/tmp/ckutilities-wp05-move-private-index-20261026-01/test-scratch",
+    "build_command": "TMPDIR=/Volumes/S8T/tmp/ckutilities-wp05-move-20261026-01/tmp cmake --build /Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build --target ck_files_native_tests ck_files_core_tests ck_vision_files_tests --parallel 4",
+    "tests": [
+      "ck_files_native_tests --suite test_files_operation_content_native.cpp: 18 passed",
+      "ck_files_core_tests --suite test_files_operation_journal.cpp: 8 passed",
+      "ck_files_core_tests --suite test_files_operation_recovery.cpp: 7 passed",
+      "ck_vision_files_tests --suite files_operation_execution_service_tests.cpp: 1 passed",
+      "ck_vision_files_tests --suite files_completion_service_tests.cpp: 26 passed"
+    ],
+    "outputs": [
+      {"path": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/tests/unit/ck_files/ck_files_native_tests", "built": "2026-10-26T08:21:03+0100", "bytes": 11165288, "sha256": "3d33b2b0d92c031cca46d201175ebfb2a0234bafd3e320217db474b0f67aefec"},
+      {"path": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/tests/unit/ck_files/ck_files_core_tests", "built": "2026-10-26T08:20:45+0100", "bytes": 18772128, "sha256": "c6ba6a1b0c521e48a5b05bfd2c941ddd1177382b24ce8e72dd49306797166486"},
+      {"path": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build/src/vision/files/ck_vision_files_tests", "built": "2026-10-26T08:20:34+0100", "bytes": 20370520, "sha256": "7c7ac0f494a12930e7060af8e36d42c4bfda70caa1b7489de1b95d59ddca1176"}
+    ]
+  },
+  "windows": {
+    "host": "ssh workstation",
+    "toolset": "MSVC 19.44.35228.0 / v143 14.44.35207",
+    "source_root": "V:\\dev\\ckutilities",
+    "build_root": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+    "tmp": "V:\\tmp\\ckutilities-wp05-move-20261026-01",
+    "build_command": "cmake --build V:\\tmp\\ckutilities-wp05-move-20261026-01\\build --config Release --target ck_files_native_tests ck_files_core_tests ck_vision_files_tests --parallel 4",
+    "tests": [
+      "ck_files_native_tests --suite test_files_operation_content_native.cpp: 18 passed",
+      "ck_files_core_tests --suite test_files_operation_journal.cpp: 8 passed",
+      "ck_files_core_tests --suite test_files_operation_recovery.cpp: 5 passed",
+      "ck_vision_files_tests --suite files_operation_execution_service_tests.cpp: 1 passed",
+      "ck_vision_files_tests --suite files_completion_service_tests.cpp: 26 passed"
+    ],
+    "outputs": [
+      {"path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_native_tests.exe", "built": "2026-10-26T06:29:39Z", "bytes": 1876480, "sha256": "83E0540F34A818EC727034EDF30DDF08A934FA39D604C231A57E9FDA607A7AFD"},
+      {"path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_core_tests.exe", "built": "2026-10-26T06:36:35Z", "bytes": 3365376, "sha256": "28AD28C90E32E6121A713B293524B71D0C725D6836FE6524EDBED3544DC6CB3F"},
+      {"path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe", "built": "2026-10-26T06:31:52Z", "bytes": 3620352, "sha256": "BE9165F243E893552D09DCFAF2E226F0595548162F8BBD5AB9E772AF3FB6022E"}
+    ]
+  },
+  "linux": {
+    "host": "ssh rpi4",
+    "source_root": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/source",
+    "build_root": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/tmp",
+    "build_command": "TMPDIR=/home/klukas/tmp/ckutilities-wp05-move-20261026-01/tmp cmake --build /home/klukas/tmp/ckutilities-wp05-move-20261026-01/build --target ck_files_native_tests ck_files_core_tests ck_vision_files_tests -j4",
+    "tests": [
+      "ck_files_native_tests --suite test_files_operation_content_native.cpp: 18 passed",
+      "ck_files_core_tests --suite test_files_operation_journal.cpp: 8 passed",
+      "ck_files_core_tests --suite test_files_operation_recovery.cpp: 7 passed",
+      "ck_vision_files_tests --suite files_operation_execution_service_tests.cpp: 1 passed",
+      "ck_vision_files_tests --suite files_completion_service_tests.cpp: 26 passed"
+    ],
+    "outputs": [
+      {"path": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/tests/unit/ck_files/ck_files_native_tests", "built": "2026-10-26T08:03:09+0100", "bytes": 65391592, "sha256": "304d3d3352d9038a3d8104a39001236f9318ea5ce75fbbc752480cf1b525e274"},
+      {"path": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/tests/unit/ck_files/ck_files_core_tests", "built": "2026-10-26T08:18:32+0100", "bytes": 110222600, "sha256": "6babd4a06c36f0517a12f9578a806770ea7fea4e282bc0209f15adbf5a81d294"},
+      {"path": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build/src/vision/files/ck_vision_files_tests", "built": "2026-10-26T08:02:40+0100", "bytes": 88379744, "sha256": "7ea1187607330a669fb13cc8ed7cf205b459d882abbb09afe5b9d6aed073b0a7"}
+    ]
+  },
+  "remaining_scope": [
+    "Trash/delete",
+    "cross-filesystem copy-move",
+    "recovery and reconciliation acceptance",
+    "sanitizer/race qualification",
+    "interactive Windows/macOS/Linux F6 acceptance"
+  ]
+}

@@ -6152,3 +6152,27 @@ output hashes and the exact qualification scope are recorded in [case-only
 rename evidence](evidence/ck-files-case-only-rename-20261026.json).
 No production executable was launched. Copy/move execution, Trash/delete,
 sanitizer/race qualification and interactive acceptance remain open.
+
+
+## 2026-10-26 — WP-05 same-filesystem move checkpoint
+
+Commits `c35b1a5` and `2297ae8` add the worker-owned F6 Move boundary for
+same-filesystem entries. The operation holds source and destination identities,
+revalidates both parents and the source entry immediately before commit, uses
+the platform no-replace rename primitive, and journals destination commit,
+source-retirement intent, retirement, and completion. Cross-filesystem move is
+explicitly refused until copy/verify/source-retirement has its own qualified
+implementation; no path-based fallback was added. Prepared or interrupted
+move journals require review rather than automatic staging cleanup.
+
+The focused move, journal, recovery, execution-service, and completion-service
+checks passed on macOS, Windows, and Linux. Windows was built from a fresh
+consistent Release tree with the repaired v143 toolset on `V:`; Linux GCC
+qualification caught and fixed one `-Werror` range-loop portability warning.
+macOS uses S8T for build/TMPDIR and the qualified project APFS volume for the
+private index fixture because S8T reports `MNT_IGNORE_OWNERSHIP` to the native
+security check. No production executable was launched. Trash/delete,
+cross-filesystem copy-move, sanitizer/race qualification, and interactive F6
+acceptance remain open; this is not yet Norton Commander or Midnight Commander
+feature parity. Exact commands, roots, output paths, timestamps, and hashes are
+recorded in [move qualification evidence](evidence/ck-files-move-20261026.json).
