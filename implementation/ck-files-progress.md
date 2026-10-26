@@ -6555,7 +6555,9 @@ passed **222/222** in 49.90 seconds, including **107/107** Files-labelled
 tests. Package hash, toolchain, and exact paths are recorded in [current
 package evidence](evidence/ck-utilities-current-packages-20261026.json).
 The current-source Windows ConPTY contract also passed 1/1 in 3.91 seconds,
-covering the packaged tool launch/draw/quit path including `ck-files`.
+covering launch/draw/quit for all ten Release build outputs, including
+`ck-files`; this is a build-output terminal check, separate from the installed
+ZIP payload verification.
 
 The working `ck-files` application is the two-pane Norton Commander/Midnight
 Commander-style file manager. The remaining release gaps are still the full
