@@ -6554,6 +6554,8 @@ documentation contains all ten guides and 28 SVG screenshots. Windows CTest
 passed **222/222** in 49.90 seconds, including **107/107** Files-labelled
 tests. Package hash, toolchain, and exact paths are recorded in [current
 package evidence](evidence/ck-utilities-current-packages-20261026.json).
+The current-source Windows ConPTY contract also passed 1/1 in 3.91 seconds,
+covering the packaged tool launch/draw/quit path including `ck-files`.
 
 The working `ck-files` application is the two-pane Norton Commander/Midnight
 Commander-style file manager. The remaining release gaps are still the full

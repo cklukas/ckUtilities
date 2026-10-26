@@ -29,6 +29,7 @@
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
     "documentation_payload": "10 guides and 28 SVG screenshots",
     "ctest": "222/222 passed, exit code 0, 49.90s total",
-    "files_label": "107/107 Files-labelled tests passed"
+    "files_label": "107/107 Files-labelled tests passed",
+    "conpty_contract": "ck_windows_tools_contract 1/1 passed, exit code 0, 3.91s"
   }
 }
