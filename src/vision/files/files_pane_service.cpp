@@ -700,6 +700,9 @@ struct FilesPaneService::State {
                                         auto renamed = (*parent.value())->rename_child_noreplace(
                                             opened.value()->name, *opened.value()->child->metadata().identity.value(),
                                             **parent.value(), request.name);
+                                        if (!renamed.value() && renamed.state() == ObservationState::Changed)
+                                            renamed = (*parent.value())->rename_child_case_only(
+                                                opened.value()->name, *opened.value()->child->metadata().identity.value(), request.name);
                                         if (!renamed.value()) {
                                             result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled
                                                                                   : FilesPaneReplyState::Failed;

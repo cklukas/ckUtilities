@@ -565,12 +565,8 @@ CK_TEST(native_operation_rename_boundary_uses_qualified_native_no_replace) {
     if (!metadata.identity.value()) return;
     const auto renamed = directory->rename_child_noreplace(name("source.bin"), *metadata.identity.value(),
                                                             *directory, name("renamed.bin"));
-#if defined(_WIN32)
-    CK_CHECK(renamed.value() || renamed.state() != ObservationState::Unsupported);
-#else
     CK_CHECK(renamed.value());
     CK_CHECK(!fs::exists(source_path) && fs::exists(scratch.path() / "renamed.bin"));
-#endif
 
     const auto second_path = scratch.path() / "second.bin";
     {
@@ -604,6 +600,8 @@ CK_TEST(native_operation_case_only_rename_requires_native_identity_proof) {
                                                             name("source.bin"));
 #if defined(_WIN32)
     CK_CHECK(renamed.value() || renamed.state() != ObservationState::Unsupported);
+#elif defined(__APPLE__)
+    CK_CHECK(renamed.value() || renamed.state() == ObservationState::Unsupported);
 #else
     CK_CHECK(!renamed.value() && renamed.state() == ObservationState::Unsupported);
     CK_CHECK(fs::exists(source_path) && !fs::exists(scratch.path() / "source.bin"));

@@ -1061,6 +1061,47 @@ public:
         return Result::available(true);
     }
 
+    Observation<bool> rename_child_case_only(const NativeName& name, const ObjectIdentity& expected_identity,
+                                              const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto* source_spelling = name.posix_bytes();
+        const auto* destination_spelling = destination_name.posix_bytes();
+        if (!name.is_valid() || !destination_name.is_valid() || !source_spelling || !destination_spelling || name == destination_name)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "rename_child_case_only.name"));
+        if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same || !identity().value())
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::UnqualifiedIdentity, "rename_child_case_only.identity"));
+
+        const auto source = stat_metadata(dirfd(directory_.get()), source_spelling->c_str(), false, scope_);
+        if (!source.value() || !source.value()->identity.value() ||
+            compare_identity(*source.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "rename_child_case_only.source_identity"));
+        const auto destination = stat_metadata(dirfd(directory_.get()), destination_spelling->c_str(), false, scope_);
+        if (!destination.value() || !destination.value()->identity.value())
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::UnsupportedQuery, "rename_child_case_only.native_case_proof"));
+        if (compare_identity(*destination.value()->identity.value(), *source.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::PlanDecisionStale, "rename_child_case_only.destination_identity"));
+
+        if (renameat(dirfd(directory_.get()), source_spelling->c_str(), dirfd(directory_.get()), destination_spelling->c_str()) != 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "rename_child_case_only.native_primitive"});
+        }
+        const auto published = stat_metadata(dirfd(directory_.get()), destination_spelling->c_str(), false, scope_);
+        if (!published.value() || !published.value()->identity.value() ||
+            compare_identity(*published.value()->identity.value(), *source.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, static_cast<std::int64_t>(errno), "rename_child_case_only.destination_identity"});
+        if (fsync(dirfd(directory_.get())) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, code, "rename_child_case_only.parent_fsync"});
+        }
+        return Result::available(true);
+    }
+
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
         using Result = Observation<DirectoryAccessCheck>;
         if (!valid_directory_access(access)) return Result::unavailable(ObservationState::Failed,
