@@ -10,7 +10,7 @@ if(NOT DEFINED CKTOOLS_PACKAGE_DIR)
   message(FATAL_ERROR "CKTOOLS_PACKAGE_DIR is required")
 endif()
 
-set(_tools ck-utilities ck-json-view ck-find ck-du ck-edit ck-chat ck-todo ck-sysmon ck-config)
+set(_tools ck-utilities ck-json-view ck-find ck-du ck-files ck-edit ck-chat ck-todo ck-sysmon ck-config)
 
 function(_cktools_check_layout kind listing)
   string(REPLACE "\n" ";" _paths "${listing}")

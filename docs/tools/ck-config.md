@@ -14,6 +14,20 @@ ck-config
 
 Use `--help` (or `-h`) to show the command-line usage.
 
+## Features
+
+- Browse the registered Disk Usage and Chat option profiles in the native
+  settings editor.
+- Edit, reset, save, reload, import, and export supported values with type and
+  range validation before a change is committed.
+- Keep derived/read-only settings visible without pretending they are
+  editable, and preserve the existing profile when an import fails.
+- Browse shared and application-specific keyboard commands, normalize
+  bindings, detect conflicts, and require explicit replacement approval.
+- Distinguish built-in defaults from personal bindings; restoring defaults does
+  not silently erase the personal scheme.
+- Use shared menus, help, themes, status feedback, and suite quit behavior.
+
 ## Option profiles
 
 Use **Options** to select Disk Usage or Chat, inspect its registered settings,

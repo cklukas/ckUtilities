@@ -24,6 +24,19 @@ ck-utilities --launch ck-du .
 Use `--help` (or `-h`) to show the command-line usage. An unknown tool or a
 missing `--launch` argument fails before a child process is started.
 
+## Features
+
+- Discover and describe every installed CK Utilities program from one
+  keyboard-first launcher.
+- Launch the selected sibling with validated arguments, or launch directly
+  with `--launch`; child exit status is returned to the caller.
+- Shared menu bar, movable windows, themes, context help, status/key footer,
+  and quit behavior across the suite.
+- Native launcher windows for a calendar, ASCII table, calculator, color
+  selector, and bounded application diagnostics.
+- Configurable shortcuts through `ck-config`, plus clear errors for unknown
+  tools, missing arguments, and unavailable sibling executables.
+
 ## Native launcher windows
 
 From the **Tools** menu, open a new launcher window or native windows for the

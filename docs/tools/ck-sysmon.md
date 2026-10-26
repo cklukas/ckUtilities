@@ -31,6 +31,22 @@ host that connects without a password is selected by default; one that fails
 stays in the menu, disabled and unchecked, with the reason. Your selections
 survive refreshes and reconnection.
 
+## Features
+
+- Native CPU, physical-memory, GPU utilization, GPU temperature/power where
+  available, dedicated/shared/unified GPU memory, bounded histories, and
+  loaded local Ollama models.
+- Local monitoring plus passwordless SSH host discovery from OpenSSH config,
+  with safe batch-mode connections, bounded timeouts, paging, refresh, and
+  per-host unavailable states.
+- Terminal and desktop presentation with responsive cards, metric toggles,
+  host/detail paging, a calendar, About/help, mouse/status controls, and
+  Standard/Dark themes.
+- Saved theme, metric, and host-selection preferences with conflict-aware
+  writes; no credentials, measurements, or model names are stored.
+- `--sample` and `--sample-host` reporting through the same versioned
+  collectors used by the interface, plus `--help` and `--version`.
+
 File / Exit closes the monitor, Help / About explains the display, and the
 clock at the right of the menu bar drops down a calendar.
 

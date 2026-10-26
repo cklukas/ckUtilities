@@ -15,6 +15,21 @@ ck-edit [MARKDOWN_FILE]
 Pass a Markdown file to open it at startup, or use **File → Open document**.
 Use `--help` (or `-h`) to show the command-line usage.
 
+## Features
+
+- Open, save, save as, close, and switch Markdown documents with explicit
+  Save, Discard, or Cancel choices for dirty content.
+- Undo and redo every supported mutation, viewport-only word wrap, find,
+  replace, and replace-all.
+- Normalize whitespace and reflow paragraphs; format selections; edit
+  headings, tasks, quotes, lists, links, images, and footnotes.
+- Create and edit pipe tables, including one-step undoable row and column
+  insertion or removal.
+- Detect external changes and preserve both versions when local edits are
+  unsaved, requiring an explicit reload, Save As, or continue decision.
+- Shared menus, keyboard shortcuts, help, themes, status feedback, and safe
+  bounded file I/O.
+
 ## Native workflow
 
 - **File:** open, save, save as, and close documents. Dirty documents require

@@ -3,15 +3,19 @@
 // mockups, following ckVision's own HeadlessTerminal-to-SVG documentation
 // pipeline.
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <span>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -28,10 +32,12 @@
 #include "disk_usage_app.hpp"
 #include "disk_usage_options.hpp"
 #include "edit_app.hpp"
+#include "files_app.hpp"
 #include "find_app.hpp"
 #include "frame_svg.hpp"
 #include "json_view_app.hpp"
 #include "launcher_app.hpp"
+#include "simulated_filesystem.hpp"
 
 namespace
 {
@@ -216,6 +222,146 @@ public:
 private:
     ck::vision::ChatModel model_;
 };
+
+class DocumentationIndexFile final : public ck::files::IndexByteFile
+{
+public:
+    ck::files::Observation<std::uint64_t> size() override
+    {
+        return ck::files::Observation<std::uint64_t>::available(bytes_.size());
+    }
+    ck::files::Observation<std::size_t> write_at(std::uint64_t offset,
+                                                  std::span<const std::byte> bytes) override
+    {
+        if (offset > bytes_.size())
+            return ck::files::Observation<std::size_t>::unavailable(
+                ck::files::ObservationState::Failed,
+                {ck::files::ErrorDomain::Adapter, 1, "documentation.index.write_offset"});
+        const auto start = static_cast<std::size_t>(offset);
+        if (bytes.size() > std::numeric_limits<std::size_t>::max() - start)
+            return ck::files::Observation<std::size_t>::unavailable(
+                ck::files::ObservationState::Failed,
+                {ck::files::ErrorDomain::Adapter, 2, "documentation.index.write_overflow"});
+        const auto end = start + bytes.size();
+        if (end > bytes_.size())
+            bytes_.resize(end);
+        std::copy(bytes.begin(), bytes.end(), bytes_.begin() + start);
+        return ck::files::Observation<std::size_t>::available(bytes.size());
+    }
+    ck::files::Observation<std::size_t> read_at(std::uint64_t offset,
+                                                 std::span<std::byte> bytes) override
+    {
+        if (offset > bytes_.size())
+            return ck::files::Observation<std::size_t>::unavailable(
+                ck::files::ObservationState::Gone,
+                {ck::files::ErrorDomain::Adapter, 3, "documentation.index.read_offset"});
+        const auto start = static_cast<std::size_t>(offset);
+        if (bytes.size() > bytes_.size() - start)
+            return ck::files::Observation<std::size_t>::unavailable(
+                ck::files::ObservationState::Gone,
+                {ck::files::ErrorDomain::Adapter, 4, "documentation.index.read_range"});
+        std::copy(bytes_.begin() + start, bytes_.begin() + start + bytes.size(), bytes.begin());
+        return ck::files::Observation<std::size_t>::available(bytes.size());
+    }
+private:
+    std::vector<std::byte> bytes_;
+};
+
+class DocumentationIndexFactory final : public ck::files::IndexFileFactory
+{
+public:
+    ck::files::Observation<std::unique_ptr<ck::files::IndexByteFile>> create_file() override
+    {
+        return ck::files::Observation<std::unique_ptr<ck::files::IndexByteFile>>::available(
+            std::make_unique<DocumentationIndexFile>());
+    }
+};
+
+std::unique_ptr<ck::files::BasicFileSystem> documentation_filesystem()
+{
+    using FileSystem = ck::testing::SimulatedFileSystem;
+    using Kind = ck::files::ObjectKind;
+    using Name = ck::files::NativeName;
+    auto files = std::make_unique<FileSystem>();
+    const auto root = files->make_node(Kind::Directory);
+    const auto left = files->make_node(Kind::Directory);
+    const auto right = files->make_node(Kind::Directory);
+    files->bind("/capture", root);
+    files->bind("/capture/left", left);
+    files->bind("/capture/right", right);
+    files->put(root, *Name::from_posix("left"), left);
+    files->put(root, *Name::from_posix("right"), right);
+    const auto add = [&](const FileSystem::Pointer &parent, std::string name,
+                         Kind kind, std::uint64_t size = 0) {
+        const auto child = files->make_node(kind);
+        if (kind == Kind::RegularFile)
+            files->metadata(child).logical_size = ck::files::Observation<std::uint64_t>::available(size);
+        files->put(parent, *Name::from_posix(name), child);
+    };
+    add(left, "Documents", Kind::Directory);
+    add(left, "Downloads", Kind::Directory);
+    add(left, "README.md", Kind::RegularFile, 1842);
+    add(left, "release-notes.json", Kind::RegularFile, 3276);
+    add(left, "report.csv", Kind::RegularFile, 9812);
+    add(right, "Archive", Kind::Directory);
+    add(right, "Incoming", Kind::Directory);
+    add(right, "README.md", Kind::RegularFile, 1842);
+    add(right, "space-report.txt", Kind::RegularFile, 420);
+    return files;
+}
+
+ck::files::NativeAbsolutePath documentation_path(std::string_view path)
+{
+    auto value = ck::files::NativeAbsolutePath::from_posix(path);
+    if (!value.value())
+        throw std::runtime_error("invalid documentation Files path");
+    return std::move(value).take_value();
+}
+
+ck::vision::FilesPaneBackend documentation_backend()
+{
+    ck::vision::FilesPaneBackend backend;
+    backend.filesystem = [] { return documentation_filesystem(); };
+    backend.workspace = [] {
+        return ck::files::Observation<std::shared_ptr<ck::files::IndexFileFactory>>::available(
+            std::make_shared<DocumentationIndexFactory>());
+    };
+    backend.storage_model = ck::files::StorageModel::LinuxStatx;
+    backend.home = [](ck::files::NativePathLimits, std::stop_token) {
+        return ck::files::Observation<ck::files::NativeAbsolutePath>::available(
+            documentation_path("/capture/right"));
+    };
+    return backend;
+}
+
+void capture_files(const std::filesystem::path &directory)
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34}, ckv::term::headless_no_graphics_profile());
+    ckv::ui::Application application(terminal, clock);
+    ck::vision::FilesAppWake wake(application);
+    auto left_service = std::make_unique<ck::vision::FilesPaneService>(
+        documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+    auto right_service = std::make_unique<ck::vision::FilesPaneService>(
+        documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+    auto app = std::make_unique<ck::vision::FilesApp>(
+        application,
+        std::array<ck::vision::FilesPaneService *, 2>{left_service.get(), right_service.get()},
+        wake,
+        std::array<ck::files::NativeAbsolutePath, 2>{documentation_path("/capture/left"),
+                                                     documentation_path("/capture/right")},
+        [&application] { application.request_quit(); });
+    for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
+        application.step(clock.now_nanos());
+        clock.advance(1'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    application.step(clock.now_nanos());
+    write_svg(directory, "ck-files", terminal.display());
+    app.reset();
+    left_service->join();
+    right_service->join();
+}
 
 void capture_launcher(const std::filesystem::path &directory)
 {
@@ -406,6 +552,7 @@ int main(int argc, char **argv)
         capture_config(output_directory);
         capture_markdown_editor(output_directory);
         capture_chat(output_directory);
+        capture_files(output_directory);
     }
     catch (const std::exception &error)
     {

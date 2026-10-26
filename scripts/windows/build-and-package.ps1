@@ -59,7 +59,7 @@ Expand-Archive -LiteralPath $zip.FullName -DestinationPath $unpacked
 $root = Get-ChildItem $unpacked -Directory | Select-Object -First 1
 $top = @(Get-ChildItem $root.FullName | ForEach-Object Name | Sort-Object)
 if (($top -join ',') -ne 'bin,share') { throw "The archive holds more than the product: $($top -join ', ')" }
-$tools = 'ck-utilities','ck-json-view','ck-find','ck-du','ck-edit','ck-chat','ck-todo','ck-sysmon','ck-config'
+$tools = 'ck-utilities','ck-json-view','ck-find','ck-du','ck-files','ck-edit','ck-chat','ck-todo','ck-sysmon','ck-config'
 foreach ($tool in $tools) {
     & (Join-Path $root.FullName "bin/$tool.exe") --help | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "$tool --help failed from the archive" }

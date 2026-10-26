@@ -33,6 +33,10 @@ features:
     icon: "▤"
     details: Scan folders in the background and browse directory sizes and file lists.
     link: tools/ck-du.md
+  - title: Files
+    icon: "▣"
+    details: Browse two directories with previews, marking, and reviewed safe file operations.
+    link: tools/ck-files.md
   - title: Edit
     icon: "#"
     details: Edit Markdown with search, undo and redo, formatting, links, footnotes, and tables.
@@ -55,11 +59,11 @@ features:
     link: tools/ck-config.md
 ---
 
-## One launcher, eight tools
+## One launcher, nine tools
 
 Start `ck-utilities` to pick a tool from the launcher, or run any tool
 directly: `ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`,
-`ck-todo`, `ck-sysmon`, and `ck-config`. Every tool shares the same menu
+`ck-todo`, `ck-sysmon`, `ck-config`, and `ck-files`. Every tool shares the same menu
 bar, window handling, help, and key footer, so what you learn in one works in all of them.
 
 ![The CK Utilities launcher](generated/screenshots/ck-utilities-launcher.svg)
@@ -79,6 +83,7 @@ bar, window handling, help, and key footer, so what you learn in one works in al
 | Inspect a JSON file | [JSON View](tools/json-view.md) |
 | Search for files by name, content, date, or size | [Find](tools/ck-find.md) |
 | See what is using disk space | [Disk Usage](tools/ck-du.md) |
+| Browse, preview, and manage files | [Files](tools/ck-files.md) |
 | Write and format Markdown | [Edit](tools/ck-edit.md) and [Markdown commands](markdown-commands.md) |
 | Talk to a local model | [Chat](tools/ck-chat.md) |
 | Keep track of tasks | [Todo](tools/ck-todo.md) |

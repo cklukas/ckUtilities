@@ -43,7 +43,8 @@ if(CKTOOLS_BUILD_DOCUMENTATION_CAPTURES)
     "${PROJECT_SOURCE_DIR}/src/tools/ck-du/include"
     "${PROJECT_SOURCE_DIR}/src/tools/ck-find/include"
     "${PROJECT_SOURCE_DIR}/src/tools/json-view/include"
-    "${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include")
+    "${PROJECT_SOURCE_DIR}/src/tools/ck-edit/include"
+    "${PROJECT_SOURCE_DIR}/tests/support")
   target_link_libraries(capture_ckutilities_screenshots PRIVATE
     cktools_docgen_frame_svg
     ck_vision_launcher
@@ -53,6 +54,7 @@ if(CKTOOLS_BUILD_DOCUMENTATION_CAPTURES)
     ck_vision_du
     ck_vision_config
     ck_vision_chat
+    ck_vision_files
     ck_du_core
     ck_chat_options
     ckvision::cvision)

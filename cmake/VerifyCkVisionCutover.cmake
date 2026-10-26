@@ -12,6 +12,7 @@ set(_cktools_product_binaries
     ck-json-view
     ck-find
     ck-du
+    ck-files
     ck-config
     ck-edit
     ck-chat

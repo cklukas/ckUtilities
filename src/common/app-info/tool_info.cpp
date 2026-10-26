@@ -10,7 +10,7 @@ namespace ck::appinfo
     namespace
     {
 
-        constexpr std::array<ToolInfo, 9> kTools{{
+        constexpr std::array<ToolInfo, 10> kTools{{
             ToolInfo{
                 "ck-utilities",
                 "ck-utilities",
@@ -32,6 +32,13 @@ namespace ck::appinfo
                 "Analyze directory and file storage utilization.",
                 "Analyze directory and file storage utilization.",
                 "Disk Usage visualizes disk usage with an ncdu-inspired tree and rich metadata. Open multiple windows to compare paths, switch units on the fly, and inspect recursive file listings with owners, timestamps, and filters. It is built to answer “where did my space go?” without memorizing long du pipelines."},
+            ToolInfo{
+                "ck-files",
+                "ck-files",
+                "Files",
+                "Manage files in a safe, keyboard-first two-pane interface.",
+                "Manage files in a safe, keyboard-first two-pane interface.",
+                "Files is a Norton Commander-style two-pane manager with breadcrumbs, completion, sorting, filtering, hidden-file visibility, previews, properties, marking, and keyboard or mouse navigation. Copy and move operations are reviewed before execution, cancellable, journaled, and explicit about conflicts, metadata, and unsupported platform actions. Trash, permanent deletion, rename, and folder creation are separate deliberate operations."},
             ToolInfo{
                 "ck-find",
                 "ck-find",

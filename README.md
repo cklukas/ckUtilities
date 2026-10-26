@@ -5,6 +5,7 @@
 ![CK Utilities launcher](docs/generated/screenshots/ck-utilities-launcher.svg)
 ![JSON View](docs/generated/screenshots/ck-json-view.svg)
 ![Markdown editor](docs/generated/screenshots/ck-edit.svg)
+![Files](docs/generated/screenshots/ck-files.svg)
 
 CK Utilities is a collection of focused terminal applications for everyday
 work: finding files, inspecting JSON, understanding disk usage, editing
@@ -13,7 +14,7 @@ working with local AI models.
 
 Use `ck-utilities` as a launcher, or start any tool directly:
 `ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`, `ck-todo`,
-`ck-sysmon`, and `ck-config`.
+`ck-sysmon`, `ck-config`, and `ck-files`.
 
 ## Free software; no user support or warranty
 
@@ -29,6 +30,7 @@ own discretion; the legal terms are in [LICENSE](LICENSE).
 | `ck-json-view` | Browse JSON as an expandable tree; search, reload, and copy values. |
 | `ck-find` | Build guided file searches with filters, previews, cancellation, and deliberate result actions. |
 | `ck-du` | Scan folders in the background and browse directory sizes and file lists. |
+| `ck-files` | Browse two directories, preview and mark entries, and perform reviewed safe file operations. |
 | `ck-config` | Edit Disk Usage and Chat settings; manage keyboard shortcuts. |
 | `ck-edit` | Edit Markdown with search, undo/redo, formatting, links, footnotes, and tables. |
 | `ck-chat` | Chat with local GGUF models; manage prompts and models, cancel responses, and export conversations. |
@@ -56,7 +58,8 @@ sudo dnf install ./ck-utilities-*.rpm
 ```
 
 The package installs `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
-`ck-edit`, `ck-chat`, `ck-todo`, `ck-sysmon`, and `ck-config` on `PATH`. Confirm the install with:
+`ck-files`, `ck-edit`, `ck-chat`, `ck-todo`, `ck-sysmon`, and `ck-config` on
+`PATH`. Confirm the install with:
 
 ```sh
 ck-utilities --help
@@ -99,6 +102,7 @@ self-contained `.exe`; Windows 10 version 1903 or later is required. See the
 - [JSON View](docs/tools/json-view.md)
 - [Find](docs/tools/ck-find.md)
 - [Disk Usage](docs/tools/ck-du.md)
+- [Files](docs/tools/ck-files.md)
 - [Todo](docs/tools/ck-todo.md)
 - [System Monitor](docs/tools/ck-sysmon.md)
 - [Config](docs/tools/ck-config.md)

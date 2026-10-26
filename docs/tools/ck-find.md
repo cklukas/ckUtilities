@@ -19,6 +19,21 @@ Use `ck-find --help` for the command-line synopsis. Search creation, loading,
 saving, previewing, running, and cancellation are available from the native
 menus and status line.
 
+## Features
+
+- Guided fields for search name, start location, filename and content
+  matching, include/exclude patterns, traversal policy, file type, date and
+  size ranges, and permission auditing.
+- Save and load reusable specifications, validate them, and preview the direct
+  execution plan before starting a search.
+- Cancellable background traversal with bounded results, progress/status
+  feedback, and a valid visible result while a replacement operation runs.
+- Result selection, path inspection, and deliberate actions with explicit
+  scope and confirmation; directory deletion is never implied by a match.
+- Fixed, read-only macOS metadata and SHA-256 command templates only when the
+  tested sandbox capability is available; no saved command is interpreted by a
+  shell, and custom commands cannot be combined with deletion.
+
 ## Safe actions
 
 Deleting matches requires an explicit confirmation and is limited to matching

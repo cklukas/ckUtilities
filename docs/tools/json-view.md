@@ -17,6 +17,21 @@ Pass one or more JSON files to open them at startup. Without a path, choose
 **File → Open JSON** in the native interface. Use `--help` (or `-h`) to show
 the command-line usage.
 
+## Features
+
+- Open one or more JSON files at startup, or open, reload, and close documents
+  from the native File menu.
+- Parse JSON into a keyboard-navigable tree with expansion to a chosen level,
+  stable selection, type-aware previews, and Unicode-safe display.
+- Search text, move to the next or previous match, reveal matching ancestors,
+  and end a search without losing the valid document.
+- Copy the selected JSON value through the terminal clipboard protocol when
+  the terminal supports it.
+- Keep the last valid document visible when a reload is malformed or
+  unreadable, and report the error in the interface rather than replacing it.
+- Shared menus, help, themes, keyboard shortcuts, status feedback, and normal
+  quit behavior.
+
 ## Native workflow
 
 - **File:** open, reload, or close the active JSON document.

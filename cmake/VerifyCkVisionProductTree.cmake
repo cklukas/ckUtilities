@@ -9,6 +9,7 @@ set(_cktools_native_executables
     ck-json-view
     ck-find
     ck-du
+    ck-files
     ck-config
     ck-edit
     ck-chat
@@ -40,6 +41,7 @@ set(_cktools_launcher_path "${CKTOOLS_PRODUCT_PREFIX}/bin/ck-utilities")
       ck-json-view
       ck-find
       ck-du
+      ck-files
       ck-config
       ck-edit
       ck-chat

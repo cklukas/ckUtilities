@@ -17,7 +17,7 @@ ctest --test-dir build/dev --output-on-failure
 ```
 
 The produced commands are `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
-`ck-config`, `ck-edit`, and `ck-chat`.
+`ck-files`, `ck-config`, `ck-edit`, `ck-chat`, `ck-todo`, and `ck-sysmon`.
 
 ## Release rehearsal
 
@@ -74,8 +74,8 @@ is what the CI and release workflows run:
 
 The screenshots in the README and on the documentation site are generated
 SVGs, not hand-made illustrations. The capture executables run the real
-launcher, JSON View, Markdown editor, ck-todo and ck-sysmon on ckVision's
-`HeadlessTerminal`, then use ckVision's SVG renderer to record the decoded
+launcher, JSON View, Find, Disk Usage, Config, Markdown editor, Chat, and Files
+on ckVision's `HeadlessTerminal`, then use ckVision's SVG renderer to record the decoded
 display. ck-todo's and ck-sysmon's golden frames, which their test suites
 compare against, are written by the same run.
 

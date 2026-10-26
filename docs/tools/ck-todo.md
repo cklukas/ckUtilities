@@ -36,6 +36,24 @@ the command line is selected after loading; otherwise the last selected board
 is restored. `--data-dir` keeps demonstrations and experiments apart from your
 own tasks.
 
+## Features
+
+- Multiple boards and lanes with create, switch, rename, merge, archive, and
+  safe protected-main-board behavior.
+- Tasks with titles, details, long notes, typed due dates/times, four priority
+  levels, optional colors, creator, and timestamps.
+- Keyboard and mouse task movement with insertion markers, lane sorting,
+  responsive narrow layouts, selection, archive, and separately confirmed
+  permanent deletion.
+- Movable, resizable note windows with undo/redo, cut/copy/paste, find,
+  word-wrap, autosave, conflict handling, and read-only preservation when the
+  task disappears elsewhere.
+- Atomic JSON workspace saves, daily backups, durable archive records,
+  cross-process change detection, non-overlapping reconciliation, and explicit
+  conflict choices for overlapping edits.
+- Demo mode, alternate data directories, themes, menus, context help,
+  configurable keyboard controls, `--help`, and `--version`.
+
 Earlier releases shipped this program as the ckVision example
 `ckvision_todo`, which kept its workspace in `~/.ckvision/todo`. To keep those
 tasks, copy that folder's contents into the workspace folder above before the

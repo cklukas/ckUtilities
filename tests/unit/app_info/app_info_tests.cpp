@@ -24,6 +24,7 @@ TEST(AppInfo, ListsAllKnownTools)
     EXPECT_TRUE(containsToolId(tools, "ck-utilities"));
     EXPECT_TRUE(containsToolId(tools, "ck-edit"));
     EXPECT_TRUE(containsToolId(tools, "ck-du"));
+    EXPECT_TRUE(containsToolId(tools, "ck-files"));
     EXPECT_TRUE(containsToolId(tools, "ck-find"));
     EXPECT_TRUE(containsToolId(tools, "ck-json-view"));
     EXPECT_TRUE(containsToolId(tools, "ck-config"));

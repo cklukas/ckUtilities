@@ -15,6 +15,24 @@ ck-du [DIRECTORY]
 `DIRECTORY` defaults to the current directory. Use `--help` (or `-h`) to show
 the command-line usage.
 
+## Features
+
+- Background directory scanning with cancellation and a preserved valid
+  snapshot while a replacement scan is pending or fails.
+- Navigable directory tree, recursive file listing, selection details, and
+  storage totals for the requested root.
+- Configurable filtering, symlink handling, filesystem-boundary behavior,
+  reporting policy, display units, and related scan options through
+  `ck-config`.
+- Rescanning and opening the selected directory's file view from the native
+  menu and keyboard workflow.
+- Capability-checked iCloud Drive actions on macOS: request a download or,
+  only after the provider reports upload, request freeing local copies.
+  Unsupported providers, paths, links, and non-directories are refused.
+- Honest cancellation and provider outcomes: acceptance of a request is not
+  reported as completed synchronization, and cancellation never hides work
+  the provider may already have accepted.
+
 ## Native workflow
 
 - **Scan:** rescan the requested directory, cancel an in-progress scan, or
