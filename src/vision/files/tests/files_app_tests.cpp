@@ -558,6 +558,46 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
 }
+CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Insert));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Down));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Insert));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 2);
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1 && checks.size() == 2);
+    for (auto *check : checks)
+        check->set_checked(0, true);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(apply != nullptr);
+    combos.front()->set_selected_index(2); // Continue with listed losses.
+    CK_CHECK(apply->activate_mnemonic("a"));
+    f.until([&] {
+        return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
+               std::filesystem::exists(f.scratch.path() / "right" / "left-item-1") &&
+               !f.app->pending(0) && !f.app->pending(1) &&
+               f.app->status(0).find("Copying") == std::string::npos &&
+               f.app->status(1).find("Copying") == std::string::npos;
+    });
+    CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
+    CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+}
 CK_TEST(files_app_rename_uses_stamped_worker_target_on_all_platforms) {
     Fixture f;
     f.loaded();
