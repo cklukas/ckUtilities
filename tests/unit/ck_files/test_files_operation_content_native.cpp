@@ -12,6 +12,7 @@
 #include <cvision/testing/cktest.hpp>
 
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 #include <iterator>
@@ -64,6 +65,9 @@ CK_TEST(native_operation_staging_applies_platform_portable_basic_metadata) {
     fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
 #endif
     const auto source_path = scratch.path() / "source.bin";
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
     {
         std::ofstream output(source_path, std::ios::binary);
         output << "portable metadata";
@@ -373,6 +377,65 @@ CK_TEST(native_operation_move_batch_renames_only_after_identity_revalidation) {
     CK_CHECK(!fs::exists(source_path / "move-me.bin"));
     CK_CHECK(fs::exists(destination_path / "moved.bin"));
 }
+
+#if defined(__linux__)
+CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_unsupported) {
+    const ck::testing::ScratchDirectory scratch("files-native-cross-filesystem-move",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "source.bin";
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    {
+        std::ofstream output(source_path, std::ios::binary);
+        output << "cross-filesystem source remains on POSIX";
+    }
+    const auto destination_path = fs::path("/dev/shm") /
+        ("ck-files-crossmove-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    struct Cleanup final {
+        fs::path path;
+        ~Cleanup() { std::error_code error; fs::remove_all(path, error); }
+    } cleanup{destination_path};
+    fs::create_directory(destination_path);
+
+    NativeFileSystem filesystem;
+    auto source_parent = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_path)));
+    auto source = take(HeldChild::observe_with_access(source_parent, name("source.bin"), EntryAccess::MetadataOnly));
+    const auto destination_identity = take(destination->identity());
+    const auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    auto journal_file = take(open_native_operation_journal_file(journal_root, name("move.journal"), true));
+    OperationJournalId journal_id;
+    journal_id.bytes[0] = std::byte{0x73};
+    auto journal = take(OperationJournal::create(FileOperation::Move, journal_id, {1, 32, 256}));
+    CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+
+    NativeOperationMoveRequest request{
+        journal,
+        std::shared_ptr<OperationJournalFile>(std::move(journal_file)),
+        0,
+        source,
+        destination,
+        destination_identity,
+        name("moved.bin"),
+        {4, 1024},
+        true};
+    auto created = NativeOperationMoveJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 64 && job->state() != OperationExecutionState::Complete &&
+         job->state() != OperationExecutionState::Failed &&
+         job->state() != OperationExecutionState::RetainedSource &&
+         job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        job->advance();
+    CK_CHECK(job->state() == OperationExecutionState::Failed ||
+             job->state() == OperationExecutionState::RetainedSource);
+    CK_CHECK(fs::exists(source_path));
+    CK_CHECK(!fs::exists(destination_path / "moved.bin"));
+}
+#endif
 
 CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_disposition) {
     const ck::testing::ScratchDirectory scratch("files-native-recovery-cleanup",
