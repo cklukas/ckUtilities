@@ -3,6 +3,28 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 9ed7eda current Windows package and full-suite checkpoint
+
+The Windows workstation qualification is now from the current source and the
+staged ckVision 1.4.0 SDK, with all project data on the mandatory `V:` drive.
+The multi-config ConPTY contract now resolves the actual Release output
+directory instead of assuming a single-config `bin` layout; commit `9ed7eda`
+records that test-harness fix.
+
+The clean Release build at
+`V:\\tmp\\ckutilities-goal-20261026-windows-01\\build-e56b723-mt` passed
+**223/223** CTest entries, including **107/107** Files-labelled tests and the
+documentation contract. The focused Windows tool contract passed **1/1** and
+launched all ten utilities, including `ck-files`. The packaged install reports
+10/10 utilities at version 0.2.0 with ckVision 1.4.0, and contains all ten
+guides plus 28 SVG screenshots. The ZIP is
+`V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-e56b723\\ck-utilities-0.2.0-windows-x64.zip`
+with SHA-256
+`EBA0521BD678BDFBE55F4851AAF8438C8038878890ACBA14AAF12921099C53EB`.
+
+Evidence: [current documentation and Windows qualification record](evidence/ck-utilities-documentation-contract-20261026.json)
+and [current package record](evidence/ck-utilities-current-packages-20261026.json).
+
 ## 2026-10-26 — documentation contract and POSIX Trash boundary checkpoint
 
 The release build now has a cross-platform CTest contract for the explicit

@@ -1,5 +1,5 @@
 {
-  "source_commit": "44a3cc0524076c651a0ee52483a3a9162ca57adb",
+  "source_commit": "9ed7eda",
   "documentation_payload": {
     "tool_guides": 10,
     "screenshots_svg": 28,
@@ -19,17 +19,20 @@
     "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
   },
   "windows_x64_workstation": {
-    "install": "V:\\dev\\ckutilities-install-goal-20261026",
-    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build",
-    "package": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build\\ck-utilities-0.2.0-windows-x64.zip",
-    "package_sha256": "629ae3087837c107ab8b4be5cbd51bde07a5b961e58ebfad4967b2c0f0cc203a",
-    "package_timestamp": "2026-10-26T16:49:57.7131582+01:00",
+    "install": "V:\\dev\\ckutilities-install-e56b723",
+    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build-e56b723-mt",
+    "package": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-e56b723\\ck-utilities-0.2.0-windows-x64.zip",
+    "package_sha256": "EBA0521BD678BDFBE55F4851AAF8438C8038878890ACBA14AAF12921099C53EB",
+    "package_timestamp": "2026-10-26T17:29:40+01:00",
     "development_drive": "V:",
-    "toolchain": "Visual Studio 2022 Build Tools 17.14.35; MSVC 19.44.35221; CMake 3.31.6-msvc6",
+    "toolchain": "Visual Studio 2022 Build Tools 17.14.35; MSVC 19.44.35228.0; CMake 3.31.6-msvc6",
+    "ckvision_sdk": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\ckvision-sdk, config 1.4.0, SHA-256 6B64012AE3B59E43DF849BBBAEFBEF9EFF797B7E324AE864116D0B7271FE6E1F",
+    "runtime": "MultiThreaded (/MT), matching the staged ckVision SDK",
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
     "documentation_payload": "10 guides and 28 SVG screenshots",
-    "ctest": "222/222 passed, exit code 0, 49.90s total",
+    "ctest": "223/223 passed, exit code 0",
     "files_label": "107/107 Files-labelled tests passed",
-    "conpty_contract": "current-source Release ck_windows_tools_contract 1/1 passed, exit code 0, 3.91s; launches all ten build outputs including ck-files"
+    "conpty_contract": "current-source Release ck_windows_tools_contract 1/1 passed, exit code 0; launches all ten build outputs including ck-files",
+    "source_sync": "Source archive e56b723 plus committed multi-config harness fix 9ed7eda; current CMake and verifier hashes matched the Mac source"
   }
 }
