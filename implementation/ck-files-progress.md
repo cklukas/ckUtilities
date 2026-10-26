@@ -6512,6 +6512,22 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-26 — WP-08 interactive terminal checkpoint
+
+The project terminal-smoke verifier qualified the current `ck-files` Release
+binary through a real POSIX pseudo-terminal for `xterm-256color`, `xterm`, and
+`vt100`. Each run resized the terminal to 30x100, sent the standard `Alt+X`
+(`ESC x`) quit chord, observed exit code 0, and confirmed that the terminal
+mode was restored exactly. The earlier manual harness result was discarded: it
+had passed unsupported `--left`/`--right` options, so it never exercised the
+application.
+
+The executable and verifier hashes, source commit, task-owned temporary root,
+fixture paths, and per-profile results are recorded in [interactive terminal
+evidence](evidence/ck-files-interactive-20261026.json). Launcher launch/return,
+the full filesystem/driver matrix, and controlled fault testing remain open.
+
+
 ## 2026-10-26 — Windows ZIP package checkpoint
 
 The current Windows Release ZIP was rebuilt and extracted from the task-owned

@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "4d99e6b0c16fa23e62ae0d60c5ac290cffcf3ec5",
+  "application": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/bin/ck-files",
+  "application_sha256": "62d6589566b2661dd09d60187923efe511432e47bedf830a82eace0cd013e2db",
+  "application_mtime": "2026-10-26T14:28:06+0100",
+  "verifier": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/src/vision/ck_vision_terminal_smoke",
+  "verifier_sha256": "55a9c155f1a07f7a4fa810305f3df5a5d85966dfd38aa4d0b32cc9c906b77d87",
+  "verifier_mtime": "2026-10-26T14:33:33+0100",
+  "temporary_root": "/Volumes/S8T/tmp/ck-files-terminal-smoke-20261026-01",
+  "fixture": {
+    "left": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "right": "/Volumes/PRO-BLADE/Development/ckUtilities"
+  },
+  "checks": [
+    {"term": "xterm-256color", "resize": "30x100", "quit": "Alt+X", "exit_code": 0, "terminal_mode_restored": true},
+    {"term": "xterm", "resize": "30x100", "quit": "Alt+X", "exit_code": 0, "terminal_mode_restored": true},
+    {"term": "vt100", "resize": "30x100", "quit": "Alt+X", "exit_code": 0, "terminal_mode_restored": true}
+  ],
+  "result": "passed",
+  "notes": "The verifier drives a real POSIX pseudo-terminal, applies a resize, sends ESC x, drains output, checks clean exit, and compares the PTY mode before and after the child. The earlier manual failure used unsupported ck-files flags and was not an application failure."
+}
