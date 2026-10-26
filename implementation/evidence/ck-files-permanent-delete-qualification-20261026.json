@@ -1,0 +1,38 @@
+{
+  "milestone": "Identity-bound permanent-delete command checkpoint",
+  "implementation_commit": "f2c8107",
+  "date": "2026-10-26",
+  "recorded_at": "2026-10-26T09:35:58Z",
+  "change": [
+    "FilesPaneService now reopens a stamped row on its worker and calls DirectoryCursor::retire_child with the observed identity.",
+    "The Files app exposes a separate Delete permanently command and irreversible confirmation dialog, with navigation and row revalidation before submission.",
+    "No pathname unlink/stat fallback, Trash/Recycling fallback, directory recursion, or POSIX/macOS capability claim was added."
+  ],
+  "qualification": {
+    "macos": {
+      "build": "Debug/Ninja incremental target ck_vision_files_tests under /Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "files_app_suite": "ck_vision_files_tests passed",
+      "delete_case": "POSIX native delete returned explicit Unsupported and left the source file present"
+    },
+    "linux_arm64_rpi4": {
+      "build": "Debug/Ninja target ck_vision_files_tests under /home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
+      "pane_service_suite": "54/54 passed",
+      "files_app_suite": "65/65 passed",
+      "delete_case": "POSIX native delete returned explicit Unsupported and left the source file present",
+      "combined_ctest_note": "The combined ctest target hit its existing 60-second envelope under concurrent unrelated RPi4 compilation; isolated suites and the new case passed directly."
+    },
+    "windows_x64_workstation": {
+      "toolset": "MSVC v143 14.44.35207",
+      "source": "V:\\dev\\ckutilities",
+      "build": "Release target ck_vision_files_tests under V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+      "files_app_ctest": "ck_vision_files_tests passed",
+      "delete_case": "Windows handle-bound permanent delete passed and removed the regular-file fixture",
+      "temporary_root": "V:\\tmp\\ckutilities-wp05-delete-20261026-01"
+    }
+  },
+  "remaining_scope": [
+    "Native Trash/Recycle Bin integration remains open.",
+    "Permanent deletion of directories and platform-qualified POSIX/macOS object-bound disposition remain open.",
+    "Cross-filesystem and recursive moves, recovery execution, full interactive acceptance and race qualification remain open."
+  ]
+}

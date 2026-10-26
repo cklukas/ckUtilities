@@ -3,6 +3,27 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — f2c8107 identity-bound permanent-delete checkpoint
+
+The Files app now has a separate `Delete permanently...` command with an
+explicit irreversible confirmation. The selected pane navigation and row are
+captured when the dialog opens; acceptance rechecks both before submitting.
+The worker reopens the row without following a final link/reparse point,
+requires a fresh object identity, holds the parent directory, and calls the
+platform `retire_child` protocol. It never falls back to pathname unlinking or
+stat-then-unlink. POSIX/macOS therefore report explicit Unsupported until a
+qualified object-bound disposition exists; Windows regular-file deletion is
+handle-bound and passed on the v143 workstation.
+
+Focused qualification passed on macOS, Windows x64 and Linux ARM64: the
+Files app and pane service suites passed, and the new deletion case preserved
+the file on POSIX while removing the regular-file fixture on Windows. The
+combined Linux ctest envelope was hit under concurrent unrelated RPi4 build
+load; isolated suites passed directly and no combined timeout is claimed as a
+pass.
+
+Evidence: [permanent-delete qualification record](evidence/ck-files-permanent-delete-qualification-20261026.json).
+
 ## 2026-10-26 — Windows workstation v143 install
 
 The production `ck-files.exe` was rebuilt with MSVC v143 14.44.35207 using
