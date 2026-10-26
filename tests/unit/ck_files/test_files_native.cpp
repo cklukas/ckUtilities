@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <array>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -153,23 +154,64 @@ CK_TEST(native_regular_files_and_directories_have_explicit_applicable_metadata) 
 }
 
 #if !defined(_WIN32)
-CK_TEST(native_trash_boundary_refuses_unsupported_platforms_without_retiring_source) {
+CK_TEST(native_trash_boundary_uses_platform_metadata_and_retires_source) {
     const ck::testing::ScratchDirectory scratch("files-trash-boundary");
-    write_file(scratch.path() / "source", "must remain");
+    const ck::testing::ScratchDirectory trash_home("files-trash-boundary-home");
+#if defined(__APPLE__)
+    const char *previous_home = std::getenv("HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const bool had_home = previous_home != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+#else
+    const ck::testing::ScratchDirectory trash_data("files-trash-boundary-data");
+    const char *previous_home = std::getenv("HOME");
+    const char *previous_xdg = std::getenv("XDG_DATA_HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const std::string previous_xdg_value = previous_xdg ? previous_xdg : "";
+    const bool had_home = previous_home != nullptr;
+    const bool had_xdg = previous_xdg != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+    CK_CHECK(::setenv("XDG_DATA_HOME", trash_data.path().c_str(), 1) == 0);
+#endif
+    write_file(scratch.path() / "source", "must be retired through native Trash");
     NativeFileSystem filesystem;
     auto directory = filesystem.open_directory(scratch.path());
     CK_CHECK(directory.value());
-    if (!directory.value()) return;
-    auto child = (*directory.value())->open_child(component("source"), EntryAccess::MetadataOnly);
-    CK_CHECK(child.value());
-    if (!child.value()) return;
-    const auto metadata = (*child.value())->inspect_basic();
-    CK_CHECK(metadata.value() && metadata.value()->identity.value());
-    if (!metadata.value() || !metadata.value()->identity.value()) return;
-    const auto moved = (*directory.value())->trash_child(component("source"),
-                                                          *metadata.value()->identity.value());
-    CK_CHECK(!moved.value() && moved.state() == ObservationState::Unsupported);
-    CK_CHECK(fs::exists(scratch.path() / "source"));
+    if (directory.value()) {
+        auto child = (*directory.value())->open_child(component("source"), EntryAccess::MetadataOnly);
+        CK_CHECK(child.value());
+        if (child.value()) {
+            const auto metadata = (*child.value())->inspect_basic();
+            CK_CHECK(metadata.value() && metadata.value()->identity.value());
+            if (metadata.value() && metadata.value()->identity.value()) {
+                const auto moved = (*directory.value())->trash_child(component("source"),
+                                                                      *metadata.value()->identity.value());
+                CK_CHECK(moved.value() && *moved.value());
+                CK_CHECK(!fs::exists(scratch.path() / "source"));
+#if defined(__APPLE__)
+                const auto trash_root = trash_home.path() / ".Trash";
+#else
+                const auto trash_root = trash_data.path() / "Trash";
+#endif
+                CK_CHECK(fs::exists(trash_root / "files" / "source"));
+                std::ifstream info(trash_root / "info" / "source.trashinfo");
+                const std::string metadata_text((std::istreambuf_iterator<char>(info)),
+                                                std::istreambuf_iterator<char>());
+                CK_CHECK(metadata_text.find("[Trash Info]") != std::string::npos &&
+                         metadata_text.find("Path=file://") != std::string::npos &&
+                         metadata_text.find("DeletionDate=") != std::string::npos);
+            }
+        }
+    }
+#if defined(__APPLE__)
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+#else
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+    if (had_xdg) CK_CHECK(::setenv("XDG_DATA_HOME", previous_xdg_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("XDG_DATA_HOME") == 0);
+#endif
 }
 #endif
 
