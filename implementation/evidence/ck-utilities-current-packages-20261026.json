@@ -1,0 +1,27 @@
+{
+  "source_commit": "44a3cc0524076c651a0ee52483a3a9162ca57adb",
+  "documentation_payload": {
+    "tool_guides": 10,
+    "screenshots_svg": 28,
+    "guides_have_features_sections": true,
+    "guides_have_embedded_screenshots": true
+  },
+  "macos_arm64": {
+    "package": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/ck-utilities-0.2.0-macos.tar.gz",
+    "sha256": "8bd11549dbf751c0bfc5e7c31f3fcd5fffc7e3f88648b51c40fe69631f155668",
+    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
+  },
+  "linux_arm64_rpi4": {
+    "package": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-linux.tar.gz",
+    "sha256": "934e26517b57f97aa28799dd6b92b4256d58d3bc4f64c4e74c57c299da1997ea",
+    "deb_sha256": "4dfee76513a935f22dd80f7c88a3418e46ecf1355a1d55f146eaabda9393d241",
+    "rpm_sha256": "5b35cbcfb0348e71fce39ca52a2a3e0b46a24d15ad989a0a31ca6f2b58cac35a",
+    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
+  },
+  "windows_x64_workstation": {
+    "install": "V:\\dev\\ckutilities-install-goal-20261026",
+    "development_drive": "V:",
+    "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
+    "documentation_payload": "10 guides and 28 SVG screenshots"
+  }
+}

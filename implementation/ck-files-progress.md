@@ -28,6 +28,12 @@ suppression or product workaround was introduced.
 
 Evidence: [POSIX Trash qualification record](evidence/ck-files-posix-trash-qualification-20261026.json).
 
+The current-source package payload was also rebuilt and rechecked: macOS and
+Linux each contain ten utilities, ten guides and 28 SVG screenshots, and all
+ten utilities pass the three real-terminal profiles on each host. Windows was
+rechecked from the installed `V:` tree with ten version checks and the same
+documentation payload. See the [current package record](evidence/ck-utilities-current-packages-20261026.json).
+
 ## 2026-10-26 — e959a08 / d51b53e recursive move and terminal acceptance checkpoints
 
 Recursive directory Move is now routed through the qualified operation path. A
