@@ -617,6 +617,29 @@ struct FilesPaneService::State {
                                 result.paths.push_back(std::move(child).take_value());
                                 result.names.push_back(bound.held()->name());
                             }
+                            if (result.sources.size() == 1 && result.sources.front()->metadata().kind.value() &&
+                                *result.sources.front()->metadata().kind.value() == ObjectKind::Directory) {
+                                auto opened = result.sources.front()->parent()->open_directory_child(result.names.front());
+                                if (!opened.value()) {
+                                    fail(*opened.unavailable_detail());
+                                    return;
+                                }
+                                auto root = std::shared_ptr<DirectoryCursor>(std::move(opened).take_value());
+                                if (!root || !root->identity().value() || !result.sources.front()->metadata().identity.value() ||
+                                    compare_identity(*root->identity().value(),
+                                                     *result.sources.front()->metadata().identity.value()) !=
+                                        IdentityComparison::Same) {
+                                    fail(operation_error(AdapterError::MetadataChanged,
+                                                          "pane.operation_sources.directory_identity",
+                                                          ObservationState::Changed));
+                                    return;
+                                }
+                                result.root_source = result.sources.front();
+                                result.source_root = std::move(root);
+                                result.source_path = result.paths.front();
+                                result.sources.clear();
+                                result.paths.clear();
+                            }
                             request.handoff(Result::available(std::move(result)));
                         } else if constexpr (std::is_same_v<Request, OperationDestination>) {
                             using Result = Observation<std::shared_ptr<const DirectoryCursor>>;

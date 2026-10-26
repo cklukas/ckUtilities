@@ -403,8 +403,13 @@ struct FilesOperationPlanningService::State final {
                             sources = std::move(*pane_input->handoff->sources);
                             destination = std::move(*pane_input->handoff->destination_cursor);
                         }
-                        if (!destination || sources.sources.empty() || sources.sources.size() != sources.paths.size() ||
-                            sources.sources.size() != sources.names.size()) {
+                        const bool recursive = sources.root_source && sources.source_root && sources.source_path &&
+                            sources.source_path->is_valid() && sources.sources.empty() && sources.paths.empty() &&
+                            sources.names.size() == 1;
+                        const bool flat = !sources.root_source && !sources.source_root && !sources.source_path &&
+                            !sources.sources.empty() && sources.sources.size() == sources.paths.size() &&
+                            sources.sources.size() == sources.names.size();
+                        if (!destination || (!recursive && !flat)) {
                             result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
                                 {ck::files::ErrorDomain::Adapter,
                                  static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
@@ -427,8 +432,14 @@ struct FilesOperationPlanningService::State final {
                             if (names_valid) {
                                 FilesOperationNativePlanningRequest native;
                                 native.evidence.operation = pane_input->request.operation;
-                                native.evidence.direct_sources = std::move(sources.sources);
-                                native.evidence.direct_source_paths = std::move(sources.paths);
+                                if (recursive) {
+                                    native.evidence.root_source = std::move(sources.root_source);
+                                    native.evidence.source_root = std::move(sources.source_root);
+                                    native.evidence.source_path = std::move(sources.source_path);
+                                } else {
+                                    native.evidence.direct_sources = std::move(sources.sources);
+                                    native.evidence.direct_source_paths = std::move(sources.paths);
+                                }
                                 native.evidence.destination = std::move(destination);
                                 native.evidence.destination_names = std::move(sources.names);
                                 native.evidence.destination_encoding = destination_encoding;

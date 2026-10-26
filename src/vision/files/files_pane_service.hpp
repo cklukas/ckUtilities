@@ -84,6 +84,12 @@ struct FilesPaneOperationSources final {
     std::vector<ck::files::HeldChild::Pointer> sources;
     std::vector<ck::files::NativeAbsolutePath> paths;
     std::vector<ck::files::NativeName> names;
+    // A single selected directory is also retained as a recursive planning
+    // root. The root cursor is opened relative to the held source parent and
+    // is identity-checked before publication; it is never a UI-facing owner.
+    ck::files::HeldChild::Pointer root_source;
+    std::shared_ptr<ck::files::DirectoryCursor> source_root;
+    std::optional<ck::files::NativeAbsolutePath> source_path;
 };
 using FilesPaneOperationSourceHandoff =
     std::function<void(ck::files::Observation<FilesPaneOperationSources>)>;
