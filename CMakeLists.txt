@@ -76,6 +76,11 @@ endif()
 
 if(BUILD_TESTING)
   add_subdirectory(tests)
+  add_test(NAME ck_tool_documentation_contract
+    COMMAND "${CMAKE_COMMAND}"
+      -DCKTOOLS_SOURCE_ROOT:PATH=${CMAKE_SOURCE_DIR}
+      -P ${CMAKE_SOURCE_DIR}/cmake/VerifyToolDocumentation.cmake)
+  set_tests_properties(ck_tool_documentation_contract PROPERTIES LABELS "documentation;release")
 endif()
 
 install(FILES README.md DESTINATION share/doc/ck-utilities COMPONENT Runtime)
