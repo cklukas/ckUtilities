@@ -1,7 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// ck-files — the native host for the read-only two-pane Files application.
+// ck-files — the native host for the worker-owned two-pane Files application.
 // Host-only concerns (arguments, terminal, user configuration and private
 // cache roots) are resolved here; the controller and workers remain injected.
 #include "files_app.hpp"

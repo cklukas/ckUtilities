@@ -79,6 +79,8 @@ if(BUILD_TESTING)
 endif()
 
 install(FILES README.md DESTINATION share/doc/ck-utilities COMPONENT Runtime)
+install(DIRECTORY docs/tools/ DESTINATION share/doc/ck-utilities/tools COMPONENT Runtime)
+install(DIRECTORY docs/generated/screenshots/ DESTINATION share/doc/ck-utilities/screenshots COMPONENT Runtime)
 install(FILES LICENSE DESTINATION share/licenses/ck-utilities COMPONENT Runtime)
 install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs COMPONENT Runtime)
 
