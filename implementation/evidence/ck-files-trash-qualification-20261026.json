@@ -1,0 +1,55 @@
+{
+  "milestone": "Native Trash and Windows Recycle Bin qualification",
+  "implementation_commits": ["11109d5", "f7e9de2"],
+  "date": "2026-10-26",
+  "contract": [
+    "Trash is a separate worker mutation and never falls back to permanent deletion.",
+    "The selected row is revalidated by navigation stamp and native object identity before disposition.",
+    "Unsupported platforms retain the source and report an explicit adapter observation.",
+    "Windows Recycle Bin publication uses a held source handle, no-replace native rename, restore metadata, and post-publication identity verification."
+  ],
+  "qualification": {
+    "macos": {
+      "build_output": "/Volumes/S8T/tmp/ckutilities-wp05-trash-20261026-01/build",
+      "tests": [
+        "ck_vision_files_tests: 206/206 passed",
+        "ck_files_native_tests: 184/184 passed",
+        "files_service_trash_reports_unsupported_without_permanent_delete_fallback: passed"
+      ],
+      "trash_behavior": "Unsupported; source remained present"
+    },
+    "linux_arm64_rpi4": {
+      "build_output": "/home/klukas/tmp/ckutilities-wp05-crossmove-20261026-01/build",
+      "tests": [
+        "ck_vision_files_tests: 206/206 passed",
+        "ck_files_native_tests: 188/188 passed",
+        "files_service_trash_reports_unsupported_without_permanent_delete_fallback: passed"
+      ],
+      "trash_behavior": "Unsupported; source remained present"
+    },
+    "windows_x64_workstation": {
+      "toolset": "MSVC v143 14.44.35207",
+      "source": "V:\\dev\\ckutilities",
+      "build_output": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+      "tests": [
+        "ck_vision_files_tests: 206/206 passed",
+        "ck_files_native_tests: 183/183 passed",
+        "native_windows_trash_moves_fixture_to_recycle_bin_with_restore_metadata: passed"
+      ],
+      "trash_behavior": "Qualified on V:; fixture moved to Recycle Bin, matching $I/$R metadata was verified, and only that pair was cleaned up",
+      "installed_application": {
+        "path": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
+        "build_path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe",
+        "bytes": 2856960,
+        "sha256": "101FF57FF9B4509A3C5ACF8A7AB167D0F4B48EA02600779EC3BBE798A2522EF0",
+        "build_and_install_hash_match": true,
+        "timestamp_utc": "2026-10-26T11:54:07Z"
+      }
+    }
+  },
+  "remaining_scope": [
+    "Implement and qualify native macOS Trash.",
+    "Implement and qualify mount-aware freedesktop/Linux Trash with restore metadata.",
+    "Qualify real Windows cross-volume move behavior, recursive moves, recovery, sanitizer/race gates, and full interactive acceptance."
+  ]
+}

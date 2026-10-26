@@ -3,6 +3,36 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 11109d5 / f7e9de2 native Trash boundary and Windows qualification
+
+The Files app now exposes a separate `Move to Trash / Recycle Bin...` command
+and confirmation. It is independent from irreversible permanent deletion: the
+worker revalidates the stamped row identity, then calls a dedicated native
+`trash_child` boundary. An unavailable platform reports the exact adapter
+failure and retains the source; it never falls back to permanent deletion.
+
+Windows implements the qualified Recycle Bin v2 protocol on the held source
+handle: it excludes concurrent writers, rejects links and hard-linked regular
+files, writes `$I` restore metadata, publishes a no-replace `$R` object with a
+native rename, rechecks the moved identity, and flushes both namespace
+directories. A unique fixture on the workstation's `V:` volume moved to the
+Recycle Bin and its exact `$I/$R` pair was then removed by the test cleanup.
+
+macOS and Linux currently return explicit `Unsupported` from the native
+boundary and retain the source. Their platform-specific Trash protocols remain
+open work; no POSIX/macOS permanent-delete fallback is enabled.
+
+Qualification: Windows passed 183 native tests and 206 Files app tests; macOS
+passed 184 native tests and 206 Files app tests plus the focused service Trash
+retention test; Linux ARM64 passed 188 native tests and 206 Files app tests
+plus the focused service Trash retention test. The verified Windows Release
+application was rebuilt and installed at
+`V:\\dev\\ckutilities-install\\bin\\ck-files.exe`; its 2,856,960 bytes and
+SHA-256 match the build at
+`V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe`.
+
+Evidence: [Trash and Recycle Bin qualification record](evidence/ck-files-trash-qualification-20261026.json).
+
 ## 2026-10-26 — 359f72c cross-filesystem move safety checkpoint
 
 The native move composition now distinguishes same-volume rename from a
