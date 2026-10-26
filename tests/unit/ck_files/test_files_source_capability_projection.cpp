@@ -80,6 +80,17 @@ CK_TEST(source_capability_projection_maps_complete_channel_attribute_and_storage
         encryption->state == SourceCapabilityState::Present);
 }
 
+CK_TEST(source_capability_projection_does_not_treat_directory_link_count_as_hard_links) {
+    auto inventory = empty_inventory();
+    BasicMetadata before;
+    before.kind = Observation<ObjectKind>::available(ObjectKind::Directory);
+    before.link_count = Observation<std::uint64_t>::available(3);
+    inventory.before = Observation<BasicMetadata>::available(std::move(before));
+
+    const auto evidence = take(SourceCapabilityProjection::from_inventory(0, inventory));
+    CK_CHECK(find(evidence, PreservationFeature::LinksAndIdentity, VolumeFeature::HardLinks) == nullptr);
+}
+
 CK_TEST(source_capability_projection_keeps_relevant_unknowns_hard_and_omits_unsupported_families) {
     auto inventory = empty_inventory();
     inventory.channels = Observation<DataChannelCatalog>::unavailable(ObservationState::Unknown,

@@ -370,9 +370,33 @@ void OperationEvidenceJob::advance_ancestry(std::stop_token stop) {
         phase_ = Phase::Seal;
         return;
     }
-    if (!ancestry_)
-        ancestry_ = std::make_unique<AncestorWalkJob>(recursive_result_->sources()[next_ancestry_],
+    if (!ancestry_) {
+        const auto& entries = recursive_result_->inventory()->entries();
+        std::size_t source_index = next_ancestry_;
+        if (request_.root_source && entries[next_ancestry_].kind != ObjectKind::Directory) {
+            const auto& relative = entries[next_ancestry_].relative_components;
+            if (relative.empty()) {
+                fail(error(AdapterError::PlanInvalid, "operation_evidence.file_parent"));
+                return;
+            }
+            std::vector<NativeName> parent_components(relative.begin(), relative.end() - 1);
+            std::optional<std::size_t> parent_index;
+            for (std::size_t candidate = 0; candidate < next_ancestry_; ++candidate) {
+                if (entries[candidate].kind == ObjectKind::Directory &&
+                    same_components(entries[candidate].relative_components, parent_components)) {
+                    parent_index = candidate;
+                    break;
+                }
+            }
+            if (!parent_index) {
+                fail(error(AdapterError::PlanInvalid, "operation_evidence.file_parent"));
+                return;
+            }
+            source_index = *parent_index;
+        }
+        ancestry_ = std::make_unique<AncestorWalkJob>(recursive_result_->sources()[source_index],
             source_target_result_->destination()->pin_directory(), request_.limits.ancestry, request_.clock);
+    }
     const auto result = ancestry_->advance(stop);
     if (result == AncestorWalkState::Paused) {
         state_ = OperationEvidenceJobState::Paused;

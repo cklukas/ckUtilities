@@ -20,6 +20,10 @@ Observation<AncestorWalkWitness> observed() {
     return Observation<AncestorWalkWitness>::available({AncestorWalkEnd::ObservedSource, 1, {}});
 }
 
+Observation<AncestorWalkWitness> disjoint_boundary() {
+    return Observation<AncestorWalkWitness>::available({AncestorWalkEnd::DisjointBoundary, 1, 0});
+}
+
 Observation<AncestorWalkWitness> unknown() {
     return Observation<AncestorWalkWitness>::unavailable(ObservationState::Unknown,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit), "fixture.ancestor"});
@@ -51,6 +55,25 @@ CK_TEST(operation_topology_projection_allows_file_missing_target_but_not_unknown
     const auto result = OperationTopologyProjection::from_worker(rows, ancestry);
     CK_CHECK(result.value() && (*result.value())[0] == SourceTargetTopology::Disjoint &&
         (*result.value())[1] == SourceTargetTopology::Unknown);
+}
+
+CK_TEST(operation_topology_projection_accepts_only_a_verified_root_boundary_for_missing_directory) {
+    const auto missing = Observation<IdentityComparison>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "source_target.no_existing_target"});
+    const std::array rows{SourceTargetInspection{source(ObjectKind::Directory), {}, missing}};
+    const std::array ancestry{disjoint_boundary()};
+    const auto result = OperationTopologyProjection::from_worker(rows, ancestry);
+    CK_CHECK(result.value() && (*result.value())[0] == SourceTargetTopology::Disjoint);
+}
+
+CK_TEST(operation_topology_projection_propagates_a_missing_root_to_its_descendants) {
+    const auto missing_parent = Observation<IdentityComparison>::unavailable(ObservationState::Unknown,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable),
+         "destination_batch.parent_unavailable"});
+    const std::array rows{SourceTargetInspection{source(ObjectKind::RegularFile), {}, missing_parent}};
+    const std::array ancestry{disjoint_boundary()};
+    const auto result = OperationTopologyProjection::from_worker(rows, ancestry);
+    CK_CHECK(result.value() && (*result.value())[0] == SourceTargetTopology::Disjoint);
 }
 
 CK_TEST(operation_topology_projection_rejects_shape_kind_and_limits) {

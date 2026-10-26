@@ -20,8 +20,17 @@ bool valid_kind(ObjectKind kind) noexcept {
 
 SourceTargetTopology ancestry_topology(const Observation<AncestorWalkWitness>& ancestry) {
     if (!ancestry.value()) return SourceTargetTopology::Unknown;
-    return ancestry.value()->end == AncestorWalkEnd::ObservedSource
-        ? SourceTargetTopology::DestinationInsideSource : SourceTargetTopology::Unknown;
+    if (ancestry.value()->end == AncestorWalkEnd::ObservedSource)
+        return SourceTargetTopology::DestinationInsideSource;
+    if (ancestry.value()->end == AncestorWalkEnd::DisjointBoundary)
+        return SourceTargetTopology::Disjoint;
+    return SourceTargetTopology::Unknown;
+}
+
+bool missing_destination_ancestor(const UnavailableObservation& detail,
+                                  const Observation<AncestorWalkWitness>& ancestry) {
+    return detail.error.operation == "destination_batch.parent_unavailable" && ancestry.value() &&
+        ancestry.value()->end == AncestorWalkEnd::DisjointBoundary;
 }
 
 } // namespace
@@ -67,7 +76,10 @@ Observation<std::vector<SourceTargetTopology>> OperationTopologyProjection::from
         const bool missing_target = detail.state == ObservationState::Unsupported &&
             detail.error.code == static_cast<std::int64_t>(AdapterError::NotApplicable) &&
             detail.error.operation == "source_target.no_existing_target";
-        if (kind != ObjectKind::Directory && missing_target)
+        if (missing_target && (kind != ObjectKind::Directory ||
+                               ancestry_topology(ancestry[index]) == SourceTargetTopology::Disjoint))
+            result.push_back(SourceTargetTopology::Disjoint);
+        else if (missing_destination_ancestor(detail, ancestry[index]))
             result.push_back(SourceTargetTopology::Disjoint);
         else if (kind == ObjectKind::Directory)
             result.push_back(ancestry_topology(ancestry[index]));

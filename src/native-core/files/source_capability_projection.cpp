@@ -200,24 +200,31 @@ Observation<std::vector<SourceCapabilityEvidence>> SourceCapabilityProjection::f
                 "source_capability.evidence", ObservationState::Unknown);
     }
 
-    if (const auto* before = inventory.before.value()) {
-        if (const auto* links = before->link_count.value(); links && *links > 1) {
-            if (!append({item, PreservationFeature::LinksAndIdentity, SourceCapabilityState::Present,
-                    PreservationConsequence::DataLoss, VolumeFeature::HardLinks, true}))
-                return rejected<std::vector<SourceCapabilityEvidence>>(AdapterError::InventoryLimit,
-                    "source_capability.evidence", ObservationState::Unknown);
-        } else if (!links) {
-            const auto state = unavailable_source(before->link_count);
-            if (state && !append({item, PreservationFeature::LinksAndIdentity, *state,
+    const bool source_is_directory = inventory.before.value() && inventory.before.value()->kind.value() &&
+        *inventory.before.value()->kind.value() == ObjectKind::Directory;
+    // POSIX directory link counts include "."/".." and one entry per
+    // subdirectory; they are not hard-link evidence. Only project this
+    // preservation feature for non-directory objects.
+    if (!source_is_directory) {
+        if (const auto* before = inventory.before.value()) {
+            if (const auto* links = before->link_count.value(); links && *links > 1) {
+                if (!append({item, PreservationFeature::LinksAndIdentity, SourceCapabilityState::Present,
+                        PreservationConsequence::DataLoss, VolumeFeature::HardLinks, true}))
+                    return rejected<std::vector<SourceCapabilityEvidence>>(AdapterError::InventoryLimit,
+                        "source_capability.evidence", ObservationState::Unknown);
+            } else if (!links) {
+                const auto state = unavailable_source(before->link_count);
+                if (state && !append({item, PreservationFeature::LinksAndIdentity, *state,
+                        PreservationConsequence::DataLoss, VolumeFeature::HardLinks, true}))
+                    return rejected<std::vector<SourceCapabilityEvidence>>(AdapterError::InventoryLimit,
+                        "source_capability.evidence", ObservationState::Unknown);
+            }
+        } else if (const auto state = unavailable_source(inventory.before); state) {
+            if (!append({item, PreservationFeature::LinksAndIdentity, *state,
                     PreservationConsequence::DataLoss, VolumeFeature::HardLinks, true}))
                 return rejected<std::vector<SourceCapabilityEvidence>>(AdapterError::InventoryLimit,
                     "source_capability.evidence", ObservationState::Unknown);
         }
-    } else if (const auto state = unavailable_source(inventory.before); state) {
-        if (!append({item, PreservationFeature::LinksAndIdentity, *state, PreservationConsequence::DataLoss,
-                VolumeFeature::HardLinks, true}))
-            return rejected<std::vector<SourceCapabilityEvidence>>(AdapterError::InventoryLimit,
-                "source_capability.evidence", ObservationState::Unknown);
     }
 
     if (const auto* storage = inventory.storage.value()) {

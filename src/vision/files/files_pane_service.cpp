@@ -920,8 +920,15 @@ struct FilesPaneService::State {
 FilesPaneBackend native_files_pane_backend(NativeAbsolutePath cache_root) {
     if (!cache_root.is_valid())
         throw std::invalid_argument("invalid pane cache address");
+    // The two native panes are views over one host filesystem provider. Share
+    // its live comparison scope so worker-owned source and destination handles
+    // can be compared safely; independently constructed NativeFileSystem
+    // adapters retain their separate scopes.
+    static const AdapterScope native_provider_scope;
     FilesPaneBackend backend;
-    backend.filesystem = [] { return std::make_unique<NativeFileSystem>(); };
+    backend.filesystem = [scope = native_provider_scope] {
+        return std::make_unique<NativeFileSystem>(scope);
+    };
     backend.workspace = [root = std::move(cache_root)] { return open_native_index_workspace(root); };
     backend.home = [](NativePathLimits limits, std::stop_token stop) { return native_home_address(limits, stop); };
 #if defined(_WIN32)

@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <utility>
 
 namespace ck::files {
 
@@ -28,6 +29,7 @@ public:
 class NativeFileSystem final : public BasicFileSystem {
 public:
     NativeFileSystem() = default;
+    explicit NativeFileSystem(AdapterScope scope) : scope_(std::move(scope)) {}
     NativeFileSystem(const NativeFileSystem&) = delete;
     NativeFileSystem& operator=(const NativeFileSystem&) = delete;
     // Native absolute path, no UTF-8 round trip and no process-cwd fallback.

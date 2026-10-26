@@ -71,9 +71,9 @@ CK_TEST(ancestor_walk_self_match_needs_no_parent_open_and_exact_depth_limits_all
     Fixture f; auto cursor = std::shared_ptr<const DirectoryCursor>(take(f.root_cursor->open_directory_child(name("source"))));
     AncestorWalkJob job(f.held, std::move(cursor), {1}, f.fs.clock()); CK_CHECK(take(finish(job)->outcome()).directory == 0 && f.calls(Op::OpenParent) == 0);
 }
-CK_TEST(ancestor_walk_repeated_root_is_only_a_walk_witness_and_never_a_not_descendant_verdict) {
+CK_TEST(ancestor_walk_self_parent_root_is_a_disjoint_boundary_witness) {
     Fixture f; AncestorWalkJob job(f.held, f.root_cursor, {}, f.fs.clock()); const auto result = finish(job); const auto end = take(result->outcome());
-    CK_CHECK(end.end == AncestorWalkEnd::RepeatedDirectory && end.directory == 1 && end.repeated == 0 && result->directories().size() == 2);
+    CK_CHECK(end.end == AncestorWalkEnd::DisjointBoundary && end.directory == 1 && end.repeated == 0 && result->directories().size() == 2);
 }
 CK_TEST(ancestor_walk_preserves_each_parent_query_failure_with_an_explicit_bounded_prefix) {
     for (auto state : {ObservationState::Unknown, ObservationState::Unsupported, ObservationState::Denied, ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {

@@ -582,8 +582,11 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review) {
     find_views(f.application.root(), checks);
     find_views(f.application.root(), buttons);
     CK_CHECK(combos.size() == 1 && !checks.empty());
-    for (auto *check : checks)
-        check->set_checked(0, true);
+    for (auto *check : checks) {
+        const auto rows = static_cast<std::size_t>(check->vertical_size_hint().preferred);
+        for (std::size_t index = 0; index != rows; ++index)
+            check->set_checked(index, true);
+    }
     ckv::widgets::Button *apply = nullptr;
     for (auto *button : buttons)
         if (button->text() == "&Apply decision")

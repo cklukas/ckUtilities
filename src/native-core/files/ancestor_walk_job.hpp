@@ -8,7 +8,7 @@ struct AncestorWalkLimits {
     std::size_t directories = 256; // includes destination and repeated endpoint
     MonotonicClock::Duration time_slice = std::chrono::milliseconds(20);
 };
-enum class AncestorWalkEnd { ObservedSource, RepeatedDirectory };
+enum class AncestorWalkEnd { ObservedSource, RepeatedDirectory, DisjointBoundary };
 struct AncestorWalkWitness {
     AncestorWalkEnd end;
     std::size_t directory;
@@ -40,10 +40,11 @@ private:
     Observation<AncestorWalkWitness> outcome_;
 };
 enum class AncestorWalkState { Collecting, Paused, Complete, Failed, Abandoned };
-// Worker-only native parent observations. There is deliberately no
-// NotDescendant/SafeToCopy result: a repeated root/loop or an unavailable edge
-// cannot prove absence from a concurrently changing namespace. Retains all
-// observed owners; native calls can block. No paths, recursion or mutation.
+// Worker-only native parent observations. A DisjointBoundary result is emitted
+// only when the native parent of the current directory is the same held object
+// (the filesystem/provider root boundary) and the source was not observed.
+// Other repeated directories remain ambiguous. Retains all observed owners;
+// native calls can block. No paths, recursion or mutation.
 class AncestorWalkJob final {
 public:
     using Result = std::shared_ptr<const CompletedAncestorWalk>;

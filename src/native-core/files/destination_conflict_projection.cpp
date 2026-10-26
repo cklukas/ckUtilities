@@ -14,6 +14,44 @@ Observation<T> rejected(AdapterError code, const char* operation,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
 }
 
+bool same_components(const std::vector<NativeName>& left, const std::vector<NativeName>& right) noexcept {
+    if (left.size() != right.size()) return false;
+    for (std::size_t index = 0; index < left.size(); ++index)
+        if (left[index] != right[index]) return false;
+    return true;
+}
+
+bool destination_directory_is_known_missing(const FrozenInventory& inventory,
+                                            const CompletedDestinationBatch& batch, std::size_t item) noexcept {
+    const auto *probe = batch.probe(item);
+    if (probe && probe->lookup().value())
+        return probe->lookup().value()->state() == ChildLookupState::Missing;
+    const auto *failure = batch.probe_failure(item);
+    if (!failure || failure->error.operation != "destination_batch.parent_unavailable") return false;
+
+    const auto& relative = inventory.entries()[item].relative_components;
+    if (relative.empty()) return false;
+    std::vector<NativeName> parent_components(relative.begin(), relative.end() - 1);
+    for (std::size_t candidate = 0; candidate < item; ++candidate) {
+        if (inventory.entries()[candidate].kind == ObjectKind::Directory &&
+            same_components(inventory.entries()[candidate].relative_components, parent_components))
+            return destination_directory_is_known_missing(inventory, batch, candidate);
+    }
+    return false;
+}
+
+bool parent_is_known_missing(const FrozenInventory& inventory, const CompletedDestinationBatch& batch,
+                             std::size_t item) noexcept {
+    const auto& relative = inventory.entries()[item].relative_components;
+    if (relative.empty()) return false;
+    std::vector<NativeName> parent_components(relative.begin(), relative.end() - 1);
+    for (std::size_t candidate = 0; candidate < item; ++candidate)
+        if (inventory.entries()[candidate].kind == ObjectKind::Directory &&
+            same_components(inventory.entries()[candidate].relative_components, parent_components))
+            return destination_directory_is_known_missing(inventory, batch, candidate);
+    return false;
+}
+
 } // namespace
 
 Observation<std::vector<DestinationConflict>> DestinationConflictProjection::from_batch(
@@ -48,6 +86,13 @@ Observation<std::vector<DestinationConflict>> DestinationConflictProjection::fro
         }
 
         if (const auto* failure = batch.probe_failure(item)) {
+            // A recursive copy whose destination root is absent has no
+            // destination cursor for descendants yet. Their parent-unavailable
+            // observations are expected absence, not destination conflicts;
+            // retain every other unavailable observation conservatively.
+            if (failure->error.operation == "destination_batch.parent_unavailable" &&
+                parent_is_known_missing(inventory, batch, item))
+                continue;
             if (!append({item, DestinationConflictKind::Unknown}))
                 return rejected<std::vector<DestinationConflict>>(AdapterError::InventoryLimit,
                     "destination_conflict_projection.conflicts", ObservationState::Unknown);
