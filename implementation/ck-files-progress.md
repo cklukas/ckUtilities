@@ -25,6 +25,12 @@ build outputs and full native suites: macOS (**179/179**), Windows
 
 The Linux qualification log is retained at
 `/home/klukas/tmp/ckutilities-attribute-boundary-20261026-01/ck_files_native_tests.log`.
+The broader current-source Files matrix (`ctest -C Release -L files`) also
+passed **107/107** on macOS (15.96 seconds), Windows (37.05 seconds) and
+Linux ARM (41.39 seconds). The Windows project-wide `RUN_TESTS` target was
+also invoked accidentally during validation and reported three unrelated
+environment/contract failures; that result is not used as Files acceptance,
+and the corrected Files-label command passed all 107 entries.
 No application instance was launched. This checkpoint does not implement
 security/ACL replay, channels/resource forks, attribute deletion/absence
 replay, automatic metadata policy, mutation UI, or a complete Norton
