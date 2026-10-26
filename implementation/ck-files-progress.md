@@ -5859,3 +5859,33 @@ The task-owned remote build and dependency tree remain available for the next
 qualification pass; they use `/home/klukas/tmp/ckutilities-linux-qualification-20261025-01`
 and `TMPDIR` is set within that root. See the command output retained in the
 task session for the full CTest list and timing evidence.
+
+
+## 2026-10-26 — WP-02 worker-owned rename boundary checkpoint
+
+Added the first acknowledged rename boundary. `FilesPaneService::rename` accepts
+only a stamped pane row and exact native destination name; the worker re-resolves
+the row, native name and held identity before mutation, so the UI never supplies
+a path as authority. A successful native mutation publishes no native owner,
+then requests a fresh listing. The UI exposes a strict exact-name Rename dialog
+and `F2`, with command routing and modal-scope tests.
+
+Windows now acquires a durable write-capable source-parent handle before the
+identity-checked no-replace rename and flushes both source and destination
+parents. This closes the observed post-mutation flush error caused by using the
+read-only enumeration cursor. POSIX rename remains explicitly Unsupported; no
+path-based fallback was added, and the POSIX test verifies the old entry remains
+untouched. Case-only rename, cross-directory move and Trash/delete remain
+separate boundaries.
+
+Commit `c0af279` passed the focused Files service/UI suite at 196/196 on macOS,
+Windows and Linux, plus the keymap suite. The complete `ctest -C Release -L
+files` matrix passed 107/107 on each platform. Exact build roots, TMPDIRs,
+qualification start/end times, output paths, byte counts and SHA-256 fingerprints
+are recorded in [rename qualification evidence](evidence/ck-files-rename-20261026.json).
+No production executable was launched; sanitizer/race and interactive-window
+acceptance remain open.
+
+WP-02 remains open for the remaining mutation boundaries and the full
+interactive acceptance pass. This checkpoint does not claim a complete Norton
+Commander or Midnight Commander feature set.
