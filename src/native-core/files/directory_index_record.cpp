@@ -22,6 +22,18 @@ constexpr std::array kinds{ObjectKind::RegularFile, ObjectKind::Directory,      
                            ObjectKind::Other};
 constexpr std::array schemes{IdentityScheme::Unknown, IdentityScheme::PosixDeviceInode,
                              IdentityScheme::WindowsFileId128, IdentityScheme::WindowsFileIndex64};
+constexpr std::uint32_t crc32c_table_value(std::uint32_t value) {
+    for (unsigned bit = 0; bit != 8; ++bit)
+        value = (value >> 1) ^ ((value & 1U) ? 0x82f63b78U : 0U);
+    return value;
+}
+constexpr auto make_crc32c_table() {
+    std::array<std::uint32_t, 256> table{};
+    for (std::size_t i = 0; i != table.size(); ++i)
+        table[i] = crc32c_table_value(static_cast<std::uint32_t>(i));
+    return table;
+}
+constexpr auto crc32c_table = make_crc32c_table();
 struct Rejected {
     UnavailableObservation detail;
 };
@@ -219,9 +231,7 @@ BasicMetadata metadata(Reader &r) {
 std::uint32_t detail::directory_index_crc32c(std::span<const std::byte> bytes) noexcept {
     std::uint32_t crc = 0xffffffffU;
     for (const auto value : bytes) {
-        crc ^= std::to_integer<std::uint32_t>(value);
-        for (unsigned bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ ((crc & 1U) ? 0x82f63b78U : 0U);
+        crc = crc32c_table[(crc ^ std::to_integer<std::uint32_t>(value)) & 0xffU] ^ (crc >> 8);
     }
     return ~crc;
 }
