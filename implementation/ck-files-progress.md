@@ -3,6 +3,35 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — WP-02 F5 held-file copy integration checkpoint
+
+Commit `42930a6` connects the worker-owned held-source copy factory to the
+real `ck-files` two-pane UI. F5 now acquires the stamped source selection and
+destination directory on their pane workers, composes bounded evidence, opens
+the plan-bound review dialog, and submits the accepted operation to the
+serialized execution worker. The UI receives only value replies; journal root
+resolution, operation journals, native owners, cancellation and execution
+revalidation stay outside the UI thread. Successful copies refresh both panes.
+
+The direct flat planner now has an explicit `DirectObjects` mount policy. It
+does not fabricate a macOS or Windows mount ID when no platform-qualified mount
+observation exists; recursive inventories still require the existing mount
+policy. The copy adapter's currently unsupported metadata subset is added as a
+reviewable loss row, and the native execution path cannot allow that loss unless
+the user selects `ContinueWithListedLosses`. A clean plan has an explicit
+plan-bound `Proceed` action.
+
+The current-source Files matrix passed **107/107** on macOS, Linux ARM and
+Windows. The acceptance test copies a real regular file through F5, requires
+the review decision, observes the destination, and verifies both pane refreshes.
+Output hashes and exact temporary/build paths are recorded in
+`evidence/ck-files-f5-copy-qualification-20261026.json`.
+
+F5 remains regular-file-only in this slice. F6 is visible but disabled until
+source retirement is independently implemented and qualified; recursive copy,
+replacement/merge, Trash/delete, sanitizer/race gates and production-window
+acceptance remain open.
+
 ## 2026-10-26 — WP-02 held-source native copy batch factory checkpoint
 
 Commit `6fa55d2` adds a worker-only factory that composes the existing native

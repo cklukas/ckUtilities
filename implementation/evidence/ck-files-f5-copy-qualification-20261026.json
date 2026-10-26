@@ -1,0 +1,78 @@
+{
+  "checkpoint": "WP-02 F5 held-file copy integration",
+  "source_commit": "42930a6",
+  "source_fingerprint": "git:42930a6",
+  "asset_changes": "none",
+  "qualification_command": "ctest -C Release --output-on-failure -L files",
+  "result": "107/107 passed on macOS, Linux ARM, and Windows",
+  "macos": {
+    "build_tree": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-copy-ui-20261026-01",
+    "outputs": {
+      "ck_vision_files_tests": {
+        "path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/src/vision/files/ck_vision_files_tests",
+        "sha256": "7ff87b7bef2df6e641eb49e8fdfa0897a5068d730b19b0af97f712b3b35d7173",
+        "bytes": 6352024,
+        "mtime": "2026-10-26T02:51:19+0100"
+      },
+      "ck_files_core_tests": {
+        "path": "/Volumes/S8T/tmp/ckutilities-cross-qualification-20261025-01/release-build/tests/unit/ck_files/ck_files_core_tests",
+        "sha256": "18118acf2898fbc825d21066b91d305d2b38c6558750e99a68c86b49f51a09fd",
+        "bytes": 5724144,
+        "mtime": "2026-10-26T02:51:17+0100"
+      }
+    }
+  },
+  "linux": {
+    "source_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build_tree": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-linux-execution-service-20261026-01",
+    "outputs": {
+      "ck_vision_files_tests": {
+        "path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/files/ck_vision_files_tests",
+        "sha256": "813810e20787d7e610fff2a46fd395f0f3d5452b1000d0e71a864683a41616ff",
+        "bytes": 6116176,
+        "mtime": "2026-10-26 03:01:16.579383175 +0100"
+      },
+      "ck_files_core_tests": {
+        "path": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_core_tests",
+        "sha256": "c9ac2cc0c3e999ad954c00ed7ccc1b127de9759fd4a69a57532ece5fce9c72d2",
+        "bytes": 5493392,
+        "mtime": "2026-10-26 03:01:27.707206988 +0100"
+      }
+    }
+  },
+  "windows": {
+    "source_tree": "V:\\dev\\ckutilities",
+    "build_tree": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-copy-ui-20261026-01",
+    "outputs": {
+      "ck_vision_files_tests": {
+        "path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+        "sha256": "6EE38B6D37FE02E46DF53C034BCD4321D9BDD5B9629FFDFAC7C21BA9468BA01",
+        "bytes": 3341824,
+        "mtime": "2026-10-26 02:58:43"
+      },
+      "ck_files_core_tests": {
+        "path": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_core_tests.exe",
+        "sha256": "D6FC8D26E367166BDCE1F76D658170CA26277BDFDDD9F3C0F06086F99FA5C94F",
+        "bytes": 3314176,
+        "mtime": "2026-10-26 02:57:13"
+      }
+    }
+  },
+  "safety_semantics": [
+    "flat direct planning accepts unavailable platform-specific mount IDs only for already-held objects and never invents a mount identity",
+    "recursive inventories retain mount qualification and crossing refusal",
+    "F5 is enabled only for a held regular-file target",
+    "the copy adapter's unhandled metadata boundary is an explicit review row; execution permits the loss only after ContinueWithListedLosses",
+    "journal creation, worker handoffs, execution revalidation, cancellation and post-copy refresh remain worker-owned"
+  ],
+  "not_claimed": [
+    "directory-recursive copy",
+    "F6 move or source retirement",
+    "replacement, merge, Trash or deletion",
+    "sanitizer/race qualification",
+    "interactive production-window acceptance"
+  ]
+}
