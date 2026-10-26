@@ -395,7 +395,8 @@ void OperationEvidenceJob::advance_ancestry(std::stop_token stop) {
             source_index = *parent_index;
         }
         ancestry_ = std::make_unique<AncestorWalkJob>(recursive_result_->sources()[source_index],
-            source_target_result_->destination()->pin_directory(), request_.limits.ancestry, request_.clock);
+            source_target_result_->destination()->pin_directory(), request_.limits.ancestry, request_.clock,
+            request_.provider_root);
     }
     const auto result = ancestry_->advance(stop);
     if (result == AncestorWalkState::Paused) {

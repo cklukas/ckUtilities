@@ -1615,10 +1615,10 @@ CK_TEST(files_service_operation_handoffs_keep_native_sources_on_the_worker) {
         });
     auto destination_submission = destination.service->acquire_operation_destination(
         destination_navigation.ticket, destination_page.stamp,
-        [&](Observation<std::shared_ptr<const DirectoryCursor>> result) {
+        [&](Observation<FilesPaneOperationDestination> result) {
             std::lock_guard lock(mutex);
             destination_thread = std::this_thread::get_id();
-            destination_ok = result.value() && *result.value();
+            destination_ok = result.value() && result.value()->directory && result.value()->provider_root;
             ++callbacks;
             condition.notify_all();
         });

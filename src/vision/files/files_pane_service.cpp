@@ -92,7 +92,7 @@ void cancel_operation(Operation &operation) noexcept {
                         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
                          "pane.operation_sources.stopped"}));
                 } else if constexpr (std::is_same_v<Request, OperationDestination>) {
-                    request.handoff(Observation<std::shared_ptr<const DirectoryCursor>>::unavailable(
+                    request.handoff(Observation<FilesPaneOperationDestination>::unavailable(
                         ObservationState::Unknown,
                         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
                          "pane.operation_destination.stopped"}));
@@ -642,7 +642,7 @@ struct FilesPaneService::State {
                             }
                             request.handoff(Result::available(std::move(result)));
                         } else if constexpr (std::is_same_v<Request, OperationDestination>) {
-                            using Result = Observation<std::shared_ptr<const DirectoryCursor>>;
+                            using Result = Observation<FilesPaneOperationDestination>;
                             if (!request.handoff)
                                 throw std::invalid_argument("missing operation destination handoff");
                             if (!pane->data() || request.navigation != active_epoch || !pane->accepts(request.stamp)) {
@@ -658,7 +658,33 @@ struct FilesPaneService::State {
                                 return;
                             }
                             auto directory = pane->hold_directory(request.stamp);
-                            request.handoff(std::move(directory));
+                            if (!directory.value()) {
+                                request.handoff(Result::unavailable(directory.unavailable_detail()->state,
+                                    directory.unavailable_detail()->error));
+                                return;
+                            }
+                            auto root_address = active->root_address().namespace_root();
+                            if (!root_address.value()) {
+                                request.handoff(Result::unavailable(root_address.unavailable_detail()->state,
+                                    root_address.unavailable_detail()->error));
+                                return;
+                            }
+                            auto opened_root = filesystem->open_native_directory(*root_address.value());
+                            if (!opened_root.value()) {
+                                request.handoff(Result::unavailable(opened_root.unavailable_detail()->state,
+                                    opened_root.unavailable_detail()->error));
+                                return;
+                            }
+                            auto provider_root = std::shared_ptr<const DirectoryCursor>(
+                                std::move(opened_root).take_value());
+                            if (!provider_root || !provider_root->identity().value()) {
+                                request.handoff(Result::unavailable(ObservationState::Unknown,
+                                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                                     "pane.operation_destination.provider_root_identity"}));
+                                return;
+                            }
+                            request.handoff(Result::available({std::move(directory).take_value(),
+                                                              std::move(provider_root)}));
                         } else if constexpr (std::is_same_v<Request, CreateDirectory>) {
                             FilesPaneReply result;
                             result.kind = FilesPaneReplyKind::Mutation;

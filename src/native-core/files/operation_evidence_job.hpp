@@ -42,6 +42,9 @@ struct OperationEvidenceJobRequest final {
     std::vector<HeldChild::Pointer> direct_sources;
     std::vector<NativeAbsolutePath> direct_source_paths;
     std::shared_ptr<const DirectoryCursor> destination;
+    // Optional explicit provider-root witness. Without it, repeated
+    // ancestry remains conservative and cannot project as disjoint.
+    std::shared_ptr<const DirectoryCursor> provider_root;
     std::vector<NativeName> destination_names;
     NameEncoding destination_encoding = NameEncoding::PosixBytes;
     InventoryMountPolicy mount_policy = InventoryMountPolicy::StayOnRootMount;

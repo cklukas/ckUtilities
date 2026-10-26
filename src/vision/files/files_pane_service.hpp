@@ -91,10 +91,16 @@ struct FilesPaneOperationSources final {
     std::shared_ptr<ck::files::DirectoryCursor> source_root;
     std::optional<ck::files::NativeAbsolutePath> source_path;
 };
+// Worker-created, read-only ancestry witness paired with the destination.
+// Neither cursor is exposed to UI state or treated as mutation authority.
+struct FilesPaneOperationDestination final {
+    std::shared_ptr<const ck::files::DirectoryCursor> directory;
+    std::shared_ptr<const ck::files::DirectoryCursor> provider_root;
+};
 using FilesPaneOperationSourceHandoff =
     std::function<void(ck::files::Observation<FilesPaneOperationSources>)>;
 using FilesPaneOperationDestinationHandoff =
-    std::function<void(ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>>)>;
+    std::function<void(ck::files::Observation<FilesPaneOperationDestination>)>;
 struct FilesPaneServiceLimits {
     std::size_t path_bytes = 64 * 1024;
     std::size_t page_rows = 4096, page_text_bytes = 1024 * 1024;

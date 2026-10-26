@@ -32,15 +32,18 @@ std::optional<UnavailableObservation> same_identity(const Observation<ObjectIden
 }
 }
 AncestorWalkJob::AncestorWalkJob(HeldChild::Pointer source, std::shared_ptr<const DirectoryCursor> destination,
-    AncestorWalkLimits limits, std::shared_ptr<const MonotonicClock> clock)
-    : source_(std::move(source)), destination_(std::move(destination)), limits_(limits), clock_(std::move(clock)) {
+    AncestorWalkLimits limits, std::shared_ptr<const MonotonicClock> clock,
+    std::shared_ptr<const DirectoryCursor> provider_root)
+    : source_(std::move(source)), destination_(std::move(destination)), provider_root_(std::move(provider_root)),
+      limits_(limits), clock_(std::move(clock)) {
     if (!source_ || !destination_ || !clock_ || limits.directories == 0 || limits.directories > hard_directories ||
         limits.time_slice <= MonotonicClock::Duration::zero() || limits.time_slice > std::chrono::seconds(1))
         throw std::invalid_argument("invalid ancestor walk");
     directories_.reserve(limits.directories);
 }
 void AncestorWalkJob::release_staging() noexcept {
-    source_.reset(); destination_.reset(); pending_.reset(); std::vector<AncestorDirectory>{}.swap(directories_);
+    source_.reset(); destination_.reset(); provider_root_.reset(); pending_.reset();
+    std::vector<AncestorDirectory>{}.swap(directories_);
     source_now_ = {}; outcome_ = {}; repeated_ = 0;
 }
 void AncestorWalkJob::fail(UnavailableObservation failure) noexcept {
@@ -91,11 +94,26 @@ void AncestorWalkJob::step() {
         }
         const auto compared = compare_identity(*directories_[index].metadata.value()->identity.value(), *directories_[repeated_].metadata.value()->identity.value());
         if (compared == IdentityComparison::Same) {
-            // A repeated identity, including a root-looking self-parent, is
-            // only a walk witness. Provider-root status needs a separate,
-            // platform-qualified proof; identity repetition alone cannot
-            // certify that the destination is outside the source.
-            outcome_ = Observation<AncestorWalkWitness>::available({AncestorWalkEnd::RepeatedDirectory, index, repeated_});
+            auto end = AncestorWalkEnd::RepeatedDirectory;
+            if (provider_root_) {
+                if (!provider_root_->identity().value()) {
+                    unavailable(provider_root_->identity().unavailable_detail()
+                        ? *provider_root_->identity().unavailable_detail()
+                        : error(ObservationState::Unknown, AdapterError::UnqualifiedIdentity,
+                                "ancestor.provider_root_identity"));
+                    break;
+                }
+                const auto root_compared = compare_identity(
+                    *provider_root_->identity().value(), *directories_[index].metadata.value()->identity.value());
+                if (root_compared == IdentityComparison::Same)
+                    end = AncestorWalkEnd::DisjointBoundary;
+                else if (root_compared == IdentityComparison::Unknown) {
+                    unavailable(error(ObservationState::Unknown, AdapterError::UnqualifiedIdentity,
+                                      "ancestor.provider_root_comparison"));
+                    break;
+                }
+            }
+            outcome_ = Observation<AncestorWalkWitness>::available({end, index, repeated_});
             phase_ = Phase::Seal;
         } else if (compared == IdentityComparison::Unknown) unavailable(error(ObservationState::Unknown, AdapterError::UnqualifiedIdentity, "ancestor.repeat_identity"));
         else ++repeated_;

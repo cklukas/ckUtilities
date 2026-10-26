@@ -61,7 +61,7 @@ struct FilesOperationPlanningService::State final {
         std::mutex mutex;
         std::condition_variable condition;
         std::optional<FilesPaneOperationSources> sources;
-        std::optional<std::shared_ptr<const ck::files::DirectoryCursor>> destination_cursor;
+        std::optional<FilesPaneOperationDestination> destination_result;
         std::optional<ck::files::UnavailableObservation> failure;
         bool source_done = false;
         bool destination_done = false;
@@ -83,12 +83,12 @@ struct FilesOperationPlanningService::State final {
             condition.notify_all();
         }
 
-        void accept_destination(ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>> value) {
+        void accept_destination(ck::files::Observation<FilesPaneOperationDestination> value) {
             std::lock_guard lock(mutex);
             if (failure || destination_done)
                 return;
             if (value.value())
-                destination_cursor = std::move(value).take_value();
+                destination_result = std::move(value).take_value();
             else
                 failure = value.unavailable_detail()
                     ? *value.unavailable_detail()
@@ -262,7 +262,7 @@ struct FilesOperationPlanningService::State final {
             });
         const auto destination = destination_service->acquire_operation_destination(
             destination_navigation, destination_stamp,
-            [handoff](ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>> value) {
+            [handoff](ck::files::Observation<FilesPaneOperationDestination> value) {
                 handoff->accept_destination(std::move(value));
             });
         {
@@ -280,7 +280,7 @@ struct FilesOperationPlanningService::State final {
                 {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::InvalidAccess),
                  "files_planning.source_submission"}));
         if (destination.state != FilesPaneSubmission::Accepted)
-            handoff->accept_destination(ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>>::unavailable(
+            handoff->accept_destination(ck::files::Observation<FilesPaneOperationDestination>::unavailable(
                 ck::files::ObservationState::Unknown,
                 {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(ck::files::AdapterError::InvalidAccess),
                  "files_planning.destination_submission"}));
@@ -396,11 +396,11 @@ struct FilesOperationPlanningService::State final {
                         }
                     } else {
                         FilesPaneOperationSources sources;
-                        std::shared_ptr<const ck::files::DirectoryCursor> destination;
+                        FilesPaneOperationDestination destination;
                         {
                             std::lock_guard lock(pane_input->handoff->mutex);
                             sources = std::move(*pane_input->handoff->sources);
-                            destination = std::move(*pane_input->handoff->destination_cursor);
+                            destination = std::move(*pane_input->handoff->destination_result);
                         }
                         const bool recursive = sources.root_source && sources.source_root && sources.source_path &&
                             sources.source_path->is_valid() && sources.sources.empty() && sources.paths.empty() &&
@@ -408,7 +408,7 @@ struct FilesOperationPlanningService::State final {
                         const bool flat = !sources.root_source && !sources.source_root && !sources.source_path &&
                             !sources.sources.empty() && sources.sources.size() == sources.paths.size() &&
                             sources.sources.size() == sources.names.size();
-                        if (!destination || (!recursive && !flat)) {
+                        if (!destination.directory || !destination.provider_root || (!recursive && !flat)) {
                             result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
                                 {ck::files::ErrorDomain::Adapter,
                                  static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
@@ -435,11 +435,12 @@ struct FilesOperationPlanningService::State final {
                                     native.evidence.root_source = std::move(sources.root_source);
                                     native.evidence.source_root = std::move(sources.source_root);
                                     native.evidence.source_path = std::move(sources.source_path);
+                                    native.evidence.provider_root = std::move(destination.provider_root);
                                 } else {
                                     native.evidence.direct_sources = std::move(sources.sources);
                                     native.evidence.direct_source_paths = std::move(sources.paths);
                                 }
-                                native.evidence.destination = std::move(destination);
+                                native.evidence.destination = std::move(destination.directory);
                                 native.evidence.destination_names = std::move(sources.names);
                                 native.evidence.destination_encoding = destination_encoding;
                                 native.evidence.mount_policy = pane_input->request.mount_policy;

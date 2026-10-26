@@ -33,7 +33,7 @@ struct FilesOperationExecutionService::State final {
         std::mutex mutex;
         std::condition_variable condition;
         std::optional<FilesPaneOperationSources> sources;
-        std::optional<std::shared_ptr<const ck::files::DirectoryCursor>> destination_cursor;
+        std::optional<FilesPaneOperationDestination> destination_result;
         std::optional<ck::files::UnavailableObservation> failure;
         bool source_done = false;
         bool destination_done = false;
@@ -52,12 +52,12 @@ struct FilesOperationExecutionService::State final {
             condition.notify_all();
         }
 
-        void destination(ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>> value) {
+        void destination(ck::files::Observation<FilesPaneOperationDestination> value) {
             std::lock_guard lock(mutex);
             if (failure || destination_done)
                 return;
             if (value.value())
-                destination_cursor = std::move(value).take_value();
+                destination_result = std::move(value).take_value();
             else
                 failure = value.unavailable_detail()
                     ? *value.unavailable_detail()
@@ -136,7 +136,7 @@ struct FilesOperationExecutionService::State final {
             });
         const auto destination_submission = value.destination_service->acquire_operation_destination(
             value.destination_navigation, value.destination_stamp,
-            [handoff](ck::files::Observation<std::shared_ptr<const ck::files::DirectoryCursor>> destination) {
+            [handoff](ck::files::Observation<FilesPaneOperationDestination> destination) {
                 handoff->destination(std::move(destination));
             });
         if (source_submission.state != FilesPaneSubmission::Accepted ||
@@ -159,7 +159,8 @@ struct FilesOperationExecutionService::State final {
                            ck::files::ObservationState::Unknown));
             return;
         }
-        if (!handoff->sources || !handoff->destination_cursor) {
+        if (!handoff->sources || !handoff->destination_result || !handoff->destination_result->directory ||
+            !handoff->destination_result->provider_root) {
             fail(error(ck::files::AdapterError::PlanInvalid, "files_execution.handoff_shape"));
             return;
         }
@@ -191,7 +192,7 @@ struct FilesOperationExecutionService::State final {
             }
             ck::files::NativeOperationMoveBatchRequest move;
             move.sources = std::move(sources);
-            move.destination = std::move(*handoff->destination_cursor);
+            move.destination = std::move(handoff->destination_result->directory);
             move.destination_names = std::move(names);
             move.journal_root = std::move(value.journal_root);
             move.journal_id = value.journal_id;
@@ -254,7 +255,7 @@ struct FilesOperationExecutionService::State final {
             ck::files::NativeOperationCopyTreeRequest tree_request(
                 (*completed.value())->sources().front()->name());
             tree_request.inventory = std::move(completed).take_value();
-            tree_request.destination = std::move(*handoff->destination_cursor);
+            tree_request.destination = std::move(handoff->destination_result->directory);
             tree_request.journal_root = std::move(value.journal_root);
             tree_request.journal_id = value.journal_id;
             tree_request.policy = value.policy;
@@ -297,7 +298,7 @@ struct FilesOperationExecutionService::State final {
         }
         ck::files::NativeOperationCopyBatchRequest copy;
         copy.sources = std::move(handoff->sources->sources);
-        copy.destination = std::move(*handoff->destination_cursor);
+        copy.destination = std::move(handoff->destination_result->directory);
         copy.destination_names = std::move(handoff->sources->names);
         copy.journal_root = std::move(value.journal_root);
         copy.journal_id = value.journal_id;

@@ -75,6 +75,11 @@ CK_TEST(ancestor_walk_repeated_root_is_only_a_walk_witness) {
     Fixture f; AncestorWalkJob job(f.held, f.root_cursor, {}, f.fs.clock()); const auto result = finish(job); const auto end = take(result->outcome());
     CK_CHECK(end.end == AncestorWalkEnd::RepeatedDirectory && end.directory == 1 && end.repeated == 0 && result->directories().size() == 2);
 }
+CK_TEST(ancestor_walk_explicit_provider_root_qualifies_only_that_repeated_identity_as_disjoint) {
+    Fixture f; AncestorWalkJob job(f.held, f.root_cursor, {}, f.fs.clock(), f.root_cursor);
+    const auto result = finish(job); const auto end = take(result->outcome());
+    CK_CHECK(end.end == AncestorWalkEnd::DisjointBoundary && end.directory == 1 && end.repeated == 0);
+}
 CK_TEST(ancestor_walk_preserves_each_parent_query_failure_with_an_explicit_bounded_prefix) {
     for (auto state : {ObservationState::Unknown, ObservationState::Unsupported, ObservationState::Denied, ObservationState::Gone, ObservationState::Changed, ObservationState::Failed}) {
         Fixture f; const NativeError error{ErrorDomain::Win32, 5, "parent.injected"}; f.fs.enqueue(Op::OpenParent, {UnavailableObservation{state, error}, {}, {}, false});

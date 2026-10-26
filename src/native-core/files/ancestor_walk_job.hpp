@@ -50,7 +50,8 @@ public:
     using Result = std::shared_ptr<const CompletedAncestorWalk>;
     static constexpr std::size_t steps_per_advance = 256, hard_directories = 4096;
     AncestorWalkJob(HeldChild::Pointer source, std::shared_ptr<const DirectoryCursor> destination,
-        AncestorWalkLimits limits = {}, std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock());
+        AncestorWalkLimits limits = {}, std::shared_ptr<const MonotonicClock> clock = system_monotonic_clock(),
+        std::shared_ptr<const DirectoryCursor> provider_root = {});
     AncestorWalkJob(const AncestorWalkJob&) = delete;
     AncestorWalkJob& operator=(const AncestorWalkJob&) = delete;
     AncestorWalkState advance(std::stop_token stop = {});
@@ -66,6 +67,7 @@ private:
     void step();
     HeldChild::Pointer source_;
     std::shared_ptr<const DirectoryCursor> destination_;
+    std::shared_ptr<const DirectoryCursor> provider_root_;
     AncestorWalkLimits limits_;
     std::shared_ptr<const MonotonicClock> clock_;
     std::optional<MonotonicClock::TimePoint> last_reading_;
