@@ -1,0 +1,35 @@
+{
+  "commit": "96bdf5e",
+  "scope": "WP-04 safety boundary for recursive sources",
+  "macos": {
+    "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "build": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp03-pane-recursive-20261026-01/tmp",
+    "configuration": "Release",
+    "target": "ck_vision_files_tests",
+    "output": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build/src/vision/files/ck_vision_files_tests",
+    "output_sha256": "53764c589c0b14785d7efb3a65c79fae45259565d099de6bc51fadcc812a80fb",
+    "focused_test": "operation_execution_service_rejects_missing_worker_handoffs_without_starting_native_work",
+    "focused_result": "1/1 passed"
+  },
+  "linux_arm64": {
+    "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp03-recursive-handoff-20261026-01",
+    "configuration": "Release",
+    "target": "ck_vision_files_tests",
+    "output": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/src/vision/files/ck_vision_files_tests",
+    "output_sha256": "18e718c0ae7740a1539bda4c66ec8cbf43d5202019f7194846f9984e01a8ec71",
+    "focused_test": "operation_execution_service_rejects_missing_worker_handoffs_without_starting_native_work",
+    "focused_result": "1/1 passed"
+  },
+  "windows_x64": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-wp03-recursive-handoff-20261026-01",
+    "qualification_status": "blocked",
+    "reason": "MSBuild reports the required v143 build tools are not installed."
+  },
+  "implementation_effect": "Recursive source payloads are rejected explicitly by the regular-file execution service with an Unsupported observation; they cannot be misinterpreted as an empty regular-file batch.",
+  "limitations": "This does not implement recursive copy. Directory staging, merge/replacement, durable tree recovery, move, Trash/delete and final release gates remain open."
+}

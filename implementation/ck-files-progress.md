@@ -3,6 +3,18 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 96bdf5e recursive execution safety boundary
+
+The current regular-file execution worker now rejects a recursive source
+payload explicitly as unsupported. This prevents the newly connected recursive
+planning handoff from being interpreted as an empty regular-file batch or from
+silently widening mutation authority. The focused execution-service test
+passes on macOS and Linux ARM64; Windows remains blocked by the missing v143
+toolset on the V: workstation.
+
+Evidence: [96bdf5e execution-boundary qualification record](evidence/ck-files-96bdf5e-execution-boundary-20261026.json).
+Recursive copy execution is still required before directory F5 can be enabled.
+
 ## 2026-10-26 — ee47e6c recursive directory planning handoff
 
 The real pane worker handoff now distinguishes flat selections from one
