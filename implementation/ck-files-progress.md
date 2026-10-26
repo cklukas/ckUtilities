@@ -22,6 +22,10 @@ permitted V: development volume for project/test data, so no real
 cross-volume Windows smoke test was claimed; the implementation remains
 gated on that qualification and the remaining move acceptance matrix.
 
+The verified Windows Release application was rebuilt from this checkpoint and
+installed at `V:\\dev\\ckutilities-install\\bin\\ck-files.exe`; its 2,828,800
+bytes and SHA-256 match the build at `V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe`.
+
 Evidence: [cross-filesystem move qualification record](evidence/ck-files-cross-filesystem-move-qualification-20261026.json).
 
 ## 2026-10-26 — f2c8107 identity-bound permanent-delete checkpoint

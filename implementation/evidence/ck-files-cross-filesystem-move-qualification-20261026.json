@@ -32,6 +32,14 @@
       "toolset": "MSVC v143 14.44.35207",
       "source": "V:\\dev\\ckutilities",
       "build_output": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+      "installed_application": {
+        "path": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
+        "build_path": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build\\bin\\Release\\ck-files.exe",
+        "bytes": 2828800,
+        "sha256": "B9CD3BAC24B2695020E752F9CC1B91EB150125A2A1C21BFC7EEE29A2059FF6DA",
+        "build_timestamp_utc": "2026-10-26T11:05:17Z",
+        "build_and_install_hash_match": true
+      },
       "tests": [
         "ck_files_native_tests --suite test_files_security_native.cpp: 4/4 passed",
         "ck_files_core_tests --filter move: 11/11 passed",
