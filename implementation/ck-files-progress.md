@@ -6528,6 +6528,16 @@ evidence](evidence/ck-files-interactive-20261026.json). Launcher launch/return,
 the full filesystem/driver matrix, and controlled fault testing remain open.
 
 
+## 2026-10-26 — Windows installed-package documentation checkpoint
+
+The installed package on `ssh workstation` was rechecked in place on the
+mandatory `V:` development drive. All ten installed utilities report the
+version contract successfully, and the installed documentation contains all
+ten utility guides plus all 28 generated screenshots. The exact install root,
+version outputs, screenshot root, and drive check are recorded in [Windows
+installed-package evidence](evidence/ck-utilities-windows-installed-20261026.json).
+
+
 ## 2026-10-26 — Windows ZIP package checkpoint
 
 The current Windows Release ZIP was rebuilt and extracted from the task-owned

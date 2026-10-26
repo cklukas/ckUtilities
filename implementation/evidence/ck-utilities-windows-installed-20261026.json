@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-26",
+  "host": "ssh workstation",
+  "development_drive": "V:",
+  "install_root": "V:\\dev\\ckutilities-install-goal-20261026",
+  "checks": {
+    "drive_available": true,
+    "version_commands": "10/10 passed",
+    "tool_guides": 10,
+    "screenshots": 28,
+    "screenshot_root": "V:\\dev\\ckutilities-install-goal-20261026\\share\\doc\\ck-utilities\\screenshots"
+  },
+  "versions": {
+    "ck-chat.exe": "ck-chat 0.2.0 (ckVision 1.4.0)",
+    "ck-config.exe": "ck-config 0.2.0 (ckVision 1.4.0)",
+    "ck-du.exe": "ck-du 0.2.0 (ckVision 1.4.0)",
+    "ck-edit.exe": "ck-edit 0.2.0 (ckVision 1.4.0)",
+    "ck-files.exe": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "ck-find.exe": "ck-find 0.2.0 (ckVision 1.4.0)",
+    "ck-json-view.exe": "ck-json-view 0.2.0 (ckVision 1.4.0)",
+    "ck-sysmon.exe": "ck-sysmon 0.2.0 (ckVision 1.4.0)",
+    "ck-todo.exe": "ck-todo 0.2.0 (ckVision 1.4.0)",
+    "ck-utilities.exe": "ck-utilities 0.2.0 (ckVision 1.4.0)"
+  },
+  "result": "passed",
+  "notes": "The installed package exposes a complete guide and screenshot payload. No source, build, cache, or temporary data was written outside V: during this workstation check."
+}
