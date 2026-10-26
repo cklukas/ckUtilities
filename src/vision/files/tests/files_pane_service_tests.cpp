@@ -1048,7 +1048,7 @@ CK_TEST(files_service_native_create_directory_is_exclusive_and_requires_refresh)
              std::filesystem::is_directory(source.path() / "created"));
     f.stopped();
 }
-CK_TEST(files_service_native_rename_revalidates_row_and_refuses_unsupported_protocols) {
+CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-rename");
     {
@@ -1070,9 +1070,8 @@ CK_TEST(files_service_native_rename_revalidates_row_and_refuses_unsupported_prot
     CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
     CK_CHECK(std::filesystem::exists(source.path() / "after") && !std::filesystem::exists(source.path() / "before"));
 #else
-    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
-             result.error->state == ObservationState::Unsupported);
-    CK_CHECK(std::filesystem::exists(source.path() / "before") && !std::filesystem::exists(source.path() / "after"));
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
+    CK_CHECK(!std::filesystem::exists(source.path() / "before") && std::filesystem::exists(source.path() / "after"));
 #endif
     f.stopped();
 }

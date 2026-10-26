@@ -550,12 +550,12 @@ CK_TEST(native_operation_source_retirement_refuses_unqualified_posix_compare_del
 #endif
 }
 
-CK_TEST(native_operation_rename_boundary_never_emulates_unqualified_posix_rename) {
+CK_TEST(native_operation_rename_boundary_uses_qualified_native_no_replace) {
     const ck::testing::ScratchDirectory scratch("files-operation-rename-boundary", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto source_path = scratch.path() / "source.bin";
     {
         std::ofstream output(source_path, std::ios::binary);
-        output << "source remains until rename identity protocol is qualified";
+        output << "source is renamed only through the qualified native identity protocol";
     }
     NativeFileSystem filesystem;
     auto directory = take(filesystem.open_directory(scratch.path()));
@@ -568,9 +568,23 @@ CK_TEST(native_operation_rename_boundary_never_emulates_unqualified_posix_rename
 #if defined(_WIN32)
     CK_CHECK(renamed.value() || renamed.state() != ObservationState::Unsupported);
 #else
-    CK_CHECK(!renamed.value() && renamed.state() == ObservationState::Unsupported);
-    CK_CHECK(fs::exists(source_path) && !fs::exists(scratch.path() / "renamed.bin"));
+    CK_CHECK(renamed.value());
+    CK_CHECK(!fs::exists(source_path) && fs::exists(scratch.path() / "renamed.bin"));
 #endif
+
+    const auto second_path = scratch.path() / "second.bin";
+    {
+        std::ofstream output(second_path, std::ios::binary);
+        output << "collision remains untouched";
+    }
+    auto second = take(directory->open_child(name("second.bin"), EntryAccess::ContentRead));
+    const auto second_metadata = take(second->inspect_basic());
+    CK_CHECK(second_metadata.identity.value());
+    if (!second_metadata.identity.value()) return;
+    const auto collision = directory->rename_child_noreplace(name("second.bin"), *second_metadata.identity.value(),
+                                                              *directory, name("renamed.bin"));
+    CK_CHECK(!collision.value() && collision.state() == ObservationState::Changed);
+    CK_CHECK(fs::exists(second_path) && fs::exists(scratch.path() / "renamed.bin"));
 }
 
 CK_TEST(native_operation_case_only_rename_requires_native_identity_proof) {

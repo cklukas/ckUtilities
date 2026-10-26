@@ -992,6 +992,75 @@ public:
         return Result::available(true);
     }
 
+    Observation<bool> rename_child_noreplace(const NativeName& name, const ObjectIdentity& expected_identity,
+                                              const DirectoryCursor& destination,
+                                              const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto* target = dynamic_cast<const PosixDirectoryCursor*>(&destination);
+        const auto* source_spelling = name.posix_bytes();
+        const auto* destination_spelling = destination_name.posix_bytes();
+        if (!target || !name.is_valid() || !destination_name.is_valid() || !source_spelling || !destination_spelling)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "rename_child_noreplace.name"));
+        if (compare_identity(expected_identity, expected_identity) != IdentityComparison::Same ||
+            !identity().value() || !destination.identity().value())
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::UnqualifiedIdentity, "rename_child_noreplace.identity"));
+
+        const auto source = stat_metadata(dirfd(directory_.get()), source_spelling->c_str(), false, scope_);
+        if (!source.value() || !source.value()->identity.value() ||
+            compare_identity(*source.value()->identity.value(), expected_identity) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "rename_child_noreplace.source_identity"));
+
+        const auto occupied = stat_metadata(dirfd(target->directory_.get()), destination_spelling->c_str(), false, target->scope_);
+        if (occupied.value())
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::PlanDecisionStale, "rename_child_noreplace.destination_occupied"));
+        if (occupied.state() != ObservationState::Gone) {
+            const auto& error = *occupied.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+
+        int status = -1;
+#if defined(__linux__) && defined(SYS_renameat2)
+        constexpr unsigned int no_replace = 1U;
+        status = static_cast<int>(syscall(SYS_renameat2, dirfd(directory_.get()), source_spelling->c_str(),
+                                           dirfd(target->directory_.get()), destination_spelling->c_str(), no_replace));
+#elif defined(__APPLE__)
+        status = renameatx_np(dirfd(directory_.get()), source_spelling->c_str(), dirfd(target->directory_.get()),
+                              destination_spelling->c_str(), RENAME_EXCL);
+#else
+        errno = ENOTSUP;
+#endif
+        if (status != 0) {
+            const int code = errno;
+            if (code == EEXIST)
+                return Result::unavailable(ObservationState::Changed,
+                    adapter_error(AdapterError::PlanDecisionStale, "rename_child_noreplace.destination_occupied"));
+            if (code == ENOSYS || code == ENOTSUP || code == EOPNOTSUPP)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Posix, code, "rename_child_noreplace.atomic_primitive"});
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, code, "rename_child_noreplace.atomic_primitive"});
+        }
+
+        const auto published = stat_metadata(dirfd(target->directory_.get()), destination_spelling->c_str(), false, target->scope_);
+        if (!published.value() || !published.value()->identity.value() ||
+            compare_identity(*published.value()->identity.value(), *source.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, static_cast<std::int64_t>(errno), "rename_child_noreplace.destination_identity"});
+        if (fsync(dirfd(target->directory_.get())) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, code, "rename_child_noreplace.destination_fsync"});
+        }
+        if (fsync(dirfd(directory_.get())) != 0) {
+            const int code = errno;
+            return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, code, "rename_child_noreplace.source_fsync"});
+        }
+        return Result::available(true);
+    }
+
     Observation<DirectoryAccessCheck> check_access(DirectoryAccess access) const override {
         using Result = Observation<DirectoryAccessCheck>;
         if (!valid_directory_access(access)) return Result::unavailable(ObservationState::Failed,

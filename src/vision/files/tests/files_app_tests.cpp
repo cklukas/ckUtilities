@@ -502,7 +502,7 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0) == "Last scan: 101 items");
 }
-CK_TEST(files_app_rename_uses_stamped_worker_target_and_never_claims_unsupported_success) {
+CK_TEST(files_app_rename_uses_stamped_worker_target_on_all_platforms) {
     Fixture f;
     f.loaded();
     CK_CHECK(f.key(ckv::Key::F2));
@@ -527,9 +527,8 @@ CK_TEST(files_app_rename_uses_stamped_worker_target_and_never_claims_unsupported
     CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "renamed-by-app"));
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
 #else
-    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
-    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "renamed-by-app"));
-    CK_CHECK(!f.app->status(0).empty() && f.app->status(0) != "Last scan: 100 items");
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "renamed-by-app"));
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
 #endif
 }
 CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
