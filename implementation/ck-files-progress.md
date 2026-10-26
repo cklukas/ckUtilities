@@ -20,6 +20,12 @@ Windows `V:` workstation install was rechecked with all ten utility versions,
 ten guides, and 28 screenshots present. A writable foreign-volume fixture is
 still required before claiming the mount-specific branches qualified.
 
+The new Trash service case also passed under fresh macOS ASan/UBSan and
+ThreadSanitizer builds from commit `239aba0`, one case in each run, with no
+diagnostics. The complete UI ASan suite remains separately blocked by the
+known pinned ckVision 1.4.0 `Desktop::install_default_handler` defect; no
+suppression or product workaround was introduced.
+
 Evidence: [POSIX Trash qualification record](evidence/ck-files-posix-trash-qualification-20261026.json).
 
 ## 2026-10-26 — e959a08 / d51b53e recursive move and terminal acceptance checkpoints

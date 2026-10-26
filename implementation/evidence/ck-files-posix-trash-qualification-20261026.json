@@ -2,6 +2,19 @@
   "milestone": "POSIX native Trash transaction and mount-specific location checkpoint",
   "implementation_commits": ["f335aa0", "67ac33b"],
   "date": "2026-10-26",
+  "sanitizers": {
+    "macos_asan_ubsan": {
+      "build_output": "/Volumes/S8T/tmp/ckutilities-sanitizers-20261026-01/asan",
+      "test": "ck_vision_files_tests --case files_service_trash_uses_native_metadata_and_removes_source: 1/1 passed",
+      "diagnostics": "none; test scratch roots were explicitly placed under /Volumes/PRO-BLADE/tmp"
+    },
+    "macos_tsan": {
+      "build_output": "/Volumes/S8T/tmp/ckutilities-sanitizers-20261026-01/tsan",
+      "test": "ck_vision_files_tests --case files_service_trash_uses_native_metadata_and_removes_source: 1/1 passed",
+      "diagnostics": "none; test scratch roots were explicitly placed under /Volumes/PRO-BLADE/tmp"
+    },
+    "scope_note": "The complete UI ASan suite remains separately blocked by the known pinned ckVision 1.4.0 Desktop::install_default_handler defect; no suppression or product workaround was introduced."
+  },
   "contract": [
     "Trash is a separate worker mutation and never falls back to permanent deletion.",
     "The source name is resolved relative to a held directory descriptor with final-link refusal and expected-identity revalidation.",
