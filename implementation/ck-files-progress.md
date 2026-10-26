@@ -52,8 +52,13 @@ focused-target qualification used the current source on all three platforms:
   `ad3e8ee3bf1ca4504ffa0cb5d001b81bfb49d6d1c926535aa550a8485f18decb` and
   `4ea0afd88e628893f0e24b40f88bdb40ffc57e27ffe2785ab8f062d746370256`.
 
-No application instance was launched. This is a folder-creation checkpoint,
-not a complete Norton Commander/Midnight Commander replacement: copy, move,
+The complete current-source `ctest -C Release -L files` matrix also passed
+**107/107** on macOS in 14.82 seconds, Windows in 27.20 seconds and Linux ARM
+in 48.10 seconds. This includes the native operation, pane-service and real
+headless application entries; no application instance was launched.
+
+This is a folder-creation checkpoint, not a complete Norton
+Commander/Midnight Commander replacement: copy, move,
 delete/Trash, rename, batch execution, metadata/security replay, recovery
 execution, fault-injection/process-crash qualification, sanitizer/race checks
 and interactive acceptance remain open.
