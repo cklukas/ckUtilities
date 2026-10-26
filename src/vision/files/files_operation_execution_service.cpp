@@ -16,7 +16,9 @@ ck::files::UnavailableObservation error(ck::files::AdapterError code, const char
 }
 
 bool valid(const FilesOperationExecutionRequest& request) noexcept {
-    return request.source_service && request.destination_service &&
+    return (request.operation == ck::files::FileOperation::Copy ||
+            request.operation == ck::files::FileOperation::Move) &&
+           request.source_service && request.destination_service &&
            request.source_service != request.destination_service && request.source_navigation.valid() &&
            request.destination_navigation.valid() && request.source_stamp.current() &&
            request.destination_stamp.current() && request.source_limits.held_entries != 0 &&
@@ -171,6 +173,50 @@ struct FilesOperationExecutionService::State final {
         if (!recursive && !flat) {
             fail(error(ck::files::AdapterError::PlanInvalid,
                        "files_execution.source_handoff_shape"));
+            return;
+        }
+        if (value.operation == ck::files::FileOperation::Move) {
+            std::vector<ck::files::HeldChild::Pointer> sources;
+            std::vector<ck::files::NativeName> names;
+            if (handoff->sources->root_source) {
+                sources.push_back(std::move(handoff->sources->root_source));
+                names.push_back(sources.front()->name());
+            } else {
+                sources = std::move(handoff->sources->sources);
+                names = std::move(handoff->sources->names);
+            }
+            if (sources.empty() || sources.size() != names.size()) {
+                fail(error(ck::files::AdapterError::PlanInvalid,
+                           "files_execution.move_source_shape"));
+                return;
+            }
+            ck::files::NativeOperationMoveBatchRequest move;
+            move.sources = std::move(sources);
+            move.destination = std::move(*handoff->destination_cursor);
+            move.destination_names = std::move(names);
+            move.journal_root = std::move(value.journal_root);
+            move.journal_id = value.journal_id;
+            move.journal_limits = value.policy.journal_limits;
+            move.open_journal = std::move(value.open_journal);
+            auto batch = ck::files::create_native_operation_move_batch(std::move(move));
+            if (!batch.value()) {
+                fail(*batch.unavailable_detail());
+                return;
+            }
+            auto job = std::move(batch).take_value();
+            while (job->state() != ck::files::OperationBatchState::Complete &&
+                   job->state() != ck::files::OperationBatchState::Failed &&
+                   job->state() != ck::files::OperationBatchState::Cancelled &&
+                   job->state() != ck::files::OperationBatchState::NeedsReconciliation)
+                job->advance(stop_token);
+            result.result = job->result();
+            result.state = job->state() == ck::files::OperationBatchState::Complete
+                ? FilesOperationExecutionState::Complete
+                : stop_token.stop_requested() || job->state() == ck::files::OperationBatchState::Cancelled
+                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
+                result.error = result.result.items.back().failure;
+            emit(std::move(result));
             return;
         }
         if (recursive) {

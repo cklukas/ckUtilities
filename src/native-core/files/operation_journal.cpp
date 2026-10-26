@@ -95,7 +95,8 @@ bool operation_journal_transition(FileOperation operation, OperationJournalState
     case OperationJournalState::Planned:
         return to == OperationJournalState::Prepared;
     case OperationJournalState::Prepared:
-        return to == OperationJournalState::Copied;
+        return to == OperationJournalState::Copied ||
+            (operation == FileOperation::Move && to == OperationJournalState::CommitIntended);
     case OperationJournalState::Copied:
         return to == OperationJournalState::Verified;
     case OperationJournalState::Verified:

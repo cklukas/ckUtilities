@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "native_operation_copy_job.hpp"
+#include "native_operation_move_job.hpp"
 #include "native_operation_recovery_evidence.hpp"
 #include "native_operation_recovery.hpp"
 #include "scratch_directory.hpp"
@@ -315,6 +316,62 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
                  evidence.value()->destination_identity.matches_live(destination_identity));
     }
     CK_CHECK(!fs::exists(destination_directory_path / "source.bin"));
+}
+
+CK_TEST(native_operation_move_batch_renames_only_after_identity_revalidation) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-move",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto source_path = scratch.path() / "source";
+    const auto destination_path = scratch.path() / "destination";
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    fs::create_directory(source_path);
+    fs::create_directory(destination_path);
+    {
+        std::ofstream output(source_path / "move-me.bin", std::ios::binary);
+        output << "same-filesystem move";
+    }
+
+    NativeFileSystem filesystem;
+    auto source_parent = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(source_path)));
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_path)));
+    auto source = take(HeldChild::observe_with_access(source_parent, name("move-me.bin"), EntryAccess::MetadataOnly));
+    const auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    OperationJournalId journal_id;
+    journal_id.bytes[0] = std::byte{0x52};
+
+    NativeOperationMoveBatchRequest request;
+    request.sources = {source};
+    request.destination = destination;
+    request.destination_names = {name("moved.bin")};
+    request.journal_root = journal_root;
+    request.journal_id = journal_id;
+    request.journal_limits = {1, 32, 256};
+    request.open_journal = [](const NativeAbsolutePath &root, const NativeName &basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    auto created = create_native_operation_move_batch(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value())
+        throw std::runtime_error("native move factory failed: " +
+            (created.unavailable_detail() ? created.unavailable_detail()->error.operation : "unknown"));
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 32 && job->state() != OperationBatchState::Complete &&
+         job->state() != OperationBatchState::Failed &&
+         job->state() != OperationBatchState::NeedsReconciliation; ++step)
+        job->advance();
+    if (job->state() != OperationBatchState::Complete) {
+        const auto &item = job->result().items.front();
+        std::string detail = "native move did not complete" +
+            (item.failure ? ": " + item.failure->error.operation : "");
+        for (const auto &entry : job->result().items)
+            detail += " item=" + std::to_string(entry.item) + " outcome=" +
+                std::to_string(static_cast<int>(entry.outcome));
+        throw std::runtime_error(detail);
+    }
+    CK_CHECK(!fs::exists(source_path / "move-me.bin"));
+    CK_CHECK(fs::exists(destination_path / "moved.bin"));
 }
 
 CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_disposition) {

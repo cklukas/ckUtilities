@@ -24,6 +24,7 @@ CK_TEST(operation_execution_service_rejects_missing_worker_handoffs_without_star
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesOperationExecutionService service;
     FilesOperationExecutionRequest request{
+        FileOperation::Copy,
         nullptr,
         nullptr,
         {},

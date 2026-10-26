@@ -4,6 +4,7 @@
 
 #include "files_pane_service.hpp"
 #include "native_operation_copy_job.hpp"
+#include "native_operation_move_job.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -18,6 +19,7 @@ namespace ck::vision {
 // native configuration. Native owners are acquired on pane workers and are
 // consumed on the execution worker; none cross into FilesApp state.
 struct FilesOperationExecutionRequest final {
+    ck::files::FileOperation operation = ck::files::FileOperation::Copy;
     FilesPaneService *source_service = nullptr;
     FilesPaneService *destination_service = nullptr;
     FilesPaneTicket source_navigation, destination_navigation;

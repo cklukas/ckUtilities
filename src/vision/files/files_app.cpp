@@ -196,6 +196,7 @@ struct FilesApp::State {
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
+    std::optional<ck::files::FileOperation> operation_execution_kind;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
     FilesApp::OperationRevalidation operation_planning_revalidation;
     FilesOperationReviewDialog::Completion operation_planning_completion;
@@ -317,7 +318,7 @@ struct FilesApp::State {
             copy_id = own("ck.files.copy", [this] { prepare_copy(ck::files::FileOperation::Copy); },
                           [this] { return can_prepare_copy(); });
             move_id = own("ck.files.move", [this] { prepare_copy(ck::files::FileOperation::Move); },
-                          [] { return false; });
+                          [this] { return can_prepare_copy(); });
             const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -454,6 +455,7 @@ struct FilesApp::State {
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_execution_request.reset();
+        operation_execution_kind.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
@@ -555,7 +557,8 @@ struct FilesApp::State {
         const auto &p = panes.at(i);
         std::string text;
         if (operation_execution_request)
-            text = "Copying to the other pane...";
+            text = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
+                ? "Moving to the other pane..." : "Copying to the other pane...";
         else if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
@@ -932,7 +935,8 @@ struct FilesApp::State {
         return kind == ck::files::ObjectKind::RegularFile || kind == ck::files::ObjectKind::Directory;
     }
     void prepare_copy(ck::files::FileOperation operation) {
-        if (operation != ck::files::FileOperation::Copy || !can_prepare_copy())
+        if ((operation != ck::files::FileOperation::Copy && operation != ck::files::FileOperation::Move) ||
+            !can_prepare_copy())
             return;
         const auto source_pane = active;
         const auto destination_pane = 1 - active;
@@ -969,11 +973,12 @@ struct FilesApp::State {
                      "files_app.copy_panes_changed"});
             return ck::files::Observation<ck::files::ConsentReceipt>::available(receipt);
         };
-        const auto completion = [this, source_pane, destination_pane, source_navigation, destination_navigation,
+        const auto completion = [this, operation, source_pane, destination_pane, source_navigation, destination_navigation,
                                  source_stamp, destination_stamp](
                                     ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
             if (!result.value()) {
-                panes[source_pane].error = "Copy was not authorized: " +
+                panes[source_pane].error = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
+                    " was not authorized: " +
                     (result.unavailable_detail() ? result.unavailable_detail()->error.operation : "review failed");
                 labels();
                 return;
@@ -983,7 +988,7 @@ struct FilesApp::State {
             for (unsigned byte = 0; byte != sizeof(serial); ++byte)
                 journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
             FilesOperationExecutionRequest execution{
-                services[source_pane], services[destination_pane], source_navigation, destination_navigation,
+                operation, services[source_pane], services[destination_pane], source_navigation, destination_navigation,
                 source_stamp, destination_stamp, {}, *operation_journal_root, journal_id, {}, {}};
             execution.source_limits.held_entries = 1024;
             execution.source_limits.access = ck::files::EntryAccess::ContentRead;
@@ -995,18 +1000,21 @@ struct FilesApp::State {
             };
             const auto submitted = execution_service->request(std::move(execution));
             if (submitted.state != FilesOperationExecutionSubmission::Accepted) {
-                panes[source_pane].error = "Copy worker is unavailable";
+                panes[source_pane].error = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
+                    " worker is unavailable";
                 labels();
                 return;
             }
             operation_execution_request = submitted.ticket;
+            operation_execution_kind = operation;
             panes[source_pane].error.clear();
             panes[destination_pane].error.clear();
             labels();
         };
         if (!prepare_operation(std::move(planning), panes[destination_pane].encoding,
                                revalidate, completion)) {
-            panes[source_pane].error = "Copy planning is unavailable";
+            panes[source_pane].error = operation == ck::files::FileOperation::Move
+                ? "Move planning is unavailable" : "Copy planning is unavailable";
             labels();
         }
     }
@@ -1484,18 +1492,22 @@ struct FilesApp::State {
             const bool source_refreshed = refresh(source);
             const bool destination_refreshed = refresh(destination);
             if (!source_refreshed || !destination_refreshed) {
-                panes[source].error = "Copy completed; refresh could not be started";
+                panes[source].error = std::string(*operation_execution_kind == ck::files::FileOperation::Move ? "Move" : "Copy") +
+                    " completed; refresh could not be started";
                 panes[destination].error = panes[source].error;
             }
         } else {
+            const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
             std::string detail = reply.state == FilesOperationExecutionState::Cancelled
-                ? "Copy cancelled" : "Copy failed";
+                ? (operation == ck::files::FileOperation::Move ? "Move cancelled" : "Copy cancelled")
+                : (operation == ck::files::FileOperation::Move ? "Move failed" : "Copy failed");
             if (reply.error)
                 detail += ": " + reply.error->error.operation;
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
                 detail += ": worker stopped";
             panes[active].error = std::move(detail);
         }
+        operation_execution_kind.reset();
         labels();
     }
     void pump() {
@@ -1543,7 +1555,9 @@ struct FilesApp::State {
                     consume_execution(std::move(*reply));
                 if (operation_execution_request && !execution_service->running()) {
                     operation_execution_request.reset();
-                    panes[active].error = "Copy worker stopped";
+                    panes[active].error = operation_execution_kind &&
+                            *operation_execution_kind == ck::files::FileOperation::Move
+                        ? "Move worker stopped" : "Copy worker stopped";
                     labels();
                 }
             }

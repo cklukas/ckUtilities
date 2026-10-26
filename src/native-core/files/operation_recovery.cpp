@@ -17,7 +17,11 @@ Observation<T> rejected(AdapterError code, const char* operation) {
 OperationRecoveryAction action(OperationJournalState state, FileOperation operation) noexcept {
     switch (state) {
     case OperationJournalState::Planned:
+        return operation == FileOperation::Move ? OperationRecoveryAction::RequireReview
+                                                : OperationRecoveryAction::InspectUnpublishedStaging;
     case OperationJournalState::Prepared:
+        return operation == FileOperation::Move ? OperationRecoveryAction::RequireReview
+                                                : OperationRecoveryAction::InspectUnpublishedStaging;
     case OperationJournalState::Copied:
     case OperationJournalState::Verified:
         return OperationRecoveryAction::InspectUnpublishedStaging;
