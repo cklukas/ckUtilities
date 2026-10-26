@@ -124,6 +124,7 @@ public:
     const std::vector<DestinationConflict>& conflicts() const noexcept { return conflicts_; }
     PlanIdentity identity() const noexcept { return identity_; }
     bool requires_review() const noexcept { return !issues_.empty() || !conflicts_.empty(); }
+    bool continue_with_listed_losses_allowed() const noexcept;
 
     // A receipt is a review result only. It never authorizes a filesystem
     // mutation; a later execution engine must revalidate the frozen plan.

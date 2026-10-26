@@ -96,6 +96,24 @@ private:
 };
 }
 
+Observation<bool> prepare_native_operation_journal_root(const NativeAbsolutePath& private_root) {
+    using Result = Observation<bool>;
+    auto host = private_root.host_path();
+    if (!host.value())
+        return Result::unavailable(host.unavailable_detail()->state, host.unavailable_detail()->error);
+    Fd directory(open(host.value()->c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    if (directory.value() < 0)
+        return failure<bool>(errno, "journal_file.prepare_root.open");
+    struct stat info{};
+    if (fstat(directory.value(), &info) != 0)
+        return failure<bool>(errno, "journal_file.prepare_root.stat");
+    if (!S_ISDIR(info.st_mode) || info.st_uid != geteuid())
+        return rejected<bool>(AdapterError::InvalidAccess, "journal_file.prepare_root.owner", ObservationState::Denied);
+    if (fchmod(directory.value(), 0700) != 0)
+        return failure<bool>(errno, "journal_file.prepare_root.mode");
+    return private_directory(directory.value());
+}
+
 Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal_file(
     const NativeAbsolutePath& private_root, const NativeName& basename, bool create_new) {
     using Pointer = std::unique_ptr<OperationJournalFile>;

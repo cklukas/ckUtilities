@@ -36,6 +36,17 @@ bool same_conflict(const DestinationConflict& left, const DestinationConflict& r
     return left.item == right.item && left.kind == right.kind;
 }
 
+bool known_reviewable_loss(const PreservationIssue& issue) noexcept {
+    if (issue.consequence == PreservationConsequence::Uncertain || issue.state == PreservationIssueState::Unknown)
+        return false;
+    if (!issue.hard_failure)
+        return true;
+    if (issue.consequence == PreservationConsequence::DataLoss)
+        return false;
+    return issue.state == PreservationIssueState::Missing || issue.state == PreservationIssueState::Unsupported ||
+        issue.state == PreservationIssueState::Denied;
+}
+
 } // namespace
 
 Observation<OperationPlan::Pointer> OperationPlan::create(FileOperation operation,
@@ -179,8 +190,7 @@ Observation<ConsentReceipt> OperationPlan::bind(ConsentAction action,
             return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.unreviewed_issue");
         if (action == ConsentAction::ContinueWithListedLosses) {
             for (const auto& issue : issues_)
-                if (issue.hard_failure || issue.state == PreservationIssueState::Unknown ||
-                    issue.consequence == PreservationConsequence::Uncertain)
+                if (!known_reviewable_loss(issue))
                     return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.uncertain_loss");
         }
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
@@ -190,6 +200,15 @@ Observation<ConsentReceipt> OperationPlan::bind(ConsentAction action,
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
             std::move(reviewed_issues), std::move(resolved_conflicts), std::move(keep_both_names)});
     return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.conflict_review");
+}
+
+bool OperationPlan::continue_with_listed_losses_allowed() const noexcept {
+    if (issues_.empty() || !conflicts_.empty())
+        return false;
+    for (const auto& issue : issues_)
+        if (!known_reviewable_loss(issue))
+            return false;
+    return true;
 }
 
 bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcept {
@@ -209,11 +228,7 @@ bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcep
         if (!receipt.resolved_conflicts.empty() || !receipt.keep_both_names.empty() ||
             !all_indices_present(receipt.reviewed_issues, issues_.size()) || issues_.empty())
             return false;
-        for (const auto& issue : issues_)
-            if (issue.hard_failure || issue.state == PreservationIssueState::Unknown ||
-                issue.consequence == PreservationConsequence::Uncertain)
-                return false;
-        return true;
+        return continue_with_listed_losses_allowed();
     case ConsentAction::SkipAffectedItems:
         return receipt.resolved_conflicts.empty() && receipt.keep_both_names.empty() &&
             all_indices_present(receipt.reviewed_issues, issues_.size()) && !issues_.empty();

@@ -8,6 +8,7 @@
 
 #include "ck/vision/keymap.hpp"
 #include "native_host.hpp"
+#include "operation_journal_file.hpp"
 
 #include <cvision/ui/application.hpp>
 
@@ -73,6 +74,11 @@ int run(const std::vector<std::string> &args) {
             return 2;
         }
     }
+    const auto operation_journal_root = absolute(operation_journals, "operation journal root");
+    if (!operation_journal_root || !ck::files::prepare_native_operation_journal_root(*operation_journal_root).value()) {
+        std::fprintf(stderr, "ck-files: cannot secure operation journal root\n");
+        return 2;
+    }
 
     const auto left = absolute(left_path, "left directory");
     const auto right = absolute(right_path, "right directory");
@@ -80,7 +86,6 @@ int run(const std::vector<std::string> &args) {
     const auto right_cache = absolute(right_index, "right cache");
     const auto left_completion_cache = absolute(left_completion, "left completion cache");
     const auto right_completion_cache = absolute(right_completion, "right completion cache");
-    const auto operation_journal_root = absolute(operation_journals, "operation journal root");
     if (!left || !right || !left_cache || !right_cache || !left_completion_cache || !right_completion_cache ||
         !operation_journal_root)
         return 2;

@@ -204,6 +204,10 @@ struct Fixture {
         std::filesystem::permissions(operation_root, std::filesystem::perms::owner_all,
                                      std::filesystem::perm_options::replace);
 #endif
+        const auto operation_root_address = address(operation_root);
+        auto prepared_journal_root = prepare_native_operation_journal_root(operation_root_address);
+        if (!prepared_journal_root.value())
+            throw std::runtime_error("cannot prepare app operation journal root");
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         app = std::make_unique<FilesApp>(
@@ -215,7 +219,7 @@ struct Fixture {
             [this] { ++exits; }, theme,
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
             planning_service.get(), execution_service.get(),
-            std::make_shared<const NativeAbsolutePath>(address(operation_root)));
+            std::make_shared<const NativeAbsolutePath>(operation_root_address));
     }
     ~Fixture() {
         app.reset();
@@ -544,9 +548,9 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
         if (button->text() == "&Apply decision")
             apply = button;
     CK_CHECK(apply != nullptr);
-    // The current copy boundary contributes one explicit metadata-loss row.
-    if (!checks.empty())
-        checks.front()->set_checked(0, true);
+    // Every displayed preservation row must be acknowledged before continuing.
+    for (auto *check : checks)
+        check->set_checked(0, true);
     // The copy adapter declares an explicit portable-metadata boundary; the
     // action order is Cancel, choose destination, continue, skip.
     combos.front()->set_selected_index(2);
@@ -578,7 +582,9 @@ CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
     find_views(f.application.root(), combos);
     find_views(f.application.root(), checks);
     find_views(f.application.root(), buttons);
-    CK_CHECK(combos.size() == 1 && checks.size() == 2);
+    // The portable copy boundary contributes the required rows; native
+    // platforms may disclose additional preservation limits.
+    CK_CHECK(combos.size() == 1 && checks.size() >= 2);
     for (auto *check : checks)
         check->set_checked(0, true);
     ckv::widgets::Button *apply = nullptr;

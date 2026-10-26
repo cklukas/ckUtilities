@@ -85,6 +85,15 @@ CK_TEST(operation_consent_cancel_is_always_safe_and_continue_requires_complete_k
         PreservationIssueState::Unknown, PreservationConsequence::Uncertain, true}});
     CK_CHECK(uncertain->bind(ConsentAction::ContinueWithListedLosses, {0}).state() == ObservationState::Failed);
     CK_CHECK(uncertain->bind(ConsentAction::ChooseAnotherDestination).value());
+
+    const auto known_metadata_loss = plan({item(14)}, {
+        PreservationIssue{0, PreservationFeature::ExtendedAttributes, PreservationIssueState::Denied,
+            PreservationConsequence::MetadataLoss, true},
+        PreservationIssue{0, PreservationFeature::PermissionsOwnership, PreservationIssueState::Denied,
+            PreservationConsequence::SecurityChange, true}});
+    const auto reviewed_metadata_loss = take(
+        known_metadata_loss->bind(ConsentAction::ContinueWithListedLosses, {0, 1}));
+    CK_CHECK(known_metadata_loss->receipt_matches(reviewed_metadata_loss));
 }
 
 CK_TEST(operation_consent_clean_plan_requires_explicit_proceed) {

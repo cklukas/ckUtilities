@@ -200,6 +200,37 @@ private:
 };
 }
 
+Observation<bool> prepare_native_operation_journal_root(const NativeAbsolutePath& private_root) {
+    using Result = Observation<bool>;
+    auto host = private_root.host_path();
+    if (!host.value())
+        return Result::unavailable(host.unavailable_detail()->state, host.unavailable_detail()->error);
+    auto user = effective_user();
+    if (!user.value())
+        return Result::unavailable(user.unavailable_detail()->state, user.unavailable_detail()->error);
+    auto user_data = std::move(user).take_value();
+    Handle directory(CreateFileW(host.value()->c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL |
+            WRITE_DAC | WRITE_OWNER, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (directory.get() == INVALID_HANDLE_VALUE)
+        return failure<bool>(GetLastError(), "journal_file.prepare_root.open");
+    std::vector<std::byte> system, acl_data;
+    SECURITY_DESCRIPTOR descriptor{};
+    auto security = make_security(user_data, system, acl_data, descriptor);
+    if (!security.value())
+        return Result::unavailable(security.unavailable_detail()->state, security.unavailable_detail()->error);
+    BOOL present = FALSE, defaulted = FALSE;
+    PACL acl = nullptr;
+    if (!GetSecurityDescriptorDacl(&descriptor, &present, &acl, &defaulted) || !present || !acl)
+        return rejected<bool>(AdapterError::InvalidNativeResult, "journal_file.prepare_root.dacl");
+    const auto code = SetSecurityInfo(directory.get(), SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+        user_data.data(), nullptr, acl, nullptr);
+    if (code != ERROR_SUCCESS)
+        return failure<bool>(code, "journal_file.prepare_root.security");
+    return verify_root(directory.get(), user_data.data());
+}
+
 Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal_file(
     const NativeAbsolutePath& private_root, const NativeName& basename, bool create_new) {
     using Pointer = std::unique_ptr<OperationJournalFile>;

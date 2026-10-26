@@ -411,20 +411,36 @@ struct FilesOperationPlanningService::State final {
                                  "files_planning.pane_handoff_shape"}};
                             result.state = FilesOperationPlanningReplyState::Failed;
                         } else {
-                            FilesOperationNativePlanningRequest native;
-                            native.evidence.operation = pane_input->request.operation;
-                            native.evidence.direct_sources = std::move(sources.sources);
-                            native.evidence.direct_source_paths = std::move(sources.paths);
-                            native.evidence.destination = std::move(destination);
-                            native.evidence.destination_names = std::move(sources.names);
-                            native.evidence.mount_policy = pane_input->request.mount_policy;
-                            native.evidence.link_policy = pane_input->request.link_policy;
-                            native.evidence.limits = pane_input->request.evidence_limits;
-                            native.evidence.clock = ck::files::system_monotonic_clock();
-                            native.projection_policy = pane_input->request.projection_policy;
-                            native.limits = pane_input->request.limits;
-                            native.review_limits = pane_input->request.review_limits;
-                            compose_native(std::move(native), stop.get_token(), result, plan);
+                            const auto destination_encoding = sources.names.front().encoding();
+                            bool names_valid = true;
+                            for (const auto &name : sources.names) {
+                                if (name.encoding() != destination_encoding) {
+                                    result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
+                                        {ck::files::ErrorDomain::Adapter,
+                                         static_cast<std::int64_t>(ck::files::AdapterError::InvalidIdentifier),
+                                         "files_planning.pane_name_encoding"}};
+                                    result.state = FilesOperationPlanningReplyState::Failed;
+                                    names_valid = false;
+                                    break;
+                                }
+                            }
+                            if (names_valid) {
+                                FilesOperationNativePlanningRequest native;
+                                native.evidence.operation = pane_input->request.operation;
+                                native.evidence.direct_sources = std::move(sources.sources);
+                                native.evidence.direct_source_paths = std::move(sources.paths);
+                                native.evidence.destination = std::move(destination);
+                                native.evidence.destination_names = std::move(sources.names);
+                                native.evidence.destination_encoding = destination_encoding;
+                                native.evidence.mount_policy = pane_input->request.mount_policy;
+                                native.evidence.link_policy = pane_input->request.link_policy;
+                                native.evidence.limits = pane_input->request.evidence_limits;
+                                native.evidence.clock = ck::files::system_monotonic_clock();
+                                native.projection_policy = pane_input->request.projection_policy;
+                                native.limits = pane_input->request.limits;
+                                native.review_limits = pane_input->request.review_limits;
+                                compose_native(std::move(native), stop.get_token(), result, plan);
+                            }
                         }
                     }
                 } else {

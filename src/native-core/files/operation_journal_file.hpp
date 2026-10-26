@@ -44,4 +44,9 @@ Observation<bool> append_operation_journal_file(
 Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal_file(
     const NativeAbsolutePath& private_root, const NativeName& basename, bool create_new);
 
+// Establish and verify the platform-private journal-root contract before
+// workers open individual journals. This may tighten an app-owned directory's
+// permissions/security descriptor, but never weakens the contract.
+Observation<bool> prepare_native_operation_journal_root(const NativeAbsolutePath& private_root);
+
 } // namespace ck::files

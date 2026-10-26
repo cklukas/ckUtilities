@@ -154,7 +154,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         if (!issues && !conflicts) {
             actions.push_back(ConsentAction::Proceed);
         } else if (issues && !conflicts) {
-            if (model->summary().uncertain == 0 && model->summary().hard_failures == 0)
+            if (model->plan()->continue_with_listed_losses_allowed())
                 actions.push_back(ConsentAction::ContinueWithListedLosses);
             actions.push_back(ConsentAction::SkipAffectedItems);
         } else if (!issues && conflicts) {
