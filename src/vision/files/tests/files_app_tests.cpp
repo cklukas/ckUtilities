@@ -516,6 +516,32 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0) == "Last scan: 101 items");
 }
+CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.rename"));
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::InputLine *> inputs;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), inputs);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(inputs.size() == 1);
+    CK_CHECK(buttons.size() == 2);
+    inputs.front()->set_text("renamed-by-app");
+    f.application.set_focus(inputs.front());
+    ckv::widgets::Button *rename = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Rename")
+            rename = button;
+    CK_CHECK(rename != nullptr && rename->activate_mnemonic("r"));
+    f.until([&] { return !f.app->pending(0); });
+
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
+    CK_CHECK(std::filesystem::is_regular_file(f.scratch.path() / "left" / "renamed-by-app"));
+    CK_CHECK(f.app->model(0).row_count() == 100);
+    CK_CHECK(f.app->status(0) == "Last scan: 100 items");
+}
 CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     Fixture f;
     f.loaded();
