@@ -1,0 +1,40 @@
+{
+  "milestone": "Portable directory-index checksum optimization and cross-platform qualification",
+  "implementation_commit": "014b9ad",
+  "qualification_timeout_commit": "204c653",
+  "date": "2026-10-26",
+  "source_fingerprint": "git commits 204c653 and 014b9ad",
+  "change": [
+    "CRC32C now uses a constexpr portable 256-entry table instead of eight bit-steps per byte.",
+    "The bounded 100000-record native index stress test has a finite 600-second CTest envelope for slower ARM64 hosts.",
+    "No record format, checksum polynomial, storage quota, I/O bound, or safety assertion changed."
+  ],
+  "qualification": {
+    "macos": {
+      "build": "Debug/Ninja incremental build 2026-10-26T08:42:50Z..08:42:58Z; app relink 09:04:33Z..09:04:34Z",
+      "index_record": "17/17 passed, including RFC CRC32C vectors",
+      "native_index": "17/17 passed; external sort 83463 ms, lookup 31027 ms, filter 26532 ms",
+      "files_app": "203/203 passed"
+    },
+    "linux_arm64_rpi4": {
+      "build": "Debug/Ninja incremental build 2026-10-26T08:46:22Z..08:48:21Z; app relink 09:05:09Z..09:05:18Z",
+      "index_record": "17/17 passed at 2026-10-26T09:06:01Z",
+      "native_index_tmpfs": "15/15 passed 2026-10-26T08:55:08Z..09:03:06Z; external sort 305078 ms, lookup 37840 ms, filter 44516 ms",
+      "files_app": "203/203 passed 2026-10-26T09:05:18Z..09:05:50Z",
+      "ext4_note": "The same 100000-record native stress case exceeded the finite 600-second envelope on the RPi4 /home ext4 fixture path before producing its first scan metric. That path is not claimed as a pass; the remote temporary-workspace qualification uses the accepted private tmpfs path."
+    },
+    "windows_x64_workstation": {
+      "build": "Release/Visual Studio 17 2022 x64 on V:\\tmp\\ckutilities-wp05-move-20261026-01\\build with MSVC v143 14.44.35207",
+      "index_record": "17/17 passed, including RFC CRC32C vectors",
+      "native_index": "14/14 passed; external sort 11101 ms, lookup 1520 ms, filter 1560 ms",
+      "files_ctest": "106/106 test_files* entries passed with -C Release",
+      "files_app": "203/203 passed",
+      "development_drive": "All workstation source, build, temporary, and test paths remained on V:."
+    }
+  },
+  "remaining_scope": [
+    "Cross-filesystem move, recursive move, Trash/Recycle Bin and permanent deletion remain open.",
+    "Recovery execution, full interactive release-window acceptance and race qualification remain open.",
+    "Full UI sanitizer qualification remains blocked by the upstream ckVision headless fixture defect recorded in the safety/sanitizer evidence."
+  ]
+}

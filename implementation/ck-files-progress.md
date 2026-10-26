@@ -3,6 +3,24 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 014b9ad / 204c653 index qualification checkpoint
+
+The directory-index CRC32C codec now uses a portable constexpr lookup table.
+This preserves the RFC vectors and wire format while removing the previous
+eight-bit-steps-per-byte cost from repeated external-sort encode/decode passes.
+The bounded 100000-record native stress test retains a finite 600-second
+envelope so a slow ARM64 host cannot turn a timeout into a pass.
+
+The changed-area qualification passed on macOS, Linux ARM64 and Windows x64:
+macOS passed 17 index-record, 17 native-index and 203 Files app cases;
+Windows passed 17 index-record, 14 native-index, 106 `test_files*` CTest
+entries and 203 Files app cases. Linux passed 17 index-record, 15 native-index
+cases and 203 Files app cases using a private tmpfs fixture on the RPi4. The
+same native stress case exceeds the finite envelope on that host's `/home`
+ext4 fixture path; it is recorded as a performance limitation, not a pass.
+
+Evidence: [index qualification record](evidence/ck-files-index-qualification-20261026.json).
+
 ## 2026-10-26 — 6d5998b / b966514 provider-root recursive-copy checkpoint
 
 Recursive operation handoff now carries a worker-created destination cursor
