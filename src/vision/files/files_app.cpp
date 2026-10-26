@@ -153,7 +153,8 @@ struct FilesApp::State {
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
-        bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false;
+        bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
+             deleting = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -193,6 +194,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
@@ -213,10 +215,13 @@ struct FilesApp::State {
     std::weak_ptr<void> create_directory_lifetime;
     ckv::widgets::Window *rename_window = nullptr;
     std::weak_ptr<void> rename_lifetime;
+    ckv::widgets::Window *delete_window = nullptr;
+    std::weak_ptr<void> delete_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId delete_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId copy_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId move_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
@@ -315,6 +320,9 @@ struct FilesApp::State {
             rename_id = own("ck.files.rename", [this] { show_rename(); }, [this] {
                 return ready(active) && panes[active].model.target().has_value();
             });
+            delete_id = own("ck.files.permanently_delete", [this] { show_delete(); }, [this] {
+                return ready(active) && panes[active].model.target().has_value();
+            });
             copy_id = own("ck.files.copy", [this] { prepare_copy(ck::files::FileOperation::Copy); },
                           [this] { return can_prepare_copy(); });
             move_id = own("ck.files.move", [this] { prepare_copy(ck::files::FileOperation::Move); },
@@ -380,6 +388,7 @@ struct FilesApp::State {
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_directory_id, "&New folder..."),
+                                                            item(delete_id, "&Delete permanently..."),
                                                             item(copy_id, "&Copy to other pane"),
                                                             item(move_id, "&Move to other pane")}},
                 ckv::widgets::MenuBarItem{
@@ -452,6 +461,8 @@ struct FilesApp::State {
         create_directory_window = nullptr;
         rename_dialog.reset();
         rename_window = nullptr;
+        delete_dialog.reset();
+        delete_window = nullptr;
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_execution_request.reset();
@@ -539,6 +550,7 @@ struct FilesApp::State {
                (preview_dialog && !preview_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
                (rename_dialog && !rename_dialog->completed()) ||
+               (delete_dialog && !delete_dialog->completed()) ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
@@ -568,7 +580,7 @@ struct FilesApp::State {
         else if (p.previewing)
             text = "Reading preview...";
         else if (p.mutating)
-            text = p.renaming ? "Renaming..." : "Creating folder...";
+            text = p.renaming ? "Renaming..." : p.deleting ? "Deleting permanently..." : "Creating folder...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
@@ -799,6 +811,29 @@ struct FilesApp::State {
         p.request = submitted.ticket;
         p.mutating = true;
         p.renaming = true;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
+    bool permanently_delete(std::size_t i, FilesPaneRowTarget target) {
+        if (!ready(i))
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->permanently_delete(p.navigation, target.stamp, target.row,
+                                                               {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Permanent deletion request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.renaming = false;
+        p.deleting = true;
         p.cancelling = false;
         p.error.clear();
         p.model.set_input_locked(true);
@@ -1072,6 +1107,53 @@ struct FilesApp::State {
                 }
             });
     }
+    void show_delete() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto target = panes[pane].model.target();
+        if (!target)
+            return;
+        const auto row = target->row;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Delete entry permanently";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "This is irreversible. The selected entry will be permanently deleted; it will not be moved to Trash or the Recycle Bin.",
+                .kind = ckv::widgets::FieldKind::Note},
+            ckv::widgets::FieldDescriptor{.label = "The worker will revalidate the selected entry identity before deletion.",
+                                          .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Delete permanently", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        delete_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        delete_window = shell->desktop().active_window();
+        delete_lifetime = delete_window->lifetime_token();
+        delete_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                delete_window = nullptr;
+                if (!result.accepted) {
+                    delete_dialog.reset();
+                    return;
+                }
+                const auto current = panes[pane].model.target();
+                if (panes[pane].navigation != navigation || !current || current->row != row) {
+                    panes[pane].error = "Entry changed while permanent deletion was open";
+                    delete_dialog.reset();
+                    labels();
+                    return;
+                }
+                delete_dialog.reset();
+                if (!permanently_delete(pane, *current)) {
+                    panes[pane].error = "Permanent deletion request was rejected";
+                    labels();
+                }
+            });
+    }
     void show_location() {
         if (!can_edit_location(active))
             return;
@@ -1328,7 +1410,9 @@ struct FilesApp::State {
             p.cancelling = false;
             p.mutating = false;
             const bool was_rename = p.renaming;
+            const bool was_delete = p.deleting;
             p.renaming = false;
+            p.deleting = false;
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
                 p.error.clear();
@@ -1336,11 +1420,14 @@ struct FilesApp::State {
                 // mutation. Reopen the retained route through the worker so
                 // the UI never presents a stale post-mutation page.
                 if (!refresh(i))
-                    p.error = was_rename ? "Entry renamed; refresh could not be started"
-                                         : "Directory created; refresh could not be started";
+                    p.error = was_delete ? "Entry permanently deleted; refresh could not be started"
+                                         : was_rename ? "Entry renamed; refresh could not be started"
+                                                      : "Directory created; refresh could not be started";
             } else {
                 p.error = reply.state == FilesPaneReplyState::Ready
-                              ? (was_rename ? "Rename outcome unavailable" : "Directory creation outcome unavailable")
+                              ? (was_delete ? "Permanent deletion outcome unavailable"
+                                            : was_rename ? "Rename outcome unavailable"
+                                                         : "Directory creation outcome unavailable")
                               : failure(reply);
             }
             labels();
@@ -1648,6 +1735,11 @@ struct FilesApp::State {
                 rename_window->close();
             return;
         }
+        if (delete_dialog && !delete_dialog->completed()) {
+            if (delete_window && !delete_lifetime.expired())
+                delete_window->close();
+            return;
+        }
         if (operation_review_dialog && !operation_review_dialog->completed()) {
             operation_review_dialog->close();
             return;
@@ -1770,6 +1862,12 @@ bool FilesApp::rename(std::size_t pane, ck::files::NativeName name) {
     if (!target)
         return false;
     return state_->rename(pane, *target, std::move(name));
+}
+bool FilesApp::permanently_delete(std::size_t pane) {
+    const auto target = state_->panes.at(pane).model.target();
+    if (!target)
+        return false;
+    return state_->permanently_delete(pane, *target);
 }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;
