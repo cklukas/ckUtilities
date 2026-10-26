@@ -6512,6 +6512,17 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-26 — macOS full-suite checkpoint
+
+After completing the previously partial validation tree, the clean Release
+build produced all registered test executables and the full macOS CTest run
+passed **223/223** with zero not-run or failed tests. The Files group passed
+107/107, including the native and UI tests. The build ran from 14:35:44 to
+14:37:58 with two jobs; CTest ran from 14:38:27 to 14:38:40. Output hashes,
+source tree, exact paths, and the task-owned `TMPDIR` are recorded in [macOS
+full-suite evidence](evidence/ck-utilities-macos-full-suite-20261026.json).
+
+
 ## 2026-10-26 — WP-08 interactive terminal checkpoint
 
 The project terminal-smoke verifier qualified the current `ck-files` Release

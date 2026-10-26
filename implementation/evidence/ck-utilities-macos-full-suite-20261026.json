@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "75f6f7c49293262c4a6a54ab28f8ca820d2479c4",
+  "source_tree": "b11504c265b0201cff969b8619503fff926c774e",
+  "host": "macOS arm64",
+  "configuration": "Release",
+  "build": {
+    "root": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build",
+    "target": "default/all",
+    "start": "2026-10-26T14:35:44+01:00",
+    "end": "2026-10-26T14:37:58+01:00",
+    "elapsed_seconds": 134,
+    "parallelism": 2,
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-full-suite-20261026-01",
+    "outputs": {
+      "ck-files": {
+        "path": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/bin/ck-files",
+        "sha256": "62d6589566b2661dd09d60187923efe511432e47bedf830a82eace0cd013e2db",
+        "mtime": "2026-10-26T14:28:06+0100"
+      },
+      "ck_vision_files_tests": {
+        "path": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/src/vision/files/ck_vision_files_tests",
+        "sha256": "018319385730ddede91963c6b0fe6b397a004c800a1343e2d7135ffb1a805d90",
+        "mtime": "2026-10-26T13:42:17+0100"
+      }
+    }
+  },
+  "ctest": {
+    "start": "2026-10-26T14:38:27+01:00",
+    "end": "2026-10-26T14:38:40+01:00",
+    "tests": 223,
+    "passed": 223,
+    "not_run": 0,
+    "failed": 0,
+    "elapsed_seconds_reported": 12.60,
+    "exit_code": 0,
+    "log": "/Volumes/S8T/tmp/ckutilities-full-suite-20261026-01/ctest-full.log"
+  },
+  "result": "passed"
+}
