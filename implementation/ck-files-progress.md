@@ -6316,6 +6316,12 @@ both architecture checks, the sysmon sample, and the complete Files/native
 matrix. Exact executable hashes and paths are recorded in [current Windows
 evidence](evidence/ck-files-windows-current-20261026.json).
 
+The product-only ZIP rehearsal also passed from the same build: extracted
+`ck-utilities-0.2.0-windows-x64.zip` has exactly `bin,share`, all 10 tools
+pass `--help`, and the extracted docs contain 10 guides and 28 screenshots.
+The archive SHA-256 is
+`6B9DC6118615665D1B6168ACE14D82E2F8D6DCDB0F0F5E1074B7D7170DF172DE`.
+
 Commit `11b7caa` also makes the Runtime install carry the documentation
 payload: the workstation install now contains all 10 utility guides and 28
 tracked SVG screenshots below `share/doc/ck-utilities`, verified by a fresh

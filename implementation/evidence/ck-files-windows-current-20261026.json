@@ -58,6 +58,14 @@
       "ck-config.exe": "0BB63A6E13D28D7325046ACB4C257890DC7178388375B3DE81E23F4ED4BDD8CF"
     }
   },
+  "package": {
+    "path": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-final\\ck-utilities-0.2.0-windows-x64.zip",
+    "sha256": "6B9DC6118615665D1B6168ACE14D82E2F8D6DCDB0F0F5E1074B7D7170DF172DE",
+    "extracted_help_smoke": "10/10",
+    "extracted_guides": 10,
+    "extracted_screenshots": 28,
+    "top_level_payload": "bin,share"
+  },
   "production_executable_launched": false,
   "remaining": [
     "sanitizer/race qualification",
