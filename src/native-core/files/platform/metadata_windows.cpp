@@ -1101,6 +1101,15 @@ public:
                 occupied.unavailable_detail() ? occupied.unavailable_detail()->error :
                     NativeError{ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "rename_child_noreplace.destination_probe"});
 
+        // The enumeration cursor is intentionally not opened with namespace
+        // write access. Acquire the durable source-parent handle before the
+        // rename so a post-rename flush failure cannot be mistaken for a
+        // pre-mutation refusal.
+        auto source_access = open_namespace_write_handle();
+        if (!source_access.value()) {
+            const auto &error = *source_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
         std::wstring spelling;
         spelling.reserve(destination_units->size());
         for (const auto unit : *destination_units) spelling.push_back(static_cast<wchar_t>(unit));
@@ -1142,7 +1151,7 @@ public:
             compare_identity(*published_metadata.value()->identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "rename_child_noreplace.destination_identity"});
-        if (!FlushFileBuffers(handle_.get()) || !FlushFileBuffers(destination_access.value()->get()))
+        if (!FlushFileBuffers(source_access.value()->get()) || !FlushFileBuffers(destination_access.value()->get()))
             return Result::unavailable(ObservationState::Unknown,
                 {ErrorDomain::Win32, GetLastError(), "rename_child_noreplace.directory_flush"});
         return Result::available(true);

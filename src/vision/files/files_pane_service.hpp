@@ -157,6 +157,13 @@ class FilesPaneService final {
     FilesPaneSubmitted create_directory(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                         ck::files::NativeName name,
                                         FilesPaneReadRange range = {});
+    // Rename one stamped visible row to one exact native component. The
+    // worker resolves the row and identity again; callers must refresh after
+    // a successful native rename. Unsupported platform protocols remain
+    // explicit failures.
+    FilesPaneSubmitted rename(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                              ck::files::PaneRowId row, ck::files::NativeName name,
+                              FilesPaneReadRange range = {});
     // One acknowledged local-state command; Busy while any work/result is
     // outstanding. It is never coalesced with another change or page request.
     // Navigation may supersede it; cancellation cannot undo a committed change.

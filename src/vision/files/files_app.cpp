@@ -153,7 +153,7 @@ struct FilesApp::State {
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
-        bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false;
+        bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -190,6 +190,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
@@ -206,9 +207,12 @@ struct FilesApp::State {
     std::weak_ptr<void> preview_dialog_lifetime;
     ckv::widgets::Window *create_directory_window = nullptr;
     std::weak_ptr<void> create_directory_lifetime;
+    ckv::widgets::Window *rename_window = nullptr;
+    std::weak_ptr<void> rename_lifetime;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -295,6 +299,9 @@ struct FilesApp::State {
                 });
             create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
                                       [this] { return ready(active); });
+            rename_id = own("ck.files.rename", [this] { show_rename(); }, [this] {
+                return ready(active) && panes[active].model.target().has_value();
+            });
             const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -354,7 +361,8 @@ struct FilesApp::State {
                      ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
-                ckv::widgets::MenuBarItem{"&Operations", {item(create_directory_id, "&New folder...")}},
+                ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
+                                                            item(create_directory_id, "&New folder...")}},
                 ckv::widgets::MenuBarItem{
                     "&Marks",
                     {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
@@ -423,6 +431,8 @@ struct FilesApp::State {
         preview_dialog.reset();
         create_directory_dialog.reset();
         create_directory_window = nullptr;
+        rename_dialog.reset();
+        rename_window = nullptr;
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_planning_encoding.reset();
@@ -505,6 +515,7 @@ struct FilesApp::State {
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
+               (rename_dialog && !rename_dialog->completed()) ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
@@ -530,7 +541,7 @@ struct FilesApp::State {
         else if (p.previewing)
             text = "Reading preview...";
         else if (p.mutating)
-            text = "Creating folder...";
+            text = p.renaming ? "Renaming..." : "Creating folder...";
         else if (p.changing)
             text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
@@ -746,6 +757,28 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool rename(std::size_t i, FilesPaneRowTarget target, ck::files::NativeName name) {
+        if (!ready(i) || !name.is_valid())
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->rename(p.navigation, target.stamp, target.row, std::move(name),
+                                                    {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Rename request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.renaming = true;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
     bool begin_change(std::size_t i, FilesPaneChange command, bool continuation = false) {
         if (!ready(i, continuation))
             return false;
@@ -861,6 +894,60 @@ struct FilesApp::State {
                 create_directory_dialog.reset();
                 if (!name || !create_directory(pane, std::move(*name))) {
                     panes[pane].error = "Folder name is not representable or the location changed";
+                    labels();
+                }
+            });
+    }
+    void show_rename() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto target = panes[pane].model.target();
+        const auto encoding = panes[pane].encoding;
+        if (!target)
+            return;
+        const auto row = target->row;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Rename entry";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "&New name:",
+                .validate = [encoding](const std::string &value) {
+                    return parse_directory_component(value, encoding).has_value();
+                },
+                .description = encoding == ck::files::NameEncoding::WindowsUtf16
+                                   ? "Strict UTF-8 input; unrepresentable Windows UTF-16 names are refused."
+                                   : "One exact native component; separators, dot names and empty input are refused."},
+            ckv::widgets::FieldDescriptor{.label = "The worker will revalidate the selected entry identity before renaming.",
+                                          .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Rename", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        rename_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        rename_window = shell->desktop().active_window();
+        rename_lifetime = rename_window->lifetime_token();
+        rename_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, row, encoding](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                rename_window = nullptr;
+                if (!result.accepted) {
+                    rename_dialog.reset();
+                    return;
+                }
+                const auto current = panes[pane].model.target();
+                if (result.values.size() != 2 || panes[pane].navigation != navigation || !current || current->row != row) {
+                    panes[pane].error = "Entry changed while rename was open";
+                    rename_dialog.reset();
+                    labels();
+                    return;
+                }
+                auto name = parse_directory_component(result.values[0], encoding);
+                rename_dialog.reset();
+                if (!name || !rename(pane, *current, std::move(*name))) {
+                    panes[pane].error = "Entry name is not representable or the entry changed";
                     labels();
                 }
             });
@@ -1120,6 +1207,8 @@ struct FilesApp::State {
                 return;
             p.cancelling = false;
             p.mutating = false;
+            const bool was_rename = p.renaming;
+            p.renaming = false;
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
                 p.error.clear();
@@ -1127,10 +1216,12 @@ struct FilesApp::State {
                 // mutation. Reopen the retained route through the worker so
                 // the UI never presents a stale post-mutation page.
                 if (!refresh(i))
-                    p.error = "Directory created; refresh could not be started";
+                    p.error = was_rename ? "Entry renamed; refresh could not be started"
+                                         : "Directory created; refresh could not be started";
             } else {
-                p.error = reply.state == FilesPaneReplyState::Ready ? "Directory creation outcome unavailable"
-                                                                      : failure(reply);
+                p.error = reply.state == FilesPaneReplyState::Ready
+                              ? (was_rename ? "Rename outcome unavailable" : "Directory creation outcome unavailable")
+                              : failure(reply);
             }
             labels();
             return;
@@ -1303,6 +1394,7 @@ struct FilesApp::State {
                     panes[i].navigating = panes[i].reading = false;
                     panes[i].previewing = false;
                     panes[i].preview_request.reset();
+                    panes[i].mutating = panes[i].renaming = false;
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
                     panes[i].model.set_input_locked(false);
@@ -1383,6 +1475,11 @@ struct FilesApp::State {
         if (create_directory_dialog && !create_directory_dialog->completed()) {
             if (create_directory_window && !create_directory_lifetime.expired())
                 create_directory_window->close();
+            return;
+        }
+        if (rename_dialog && !rename_dialog->completed()) {
+            if (rename_window && !rename_lifetime.expired())
+                rename_window->close();
             return;
         }
         if (operation_review_dialog && !operation_review_dialog->completed()) {
@@ -1498,6 +1595,12 @@ bool FilesApp::navigate_bookmark(std::size_t pane, std::size_t bookmark) {
 }
 bool FilesApp::create_directory(std::size_t pane, ck::files::NativeName name) {
     return state_->create_directory(pane, std::move(name));
+}
+bool FilesApp::rename(std::size_t pane, ck::files::NativeName name) {
+    const auto target = state_->panes.at(pane).model.target();
+    if (!target)
+        return false;
+    return state_->rename(pane, *target, std::move(name));
 }
 std::shared_ptr<const FilesPaneLocation> FilesApp::location(std::size_t pane) const {
     return state_->panes.at(pane).active;

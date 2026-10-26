@@ -65,6 +65,9 @@ class FilesApp final {
     // Creates one exact native directory component relative to the pane's
     // currently acknowledged route, then refreshes only after worker success.
     bool create_directory(std::size_t pane, ck::files::NativeName name);
+    // Renames the currently acknowledged target through the worker's native
+    // identity protocol, then refreshes only after success.
+    bool rename(std::size_t pane, ck::files::NativeName name);
     // Last acknowledged requested route, not current membership or operation authority.
     std::shared_ptr<const FilesPaneLocation> location(std::size_t pane) const;
     bool change_marks(std::size_t pane, ck::files::IndexedMarkCommand command);

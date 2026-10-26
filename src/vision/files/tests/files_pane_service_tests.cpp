@@ -1048,6 +1048,34 @@ CK_TEST(files_service_native_create_directory_is_exclusive_and_requires_refresh)
              std::filesystem::is_directory(source.path() / "created"));
     f.stopped();
 }
+CK_TEST(files_service_native_rename_revalidates_row_and_refuses_unsupported_protocols) {
+    Fixture f;
+    ck::testing::ScratchDirectory source("files-service-rename");
+    {
+        std::ofstream file(source.path() / "before", std::ios::binary);
+        file << "rename";
+    }
+    f.service = std::make_unique<FilesPaneService>(
+        native_files_pane_backend(take(NativeAbsolutePath::from_host(f.scratch.path()))), FilesPaneServiceLimits{},
+        [t = f.trace] { t->notify(); });
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto before = f.reply();
+    CK_CHECK(before.state == FilesPaneReplyState::Ready && before.page && before.page->rows().size() == 1);
+    const auto request = f.service->rename(before.navigation, before.stamp, before.page->rows()[0].id,
+                                           child_name("after"));
+    CK_CHECK(request.state == FilesPaneSubmission::Accepted);
+    const auto result = f.reply();
+#if defined(_WIN32)
+    CK_CHECK(result.state == FilesPaneReplyState::Ready && result.mutation_applied.value_or(false));
+    CK_CHECK(std::filesystem::exists(source.path() / "after") && !std::filesystem::exists(source.path() / "before"));
+#else
+    CK_CHECK(result.state == FilesPaneReplyState::Failed && result.error &&
+             result.error->state == ObservationState::Unsupported);
+    CK_CHECK(std::filesystem::exists(source.path() / "before") && !std::filesystem::exists(source.path() / "after"));
+#endif
+    f.stopped();
+}
 CK_TEST(files_service_short_wire_budget_never_publishes_an_incomplete_requested_viewport) {
     Fixture f;
     FilesPaneServiceLimits limits;

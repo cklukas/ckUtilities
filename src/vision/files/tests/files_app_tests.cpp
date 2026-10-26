@@ -502,6 +502,36 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0) == "Last scan: 101 items");
 }
+CK_TEST(files_app_rename_uses_stamped_worker_target_and_never_claims_unsupported_success) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::F2));
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::InputLine *> inputs;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), inputs);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(inputs.size() == 1);
+    CK_CHECK(buttons.size() == 2);
+    inputs.front()->set_text("renamed-by-app");
+    f.application.set_focus(inputs.front());
+    ckv::widgets::Button *rename = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Rename")
+            rename = button;
+    CK_CHECK(rename != nullptr && rename->activate_mnemonic("r"));
+    f.until([&] { return !f.app->pending(0); });
+
+#if defined(_WIN32)
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "renamed-by-app"));
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
+#else
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "renamed-by-app"));
+    CK_CHECK(!f.app->status(0).empty() && f.app->status(0) != "Last scan: 100 items");
+#endif
+}
 CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
     Fixture f;
     f.loaded();
@@ -817,11 +847,14 @@ CK_TEST(files_app_folder_double_click_routes_to_the_clicked_pane_and_keeps_the_o
              f.app->location(1)->components()[0].display_name() == "right-item-0");
     CK_CHECK(f.app->location(0) == left && f.app->model(0).row_count() == 100 && f.app->target(0));
 }
-CK_TEST(files_app_folder_keyboard_activation_uses_live_keymap_and_leaves_F2_to_command_routing) {
+CK_TEST(files_app_folder_keyboard_activation_uses_live_keymap_and_routes_F2_to_rename) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
     f.application.commands().unbind_key({ckv::Key::Enter, ckv::Modifier::None, {}});
-    CK_CHECK(!f.key(ckv::Key::Enter) && !f.key(ckv::Key::F2) && !f.app->pending(0));
+    CK_CHECK(!f.key(ckv::Key::Enter) && !f.app->pending(0));
+    CK_CHECK(f.key(ckv::Key::F2) && !f.app->pending(0));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
     f.application.commands().bind_key({ckv::Key::F8, ckv::Modifier::Ctrl, {}}, f.id("ck.files.enter_directory"));
     CK_CHECK(f.key(ckv::Key::F8, ckv::Modifier::Ctrl));
     f.loaded();
