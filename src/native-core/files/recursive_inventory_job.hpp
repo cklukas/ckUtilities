@@ -33,6 +33,10 @@ class CompletedRecursiveInventory final {
 public:
     const FrozenInventory::Pointer& inventory() const noexcept { return inventory_; }
     const std::vector<HeldChild::Pointer>& sources() const noexcept { return sources_; }
+    // Move workers may release the inventory's duplicate source owners after
+    // verification. The inventory entries and identities remain immutable;
+    // only the worker-held native handles are retired from this owner.
+    void release_sources() const noexcept { sources_.clear(); }
 
 private:
     friend class RecursiveInventoryJob;
@@ -41,7 +45,7 @@ private:
         std::vector<HeldChild::Pointer> sources) noexcept
         : inventory_(std::move(inventory)), sources_(std::move(sources)) {}
     FrozenInventory::Pointer inventory_;
-    std::vector<HeldChild::Pointer> sources_;
+    mutable std::vector<HeldChild::Pointer> sources_;
 };
 
 // Worker-owned, read-only recursive traversal. The root cursor and every

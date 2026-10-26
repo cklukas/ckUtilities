@@ -795,6 +795,76 @@ CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_
     CK_CHECK(fs::is_directory(destination_path / ".ck-tree-staging-74000000000000000000000000000000-0"));
 }
 
+CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retirement) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-move-tree",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_path = scratch.path() / "source";
+    const auto destination_path = scratch.path() / "destination";
+    fs::create_directory(source_path);
+    fs::create_directory(destination_path);
+    fs::create_directory(source_path / "nested");
+    {
+        std::ofstream first(source_path / "root.bin", std::ios::binary);
+        first << "recursive move root payload";
+        std::ofstream second(source_path / "nested" / "child.bin", std::ios::binary);
+        second << "recursive move child payload";
+    }
+
+    NativeFileSystem filesystem;
+    auto fixture_root = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto root_source = take(HeldChild::observe_with_access(fixture_root, name("source"), EntryAccess::MetadataOnly));
+    auto source_root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_directory(source_path)));
+    auto source_native_path = take(NativeAbsolutePath::from_host(source_path));
+    RecursiveInventoryJob inventory(source_root, source_native_path, InventoryMountPolicy::StayOnRootMount,
+                                    InventoryLinkPolicy::PreserveLinks, {}, system_monotonic_clock(), root_source);
+    for (unsigned step = 0; step != 200 && inventory.state() != RecursiveInventoryState::Complete &&
+         inventory.state() != RecursiveInventoryState::Failed; ++step)
+        inventory.advance();
+    CK_CHECK(inventory.state() == RecursiveInventoryState::Complete);
+    if (inventory.state() != RecursiveInventoryState::Complete) return;
+    auto completed = take(inventory.completed_sources());
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_path)));
+
+    NativeOperationCopyTreeRequest request(name("source-move"));
+    request.inventory = std::move(completed);
+    request.destination = destination;
+    request.journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    request.journal_id.bytes[0] = std::byte{0x75};
+    request.policy.allow_unhandled_metadata_loss = true;
+    request.policy.copy_limits.chunk_bytes = 4;
+    request.policy.copy_limits.max_bytes = 1024;
+    request.operation = FileOperation::Move;
+    request.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    auto created = create_native_operation_copy_tree(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 1200 && job->state() != OperationExecutionState::Complete &&
+         job->state() != OperationExecutionState::Failed &&
+         job->state() != OperationExecutionState::Cancelled &&
+         job->state() != OperationExecutionState::RetainedSource &&
+         job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        job->advance();
+
+    CK_CHECK(fs::is_regular_file(destination_path / "source-move" / "root.bin"));
+    CK_CHECK(fs::is_regular_file(destination_path / "source-move" / "nested" / "child.bin"));
+#if defined(_WIN32)
+    CK_CHECK(job->state() == OperationExecutionState::Complete);
+    job.reset();
+    const auto source_status = filesystem.inspect_basic(source_path);
+    CK_CHECK(!source_status.value());
+#else
+    CK_CHECK(job->state() == OperationExecutionState::RetainedSource);
+    CK_CHECK(fs::is_regular_file(source_path / "root.bin"));
+    CK_CHECK(fs::is_regular_file(source_path / "nested" / "child.bin"));
+#endif
+}
+
 CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {
     const ck::testing::ScratchDirectory scratch("files-operation-publication", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;

@@ -131,6 +131,7 @@ struct NativeOperationCopyTreeRequest final {
     std::optional<NativeAbsolutePath> journal_root;
     OperationJournalId journal_id{};
     NativeOperationCopyBatchPolicy policy{};
+    FileOperation operation = FileOperation::Copy;
     std::function<Observation<std::unique_ptr<OperationJournalFile>>(
         const NativeAbsolutePath&, const NativeName&, bool)> open_journal;
 };
@@ -146,9 +147,9 @@ public:
     const OperationExecutionResult& result() const noexcept { return result_; }
     OperationExecutionState advance(std::stop_token stop = {});
 
-    // There is no safe recursive directory disposition in the current native
-    // contract. This API therefore refuses cleanup and leaves the private
-    // tree available for recovery inspection.
+    // Cleanup of an unpublished recursive tree remains explicitly refused;
+    // a Move tree retires originals only after verified publication, in
+    // reverse inventory order.
     Observation<bool> cleanup_unpublished_staging();
 
 private:

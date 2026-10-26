@@ -175,7 +175,7 @@ struct FilesOperationExecutionService::State final {
                        "files_execution.source_handoff_shape"));
             return;
         }
-        if (value.operation == ck::files::FileOperation::Move) {
+        if (value.operation == ck::files::FileOperation::Move && flat) {
             std::vector<ck::files::HeldChild::Pointer> sources;
             std::vector<ck::files::NativeName> names;
             if (handoff->sources->root_source) {
@@ -222,6 +222,61 @@ struct FilesOperationExecutionService::State final {
             return;
         }
         if (recursive) {
+            if (value.operation == ck::files::FileOperation::Move) {
+                const auto source_parent = handoff->sources->root_source->parent_identity();
+                const auto destination_identity = handoff->destination_result->directory->identity();
+                if (!source_parent.value() || !destination_identity.value()) {
+                    fail(error(ck::files::AdapterError::UnqualifiedIdentity,
+                               "files_execution.recursive_move.volume_identity",
+                               ck::files::ObservationState::Unknown));
+                    return;
+                }
+                const auto &source_volume = *source_parent.value();
+                const auto &destination_volume = *destination_identity.value();
+                const bool same_filesystem = source_volume.scope == destination_volume.scope &&
+                    source_volume.scheme == destination_volume.scheme &&
+                    source_volume.volume == destination_volume.volume;
+                if (same_filesystem) {
+                    // A directory rename is already atomic and identity-bound;
+                    // release the traversal cursor before Windows is asked to
+                    // rename the held directory.
+                    handoff->sources->source_root.reset();
+                    std::vector<ck::files::HeldChild::Pointer> sources;
+                    sources.push_back(std::move(handoff->sources->root_source));
+                    std::vector<ck::files::NativeName> names{sources.front()->name()};
+                    ck::files::NativeOperationMoveBatchRequest move;
+                    move.sources = std::move(sources);
+                    move.destination = std::move(handoff->destination_result->directory);
+                    move.destination_names = std::move(names);
+                    move.journal_root = std::move(value.journal_root);
+                    move.journal_id = value.journal_id;
+                    move.journal_limits = value.policy.journal_limits;
+                    move.open_journal = std::move(value.open_journal);
+                    move.copy_limits = value.policy.copy_limits;
+                    move.allow_unhandled_metadata_loss = value.policy.allow_unhandled_metadata_loss;
+                    auto batch = ck::files::create_native_operation_move_batch(std::move(move));
+                    if (!batch.value()) {
+                        fail(*batch.unavailable_detail());
+                        return;
+                    }
+                    auto job = std::move(batch).take_value();
+                    while (job->state() != ck::files::OperationBatchState::Complete &&
+                           job->state() != ck::files::OperationBatchState::Failed &&
+                           job->state() != ck::files::OperationBatchState::Cancelled &&
+                           job->state() != ck::files::OperationBatchState::RetainedSource &&
+                           job->state() != ck::files::OperationBatchState::NeedsReconciliation)
+                        job->advance(stop_token);
+                    result.result = job->result();
+                    result.state = job->state() == ck::files::OperationBatchState::Complete
+                        ? FilesOperationExecutionState::Complete
+                        : stop_token.stop_requested() || job->state() == ck::files::OperationBatchState::Cancelled
+                            ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+                    if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
+                        result.error = result.result.items.back().failure;
+                    emit(std::move(result));
+                    return;
+                }
+            }
             ck::files::RecursiveInventoryLimits limits;
             limits.inventory.max_entries = value.source_limits.held_entries;
             auto inventory_job = std::make_unique<ck::files::RecursiveInventoryJob>(
@@ -261,6 +316,7 @@ struct FilesOperationExecutionService::State final {
             tree_request.journal_root = std::move(value.journal_root);
             tree_request.journal_id = value.journal_id;
             tree_request.policy = value.policy;
+            tree_request.operation = value.operation;
             tree_request.open_journal = std::move(value.open_journal);
             auto tree = ck::files::create_native_operation_copy_tree(std::move(tree_request));
             if (!tree.value()) {
@@ -271,6 +327,7 @@ struct FilesOperationExecutionService::State final {
             while (job->state() != ck::files::OperationExecutionState::Complete &&
                    job->state() != ck::files::OperationExecutionState::Failed &&
                    job->state() != ck::files::OperationExecutionState::Cancelled &&
+                   job->state() != ck::files::OperationExecutionState::RetainedSource &&
                    job->state() != ck::files::OperationExecutionState::NeedsReconciliation)
                 job->advance(stop_token);
             const auto tree_state = job->state();
@@ -280,6 +337,8 @@ struct FilesOperationExecutionService::State final {
                     ? ck::files::OperationItemOutcome::Cancelled
                     : tree_state == ck::files::OperationExecutionState::NeedsReconciliation
                         ? ck::files::OperationItemOutcome::NeedsReconciliation
+                    : tree_state == ck::files::OperationExecutionState::RetainedSource
+                        ? ck::files::OperationItemOutcome::RetainedSource
                         : ck::files::OperationItemOutcome::Failed;
             result.result.items.push_back({0, outcome, job->result().failure});
             result.result.state = outcome == ck::files::OperationItemOutcome::Complete
@@ -288,6 +347,8 @@ struct FilesOperationExecutionService::State final {
                     ? ck::files::OperationBatchState::Cancelled
                     : outcome == ck::files::OperationItemOutcome::NeedsReconciliation
                         ? ck::files::OperationBatchState::NeedsReconciliation
+                    : outcome == ck::files::OperationItemOutcome::RetainedSource
+                        ? ck::files::OperationBatchState::RetainedSource
                         : ck::files::OperationBatchState::Failed;
             result.state = outcome == ck::files::OperationItemOutcome::Complete
                 ? FilesOperationExecutionState::Complete
