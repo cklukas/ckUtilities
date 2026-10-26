@@ -1,6 +1,6 @@
 {
   "date": "2026-10-26",
-  "source_commit": "6a1717b",
+  "source_commit": "11b7caa",
   "scope": "Current-source Windows Release build, install, and qualification",
   "host": "ssh workstation",
   "toolchain": {
@@ -39,6 +39,12 @@
   "install": {
     "root": "V:\\dev\\ckutilities-install-goal-20261026",
     "help_smoke": "10/10 installed executables passed --help",
+    "documentation_payload": {
+      "tool_guides": 10,
+      "screenshots": 28,
+      "guide_root": "V:\\dev\\ckutilities-install-goal-20261026\\share\\doc\\ck-utilities\\tools",
+      "screenshot_root": "V:\\dev\\ckutilities-install-goal-20261026\\share\\doc\\ck-utilities\\screenshots"
+    },
     "executables": {
       "ck-utilities.exe": "504EF106CD1A8207DD1812F3045EAD140E175BE7A5C7A09994514410529BAA5E",
       "ck-json-view.exe": "D4054EBB942BF24B411257AB1CE7B36114D87A25CE365064A04E143C7675B482",

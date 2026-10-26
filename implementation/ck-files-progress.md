@@ -6316,6 +6316,11 @@ both architecture checks, the sysmon sample, and the complete Files/native
 matrix. Exact executable hashes and paths are recorded in [current Windows
 evidence](evidence/ck-files-windows-current-20261026.json).
 
+Commit `11b7caa` also makes the Runtime install carry the documentation
+payload: the workstation install now contains all 10 utility guides and 28
+tracked SVG screenshots below `share/doc/ck-utilities`, verified by a fresh
+CMake reconfigure/install on the same `V:` build.
+
 
 ## 2026-10-26 — WP-02 worker-owned rename boundary checkpoint
 
