@@ -162,6 +162,12 @@ struct FilesOperationExecutionService::State final {
             fail(error(ck::files::AdapterError::PlanInvalid, "files_execution.handoff_shape"));
             return;
         }
+        if (handoff->sources->root_source || handoff->sources->source_root || handoff->sources->source_path) {
+            fail(error(ck::files::AdapterError::UnsupportedQuery,
+                       "files_execution.recursive_copy_unavailable",
+                       ck::files::ObservationState::Unsupported));
+            return;
+        }
         ck::files::NativeOperationCopyBatchRequest copy;
         copy.sources = std::move(handoff->sources->sources);
         copy.destination = std::move(*handoff->destination_cursor);
