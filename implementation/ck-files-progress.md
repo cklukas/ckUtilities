@@ -5889,3 +5889,23 @@ acceptance remain open.
 WP-02 remains open for the remaining mutation boundaries and the full
 interactive acceptance pass. This checkpoint does not claim a complete Norton
 Commander or Midnight Commander feature set.
+
+
+## 2026-10-26 — WP-02 POSIX no-replace rename checkpoint
+
+Commit `a90a7cd` extends the worker-owned rename boundary to POSIX. Linux uses
+`renameat2(RENAME_NOREPLACE)` and macOS uses `renameatx_np(RENAME_EXCL)` when
+the native primitive is available. The worker revalidates the source identity
+through the held parent before mutation, refuses an occupied destination, then
+verifies the destination identity and flushes both affected parent directories.
+There is no stat-then-rename emulation. Case-only rename remains a separate
+native-proof boundary.
+
+The focused native suites passed macOS **179/179**, Windows **178/178** and
+Linux **182/182**; the focused Files suite passed **196/196** on all three.
+The collision test verifies that an occupied destination remains untouched.
+The complete `ctest -C Release -L files` matrix passed **107/107** on macOS,
+Windows and Linux. Exact roots, times, output paths and fingerprints are in
+[POSIX rename qualification evidence](evidence/ck-files-posix-rename-20261026.json).
+No production executable was launched. Cross-directory move, copy, Trash/delete,
+sanitizer/race qualification and interactive acceptance remain open.
