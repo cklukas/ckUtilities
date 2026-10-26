@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 5cad04a repeated-root safety correction and sanitizer checkpoint
+
+The ancestor walker no longer converts an identity repeat into
+`DisjointBoundary`, including when the repeated object looks like a native
+root self-parent. That conversion was not backed by an explicit
+provider-root proof and could make recursive-copy topology appear disjoint
+through an ambiguous alias. The contract now keeps every such repeat as
+`RepeatedDirectory`; a future platform-qualified root capability must be
+introduced separately before it can produce a disjoint verdict.
+
+The correction passed the focused ancestor suites on macOS, Linux ARM64 and
+Windows v143. A fresh macOS ASan/UBSan build passed the simulated/native
+ancestor, native operation-content, execution, recovery and app worker-handoff
+cases. The first headless UI fixture then hit the known ckVision
+`Image`/`VirtualDisplay` container-overflow defect during fixture construction;
+the sanitizer was not suppressed and no UI sanitizer pass is claimed.
+
+Evidence: [WP-05 safety and sanitizer record](evidence/ck-files-wp05-safety-sanitizer-20261026.json).
+
 ## 2026-10-26 — macOS real-terminal `ck-files` move smoke
 
 The exact freshly built executable

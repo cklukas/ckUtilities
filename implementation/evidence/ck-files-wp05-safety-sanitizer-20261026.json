@@ -1,0 +1,65 @@
+{
+  "milestone": "WP-05 ancestor safety correction and sanitizer qualification",
+  "source_commit": "5cad04a",
+  "date": "2026-10-26",
+  "change": "Repeated native identities, including root-looking self-parents, remain ambiguous. DisjointBoundary is no longer inferred without a separate provider-root proof.",
+  "cross_platform_focused": {
+    "macos": {
+      "build": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "result": "19 simulated ancestor tests and 5 native ancestor tests passed"
+    },
+    "linux_arm64": {
+      "host": "rpi4",
+      "build": "/home/klukas/tmp/ckutilities-wp05-move-20261026-01/build",
+      "result": "19 simulated ancestor tests and 6 native ancestor tests passed"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "toolset": "MSVC v143 14.44.35207",
+      "build": "V:\\tmp\\ckutilities-wp05-move-20261026-01\\build",
+      "result": "19 simulated ancestor tests and 5 native ancestor tests passed"
+    }
+  },
+  "macos_sanitizer": {
+    "build": "/Volumes/S8T/tmp/ckutilities-wp05-sanitizer-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp05-sanitizer-20261026-01/tmp",
+    "sanitizers": ["address", "undefined"],
+    "environment": {
+      "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=0",
+      "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+    },
+    "passed": [
+      "test_files_ancestor.cpp (19)",
+      "test_files_ancestor_native.cpp (5)",
+      "test_files_operation_content_native.cpp (18)",
+      "test_files_operation_execution_job.cpp (4)",
+      "test_files_operation_recovery.cpp (7)",
+      "files_service_operation_handoffs_keep_native_sources_on_the_worker (1)"
+    ],
+    "artifacts": {
+      "ck_files_core_tests": {
+        "bytes": 39200256,
+        "sha256": "0a94bd6164b8d9785e143fcbb230e850e1411e800257ab8cd886070eaee9b573"
+      },
+      "ck_files_native_tests": {
+        "bytes": 20393112,
+        "sha256": "47bd9602272cc2fef23d1c00083d12bf55130fbed8acc6d8c6aefc8f49795fae"
+      },
+      "ck_vision_files_tests": {
+        "bytes": 29145288,
+        "sha256": "23e6e70ddd8f1a71edd2e416f28abb4cb2bcd0799aa534b321f09bcad213895a"
+      }
+    },
+    "ui_sanitizer_blocker": {
+      "test": "files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing",
+      "result": "blocked before application behavior by AddressSanitizer container-overflow in ckVision Image/VirtualDisplay construction",
+      "source": "ckVision headless terminal fixture, not ckUtilities Files code",
+      "suppression": false
+    }
+  },
+  "remaining_scope": [
+    "A platform-qualified provider-root proof is still required before any recursive-copy disjoint verdict.",
+    "Cross-filesystem move, recursive move, Trash/Recycle Bin, permanent deletion, recovery execution and release-window acceptance remain open.",
+    "Full UI sanitizer qualification remains blocked by the upstream ckVision fixture defect."
+  ]
+}
