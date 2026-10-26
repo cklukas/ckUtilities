@@ -88,8 +88,9 @@ the current macOS and Linux adapters retain sources for unsupported Trash or
 permanent source-retirement paths. The current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
-and clean `Alt+X` shutdown for the installed utility set. This is still an
-implementation checkpoint, not a claim that every release gate is complete:
+and clean `Alt+X` shutdown for the installed utility set. The same three
+profiles pass for all ten utilities in the Linux aarch64 archive. This is still
+an implementation checkpoint, not a claim that every release gate is complete:
 native macOS/Linux Trash, recovery execution, full filesystem-matrix coverage,
 and final mouse/restricted-key acceptance remain tracked work.
 

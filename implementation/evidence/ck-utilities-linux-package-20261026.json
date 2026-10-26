@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-26",
+  "source_commit": "75f6f7c49293262c4a6a54ab28f8ca820d2479c4",
+  "host": "rpi4",
+  "platform": "Debian aarch64 / Linux",
+  "temporary_root": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01",
+  "configuration": "Release, Ninja, GCC 14.2.0, pinned ckVision SDK",
+  "build": {
+    "targets": 456,
+    "start": "2026-10-26T14:44:02+01:00",
+    "end": "2026-10-26T16:13:29+01:00",
+    "elapsed_seconds": 5367,
+    "ck_files": {
+      "path": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/bin/ck-files",
+      "sha256": "3dd359c27797665f4f5e7a2501adfd493ba463d71520903b9659d294767ff4ca",
+      "mtime": "2026-10-26 16:13:19.866808151 +0100"
+    },
+    "terminal_verifier_sha256": "6a1f4097d8f056507e0080623a5ec6b7a0f1d2a074b8e5fd77aaca5dbfe7aec8"
+  },
+  "ctest": {
+    "start": "2026-10-26T16:13:34+01:00",
+    "end": "2026-10-26T16:14:22+01:00",
+    "tests": 222,
+    "passed": 222,
+    "failed": 0,
+    "elapsed_seconds_reported": 48.40,
+    "exit_code": 0
+  },
+  "packages": {
+    "tgz": {
+      "path": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-linux.tar.gz",
+      "sha256": "fb45c1b246fbe2c949b6d7ea1ddf0d56aab52f2b486bf9249ad3917d76b72b85",
+      "mtime": "2026-10-26 16:14:39.565666542 +0100"
+    },
+    "deb": {
+      "path": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities_0.2.0_arm64.deb",
+      "sha256": "b67fc1e37c177b9526ffe5dc3831c9f6153e5b8f199115939fac35c0751155cf",
+      "mtime": "2026-10-26 16:14:49.105529612 +0100"
+    },
+    "rpm": {
+      "path": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-1.aarch64.rpm",
+      "sha256": "d7ef6ec67122c08126361ffeac484a0f4aef97c624d3f8f8070b852fb1386a69",
+      "mtime": "2026-10-26 16:15:11.337210291 +0100"
+    }
+  },
+  "payload": {
+    "executables": 10,
+    "guides": 10,
+    "screenshots": 28,
+    "version_and_help": "10/10 passed",
+    "deb_entries": 63,
+    "rpm_entries": 59
+  },
+  "terminal_contract": {
+    "utilities": ["ck-utilities", "ck-json-view", "ck-find", "ck-du", "ck-config", "ck-edit", "ck-chat", "ck-todo", "ck-sysmon", "ck-files"],
+    "profiles": ["xterm-256color", "xterm", "vt100"],
+    "runs": 30,
+    "passed": 30,
+    "checks": ["real PTY launch", "visible draw", "30x100 resize", "Alt+X clean exit", "terminal mode restoration"]
+  },
+  "result": "passed"
+}

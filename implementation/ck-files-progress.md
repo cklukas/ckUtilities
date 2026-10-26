@@ -6512,6 +6512,18 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-26 — Linux package and all-utility terminal checkpoint
+
+The isolated Debian aarch64 `rpi4` build completed all **456/456** Release
+targets, and Linux CTest passed **222/222** in 48.40s, including all 107 Files
+tests. CPack generated TGZ, DEB, and RPM packages. The extracted TGZ contains
+ten executables, ten utility guides, and 28 screenshots; all ten utilities
+passed version/help checks. The real-PTY contract passed **30/30** runs across
+`xterm-256color`, `xterm`, and `vt100`. Exact build/package times, hashes,
+payload counts, and task-owned paths are recorded in [Linux package
+evidence](evidence/ck-utilities-linux-package-20261026.json).
+
+
 ## 2026-10-26 — macOS full-suite checkpoint
 
 After completing the previously partial validation tree, the clean Release
