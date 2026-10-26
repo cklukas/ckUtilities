@@ -3,6 +3,24 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — 48410d5 destination-tree evidence
+
+WP-03 operation evidence now resolves recursive destination rows beneath their
+actual held destination parents. Exact-name collision grouping is parent-scoped;
+missing and type-blocked ancestors retain explicit unknown descendant evidence
+instead of probing a flattened destination root. Flat direct-object behavior is
+unchanged.
+
+The focused destination-batch, operation-evidence and conflict-projection tests
+pass on macOS and Linux ARM64. The current Windows tree cannot be rebuilt: its
+configured v143 toolset and the alternate LLVM 19.1.5 toolset are unavailable,
+so the pre-change executable is not counted. The Mac core suite remains
+105/106 because the private-filesystem index fixture aborts in this environment.
+
+Evidence: [48410d5 destination-tree qualification record](evidence/ck-files-48410d5-destination-tree-20261026.json).
+Recursive copy execution, directory merge/replacement policy, move, Trash/delete,
+recovery execution and final release gates remain open.
+
 ## 2026-10-26 — a3d8c29 exact recursive inventory components
 
 WP-03 recursive inventory records now retain exact native components relative

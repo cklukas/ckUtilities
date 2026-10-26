@@ -1,0 +1,60 @@
+{
+  "commit": "48410d50dd63a797e3dba273fff4bf437b603b83",
+  "behavior_commit": "23eaafa69e17a2008cd295921f48c50f19c90a18",
+  "scope": "WP-03 destination-tree evidence and parent-scoped conflict probing",
+  "macos": {
+    "source": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "build": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build",
+    "tmpdir": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/tmp",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/Volumes/S8T/tmp/ckutilities-wp03-relative-20261026-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "b0f5a9759b0ed098d9920350aef28227e0a1525e69e1e65d94b6680eee595a6a",
+    "build_start_utc": "2026-10-26T03:34:12Z",
+    "build_end_utc": "2026-10-26T03:34:13Z",
+    "build_elapsed_seconds": 1,
+    "focused_tests": "test_files_destination_batch, test_files_operation_evidence, test_files_destination_conflict_projection",
+    "focused_result": "3/3 passed",
+    "full_core_result": "105/106 passed; test_files_index_file_native aborted in its private-filesystem fixture"
+  },
+  "linux_arm64": {
+    "source": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/source",
+    "build": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build",
+    "tmpdir": "/home/klukas/tmp/ckutilities-wp03-tree-20261026-01",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "/home/klukas/tmp/ckutilities-linux-qualification-20261025-01/build/tests/unit/ck_files/ck_files_core_tests",
+    "output_sha256": "98da4a79660a515da8326d7b83caec73c0cf08b135fedd2ea7279d2b5155e2fe",
+    "build_start_utc": "2026-10-26T03:32:27Z",
+    "build_end_utc": "2026-10-26T03:33:22Z",
+    "build_elapsed_seconds": 55,
+    "focused_tests": "test_files_destination_batch, test_files_operation_evidence, test_files_destination_conflict_projection",
+    "focused_result": "3/3 passed"
+  },
+  "windows_x64": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+    "tmpdir": "V:\\tmp\\ckutilities-wp03-tree-20261026-01",
+    "configuration": "Release",
+    "target": "ck_files_core_tests",
+    "output": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\tests\\unit\\ck_files\\Release\\ck_files_core_tests.exe",
+    "output_sha256": "4E18A7B1032C91F9FF1172654E03B6EA8E291DDF17625E0A782BFA0ADF9DDFFC",
+    "output_last_write_utc": "2026-10-26T03:06:08Z",
+    "focused_result": "not accepted for this commit: available executable predates 23eaafa",
+    "rebuild_attempts": [
+      "CMake is not available in the workstation command environment.",
+      "MSBuild with the configured v143 toolset failed because v143 is not installed.",
+      "MSBuild with installed clang-cl failed because the configured LLVM 19.1.5 toolset is not installed."
+    ]
+  },
+  "implementation_effect": [
+    "CompletedDestinationBatch retains a parent cursor per row and scopes exact-name grouping to that parent.",
+    "Recursive operation evidence resolves each destination directory through a held child cursor before probing descendants.",
+    "Missing or type-blocked ancestors leave descendant rows explicitly unknown; they are never probed at the destination root or treated as missing.",
+    "Flat direct-object batches retain their existing single-parent behavior."
+  ],
+  "limitations": [
+    "This is read-only planning evidence; recursive copy execution, directory merge/replacement policy, move, Trash/delete and recovery execution remain open.",
+    "Windows qualification is blocked by missing configured toolchains; no stale executable is counted as current evidence."
+  ]
+}
