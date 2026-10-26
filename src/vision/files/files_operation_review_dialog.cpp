@@ -151,7 +151,9 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         actions = {ConsentAction::Cancel, ConsentAction::ChooseAnotherDestination};
         const bool issues = !model->issue_rows().empty();
         const bool conflicts = !model->conflict_rows().empty();
-        if (issues && !conflicts) {
+        if (!issues && !conflicts) {
+            actions.push_back(ConsentAction::Proceed);
+        } else if (issues && !conflicts) {
             if (model->summary().uncertain == 0 && model->summary().hard_failures == 0)
                 actions.push_back(ConsentAction::ContinueWithListedLosses);
             actions.push_back(ConsentAction::SkipAffectedItems);
@@ -169,6 +171,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         switch (action) {
         case ConsentAction::Cancel: return "Cancel";
         case ConsentAction::ChooseAnotherDestination: return "Choose another destination";
+        case ConsentAction::Proceed: return "Proceed";
         case ConsentAction::SkipAffectedItems: return "Skip affected items";
         case ConsentAction::ContinueWithListedLosses: return "Continue with listed losses";
         case ConsentAction::SkipConflict: return "Skip listed conflicts";

@@ -41,7 +41,7 @@ OperationEvidenceJob::OperationEvidenceJob(OperationEvidenceJobRequest request)
             request_.mount_policy, request_.link_policy, request_.limits.recursive, request_.clock,
             request_.root_source);
     } else {
-        flat_builder_ = std::make_unique<FrozenInventoryBuilder>(request_.mount_policy, request_.link_policy,
+        flat_builder_ = std::make_unique<FrozenInventoryBuilder>(InventoryMountPolicy::DirectObjects, request_.link_policy,
             request_.limits.recursive.inventory);
         phase_ = Phase::FlatInventory;
     }
@@ -122,8 +122,7 @@ void OperationEvidenceJob::advance_flat_inventory() {
             return;
         }
         const auto& metadata = source->metadata();
-        if (!metadata.identity.value() || !metadata.kind.value() || !metadata.mount_id.value() ||
-            !metadata.logical_size.value()) {
+        if (!metadata.identity.value() || !metadata.kind.value() || !metadata.logical_size.value()) {
             fail(error(AdapterError::UnqualifiedIdentity, "operation_evidence.direct_metadata", ObservationState::Unknown));
             return;
         }

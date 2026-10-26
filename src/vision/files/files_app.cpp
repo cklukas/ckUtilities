@@ -173,6 +173,8 @@ struct FilesApp::State {
     std::array<FilesPaneService *, 2> services;
     std::array<FilesCompletionService *, 2> completion_services;
     FilesOperationPlanningService *planning_service = nullptr;
+    FilesOperationExecutionService *execution_service = nullptr;
+    std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
     FilesAppWake &wake;
     std::function<void()> host_quit;
     std::array<Pane, 2> panes;
@@ -193,6 +195,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
+    std::optional<FilesOperationExecutionTicket> operation_execution_request;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
     FilesApp::OperationRevalidation operation_planning_revalidation;
     FilesOperationReviewDialog::Completion operation_planning_completion;
@@ -213,6 +216,8 @@ struct FilesApp::State {
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId copy_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId move_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -221,10 +226,14 @@ struct FilesApp::State {
     ckv::ui::CommandId properties_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId preview_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
+    std::uint64_t operation_serial = 1;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
-          std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning)
+          std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning,
+          FilesOperationExecutionService *execution,
+          std::shared_ptr<const ck::files::NativeAbsolutePath> journal_root)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
+          execution_service(execution), operation_journal_root(std::move(journal_root)),
           wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
         if (!services[0] || !services[1] || services[0] == services[1] || !host_quit)
@@ -245,7 +254,10 @@ struct FilesApp::State {
             application.commands().set_command_scope(cancel_id, {.contexts = {"ck.files.pane"}});
             application.commands().set_enabled_predicate(switch_id, [this] { return !closing && !modal_pending(); });
             application.commands().set_enabled_predicate(
-                cancel_id, [this] { return !closing && !modal_pending() && pending(panes[active]); });
+                cancel_id, [this] {
+                    return !closing && !modal_pending() &&
+                           (operation_execution_request.has_value() || pending(panes[active]));
+                });
             const auto own = [&](std::string_view key, std::function<void()> handler, std::function<bool()> enabled) {
                 const auto id =
                     commands.own(declare_suite_command(application.commands(), "ck-files", key, std::move(handler)));
@@ -302,6 +314,10 @@ struct FilesApp::State {
             rename_id = own("ck.files.rename", [this] { show_rename(); }, [this] {
                 return ready(active) && panes[active].model.target().has_value();
             });
+            copy_id = own("ck.files.copy", [this] { prepare_copy(ck::files::FileOperation::Copy); },
+                          [this] { return can_prepare_copy(); });
+            move_id = own("ck.files.move", [this] { prepare_copy(ck::files::FileOperation::Move); },
+                          [] { return false; });
             const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -362,7 +378,9 @@ struct FilesApp::State {
                      ckv::widgets::MenuItem::command(
                          ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
-                                                            item(create_directory_id, "&New folder...")}},
+                                                            item(create_directory_id, "&New folder..."),
+                                                            item(copy_id, "&Copy to other pane"),
+                                                            item(move_id, "&Move to other pane")}},
                 ckv::widgets::MenuBarItem{
                     "&Marks",
                     {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
@@ -435,6 +453,7 @@ struct FilesApp::State {
         rename_window = nullptr;
         operation_review_dialog.reset();
         operation_planning_request.reset();
+        operation_execution_request.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
@@ -453,6 +472,8 @@ struct FilesApp::State {
                 service->request_stop();
         if (planning_service)
             planning_service->request_stop();
+        if (execution_service)
+            execution_service->request_stop();
     }
     void create_window() {
         auto first = std::make_unique<PaneSurface>(panes[0].model),
@@ -526,13 +547,16 @@ struct FilesApp::State {
         return p.navigating || p.reading || p.changing || p.queued_view || p.previewing || p.mutating;
     }
     bool ready(std::size_t i, bool continuation = false) const {
-        return i < 2 && !closing && (continuation || !modal_pending()) && !pending(panes[i]) && panes[i].active &&
+        return i < 2 && !closing && !operation_execution_request && (continuation || !modal_pending()) &&
+               !pending(panes[i]) && panes[i].active &&
                panes[i].model.current() && services[i]->running();
     }
     std::string status(std::size_t i) const {
         const auto &p = panes.at(i);
         std::string text;
-        if (p.cancelling)
+        if (operation_execution_request)
+            text = "Copying to the other pane...";
+        else if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
             text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
@@ -897,6 +921,92 @@ struct FilesApp::State {
                     labels();
                 }
             });
+    }
+    bool can_prepare_copy() const {
+        if (!execution_service || !operation_journal_root || active > 1 ||
+            operation_execution_request || !ready(active) || !ready(1 - active))
+            return false;
+        return panes[active].model.target().has_value() &&
+               panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile;
+    }
+    void prepare_copy(ck::files::FileOperation operation) {
+        if (operation != ck::files::FileOperation::Copy || !can_prepare_copy())
+            return;
+        const auto source_pane = active;
+        const auto destination_pane = 1 - active;
+        const auto source_navigation = panes[source_pane].navigation;
+        const auto destination_navigation = panes[destination_pane].navigation;
+        const auto source_stamp = panes[source_pane].stamp;
+        const auto destination_stamp = panes[destination_pane].stamp;
+        FilesOperationPanePlanningRequest planning;
+        planning.operation = operation;
+        planning.source_service = services[source_pane];
+        planning.destination_service = services[destination_pane];
+        planning.source_navigation = source_navigation;
+        planning.destination_navigation = destination_navigation;
+        planning.source_stamp = source_stamp;
+        planning.destination_stamp = destination_stamp;
+        planning.source_limits.access = ck::files::EntryAccess::ContentRead;
+        planning.evidence_limits.max_items = planning.source_limits.held_entries;
+        planning.projection_policy.require_unhandled_metadata_consent = true;
+        const auto revalidate = [this, source_pane, destination_pane, source_navigation, destination_navigation](
+                                    const ck::files::ConsentReceipt &receipt) {
+            if (receipt.action != ck::files::ConsentAction::Proceed &&
+                receipt.action != ck::files::ConsentAction::ContinueWithListedLosses)
+                return ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
+                    ck::files::ObservationState::Unsupported,
+                    {ck::files::ErrorDomain::Adapter,
+                     static_cast<std::int64_t>(ck::files::AdapterError::ProviderReviewRequired),
+                     "files_app.copy_decision"});
+            if (panes[source_pane].navigation != source_navigation || panes[destination_pane].navigation != destination_navigation ||
+                !panes[source_pane].stamp.current() || !panes[destination_pane].stamp.current())
+                return ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
+                    ck::files::ObservationState::Changed,
+                    {ck::files::ErrorDomain::Adapter,
+                     static_cast<std::int64_t>(ck::files::AdapterError::PlanDecisionStale),
+                     "files_app.copy_panes_changed"});
+            return ck::files::Observation<ck::files::ConsentReceipt>::available(receipt);
+        };
+        const auto completion = [this, source_pane, destination_pane, source_navigation, destination_navigation,
+                                 source_stamp, destination_stamp](
+                                    ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
+            if (!result.value()) {
+                panes[source_pane].error = "Copy was not authorized: " +
+                    (result.unavailable_detail() ? result.unavailable_detail()->error.operation : "review failed");
+                labels();
+                return;
+            }
+            ck::files::OperationJournalId journal_id;
+            const auto serial = operation_serial++;
+            for (unsigned byte = 0; byte != sizeof(serial); ++byte)
+                journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
+            FilesOperationExecutionRequest execution{
+                services[source_pane], services[destination_pane], source_navigation, destination_navigation,
+                source_stamp, destination_stamp, {}, *operation_journal_root, journal_id, {}, {}};
+            execution.source_limits.held_entries = 1024;
+            execution.source_limits.access = ck::files::EntryAccess::ContentRead;
+            execution.policy.allow_unhandled_metadata_loss =
+                result.value()->action == ck::files::ConsentAction::ContinueWithListedLosses;
+            execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
+                                        const ck::files::NativeName &basename, bool create_new) {
+                return ck::files::open_native_operation_journal_file(root, basename, create_new);
+            };
+            const auto submitted = execution_service->request(std::move(execution));
+            if (submitted.state != FilesOperationExecutionSubmission::Accepted) {
+                panes[source_pane].error = "Copy worker is unavailable";
+                labels();
+                return;
+            }
+            operation_execution_request = submitted.ticket;
+            panes[source_pane].error.clear();
+            panes[destination_pane].error.clear();
+            labels();
+        };
+        if (!prepare_operation(std::move(planning), panes[destination_pane].encoding,
+                               revalidate, completion)) {
+            panes[source_pane].error = "Copy planning is unavailable";
+            labels();
+        }
     }
     void show_rename() {
         if (!ready(active))
@@ -1362,6 +1472,30 @@ struct FilesApp::State {
                 "files_app.operation_planning"}});
         completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error));
     }
+    void consume_execution(FilesOperationExecutionReply reply) {
+        if (!operation_execution_request || reply.request != *operation_execution_request)
+            return;
+        operation_execution_request.reset();
+        if (reply.state == FilesOperationExecutionState::Complete) {
+            const auto source = active;
+            const auto destination = 1 - active;
+            const bool source_refreshed = refresh(source);
+            const bool destination_refreshed = refresh(destination);
+            if (!source_refreshed || !destination_refreshed) {
+                panes[source].error = "Copy completed; refresh could not be started";
+                panes[destination].error = panes[source].error;
+            }
+        } else {
+            std::string detail = reply.state == FilesOperationExecutionState::Cancelled
+                ? "Copy cancelled" : "Copy failed";
+            if (reply.error)
+                detail += ": " + reply.error->error.operation;
+            else if (reply.worker_fault != FilesPaneWorkerFault::None)
+                detail += ": worker stopped";
+            panes[active].error = std::move(detail);
+        }
+        labels();
+    }
     void pump() {
         if (closing || pumping)
             return;
@@ -1402,6 +1536,15 @@ struct FilesApp::State {
                 }
                 page(i);
             }
+            if (execution_service) {
+                if (auto reply = execution_service->take())
+                    consume_execution(std::move(*reply));
+                if (operation_execution_request && !execution_service->running()) {
+                    operation_execution_request.reset();
+                    panes[active].error = "Copy worker stopped";
+                    labels();
+                }
+            }
             watch();
             labels();
             pumping = false;
@@ -1419,6 +1562,11 @@ struct FilesApp::State {
         wake.request();
     }
     void cancel_read() {
+        if (!closing && !modal_pending() && operation_execution_request && execution_service) {
+            execution_service->cancel(*operation_execution_request);
+            labels();
+            return;
+        }
         if (!closing && !modal_pending() && pending(panes[active])) {
             panes[active].queued_view.reset();
             const auto request = panes[active].preview_request.value_or(panes[active].request);
@@ -1446,6 +1594,8 @@ struct FilesApp::State {
                 service->request_stop();
         if (planning_service)
             planning_service->request_stop();
+        if (execution_service)
+            execution_service->request_stop();
         host_quit(); // No join in dispatch; the composition owner joins afterwards.
     }
     void request_close() {
@@ -1574,9 +1724,12 @@ struct FilesApp::State {
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,
                    std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
                    ThemeScheme theme, std::array<FilesCompletionService *, 2> completion_services,
-                   FilesOperationPlanningService *planning_service)
+                   FilesOperationPlanningService *planning_service,
+                   FilesOperationExecutionService *execution_service,
+                   std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
-                                     completion_services, planning_service)) {}
+                                     completion_services, planning_service, execution_service,
+                                     std::move(operation_journal_root))) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));

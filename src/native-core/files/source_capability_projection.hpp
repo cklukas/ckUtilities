@@ -15,6 +15,11 @@ namespace ck::files {
 // unknown channel namespace to a guessed destination feature.
 struct SourceCapabilityProjectionPolicy final {
     VolumeFeature unavailable_channel_destination = VolumeFeature::Unknown;
+    // The execution adapter may intentionally preserve only a declared
+    // portable subset. When set, the evidence assembly adds an explicit,
+    // reviewable loss row for that adapter boundary instead of treating the
+    // omission as a successful preservation result.
+    bool require_unhandled_metadata_consent = false;
 };
 
 struct SourceCapabilityProjectionLimits final {

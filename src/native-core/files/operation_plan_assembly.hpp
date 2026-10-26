@@ -27,7 +27,8 @@ public:
         std::shared_ptr<const FrozenInventory> inventory, std::span<const SourceTargetTopology> topologies,
         std::span<const SourceCapabilityEvidence> source,
         std::span<const DestinationCapabilityEvidence> destination,
-        std::vector<DestinationConflict> conflicts = {}, OperationPlanAssemblyLimits limits = {});
+        std::vector<DestinationConflict> conflicts = {}, OperationPlanAssemblyLimits limits = {},
+        std::vector<PreservationIssue> additional_issues = {});
 };
 
 } // namespace ck::files

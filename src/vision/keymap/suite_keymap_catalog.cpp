@@ -80,6 +80,8 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},
     CommandDefinition{"ck.files.rename", "&Rename...", "Files", "F2"},
     CommandDefinition{"ck.files.create_directory", "&New folder...", "Files", "F7"},
+    CommandDefinition{"ck.files.copy", "&Copy to other pane", "Files", "F5"},
+    CommandDefinition{"ck.files.move", "&Move to other pane", "Files", "F6"},
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
     CommandDefinition{"ck.files.cancel_read", "&Cancel activity", "Files", ""},
     CommandDefinition{"ck.files.toggle_mark", "&Toggle mark", "Files", "Insert"},

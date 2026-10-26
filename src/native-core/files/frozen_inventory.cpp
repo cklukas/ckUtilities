@@ -50,6 +50,7 @@ bool FrozenInventoryBuilder::valid_link(const FrozenInventoryEntry& entry) const
 }
 
 bool FrozenInventoryBuilder::valid_mount(const FrozenInventoryEntry& entry) const noexcept {
+    if (mount_policy_ == InventoryMountPolicy::DirectObjects) return true;
     if (mount_policy_ == InventoryMountPolicy::AllowCrossMounts) return entry.mount_id.state() == ObservationState::Available;
     if (entry.mount_id.state() != ObservationState::Available) return false;
     const auto value = *entry.mount_id.value();
@@ -73,7 +74,8 @@ bool FrozenInventoryBuilder::add(FrozenInventoryEntry entry) {
         return fail(AdapterError::InventoryLimit, "frozen_inventory.bytes", ObservationState::Unknown);
     if (!root_identity_) {
         root_identity_ = entry.identity;
-        root_mount_id_ = *entry.mount_id.value();
+        if (mount_policy_ != InventoryMountPolicy::DirectObjects)
+            root_mount_id_ = *entry.mount_id.value();
     } else if (entry.identity.scope != root_identity_->scope) {
         return fail(AdapterError::UnqualifiedIdentity, "frozen_inventory.scope");
     }

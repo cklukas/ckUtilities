@@ -85,7 +85,6 @@ CK_TEST(operation_evidence_job_composes_direct_held_sources_without_reopening_pa
     fs.bind("/operation-evidence-direct-destination", destination);
     fs.put(source_parent, name("file"), source_file);
     fs.metadata(source_file).logical_size = Observation<std::uint64_t>::available(4);
-    fs.metadata(source_file).mount_id = Observation<std::uint64_t>::available(1);
 
     std::shared_ptr<const DirectoryCursor> source_parent_cursor(take(fs.open_directory("/operation-evidence-direct-source")));
     auto source = take(HeldChild::observe(source_parent_cursor, name("file")));

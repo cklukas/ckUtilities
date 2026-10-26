@@ -87,6 +87,13 @@ CK_TEST(operation_consent_cancel_is_always_safe_and_continue_requires_complete_k
     CK_CHECK(uncertain->bind(ConsentAction::ChooseAnotherDestination).value());
 }
 
+CK_TEST(operation_consent_clean_plan_requires_explicit_proceed) {
+    const auto operation = plan({item(15)});
+    const auto proceed = take(operation->bind(ConsentAction::Proceed));
+    CK_CHECK(proceed.action == ConsentAction::Proceed && operation->receipt_matches(proceed));
+    CK_CHECK(operation->bind(ConsentAction::ContinueWithListedLosses).state() == ObservationState::Failed);
+}
+
 CK_TEST(operation_consent_receipts_are_bound_to_the_immutable_plan_identity) {
     const auto first = plan({item(9)});
     const auto receipt = take(first->bind(ConsentAction::Cancel));

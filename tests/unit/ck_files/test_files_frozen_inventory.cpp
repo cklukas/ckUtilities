@@ -63,6 +63,17 @@ CK_TEST(frozen_inventory_mount_policy_refuses_crossing_or_unknown_mounts) {
     CK_CHECK(!cross.add(std::move(unknown)));
 }
 
+CK_TEST(frozen_inventory_direct_objects_preserve_unknown_mount_without_traversal) {
+    const AdapterScope scope;
+    FrozenInventoryBuilder direct(InventoryMountPolicy::DirectObjects, InventoryLinkPolicy::PreserveLinks);
+    auto value = entry(scope, "/direct/file", 1);
+    value.mount_id = Observation<std::uint64_t>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "fixture.mount_not_applicable"});
+    CK_CHECK(direct.add(std::move(value)) && direct.seal());
+    const auto result = take(direct);
+    CK_CHECK(result->entries().size() == 1 && !result->entries().front().mount_id.value());
+}
+
 CK_TEST(frozen_inventory_link_policy_never_follows_without_explicit_target_evidence) {
     const AdapterScope scope;
     FrozenInventoryBuilder preserve(InventoryMountPolicy::StayOnRootMount, InventoryLinkPolicy::PreserveLinks);

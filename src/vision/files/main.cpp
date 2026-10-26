@@ -66,7 +66,8 @@ int run(const std::vector<std::string> &args) {
     const std::filesystem::path right_index = cache_root / "index-right";
     const std::filesystem::path left_completion = cache_root / "completion-left";
     const std::filesystem::path right_completion = cache_root / "completion-right";
-    for (const auto &directory : {left_index, right_index, left_completion, right_completion}) {
+    const std::filesystem::path operation_journals = cache_root / "operations";
+    for (const auto &directory : {left_index, right_index, left_completion, right_completion, operation_journals}) {
         if (!make_private_directory(directory)) {
             std::fprintf(stderr, "ck-files: cannot create private cache directory\n");
             return 2;
@@ -79,7 +80,9 @@ int run(const std::vector<std::string> &args) {
     const auto right_cache = absolute(right_index, "right cache");
     const auto left_completion_cache = absolute(left_completion, "left completion cache");
     const auto right_completion_cache = absolute(right_completion, "right completion cache");
-    if (!left || !right || !left_cache || !right_cache || !left_completion_cache || !right_completion_cache)
+    const auto operation_journal_root = absolute(operation_journals, "operation journal root");
+    if (!left || !right || !left_cache || !right_cache || !left_completion_cache || !right_completion_cache ||
+        !operation_journal_root)
         return 2;
 
     ck::host::NativeClock clock;
@@ -91,6 +94,7 @@ int run(const std::vector<std::string> &args) {
     std::array<std::unique_ptr<ck::vision::FilesPaneService>, 2> services;
     std::array<std::unique_ptr<ck::vision::FilesCompletionService>, 2> completion_services;
     auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
+    auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
     services[0] = std::make_unique<ck::vision::FilesPaneService>(
         ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     services[1] = std::make_unique<ck::vision::FilesPaneService>(
@@ -108,7 +112,8 @@ int run(const std::vector<std::string> &args) {
         {*left, *right},
         [&application] { application.request_quit(); },
         ck::vision::ThemeScheme::Classic,
-        {completion_services[0].get(), completion_services[1].get()}, planning_service.get());
+        {completion_services[0].get(), completion_services[1].get()}, planning_service.get(), execution_service.get(),
+        std::make_shared<const NativeAbsolutePath>(*operation_journal_root));
     keymap.load();
     application.run();
     return 0;

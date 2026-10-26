@@ -3,6 +3,7 @@
 #pragma once
 #include "files_completion_service.hpp"
 #include "files_operation_planning_service.hpp"
+#include "files_operation_execution_service.hpp"
 #include "files_operation_review_dialog.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
@@ -46,7 +47,9 @@ class FilesApp final {
              std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> host_quit,
              ThemeScheme theme = ThemeScheme::Classic,
              std::array<FilesCompletionService *, 2> completion_services = {},
-             FilesOperationPlanningService *planning_service = nullptr);
+             FilesOperationPlanningService *planning_service = nullptr,
+             FilesOperationExecutionService *execution_service = nullptr,
+             std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {});
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

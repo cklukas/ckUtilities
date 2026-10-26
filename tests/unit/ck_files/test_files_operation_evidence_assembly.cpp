@@ -74,6 +74,20 @@ CK_TEST(operation_evidence_assembly_projects_each_object_before_plan_creation) {
         (*plan.value())->issues().front().feature == PreservationFeature::StorageRepresentation);
 }
 
+CK_TEST(operation_evidence_assembly_retains_explicit_unhandled_metadata_consent_rows) {
+    const auto inventory = inventory_with_two_entries();
+    const std::array objects{empty_inventory(), empty_inventory()};
+    const std::array topologies{SourceTargetTopology::Disjoint, SourceTargetTopology::Disjoint};
+    SourceCapabilityProjectionPolicy policy;
+    policy.require_unhandled_metadata_consent = true;
+    const auto plan = OperationEvidenceAssembly::assemble(FileOperation::Copy, inventory, topologies, objects,
+        {}, {}, policy);
+    CK_CHECK(plan.value() && (*plan.value())->issues().size() == 2);
+    CK_CHECK((*plan.value())->issues()[0].feature == PreservationFeature::ProviderManagedObject &&
+        (*plan.value())->issues()[0].state == PreservationIssueState::Unsupported &&
+        !(*plan.value())->issues()[0].hard_failure);
+}
+
 CK_TEST(operation_evidence_assembly_propagates_projection_failures_and_shape_errors) {
     const auto inventory = inventory_with_two_entries();
     const std::array topologies{SourceTargetTopology::Disjoint, SourceTargetTopology::Disjoint};

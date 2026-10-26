@@ -13,7 +13,11 @@
 
 namespace ck::files {
 
-enum class InventoryMountPolicy { StayOnRootMount, AllowCrossMounts };
+// DirectObjects is for an already-held flat object set. It does not traverse
+// directories, so an unavailable platform-specific mount observation cannot
+// be promoted into a false mount identity. Recursive inventories must use one
+// of the two mount-qualified policies below.
+enum class InventoryMountPolicy { StayOnRootMount, AllowCrossMounts, DirectObjects };
 enum class InventoryLinkPolicy { PreserveLinks, FollowLinks };
 enum class LinkTraversalEvidence { NotLink, NotFollowed, Followed, Cycle, UnknownTarget };
 

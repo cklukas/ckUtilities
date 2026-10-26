@@ -53,6 +53,7 @@ enum class FileOperation { Copy, Move };
 enum class ConsentAction {
     Cancel,
     ChooseAnotherDestination,
+    Proceed,
     SkipAffectedItems,
     ContinueWithListedLosses,
     SkipConflict,

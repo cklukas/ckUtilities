@@ -113,6 +113,7 @@ struct Fixture {
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
     std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
     std::unique_ptr<FilesOperationPlanningService> planning_service;
+    std::unique_ptr<FilesOperationExecutionService> execution_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
@@ -197,6 +198,13 @@ struct Fixture {
                 std::make_unique<FilesCompletionService>(native_files_pane_backend(address(completion_cache)),
                                                          FilesCompletionServiceLimits{}, wake.callback());
         }
+        const auto operation_root = scratch.path() / "operation-journals";
+        std::filesystem::create_directory(operation_root);
+#ifndef _WIN32
+        std::filesystem::permissions(operation_root, std::filesystem::perms::owner_all,
+                                     std::filesystem::perm_options::replace);
+#endif
+        execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
@@ -206,7 +214,8 @@ struct Fixture {
                 address(scratch.path() / "right")},
             [this] { ++exits; }, theme,
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
-            planning_service.get());
+            planning_service.get(), execution_service.get(),
+            std::make_shared<const NativeAbsolutePath>(address(operation_root)));
     }
     ~Fixture() {
         app.reset();
@@ -219,6 +228,7 @@ struct Fixture {
         for (auto &service : completion_services)
             service->join();
         planning_service->join();
+        execution_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
     template <class Predicate> void until(Predicate ready) {
@@ -501,6 +511,52 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "created-by-app"));
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0) == "Last scan: 101 items");
+}
+CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    CK_CHECK(f.app->operation_review_pending());
+    CK_CHECK(!f.command("ck.files.rename") && !f.command("ck.files.create_directory"));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+}
+CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(apply != nullptr);
+    // The current copy boundary contributes one explicit metadata-loss row.
+    if (!checks.empty())
+        checks.front()->set_checked(0, true);
+    // The copy adapter declares an explicit portable-metadata boundary; the
+    // action order is Cancel, choose destination, continue, skip.
+    combos.front()->set_selected_index(2);
+    CK_CHECK(apply->activate_mnemonic("a"));
+    f.until([&] { return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
+                        !f.app->pending(0) && !f.app->pending(1) &&
+                        f.app->status(0).find("Copying") == std::string::npos &&
+                        f.app->status(1).find("Copying") == std::string::npos; });
+    CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
+    CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
 }
 CK_TEST(files_app_rename_uses_stamped_worker_target_on_all_platforms) {
     Fixture f;

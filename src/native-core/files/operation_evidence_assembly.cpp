@@ -28,6 +28,9 @@ Observation<OperationPlan::Pointer> OperationEvidenceAssembly::assemble(FileOper
         return rejected<OperationPlan::Pointer>(AdapterError::InvalidLimit, "operation_evidence.source_limit");
 
     std::vector<SourceCapabilityEvidence> source;
+    std::vector<PreservationIssue> additional_issues;
+    if (projection_policy.require_unhandled_metadata_consent)
+        additional_issues.reserve(source_objects.size());
     for (std::size_t item = 0; item < source_objects.size(); ++item) {
         auto projected = SourceCapabilityProjection::from_inventory(item, source_objects[item], projection_policy,
             limits.projection);
@@ -38,9 +41,12 @@ Observation<OperationPlan::Pointer> OperationEvidenceAssembly::assemble(FileOper
                 ObservationState::Unknown);
         auto values = std::move(projected).take_value();
         source.insert(source.end(), std::make_move_iterator(values.begin()), std::make_move_iterator(values.end()));
+        if (projection_policy.require_unhandled_metadata_consent)
+            additional_issues.push_back({item, PreservationFeature::ProviderManagedObject,
+                PreservationIssueState::Unsupported, PreservationConsequence::MetadataLoss, false});
     }
     return OperationPlanAssembly::assemble(operation, std::move(inventory), topologies, source, destination,
-        std::move(conflicts), limits.plan);
+        std::move(conflicts), limits.plan, std::move(additional_issues));
 }
 
 } // namespace ck::files

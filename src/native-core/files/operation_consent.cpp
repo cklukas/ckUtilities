@@ -167,6 +167,12 @@ Observation<ConsentReceipt> OperationPlan::bind(ConsentAction action,
         return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action,
             std::move(reviewed_issues), std::move(resolved_conflicts), {}});
     }
+    if (action == ConsentAction::Proceed) {
+        if (!issues_.empty() || !conflicts_.empty() || !reviewed_issues.empty() ||
+            !resolved_conflicts.empty() || !keep_both_names.empty())
+            return rejected<ConsentReceipt>(AdapterError::ProviderReviewRequired, "operation_plan.review_required");
+        return Observation<ConsentReceipt>::available(ConsentReceipt{identity_, action, {}, {}, {}});
+    }
     if (action == ConsentAction::ContinueWithListedLosses || action == ConsentAction::SkipAffectedItems) {
         if (!all_indices_present(reviewed_issues, issues_.size()) || issues_.empty() || !resolved_conflicts.empty() ||
             !keep_both_names.empty())
@@ -196,6 +202,9 @@ bool OperationPlan::receipt_matches(const ConsentReceipt& receipt) const noexcep
         return receipt.reviewed_issues.empty() && receipt.resolved_conflicts.empty() && receipt.keep_both_names.empty();
     case ConsentAction::ChooseAnotherDestination:
         return requires_review() && receipt.keep_both_names.empty();
+    case ConsentAction::Proceed:
+        return issues_.empty() && conflicts_.empty() && receipt.reviewed_issues.empty() &&
+            receipt.resolved_conflicts.empty() && receipt.keep_both_names.empty();
     case ConsentAction::ContinueWithListedLosses:
         if (!receipt.resolved_conflicts.empty() || !receipt.keep_both_names.empty() ||
             !all_indices_present(receipt.reviewed_issues, issues_.size()) || issues_.empty())
