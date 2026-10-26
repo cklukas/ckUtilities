@@ -4,8 +4,11 @@
 
 #include <filesystem>
 #include <fstream>
+#include <array>
+#include <cstring>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "cvision/testing/cktest.hpp"
 #include "scratch_directory.hpp"
@@ -38,6 +41,68 @@ NativeName component(const char *text) {
     auto result = NativeName::from_posix(text);
     if (!result) throw std::runtime_error("cannot construct native test component");
     return std::move(*result);
+}
+#endif
+
+#if defined(_WIN32)
+std::wstring final_path(const std::filesystem::path &path) {
+    const auto raw = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                 FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (raw == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot open Recycle Bin fixture");
+    std::vector<wchar_t> buffer(32768);
+    const auto written = GetFinalPathNameByHandleW(raw, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                   FILE_NAME_NORMALIZED);
+    CloseHandle(raw);
+    if (!written || written >= buffer.size()) throw std::runtime_error("cannot resolve Recycle Bin fixture");
+    return std::wstring(buffer.data(), written);
+}
+
+std::size_t remove_recycle_fixture(const std::wstring &root, const std::wstring &original) {
+    const auto pattern = root + L"\\$Recycle.Bin\\*";
+    WIN32_FIND_DATAW directory_data{};
+    const auto directory_search = FindFirstFileW(pattern.c_str(), &directory_data);
+    if (directory_search == INVALID_HANDLE_VALUE) return 0;
+    std::size_t removed = 0;
+    do {
+        if ((directory_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+            std::wstring(directory_data.cFileName) == L"." || std::wstring(directory_data.cFileName) == L"..")
+            continue;
+        const auto directory = root + L"\\$Recycle.Bin\\" + directory_data.cFileName;
+        WIN32_FIND_DATAW metadata_data{};
+        const auto metadata_search = FindFirstFileW((directory + L"\\$I*").c_str(), &metadata_data);
+        if (metadata_search == INVALID_HANDLE_VALUE) continue;
+        do {
+            const std::wstring metadata_name(metadata_data.cFileName);
+            if (metadata_name.size() < 3 || metadata_name[0] != L'$' || metadata_name[1] != L'I') continue;
+            const auto metadata_path = directory + L"\\" + metadata_name;
+            const auto handle = CreateFileW(metadata_path.c_str(), GENERIC_READ,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (handle == INVALID_HANDLE_VALUE) continue;
+            std::array<std::byte, 544> bytes{};
+            DWORD read = 0;
+            const bool read_ok = ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) &&
+                                 read == bytes.size();
+            CloseHandle(handle);
+            if (!read_ok) continue;
+            std::wstring recorded;
+            for (std::size_t offset = 24; offset + sizeof(wchar_t) <= bytes.size(); offset += sizeof(wchar_t)) {
+                wchar_t unit{};
+                std::memcpy(&unit, bytes.data() + offset, sizeof(unit));
+                if (!unit) break;
+                recorded.push_back(unit);
+            }
+            if (recorded != original) continue;
+            const auto restored_path = directory + L"\\$R" + metadata_name.substr(2);
+            const bool restored_removed = DeleteFileW(restored_path.c_str()) != FALSE;
+            const bool metadata_removed = DeleteFileW(metadata_path.c_str()) != FALSE;
+            if (restored_removed && metadata_removed) ++removed;
+        } while (FindNextFileW(metadata_search, &metadata_data));
+        FindClose(metadata_search);
+    } while (FindNextFileW(directory_search, &directory_data));
+    FindClose(directory_search);
+    return removed;
 }
 #endif
 }
@@ -201,6 +266,27 @@ CK_TEST(native_linux_inspection_preserves_non_UTF8_path_bytes) {
 #endif
 
 #if defined(_WIN32)
+CK_TEST(native_windows_trash_moves_fixture_to_recycle_bin_with_restore_metadata) {
+    const ck::testing::ScratchDirectory scratch("files-trash");
+    const auto path = scratch.path() / L"trash-fixture.bin";
+    write_file(path, "recycle fixture");
+    const auto original = final_path(path);
+    wchar_t volume[MAX_PATH]{};
+    if (!GetVolumePathNameW(path.c_str(), volume, ARRAYSIZE(volume)))
+        throw std::runtime_error("cannot resolve Recycle Bin volume");
+    NativeFileSystem filesystem;
+    auto directory_observed = filesystem.open_directory(scratch.path());
+    auto directory = std::move(directory_observed).take_value();
+    auto child_observed = directory->open_child(*NativeName::from_windows(u"trash-fixture.bin"), EntryAccess::MetadataOnly);
+    auto child = std::move(child_observed).take_value();
+    const auto metadata = available(child->inspect_basic());
+    const auto moved = directory->trash_child(*NativeName::from_windows(u"trash-fixture.bin"), *metadata.identity.value());
+    const auto removed = remove_recycle_fixture(volume, original);
+    CK_CHECK(moved.value() && *moved.value());
+    CK_CHECK(!std::filesystem::exists(path));
+    CK_CHECK(removed == 1);
+}
+
 CK_TEST(native_windows_metadata_refuses_device_namespaces_before_any_open) {
     const ck::testing::ScratchDirectory scratch("files-namespace");
     NativeFileSystem filesystem;
