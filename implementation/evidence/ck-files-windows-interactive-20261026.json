@@ -1,0 +1,40 @@
+{
+  "commit": "d6d2d946a2dbd55dc7a2a3c2f6c3db8cc6cf3c02",
+  "scope": "Windows x64 real-terminal acceptance of the current ck-files F5 held-file copy slice",
+  "source": "V:\\dev\\ckutilities",
+  "build": {
+    "configuration": "Release",
+    "target": "ckfiles_ckvision",
+    "executable": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\bin\\Release\\ck-files.exe",
+    "executable_sha256": "F25AC7B21FE2FEB4AD05080684DF52180356447D9BD3DCDED0FF64E6F3FD02EA",
+    "executable_last_write_utc": "2026-10-26T02:48:23Z"
+  },
+  "temporary_root": "V:\\tmp\\ckutilities-interactive-20261026-01",
+  "environment": {
+    "APPDATA": "V:\\tmp\\ckutilities-interactive-20261026-01\\config",
+    "TEMP": "V:\\tmp\\ckutilities-interactive-20261026-01",
+    "TMP": "V:\\tmp\\ckutilities-interactive-20261026-01",
+    "TMPDIR": "V:\\tmp\\ckutilities-interactive-20261026-01"
+  },
+  "workflow": [
+    "Started the exact verified executable with left and right fixture directories in the real Windows terminal session.",
+    "Entered the left benchmarks directory with Enter and observed the refreshed listing.",
+    "Opened F3 bounded hexadecimal preview for sample.txt; the preview disclosed display-only, no execution or write operation.",
+    "Opened F5 Review file operation for sample.txt.",
+    "Acknowledged all three Windows-disclosed review rows: extended attributes access denied, permissions and ownership access denied, and provider-managed data unsupported.",
+    "Selected Continue with listed losses and applied the plan-bound decision."
+  ],
+  "result": {
+    "destination": "V:\\tmp\\ckutilities-interactive-20261026-01\\right\\sample.txt",
+    "source_length": 19,
+    "destination_length": 19,
+    "source_sha256": "ADE4B3EA4B51F19D816028DB49050097BE528F8027EDEABA5698A6A49CA1C086",
+    "destination_sha256": "ADE4B3EA4B51F19D816028DB49050097BE528F8027EDEABA5698A6A49CA1C086",
+    "clean_shutdown": true,
+    "exact_executable_process_remaining": false
+  },
+  "limitations": [
+    "This accepts only the implemented regular-file F5 copy slice.",
+    "Recursive directory copy, replacement or merge policy, F6 move, Trash/delete, recovery execution, and final release gates remain open."
+  ]
+}

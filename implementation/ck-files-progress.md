@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — Windows real-terminal acceptance of the F5 copy slice
+
+The exact verified Windows Release executable at
+`V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build\\bin\\Release\\ck-files.exe`
+passed a real ConPTY terminal workflow with task-owned fixtures under
+`V:\\tmp\\ckutilities-interactive-20261026-01`. The workflow entered a
+directory, opened the bounded F3 preview, opened F5 review, acknowledged all
+three Windows-disclosed preservation-loss rows, selected
+`Continue with listed losses`, and applied the plan. The destination file was
+19 bytes with the same SHA-256 as the source; the exact executable then shut
+down cleanly and no process for that path remained.
+
+Evidence: [Windows interactive acceptance record](evidence/ck-files-windows-interactive-20261026.json).
+This closes the current regular-file F5 interactive slice only. Recursive
+directory copy, replacement or merge policy, F6 move, Trash/delete, recovery
+execution, and final release gates remain open.
+
 ## 2026-10-26 — af460a2 cross-platform copy and sanitizer qualification
 
 Commit `af460a2` hardens the F5 held-file copy path across platform name
