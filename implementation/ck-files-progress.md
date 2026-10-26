@@ -3,6 +3,22 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — b92aca0 worker-owned rename acceptance checkpoint
+
+The Files app now has an end-to-end acceptance case for Rename: the strict
+name dialog submits the stamped row to the pane worker, the worker performs
+identity-bound native rename, and the app refreshes the listing before
+reporting the new name. The case passed on macOS, Linux ARM64 and Windows x64.
+Native case-only behavior remains capability-gated: a platform must prove the
+destination resolves to the same object before that specialized protocol is
+used.
+
+This closes neither permanent deletion nor Trash. POSIX source retirement
+remains unsupported where the platform cannot provide an atomic identity-bound
+disposition; the app must not expose a destructive fallback.
+
+Evidence: [Files rename qualification record](evidence/ck-files-rename-20261026.json).
+
 ## 2026-10-26 — 59f7fc5 cross-platform operation handoff checkpoint
 
 The worker-to-worker source/destination handoffs now wait until both pane
