@@ -493,6 +493,87 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
     }
 }
 
+CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_loss_consent) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-copy-factory",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_directory_path = scratch.path() / "source";
+    const auto destination_directory_path = scratch.path() / "destination";
+    fs::create_directory(source_directory_path);
+    fs::create_directory(destination_directory_path);
+    {
+        std::ofstream first(source_directory_path / "first.bin", std::ios::binary);
+        first << "held factory payload";
+    }
+
+    NativeFileSystem filesystem;
+    auto source_parent = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(source_directory_path)));
+    auto destination = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(destination_directory_path)));
+    auto source = take(HeldChild::observe_with_access(source_parent, name("first.bin"), EntryAccess::ContentRead));
+    auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+
+    NativeOperationCopyBatchRequest refused;
+    refused.sources = {source};
+    refused.destination = destination;
+    refused.destination_names = {name("first-copy.bin")};
+    refused.journal_root = journal_root;
+    refused.journal_id.bytes[0] = std::byte{0x70};
+    refused.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    auto refused_created = create_native_operation_copy_batch(std::move(refused));
+    CK_CHECK(refused_created.value());
+    if (!refused_created.value()) return;
+    auto refused_batch = std::move(refused_created).take_value();
+    for (unsigned step = 0; step != 300 && refused_batch->state() != OperationBatchState::Complete &&
+         refused_batch->state() != OperationBatchState::Failed &&
+         refused_batch->state() != OperationBatchState::Cancelled; ++step)
+        refused_batch->advance();
+    CK_CHECK(refused_batch->state() == OperationBatchState::Failed);
+    CK_CHECK(!fs::exists(destination_directory_path / "first-copy.bin"));
+
+    NativeOperationCopyBatchRequest request;
+    request.sources = {source};
+    request.destination = destination;
+    request.destination_names = {name("first-copy-consented.bin")};
+    request.journal_root = journal_root;
+    request.journal_id.bytes[0] = std::byte{0x71};
+    request.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    request.policy.allow_unhandled_metadata_loss = true;
+    request.policy.copy_limits.chunk_bytes = 5;
+    request.policy.copy_limits.max_bytes = 1024;
+    auto created = create_native_operation_copy_batch(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto batch = std::move(created).take_value();
+    for (unsigned step = 0; step != 300 && batch->state() != OperationBatchState::Complete &&
+         batch->state() != OperationBatchState::Failed && batch->state() != OperationBatchState::Cancelled; ++step)
+        batch->advance();
+    CK_CHECK(batch->state() == OperationBatchState::Complete);
+    CK_CHECK(fs::exists(destination_directory_path / "first-copy-consented.bin"));
+    const auto copied = take(destination->open_child(name("first-copy-consented.bin"), EntryAccess::ContentRead));
+    const auto content = take(copied->read_content({1024}, 0));
+    CK_CHECK(content.complete && content.bytes.size() == std::string("held factory payload").size());
+
+    fs::create_directory(source_directory_path / "nested");
+    auto directory_source = take(HeldChild::observe_with_access(source_parent, name("nested"), EntryAccess::MetadataOnly));
+    NativeOperationCopyBatchRequest unsupported;
+    unsupported.sources = {directory_source};
+    unsupported.destination = destination;
+    unsupported.destination_names = {name("nested-copy")};
+    unsupported.journal_root = journal_root;
+    unsupported.journal_id.bytes[0] = std::byte{0x72};
+    unsupported.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+    const auto rejected_directory = create_native_operation_copy_batch(std::move(unsupported));
+    CK_CHECK(!rejected_directory.value() && rejected_directory.state() == ObservationState::Unsupported);
+}
+
 CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_checked) {
     const ck::testing::ScratchDirectory scratch("files-operation-publication", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;

@@ -17,6 +17,9 @@ public:
     static Observation<Pointer> observe_with_access(std::shared_ptr<const DirectoryCursor> parent, NativeName name,
         EntryAccess access, std::stop_token stop = {});
     Observation<Pointer> refresh(std::stop_token stop = {}) const;
+    // The parent cursor is retained with the child and may be transferred
+    // only between native workers. It is never a UI-facing path substitute.
+    const std::shared_ptr<const DirectoryCursor>& parent() const noexcept { return parent_; }
     const Observation<ObjectIdentity>& parent_identity() const noexcept { return parent_->identity(); }
     const NativeName& name() const noexcept { return name_; }
     const BasicMetadata& metadata() const noexcept { return metadata_; }

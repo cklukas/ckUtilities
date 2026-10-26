@@ -7,6 +7,7 @@
 #include "opened_entry.hpp"
 
 #include <cstdint>
+#include <string>
 
 namespace ck::files {
 namespace {
@@ -24,6 +25,36 @@ Observation<bool> unavailable_bool(const UnavailableObservation& detail) {
 
 bool same(const ObjectIdentity& left, const ObjectIdentity& right) noexcept {
     return compare_identity(left, right) == IdentityComparison::Same;
+}
+
+std::optional<NativeName> generated_name(NameEncoding encoding, const char* prefix,
+                                         const OperationJournalId& id, std::size_t item) {
+    std::string text = std::string(prefix);
+    constexpr char hex[] = "0123456789abcdef";
+    for (const auto byte : id.bytes) {
+        const auto value = std::to_integer<unsigned char>(byte);
+        text.push_back(hex[value >> 4U]);
+        text.push_back(hex[value & 0x0FU]);
+    }
+    text.push_back('-');
+    text += std::to_string(item);
+    if (encoding == NameEncoding::PosixBytes)
+        return NativeName::from_posix(text);
+    if (encoding == NameEncoding::WindowsUtf16) {
+        std::u16string units;
+        units.reserve(text.size());
+        for (const auto character : text)
+            units.push_back(static_cast<char16_t>(static_cast<unsigned char>(character)));
+        return NativeName::from_windows(std::move(units));
+    }
+    return std::nullopt;
+}
+
+OperationJournalId item_journal_id(OperationJournalId base, std::size_t item) noexcept {
+    const auto value = static_cast<std::uint64_t>(item);
+    for (unsigned byte = 0; byte != sizeof(value); ++byte)
+        base.bytes[8 + byte] = std::byte{static_cast<unsigned char>(value >> (byte * 8U))};
+    return base;
 }
 
 } // namespace
@@ -268,6 +299,115 @@ Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
         request.jobs.push_back(std::move(*job).release_execution_job());
     }
     return OperationBatchJob::create(std::move(request));
+}
+
+Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
+    NativeOperationCopyBatchRequest request) {
+    if (request.sources.empty() || request.sources.size() != request.destination_names.size() ||
+        request.sources.size() > request.policy.journal_limits.max_items || !request.destination ||
+        !request.open_journal || !request.journal_root ||
+        !request.journal_root->is_valid() || !request.policy.copy_limits.valid())
+        return rejected<OperationBatchJob::Pointer>(AdapterError::PlanInvalid,
+                                                     "native_operation_copy_batch.request");
+
+    const auto destination_identity = request.destination->identity();
+    if (!destination_identity.value() || !NativeDurableIdentity::from_live(*destination_identity.value()))
+        return rejected<OperationBatchJob::Pointer>(AdapterError::UnqualifiedIdentity,
+                                                     "native_operation_copy_batch.destination");
+
+    std::vector<NativeOperationCopyJob::Pointer> jobs;
+    jobs.reserve(request.sources.size());
+    for (std::size_t item = 0; item != request.sources.size(); ++item) {
+        const auto& source = request.sources[item];
+        const auto& destination_name = request.destination_names[item];
+        if (!source || !destination_name.is_valid() || !source->parent())
+            return rejected<OperationBatchJob::Pointer>(AdapterError::PlanInvalid,
+                                                         "native_operation_copy_batch.source");
+        const auto& metadata = source->metadata();
+        if (!metadata.identity.value() || !metadata.kind.value())
+            return rejected<OperationBatchJob::Pointer>(AdapterError::UnqualifiedIdentity,
+                                                         "native_operation_copy_batch.source_metadata",
+                                                         ObservationState::Unknown);
+        if (*metadata.kind.value() != ObjectKind::RegularFile)
+            return rejected<OperationBatchJob::Pointer>(AdapterError::UnsupportedQuery,
+                                                         "native_operation_copy_batch.non_regular_source",
+                                                         ObservationState::Unsupported);
+        if (!NativeDurableIdentity::from_live(*metadata.identity.value()) ||
+            !NativeDurableIdentity::from_live(*source->parent_identity().value()))
+            return rejected<OperationBatchJob::Pointer>(AdapterError::UnqualifiedIdentity,
+                                                         "native_operation_copy_batch.source_identity");
+
+        const auto item_id = item_journal_id(request.journal_id, item);
+        const auto staging_name = generated_name(destination_name.encoding(), ".ck-copy-staging-", item_id, item);
+        const auto journal_name = generated_name(request.journal_root->encoding(), ".ck-copy-journal-", item_id, item);
+        if (!staging_name || !journal_name)
+            return rejected<OperationBatchJob::Pointer>(AdapterError::UnrepresentableName,
+                                                         "native_operation_copy_batch.generated_name");
+
+        auto journal_file = request.open_journal(*request.journal_root, *journal_name, true);
+        if (!journal_file.value())
+            return Observation<OperationBatchJob::Pointer>::unavailable(
+                journal_file.unavailable_detail()->state, journal_file.unavailable_detail()->error);
+        auto journal = OperationJournal::create(FileOperation::Copy, item_id,
+                                                 request.policy.journal_limits);
+        if (!journal.value())
+            return Observation<OperationBatchJob::Pointer>::unavailable(
+                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
+        auto journal_pointer = std::move(journal).take_value();
+        auto appended = append_operation_journal_file(**journal_file.value(), *journal_pointer,
+            {1, 0, OperationJournalState::Planned, {}});
+        if (!appended.value())
+            return Observation<OperationBatchJob::Pointer>::unavailable(
+                appended.unavailable_detail()->state, appended.unavailable_detail()->error);
+
+        auto journal_handle = std::shared_ptr<OperationJournalFile>(std::move(journal_file).take_value());
+        NativeOperationCopyRequest copy_request{
+            journal_pointer,
+            journal_handle,
+            0,
+            source->parent(),
+            *source->parent_identity().value(),
+            source->name(),
+            *metadata.identity.value(),
+            request.destination,
+            *destination_identity.value(),
+            *staging_name,
+            destination_name,
+            request.policy.copy_limits,
+            {}};
+        const auto held_source = source;
+        const auto allow_metadata_loss = request.policy.allow_unhandled_metadata_loss;
+        copy_request.prepare_metadata = [held_source, allow_metadata_loss](OpenedEntry& staging,
+                                                                            std::stop_token) {
+            OperationMetadataRequest metadata_request;
+            metadata_request.apply_traversal_metadata = [&staging, held_source](std::stop_token) {
+                return staging.apply_portable_basic_metadata(held_source->metadata());
+            };
+            metadata_request.apply_security_metadata = [allow_metadata_loss](std::stop_token) {
+                if (allow_metadata_loss)
+                    return Observation<bool>::available(true);
+                return Observation<bool>::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::ProviderReviewRequired),
+                     "native_operation_copy.metadata_loss_consent"});
+            };
+            // Portable basic metadata is the only preservation subset this
+            // factory binds today. The explicit no-op records that final-time
+            // handling beyond that subset was not claimed as preserved.
+            metadata_request.apply_final_times = [](std::stop_token) {
+                return Observation<bool>::available(true);
+            };
+            metadata_request.flush_destination = [&staging](std::stop_token) {
+                return staging.flush_content();
+            };
+            return OperationMetadataJob::create(std::move(metadata_request));
+        };
+        auto created = NativeOperationCopyJob::create(std::move(copy_request));
+        if (!created.value())
+            return Observation<OperationBatchJob::Pointer>::unavailable(
+                created.unavailable_detail()->state, created.unavailable_detail()->error);
+        jobs.push_back(std::move(created).take_value());
+    }
+    return create_native_operation_copy_batch(std::move(jobs));
 }
 
 } // namespace ck::files

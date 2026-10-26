@@ -5,9 +5,11 @@
 #include "operation_execution_job.hpp"
 #include "operation_batch_job.hpp"
 #include "operation_journal_file.hpp"
+#include "held_child.hpp"
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace ck::files {
@@ -73,6 +75,36 @@ private:
     std::shared_ptr<State> state_;
     OperationExecutionJob::Pointer execution_;
 };
+
+// Worker-only construction inputs for a regular-file copy batch. Sources are
+// held objects from one pane and destination is a held directory from the
+// other pane; neither is converted back into a path. This boundary is
+// intentionally regular-file-only until recursive directory composition has
+// its own qualified implementation.
+struct NativeOperationCopyBatchPolicy final {
+    StreamCopyLimits copy_limits{};
+    OperationJournalLimits journal_limits{};
+    bool allow_unhandled_metadata_loss = false;
+};
+
+struct NativeOperationCopyBatchRequest final {
+    std::vector<HeldChild::Pointer> sources;
+    std::shared_ptr<const DirectoryCursor> destination;
+    std::vector<NativeName> destination_names;
+    std::optional<NativeAbsolutePath> journal_root;
+    OperationJournalId journal_id{};
+    NativeOperationCopyBatchPolicy policy{};
+    // Platform adapter injection keeps the portable core independent of the
+    // POSIX/Windows journal opener while retaining exact native names.
+    std::function<Observation<std::unique_ptr<OperationJournalFile>>(
+        const NativeAbsolutePath&, const NativeName&, bool)> open_journal;
+};
+
+// Creates and durably marks one journal per item before returning the ordered
+// batch. If a later item cannot be composed, earlier journals remain on disk
+// for explicit recovery; the factory never silently removes evidence.
+Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
+    NativeOperationCopyBatchRequest request);
 
 // Composes already-qualified native copy jobs without changing their
 // per-item journal or failure semantics. The batch remains strictly ordered.
