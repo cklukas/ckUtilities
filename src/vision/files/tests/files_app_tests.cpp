@@ -542,6 +542,25 @@ CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listin
     CK_CHECK(f.app->model(0).row_count() == 100);
     CK_CHECK(f.app->status(0) == "Last scan: 100 items");
 }
+CK_TEST(files_app_permanent_delete_requires_explicit_confirmation_and_cancel_preserves_entry) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.permanently_delete"));
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), buttons);
+    CK_CHECK(buttons.size() == 2);
+    ckv::widgets::Button *cancel = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Cancel")
+            cancel = button;
+    CK_CHECK(cancel != nullptr && f.app->status(0) == "Last scan: 100 items");
+    CK_CHECK(cancel->activate_mnemonic("c"));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(std::filesystem::is_regular_file(f.scratch.path() / "left" / "left-item-0"));
+    CK_CHECK(!f.app->pending(0) && f.app->model(0).row_count() == 100);
+}
 CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     Fixture f;
     f.loaded();
