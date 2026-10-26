@@ -6543,6 +6543,25 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-26 — Windows current-source package and test checkpoint
+
+The current Windows Release package was rebuilt with the installed Visual
+Studio 2022 v143 toolchain while keeping the source checkout, build, install,
+cache, and temporary paths on `V:`. The refreshed ZIP was installed to the
+task-owned prefix after confirming that no process was using that install.
+All ten installed utilities report `0.2.0 (ckVision 1.4.0)`, and the installed
+documentation contains all ten guides and 28 SVG screenshots. Windows CTest
+passed **222/222** in 49.90 seconds, including **107/107** Files-labelled
+tests. Package hash, toolchain, and exact paths are recorded in [current
+package evidence](evidence/ck-utilities-current-packages-20261026.json).
+
+The working `ck-files` application is the two-pane Norton Commander/Midnight
+Commander-style file manager. The remaining release gaps are still the full
+filesystem/driver matrix, controlled fault/recovery qualification, and final
+real-window interactive acceptance; this checkpoint does not claim complete
+feature parity with those classic managers.
+
+
 ## 2026-10-26 — Linux package and all-utility terminal checkpoint
 
 The isolated Debian aarch64 `rpi4` build completed all **456/456** Release
