@@ -13,6 +13,14 @@ std::shared_ptr<const DirectoryCursor> first_parent(
     for (const auto& parent : parents) if (parent) return parent;
     return {};
 }
+bool same_parent(const std::vector<std::shared_ptr<const DirectoryCursor>>& parents,
+    std::size_t left, std::size_t right) noexcept {
+    if (!parents[left] || !parents[right]) return false;
+    const auto& left_identity = parents[left]->identity();
+    const auto& right_identity = parents[right]->identity();
+    return left_identity.value() && right_identity.value() &&
+        compare_identity(*left_identity.value(), *right_identity.value()) == IdentityComparison::Same;
+}
 }
 const DestinationEntryInspection* CompletedDestinationBatch::leader(std::size_t row) const noexcept {
     if (row >= entries_.size() || !entries_[row].exact_name_leader) return nullptr;
@@ -96,18 +104,30 @@ void DestinationBatchJob::step(std::stop_token stop) {
         DestinationEntryInspection entry(std::move(names_[next_]));
         if (mapped.value()) {
             if (!retain_name(*mapped.value())) return;
-            const auto found = parent_directories_[next_]
-                ? names_index_.find(ScopedNameKey{parent_directories_[next_].get(), *mapped.value()})
-                : names_index_.end();
-            if (found == names_index_.end()) {
+            std::optional<std::size_t> leader;
+            if (parent_directories_[next_]) {
+                const auto found = names_index_.find(*mapped.value());
+                if (found != names_index_.end()) {
+                    for (const auto candidate : found->second) {
+                        if (same_parent(parent_directories_, candidate, next_)) {
+                            leader = candidate;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!leader) {
                 // Reserve once during mapping, never again on a paused retry.
                 // Index key + probe requested name + lookup context name.
                 for (int copy = 0; copy < 3; ++copy) if (!retain_name(*mapped.value())) return;
                 if (parent_directories_[next_]) {
-                    names_index_.emplace(ScopedNameKey{parent_directories_[next_].get(), *mapped.value()}, next_);
+                    names_index_[*mapped.value()].push_back(next_);
                 }
                 entry.exact_name_leader = next_; entry.exact_name_count = 1;
-            } else { entry.exact_name_leader = found->second; ++entries_[found->second].exact_name_count; }
+            } else {
+                entry.exact_name_leader = *leader;
+                ++entries_[*leader].exact_name_count;
+            }
         }
         entry.mapped = std::move(mapped); entries_.push_back(std::move(entry)); ++next_; break;
     }

@@ -71,6 +71,14 @@ CK_TEST(destination_batch_scopes_exact_name_groups_to_their_parent_cursor) {
     CK_CHECK(result->exact_name_count(0) == 1 && result->exact_name_count(1) == 1);
     CK_CHECK(result->entries()[0].exact_name_leader == 0 && result->entries()[1].exact_name_leader == 1);
     CK_CHECK(result->probe(0) && result->probe(1) && result->probe(0) != result->probe(1));
+
+    std::shared_ptr<const DirectoryCursor> first_again(take(fs.open_directory("/destination-batch-scope-first")));
+    DestinationBatchJob reopened({first_cursor, first_again}, {name("same"), name("same")},
+        NameEncoding::PosixBytes, {}, fs.clock());
+    const auto reopened_result = finish(reopened);
+    CK_CHECK(reopened_result->exact_name_count(0) == 2 && reopened_result->exact_name_count(1) == 2);
+    CK_CHECK(reopened_result->entries()[1].exact_name_leader == 0 &&
+        reopened_result->probe(0) == reopened_result->probe(1));
 }
 CK_TEST(destination_batch_reports_hard_link_object_matches_separately_from_exact_name_groups) {
     Fixture f; auto object = f.put(name("a")); f.fs.put(f.root, name("b"), object);

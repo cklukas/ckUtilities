@@ -4,7 +4,6 @@
 #include "directory_entry_probe.hpp"
 #include "name_mapping.hpp"
 #include "monotonic_clock.hpp"
-#include <functional>
 #include <map>
 #include <tuple>
 
@@ -87,16 +86,6 @@ private:
     // Scope is deliberately not ordered or hashed. Exact key buckets are only
     // an index; compare_identity still qualifies every positive match.
     using IdentityKey = std::tuple<IdentityScheme, std::array<std::byte, 16>, std::array<std::byte, 16>, std::optional<std::uint64_t>>;
-    struct ScopedNameKey final {
-        const DirectoryCursor* parent = nullptr;
-        NativeName name;
-    };
-    struct ScopedNameLess final {
-        bool operator()(const ScopedNameKey& left, const ScopedNameKey& right) const noexcept {
-            if (left.parent != right.parent) return std::less<const DirectoryCursor*>{}(left.parent, right.parent);
-            return compare_native_names(left.name, right.name) < 0;
-        }
-    };
     void fail(UnavailableObservation error) noexcept;
     void release_staging() noexcept;
     bool retain_name(const NativeName& name);
@@ -110,7 +99,7 @@ private:
     std::shared_ptr<const MonotonicClock> clock_;
     std::optional<MonotonicClock::TimePoint> last_reading_;
     std::vector<DestinationEntryInspection> entries_;
-    std::map<ScopedNameKey, std::size_t, ScopedNameLess> names_index_;
+    std::map<NativeName, std::vector<std::size_t>, NativeNameLess> names_index_;
     std::map<IdentityKey, std::vector<std::size_t>> objects_;
     std::vector<std::size_t>* bucket_ = nullptr;
     std::size_t next_ = 0, candidate_ = 0, bytes_ = 0;
