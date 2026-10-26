@@ -213,6 +213,117 @@ CK_TEST(native_trash_boundary_uses_platform_metadata_and_retires_source) {
     else CK_CHECK(::unsetenv("XDG_DATA_HOME") == 0);
 #endif
 }
+
+fs::path foreign_mount_root(fs::path path) {
+    struct stat current{};
+    if (::stat(path.c_str(), &current) != 0) return {};
+    while (path.has_parent_path()) {
+        const auto parent = path.parent_path();
+        if (parent == path) break;
+        struct stat parent_stat{};
+        if (::stat(parent.c_str(), &parent_stat) != 0 || parent_stat.st_dev != current.st_dev) break;
+        path = parent;
+        current = parent_stat;
+    }
+    return path;
+}
+
+CK_TEST(native_trash_mount_specific_layout_is_identity_checked_and_cleaned) {
+    const char *foreign_root_text = std::getenv("CKTOOLS_FILES_FOREIGN_TRASH_ROOT");
+    const char *home_root_text = std::getenv("CKTOOLS_FILES_TRASH_HOME_ROOT");
+    // This is an opt-in cross-mount qualification. The ordinary native suite
+    // remains self-contained and must not require a second filesystem.
+    if (!foreign_root_text || !home_root_text || !foreign_root_text[0] || !home_root_text[0]) return;
+
+    const ck::testing::ScratchDirectory foreign_root("files-trash-foreign", foreign_root_text);
+    const ck::testing::ScratchDirectory trash_home("files-trash-foreign-home", home_root_text);
+    const auto basename = std::string("native-foreign-") + foreign_root.path().filename().string();
+    const auto source = foreign_root.path() / basename;
+    write_file(source, "mount-specific Trash must retain restore data");
+
+    const auto mount = foreign_mount_root(foreign_root.path());
+    CK_CHECK(!mount.empty());
+    if (mount.empty()) return;
+
+    const auto mount_stat = [&] {
+        struct stat value{};
+        return ::stat(mount.c_str(), &value) == 0 ? value.st_dev : dev_t{};
+    }();
+    struct stat source_stat{};
+    CK_CHECK(::stat(source.c_str(), &source_stat) == 0 && mount_stat == source_stat.st_dev);
+
+    const char *previous_home = std::getenv("HOME");
+#if !defined(__APPLE__)
+    const char *previous_xdg = std::getenv("XDG_DATA_HOME");
+#endif
+    const std::string previous_home_value = previous_home ? previous_home : "";
+#if !defined(__APPLE__)
+    const std::string previous_xdg_value = previous_xdg ? previous_xdg : "";
+#endif
+    const bool had_home = previous_home != nullptr;
+#if !defined(__APPLE__)
+    const bool had_xdg = previous_xdg != nullptr;
+#endif
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+#if !defined(__APPLE__)
+    CK_CHECK(::setenv("XDG_DATA_HOME", trash_home.path().c_str(), 1) == 0);
+#endif
+
+    NativeFileSystem filesystem;
+    auto directory = filesystem.open_directory(foreign_root.path());
+    CK_CHECK(directory.value());
+    if (directory.value()) {
+        auto child_name = NativeName::from_posix(basename);
+        CK_CHECK(child_name);
+        if (child_name) {
+            auto child = (*directory.value())->open_child(*child_name, EntryAccess::MetadataOnly);
+            CK_CHECK(child.value());
+            if (child.value()) {
+                const auto metadata = (*child.value())->inspect_basic();
+                CK_CHECK(metadata.value() && metadata.value()->identity.value());
+                if (metadata.value() && metadata.value()->identity.value()) {
+                    const auto moved = (*directory.value())->trash_child(*child_name,
+                                                                          *metadata.value()->identity.value());
+                    CK_CHECK(moved.value() && *moved.value());
+                    CK_CHECK(!fs::exists(source));
+#if defined(__APPLE__)
+                    const auto trash_root = mount / ".Trashes" / std::to_string(static_cast<unsigned long long>(::geteuid()));
+#else
+                    const auto trash_root = mount / (std::string(".Trash-") +
+                                                      std::to_string(static_cast<unsigned long long>(::geteuid())));
+#endif
+                    const auto trashed = trash_root / "files" / basename;
+                    const auto info_path = trash_root / "info" / (basename + ".trashinfo");
+                    CK_CHECK(fs::exists(trashed) && fs::exists(info_path));
+                    std::ifstream info(info_path);
+                    const std::string metadata_text((std::istreambuf_iterator<char>(info)),
+                                                    std::istreambuf_iterator<char>());
+                    CK_CHECK(metadata_text.find("[Trash Info]") != std::string::npos &&
+                             metadata_text.find("Path=file://") != std::string::npos &&
+                             metadata_text.find("DeletionDate=") != std::string::npos);
+                    std::error_code cleanup;
+                    fs::remove(trashed, cleanup);
+                    fs::remove(info_path, cleanup);
+                    fs::remove(trash_root / "files", cleanup);
+                    fs::remove(trash_root / "info", cleanup);
+                    fs::remove(trash_root, cleanup);
+#if defined(__APPLE__)
+                    fs::remove(mount / ".Trashes", cleanup);
+#endif
+                }
+            }
+        }
+    }
+#if defined(__APPLE__)
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+#else
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+    if (had_xdg) CK_CHECK(::setenv("XDG_DATA_HOME", previous_xdg_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("XDG_DATA_HOME") == 0);
+#endif
+}
 #endif
 
 CK_TEST(native_hard_links_share_identity_but_adapter_scopes_do_not) {

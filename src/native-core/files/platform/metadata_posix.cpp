@@ -289,7 +289,16 @@ Observation<OwnedDescriptor> open_directory_path(std::string_view path, bool cre
     using Result = Observation<OwnedDescriptor>;
     if (path.empty() || path.front() != '/')
         return Result::unavailable(ObservationState::Unsupported, adapter_error(AdapterError::UnsupportedQuery, operation));
-    OwnedDescriptor current(open("/", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+#if defined(__APPLE__)
+    // macOS volume Trash roots are commonly write/search-only (for example
+    // .Trashes is mode 0333 with the sticky bit). O_RDONLY incorrectly turns
+    // a usable native Trash into EACCES; O_SEARCH retains descriptor-relative
+    // traversal and mkdirat/renameat authority without reading directory data.
+    constexpr int directory_open_mode = O_SEARCH;
+#else
+    constexpr int directory_open_mode = O_RDONLY | O_DIRECTORY;
+#endif
+    OwnedDescriptor current(open("/", directory_open_mode | O_NOFOLLOW | O_CLOEXEC));
     if (current.get() < 0)
         return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
     std::size_t begin = 1;
@@ -302,14 +311,14 @@ Observation<OwnedDescriptor> open_directory_path(std::string_view path, bool cre
                 adapter_error(AdapterError::UnsupportedQuery, operation));
 
         OwnedDescriptor next(openat(current.get(), std::string(component).c_str(),
-            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+            directory_open_mode | O_NOFOLLOW | O_CLOEXEC));
         if (next.get() < 0 && create && errno == ENOENT) {
             if (mkdirat(current.get(), std::string(component).c_str(), 0700) != 0 && errno != EEXIST)
                 return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
             if (fsync(current.get()) != 0)
                 return Result::unavailable(ObservationState::Unknown, {ErrorDomain::Posix, errno, operation});
             next = OwnedDescriptor(openat(current.get(), std::string(component).c_str(),
-                O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+                directory_open_mode | O_NOFOLLOW | O_CLOEXEC));
         }
         if (next.get() < 0)
             return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, operation});
