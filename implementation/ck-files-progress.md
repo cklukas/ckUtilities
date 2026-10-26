@@ -3,6 +3,25 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-26 — d969d67 cross-platform recursive-copy publication boundary
+
+The worker-owned recursive copy engine now releases all staged descendant
+directory handles before the final atomic no-replace root rename. Windows
+rejects publication of a directory tree while those handles remain open; the
+native namespace-write reopen also requests the directory rights required for
+subdirectory creation and child removal. Existing collision behavior is
+unchanged: an occupied destination is retained and the private staging tree
+remains available for reconciliation.
+
+The operation-content native suite passed **17/17** on macOS, Linux ARM64 and
+Windows x64 from the current source. Windows used the mandatory `V:` source,
+build and temporary roots with MSVC 14.44.35207; no app instance was launched.
+
+Evidence: [recursive-copy qualification record](evidence/ck-files-recursive-copy-20261026.json).
+This is a WP-04 recursive-copy checkpoint. Recovery cleanup for recursive
+staging, same- and cross-filesystem move retirement, Trash/delete, full
+interactive acceptance and the remaining release gates are still open.
+
 ## 2026-10-26 — 96bdf5e recursive execution safety boundary
 
 The current regular-file execution worker now rejects a recursive source

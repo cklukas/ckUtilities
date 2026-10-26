@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-26",
+  "scope": "WP-04 recursive directory copy publication boundary",
+  "commits": ["f0771b2", "d969d67"],
+  "source_head": "d969d67de6e734751b92f121b07b539c73df9481",
+  "result": "qualified_recursive_copy_engine_checkpoint",
+  "tests": {
+    "operation_content_suite": {
+      "count": 17,
+      "macos": "passed",
+      "linux_arm64": "passed",
+      "windows_x64": "passed"
+    },
+    "macos_binary_sha256": "add26f6012c02742d1e0106cb333397daaec063a703ab528d7d713008042b425",
+    "linux_binary_sha256": "3e71b54eb3d761dd11d50c8b18a78a882cb98dd25d81c46741f7e41034ddf9d9",
+    "windows_binary_sha256": "0f56f3147507645621711ab8faab76609f6a3a1843bbae9e09142dc6c0bb4812"
+  },
+  "platforms": {
+    "macos": {
+      "build": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "temporary_root": "/Volumes/S8T/tmp/ckutilities-wp04-tree-20261026-01",
+      "notes": "Native operation-content target rebuilt after the handle-lifetime fix; 17/17 passed."
+    },
+    "linux_arm64": {
+      "host": "rpi4",
+      "build": "/home/klukas/tmp/ckutilities-wp04-tree-20261026-01/build",
+      "temporary_root": "/home/klukas/tmp/ckutilities-wp04-tree-20261026-01",
+      "notes": "Native operation-content target rebuilt from the current source; 17/17 passed."
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "compiler": "MSVC 14.44.35207 / Visual Studio 2022 BuildTools",
+      "source": "V:\\dev\\ckutilities",
+      "build": "V:\\tmp\\ckutilities-windows-qualification-20261025-01\\build",
+      "temporary_root": "V:\\tmp\\ckutilities-wp04-tree-20261026-01",
+      "notes": "Release native target rebuilt with 0 warnings and 0 errors; 17/17 passed."
+    }
+  },
+  "safety_change": "Before recursive root publication, release every staged descendant directory cursor and the staging-root cursor. Windows otherwise rejects renaming a directory tree with open descendant handles. The Windows namespace publication handle now requests FILE_ADD_SUBDIRECTORY and FILE_DELETE_CHILD in addition to FILE_ADD_FILE."
+}
