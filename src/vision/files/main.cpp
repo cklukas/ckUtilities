@@ -10,6 +10,7 @@
 #include "host_about.hpp"
 #include "native_host.hpp"
 #include "operation_journal_file.hpp"
+#include "files_settings.hpp"
 
 #include <cvision/ui/application.hpp>
 
@@ -95,6 +96,10 @@ int run(const std::vector<std::string> &args) {
         !operation_journal_root)
         return 2;
 
+    ck::host::NativeFileSystem settings_files;
+    ck::vision::FilesSettingsStore settings(settings_files, config_root_text + "/files/settings");
+    auto loaded_settings = settings.load();
+
     ck::host::NativeClock clock;
     ck::host::NativeTerminal terminal(clock);
     ckv::ui::Application application(terminal, clock);
@@ -123,7 +128,10 @@ int run(const std::vector<std::string> &args) {
         [&application] { application.request_quit(); },
         ck::vision::ThemeScheme::Classic,
         {completion_services[0].get(), completion_services[1].get()}, planning_service.get(), execution_service.get(),
-        std::make_shared<const NativeAbsolutePath>(*operation_journal_root));
+        std::make_shared<const NativeAbsolutePath>(*operation_journal_root),
+        {std::move(loaded_settings.value), [&settings](const ck::vision::FilesPersistentSettings &value) {
+             return settings.save(value);
+         }, std::move(loaded_settings.diagnostic)});
     keymap.load();
     application.run();
     return 0;

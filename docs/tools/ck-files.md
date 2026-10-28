@@ -56,9 +56,10 @@ execute files or provide an embedded shell.
   boundaries. Unknown or unavailable preservation is a reason to stop, skip,
   or choose another destination—not a silent success.
 - Shared suite help, themes, configurable shortcuts, visible menu alternatives,
-  session-local layout/display settings and bookmarks, and CLI help/version
-  behavior. Durable Files preference persistence is not advertised by this
-  release checkpoint yet.
+  durable display settings and exact native bookmarks, and CLI
+  help/version behavior. Settings are versioned, bounded, private and written
+  atomically; invalid settings and failed or conflicting writes are reported,
+  and failed writes never replace the last known file.
 
 ## Default commands
 
@@ -96,8 +97,8 @@ xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
 profiles pass for all ten utilities in the Linux aarch64 archive. This is still
 an implementation checkpoint, not a claim that every release gate is complete:
-foreign-volume Trash qualification, recovery execution, full filesystem-matrix
-coverage, and final mouse/restricted-key acceptance remain tracked work.
+recovery execution, full filesystem-matrix coverage, and final
+mouse/restricted-key acceptance remain tracked work.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and

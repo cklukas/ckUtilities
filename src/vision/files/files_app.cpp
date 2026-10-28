@@ -178,6 +178,7 @@ struct FilesApp::State {
     FilesOperationPlanningService *planning_service = nullptr;
     FilesOperationExecutionService *execution_service = nullptr;
     std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
+    FilesSettingsBinding settings;
     FilesAppWake &wake;
     std::function<void()> host_quit;
     std::array<Pane, 2> panes;
@@ -243,10 +244,10 @@ struct FilesApp::State {
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
           std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning,
           FilesOperationExecutionService *execution,
-          std::shared_ptr<const ck::files::NativeAbsolutePath> journal_root)
+          std::shared_ptr<const ck::files::NativeAbsolutePath> journal_root, FilesSettingsBinding supplied_settings)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
           execution_service(execution), operation_journal_root(std::move(journal_root)),
-          wake(signal),
+          settings(std::move(supplied_settings)), wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
         if (!services[0] || !services[1] || services[0] == services[1] || !host_quit)
             throw std::invalid_argument("invalid Files host");
@@ -433,7 +434,12 @@ struct FilesApp::State {
             application.commands().set_handler(application.commands().standard().quit, [this] { request_close(); });
             for (std::size_t i = 0; i < 2; ++i) {
                 panes[i].encoding = locations[i].encoding();
-                navigate(i, std::move(locations[i]));
+                if (ck::files::valid_pane_order({settings.value.views[i].sort, settings.value.views[i].descending,
+                                                 settings.value.views[i].folders_first}))
+                    panes[i].view = settings.value.views[i];
+                for (auto &bookmark : settings.value.bookmarks[i])
+                    panes[i].bookmarks.push_back(std::make_shared<const FilesPaneLocation>(std::move(bookmark)));
+                navigate(i, FilesPaneLocation(std::move(locations[i])), panes[i].view);
             }
             application.set_focus(surfaces[0]->grid);
             pump();
@@ -620,7 +626,22 @@ struct FilesApp::State {
         }
         if (p.range_start)
             text += " | Range start set";
+        if (!settings.diagnostic.empty())
+            text += " | " + settings.diagnostic;
         return text;
+    }
+    void save_settings() {
+        if (!settings.save)
+            return;
+        FilesPersistentSettings value;
+        for (std::size_t i = 0; i < panes.size(); ++i) {
+            value.views[i] = panes[i].view;
+            value.bookmarks[i].reserve(panes[i].bookmarks.size());
+            for (const auto &bookmark : panes[i].bookmarks)
+                value.bookmarks[i].push_back(*bookmark);
+        }
+        settings.diagnostic = settings.save(value);
+        labels();
     }
     void labels() {
         if (!window)
@@ -711,6 +732,7 @@ struct FilesApp::State {
                         [&](const auto &bookmark) { return *bookmark == *panes[i].active; }))
             return false;
         panes[i].bookmarks.push_back(panes[i].active);
+        save_settings();
         labels();
         return true;
     }
@@ -721,6 +743,8 @@ struct FilesApp::State {
         panes[i].bookmarks.erase(std::remove_if(panes[i].bookmarks.begin(), panes[i].bookmarks.end(),
                                                 [&](const auto &bookmark) { return *bookmark == *panes[i].active; }),
                                  panes[i].bookmarks.end());
+        if (panes[i].bookmarks.size() != before)
+            save_settings();
         labels();
         return panes[i].bookmarks.size() != before;
     }
@@ -1564,6 +1588,8 @@ struct FilesApp::State {
                     }
                 }
                 p.view = reply.page->view();
+                if (reply.kind == FilesPaneReplyKind::View && reply.change_outcome == FilesPaneChangeOutcome::Applied)
+                    save_settings();
                 p.selection = reply.page->selection();
                 p.worker_focus = reply.page->focused_position();
                 p.cache = FilesPaneViewport{reply.page->first(), reply.page->rows().size()};
@@ -1929,10 +1955,11 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
                    ThemeScheme theme, std::array<FilesCompletionService *, 2> completion_services,
                    FilesOperationPlanningService *planning_service,
                    FilesOperationExecutionService *execution_service,
-                   std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root)
+                   std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root,
+                   FilesSettingsBinding settings)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
                                      completion_services, planning_service, execution_service,
-                                     std::move(operation_journal_root))) {}
+                                     std::move(operation_journal_root), std::move(settings))) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));

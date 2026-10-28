@@ -5,6 +5,7 @@
 #include "files_operation_planning_service.hpp"
 #include "files_operation_execution_service.hpp"
 #include "files_operation_review_dialog.hpp"
+#include "files_settings.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
 #include "ck/vision/suite_shell.hpp"
@@ -49,7 +50,8 @@ class FilesApp final {
              std::array<FilesCompletionService *, 2> completion_services = {},
              FilesOperationPlanningService *planning_service = nullptr,
              FilesOperationExecutionService *execution_service = nullptr,
-             std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {});
+             std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {},
+             FilesSettingsBinding settings = {});
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

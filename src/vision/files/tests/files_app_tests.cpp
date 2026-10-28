@@ -119,7 +119,7 @@ struct Fixture {
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
                      FilesPaneServiceLimits limits = {}, ckv::Size size = {120, 34},
                      std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
-                     bool missing_initial = false, bool rejected_initial = false)
+                     bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {})
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -219,7 +219,7 @@ struct Fixture {
             [this] { ++exits; }, theme,
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
             planning_service.get(), execution_service.get(),
-            std::make_shared<const NativeAbsolutePath>(operation_root_address));
+            std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings));
     }
     ~Fixture() {
         app.reset();
@@ -1681,6 +1681,23 @@ CK_TEST(files_app_history_and_bookmarks_change_only_after_worker_acknowledgment)
     f.loaded();
     CK_CHECK(f.app->location(0)->root_address() == right);
     CK_CHECK(f.app->remove_bookmark(0) && f.app->bookmark_count(0) == 0);
+}
+CK_TEST(files_app_persists_acknowledged_view_and_bookmark_changes) {
+    const auto saved = std::make_shared<FilesPersistentSettings>();
+    FilesSettingsBinding binding{
+        {}, [saved](const FilesPersistentSettings &value) {
+            *saved = value;
+            return std::string{};
+        }, {}};
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, std::move(binding));
+    f.loaded();
+    CK_CHECK(f.app->add_bookmark(0));
+    CK_CHECK(saved->bookmarks[0].size() == 1 && saved->bookmarks[0][0] == *f.app->location(0));
+    auto view = f.app->view(0);
+    view.show_hidden = true;
+    CK_CHECK(f.app->change_view(0, view));
+    f.loaded();
+    CK_CHECK(saved->views[0].show_hidden);
 }
 CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     Fixture f;
