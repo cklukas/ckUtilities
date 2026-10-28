@@ -28,9 +28,14 @@
   },
   "linux": {
     "host": "rpi4 aarch64 Debian Linux",
+    "build": "\\home\\klukas\\ckutilities-settings-20261028-01\\build\\bin\\ck-files",
+    "build_window_utc": "2026-10-28T12:12:05.909864338Z–2026-10-28T12:16:53.203572869Z",
+    "executable_sha256": "3da57e892cfc9b8afc187a6b4ca06d96a5191efb078d509bb83d8f56a71b7e39",
+    "tests": "ctest -L files: 107/107 passed in 48.07 seconds",
+    "terminal_profiles": "xterm-256color, xterm, vt100: all passed with the exact rebuilt binary",
     "adapter_compile": "files_volume_service.cpp compiled with C++20 -Wall -Wextra -Wpedantic -Werror",
     "object_sha256": "19ed5f42e5b640b5b65dd46e56a8e9e57b2041e07c75faaa88ef0479fd6ecdf7",
-    "status": "Linux /proc/self/mountinfo adapter compile passed; full Linux product qualification remains covered by the existing current-source records."
+    "status": "Integrated Linux ARM64 build, Files gate, and three real-PTY terminal profiles passed after synchronizing the current source files."
   },
   "safety": [
     "Native enumeration runs on a worker and publishes bounded value records to the UI.",

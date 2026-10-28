@@ -25,6 +25,14 @@ the remaining WP-07 filesystem/fault matrix or WP-08 final release rehearsal.
 
 Evidence: [root-boundary volume view record](evidence/ck-files-volume-view-20261028.json).
 
+The Linux ARM64 follow-up then rebuilt the integrated product and all Files test
+targets from the synchronized current source. The exact rebuilt `ck-files`
+binary passed the complete **107/107** Files-labelled CTest gate in 48.07
+seconds, and the three real PTY profiles (`xterm-256color`, `xterm`, and
+`vt100`) passed with clean shutdown and terminal-mode restoration. The earlier
+partial incremental attempt was discarded because its clean build had not
+included the native/unit test executables; it is not counted as evidence.
+
 ## 2026-10-28 — Windows workstation filesystem availability
 
 The mandatory `V:` development volume is confirmed as writable **ReFS**, not
