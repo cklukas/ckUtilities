@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-28",
+  "host": "Windows x64 workstation",
+  "development_drive": "V:",
+  "source": "V:\\dev\\ckutilities-goal-20261028-01",
+  "filesystem": {
+    "volume": "V:",
+    "label": "DevBuild",
+    "type": "ReFS",
+    "read_write": true,
+    "max_component_length": 255,
+    "fsutil_reported_capabilities": [
+      "case-sensitive filenames",
+      "ACL preservation and enforcement",
+      "sparse files",
+      "reparse points",
+      "POSIX-style unlink and rename",
+      "case-sensitive directories",
+      "encrypted file system",
+      "named streams",
+      "hard links",
+      "extended attributes",
+      "USN journal",
+      "integrity streams",
+      "block cloning",
+      "sparse VDL"
+    ]
+  },
+  "independent_command": "fsutil fsinfo volumeinfo V:",
+  "qualification_decision": {
+    "refs_features_are_available_for_fixture_testing": true,
+    "ntfs_matrix_row_passed": false,
+    "ntfs_matrix_row_status": "Not tested: V: is ReFS; using C: or D: for project fixtures is prohibited by the workstation development-drive policy.",
+    "next_safe_option": "Provide or attach an NTFS fixture on V: (for example, a user-approved temporary VHD) before claiming NTFS-specific results."
+  },
+  "notes": [
+    "This is a capability inventory, not a claim that every listed feature has passed a Files preservation workflow.",
+    "The current Windows build and project outputs remain on V:."
+  ]
+}

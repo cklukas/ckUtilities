@@ -3,6 +3,19 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — Windows workstation filesystem availability
+
+The mandatory `V:` development volume is confirmed as writable **ReFS**, not
+NTFS. `fsutil fsinfo volumeinfo V:` independently reports case-sensitive
+directories, ACLs, sparse files, reparse points, named streams, hard links,
+extended attributes, integrity streams and block cloning among its capabilities.
+This makes ReFS fixture testing possible, but it does not pass the required
+NTFS row. The other NTFS volumes are not eligible for project fixtures under
+the workstation policy; an NTFS fixture must be attached on `V:` before
+NTFS-specific preservation results can be claimed.
+
+Evidence: [Windows storage availability record](evidence/ck-files-windows-storage-availability-20261028.json).
+
 ## 2026-10-28 — Linux 100,000-entry directory qualification slice
 
 The installed current Linux ARM64 `ck-files` binary scanned a real ext4
