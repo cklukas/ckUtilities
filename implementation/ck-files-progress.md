@@ -3,6 +3,19 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — bounded archive-journal startup discovery
+
+Commit `af780a4` adds the worker-safe discovery primitive for private volume
+archive journals. It accepts only the generated journal basename shape, bounds
+the number of entries, uses error-code filesystem iteration, preserves the
+exact native basename, and reports symlinks, non-regular entries, malformed
+journals, and unfinished states as reconciliation-required items. It performs
+no cleanup, resume, replacement, or other mutation. The archive suite passed
+**14/14** on macOS arm64, Linux ARM64, and Windows x64/MSVC v143. The next
+integration step is to feed this scan into startup status and explicit
+user-facing inspect/cleanup/revalidated-retry actions; no automatic recovery is
+enabled. Evidence: [archive discovery record](evidence/ck-files-volume-archive-discovery-current-20261028.json).
+
 ## 2026-10-28 — volume archive journal restart projection
 
 Commit `89c885d` adds a read-only archive-specific recovery projection over the

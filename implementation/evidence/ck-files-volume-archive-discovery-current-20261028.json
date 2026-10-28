@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-28",
+  "source_commit": "af780a4",
+  "scope": "Bounded read-only startup discovery of volume archive journals",
+  "behavior": {
+    "private_root": "caller-qualified only",
+    "matching_name": ".ck-volume-archive- followed by exactly 32 lowercase hexadecimal digits",
+    "max_journals_default": 1024,
+    "symlinks_and_non_regular_entries": "retained as reconciliation-required errors; never followed",
+    "malformed_or_unfinished_journals": "retained with exact native name and reconciliation-required report",
+    "mutation": "none"
+  },
+  "validation": {
+    "macos_arm64": "14/14 archive tests",
+    "linux_arm64": "14/14 archive tests",
+    "windows_x64_msvc_v143": "14/14 archive tests",
+    "source_file_hashes": {
+      "files_volume_archive.hpp": "e53b50539715ce08cb2791e90e2508697f212e2b3babbc0037baf3ec35d01f1b",
+      "files_volume_archive.cpp": "4b6850e0111dbafe101215b9ed58e064d43430b3b0f68d2fb344f63f99634001",
+      "files_volume_archive_tests.cpp": "54c0536f7d1e2fd020777fcbdb62e798cf7e5e364b094fabf9ddeec10740b505"
+    }
+  },
+  "remaining": "FilesApp startup status and user-facing inspect/cleanup/revalidated-retry actions are not connected yet"
+}

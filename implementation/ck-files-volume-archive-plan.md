@@ -125,9 +125,10 @@ journal transitions, archive-specific read-only recovery projection, and Files
 planning/review/execution wiring are implemented and focused-qualified on
 macOS, Linux ARM64 and Windows x64. The format records exact POSIX bytes or
 Windows UTF-16 units plus explicit loss records; unreviewed losses and hard
-losses cannot reach the writer. Snapshot/provider qualification, startup
-journal discovery with user-facing reconciliation actions, and real-volume
-interactive acceptance remain open. The macOS broad app ASan
+losses cannot reach the writer. Snapshot/provider qualification and
+user-facing startup reconciliation actions remain open; bounded read-only
+journal discovery is now implemented. Real-volume interactive acceptance also
+remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
 not suppressed.
