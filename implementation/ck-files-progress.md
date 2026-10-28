@@ -64,6 +64,17 @@ required ckVision 1.4.0 SDK is installed. These results qualify the worker's
 Windows build and Linux compiler boundary, not native source enumeration or
 snapshot support.
 
+## 2026-10-28 — archive worker identity revalidation
+
+Commit `3280bca` closes a worker-boundary escalation gap: the immutable
+document returned by a source callback must retain the requested volume's
+identity, mount point, filesystem and archive capability state. A callback can
+no longer upgrade an `Unknown` request to `LiveReadable` while retaining only
+the same identity. The regression case passed in the macOS application suite;
+the current Windows `V:` Release build and complete Files-labelled gate also
+passed **107/107** in 23.07 seconds. Production volume Copy remains disabled
+until the native source adapter and review/journal integration are complete.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
