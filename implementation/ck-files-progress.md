@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — WP-00 volume archive and command availability contract
+
+The WP-00 contract was extended for the pane-local volume view. A volume row
+is an explicit source for a versioned sparse filesystem archive when copied to
+the other pane; it is not a normal file target and cannot be moved, renamed,
+deleted, trashed, marked or entered. The contract requires native volume
+identity, explicit live/snapshot consistency, sparse extent verification,
+metadata/stream loss reporting, transactional publication and crash-safe
+journaling. Windows VSS, macOS APFS snapshots and a separately qualified Linux
+provider snapshot are preferred; generic freeze/unmount is not a substitute,
+and ordinary live traversal does not require unmounting or elevation.
+
+The same record now governs command enablement across menu, keyboard, palette
+and footer surfaces. Disabled commands remain visible and report a concise,
+selection-specific reason in the status bar. This is a specification checkpoint
+only: native archive and snapshot execution remain open implementation work.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file

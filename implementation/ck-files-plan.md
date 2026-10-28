@@ -310,6 +310,64 @@ installation/archive and terminal checks pass with the new baseline. Every
 capability has a defined unknown/unsupported behavior; no unverified platform
 API is described as implemented. Record clean/incremental build baselines.
 
+#### WP-00 extension — volume archives and command availability
+
+The volume row exposed above a namespace root is a source for a distinct
+**Volume archive** operation. Copying a volume to the other pane creates a
+versioned `.ckarchive` filesystem archive in that pane's selected directory;
+Move, Rename, Delete, Trash, Mark, and Enter are not volume-row operations.
+The archive is not a raw block image and is never presented as one. A raw
+image/restore workflow requires a separate specification and command family.
+
+The archive contract is:
+
+- The source is identified by native volume identity plus the revalidated
+  mount/session identity, never by a display label or a stale path alone.
+- The writer records a manifest, format version, source identity and
+  consistency mode; directories, regular data, links, hard-link groups,
+  sparse extents, timestamps, permissions/ACLs, extended attributes and
+  platform-specific additional streams are either preserved or listed as an
+  exact loss/unsupported diagnostic. Unknown or unreadable objects are not
+  silently skipped.
+- Sparse logical files remain sparse in the archive. The writer must verify
+  logical length, data extents, allocated size and read-back digests. A dense
+  fallback is not automatic because it can exhaust the destination.
+- A snapshot is preferred when the platform and volume provider expose one:
+  Windows VSS, native APFS snapshots on macOS, and an explicitly qualified
+  filesystem/provider snapshot on Linux. A generic freeze/unmount is not a
+  snapshot substitute. If only live traversal is available, the plan marks
+  the archive as live/inherently concurrent and requires the consistency
+  policy to be visible before execution; no unmount is required for ordinary
+  live traversal.
+- The archive is written to a private temporary object in the destination,
+  journaled, flushed and independently verified before atomic publication.
+  Cancellation, source changes, destination conflicts, quota/space failures,
+  and crash recovery leave no apparently complete archive. The source is
+  never deleted by this operation.
+- Capability probing is read-only where possible and is revalidated in the
+  worker immediately before traversal. Permission denied, unsupported,
+  unavailable and unknown are separate outcomes. Elevation is requested only
+  by a future, explicitly approved native snapshot/metadata adapter; the
+  normal archive path must not silently relaunch elevated or ask for admin
+  rights merely to read a mounted volume.
+
+Every command surface uses one operation-specific availability result
+`{enabled, reason}` derived from the active pane, selection, destination and
+current job state. Menus, palette/status actions, footer commands and keyboard
+handlers consume the same result. A disabled command remains visible, is
+inert, and exposes its concise reason in the status bar; generic statements
+about permissions or changing space are not used as filler. The reason is
+selection- and state-specific, for example “Move unavailable: volume rows are
+archive sources, not movable entries” or “Copy unavailable: destination pane
+is still loading”.
+
+WP-00 extension acceptance requires deterministic tests for the volume-copy
+routing table, all forbidden volume-row actions, destination/read-only/loading
+states, live-versus-snapshot capability states, sparse-archive policy, and
+the shared disabled-reason/status-bar behavior. These tests specify the
+worker contract; native snapshot and archive execution remain later package
+work and must not be claimed complete until independently verified.
+
 ### WP-01 — model and native services
 
 - [x] Add core/platform targets with strict warnings, injected filesystem/time,
