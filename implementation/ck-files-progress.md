@@ -21,6 +21,11 @@ remaining recovery gate is explicit restart/reconciliation handling for
 unfinished journal records; snapshot providers and real-volume acceptance also
 remain open.
 
+Commit `132332b` closes the corresponding UI boundary: volume Copy is now
+disabled consistently across menu, keyboard and footer status when the private
+archive journal root or worker is unavailable, with the specific reason shown
+in the active pane status.
+
 ## 2026-10-28 — native Windows UTF-16 volume-source qualification
 
 Commit `beddc95` completes the native path-codec slice for volume archive

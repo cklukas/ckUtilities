@@ -1,7 +1,7 @@
 {
   "date": "2026-10-28",
   "scope": "native volume source adapter and live capability probe",
-  "source_commits": ["2cc983c", "c0407ff", "beddc95", "b493137"],
+  "source_commits": ["2cc983c", "c0407ff", "beddc95", "b493137", "132332b"],
   "platforms": {
     "macos_arm64": {
       "build": "ck_vision_files_tests",

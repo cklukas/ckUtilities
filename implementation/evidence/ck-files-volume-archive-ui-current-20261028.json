@@ -1,7 +1,7 @@
 {
   "date": "2026-10-28",
   "scope": "volume archive planning, review, and Files application wiring",
-  "source_commit": "b493137",
+  "source_commit": "132332b",
   "platforms": {
     "linux_arm64_rpi4": {
       "build_targets": ["ck_vision_files_tests", "ck-files"],
