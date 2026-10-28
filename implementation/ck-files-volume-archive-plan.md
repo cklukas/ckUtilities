@@ -120,10 +120,13 @@ are never upgraded because a filesystem label looks familiar.
 ## Current state
 
 The versioned sparse writer, single-worker boundary, archive-specific review
-model, native POSIX source adapter, and read-only live capability probe are
-implemented and focused-qualified on macOS, Linux ARM64 and Windows x64. The
-format records exact POSIX path encoding and explicit loss records; unreviewed
-losses and hard losses cannot reach the writer. Windows UTF-16 paths remain
-gated until a native-unit archive codec is implemented. Snapshot/provider
-qualification, durable journal integration, the archive-specific Files review,
-and production Copy wiring remain intentionally gated.
+model, native POSIX source adapter, read-only live capability probe, and Files
+planning/review/execution wiring are implemented and focused-qualified on
+macOS, Linux ARM64 and Windows x64. The format records exact POSIX path
+encoding and explicit loss records; unreviewed losses and hard losses cannot
+reach the writer. Windows UTF-16 paths remain gated until a native-unit codec
+is implemented. Snapshot/provider qualification, durable journal integration,
+and real-volume interactive acceptance remain open. The macOS broad app ASan
+fixture currently reports an existing libc++ container-overflow diagnostic in
+`DirectoryCursor::read`; this is retained as an explicit validation blocker,
+not suppressed.

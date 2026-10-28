@@ -3,6 +3,26 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — volume archive planning and Files review wiring
+
+Commit `9a95fe7` connects the worker planning service and sparse archive worker
+to the Files command path. Copying a qualified POSIX volume row now plans on a
+worker, opens an archive-specific review, and starts the writer only after the
+immutable review is approved. The review shows the source identity and live
+consistency mode, destination and archive name, logical/stored bytes, sparse
+shape, object counts, and every recorded loss. Planning and archiving can be
+cancelled, and their states are surfaced in the pane/footer status.
+
+The integrated Files application suite passed **68/68** on Linux ARM64 and
+Windows x64/MSVC v143; the volume archive suite passed **11/11** on all three
+platforms. Windows remains disabled at the command predicate because the
+native UTF-16 archive path codec is not qualified. The macOS focused volume
+view/archive tests pass, but the broad current-source ASan app fixture exposes
+an existing libc++ container-overflow diagnostic in `DirectoryCursor::read` and
+is not counted as a clean full-app gate.
+
+Evidence: [current volume archive UI record](evidence/ck-files-volume-archive-ui-current-20261028.json).
+
 ## 2026-10-28 — native volume source and capability qualification
 
 Commits `2cc983c` and `c0407ff` add the worker-owned native volume source

@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-28",
+  "scope": "volume archive planning, review, and Files application wiring",
+  "source_commit": "9a95fe7",
+  "platforms": {
+    "linux_arm64_rpi4": {
+      "build_targets": ["ck_vision_files_tests", "ck-files"],
+      "files_app_tests": "68/68",
+      "volume_archive_tests": "11/11",
+      "volume_view_test": "1/1"
+    },
+    "windows_x64_msvc_v143": {
+      "build_targets": ["ck_vision_files_tests", "ckfiles_ckvision"],
+      "files_app_tests": "68/68",
+      "volume_archive_tests": "11/11",
+      "volume_view_test": "1/1",
+      "volume_source_policy": "unsupported until native UTF-16 archive path codec"
+    },
+    "macos_arm64": {
+      "build_targets": ["ck_vision_files_tests", "ck-files"],
+      "volume_archive_tests": "11/11",
+      "volume_view_test": "1/1",
+      "app_fixture_note": "The broad ASan app fixture currently trips an existing libc++ container-overflow diagnostic in DirectoryCursor::read; the result is not counted as a clean full-app sanitizer gate."
+    }
+  },
+  "qualified_behavior": [
+    "Copy on a qualified volume row starts worker planning instead of ordinary file-copy planning.",
+    "The worker returns a complete immutable archive review before any destination write.",
+    "The review displays source identity, consistency, destination/archive, logical and stored bytes, object counts, sparse files, and explicit losses.",
+    "Only an approved review starts the existing sparse writer; cancellation is available while planning and archiving.",
+    "The footer reports planning, archiving, completion, indeterminate durability, cancellation, and failure states."
+  ],
+  "remaining_gates": [
+    "Native Windows UTF-16 source codec",
+    "Snapshot providers and durable archive journal/recovery",
+    "macOS broad app ASan fixture repair and full current-source app gate",
+    "Real-volume interactive archive acceptance with controlled loss/conflict fixtures"
+  ]
+}
