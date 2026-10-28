@@ -4,6 +4,7 @@
 
 #include "files_volume_service.hpp"
 #include "native_path.hpp"
+#include "operation_recovery.hpp"
 #include "operation_journal_file.hpp"
 #include "observation.hpp"
 
@@ -247,6 +248,33 @@ struct FilesVolumeArchiveWriteResult final {
     std::string diagnostic;
     bool digests_verified = false;
 };
+
+// The archive journal's evidence is intentionally small and identity-only.
+// Startup inspection returns it together with the generic recovery projection;
+// it never opens, deletes, resumes or publishes an archive.
+struct FilesVolumeArchiveJournalEvidence final {
+    std::uint64_t transaction_id = 0;
+    std::string source_identity;
+    std::string source_mount_point;
+    std::string archive_name;
+    friend bool operator==(const FilesVolumeArchiveJournalEvidence &,
+                           const FilesVolumeArchiveJournalEvidence &) = default;
+};
+
+struct FilesVolumeArchiveRecoveryReport final {
+    ck::files::OperationJournalId journal_id;
+    FilesVolumeArchiveJournalEvidence evidence;
+    ck::files::OperationRecoveryReport operation;
+};
+
+ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
+    const ck::files::OperationJournal &journal,
+    std::optional<ck::files::UnavailableObservation> tail = std::nullopt);
+
+ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
+    ck::files::OperationJournalFile &file,
+    ck::files::OperationJournalLimits journal_limits = {},
+    ck::files::OperationJournalCodecLimits codec_limits = {});
 
 ck::files::Observation<FilesVolumeArchiveWriteResult> write_volume_archive(
     const FilesVolumeArchiveWriteRequest &request, std::stop_token stop_token = {});

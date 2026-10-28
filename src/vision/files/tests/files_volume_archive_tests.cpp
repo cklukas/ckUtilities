@@ -55,6 +55,29 @@ OperationJournalId journal_id(std::uint64_t value) {
     return result;
 }
 
+template <class T>
+void append_le(std::vector<std::byte> &out, T value) {
+    for (std::size_t index = 0; index != sizeof(T); ++index)
+        out.push_back(std::byte{static_cast<unsigned char>(value >> (index * 8U))});
+}
+
+void append_string(std::vector<std::byte> &out, std::string_view value) {
+    append_le<std::uint64_t>(out, value.size());
+    for (const auto byte : value)
+        out.push_back(std::byte{static_cast<unsigned char>(byte)});
+}
+
+std::vector<std::byte> journal_evidence(std::uint64_t transaction, std::string_view identity = "fixture-volume",
+                                        std::string_view mount = "/fixture",
+                                        std::string_view archive = "fixture.ckarchive") {
+    std::vector<std::byte> result;
+    append_le<std::uint64_t>(result, transaction);
+    append_string(result, identity);
+    append_string(result, mount);
+    append_string(result, archive);
+    return result;
+}
+
 auto open_journal() {
     return [](const NativeAbsolutePath &root, const NativeName &name, bool create_new) {
         return open_native_operation_journal_file(root, name, create_new);
@@ -262,6 +285,14 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                             CK_CHECK(records.front().state == OperationJournalState::Planned);
                             CK_CHECK(records.back().state == OperationJournalState::Complete);
                         }
+                        auto recovery = inspect_volume_archive_recovery(*decoded.value()->journal,
+                                                                         decoded.value()->tail);
+                        CK_CHECK(recovery.value());
+                        if (recovery.value()) {
+                            CK_CHECK(!recovery.value()->operation.requires_reconciliation);
+                            CK_CHECK(recovery.value()->evidence.transaction_id == 11);
+                            CK_CHECK(recovery.value()->evidence.archive_name == "worker.ckarchive");
+                        }
                     }
                 }
             }
@@ -270,6 +301,53 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     CK_CHECK(journal_files == 1);
     service.request_stop();
     service.join();
+}
+
+CK_TEST(volume_archive_recovery_requires_review_for_unfinished_or_untrusted_journal) {
+    auto created = OperationJournal::create(FileOperation::Copy, journal_id(21));
+    CK_CHECK(created.value());
+    if (!created.value())
+        return;
+    const auto evidence = journal_evidence(21, "fixture-volume", "/fixture", "recovery.ckarchive");
+    CK_CHECK((*created.value())->append({1, 0, OperationJournalState::Planned, evidence}).value());
+    CK_CHECK((*created.value())->append({2, 0, OperationJournalState::Prepared, evidence}).value());
+    CK_CHECK((*created.value())->append({3, 0, OperationJournalState::Copied, evidence}).value());
+    auto recovery = inspect_volume_archive_recovery(**created.value());
+    CK_CHECK(recovery.value());
+    if (recovery.value()) {
+        CK_CHECK(recovery.value()->operation.requires_reconciliation);
+        CK_CHECK(recovery.value()->operation.items.size() == 1);
+        CK_CHECK(recovery.value()->operation.items[0].action == OperationRecoveryAction::InspectUnpublishedStaging);
+    }
+
+    auto tail = UnavailableObservation{ObservationState::Unknown,
+                                       {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+                                        "test.truncated_tail"}};
+    auto tailed = inspect_volume_archive_recovery(**created.value(), tail);
+    CK_CHECK(tailed.value());
+    CK_CHECK(tailed.value() && tailed.value()->operation.has_untrusted_tail);
+}
+
+CK_TEST(volume_archive_recovery_rejects_malformed_or_changed_identity_evidence) {
+    auto malformed = OperationJournal::create(FileOperation::Copy, journal_id(22));
+    CK_CHECK(malformed.value());
+    if (malformed.value()) {
+        CK_CHECK((*malformed.value())->append({1, 0, OperationJournalState::Planned, {std::byte{1}}}).value());
+        const auto refused = inspect_volume_archive_recovery(**malformed.value());
+        CK_CHECK(!refused.value());
+        CK_CHECK(refused.state() == ObservationState::Unknown);
+    }
+
+    auto changed = OperationJournal::create(FileOperation::Copy, journal_id(23));
+    CK_CHECK(changed.value());
+    if (changed.value()) {
+        CK_CHECK((*changed.value())->append({1, 0, OperationJournalState::Planned, journal_evidence(23)}).value());
+        CK_CHECK((*changed.value())->append({2, 0, OperationJournalState::Prepared,
+                                          journal_evidence(23, "different-volume")}).value());
+        const auto refused = inspect_volume_archive_recovery(**changed.value());
+        CK_CHECK(!refused.value());
+        CK_CHECK(refused.state() == ObservationState::Changed);
+    }
 }
 
 CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) {

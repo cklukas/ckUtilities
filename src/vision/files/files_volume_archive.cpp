@@ -77,6 +77,44 @@ void append_string(std::vector<std::byte> &out, std::string_view value) {
         out.push_back(std::byte{byte});
 }
 
+bool safe_archive_name(std::string_view name);
+
+template <class T>
+bool read_le(std::span<const std::byte> bytes, std::size_t &offset, T &value) {
+    static_assert(std::is_unsigned_v<T>);
+    if (offset > bytes.size() || bytes.size() - offset < sizeof(T))
+        return false;
+    value = 0;
+    for (std::size_t index = 0; index != sizeof(T); ++index)
+        value |= static_cast<T>(std::to_integer<unsigned char>(bytes[offset + index])) << (index * 8U);
+    offset += sizeof(T);
+    return true;
+}
+
+bool read_string(std::span<const std::byte> bytes, std::size_t &offset, std::string &value) {
+    std::uint64_t size = 0;
+    constexpr std::uint64_t max_evidence_string = 4096;
+    if (!read_le(bytes, offset, size) || size > max_evidence_string || size > bytes.size() - offset)
+        return false;
+    value.assign(reinterpret_cast<const char *>(bytes.data() + offset), static_cast<std::size_t>(size));
+    offset += static_cast<std::size_t>(size);
+    return true;
+}
+
+Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(
+    std::span<const std::byte> bytes) {
+    FilesVolumeArchiveJournalEvidence result;
+    std::size_t offset = 0;
+    if (!read_le(bytes, offset, result.transaction_id) || result.transaction_id == 0 ||
+        !read_string(bytes, offset, result.source_identity) || result.source_identity.empty() ||
+        !read_string(bytes, offset, result.source_mount_point) || result.source_mount_point.empty() ||
+        !read_string(bytes, offset, result.archive_name) || !safe_archive_name(result.archive_name) ||
+        offset != bytes.size())
+        return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
+            ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence"));
+    return Observation<FilesVolumeArchiveJournalEvidence>::available(std::move(result));
+}
+
 bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t &result) {
     if (right > std::numeric_limits<std::uint64_t>::max() - left)
         return false;
@@ -447,6 +485,47 @@ struct ArchiveJournalBinding final {
 };
 
 } // namespace
+
+Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
+    const ck::files::OperationJournal &journal, std::optional<UnavailableObservation> tail) {
+    if (journal.operation() != ck::files::FileOperation::Copy)
+        return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.recovery_operation"));
+    auto operation = ck::files::inspect_operation_recovery(journal, std::move(tail));
+    if (!operation.value())
+        return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+            operation.state(), operation.unavailable_detail()->error);
+
+    std::optional<FilesVolumeArchiveJournalEvidence> evidence;
+    for (const auto &record : journal.records()) {
+        if (record.item != 0)
+            return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+                ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_item"));
+        auto decoded = decode_archive_journal_evidence(record.evidence);
+        if (!decoded.value())
+            return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+                decoded.state(), decoded.unavailable_detail()->error);
+        if (evidence && *evidence != *decoded.value())
+            return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+                ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.recovery_identity"));
+        evidence = std::move(decoded).take_value();
+    }
+    if (!evidence)
+        return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+            ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence"));
+    return Observation<FilesVolumeArchiveRecoveryReport>::available(
+        {journal.id(), std::move(*evidence), std::move(operation).take_value()});
+}
+
+Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
+    ck::files::OperationJournalFile &file, ck::files::OperationJournalLimits journal_limits,
+    ck::files::OperationJournalCodecLimits codec_limits) {
+    auto loaded = ck::files::load_operation_journal(file, journal_limits, codec_limits);
+    if (!loaded.value())
+        return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+            loaded.state(), loaded.unavailable_detail()->error);
+    return inspect_volume_archive_recovery(*loaded.value()->journal, loaded.value()->tail);
+}
 
 Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
                                                                 std::stop_token stop_token) {
