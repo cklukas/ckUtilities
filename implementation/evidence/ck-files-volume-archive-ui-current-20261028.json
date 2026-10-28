@@ -1,7 +1,7 @@
 {
   "date": "2026-10-28",
   "scope": "volume archive planning, review, and Files application wiring",
-  "source_commit": "beddc95",
+  "source_commit": "b493137",
   "platforms": {
     "linux_arm64_rpi4": {
       "build_targets": ["ck_vision_files_tests", "ck-files"],
@@ -31,7 +31,7 @@
     "The footer reports planning, archiving, completion, indeterminate durability, cancellation, and failure states."
   ],
   "remaining_gates": [
-    "Snapshot providers and durable archive journal/recovery",
+    "Snapshot providers and journal restart/reconciliation recovery",
     "macOS broad app ASan fixture repair and full current-source app gate",
     "Real-volume interactive archive acceptance with controlled loss/conflict fixtures"
   ]

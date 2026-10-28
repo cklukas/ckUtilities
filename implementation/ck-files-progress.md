@@ -3,6 +3,24 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — durable volume-archive journal transitions
+
+Commit `b493137` binds the volume archive worker to the existing private native
+operation-journal boundary. A durable record is created and flushed before the
+source builder runs; the worker then records `Planned`, `Prepared`, `Copied`,
+`Verified`, `CommitIntended`, `DestinationCommitted` and `Complete`. A failed
+pre-publication journal transition fails closed and removes only the private
+temporary archive. A post-publication directory or journal durability failure
+retains the published archive and reports an indeterminate/reconciliation
+state. Journal evidence contains bounded transaction/source/destination
+identity data and never file contents.
+
+The archive suite passed **11/11** on macOS arm64, Linux ARM64 and Windows
+x64/MSVC v143, including durable journal decoding and state verification. The
+remaining recovery gate is explicit restart/reconciliation handling for
+unfinished journal records; snapshot providers and real-volume acceptance also
+remain open.
+
 ## 2026-10-28 — native Windows UTF-16 volume-source qualification
 
 Commit `beddc95` completes the native path-codec slice for volume archive
