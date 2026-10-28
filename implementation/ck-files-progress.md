@@ -31,6 +31,26 @@ verified against the Mac checkout. Both results qualify the gating and
 volume-view contract only; archive execution and native snapshot providers
 remain disabled until their workers and platform checks are implemented.
 
+## 2026-10-28 — sparse volume archive worker foundation
+
+Commit `239fc9f` adds the worker-owned `.ckarchive` foundation. Its versioned
+container stores a native-identity manifest, live/snapshot consistency mode,
+relative entry records, links and hard-link groups, logical sizes, and sparse
+data extents. The writer refuses unsafe entry paths, unknown source capability,
+bad extent ordering, destination conflicts and non-archive names. It creates an
+exclusive temporary file, enables sparse storage where the platform requires
+it, writes and flushes the manifest/data, reads back every written extent,
+publishes without replacement, and flushes the destination directory where the
+platform exposes that durability boundary. Cancellation and worker shutdown
+are explicit; temporary artifacts are removed before publication failures.
+
+The service is deliberately not connected to the Files Copy command yet. A
+native source adapter still has to build a complete immutable document with
+verified metadata/streams and a qualified snapshot/live policy; until then the
+existing capability gate keeps volume Copy disabled. The new archive unit and
+worker tests pass inside the current macOS Files test executable; Windows and
+Linux qualification of this new code remains open.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
