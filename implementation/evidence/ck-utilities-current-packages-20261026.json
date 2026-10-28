@@ -26,22 +26,24 @@
     "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
   },
   "windows_x64_workstation": {
-    "install": "V:\\dev\\ckutilities-install-b5afc33",
-    "build": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\build-e56b723-mt",
-    "package": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-b5afc33\\ck-utilities-0.2.0-windows-x64.zip",
-    "package_sha256": "CF9DD7E0878B2F6E5F1A2C197B75762460E7B276C3BCEDD633E52D22483701F7",
-    "package_bytes": 10130612,
-    "package_timestamp": "2026-10-28T06:44:22.1664081Z",
+    "install": "V:\\dev\\ckutilities-install-7946c61",
+    "build": "V:\\tmp\\ckutilities-settings-20261028-01\\build-mt",
+    "package": "V:\\tmp\\ckutilities-settings-20261028-01\\packages\\ck-utilities-0.2.0-windows-x64.zip",
+    "package_sha256": "062B062313E443A4D96805FDA8BEE234E02F3A45EA8A371BBE13E643964832AB",
+    "package_bytes": 10165778,
+    "package_timestamp": "2026-10-28T07:12:26.7971191Z",
     "development_drive": "V:",
-    "toolchain": "Visual Studio 2022 Build Tools 17.14.35; MSVC 19.44.35228.0; CMake 3.31.6-msvc6",
+    "toolchain": "Visual Studio 2022 Build Tools 17.14.40; MSVC 19.44.35207.0; CMake 3.31.6-msvc6",
     "ckvision_sdk": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\ckvision-sdk, config 1.4.0, SHA-256 6B64012AE3B59E43DF849BBBAEFBEF9EFF797B7E324AE864116D0B7271FE6E1F",
     "runtime": "MultiThreaded (/MT), matching the staged ckVision SDK",
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
-    "documentation_payload": "10 guides and 28 SVG screenshots",
-    "ctest": "223/223 passed, exit code 0, 60.274s wall / 58.15s CTest total",
+    "documentation_payload": "10 guides and 28 SVG screenshots; installed and extracted ZIP payloads both verified",
+    "ctest": "223/223 passed, exit code 0, 68.55s total",
     "files_label": "107/107 Files-labelled tests passed",
     "conpty_contract": "current-source Release ck_windows_tools_contract 1/1 passed, exit code 0; launches all ten build outputs including ck-files",
-    "source_sync": "Source archive b5afc33, archive SHA-256 0A62F798CD915C49F1A4E6F1D5DA32BAD900230E5C5762D984F1F8493B8555EF; current guide and test harness hashes matched the Mac source",
-    "package_verification": "Installed and extracted package each contain 10 guides and 28 SVG screenshots, including the corrected Files guide"
+    "source_sync": "Source archive 7946c61, archive SHA-256 D879AAD07088D7E698BB3A393D0476C3A0D82A2B6C605BED4B0F56DCA5A43D2; current guide and settings-source hashes matched the Mac source",
+    "build_window": "2026-10-28T06:58:20.3483413Z–2026-10-28T07:10:51.9801611Z, 12m31.632s; Release, v143, /MT",
+    "ck_files_binary_sha256": "3B3C1BF087599915638CCA02FAB89D81CB8372F73999195BBF6D8DC6903F3756",
+    "package_verification": "Installed and extracted package each contain 10 guides and 28 SVG screenshots, including the durable-settings Files guide; 10/10 utility versions verified"
   }
 }

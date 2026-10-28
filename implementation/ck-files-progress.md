@@ -31,6 +31,30 @@ contains all ten guides and 28 SVG screenshots.
 Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
 and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
 
+## 2026-10-28 — 7946c61 Windows build, install and package qualification
+
+The exact `7946c61` source archive was extracted to the mandatory workstation
+development drive at `V:\dev\ckutilities-goal-20261028-01`; the source guide
+and `files_settings.cpp` hashes matched the Mac source. The clean Release
+build used the staged ckVision 1.4.0 SDK, Visual Studio 17.14.40/v143 and
+`/MT`, with all project outputs, temporary files and logs on `V:`. It ran from
+`2026-10-28T06:58:20.3483413Z` to `2026-10-28T07:10:51.9801611Z` (12m31.632s)
+and produced `ck-files.exe` SHA-256
+`3B3C1BF087599915638CCA02FAB89D81CB8372F73999195BBF6D8DC6903F3756`.
+
+The full Windows suite passed **223/223** in 68.55 seconds, including
+**107/107** Files-labelled tests and the documentation contract. The verified
+install is `V:\dev\ckutilities-install-7946c61`; all ten utilities report
+`0.2.0 (ckVision 1.4.0)`. The package is
+`V:\tmp\ckutilities-settings-20261028-01\packages\ck-utilities-0.2.0-windows-x64.zip`
+with SHA-256
+`062B062313E443A4D96805FDA8BEE234E02F3A45EA8A371BBE13E643964832AB` and
+10,165,778 bytes. Installed and extracted payloads each contain all ten guides
+and 28 SVG screenshots.
+
+Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
+and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-28 — b5afc33 refreshed macOS package with current documentation
 
 The macOS ARM64 archive was refreshed after the Files guide was corrected to
