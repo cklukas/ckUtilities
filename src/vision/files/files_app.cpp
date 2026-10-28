@@ -703,7 +703,12 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: no volume is selected");
                 if (volume->archive.support != FilesVolumeArchiveSupport::LiveReadable &&
                     volume->archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
-                    return unavailable("Copy unavailable: archive capability is unknown");
+                    return unavailable(volume->archive.support == FilesVolumeArchiveSupport::Denied
+                                           ? "Copy unavailable: volume access is denied"
+                                       : volume->archive.support == FilesVolumeArchiveSupport::Unsupported
+                                           ? "Copy unavailable: volume archive format is unsupported"
+                                           : "Copy unavailable: archive capability is unknown");
+                return unavailable("Copy unavailable: volume archive review is not connected");
             }
             if (!execution_service || !operation_journal_root)
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");

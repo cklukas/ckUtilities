@@ -56,6 +56,26 @@ CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
     }
 }
 
+CK_TEST(volume_enumerator_qualifies_only_readable_posix_archive_sources) {
+    const auto volumes = enumerate_native_volumes();
+    CK_CHECK(volumes.value());
+#if defined(_WIN32)
+    for (const auto &volume : *volumes.value()) {
+        CK_CHECK(volume.archive.support == FilesVolumeArchiveSupport::Unsupported);
+        CK_CHECK(volume.archive.diagnostic.find("UTF-16") != std::string::npos);
+    }
+#else
+    bool live_source = false;
+    for (const auto &volume : *volumes.value()) {
+        if (volume.mount_point == "/") {
+            live_source = volume.archive.support == FilesVolumeArchiveSupport::LiveReadable;
+            CK_CHECK(volume.archive.diagnostic.find("Live source traversal qualified") != std::string::npos);
+        }
+    }
+    CK_CHECK(live_source);
+#endif
+}
+
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7};

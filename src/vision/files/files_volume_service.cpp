@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_service.hpp"
+#include "native_filesystem.hpp"
 #include <algorithm>
 #include <condition_variable>
 #include <cwchar>
@@ -84,7 +85,11 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
     record.mount_point = mount.empty() ? utf8(volume) : utf8(mount);
     record.filesystem = info && filesystem[0] ? utf8(filesystem) : "Unknown";
     record.identity = utf8(volume);
-    record.archive.diagnostic = "Archive capability probe not run";
+    // The volume inventory uses UTF-8 only for display. Until the archive
+    // manifest has its native UTF-16 path codec, Windows must remain an
+    // explicit unsupported source rather than accepting lossy conversions.
+    record.archive.support = FilesVolumeArchiveSupport::Unsupported;
+    record.archive.diagnostic = "Native UTF-16 archive path codec is not qualified";
     if (space) {
         record.total_bytes = total_bytes.QuadPart;
         record.free_bytes = available_bytes.QuadPart;
@@ -163,6 +168,54 @@ void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string nam
     result.push_back(std::move(record));
 }
 
+void probe_posix_archive_capability(FilesVolumeRecord &record) {
+    auto address = ck::files::NativeAbsolutePath::from_posix(record.mount_point);
+    if (!address.value()) {
+        record.archive.support = FilesVolumeArchiveSupport::Unsupported;
+        record.archive.diagnostic = "Native mount path is not representable";
+        return;
+    }
+    ck::files::NativeFileSystem filesystem;
+    auto opened = filesystem.open_native_directory(*address.value());
+    if (!opened.value()) {
+        const auto *detail = opened.unavailable_detail();
+        if (detail && detail->state == ObservationState::Denied)
+            record.archive.support = FilesVolumeArchiveSupport::Denied;
+        else if (detail && detail->state == ObservationState::Unsupported)
+            record.archive.support = FilesVolumeArchiveSupport::Unsupported;
+        else
+            record.archive.support = FilesVolumeArchiveSupport::Unknown;
+        record.archive.diagnostic = detail ? "Archive capability probe failed: " + detail->error.operation
+                                           : "Archive capability probe failed";
+        return;
+    }
+    auto metadata = (*opened.value())->inspect_basic();
+    if (!metadata.value()) {
+        const auto *detail = metadata.unavailable_detail();
+        record.archive.support = detail && detail->state == ObservationState::Denied
+                                     ? FilesVolumeArchiveSupport::Denied
+                                 : detail && detail->state == ObservationState::Unsupported
+                                     ? FilesVolumeArchiveSupport::Unsupported
+                                     : FilesVolumeArchiveSupport::Unknown;
+        record.archive.diagnostic = detail ? "Archive capability probe failed: " + detail->error.operation
+                                           : "Archive capability probe failed";
+        return;
+    }
+    if (!metadata.value()->kind.value() ||
+        *metadata.value()->kind.value() != ck::files::ObjectKind::Directory ||
+        !metadata.value()->identity.value() || !metadata.value()->mount_id.value()) {
+        record.archive.support = FilesVolumeArchiveSupport::Unknown;
+        record.archive.diagnostic = "Archive capability probe could not qualify the mount identity";
+        return;
+    }
+    // This is only a source-read eligibility probe. The worker still performs
+    // the complete object inventory and the review/writer rejects any hard
+    // loss, unsupported object, or source change.
+    record.archive.support = FilesVolumeArchiveSupport::LiveReadable;
+    record.archive.snapshot_available = false;
+    record.archive.diagnostic = "Live source traversal qualified; snapshot provider not configured";
+}
+
 #if defined(__APPLE__)
 Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
     struct statfs *mounts = nullptr;
@@ -191,6 +244,8 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
     });
+    for (auto &record : result)
+        probe_posix_archive_capability(record);
     return Observation<std::vector<FilesVolumeRecord>>::available(std::move(result));
 }
 #else
@@ -244,6 +299,8 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_linux() {
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
     });
+    for (auto &record : result)
+        probe_posix_archive_capability(record);
     return Observation<std::vector<FilesVolumeRecord>>::available(std::move(result));
 }
 #endif
