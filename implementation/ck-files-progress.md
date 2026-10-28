@@ -3,6 +3,26 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — native Windows UTF-16 volume-source qualification
+
+Commit `beddc95` completes the native path-codec slice for volume archive
+planning. Windows volume records now retain exact UTF-16 mount units alongside
+their display text; archive paths encode those units losslessly in bounded
+little-endian form, and review diagnostics decode them only for display. The
+Windows enumerator performs a read-only native directory, kind, identity and
+mount-boundary probe before advertising a live-readable source. Planning and
+archive-worker revalidation also compares the exact native mount units, so a
+reused display path cannot silently select a different source.
+
+The focused archive and source suites passed **11/11** and **3/3** on macOS
+arm64, Linux ARM64 and Windows x64/MSVC v143. The integrated Files app suite
+passed **68/68** on Linux ARM64 and Windows x64/MSVC v143. Snapshot providers,
+durable archive journal/recovery, real-volume interactive acceptance and the
+macOS broad current-source ASan fixture remain open gates.
+
+Evidence: [current native volume source record](evidence/ck-files-volume-source-current-20261028.json),
+[current volume archive UI record](evidence/ck-files-volume-archive-ui-current-20261028.json).
+
 ## 2026-10-28 — volume archive planning and Files review wiring
 
 Commit `9a95fe7` connects the worker planning service and sparse archive worker
@@ -15,8 +35,8 @@ cancelled, and their states are surfaced in the pane/footer status.
 
 The integrated Files application suite passed **68/68** on Linux ARM64 and
 Windows x64/MSVC v143; the volume archive suite passed **11/11** on all three
-platforms. Windows remains disabled at the command predicate because the
-native UTF-16 archive path codec is not qualified. The macOS focused volume
+platforms. At that checkpoint Windows was still gated on the native UTF-16
+archive path codec; that gate is closed by `beddc95`. The macOS focused volume
 view/archive tests pass, but the broad current-source ASan app fixture exposes
 an existing libc++ container-overflow diagnostic in `DirectoryCursor::read` and
 is not counted as a clean full-app gate.
@@ -31,15 +51,15 @@ opaque mount identity before and after traversal, stays within the original
 mount, reads regular-file extents through native handles, records hard-link
 and symlink information, and records every unencoded metadata/channel or
 unsupported-object loss. Hard losses cannot reach the sparse writer. The
-probe only qualifies a POSIX mount as live-readable after its native directory,
+probe qualifies a source as live-readable only after its native directory,
 filesystem kind, identity, and mount boundary are observable; it does not
-request elevation or unmount anything. Windows remains explicitly gated on a
-native UTF-16 archive path codec.
+request elevation or unmount anything. Windows uses exact UTF-16 mount units
+instead of converting the display text.
 
 The source and archive suites passed **13/13** on macOS arm64, Linux arm64,
-and Windows x64/MSVC v143. Volume Copy remains disabled in Files until the
-archive-specific review, journal/recovery, and worker wiring are connected;
-the disabled command now exposes that exact reason in the pane footer.
+and Windows x64/MSVC v143. Volume Copy remains gated until snapshot/provider
+selection and durable journal/recovery are connected; the command exposes the
+current exact reason in the pane footer.
 
 Evidence: [native volume source record](evidence/ck-files-volume-source-current-20261028.json).
 

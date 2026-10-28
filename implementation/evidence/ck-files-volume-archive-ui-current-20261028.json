@@ -1,7 +1,7 @@
 {
   "date": "2026-10-28",
   "scope": "volume archive planning, review, and Files application wiring",
-  "source_commit": "9a95fe7",
+  "source_commit": "beddc95",
   "platforms": {
     "linux_arm64_rpi4": {
       "build_targets": ["ck_vision_files_tests", "ck-files"],
@@ -14,7 +14,7 @@
       "files_app_tests": "68/68",
       "volume_archive_tests": "11/11",
       "volume_view_test": "1/1",
-      "volume_source_policy": "unsupported until native UTF-16 archive path codec"
+      "volume_source_policy": "native UTF-16 path codec and read-only capability probe qualified"
     },
     "macos_arm64": {
       "build_targets": ["ck_vision_files_tests", "ck-files"],
@@ -31,7 +31,6 @@
     "The footer reports planning, archiving, completion, indeterminate durability, cancellation, and failure states."
   ],
   "remaining_gates": [
-    "Native Windows UTF-16 source codec",
     "Snapshot providers and durable archive journal/recovery",
     "macOS broad app ASan fixture repair and full current-source app gate",
     "Real-volume interactive archive acceptance with controlled loss/conflict fixtures"
