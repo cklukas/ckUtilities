@@ -114,6 +114,7 @@ struct Fixture {
     std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
     std::unique_ptr<FilesOperationPlanningService> planning_service;
     std::unique_ptr<FilesOperationExecutionService> execution_service;
+    std::unique_ptr<FilesVolumeService> volume_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
@@ -210,6 +211,14 @@ struct Fixture {
             throw std::runtime_error("cannot prepare app operation journal root");
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
+        volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [] {
+            std::vector<FilesVolumeRecord> records;
+            records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
+                               3ull * 1024 * 1024, false});
+            records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
+                               2ull * 1024 * 1024, true});
+            return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
+        });
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
             std::array<NativeAbsolutePath, 2>{
@@ -219,10 +228,12 @@ struct Fixture {
             [this] { ++exits; }, theme,
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
             planning_service.get(), execution_service.get(),
-            std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings));
+            std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
+            volume_service.get());
     }
     ~Fixture() {
         app.reset();
+        volume_service->join();
         if (gate)
             gate->release();
         directory_gate->release();
@@ -1302,7 +1313,7 @@ CK_TEST(files_app_parent_failure_retains_exact_route_rows_and_range_without_affe
     CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
     CK_CHECK(f.app->status(0).find("previous location retained") != std::string::npos);
 }
-CK_TEST(files_app_root_menu_obeys_namespace_boundary_and_parent_is_disabled_at_root) {
+CK_TEST(files_app_root_menu_opens_read_only_volume_info_above_namespace_root) {
     Fixture f(ThemeScheme::HighContrast, {}, {}, {80, 24});
     f.loaded();
     const auto expected = f.app->location(0)->namespace_root();
@@ -1311,8 +1322,17 @@ CK_TEST(files_app_root_menu_obeys_namespace_boundary_and_parent_is_disabled_at_r
     CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "r"}}));
     f.loaded();
     CK_CHECK(*f.app->location(0) == *expected.value() && f.app->location(1) == other);
-    CK_CHECK(!f.command("ck.files.root") && !f.command("ck.files.parent"));
-    CK_CHECK(!f.app->navigate_parent(0) && !f.app->navigate_root(0) && !f.app->navigate_parent(2));
+    CK_CHECK(!f.command("ck.files.root"));
+    CK_CHECK(f.command("ck.files.parent"));
+    f.until([&] { return f.painted().find("Volumes and mounts") != std::string::npos; });
+    const auto text = f.painted();
+    CK_CHECK(text.find("Fixture volume") != text.npos && text.find("/fixture") != text.npos);
+    CK_CHECK(text.find("Free: 3.00 MiB | Total: 10.0 MiB") != text.npos);
+    CK_CHECK(text.find("Read-only") != text.npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->volume_info_pending());
+    CK_CHECK(!f.app->navigate_root(0) && !f.app->navigate_parent(2));
 }
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);

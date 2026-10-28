@@ -287,6 +287,7 @@ std::unique_ptr<ck::files::BasicFileSystem> documentation_filesystem()
     const auto left = files->make_node(Kind::Directory);
     const auto right = files->make_node(Kind::Directory);
     files->bind("/capture", root);
+    files->bind("/", root);
     files->bind("/capture/left", left);
     files->bind("/capture/right", right);
     files->put(root, *Name::from_posix("left"), left);
@@ -344,13 +345,23 @@ void capture_files(const std::filesystem::path &directory)
         documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     auto right_service = std::make_unique<ck::vision::FilesPaneService>(
         documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+    auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback(), [] {
+        std::vector<ck::vision::FilesVolumeRecord> records;
+        records.push_back({"Workspace", "/capture", "simulatedfs", 20ull * 1024 * 1024 * 1024,
+                           12ull * 1024 * 1024 * 1024, false});
+        records.push_back({"Archive", "/archive", "simulatedfs", 500ull * 1024 * 1024 * 1024,
+                           214ull * 1024 * 1024 * 1024, true});
+        return ck::files::Observation<std::vector<ck::vision::FilesVolumeRecord>>::available(std::move(records));
+    });
     auto app = std::make_unique<ck::vision::FilesApp>(
         application,
         std::array<ck::vision::FilesPaneService *, 2>{left_service.get(), right_service.get()},
         wake,
         std::array<ck::files::NativeAbsolutePath, 2>{documentation_path("/capture/left"),
                                                      documentation_path("/capture/right")},
-        [&application] { application.request_quit(); });
+        [&application] { application.request_quit(); }, ck::vision::ThemeScheme::Classic,
+        std::array<ck::vision::FilesCompletionService *, 2>{}, nullptr, nullptr,
+        std::shared_ptr<const ck::files::NativeAbsolutePath>{}, ck::vision::FilesSettingsBinding{}, volume_service.get());
     for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
         application.step(clock.now_nanos());
         clock.advance(1'000'000);
@@ -358,9 +369,27 @@ void capture_files(const std::filesystem::path &directory)
     }
     application.step(clock.now_nanos());
     write_svg(directory, "ck-files", terminal.display());
+    if (!app->navigate(0, documentation_path("/")))
+        throw std::runtime_error("could not navigate to the documentation Files root");
+    for (int step = 0; step != 500 && app->pending(0); ++step)
+    {
+        application.step(clock.now_nanos());
+        clock.advance(1'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!app->navigate_parent(0))
+        throw std::runtime_error("could not request the documentation Files volume view");
+    for (int step = 0; step != 100; ++step)
+    {
+        application.step(clock.now_nanos());
+        clock.advance(1'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    write_svg(directory, "ck-files-volumes", terminal.display());
     app.reset();
     left_service->join();
     right_service->join();
+    volume_service->join();
 }
 
 void capture_launcher(const std::filesystem::path &directory)

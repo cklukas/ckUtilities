@@ -6,6 +6,7 @@
 #include "files_operation_execution_service.hpp"
 #include "files_operation_review_dialog.hpp"
 #include "files_settings.hpp"
+#include "files_volume_service.hpp"
 #include "files_pane_grid.hpp"
 #include "files_pane_service.hpp"
 #include "ck/vision/suite_shell.hpp"
@@ -51,7 +52,7 @@ class FilesApp final {
              FilesOperationPlanningService *planning_service = nullptr,
              FilesOperationExecutionService *execution_service = nullptr,
              std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {},
-             FilesSettingsBinding settings = {});
+             FilesSettingsBinding settings = {}, FilesVolumeService *volume_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;
@@ -90,6 +91,7 @@ class FilesApp final {
     bool preview_pending() const;
     bool operation_review_pending() const;
     bool location_editor_pending() const;
+    bool volume_info_pending() const;
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
         ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
         FilesOperationReviewDialog::Completion completion);
