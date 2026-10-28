@@ -2068,9 +2068,19 @@ struct FilesApp::State {
                              "volume_archive.cancelled"});
                     return ck::files::Observation<FilesVolumeArchiveDocument>::available(archive_document);
                 };
+                ck::files::OperationJournalId journal_id;
+                const auto serial = operation_serial++;
+                for (unsigned byte = 0; byte != sizeof(serial); ++byte)
+                    journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
                 FilesVolumeArchiveRequest request{
                     volume_archive_source, review->destination_directory(), review->archive_name(),
-                    review->document().consistency, operation_serial++, std::move(build_document)};
+                    review->document().consistency, serial, std::move(build_document),
+                    std::optional<ck::files::NativeAbsolutePath>{*operation_journal_root},
+                    journal_id, {},
+                    [](const ck::files::NativeAbsolutePath &root, const ck::files::NativeName &basename,
+                       bool create_new) {
+                        return ck::files::open_native_operation_journal_file(root, basename, create_new);
+                    }};
                 const auto submitted = volume_archive_service->request(std::move(request));
                 if (submitted.state != FilesVolumeArchiveSubmission::Accepted) {
                     panes[source_pane].error = "Volume archive worker rejected the approved review";

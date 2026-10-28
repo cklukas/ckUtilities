@@ -4,6 +4,7 @@
 
 #include "files_volume_service.hpp"
 #include "native_path.hpp"
+#include "operation_journal_file.hpp"
 #include "observation.hpp"
 
 #include <cstddef>
@@ -227,6 +228,9 @@ struct FilesVolumeArchiveWriteRequest final {
     std::filesystem::path destination_directory;
     std::string archive_name;
     std::uint64_t transaction_id = 1;
+    // Optional for the standalone format writer; the Files archive service
+    // supplies this worker-owned durable transition callback.
+    std::function<ck::files::Observation<bool>(ck::files::OperationJournalState)> append_journal;
 };
 
 enum class FilesVolumeArchivePublication {
@@ -257,6 +261,11 @@ struct FilesVolumeArchiveRequest final {
     // immutable document or an explicit unavailable result; it may not expose
     // native handles or partial entries to FilesApp.
     std::function<ck::files::Observation<FilesVolumeArchiveDocument>(std::stop_token)> build_document;
+    std::optional<ck::files::NativeAbsolutePath> journal_root;
+    ck::files::OperationJournalId journal_id{};
+    ck::files::OperationJournalLimits journal_limits{};
+    std::function<ck::files::Observation<std::unique_ptr<ck::files::OperationJournalFile>>(
+        const ck::files::NativeAbsolutePath &, const ck::files::NativeName &, bool)> open_journal;
 };
 
 enum class FilesVolumeArchiveSubmission {

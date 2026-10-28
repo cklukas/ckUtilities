@@ -39,6 +39,28 @@ FilesVolumeArchiveDocument document(FilesVolumeArchiveSupport support = FilesVol
     return result;
 }
 
+NativeAbsolutePath journal_root(const std::filesystem::path &base) {
+    const auto root = base / "journals";
+    std::filesystem::create_directories(root);
+    auto result = address(root);
+    if (!prepare_native_operation_journal_root(result).value())
+        throw std::runtime_error("volume archive journal root unavailable");
+    return result;
+}
+
+OperationJournalId journal_id(std::uint64_t value) {
+    OperationJournalId result;
+    for (unsigned byte = 0; byte != sizeof(value); ++byte)
+        result.bytes[byte] = std::byte{static_cast<unsigned char>(value >> (byte * 8U))};
+    return result;
+}
+
+auto open_journal() {
+    return [](const NativeAbsolutePath &root, const NativeName &name, bool create_new) {
+        return open_native_operation_journal_file(root, name, create_new);
+    };
+}
+
 } // namespace
 
 CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
@@ -82,7 +104,7 @@ CK_TEST(volume_enumerator_reports_native_archive_capability) {
 
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7};
+    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7, {}};
     const auto written = write_volume_archive(request);
     CK_CHECK(written.value());
     CK_CHECK(written.value()->entry_count == 3);
@@ -107,14 +129,14 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
 CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
-                                           "unknown.ckarchive", 1};
+                                           "unknown.ckarchive", 1, {}};
     const auto refused = write_volume_archive(unknown);
     CK_CHECK(!refused.value());
     CK_CHECK(refused.state() == ObservationState::Unknown);
 
     auto unsafe_document = document();
     unsafe_document.entries[1].path = "../escape";
-    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2};
+    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2, {}};
     const auto unsafe_result = write_volume_archive(unsafe);
     CK_CHECK(!unsafe_result.value());
     CK_CHECK(unsafe_result.state() == ObservationState::Unsupported);
@@ -159,7 +181,7 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     CK_CHECK(approved.value()->continued_with_listed_losses);
 
     auto unreviewed = model->document();
-    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17};
+    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17, {}};
     const auto write_result = write_volume_archive(write_request);
     CK_CHECK(!write_result.value());
     CK_CHECK(write_result.state() == ObservationState::Unknown);
@@ -204,7 +226,8 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     FilesVolumeArchiveService service;
     FilesVolumeArchiveRequest request{source(), address(scratch.path()), "worker.ckarchive",
                                       FilesVolumeArchiveConsistency::Live, 11,
-                                      [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }};
+                                      [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); },
+                                      journal_root(scratch.path()), journal_id(11), {}, open_journal()};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> reply;
@@ -216,6 +239,35 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     CK_CHECK(reply.has_value());
     CK_CHECK(reply->state == FilesVolumeArchiveState::Complete);
     CK_CHECK(reply->result && std::filesystem::exists(reply->result->published_path));
+    std::size_t journal_files = 0;
+    for (const auto &entry : std::filesystem::directory_iterator(scratch.path() / "journals")) {
+        if (entry.is_regular_file() && entry.path().filename().string().starts_with(".ck-volume-archive-")) {
+            ++journal_files;
+            std::ifstream stream(entry.path(), std::ios::binary | std::ios::ate);
+            CK_CHECK(stream.good());
+            if (stream) {
+                const auto size = stream.tellg();
+                CK_CHECK(size > 0);
+                if (size > 0) {
+                    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+                    stream.seekg(0);
+                    stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+                    CK_CHECK(stream.good());
+                    auto decoded = decode_operation_journal(bytes);
+                    CK_CHECK(decoded.value());
+                    if (decoded.value()) {
+                        const auto &records = decoded.value()->journal->records();
+                        CK_CHECK(records.size() == 7);
+                        if (records.size() == 7) {
+                            CK_CHECK(records.front().state == OperationJournalState::Planned);
+                            CK_CHECK(records.back().state == OperationJournalState::Complete);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CK_CHECK(journal_files == 1);
     service.request_stop();
     service.join();
 }
@@ -228,7 +280,7 @@ CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) 
         request_source, address(scratch.path()), "revalidation.ckarchive", FilesVolumeArchiveConsistency::Live, 13,
         [](std::stop_token) {
             return Observation<FilesVolumeArchiveDocument>::available(document(FilesVolumeArchiveSupport::LiveReadable));
-        }};
+        }, journal_root(scratch.path()), journal_id(13), {}, open_journal()};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> reply;
@@ -264,7 +316,7 @@ CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
                                               ObservationState::Unknown,
                                               {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
                                                "volume_archive.cancelled"});
-                                      }};
+                                      }, journal_root(scratch.path()), journal_id(12), {}, open_journal()};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     {

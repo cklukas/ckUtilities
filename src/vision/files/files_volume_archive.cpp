@@ -413,6 +413,39 @@ bool valid_request(const FilesVolumeArchiveWriteRequest &request) {
            request.transaction_id != 0;
 }
 
+std::optional<ck::files::NativeName> archive_journal_name(const ck::files::NativeAbsolutePath &root,
+                                                          const ck::files::OperationJournalId &id) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string text = ".ck-volume-archive-";
+    for (const auto byte : id.bytes) {
+        const auto value = std::to_integer<unsigned char>(byte);
+        text.push_back(hex[value >> 4U]);
+        text.push_back(hex[value & 0x0FU]);
+    }
+    if (root.encoding() == ck::files::NameEncoding::PosixBytes)
+        return ck::files::NativeName::from_posix(std::move(text));
+    if (root.encoding() == ck::files::NameEncoding::WindowsUtf16) {
+        std::u16string units;
+        units.reserve(text.size());
+        for (const auto character : text)
+            units.push_back(static_cast<char16_t>(static_cast<unsigned char>(character)));
+        return ck::files::NativeName::from_windows(std::move(units));
+    }
+    return std::nullopt;
+}
+
+struct ArchiveJournalBinding final {
+    ck::files::OperationJournal::Pointer journal;
+    std::shared_ptr<ck::files::OperationJournalFile> file;
+    std::vector<std::byte> evidence;
+
+    ck::files::Observation<bool> append(ck::files::OperationJournalState state) {
+        const auto sequence = static_cast<std::uint64_t>(journal->records().size()) + 1;
+        return ck::files::append_operation_journal_file(
+            *file, *journal, {sequence, 0, state, evidence});
+    }
+};
+
 } // namespace
 
 Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
@@ -524,6 +557,14 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
+    if (request.append_journal) {
+        auto journal = request.append_journal(ck::files::OperationJournalState::Copied);
+        if (!journal.value()) {
+            std::filesystem::remove(temp, ec);
+            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
+        }
+    }
 
     std::ifstream verify(temp, std::ios::binary);
     std::vector<char> header_check(header.size());
@@ -552,11 +593,31 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
             }
         }
     verify.close();
+    if (request.append_journal) {
+        auto journal = request.append_journal(ck::files::OperationJournalState::Verified);
+        if (!journal.value()) {
+            std::filesystem::remove(temp, ec);
+            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
+        }
+    }
+    if (request.append_journal) {
+        auto journal = request.append_journal(ck::files::OperationJournalState::CommitIntended);
+        if (!journal.value()) {
+            std::filesystem::remove(temp, ec);
+            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
+        }
+    }
     bool published_result = false;
     if (!publish_without_replace(temp, published, failure_detail, published_result)) {
         if (published_result) {
+            if (request.append_journal)
+                (void)request.append_journal(ck::files::OperationJournalState::DestinationCommitted);
             const auto diagnostic = failure_detail.error.operation;
             if (!durable_directory(request.destination_directory, failure_detail)) {
+                if (request.append_journal)
+                    (void)request.append_journal(ck::files::OperationJournalState::NeedsReconciliation);
                 return Observation<FilesVolumeArchiveWriteResult>::available(
                     {published, logical_size, data_bytes, encoded.size(),
                      FilesVolumeArchivePublication::PublishedDurabilityUnknown,
@@ -569,10 +630,29 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
-    if (!durable_directory(request.destination_directory, failure_detail))
+    if (request.append_journal) {
+        auto journal = request.append_journal(ck::files::OperationJournalState::DestinationCommitted);
+        if (!journal.value())
+            return Observation<FilesVolumeArchiveWriteResult>::available(
+                {published, logical_size, data_bytes, encoded.size(),
+                 FilesVolumeArchivePublication::PublishedDurabilityUnknown,
+                 journal.unavailable_detail()->error.operation, true});
+    }
+    if (!durable_directory(request.destination_directory, failure_detail)) {
+        if (request.append_journal)
+            (void)request.append_journal(ck::files::OperationJournalState::NeedsReconciliation);
         return Observation<FilesVolumeArchiveWriteResult>::available(
             {published, logical_size, data_bytes, encoded.size(),
              FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation, true});
+    }
+    if (request.append_journal) {
+        auto journal = request.append_journal(ck::files::OperationJournalState::Complete);
+        if (!journal.value())
+            return Observation<FilesVolumeArchiveWriteResult>::available(
+                {published, logical_size, data_bytes, encoded.size(),
+                 FilesVolumeArchivePublication::PublishedDurabilityUnknown,
+                 journal.unavailable_detail()->error.operation, true});
+    }
     return Observation<FilesVolumeArchiveWriteResult>::available(
         {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}, true});
 }
@@ -951,17 +1031,61 @@ struct FilesVolumeArchiveService::State final {
     static bool valid(const FilesVolumeArchiveRequest &value) {
         return value.source.identity.size() != 0 && value.source.mount_point.size() != 0 &&
                value.destination_directory.is_valid() && safe_archive_name(value.archive_name) &&
-               value.transaction_id != 0 && static_cast<bool>(value.build_document);
+               value.transaction_id != 0 && static_cast<bool>(value.build_document) && value.journal_root &&
+               value.journal_root->is_valid() && static_cast<bool>(value.open_journal);
     }
     void run_one(FilesVolumeArchiveTicket ticket, FilesVolumeArchiveRequest value, std::stop_token token) {
         FilesVolumeArchiveReply result;
         result.request = ticket;
+        std::shared_ptr<ArchiveJournalBinding> journal;
         auto fail = [&](UnavailableObservation detail) {
+            if (journal && !journal->journal->records().empty()) {
+                const auto current = journal->journal->state(0);
+                if (current && !ck::files::operation_journal_terminal(*current)) {
+                    const auto terminal = journal->append(
+                        token.stop_requested() ? ck::files::OperationJournalState::Cancelled
+                                               : ck::files::OperationJournalState::Failed);
+                    if (!terminal.value())
+                        detail = *terminal.unavailable_detail();
+                }
+            }
             result.state = token.stop_requested() ? FilesVolumeArchiveState::Cancelled : FilesVolumeArchiveState::Failed;
             result.error = std::move(detail);
             emit(std::move(result));
         };
         try {
+            auto journal_id = value.journal_id;
+            auto journal_name = archive_journal_name(*value.journal_root, journal_id);
+            if (!journal_name) {
+                fail(error(AdapterError::UnrepresentableName, "volume_archive.journal_name",
+                            ObservationState::Unsupported));
+                return;
+            }
+            auto opened_journal = value.open_journal(*value.journal_root, *journal_name, true);
+            if (!opened_journal.value()) {
+                fail(*opened_journal.unavailable_detail());
+                return;
+            }
+            auto created_journal = ck::files::OperationJournal::create(
+                ck::files::FileOperation::Copy, journal_id, value.journal_limits);
+            if (!created_journal.value()) {
+                fail(*created_journal.unavailable_detail());
+                return;
+            }
+            std::vector<std::byte> evidence;
+            append_le<std::uint64_t>(evidence, value.transaction_id);
+            append_string(evidence, value.source.identity);
+            append_string(evidence, value.source.mount_point);
+            append_string(evidence, value.archive_name);
+            journal = std::make_shared<ArchiveJournalBinding>(
+                std::move(created_journal).take_value(),
+                std::shared_ptr<ck::files::OperationJournalFile>(std::move(opened_journal).take_value()),
+                std::move(evidence));
+            auto planned = journal->append(ck::files::OperationJournalState::Planned);
+            if (!planned.value()) {
+                fail(*planned.unavailable_detail());
+                return;
+            }
             auto document = value.build_document(token);
             if (!document.value()) {
                 fail(*document.unavailable_detail());
@@ -979,13 +1103,19 @@ struct FilesVolumeArchiveService::State final {
                             ObservationState::Changed));
                 return;
             }
+            auto prepared = journal->append(ck::files::OperationJournalState::Prepared);
+            if (!prepared.value()) {
+                fail(*prepared.unavailable_detail());
+                return;
+            }
             auto destination = value.destination_directory.host_path();
             if (!destination.value()) {
                 fail(*destination.unavailable_detail());
                 return;
             }
             FilesVolumeArchiveWriteRequest write_request{
-                std::move(complete), *destination.value(), std::move(value.archive_name), value.transaction_id};
+                std::move(complete), *destination.value(), std::move(value.archive_name), value.transaction_id,
+                [journal](ck::files::OperationJournalState state) { return journal->append(state); }};
             auto written = write_volume_archive(write_request, token);
             if (!written.value()) {
                 fail(*written.unavailable_detail());
