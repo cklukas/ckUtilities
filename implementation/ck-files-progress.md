@@ -6982,6 +6982,18 @@ production UI enablement, and full Windows/Linux archive integration remain
 open.
 
 
+## 2026-10-28 — Sanitizer topology qualification
+
+The private Files fixture roots were qualified on the task-owned
+`PRO-BLADE/tmp` workspace, and ckVision 1.4.0 was rebuilt separately with the
+matching sanitizer runtime for each consumer: AddressSanitizer plus UBSan for
+the ASan build and ThreadSanitizer for the TSan build. The complete macOS
+Files-labelled gate passed **107/107** in the ASan build in 7.72 seconds and
+**107/107** in the TSan build in 18.96 seconds. The unsanitized-dependency
+findings from the earlier attempt were excluded from the qualification because
+the dependency was not built with the consumer's sanitizer ABI.
+
+
 ## 2026-10-26 — Windows current-source package and test checkpoint
 
 The current Windows Release package was rebuilt with the installed Visual
