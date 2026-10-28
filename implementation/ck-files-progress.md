@@ -54,15 +54,16 @@ settings cases with no sanitizer diagnostics. ASan+UBSan ran from
 `11:13:51.481349Z` to `11:14:54.688066Z`, with tests at
 `11:14:57.226719Z`–`11:14:57.613031Z`.
 
-This closes the focused sanitizer check for durable Files settings. The full
-UI sanitizer suite remains blocked by the pinned ckVision
+This closes the focused sanitizer check for durable Files settings. A complete
+current `ck_vision_files_tests` run then passed **212/212** under TSan with no
+diagnostics, using the prior qualified LLVM Clang 23 profile and the required
+PRO-BLADE private fixture root. It includes the full completion, pane, app,
+and Right-to-accept cases. Exploratory attempts using an S8T `noowners` fixture
+timed out before entering the first completion gate and are retained as
+non-qualification diagnostics; they did not alter code or test timeouts. The
+full UI ASan/UBSan suite remains blocked by the pinned ckVision
 `Desktop::install_default_handler` defect; no suppression or product
-workaround was introduced. An attempted complete TSan Files run also remains
-open: the first completion-service case timed out its five-second test gate
-(`gate not entered`, exit 134) without a TSan diagnostic. The prior qualified
-`-O1 -g` TSan profile reproduced the same timeout; the same 26
-completion-service cases passed under the current normal build. These results
-are recorded as failures, not passes, in the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
+workaround was introduced. See the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
 
 ## 2026-10-28 — 28a4634 store-level settings qualification
 

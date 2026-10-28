@@ -29,7 +29,7 @@
     "result": "failed; exit code 134 in the first completion-service case",
     "diagnostic": "The test's five-second Gate::wait timed out with std::runtime_error: gate not entered; no TSan race report was emitted",
     "normal_comparison": "The same current normal build passed all 26 completion-service cases",
-    "status": "not counted as a TSan pass; full Files TSan qualification remains open"
+    "status": "Not counted as a TSan pass: this exploratory attempt used an S8T noowners fixture and is superseded by the qualified PRO-BLADE-fixture run below"
   },
   "thread_sanitizer_o1_full_files_attempt": {
     "build": "/Volumes/S8T/tmp/ckutilities-tsan-settings-20261028-02/build/src/vision/files/ck_vision_files_tests",
@@ -40,7 +40,20 @@
     "test_window": "2026-10-28T11:17:11.629530000Z–2026-10-28T11:17:16.944265000Z",
     "result": "failed; exit code 134 in the same first completion-service case",
     "diagnostic": "The five-second Gate::wait timed out with std::runtime_error: gate not entered; no TSan race report was emitted",
-    "status": "The prior qualified O1 profile reproduces the timeout; no test timeout or product code was changed"
+    "status": "Not counted as a TSan pass: this exploratory attempt used an S8T noowners fixture and is superseded by the qualified PRO-BLADE-fixture run below"
   },
-  "remaining_gate": "The full UI sanitizer suite remains blocked by the pinned ckVision Desktop::install_default_handler defect; this focused settings evidence does not suppress or work around it."
+  "thread_sanitizer_full_files_qualified": {
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-tsan-settings-20261028-04",
+    "private_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-tsan-settings-20261028-04-private",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "configuration": "RelWithDebInfo/Ninja; -O1 -g -fsanitize=thread -fno-omit-frame-pointer; TSAN halt_on_error=1, second_deadlock_stack=1, history_size=7, report_signal_unsafe=0",
+    "build_window": "2026-10-28T11:19:41.934537000Z–2026-10-28T11:20:33.038849000Z",
+    "build_steps": 125,
+    "build_exit_code": 0,
+    "test_window": "2026-10-28T11:20:35.598134000Z–2026-10-28T11:20:44.279120000Z",
+    "tests": "212/212 ck_vision_files_tests cases passed",
+    "binary_sha256": "643308c4e14d67f9c5f3ebdaecb933f32892bb55421b6c5fc172d9021051384d",
+    "diagnostics": "No TSan diagnostics"
+  },
+  "remaining_gate": "The full UI ASan/UBSan suite remains blocked by the pinned ckVision Desktop::install_default_handler defect; no suppression or product workaround is used."
 }
