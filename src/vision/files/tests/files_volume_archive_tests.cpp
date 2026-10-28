@@ -84,6 +84,15 @@ auto open_journal() {
     };
 }
 
+std::optional<NativeName> archive_journal_name(std::string_view suffix) {
+    const std::string value = ".ck-volume-archive-" + std::string(suffix);
+#if defined(_WIN32)
+    return NativeName::from_windows(std::u16string(value.begin(), value.end()));
+#else
+    return NativeName::from_posix(value);
+#endif
+}
+
 } // namespace
 
 CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
@@ -347,6 +356,38 @@ CK_TEST(volume_archive_recovery_rejects_malformed_or_changed_identity_evidence) 
         const auto refused = inspect_volume_archive_recovery(**changed.value());
         CK_CHECK(!refused.value());
         CK_CHECK(refused.state() == ObservationState::Changed);
+    }
+}
+
+CK_TEST(volume_archive_recovery_scan_preserves_native_names_and_reports_unfinished_journals) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-scan", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    const auto name = archive_journal_name("00000000000000000000000000000031");
+    CK_CHECK(name.has_value());
+    if (!name)
+        return;
+    auto file = open_native_operation_journal_file(root, *name, true);
+    CK_CHECK(file.value());
+    if (!file.value())
+        return;
+    auto journal = OperationJournal::create(FileOperation::Copy, journal_id(31));
+    CK_CHECK(journal.value());
+    if (!journal.value())
+        return;
+    const auto evidence = journal_evidence(31, "fixture-volume", "/fixture", "scan.ckarchive");
+    auto journal_file = std::move(file).take_value();
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(),
+                                           {1, 0, OperationJournalState::Planned, evidence}).value());
+    journal_file.reset();
+    const auto scan = discover_volume_archive_recovery(root);
+    CK_CHECK(scan.value());
+    if (scan.value()) {
+        CK_CHECK(scan.value()->journals.size() == 1);
+        CK_CHECK(scan.value()->requires_reconciliation);
+        CK_CHECK(scan.value()->journals[0].native_name.has_value());
+        CK_CHECK(scan.value()->journals[0].report.has_value());
+        CK_CHECK(scan.value()->journals[0].report->operation.requires_reconciliation);
+        CK_CHECK(scan.value()->journals[0].display_name.find(".ck-volume-archive-") == 0);
     }
 }
 

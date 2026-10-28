@@ -267,6 +267,26 @@ struct FilesVolumeArchiveRecoveryReport final {
     ck::files::OperationRecoveryReport operation;
 };
 
+struct FilesVolumeArchiveRecoveryLimits final {
+    std::size_t max_journals = 1024;
+    ck::files::OperationJournalLimits journal{};
+    ck::files::OperationJournalCodecLimits codec{};
+};
+
+struct FilesVolumeArchiveRecoveryItem final {
+    // The native name is retained for a future recovery action; display_name
+    // is diagnostic text only and must never be reparsed as authority.
+    std::optional<ck::files::NativeName> native_name;
+    std::string display_name;
+    std::optional<FilesVolumeArchiveRecoveryReport> report;
+    std::optional<ck::files::UnavailableObservation> error;
+};
+
+struct FilesVolumeArchiveRecoveryScan final {
+    std::vector<FilesVolumeArchiveRecoveryItem> journals;
+    bool requires_reconciliation = false;
+};
+
 ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
     const ck::files::OperationJournal &journal,
     std::optional<ck::files::UnavailableObservation> tail = std::nullopt);
@@ -275,6 +295,14 @@ ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_
     ck::files::OperationJournalFile &file,
     ck::files::OperationJournalLimits journal_limits = {},
     ck::files::OperationJournalCodecLimits codec_limits = {});
+
+// Read-only startup discovery below the already-qualified private journal
+// root. It never follows a matching symlink, mutates a journal, or turns a
+// display name back into a native path. Matching malformed/unfinished entries
+// are retained as explicit reconciliation items instead of being ignored.
+ck::files::Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
+    const ck::files::NativeAbsolutePath &private_root,
+    FilesVolumeArchiveRecoveryLimits limits = {});
 
 ck::files::Observation<FilesVolumeArchiveWriteResult> write_volume_archive(
     const FilesVolumeArchiveWriteRequest &request, std::stop_token stop_token = {});
