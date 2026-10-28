@@ -75,6 +75,21 @@ the current Windows `V:` Release build and complete Files-labelled gate also
 passed **107/107** in 23.07 seconds. Production volume Copy remains disabled
 until the native source adapter and review/journal integration are complete.
 
+## 2026-10-28 — archive worker sanitizer qualification
+
+Fresh current-source macOS builds were created under
+`/Volumes/S8T/tmp/ckutilities-volume-archive-asan-20261028-01/build` and
+`/Volumes/S8T/tmp/ckutilities-volume-archive-tsan-20261028-01/build` with
+AppleClang ASan/UBSan and TSan respectively. The five archive writer/service
+cases passed under both sanitizer configurations with abort-on-error enabled;
+TSan reported no races. The full ASan Files application suite remains
+environment-limited: Apple ASan aborts when leak detection is requested, and
+without leak detection an existing completion-service gate timed out at five
+seconds (`gate not entered`) while its exact normal-build case passes. This is
+recorded as an open sanitizer qualification item, not a pass. The current
+normal macOS Files-labelled gate passed **107/107** in 12.70 seconds after the
+worker revalidation change.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
