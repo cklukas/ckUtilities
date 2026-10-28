@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-28",
+  "host": "Linux arm64 rpi4",
+  "terminal": "PTY, 80 columns x 24 rows",
+  "binary": "/home/klukas/ckutilities-settings-20261028-01/install/bin/ck-files",
+  "binary_sha256": "cdc8b6acc57da247809167878ca951c63b12814c0282a35a17f9e47282233ad9",
+  "source": "/home/klukas/ckutilities-settings-20261028-01/source",
+  "left": "/home/klukas/ckutilities-settings-20261028-01/source",
+  "right": "/home/klukas/ckutilities-settings-20261028-01/source/docs",
+  "temporary_root": "/home/klukas/ckutilities-interactive-current-20261028-03",
+  "environment": {
+    "TMPDIR": "/home/klukas/ckutilities-interactive-current-20261028-03/tmp",
+    "HOME": "/home/klukas/ckutilities-interactive-current-20261028-03/home",
+    "XDG_CONFIG_HOME": "/home/klukas/ckutilities-interactive-current-20261028-03/config"
+  },
+  "run_window": "2026-10-28T11:26:55.121662343Z–2026-10-28T11:27:06.278102575Z",
+  "exit_code": 0,
+  "observed": [
+    "Both panes rendered in the real terminal with independent locations.",
+    "Enter opened benchmarks and displayed 3 items; Backspace returned to the parent location.",
+    "Ctrl+R refreshed the left listing without leaving the application.",
+    "F4 switched to the right pane and rendered the populated docs listing.",
+    "Alt+X shut down the application cleanly while no mutation command was active."
+  ],
+  "cleanup": "The exact ck-files process was absent after exit and the disposable temporary root was removed."
+}

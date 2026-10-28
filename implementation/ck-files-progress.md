@@ -3,6 +3,17 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — current Linux real-terminal smoke qualification
+
+The current installed Linux ARM64 `ck-files` binary passed a real 80x24 PTY
+smoke run. Both panes rendered from independent locations; Enter opened
+`benchmarks`, Backspace returned to the parent, Ctrl+R refreshed the listing,
+and F4 switched to the populated `docs` pane. Alt+X shut down the application
+cleanly with exit code 0. The exact process was absent afterward and the
+disposable remote temporary root was removed.
+
+Evidence: [current Linux interactive record](evidence/ck-files-linux-interactive-current-20261028.json).
+
 ## 2026-10-28 — 28a4634 Linux full build, CTest and package qualification
 
 The current Linux ARM64 qualification completed from the protected
