@@ -1332,6 +1332,14 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(f.key(ckv::Key::Down));
     CK_CHECK(f.app->active_pane() == 0 && f.app->model(0).cursor().row == 1);
     CK_CHECK(f.app->status(0).find("RO") != std::string::npos);
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.move")));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.rename")));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.permanently_delete")));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.toggle_mark")));
+    CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.parent")));
+    CK_CHECK(f.app->status(0).find("volume archive worker is not enabled yet") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("volume rows are archive sources") != std::string::npos);
     CK_CHECK(f.painted().find("RO") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });

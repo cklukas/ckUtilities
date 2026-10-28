@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "files_command_availability.hpp"
 #include "files_completion_service.hpp"
 #include "files_operation_planning_service.hpp"
 #include "files_operation_execution_service.hpp"
@@ -11,6 +12,7 @@
 #include "files_pane_service.hpp"
 #include "ck/vision/suite_shell.hpp"
 #include <array>
+#include <string_view>
 namespace ck::vision {
 // One payload-free queued UI callback for both panes. Construct before services;
 // pass callback() to their wake parameter. Application outlives this bridge and
@@ -108,6 +110,7 @@ class FilesApp final {
     bool narrow() const noexcept;
     bool pending(std::size_t pane) const;
     std::string status(std::size_t pane) const;
+    FilesCommandAvailability availability(std::string_view command) const;
     std::optional<FilesAppTarget> target(std::size_t pane) const;
     const FilesPaneGridModel &model(std::size_t pane) const;
     ckv::widgets::CellGrid *grid(std::size_t pane) const;

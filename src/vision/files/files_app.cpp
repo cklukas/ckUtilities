@@ -304,13 +304,10 @@ struct FilesApp::State {
             application.commands().set_command_scope(switch_id, {.contexts = {"ck.files.pane"}});
             application.commands().set_command_scope(cancel_id, {.contexts = {"ck.files.pane"}});
             application.commands().bind_key({ckv::Key::Escape, ckv::Modifier::None, {}}, cancel_id);
-            application.commands().set_enabled_predicate(switch_id, [this] { return !closing && !modal_pending(); });
-            application.commands().set_enabled_predicate(
-                cancel_id, [this] {
-                    return !closing && !modal_pending() &&
-                           (operation_execution_request.has_value() || pending(panes[active]) ||
-                            panes[active].volume_view);
-                });
+            application.commands().set_enabled_predicate(switch_id,
+                                                         [this] { return availability("ck.files.switch_pane").enabled; });
+            application.commands().set_enabled_predicate(cancel_id,
+                                                         [this] { return availability("ck.files.cancel_read").enabled; });
             const auto own = [&](std::string_view key, std::function<void()> handler, std::function<bool()> enabled) {
                 const auto id =
                     commands.own(declare_suite_command(application.commands(), "ck-files", key, std::move(handler)));
@@ -320,7 +317,7 @@ struct FilesApp::State {
                 application.commands().set_command_scope(id, {.contexts = {"ck.files.pane"}});
                 return id;
             };
-            const auto row_ready = [this] { return ready(active) && panes[active].model.target().has_value(); };
+            const auto row_ready = [this] { return availability("ck.files.toggle_mark").enabled; };
             const auto location_id =
                 own("ck.files.location", [this] { show_location(); }, [this] { return can_edit_location(active); });
             const auto parent_id = own(
@@ -328,59 +325,47 @@ struct FilesApp::State {
                 [this] {
                     navigate_relative(active, false);
                 },
-                [this] { return panes[active].volume_view || relative_ready(active, false); });
+                [this] { return availability("ck.files.parent").enabled; });
             const auto root_id = own(
                 "ck.files.root", [this] { navigate_relative(active, true); },
-                [this] { return relative_ready(active, true); });
+                [this] { return availability("ck.files.root").enabled; });
             const auto home_id =
-                own("ck.files.home", [this] { navigate_home(active); }, [this] { return ready(active); });
+                own("ck.files.home", [this] { navigate_home(active); },
+                    [this] { return availability("ck.files.home").enabled; });
             history_back_id = own(
                 "ck.files.history_back", [this] { navigate_history_back(active); },
-                [this] { return ready(active) && panes[active].history_position > 0; });
+                [this] { return availability("ck.files.history_back").enabled; });
             history_forward_id = own(
                 "ck.files.history_forward", [this] { navigate_history_forward(active); },
-                [this] {
-                    return ready(active) && panes[active].history_position + 1 < panes[active].history.size();
-                });
+                [this] { return availability("ck.files.history_forward").enabled; });
             bookmark_add_id = own(
                 "ck.files.bookmark_add", [this] { add_bookmark(active); },
-                [this] { return ready(active) && panes[active].active; });
+                [this] { return availability("ck.files.bookmark_add").enabled; });
             bookmark_remove_id = own(
                 "ck.files.bookmark_remove", [this] { remove_bookmark(active); },
-                [this] {
-                    return ready(active) && panes[active].active &&
-                           std::any_of(panes[active].bookmarks.begin(), panes[active].bookmarks.end(),
-                                       [this](const auto &bookmark) { return *bookmark == *panes[active].active; });
-                });
-            refresh_id = own("ck.files.refresh", [this] { refresh(active); }, [this] { return ready(active); });
-            properties_id = own("ck.files.properties", [this] { show_properties(); }, [this] {
-                return ready(active) && panes[active].model.cursor_row();
-            });
-            preview_id = own("ck.files.preview", [this] { show_preview(); }, [this] {
-                return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile;
-            });
+                [this] { return availability("ck.files.bookmark_remove").enabled; });
+            refresh_id = own("ck.files.refresh", [this] { refresh(active); },
+                             [this] { return availability("ck.files.refresh").enabled; });
+            properties_id = own("ck.files.properties", [this] { show_properties(); },
+                                [this] { return availability("ck.files.properties").enabled; });
+            preview_id = own("ck.files.preview", [this] { show_preview(); },
+                             [this] { return availability("ck.files.preview").enabled; });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
-                [this] {
-                    return ready(active) && panes[active].model.target() &&
-                           panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory;
-                });
+                [this] { return availability("ck.files.enter_directory").enabled; });
             create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
-                                      [this] { return ready(active); });
-            rename_id = own("ck.files.rename", [this] { show_rename(); }, [this] {
-                return ready(active) && panes[active].model.target().has_value();
-            });
-            trash_id = own("ck.files.trash", [this] { show_trash(); }, [this] {
-                return ready(active) && panes[active].model.target().has_value();
-            });
-            delete_id = own("ck.files.permanently_delete", [this] { show_delete(); }, [this] {
-                return ready(active) && panes[active].model.target().has_value();
-            });
+                                      [this] { return availability("ck.files.create_directory").enabled; });
+            rename_id = own("ck.files.rename", [this] { show_rename(); },
+                            [this] { return availability("ck.files.rename").enabled; });
+            trash_id = own("ck.files.trash", [this] { show_trash(); },
+                           [this] { return availability("ck.files.trash").enabled; });
+            delete_id = own("ck.files.permanently_delete", [this] { show_delete(); },
+                            [this] { return availability("ck.files.permanently_delete").enabled; });
             copy_id = own("ck.files.copy", [this] { prepare_copy(ck::files::FileOperation::Copy); },
-                          [this] { return can_prepare_copy(); });
+                          [this] { return availability("ck.files.copy").enabled; });
             move_id = own("ck.files.move", [this] { prepare_copy(ck::files::FileOperation::Move); },
-                          [this] { return can_prepare_copy(); });
-            const auto visible_ready = [this] { return ready(active) && panes[active].model.row_count() != 0; };
+                          [this] { return availability("ck.files.move").enabled; });
+            const auto visible_ready = [this] { return availability("ck.files.mark_visible").enabled; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
                 [this] {
@@ -401,9 +386,7 @@ struct FilesApp::State {
                 visible_ready);
             const auto clear = own(
                 "ck.files.clear_marks", [this] { change_marks(active, ck::files::IndexedClearMarks{}); },
-                [this] {
-                    return ready(active) && panes[active].selection.marks && panes[active].selection.marks->total != 0;
-                });
+                [this] { return availability("ck.files.clear_marks").enabled; });
             const auto range = own(
                 "ck.files.range_start",
                 [this] {
@@ -413,15 +396,14 @@ struct FilesApp::State {
                     }
                 },
                 row_ready);
-            const auto range_ready = [this] {
-                return ready(active) && panes[active].range_start && panes[active].model.target();
-            };
+            const auto range_ready = [this] { return availability("ck.files.mark_range").enabled; };
             const auto mark_range = own("ck.files.mark_range", [this] { mark_through(true); }, range_ready);
             const auto unmark_range = own("ck.files.unmark_range", [this] { mark_through(false); }, range_ready);
-            const auto options_id =
-                own("ck.files.view_options", [this] { show_view_options(); }, [this] { return ready(active); });
+            const auto options_id = own("ck.files.view_options", [this] { show_view_options(); },
+                                        [this] { return availability("ck.files.view_options").enabled; });
             const auto item = [](auto id, const char *title) {
-                return ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{id, title});
+                return ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{id, title})
+                    .with_disabled_reason("See the active pane status for why this command is unavailable.");
             };
             SuiteShellOptions options;
             options.application_name = "Files";
@@ -436,9 +418,7 @@ struct FilesApp::State {
                      item(history_forward_id, "Go &forward"), item(bookmark_add_id, "Add &bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
                      item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
-                     ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{switch_id, "S&witch pane"}),
-                     ckv::widgets::MenuItem::command(
-                         ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"})}},
+                     item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_directory_id, "&New folder..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
@@ -623,6 +603,136 @@ struct FilesApp::State {
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
+    FilesCommandAvailability availability(std::string_view command) const {
+        const auto unavailable = [](std::string reason) {
+            return FilesCommandAvailability::unavailable(std::move(reason));
+        };
+        if (closing)
+            return unavailable(std::string(command) + " unavailable: Files is closing");
+        if (command == "ck.files.switch_pane")
+            return modal_pending() ? unavailable("Switch pane unavailable: a dialog is open")
+                                   : FilesCommandAvailability::available();
+        if (command == "ck.files.cancel_read") {
+            if (modal_pending())
+                return unavailable("Cancel unavailable: a dialog is open");
+            if (operation_execution_request || pending(panes[active]) || panes[active].volume_view)
+                return FilesCommandAvailability::available();
+            return unavailable("Cancel unavailable: no activity is running");
+        }
+        if (command == "ck.files.parent") {
+            if (panes[active].volume_view)
+                return FilesCommandAvailability::available();
+            if (!ready(active))
+                return unavailable("Parent folder unavailable: active pane is not ready");
+            if (!panes[active].active || !panes[active].active->parent().value())
+                return unavailable("Parent folder unavailable: location has no parent");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.root") {
+            if (!ready(active))
+                return unavailable("Location root unavailable: active pane is not ready");
+            if (!panes[active].active)
+                return unavailable("Location root unavailable: no completed location");
+            const auto root = panes[active].active->namespace_root();
+            if (!root.value() || *root.value() == *panes[active].active)
+                return unavailable("Location root unavailable: already at namespace root");
+            return FilesCommandAvailability::available();
+        }
+        if (command == "ck.files.location")
+            return can_edit_location(active) ? FilesCommandAvailability::available()
+                                             : unavailable("Location editor unavailable: active pane is busy");
+        if (command == "ck.files.home")
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("Home location unavailable: active pane is not ready");
+        if (command == "ck.files.history_back")
+            return ready(active) && panes[active].history_position > 0
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Go back unavailable: no earlier location is available");
+        if (command == "ck.files.history_forward")
+            return ready(active) && panes[active].history_position + 1 < panes[active].history.size()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Go forward unavailable: no later location is available");
+        if (command == "ck.files.bookmark_add")
+            return ready(active) && panes[active].active
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Add bookmark unavailable: active location is not ready");
+        if (command == "ck.files.bookmark_remove") {
+            const bool present = panes[active].active &&
+                                 std::any_of(panes[active].bookmarks.begin(), panes[active].bookmarks.end(),
+                                             [this](const auto &bookmark) { return *bookmark == *panes[active].active; });
+            return ready(active) && present ? FilesCommandAvailability::available()
+                                            : unavailable("Remove bookmark unavailable: location is not bookmarked");
+        }
+        if (command == "ck.files.refresh")
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("Refresh unavailable: active pane is not ready");
+        if (command == "ck.files.properties")
+            return ready(active) && panes[active].model.cursor_row()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Properties unavailable: no current entry is selected");
+        if (command == "ck.files.preview")
+            return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Preview unavailable: select a regular file");
+        if (command == "ck.files.enter_directory")
+            return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Enter folder unavailable: select a folder");
+        if (command == "ck.files.create_directory")
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("New folder unavailable: active pane is not ready");
+        if (command == "ck.files.rename" || command == "ck.files.trash" ||
+            command == "ck.files.permanently_delete") {
+            if (panes[active].volume_view)
+                return unavailable(std::string(command == "ck.files.rename" ? "Rename" :
+                                                       command == "ck.files.trash" ? "Trash / Recycle Bin" : "Delete") +
+                                   " unavailable: volume rows are archive sources, not entries");
+            return ready(active) && panes[active].model.target()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Operation unavailable: select a current entry");
+        }
+        if (command == "ck.files.copy" || command == "ck.files.move") {
+            const bool move = command == "ck.files.move";
+            if (!execution_service || !operation_journal_root)
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");
+            if (operation_execution_request)
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: another operation is running");
+            if (panes[active].volume_view)
+                return unavailable(std::string(move ? "Move" : "Copy") +
+                                   (move ? " unavailable: volume rows are archive sources, not movable entries"
+                                         : " unavailable: volume archive worker is not enabled yet"));
+            if (!ready(active) || !ready(1 - active))
+                return unavailable(std::string(move ? "Move" : "Copy") +
+                                   " unavailable: both panes must be ready");
+            if (!panes[active].model.target())
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: no entry is selected");
+            const auto kind = panes[active].model.cursor_kind();
+            return kind == ck::files::ObjectKind::RegularFile || kind == ck::files::ObjectKind::Directory
+                       ? FilesCommandAvailability::available()
+                       : unavailable(std::string(move ? "Move" : "Copy") + " unavailable: selected row is not a file or folder");
+        }
+        if (command == "ck.files.toggle_mark" || command == "ck.files.range_start")
+            return ready(active) && panes[active].model.target() && !panes[active].volume_view
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Mark unavailable: volume rows and empty selections cannot be marked");
+        if (command == "ck.files.mark_visible" || command == "ck.files.unmark_visible" ||
+            command == "ck.files.invert_marks")
+            return ready(active) && panes[active].model.row_count() != 0 && !panes[active].volume_view
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Marking unavailable: no file rows are visible");
+        if (command == "ck.files.clear_marks")
+            return ready(active) && panes[active].selection.marks && panes[active].selection.marks->total != 0
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Clear marks unavailable: no entries are marked");
+        if (command == "ck.files.mark_range" || command == "ck.files.unmark_range")
+            return ready(active) && panes[active].range_start && panes[active].model.target()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Range marking unavailable: set a range start and select an entry");
+        if (command == "ck.files.view_options")
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("View options unavailable: active pane is not ready");
+        return FilesCommandAvailability::available();
+    }
     bool can_edit_location(std::size_t i) const {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
@@ -686,6 +796,11 @@ struct FilesApp::State {
         }
         if (p.range_start)
             text += " | Range start set";
+        if (p.volume_view) {
+            const auto copy = availability("ck.files.copy");
+            const auto move = availability("ck.files.move");
+            text += " | Hint: " + copy.reason + "; " + move.reason;
+        }
         if (!settings.diagnostic.empty())
             text += " | " + settings.diagnostic;
         return text;
@@ -2194,6 +2309,9 @@ bool FilesApp::pending(std::size_t pane) const {
     return State::pending(p);
 }
 std::string FilesApp::status(std::size_t pane) const { return state_->status(pane); }
+FilesCommandAvailability FilesApp::availability(std::string_view command) const {
+    return state_->availability(command);
+}
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
     if (state_->closing || p.navigating || p.changing || p.queued_view || p.previewing || p.mutating ||
