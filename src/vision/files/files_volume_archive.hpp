@@ -287,6 +287,25 @@ struct FilesVolumeArchiveRecoveryScan final {
     bool requires_reconciliation = false;
 };
 
+enum class FilesVolumeArchiveRecoverySubmission {
+    Accepted,
+    Busy,
+    Stopped,
+    Invalid,
+};
+
+enum class FilesVolumeArchiveRecoveryState {
+    Ready,
+    Failed,
+    WorkerFault,
+};
+
+struct FilesVolumeArchiveRecoveryReply final {
+    FilesVolumeArchiveRecoveryState state = FilesVolumeArchiveRecoveryState::Failed;
+    std::optional<FilesVolumeArchiveRecoveryScan> scan;
+    std::optional<ck::files::UnavailableObservation> error;
+};
+
 ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
     const ck::files::OperationJournal &journal,
     std::optional<ck::files::UnavailableObservation> tail = std::nullopt);
@@ -303,6 +322,30 @@ ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_
 ck::files::Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
     const ck::files::NativeAbsolutePath &private_root,
     FilesVolumeArchiveRecoveryLimits limits = {});
+
+// Worker-owned startup boundary for the read-only recovery projection. The
+// service never resumes, deletes, opens for mutation, or publishes an archive.
+// A caller may submit one bounded scan at a time and consume its reply from
+// the UI thread.
+class FilesVolumeArchiveRecoveryService final {
+  public:
+    explicit FilesVolumeArchiveRecoveryService(std::function<void()> wake = {});
+    ~FilesVolumeArchiveRecoveryService();
+    FilesVolumeArchiveRecoveryService(const FilesVolumeArchiveRecoveryService &) = delete;
+    FilesVolumeArchiveRecoveryService &operator=(const FilesVolumeArchiveRecoveryService &) = delete;
+
+    FilesVolumeArchiveRecoverySubmission request(
+        ck::files::NativeAbsolutePath private_root, FilesVolumeArchiveRecoveryLimits limits = {});
+    std::optional<FilesVolumeArchiveRecoveryReply> take();
+    void request_stop() noexcept;
+    void join();
+    bool running() const noexcept;
+    bool working() const;
+
+  private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
 
 ck::files::Observation<FilesVolumeArchiveWriteResult> write_volume_archive(
     const FilesVolumeArchiveWriteRequest &request, std::stop_token stop_token = {});

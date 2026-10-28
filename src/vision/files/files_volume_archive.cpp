@@ -626,6 +626,124 @@ Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
     return Observation<FilesVolumeArchiveRecoveryScan>::available(std::move(result));
 }
 
+struct FilesVolumeArchiveRecoveryService::State final {
+    std::function<void()> wake;
+    std::mutex mutex;
+    std::condition_variable condition;
+    std::optional<std::pair<ck::files::NativeAbsolutePath, FilesVolumeArchiveRecoveryLimits>> pending;
+    std::optional<FilesVolumeArchiveRecoveryReply> reply;
+    std::stop_source stop;
+    bool stopping = false, busy = false, signalled = false;
+    std::thread worker;
+
+    explicit State(std::function<void()> callback) : wake(std::move(callback)), worker([this] { run(); }) {}
+    ~State() {
+        request_stop();
+        join();
+    }
+    void request_stop() noexcept {
+        std::lock_guard lock(mutex);
+        stopping = true;
+        stop.request_stop();
+        condition.notify_all();
+    }
+    void join() {
+        if (worker.joinable())
+            worker.join();
+    }
+    void signal() {
+        if (signalled || !wake)
+            return;
+        signalled = true;
+        try { wake(); } catch (...) {}
+    }
+    static bool valid(const ck::files::NativeAbsolutePath &root,
+                      const FilesVolumeArchiveRecoveryLimits &limits) {
+        return root.is_valid() && limits.max_journals != 0 && limits.max_journals <= 16 * 1024 &&
+               limits.journal.max_items != 0 && limits.journal.max_records != 0 && limits.codec.max_bytes != 0;
+    }
+    void emit(FilesVolumeArchiveRecoveryReply value) {
+        std::lock_guard lock(mutex);
+        if (stopping)
+            return;
+        reply = std::move(value);
+        busy = false;
+        signal();
+    }
+    void run_one(ck::files::NativeAbsolutePath root, FilesVolumeArchiveRecoveryLimits limits) {
+        try {
+            auto scan = discover_volume_archive_recovery(root, limits);
+            FilesVolumeArchiveRecoveryReply result;
+            if (scan.value()) {
+                result.state = FilesVolumeArchiveRecoveryState::Ready;
+                result.scan = std::move(scan).take_value();
+            } else {
+                result.state = FilesVolumeArchiveRecoveryState::Failed;
+                result.error = *scan.unavailable_detail();
+            }
+            emit(std::move(result));
+        } catch (...) {
+            FilesVolumeArchiveRecoveryReply result;
+            result.state = FilesVolumeArchiveRecoveryState::WorkerFault;
+            result.error = error(AdapterError::PlanInvalid, "volume_archive.recovery.worker_fault");
+            emit(std::move(result));
+        }
+    }
+    void run() {
+        for (;;) {
+            std::optional<std::pair<ck::files::NativeAbsolutePath, FilesVolumeArchiveRecoveryLimits>> job;
+            {
+                std::unique_lock lock(mutex);
+                condition.wait(lock, [this] { return stopping || pending.has_value(); });
+                if (stopping) {
+                    pending.reset();
+                    return;
+                }
+                job = std::move(*pending);
+                pending.reset();
+                busy = true;
+                stop = std::stop_source{};
+                signalled = false;
+            }
+            run_one(std::move(job->first), std::move(job->second));
+        }
+    }
+};
+
+FilesVolumeArchiveRecoveryService::FilesVolumeArchiveRecoveryService(std::function<void()> wake)
+    : state_(std::make_unique<State>(std::move(wake))) {}
+FilesVolumeArchiveRecoveryService::~FilesVolumeArchiveRecoveryService() = default;
+FilesVolumeArchiveRecoverySubmission FilesVolumeArchiveRecoveryService::request(
+    ck::files::NativeAbsolutePath private_root, FilesVolumeArchiveRecoveryLimits limits) {
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping)
+        return FilesVolumeArchiveRecoverySubmission::Stopped;
+    if (!State::valid(private_root, limits))
+        return FilesVolumeArchiveRecoverySubmission::Invalid;
+    if (state_->busy || state_->pending)
+        return FilesVolumeArchiveRecoverySubmission::Busy;
+    state_->pending = std::make_pair(std::move(private_root), limits);
+    state_->condition.notify_one();
+    return FilesVolumeArchiveRecoverySubmission::Accepted;
+}
+std::optional<FilesVolumeArchiveRecoveryReply> FilesVolumeArchiveRecoveryService::take() {
+    std::lock_guard lock(state_->mutex);
+    auto result = std::move(state_->reply);
+    state_->reply.reset();
+    state_->signalled = false;
+    return result;
+}
+void FilesVolumeArchiveRecoveryService::request_stop() noexcept { state_->request_stop(); }
+void FilesVolumeArchiveRecoveryService::join() { state_->join(); }
+bool FilesVolumeArchiveRecoveryService::running() const noexcept {
+    std::lock_guard lock(state_->mutex);
+    return !state_->stopping;
+}
+bool FilesVolumeArchiveRecoveryService::working() const {
+    std::lock_guard lock(state_->mutex);
+    return state_->busy || state_->pending.has_value();
+}
+
 Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
                                                                 std::stop_token stop_token) {
     if (!valid_request(request))

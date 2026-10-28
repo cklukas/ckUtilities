@@ -4,6 +4,7 @@
 #include <cvision/testing/cktest.hpp>
 
 #include <chrono>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <condition_variable>
@@ -389,6 +390,31 @@ CK_TEST(volume_archive_recovery_scan_preserves_native_names_and_reports_unfinish
         CK_CHECK(scan.value()->journals[0].report->operation.requires_reconciliation);
         CK_CHECK(scan.value()->journals[0].display_name.find(".ck-volume-archive-") == 0);
     }
+}
+
+CK_TEST(volume_archive_recovery_service_scans_off_ui_thread_and_rejects_invalid_limits) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    std::atomic_bool woke = false;
+    FilesVolumeArchiveRecoveryService service([&woke] { woke.store(true); });
+    FilesVolumeArchiveRecoveryLimits invalid;
+    invalid.max_journals = 0;
+    CK_CHECK(service.request(root, invalid) == FilesVolumeArchiveRecoverySubmission::Invalid);
+    CK_CHECK(service.request(root) == FilesVolumeArchiveRecoverySubmission::Accepted);
+    CK_CHECK(service.request(root) == FilesVolumeArchiveRecoverySubmission::Busy);
+
+    std::optional<FilesVolumeArchiveRecoveryReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryState::Ready);
+    CK_CHECK(reply && reply->scan && reply->scan->journals.empty());
+    CK_CHECK(woke.load());
+    service.request_stop();
+    service.join();
+    CK_CHECK(!service.running());
 }
 
 CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) {

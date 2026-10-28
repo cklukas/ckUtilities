@@ -215,6 +215,7 @@ struct FilesApp::State {
     FilesVolumeService *volume_service = nullptr;
     FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr;
     FilesVolumeArchiveService *volume_archive_service = nullptr;
+    FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr;
     std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
     FilesSettingsBinding settings;
     FilesAppWake &wake;
@@ -242,6 +243,9 @@ struct FilesApp::State {
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
     std::optional<FilesVolumeArchivePlanningTicket> volume_archive_planning_request;
     std::optional<FilesVolumeArchiveTicket> volume_archive_execution_request;
+    bool volume_archive_recovery_request = false;
+    std::optional<FilesVolumeArchiveRecoveryScan> volume_archive_recovery_scan;
+    std::string volume_archive_recovery_error;
     std::unique_ptr<FilesVolumeArchiveReviewDialog> volume_archive_review_dialog;
     FilesVolumeRecord volume_archive_source;
     std::shared_ptr<const FilesPaneLocation> volume_archive_destination;
@@ -291,10 +295,11 @@ struct FilesApp::State {
           FilesOperationExecutionService *execution,
           std::shared_ptr<const ck::files::NativeAbsolutePath> journal_root, FilesSettingsBinding supplied_settings,
           FilesVolumeService *volumes, FilesVolumeArchivePlanningService *archive_planning,
-          FilesVolumeArchiveService *archive_service)
+          FilesVolumeArchiveService *archive_service, FilesVolumeArchiveRecoveryService *archive_recovery)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
           execution_service(execution), volume_service(volumes),
           volume_archive_planning_service(archive_planning), volume_archive_service(archive_service),
+          volume_archive_recovery_service(archive_recovery),
           operation_journal_root(std::move(journal_root)),
           settings(std::move(supplied_settings)), wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
@@ -465,6 +470,16 @@ struct FilesApp::State {
             });
             wake.bind([this] { pump(); });
             bound = true;
+            if (volume_archive_recovery_service) {
+                if (!operation_journal_root || !operation_journal_root->is_valid()) {
+                    volume_archive_recovery_error = "archive journal is not configured";
+                } else if (volume_archive_recovery_service->request(*operation_journal_root) ==
+                           FilesVolumeArchiveRecoverySubmission::Accepted) {
+                    volume_archive_recovery_request = true;
+                } else {
+                    volume_archive_recovery_error = "archive recovery scan could not be started";
+                }
+            }
             application.commands().set_handler(application.commands().standard().quit, [this] { request_close(); });
             for (std::size_t i = 0; i < 2; ++i) {
                 panes[i].encoding = locations[i].encoding();
@@ -550,6 +565,8 @@ struct FilesApp::State {
             volume_archive_planning_service->request_stop();
         if (volume_archive_service)
             volume_archive_service->request_stop();
+        if (volume_archive_recovery_service)
+            volume_archive_recovery_service->request_stop();
     }
     void create_window() {
         auto first = std::make_unique<PaneSurface>(panes[0].model),
@@ -737,6 +754,16 @@ struct FilesApp::State {
                 if (!volume_archive_planning_service || !volume_archive_service ||
                     !volume_archive_planning_service->running() || !volume_archive_service->running())
                     return unavailable("Copy unavailable: archive worker is unavailable");
+                if (!volume_archive_recovery_service)
+                    return unavailable("Copy unavailable: archive recovery service is not configured");
+                if (volume_archive_recovery_request)
+                    return unavailable("Copy unavailable: archive recovery scan is still running");
+                if (!volume_archive_recovery_error.empty())
+                    return unavailable("Copy unavailable: " + volume_archive_recovery_error);
+                if (!volume_archive_recovery_scan)
+                    return unavailable("Copy unavailable: archive recovery scan is not ready");
+                if (volume_archive_recovery_scan->requires_reconciliation)
+                    return unavailable("Copy unavailable: archive recovery review is required");
                 if (!archive_destination_ready(active))
                     return unavailable("Copy unavailable: destination pane is not ready");
                 return FilesCommandAvailability::available();
@@ -2206,6 +2233,26 @@ struct FilesApp::State {
                     panes[active].error = "Volume archive planning worker stopped";
                 }
             }
+            if (volume_archive_recovery_service) {
+                if (auto reply = volume_archive_recovery_service->take()) {
+                    volume_archive_recovery_request = false;
+                    if (reply->state == FilesVolumeArchiveRecoveryState::Ready && reply->scan) {
+                        volume_archive_recovery_scan = std::move(reply->scan);
+                        volume_archive_recovery_error.clear();
+                    } else {
+                        volume_archive_recovery_scan.reset();
+                        volume_archive_recovery_error = reply->error
+                            ? "archive recovery scan failed: " + reply->error->error.operation
+                            : "archive recovery scan failed";
+                    }
+                    labels();
+                }
+                if (volume_archive_recovery_request && !volume_archive_recovery_service->running()) {
+                    volume_archive_recovery_request = false;
+                    volume_archive_recovery_error = "archive recovery worker stopped";
+                    labels();
+                }
+            }
             for (std::size_t i = 0; i < 2; ++i) {
                 if (auto reply = services[i]->take())
                     consume(i, std::move(*reply));
@@ -2320,6 +2367,12 @@ struct FilesApp::State {
             execution_service->request_stop();
         if (volume_service)
             volume_service->request_stop();
+        if (volume_archive_planning_service)
+            volume_archive_planning_service->request_stop();
+        if (volume_archive_service)
+            volume_archive_service->request_stop();
+        if (volume_archive_recovery_service)
+            volume_archive_recovery_service->request_stop();
         host_quit(); // No join in dispatch; the composition owner joins afterwards.
     }
     void request_close() {
@@ -2463,11 +2516,13 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
                    std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root,
                    FilesSettingsBinding settings, FilesVolumeService *volume_service,
                    FilesVolumeArchivePlanningService *volume_archive_planning_service,
-                   FilesVolumeArchiveService *volume_archive_service)
+                   FilesVolumeArchiveService *volume_archive_service,
+                   FilesVolumeArchiveRecoveryService *volume_archive_recovery_service)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
                                      completion_services, planning_service, execution_service,
                                      std::move(operation_journal_root), std::move(settings), volume_service,
-                                     volume_archive_planning_service, volume_archive_service)) {}
+                                     volume_archive_planning_service, volume_archive_service,
+                                     volume_archive_recovery_service)) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));

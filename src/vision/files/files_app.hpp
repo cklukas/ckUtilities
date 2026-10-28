@@ -57,7 +57,8 @@ class FilesApp final {
              std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {},
              FilesSettingsBinding settings = {}, FilesVolumeService *volume_service = nullptr,
              FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr,
-             FilesVolumeArchiveService *volume_archive_service = nullptr);
+             FilesVolumeArchiveService *volume_archive_service = nullptr,
+             FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;
