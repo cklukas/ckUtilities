@@ -53,6 +53,19 @@ with 29 MiB peak RSS. The initial invalid placeholder-directory invocation
 was not counted; the recorded runs used the repository corpus directories.
 See the [current fuzz evidence](evidence/ck-files-fuzz-current-20261028.json).
 
+## 2026-10-28 — current Windows ConPTY qualification
+
+The current Release executable on the mandatory `V:` development drive passed
+the real Windows ConPTY contract **1/1** in 6.11 seconds. The contract started
+all ten utilities, including `ck-files`, verified visible terminal output, and
+shut each down through the standard Alt+X path. The exact `ck-files.exe` is
+`V:\\tmp\\ckutilities-settings-20261028-01\\build-mt\\bin\\Release\\ck-files.exe`,
+3,201,024 bytes, SHA-256
+`3B3C1BF087599915638CCA02FAB89D81CB8372F73999195BBF6D8DC6903F3756`.
+All temporary and per-user paths remained under `V:\\tmp`.
+
+Evidence: [current Windows ConPTY record](evidence/ck-files-windows-conpty-current-20261028.json).
+
 ## 2026-10-28 — current Files settings sanitizer qualification
 
 The current settings implementation passed focused sanitizer coverage on macOS

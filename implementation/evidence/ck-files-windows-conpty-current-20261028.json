@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-28",
+  "host": "Windows x64 workstation",
+  "development_drive": "V:",
+  "source": "V:\\dev\\ckutilities-goal-20261028-01",
+  "build": "V:\\tmp\\ckutilities-settings-20261028-01\\build-mt",
+  "configuration": "Release; Visual Studio multi-config; v143; /MT",
+  "executable": "V:\\tmp\\ckutilities-settings-20261028-01\\build-mt\\bin\\Release\\ck-files.exe",
+  "executable_sha256": "3B3C1BF087599915638CCA02FAB89D81CB8372F73999195BBF6D8DC6903F3756",
+  "executable_bytes": 3201024,
+  "executable_last_write_utc": "2026-10-28T07:06:11.1618949Z",
+  "temporary_root": "V:\\tmp\\ckutilities-interactive-current-20261028-01",
+  "environment": {
+    "TEMP": "V:\\tmp\\ckutilities-interactive-current-20261028-01",
+    "TMP": "V:\\tmp\\ckutilities-interactive-current-20261028-01",
+    "TMPDIR": "V:\\tmp\\ckutilities-interactive-current-20261028-01",
+    "APPDATA": "V:\\tmp\\ckutilities-interactive-current-20261028-01\\config\\roaming",
+    "LOCALAPPDATA": "V:\\tmp\\ckutilities-interactive-current-20261028-01\\config\\local"
+  },
+  "contract": {
+    "test": "ck_windows_tools_contract",
+    "result": "1/1 passed",
+    "start": "2026-10-28T11:25:01.2851610Z",
+    "end": "2026-10-28T11:25:07.4621628Z",
+    "elapsed_seconds": 6.11,
+    "exit_code": 0,
+    "scope": "Real Windows ConPTY launch/draw/clean Alt+X shutdown for all ten utilities, including ck-files"
+  }
+}
