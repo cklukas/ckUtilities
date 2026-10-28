@@ -6969,6 +6969,23 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-28 — Cross-platform contextual availability qualification
+
+The shared Files availability predicates now feed a concise contextual hint
+into the active pane status for an empty/non-target listing, while the
+volume view continues to report its archive-Copy reason. The hint is omitted
+while a worker is pending and from inactive panes, so normal browsing does not
+accumulate generic disabled-command text. The same command predicates remain
+the source for menus, palette/keyboard enablement and status-line items.
+
+The macOS Files application suite passed **213/213** cases in the fresh
+task-owned build, and the current-source Windows v143 build on the required
+`V:` drive passed its complete Files-labelled executable **107/107** gate in
+20.69 seconds (`Debug`, because the existing Windows qualification tree is
+multi-config). The Windows source hashes for the changed application and test
+files were recorded before configuration; no application process was running.
+
+
 ## 2026-10-28 — Volume archive digest qualification
 
 The sparse volume archive worker now independently computes SHA-256 digests for
