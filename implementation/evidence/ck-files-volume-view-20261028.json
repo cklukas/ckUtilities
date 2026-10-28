@@ -19,12 +19,13 @@
     "host": "Windows x64 workstation",
     "development_drive": "V:",
     "toolset": "Visual Studio 2022 v143; MSVC 19.44.35228; Windows SDK 10.0.26100.0",
-    "build": "V:\\tmp\\ck-files-volume-build-20261028-02\\bin\\Release\\ck-files.exe",
+    "build": "V:\\tmp\\ck-files-windows-integrated-20261028-01\\build\\bin\\Release\\ck-files.exe",
     "installed_executable": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
-    "configuration": "Release; Visual Studio multi-config; /MT for the installed ckVision static SDK",
+    "configuration": "Release; Visual Studio multi-config; CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded (/MT) for the packaged ckVision static SDK",
     "version": "ck-files 0.2.0 (ckVision 1.4.0)",
-    "executable_sha256": "0A3130D5A1F5A71D560D52BF5BE9FF54303C1D3068129867E5CE076EBD111E2A",
-    "status": "Build and install succeeded; --version passed. The existing all-tools ConPTY contract remains separately qualified, but this checkpoint does not claim a new interactive pane-local capture on Windows."
+    "executable_sha256": "8691F0223B70BC3D46661FE9B8DA74AC05322F0F1DB3FBFC12B4F54002737915",
+    "tests": "ctest -C Release -L files: 107/107 passed in 23.95 seconds",
+    "status": "Current pane-local volume-listing sources built successfully on the v143 workstation; --version passed. The existing all-tools ConPTY contract remains separately qualified, but this checkpoint does not claim a new interactive pane-local capture on Windows."
   },
   "linux": {
     "host": "rpi4 aarch64 Debian Linux",
