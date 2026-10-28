@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — deterministic documentation capture requalified
+
+The official `tools/docgen/generate_screenshots.sh` pipeline was rerun from a
+fresh Release/Ninja build using a clean ckVision source checkout at
+`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` and the installed 1.4.0 SDK. The
+real `HeadlessTerminal` capture produced the Files two-pane and root-boundary
+volume scenes, plus the suite's Todo and Sysmon artifacts. A second complete
+generation produced a byte-identical manifest for all 29 SVGs and 15 Todo
+goldens. The generated Files volume view visibly shows mount, filesystem type,
+free/total space, and the dynamic Copy-unavailable hint in the pane footer.
+
+The capture required the existing Apple libc++ compatibility setting
+`ASAN_OPTIONS=detect_container_overflow=0`; without it, the binary stopped on
+the known `DirectoryCursor::read` container-overflow diagnostic. This remains
+an open broad macOS ASan fixture gate and is not counted as a clean sanitizer
+result. Evidence: [documentation capture record](evidence/ck-files-documentation-capture-20261028.json).
+
 ## 2026-10-28 — durable volume-archive journal transitions
 
 Commit `b493137` binds the volume archive worker to the existing private native

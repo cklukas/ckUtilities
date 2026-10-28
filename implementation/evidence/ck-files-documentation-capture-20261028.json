@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-28",
+  "purpose": "Deterministic ck-files and suite documentation capture",
+  "source_commit": "484d288c40d79522be450494cd40773eca253714",
+  "ckvision_revision": "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba",
+  "ckvision_source": "/Volumes/S8T/tmp/ckutilities-doc-capture-20261028-01/ckvision-source",
+  "ckvision_frame_svg_sha256": "ce5d0ffc780facd6fb58efa8cd46caa94dbcaeb6b88477fe3088fb3742e6e9aa",
+  "sdk_prefix": "/Volumes/S8T/tmp/ckvision-1.4.0-sanitized-20261028-01/sdk",
+  "build": {
+    "generator": "Ninja",
+    "configuration": "Release",
+    "build_directory": "/Volumes/S8T/tmp/ckutilities-doc-capture-20261028-01/build",
+    "target_set": [
+      "capture_ckutilities_screenshots",
+      "capture_todo_screenshots",
+      "generate_sysmon_goldens",
+      "capture_sysmon_screenshots"
+    ],
+    "initial_clean_build_elapsed_seconds": 105.25,
+    "initial_clean_build_steps": 260,
+    "output_paths": [
+      "/Volumes/PRO-BLADE/Development/ckUtilities/docs/generated/screenshots",
+      "/Volumes/PRO-BLADE/Development/ckUtilities/src/vision/todo/tests/golden"
+    ]
+  },
+  "capture": {
+    "successful_runs": 2,
+    "first_success_elapsed_seconds": 6.00,
+    "second_success_elapsed_seconds": 5.04,
+    "artifact_counts": {
+      "svg": 29,
+      "todo_dump": 15,
+      "total": 44
+    },
+    "repeatability": "byte-identical manifest",
+    "asan_compatibility": "ASAN_OPTIONS=detect_container_overflow=0",
+    "asan_note": "Without this setting, the capture binary hit the already-recorded Apple libc++ container-overflow diagnostic in DirectoryCursor::read while listing the deterministic Files fixture; the successful capture is not evidence of a clean broad current-source ASan run."
+  },
+  "fixtures": [
+    "ck-files.svg",
+    "ck-files-volumes.svg"
+  ],
+  "working_tree_after_capture": "clean before evidence record"
+}
