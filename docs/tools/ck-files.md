@@ -33,6 +33,11 @@ execute files or provide an embedded shell.
   Space shows free and total capacity together. The selected row's footer adds
   its mount, filesystem, space, and read-only state. The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
+  Copy is reserved for a separately qualified Volume archive worker: until
+  native identity and archive capability checks pass, it remains visibly
+  disabled and the active-pane status explains the reason. A qualified Volume
+  archive will be a versioned sparse filesystem archive, not a raw block image;
+  Move is never used for this operation.
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.

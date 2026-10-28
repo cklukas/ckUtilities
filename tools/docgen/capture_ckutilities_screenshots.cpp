@@ -348,9 +348,13 @@ void capture_files(const std::filesystem::path &directory)
     auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback(), [] {
         std::vector<ck::vision::FilesVolumeRecord> records;
         records.push_back({"Workspace", "/capture", "simulatedfs", 20ull * 1024 * 1024 * 1024,
-                           12ull * 1024 * 1024 * 1024, false});
+                           12ull * 1024 * 1024 * 1024, false, "documentation-workspace", {
+                               ck::vision::FilesVolumeArchiveSupport::Unknown, false,
+                               "documentation capability probe pending"}});
         records.push_back({"Archive", "/archive", "simulatedfs", 500ull * 1024 * 1024 * 1024,
-                           214ull * 1024 * 1024 * 1024, true});
+                           214ull * 1024 * 1024 * 1024, true, "documentation-archive", {
+                               ck::vision::FilesVolumeArchiveSupport::Unknown, false,
+                               "documentation capability probe pending"}});
         return ck::files::Observation<std::vector<ck::vision::FilesVolumeRecord>>::available(std::move(records));
     });
     auto app = std::make_unique<ck::vision::FilesApp>(

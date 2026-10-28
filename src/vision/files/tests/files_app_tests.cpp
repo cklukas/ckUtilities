@@ -1340,8 +1340,8 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.permanently_delete")));
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.toggle_mark")));
     CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.parent")));
-    CK_CHECK(f.app->status(0).find("volume archive capability is not qualified") != std::string::npos);
-    CK_CHECK(f.app->status(0).find("volume rows are archive sources") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("archive capability is unknown") != std::string::npos);
+    CK_CHECK(f.app->availability("ck.files.move").reason.find("volume rows are archive sources") != std::string::npos);
     CK_CHECK(f.painted().find("RO") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });

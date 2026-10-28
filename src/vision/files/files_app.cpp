@@ -693,8 +693,6 @@ struct FilesApp::State {
         }
         if (command == "ck.files.copy" || command == "ck.files.move") {
             const bool move = command == "ck.files.move";
-            if (!execution_service || !operation_journal_root)
-                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");
             if (operation_execution_request)
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: another operation is running");
             if (panes[active].volume_view) {
@@ -705,10 +703,10 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: no volume is selected");
                 if (volume->archive.support != FilesVolumeArchiveSupport::LiveReadable &&
                     volume->archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
-                    return unavailable("Copy unavailable: volume archive capability is not qualified" +
-                                       (volume->archive.diagnostic.empty() ? std::string{}
-                                                                           : ": " + volume->archive.diagnostic));
+                    return unavailable("Copy unavailable: archive capability is unknown");
             }
+            if (!execution_service || !operation_journal_root)
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");
@@ -806,8 +804,7 @@ struct FilesApp::State {
             text += " | Range start set";
         if (p.volume_view) {
             const auto copy = availability("ck.files.copy");
-            const auto move = availability("ck.files.move");
-            text += " | Hint: " + copy.reason + "; " + move.reason;
+            text += "\nHint: " + copy.reason;
         }
         if (!settings.diagnostic.empty())
             text += " | " + settings.diagnostic;
