@@ -37,7 +37,8 @@ execute files or provide an embedded shell.
   native identity and archive capability checks pass, it remains visibly
   disabled and the active-pane status explains the reason. A qualified Volume
   archive will be a versioned sparse filesystem archive, not a raw block image;
-  Move is never used for this operation.
+  Move is never used for this operation. The staged enablement, privilege,
+  snapshot, preservation and recovery rules are in the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.
