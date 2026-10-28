@@ -3,6 +3,21 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — startup recovery gate and dynamic archive readiness
+
+Commit `be821c2` connects the bounded read-only volume-archive journal scan to
+the production `FilesApp` composition root through a worker-owned recovery
+service. Startup Copy readiness now stays disabled while the scan is running,
+when the scan fails, or when any unfinished/malformed journal requires review;
+the active pane status reports the specific reason. Menu, keyboard and footer
+commands continue to use the same availability predicate. The service never
+resumes, deletes, replaces, or publishes an archive. Archive and Files app
+suites passed **15/15** and **68/68** on macOS arm64, Linux ARM64, and Windows
+x64/MSVC v143. Explicit inspect/cleanup/revalidated-retry UI actions, snapshot
+providers, and real-volume interactive acceptance remain open.
+
+Evidence: [startup recovery service record](evidence/ck-files-volume-archive-recovery-service-current-20261028.json).
+
 ## 2026-10-28 — bounded archive-journal startup discovery
 
 Commit `af780a4` adds the worker-safe discovery primitive for private volume
@@ -11,10 +26,10 @@ the number of entries, uses error-code filesystem iteration, preserves the
 exact native basename, and reports symlinks, non-regular entries, malformed
 journals, and unfinished states as reconciliation-required items. It performs
 no cleanup, resume, replacement, or other mutation. The archive suite passed
-**14/14** on macOS arm64, Linux ARM64, and Windows x64/MSVC v143. The next
-integration step is to feed this scan into startup status and explicit
-user-facing inspect/cleanup/revalidated-retry actions; no automatic recovery is
-enabled. Evidence: [archive discovery record](evidence/ck-files-volume-archive-discovery-current-20261028.json).
+**14/14** on macOS arm64, Linux ARM64, and Windows x64/MSVC v143. The scan is
+now consumed by the startup recovery gate; explicit user-facing
+inspect/cleanup/revalidated-retry actions remain open and no automatic recovery
+is enabled. Evidence: [archive discovery record](evidence/ck-files-volume-archive-discovery-current-20261028.json).
 
 ## 2026-10-28 — volume archive journal restart projection
 

@@ -42,8 +42,11 @@ execute files or provide an embedded shell.
   explicit preservation losses. The worker revalidates the source, records
   durable journal states, verifies data before no-replace publication, and
   reports indeterminate durability when publication has happened but a later
-  flush or journal step cannot be proven. Snapshot providers and restart
-  reconciliation remain capability-gated. See the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
+  flush or journal step cannot be proven. On startup, a bounded read-only
+  recovery scan checks private archive journals; Copy remains disabled until
+  the scan is complete and no reconciliation-required journal is present.
+  Snapshot providers and explicit inspect/cleanup/revalidated-retry actions
+  remain capability-gated. See the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.

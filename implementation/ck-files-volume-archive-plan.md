@@ -22,7 +22,10 @@ read-only archive source, never a movable or deletable entry.
    volume identity and destination, writes an exclusive sparse temporary file,
    verifies the manifest and every written extent, flushes it, and publishes
    without replacing an existing archive. The footer reports planning,
-   running, cancellation, completion, failure or indeterminate durability.
+   running, cancellation, completion, failure or indeterminate durability. On
+   startup, a separate read-only worker scans bounded private archive journals;
+   Copy remains disabled until that scan completes successfully and reports no
+   reconciliation-required journal.
 5. Every command surface uses the same availability predicate. When Copy is
    disabled, the active pane status gives the specific reason, such as
    `archive capability is unknown`, `snapshot provider unavailable`,
@@ -121,14 +124,14 @@ are never upgraded because a filesystem label looks familiar.
 
 The versioned sparse writer, single-worker boundary, archive-specific review
 model, native source adapter, read-only live capability probe, durable archive
-journal transitions, archive-specific read-only recovery projection, and Files
-planning/review/execution wiring are implemented and focused-qualified on
-macOS, Linux ARM64 and Windows x64. The format records exact POSIX bytes or
-Windows UTF-16 units plus explicit loss records; unreviewed losses and hard
-losses cannot reach the writer. Snapshot/provider qualification and
-user-facing startup reconciliation actions remain open; bounded read-only
-journal discovery is now implemented. Real-volume interactive acceptance also
-remains open. The macOS broad app ASan
+journal transitions, archive-specific read-only recovery projection, bounded
+journal discovery, startup recovery worker, and Files
+planning/review/execution/readiness wiring are implemented and
+focused-qualified on macOS, Linux ARM64 and Windows x64. The format records
+exact POSIX bytes or Windows UTF-16 units plus explicit loss records;
+unreviewed losses and hard losses cannot reach the writer. Snapshot/provider
+qualification and user-facing startup inspect/cleanup/revalidated-retry actions
+remain open. Real-volume interactive acceptance also remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
 not suppressed.

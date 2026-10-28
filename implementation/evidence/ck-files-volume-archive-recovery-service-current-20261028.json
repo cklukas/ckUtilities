@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-28",
+  "source_commit": "be821c2",
+  "scope": "Worker-owned startup gate for bounded volume-archive journal discovery",
+  "behavior": {
+    "execution": "read-only worker scan of caller-qualified private journal root",
+    "copy_gate": "disabled while scanning, on scan failure, or when reconciliation is required",
+    "status_hint": "active pane reports the specific unavailable reason",
+    "mutation": "none; no resume, delete, replacement, or archive publication",
+    "command_surfaces": "menu, keyboard and footer share FilesApp availability predicate"
+  },
+  "validation": {
+    "macos_arm64": "15/15 archive tests; 68/68 Files app tests",
+    "linux_arm64": "15/15 archive tests; 68/68 Files app tests",
+    "windows_x64_msvc_v143": "15/15 archive tests; 68/68 Files app tests"
+  },
+  "remaining": "explicit inspect/cleanup/revalidated-retry UI, snapshot providers, and real-volume interactive acceptance"
+}
