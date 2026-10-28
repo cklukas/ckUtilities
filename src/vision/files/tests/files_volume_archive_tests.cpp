@@ -1,0 +1,140 @@
+#include "files_volume_archive.hpp"
+#include "scratch_directory.hpp"
+
+#include <cvision/testing/cktest.hpp>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <condition_variable>
+#include <mutex>
+#include <stdexcept>
+#include <thread>
+
+namespace {
+using namespace ck::files;
+using namespace ck::vision;
+
+NativeAbsolutePath address(const std::filesystem::path &path) {
+    auto value = NativeAbsolutePath::from_host(path);
+    if (!value.value())
+        throw std::runtime_error("volume archive fixture address unavailable");
+    return std::move(value).take_value();
+}
+
+FilesVolumeRecord source(FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::LiveReadable) {
+    return {"Fixture volume", "/fixture", "fixturefs", 64, 32, false, "fixture-volume",
+            {support, support == FilesVolumeArchiveSupport::SnapshotPreferred, {}}};
+}
+
+FilesVolumeArchiveDocument document(FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::LiveReadable) {
+    FilesVolumeArchiveDocument result;
+    result.source = source(support);
+    result.entries.push_back({"root", FilesVolumeArchiveEntryKind::Directory, 0, {}, {}, 0});
+    result.entries.push_back({"sparse.bin", FilesVolumeArchiveEntryKind::RegularFile, 16,
+                              {{0, {std::byte{'a'}, std::byte{'b'}, std::byte{'c'}}},
+                               {8, {std::byte{'z'}}}},
+                              {}, 0});
+    result.entries.push_back({"link", FilesVolumeArchiveEntryKind::Symlink, 0, {}, "sparse.bin", 0});
+    return result;
+}
+
+} // namespace
+
+CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7};
+    const auto written = write_volume_archive(request);
+    CK_CHECK(written.value());
+    CK_CHECK(written.value()->entry_count == 3);
+    CK_CHECK(written.value()->data_bytes == 4);
+    CK_CHECK(std::filesystem::file_size(written.value()->published_path) == written.value()->logical_size);
+
+    std::ifstream archive(written.value()->published_path, std::ios::binary);
+    archive.seekg(56 + 1, std::ios::beg); // Header plus the first manifest byte.
+    CK_CHECK(archive.good());
+    std::vector<char> all(static_cast<std::size_t>(std::filesystem::file_size(written.value()->published_path)));
+    archive.seekg(0);
+    archive.read(all.data(), static_cast<std::streamsize>(all.size()));
+    CK_CHECK(archive.good() || archive.eof());
+
+    const auto second = write_volume_archive(request);
+    CK_CHECK(!second.value());
+    CK_CHECK(second.state() == ObservationState::Changed);
+}
+
+CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
+                                           "unknown.ckarchive", 1};
+    const auto refused = write_volume_archive(unknown);
+    CK_CHECK(!refused.value());
+    CK_CHECK(refused.state() == ObservationState::Unknown);
+
+    auto unsafe_document = document();
+    unsafe_document.entries[1].path = "../escape";
+    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2};
+    const auto unsafe_result = write_volume_archive(unsafe);
+    CK_CHECK(!unsafe_result.value());
+    CK_CHECK(unsafe_result.state() == ObservationState::Unsupported);
+}
+
+CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchiveService service;
+    FilesVolumeArchiveRequest request{source(), address(scratch.path()), "worker.ckarchive",
+                                      FilesVolumeArchiveConsistency::Live, 11,
+                                      [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }};
+    const auto submitted = service.request(std::move(request));
+    CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
+    std::optional<FilesVolumeArchiveReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply.has_value());
+    CK_CHECK(reply->state == FilesVolumeArchiveState::Complete);
+    CK_CHECK(reply->result && std::filesystem::exists(reply->result->published_path));
+    service.request_stop();
+    service.join();
+}
+
+CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-cancel", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool entered = false;
+    FilesVolumeArchiveService service;
+    FilesVolumeArchiveRequest request{source(), address(scratch.path()), "cancel.ckarchive",
+                                      FilesVolumeArchiveConsistency::Live, 12,
+                                      [&mutex, &changed, &entered](std::stop_token token) {
+                                          {
+                                              std::lock_guard lock(mutex);
+                                              entered = true;
+                                              changed.notify_all();
+                                          }
+                                          while (!token.stop_requested())
+                                              std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                          return Observation<FilesVolumeArchiveDocument>::unavailable(
+                                              ObservationState::Unknown,
+                                              {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
+                                               "volume_archive.cancelled"});
+                                      }};
+    const auto submitted = service.request(std::move(request));
+    CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
+    {
+        std::unique_lock lock(mutex);
+        CK_CHECK(changed.wait_for(lock, std::chrono::seconds(5), [&entered] { return entered; }));
+    }
+    CK_CHECK(service.cancel(submitted.ticket));
+    std::optional<FilesVolumeArchiveReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveState::Cancelled);
+    service.request_stop();
+    service.join();
+}
