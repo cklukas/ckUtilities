@@ -3,6 +3,24 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — volume archive review and loss model
+
+Commit `393d9f2` adds the archive-specific review boundary. The versioned
+manifest is now format 2 and records exact POSIX path encoding plus explicit
+loss records. The writer refuses unreviewed losses, the review model reports
+logical/data bytes, sparse files, object counts and hard losses, and approval
+requires every listed non-hard loss to be acknowledged. Hard losses and
+destination conflicts remain non-authorizable. Windows UTF-16 archive paths
+are deliberately refused until the archive has a native-unit codec; display
+UTF-8 is not used as a substitute.
+
+The focused archive suite passed **9/9** on macOS arm64, Linux arm64 and
+Windows x64/MSVC v143. The Windows test build used `/MT` to match the installed
+ckVision 1.4.0 SDK. Production volume Copy remains disabled pending the native
+source inventory/snapshot adapter and journal/recovery integration.
+
+Evidence: [current volume archive review record](evidence/ck-files-volume-archive-review-current-20261028.json).
+
 ## 2026-10-28 — current Linux real-terminal smoke from integrated build
 
 The exact current-source ARM64 `ck-files` executable from the integrated Linux

@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-28",
+  "source_commit": "393d9f2",
+  "scope": "Volume archive path encoding, loss manifest and archive-specific review model",
+  "macos": {
+    "build_root": "/Volumes/S8T/tmp/ckutilities-archive-review-20261028-01/build",
+    "target": "ck_vision_files_tests",
+    "incremental_build_window": "2026-10-28T15:15:58Z–2026-10-28T15:15:58Z",
+    "test_window": "2026-10-28T15:16:13Z–2026-10-28T15:16:13Z",
+    "test_command": "ck_vision_files_tests --suite files_volume_archive_tests.cpp",
+    "test_result": "9/9 passed",
+    "test_binary_sha256": "f077c078bffb9cbac373f3812670264d971dd38f4d5fb2368c75414271e9d322",
+    "test_binary_bytes": 20438168
+  },
+  "linux_arm64": {
+    "build_root": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+    "target": "ck_vision_files_tests",
+    "incremental_build_window": "2026-10-28T15:15:58Z–2026-10-28T15:15:58Z",
+    "test_window": "2026-10-28T15:16:10Z–2026-10-28T15:16:11Z",
+    "test_command": "ck_vision_files_tests --suite files_volume_archive_tests.cpp",
+    "test_result": "9/9 passed",
+    "test_binary_sha256": "ce09d108207d4aaef1b8ae2dca91a89627348602add324eabe5e7e6c52aa2a12",
+    "test_binary_bytes": 6736776
+  },
+  "windows_x64": {
+    "build_root": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build",
+    "configuration": "Release",
+    "runtime": "MultiThreaded (/MT), matching the installed ckVision 1.4.0 SDK",
+    "target": "ck_vision_files_tests",
+    "incremental_build_window": "2026-10-28T15:15:54Z–2026-10-28T15:15:57Z",
+    "test_window": "2026-10-28T15:16:06Z–2026-10-28T15:16:07Z",
+    "test_command": "ck_vision_files_tests.exe --suite files_volume_archive_tests.cpp",
+    "test_result": "9/9 passed",
+    "test_binary_sha256": "C965C2238B479D6E709FA979334288BDEF5CF1C2AB932AB357DD3884DE08ED10",
+    "test_binary_bytes": 4209152
+  },
+  "safety_boundaries": [
+    "Archive paths are accepted only as exact POSIX native bytes; Windows UTF-16 paths refuse until an explicit codec exists.",
+    "Loss records are serialized in format version 2 and unreviewed losses are refused by the writer.",
+    "Hard losses cannot be authorized by the review model; listed non-hard losses require every loss index to be reviewed.",
+    "Production volume Copy remains disabled because native source inventory, snapshot/provider qualification and journal integration are not complete."
+  ]
+}

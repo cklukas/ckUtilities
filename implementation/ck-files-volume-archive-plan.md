@@ -118,8 +118,11 @@ are never upgraded because a filesystem label looks familiar.
 
 ## Current state
 
-The versioned sparse writer and single-worker boundary are implemented and
-qualified on macOS and Windows. Linux has passed a strict standalone compile;
-integrated qualification waits for the required ckVision 1.4.0 SDK. The native
-source adapter, archive review, journal integration and production Copy wiring
-remain intentionally gated and are the next implementation slices.
+The versioned sparse writer, single-worker boundary and archive-specific review
+model are implemented and focused-qualified on macOS, Linux ARM64 and Windows
+x64. The format now records exact POSIX path encoding and explicit loss
+records; unreviewed losses and hard losses cannot reach the writer. Windows
+UTF-16 paths remain gated until a native-unit archive codec is implemented.
+The native source adapter, snapshot/provider qualification, journal integration
+and production Copy wiring remain intentionally gated and are the next
+implementation slices.
