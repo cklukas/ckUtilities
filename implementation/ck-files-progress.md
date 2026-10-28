@@ -3,6 +3,23 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — volume archive journal restart projection
+
+Commit `89c885d` adds a read-only archive-specific recovery projection over the
+durable journal. It accepts only Copy journals with one archive item, decodes
+bounded transaction/source/mount/archive evidence, requires that identity
+evidence remain identical through every transition, and preserves truncated
+tails or unfinished states as explicit reconciliation work. Malformed or
+changed evidence fails closed; the projection never reopens a path, deletes a
+temporary file, resumes a worker, replaces an archive, or claims publication.
+
+The full Files test executable passed **229/229** on macOS arm64, including
+13/13 volume-archive, 3/3 native-source, and 68/68 integrated Files tests.
+The same focused matrix passed on Linux ARM64 and Windows x64/MSVC v143.
+Startup discovery of orphan volume journals and the user-facing inspect/cleanup
+or revalidated-retry actions remain open release work. Evidence: [volume archive
+recovery record](evidence/ck-files-volume-archive-recovery-current-20261028.json).
+
 ## 2026-10-28 — deterministic documentation capture requalified
 
 The official `tools/docgen/generate_screenshots.sh` pipeline was rerun from a

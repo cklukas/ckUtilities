@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-28",
+  "source_commit": "89c885d",
+  "scope": "Volume archive journal recovery inspection",
+  "implementation": {
+    "mutation_behavior": "read-only; no open-by-path recovery mutation, deletion, resume, replacement, or publication",
+    "checks": [
+      "operation must be Copy",
+      "all journal records must address the single archive item",
+      "bounded transaction/source identity/mount/archive evidence must decode",
+      "evidence must remain identical across transitions",
+      "malformed evidence and untrusted tails remain reconciliation-required"
+    ],
+    "remaining_work": "startup journal discovery and user-facing reconciliation actions are still open"
+  },
+  "validation": {
+    "macos": {
+      "architecture": "arm64",
+      "build": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build",
+      "sdk": "/Volumes/S8T/tmp/ckvision-1.4.0-sanitized-20261028-01/sdk",
+      "test_executable": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/files/ck_vision_files_tests",
+      "archive_tests": "13/13",
+      "source_tests": "3/3",
+      "files_app_tests": "68/68",
+      "aggregate_files_tests": "229/229",
+      "asan_environment": "ASAN_OPTIONS=detect_container_overflow=0",
+      "note": "The owner-aware PRO-BLADE validation volume was required because S8T is APFS noowners and is intentionally rejected by the private index contract."
+    },
+    "linux": {
+      "architecture": "ARM64",
+      "build": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+      "test_executable": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/src/vision/files/ck_vision_files_tests",
+      "archive_tests": "13/13",
+      "source_tests": "3/3",
+      "files_app_tests": "68/68"
+    },
+    "windows": {
+      "architecture": "x64",
+      "toolset": "MSVC v143",
+      "build": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build",
+      "test_executable": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+      "build_start_utc": "2026-10-28T16:18:56.4986116Z",
+      "build_end_utc": "2026-10-28T16:19:46.0451703Z",
+      "archive_tests": "13/13",
+      "source_tests": "3/3",
+      "files_app_tests": "68/68"
+    }
+  }
+}
