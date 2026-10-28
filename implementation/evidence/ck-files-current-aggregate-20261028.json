@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-28",
+  "source_commit": "48a8448",
+  "platform": "macOS arm64",
+  "configuration": "Release/Ninja",
+  "executable": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/files/ck_vision_files_tests",
+  "environment": {
+    "TMPDIR": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/tmp-full-current",
+    "ASAN_OPTIONS": "detect_container_overflow=0"
+  },
+  "result": "231/231 tests passed",
+  "known_compatibility": "Without the Apple libc++ container-overflow compatibility setting, DirectoryCursor::read stops the broad current-source fixture; this is retained as an open sanitizer gate and is not treated as a clean ASan result."
+}

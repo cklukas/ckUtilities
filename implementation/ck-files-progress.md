@@ -3,6 +3,18 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — current macOS aggregate regression run
+
+The current committed macOS arm64 Release/Ninja test executable completed the
+full Files aggregate with **231/231 tests passed**, including the new recovery
+service and all existing completion, location, operation, volume-source,
+volume-archive, pane, and app tests. The run used
+`ASAN_OPTIONS=detect_container_overflow=0` because the broad current-source
+fixture otherwise stops on the known Apple libc++ `DirectoryCursor::read`
+container-overflow diagnostic; no other sanitizer diagnostic was reported.
+
+Evidence: [current aggregate record](evidence/ck-files-current-aggregate-20261028.json).
+
 ## 2026-10-28 — Linux sanitizer qualification of recovery gate
 
 The fresh ARM64 `RelWithDebInfo` build at
