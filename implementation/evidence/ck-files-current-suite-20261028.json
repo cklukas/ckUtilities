@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-28",
+  "host": "macOS arm64",
+  "source_revision": "b0b42f0",
+  "files_source_last_code_revision": "28a4634",
+  "build": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build",
+  "runs": [
+    {
+      "command": "ctest --test-dir /Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build --output-on-failure -R '^(ck_vision_files_tests|test_files_)$'",
+      "result": "1/1 passed",
+      "start": "2026-10-28T11:29:09.701723000Z",
+      "end": "2026-10-28T11:29:14.891646000Z",
+      "elapsed_seconds": 5.17,
+      "exit_code": 0,
+      "scope": "Current Files application suite; 212 application cases"
+    },
+    {
+      "command": "ctest --test-dir /Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build --output-on-failure -L files",
+      "result": "107/107 passed",
+      "start": "2026-10-28T11:29:17.633828000Z",
+      "end": "2026-10-28T11:29:55.400858000Z",
+      "elapsed_seconds": 37.73,
+      "exit_code": 0,
+      "scope": "Files-labelled unit, native, application, planning, journal, recovery and operation tests"
+    }
+  ],
+  "notes": [
+    "The source has no Files implementation changes after 28a4634; later commits in source_revision are evidence and documentation records.",
+    "This validates the implementation suites, not the remaining full filesystem matrix, controlled crash/power-loss tests, or release-window interactive acceptance."
+  ]
+}

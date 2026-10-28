@@ -3,6 +3,17 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — current macOS Files suite qualification
+
+The current Files implementation suite passed on macOS arm64: the real
+`ck_vision_files_tests` application suite passed **1/1** (212 application
+cases), and the complete Files-labelled gate passed **107/107**. The latter
+includes the native filesystem, indexed pane, planning, journal, recovery,
+copy/move, and UI tests. The source has no Files implementation changes after
+`28a4634`; later commits only add qualification and documentation records.
+
+Evidence: [current Files suite record](evidence/ck-files-current-suite-20261028.json).
+
 ## 2026-10-28 — current Linux real-terminal smoke qualification
 
 The current installed Linux ARM64 `ck-files` binary passed a real 80x24 PTY

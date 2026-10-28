@@ -330,27 +330,32 @@ configuration also passes against current sources. Query coverage and unavailabl
 states remain explicit. This acceptance grants no preservation or mutation
 authority and does not close the application or release requirements below.
 
-### WP-02 — read-only Files application
+### WP-02 — responsive two-pane Files application
 
-- [ ] Implement the real two-pane app, asynchronous navigation/completion,
+- [x] Implement the real two-pane app, asynchronous navigation/completion,
   bounded providers, history/bookmarks, sorting/filtering, properties and preview.
-- [ ] Preserve pane state on errors; support roots, drives, UNC and external
+- [x] Preserve pane state on errors; support roots, drives, UNC and external
   removal. Define refresh semantics; do not present a stale listing as current.
-- [ ] Test pending scans, stale replies, blocked storage, rapid navigation,
+- [x] Test pending scans, stale replies, blocked storage, rapid navigation,
   resize, narrow layout, all suite themes, mouse and keyboard operation.
+
+Implementation is complete and covered by the current Files application suite;
+release acceptance remains open until the cross-platform interactive and
+filesystem qualification gates below are complete.
 
 Acceptance: real view graph works headlessly and interactively; no synchronous
 disk access in paint/provider/command callbacks; stable selections survive
 refresh and reorder; unsupported names are visible and cannot target a different
-object. No mutation commands are enabled at this development milestone.
+object. Mutations are available only through reviewed, revalidated worker
+flows; their cross-platform release qualification remains in WP-07/WP-08.
 
 ### WP-03 — complete planning and loss consent
 
-- [ ] Implement frozen recursive inventories with mount/link policies,
+- [x] Implement frozen recursive inventories with mount/link policies,
   overlap/self/descendant detection, destination conflicts and capability diffs.
-- [ ] Implement review dialogs for preservation loss, uncertainty, collisions,
+- [x] Implement review dialogs for preservation loss, uncertainty, collisions,
   destination replacement and explicit directory merges.
-- [ ] Bind user decisions to plan identity and invalidate them on relevant change.
+- [x] Bind user decisions to plan identity and invalidate them on relevant change.
 
 Acceptance: tests demonstrate separate consent for missing ADS/resource forks,
 ACL/security changes, sparse expansion, timestamp precision, hard-link loss,
@@ -359,11 +364,11 @@ causes no mutation. Concurrent substitutions force revalidation/new decisions.
 
 ### WP-04 — copy, verification and recovery
 
-- [ ] Implement native streaming/copy adapters, per-stream digest verification,
+- [x] Implement native streaming/copy adapters, per-stream digest verification,
   ordered metadata preservation, safe commit/replacement and durable journals.
-- [ ] Implement bounded progress, conflicts during execution, cancellation,
+- [x] Implement bounded progress, conflicts during execution, cancellation,
   per-item outcomes, startup inspection and recovery of owned artifacts.
-- [ ] Add deterministic failure injection at each journal/commit boundary and
+- [x] Add deterministic failure injection at each journal/commit boundary and
   during read/write/flush/metadata operations; test process termination recovery.
 
 Acceptance: failures never destroy the old target or expose an incomplete copy
@@ -373,11 +378,11 @@ crash-after-commit and journal persistence failure. Recovery never guesses.
 
 ### WP-05 — remaining mutations
 
-- [ ] Implement same-filesystem and cross-filesystem moves with separate
+- [x] Implement same-filesystem and cross-filesystem moves with separate
   semantics and independently verified source-removal predicates.
-- [ ] Implement case-only rename, folder creation, native Trash/Recycle Bin and
+- [x] Implement case-only rename, folder creation, native Trash/Recycle Bin and
   explicit permanent deletion with no link traversal or hidden fallback.
-- [ ] Test nested partial failures, new children, read-only/immutable objects,
+- [x] Test nested partial failures, new children, read-only/immutable objects,
   mount-boundary changes, reused paths and handles, and unavailable Trash.
 
 Acceptance: cross-filesystem source removal is impossible before verified,
@@ -388,12 +393,12 @@ always states its irreversibility; cancellation outcomes reflect actual effects.
 
 ### WP-06 — complete product interaction
 
-- [ ] Finish command registry/keymap integration, menus, help, status actions,
+- [x] Finish command registry/keymap integration, menus, help, status actions,
   job details, error summaries, settings, launcher and CLI behavior.
-- [ ] Serialize mutations initially; allow browsing and planning while a job
+- [x] Serialize mutations initially; allow browsing and planning while a job
   runs. Lock conflicting paths/identities across panes; test interactions with
   external processes. No unbounded job queue or concurrent conflicting writes.
-- [ ] Ensure every progress/result message is derived from engine state.
+- [x] Ensure every progress/result message is derived from engine state.
   Keep Cancel, Skip and Retry distinct; retry creates a revalidated plan.
 
 Acceptance: full workflows work without function keys or mouse; focus returns
