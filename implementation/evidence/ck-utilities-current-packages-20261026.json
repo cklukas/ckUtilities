@@ -1,5 +1,5 @@
 {
-  "source_commit": "b5afc33",
+  "source_commit": "7946c61",
   "documentation_payload": {
     "tool_guides": 10,
     "screenshots_svg": 28,
@@ -7,13 +7,16 @@
     "guides_have_embedded_screenshots": true
   },
   "macos_arm64": {
-    "package": "/Volumes/S8T/tmp/ckutilities-docs-refresh-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz",
-    "sha256": "a25458c64a8b555ca3e86d0cf33c7235a3bf100fe888de854f621f8bf5930cff",
-    "package_bytes": 11704615,
-    "package_timestamp": "2026-10-28T07:45:09+0100",
+    "package": "/Volumes/S8T/tmp/ckutilities-settings-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz",
+    "sha256": "872b107b5d6895e5a6e9b4c2e7c82ed88380021338c438c59217691486d1a66a",
+    "package_bytes": 11745071,
+    "package_timestamp": "2026-10-28T07:55:12+0100",
     "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100",
-    "package_verification": "10 guides and 28 SVG screenshots; extracted ck-files guide contains the current feature and preference-persistence qualification text",
-    "refresh_note": "Documentation-only package refresh from source commit b5afc33; existing current-source macOS interactive and full-suite qualification remains recorded below"
+    "package_verification": "10 guides and 28 SVG screenshots; extracted ck-files guide documents durable display settings and exact native bookmarks",
+    "release_build": "2026-10-28T06:51:54.149758Z–2026-10-28T06:54:43.490372Z; clean Release restore after 7946c61",
+    "binary_sha256": "03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55",
+    "ctest": "224/224 passed, exit code 0, 20.43s total; Files-labelled 107/107",
+    "settings_tests": "4 new persistence cases passed: 3 codec/store cases and 1 acknowledged app integration case"
   },
   "linux_arm64_rpi4": {
     "package": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-linux.tar.gz",

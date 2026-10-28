@@ -1,5 +1,5 @@
 {
-  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda", "b5afc33"],
+  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda", "b5afc33", "7946c61"],
   "contract": {
     "expected_utilities": [
       "ck-utilities",
@@ -22,8 +22,14 @@
     "build": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build",
     "documentation_contract": "1/1 passed",
     "full_ctest": "224/224 passed",
+    "full_ctest_window": "2026-10-28T06:54:47.153283Z–2026-10-28T06:55:07.616101Z, 20.43s total",
+    "release_build": "2026-10-28T06:51:54.149758Z–2026-10-28T06:54:43.490372Z; Release; clean restore build after 7946c61",
+    "ck_files_binary_sha256": "03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55",
     "files_native_trash": "1/1 passed",
-    "files_native_foreign_volume_trash": "8/8 passed"
+    "files_native_foreign_volume_trash": "8/8 passed",
+    "package": "/Volumes/S8T/tmp/ckutilities-settings-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz",
+    "package_sha256": "872b107b5d6895e5a6e9b4c2e7c82ed88380021338c438c59217691486d1a66a",
+    "documentation_payload": "10 guides and 28 SVG screenshots"
   },
   "linux_arm64_rpi4": {
     "source": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/source",

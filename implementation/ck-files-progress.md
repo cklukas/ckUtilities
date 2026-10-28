@@ -3,6 +3,34 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — 7946c61 durable Files display settings and bookmarks
+
+Files now loads and atomically persists bounded, versioned display settings and
+exact native bookmarks under the private suite configuration root. POSIX raw
+bytes, Windows UTF-16 units, literal route components, sort/filter flags and
+hidden-item policy are encoded without parsing display text. Invalid settings,
+resource-limit violations and concurrent-write conflicts remain explicit; a
+failed write preserves the previous file. Startup still uses explicit command
+line locations, while restored bookmarks retain their complete structured
+routes and are reopened only through the worker navigation protocol.
+
+The implementation and app integration are committed as `7946c61`. New codec,
+corruption/bounds, and acknowledged app-persistence tests pass. A clean macOS
+Release restore build ran from
+`2026-10-28T06:51:54.149758Z` to `2026-10-28T06:54:43.490372Z`; the verified
+`ck-files` binary SHA-256 is
+`03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55`. The
+full suite then passed **224/224** in 20.43 seconds, including **107/107**
+Files-labelled tests and the documentation contract. The current macOS
+archive is
+`/Volumes/S8T/tmp/ckutilities-settings-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz`
+with SHA-256
+`872b107b5d6895e5a6e9b4c2e7c82ed88380021338c438c59217691486d1a66a`; it
+contains all ten guides and 28 SVG screenshots.
+
+Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
+and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-28 — b5afc33 refreshed macOS package with current documentation
 
 The macOS ARM64 archive was refreshed after the Files guide was corrected to
