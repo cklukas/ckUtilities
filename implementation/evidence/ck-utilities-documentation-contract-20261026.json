@@ -1,5 +1,5 @@
 {
-  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda"],
+  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda", "b5afc33"],
   "contract": {
     "expected_utilities": [
       "ck-utilities",
@@ -42,10 +42,11 @@
     "toolchain": "Visual Studio 2022 Build Tools 17.14.35; MSVC 19.44.35228.0; CMake 3.31.6-msvc6",
     "ckvision_sdk": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\ckvision-sdk, config 1.4.0, SHA-256 6B64012AE3B59E43DF849BBBAEFBEF9EFF797B7E324AE864116D0B7271FE6E1F",
     "runtime": "MultiThreaded (/MT), matching the staged ckVision SDK",
-    "package": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-e56b723\\ck-utilities-0.2.0-windows-x64.zip",
-    "package_sha256": "EBA0521BD678BDFBE55F4851AAF8438C8038878890ACBA14AAF12921099C53EB",
-    "install": "V:\\dev\\ckutilities-install-e56b723",
+    "package": "V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-b5afc33\\ck-utilities-0.2.0-windows-x64.zip",
+    "package_sha256": "CF9DD7E0878B2F6E5F1A2C197B75762460E7B276C3BCEDD633E52D22483701F7",
+    "install": "V:\\dev\\ckutilities-install-b5afc33",
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
-    "documentation_payload": "10 guides and 28 SVG screenshots"
+    "documentation_payload": "10 guides and 28 SVG screenshots; extracted ZIP matches the installed payload",
+    "package_tool": "CMake cpack.exe invoked by absolute path because Chocolatey's deprecated cpack alias precedes it on PATH"
   }
 }

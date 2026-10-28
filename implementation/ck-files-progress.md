@@ -3,6 +3,27 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — b5afc33 refreshed Windows package with current documentation
+
+The Windows package was rebuilt after the Files guide was corrected to avoid
+advertising durable preference persistence that is not implemented in this
+checkpoint. The source archive on `V:` matches commit `b5afc33`; the clean
+Release build remained the verified `MultiThreaded` v143 build and its full
+CTest result is **223/223 passed**, including **107/107** Files-labelled tests,
+the documentation contract, and the ten-tool ConPTY contract.
+
+The replacement ZIP is
+`V:\\tmp\\ckutilities-goal-20261026-windows-01\\packages-b5afc33\\ck-utilities-0.2.0-windows-x64.zip`
+with SHA-256
+`CF9DD7E0878B2F6E5F1A2C197B75762460E7B276C3BCEDD633E52D22483701F7`.
+The installed and extracted payloads each contain all ten guides and 28 SVG
+screenshots, and the ten installed utilities report ckVision 1.4.0. Packaging
+used the absolute CMake `cpack.exe` because Chocolatey's deprecated `cpack`
+alias takes precedence on the workstation PATH.
+
+Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
+and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-26 — 9ed7eda current Windows package and full-suite checkpoint
 
 The Windows workstation qualification is now from the current source and the
