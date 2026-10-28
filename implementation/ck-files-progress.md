@@ -20,6 +20,17 @@ and footer surfaces. Disabled commands remain visible and report a concise,
 selection-specific reason in the status bar. This is a specification checkpoint
 only: native archive and snapshot execution remain open implementation work.
 
+The first implementation slice is committed as `7574326`, `e5b65b4`, and
+`4d9745d`: a shared availability result now drives Files command predicates,
+volume-specific refusal reasons, opaque native volume identity, archive
+capability state, the guide wording, and the refreshed real-UI volume capture.
+The macOS Files-labelled gate passed **107/107** in 12.15 seconds. The
+current-source Windows Release build on the required `V:` workstation passed
+the same **107/107** gate in 22.80 seconds after the source hashes were
+verified against the Mac checkout. Both results qualify the gating and
+volume-view contract only; archive execution and native snapshot providers
+remain disabled until their workers and platform checks are implemented.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
