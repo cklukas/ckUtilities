@@ -64,3 +64,25 @@ CK_TEST(files_settings_parser_bounds_bookmarks_and_filters) {
     settings.views[0].display_substring.push_back('x');
     CK_CHECK(!parse_files_settings(files_settings_text(settings)).has_value());
 }
+
+CK_TEST(files_settings_store_restores_and_rejects_stale_atomic_writes) {
+    ckv::MemoryFileSystem files;
+    FilesSettingsStore first(files, "/user/ck-files.settings");
+    CK_CHECK(first.load().diagnostic.empty());
+    FilesPersistentSettings value;
+    value.views[1].show_hidden = true;
+    value.bookmarks[1].push_back(route("/root", "child"));
+    CK_CHECK(first.save(value).empty());
+
+    FilesSettingsStore relaunched(files, "/user/ck-files.settings");
+    const auto restored = relaunched.load();
+    CK_CHECK(restored.diagnostic.empty() && restored.value.views[1].show_hidden &&
+             restored.value.bookmarks[1].size() == 1 && restored.value.bookmarks[1][0] == value.bookmarks[1][0]);
+
+    FilesSettingsStore stale(files, "/user/ck-files.settings");
+    CK_CHECK(stale.load().diagnostic.empty());
+    value.views[1].show_hidden = false;
+    CK_CHECK(relaunched.save(value).empty());
+    CK_CHECK(!stale.save({}).empty());
+    CK_CHECK(parse_files_settings(files.read_file("/user/ck-files.settings")->contents)->views[1].show_hidden == false);
+}
