@@ -6,6 +6,7 @@
 #include "files_operation_planning_service.hpp"
 #include "files_operation_execution_service.hpp"
 #include "files_operation_review_dialog.hpp"
+#include "files_volume_archive_review_dialog.hpp"
 #include "files_settings.hpp"
 #include "files_volume_service.hpp"
 #include "files_pane_grid.hpp"
@@ -54,7 +55,9 @@ class FilesApp final {
              FilesOperationPlanningService *planning_service = nullptr,
              FilesOperationExecutionService *execution_service = nullptr,
              std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {},
-             FilesSettingsBinding settings = {}, FilesVolumeService *volume_service = nullptr);
+             FilesSettingsBinding settings = {}, FilesVolumeService *volume_service = nullptr,
+             FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr,
+             FilesVolumeArchiveService *volume_archive_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

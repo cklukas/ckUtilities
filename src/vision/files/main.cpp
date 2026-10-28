@@ -111,6 +111,9 @@ int run(const std::vector<std::string> &args) {
     auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
     auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
     auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback());
+    auto volume_archive_planning_service =
+        std::make_unique<ck::vision::FilesVolumeArchivePlanningService>(wake.callback());
+    auto volume_archive_service = std::make_unique<ck::vision::FilesVolumeArchiveService>(wake.callback());
     services[0] = std::make_unique<ck::vision::FilesPaneService>(
         ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     services[1] = std::make_unique<ck::vision::FilesPaneService>(
@@ -132,7 +135,8 @@ int run(const std::vector<std::string> &args) {
         std::make_shared<const NativeAbsolutePath>(*operation_journal_root),
         {std::move(loaded_settings.value), [&settings](const ck::vision::FilesPersistentSettings &value) {
              return settings.save(value);
-         }, std::move(loaded_settings.diagnostic)}, volume_service.get());
+         }, std::move(loaded_settings.diagnostic)}, volume_service.get(), volume_archive_planning_service.get(),
+        volume_archive_service.get());
     keymap.load();
     application.run();
     return 0;
