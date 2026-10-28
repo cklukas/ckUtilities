@@ -96,6 +96,61 @@ CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths)
     CK_CHECK(unsafe_result.state() == ObservationState::Unsupported);
 }
 
+CK_TEST(volume_archive_review_reports_sparse_shape_and_binds_default_name) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-review", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto review = FilesVolumeArchiveReview::create(document(), address(scratch.path()), {},
+                                                   FilesVolumeArchiveDestinationState::Ready);
+    CK_CHECK(review.value());
+    const auto &model = *review.value();
+    CK_CHECK(model->archive_name() == "Fixture_volume.ckarchive");
+    CK_CHECK(model->summary().entries == 3);
+    CK_CHECK(model->summary().regular_files == 1);
+    CK_CHECK(model->summary().sparse_files == 1);
+    CK_CHECK(model->summary().logical_bytes == 16);
+    CK_CHECK(model->summary().data_bytes == 4);
+    CK_CHECK(!model->requires_loss_consent());
+    const auto approval = model->approve(FilesVolumeArchiveReviewDecision::Proceed);
+    CK_CHECK(approval.value());
+    CK_CHECK(!approval.value()->continued_with_listed_losses);
+    CK_CHECK(approval.value()->review == model);
+}
+
+CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_unreviewed_losses) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-review-loss", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto reviewed_document = document();
+    reviewed_document.losses.push_back({1, "sparse.bin", FilesVolumeArchiveLossKind::Metadata, false,
+                                        "portable timestamps are not encoded"});
+    auto review = FilesVolumeArchiveReview::create(std::move(reviewed_document), address(scratch.path()),
+                                                   "loss.ckarchive", FilesVolumeArchiveDestinationState::Ready);
+    CK_CHECK(review.value());
+    const auto &model = *review.value();
+    CK_CHECK(model->summary().losses == 1);
+    CK_CHECK(model->summary().hard_losses == 0);
+    const auto refused = model->approve(FilesVolumeArchiveReviewDecision::Proceed);
+    CK_CHECK(!refused.value());
+    const std::size_t loss = 0;
+    const auto approved = model->approve(FilesVolumeArchiveReviewDecision::ContinueWithListedLosses,
+                                         std::span<const std::size_t>(&loss, 1));
+    CK_CHECK(approved.value());
+    CK_CHECK(approved.value()->continued_with_listed_losses);
+
+    auto unreviewed = model->document();
+    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17};
+    const auto write_result = write_volume_archive(write_request);
+    CK_CHECK(!write_result.value());
+    CK_CHECK(write_result.state() == ObservationState::Unknown);
+}
+
+CK_TEST(volume_archive_review_refuses_unrepresentable_windows_path_encoding) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-review-encoding", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto value = document();
+    value.path_encoding = NameEncoding::WindowsUtf16;
+    const auto review = FilesVolumeArchiveReview::create(std::move(value), address(scratch.path()),
+                                                         "encoding.ckarchive", FilesVolumeArchiveDestinationState::Ready);
+    CK_CHECK(!review.value());
+    CK_CHECK(review.state() == ObservationState::Unsupported);
+}
+
 CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveService service;

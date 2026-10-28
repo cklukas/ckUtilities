@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cctype>
 #include <condition_variable>
 #include <cstring>
 #include <cerrno>
@@ -40,7 +41,7 @@ using ck::files::ObservationState;
 using ck::files::UnavailableObservation;
 
 constexpr std::array<char, 8> kMagic{'C', 'K', 'A', 'R', 'V', '0', '1', '\0'};
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;
 constexpr std::uint64_t kHeaderSize = 56;
 
 struct ArchiveDiagnostic final {
@@ -83,12 +84,17 @@ bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t &result)
     return true;
 }
 
-bool safe_relative_path(std::string_view path) {
-    if (path.empty() || path.front() == '/' || path.front() == '\\' || path.find('\0') != std::string_view::npos)
+bool safe_relative_path(std::string_view path, ck::files::NameEncoding encoding) {
+    // A std::string cannot carry Windows UTF-16 code units without an
+    // irreversible conversion. Keep that path family fail-closed until the
+    // archive gets its explicit UTF-16 codec.
+    if (encoding != ck::files::NameEncoding::PosixBytes)
+        return false;
+    if (path.empty() || path.front() == '/' || path.find('\0') != std::string_view::npos)
         return false;
     std::size_t start = 0;
     while (start <= path.size()) {
-        const auto end = path.find_first_of("/\\", start);
+        const auto end = path.find('/', start);
         const auto component = path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
         if (component.empty() || component == "." || component == "..")
             return false;
@@ -137,6 +143,16 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
     if (document.entries.empty())
         return Observation<std::vector<EncodedEntry>>::unavailable(
             ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.empty_document"));
+    if (document.path_encoding != ck::files::NameEncoding::PosixBytes)
+        return Observation<std::vector<EncodedEntry>>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.path_encoding"));
+    for (const auto &loss : document.losses) {
+        if (loss.entry_index >= document.entries.size() ||
+            (!loss.path.empty() && !safe_relative_path(loss.path, document.path_encoding)) ||
+            loss.diagnostic.empty())
+            return Observation<std::vector<EncodedEntry>>::unavailable(
+                ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.loss_record"));
+    }
 
     std::set<std::string> paths;
     std::vector<EncodedEntry> encoded;
@@ -146,7 +162,7 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
         if (stop_token.stop_requested())
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
-        if (!safe_relative_path(entry.path) || !paths.insert(entry.path).second)
+        if (!safe_relative_path(entry.path, document.path_encoding) || !paths.insert(entry.path).second)
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.entry_path"));
         if (entry.kind == FilesVolumeArchiveEntryKind::HardLink && entry.hard_link_group == 0)
@@ -215,7 +231,8 @@ void append_manifest(std::vector<std::byte> &out, const FilesVolumeArchiveDocume
     append_string(out, document.source.mount_point);
     append_string(out, document.source.filesystem);
     append_le<std::uint8_t>(out, static_cast<std::uint8_t>(document.consistency));
-    for (int i = 0; i != 7; ++i)
+    append_le<std::uint8_t>(out, static_cast<std::uint8_t>(document.path_encoding));
+    for (int i = 0; i != 6; ++i)
         append_le<std::uint8_t>(out, 0);
     for (const auto &encoded : entries) {
         const auto &entry = *encoded.source;
@@ -232,6 +249,16 @@ void append_manifest(std::vector<std::byte> &out, const FilesVolumeArchiveDocume
             append_le<std::uint64_t>(out, extent.archive_offset);
             append_le<std::uint64_t>(out, extent.length);
         }
+    }
+    append_le<std::uint64_t>(out, document.losses.size());
+    for (const auto &loss : document.losses) {
+        append_le<std::uint64_t>(out, loss.entry_index);
+        append_le<std::uint8_t>(out, static_cast<std::uint8_t>(loss.kind));
+        append_le<std::uint8_t>(out, loss.hard_failure ? 1U : 0U);
+        for (int i = 0; i != 6; ++i)
+            append_le<std::uint8_t>(out, 0);
+        append_string(out, loss.path);
+        append_string(out, loss.diagnostic);
     }
 }
 
@@ -357,6 +384,9 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (!valid_request(request))
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.request"));
+    if (!request.document.losses.empty() && !request.document.losses_reviewed)
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unknown, error(AdapterError::ProviderReviewRequired, "volume_archive.loss_consent"));
     std::error_code ec;
     const auto destination_status = std::filesystem::symlink_status(request.destination_directory, ec);
     if (ec)
@@ -505,6 +535,129 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
              FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation, true});
     return Observation<FilesVolumeArchiveWriteResult>::available(
         {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}, true});
+}
+
+namespace {
+
+template <class T>
+Observation<T> review_rejected(ObservationState state, AdapterError code, const char *operation) {
+    return Observation<T>::unavailable(state, error(code, operation));
+}
+
+bool all_loss_indices_reviewed(std::span<const std::size_t> reviewed, std::size_t count) {
+    if (reviewed.size() != count)
+        return false;
+    std::vector<bool> seen(count, false);
+    for (const auto index : reviewed) {
+        if (index >= count || seen[index])
+            return false;
+        seen[index] = true;
+    }
+    return true;
+}
+
+} // namespace
+
+std::string FilesVolumeArchiveReview::default_archive_name(std::string_view volume_name) {
+    std::string stem;
+    stem.reserve(std::min<std::size_t>(volume_name.size(), 128));
+    for (const unsigned char byte : volume_name) {
+        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+            (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == '.')
+            stem.push_back(static_cast<char>(byte));
+        else
+            stem.push_back('_');
+        if (stem.size() == 128)
+            break;
+    }
+    if (stem.empty() || stem == "." || stem == "..")
+        stem = "volume";
+    if (!stem.ends_with(".ckarchive"))
+        stem += ".ckarchive";
+    return stem;
+}
+
+Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
+    FilesVolumeArchiveDocument document, ck::files::NativeAbsolutePath destination_directory,
+    std::string archive_name, FilesVolumeArchiveDestinationState destination_state) {
+    if (!document.source.identity.empty() && !document.source.mount_point.empty()) {
+        // Continue below; the explicit checks are kept separate so every
+        // refusal has a stable operation name for the status/review layer.
+    } else {
+        return review_rejected<Pointer>(ObservationState::Unknown, AdapterError::UnqualifiedIdentity,
+                                        "volume_archive.review.source_identity");
+    }
+    if (!destination_directory.is_valid())
+        return review_rejected<Pointer>(ObservationState::Failed, AdapterError::InvalidPath,
+                                        "volume_archive.review.destination");
+    if (archive_name.empty())
+        archive_name = default_archive_name(document.source.name);
+    if (!safe_archive_name(archive_name))
+        return review_rejected<Pointer>(ObservationState::Unsupported, AdapterError::UnrepresentableName,
+                                        "volume_archive.review.archive_name");
+    if (destination_state == FilesVolumeArchiveDestinationState::Unknown)
+        return review_rejected<Pointer>(ObservationState::Unknown, AdapterError::PlanDecisionStale,
+                                        "volume_archive.review.destination_state");
+
+    std::uint64_t logical_bytes = 0;
+    std::uint64_t data_bytes = 0;
+    auto encoded = validate_and_encode(document, logical_bytes, data_bytes, {});
+    if (!encoded.value())
+        return review_rejected<Pointer>(encoded.unavailable_detail()->state,
+                                        static_cast<AdapterError>(encoded.unavailable_detail()->error.code),
+                                        "volume_archive.review.document");
+
+    FilesVolumeArchiveReviewSummary summary;
+    summary.logical_bytes = logical_bytes;
+    summary.data_bytes = data_bytes;
+    summary.entries = document.entries.size();
+    summary.destination_conflict = destination_state == FilesVolumeArchiveDestinationState::Conflict;
+    for (const auto &entry : document.entries) {
+        switch (entry.kind) {
+        case FilesVolumeArchiveEntryKind::Directory: ++summary.directories; break;
+        case FilesVolumeArchiveEntryKind::RegularFile:
+            ++summary.regular_files;
+            if (!entry.extents.empty()) {
+                const auto &last = entry.extents.back();
+                std::uint64_t end = last.offset + last.bytes.size();
+                if (end < entry.logical_size)
+                    ++summary.sparse_files;
+            }
+            break;
+        case FilesVolumeArchiveEntryKind::Symlink: ++summary.links; break;
+        case FilesVolumeArchiveEntryKind::HardLink: ++summary.hard_links; break;
+        }
+    }
+    summary.losses = document.losses.size();
+    summary.hard_losses = static_cast<std::size_t>(std::count_if(
+        document.losses.begin(), document.losses.end(), [](const auto &loss) { return loss.hard_failure; }));
+    return Observation<Pointer>::available(Pointer(new FilesVolumeArchiveReview(
+        std::move(document), std::move(destination_directory), std::move(archive_name), summary)));
+}
+
+Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
+    FilesVolumeArchiveReviewDecision decision, std::span<const std::size_t> reviewed_losses) const {
+    if (decision == FilesVolumeArchiveReviewDecision::Cancel)
+        return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Unsupported,
+                                                           AdapterError::ProviderReviewRequired,
+                                                           "volume_archive.review.cancelled");
+    if (summary_.destination_conflict)
+        return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Changed,
+                                                           AdapterError::PlanDecisionStale,
+                                                           "volume_archive.review.destination_conflict");
+    if (document_.losses.empty()) {
+        if (decision != FilesVolumeArchiveReviewDecision::Proceed || !reviewed_losses.empty())
+            return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Unsupported,
+                                                               AdapterError::ProviderReviewRequired,
+                                                               "volume_archive.review.loss_decision");
+        return Observation<FilesVolumeArchiveApproval>::available({shared_from_this(), false});
+    }
+    if (decision != FilesVolumeArchiveReviewDecision::ContinueWithListedLosses ||
+        !all_loss_indices_reviewed(reviewed_losses, document_.losses.size()) || summary_.hard_losses != 0)
+        return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Unsupported,
+                                                           AdapterError::ProviderReviewRequired,
+                                                           "volume_archive.review.loss_consent");
+    return Observation<FilesVolumeArchiveApproval>::available({shared_from_this(), true});
 }
 
 struct FilesVolumeArchiveService::State final {

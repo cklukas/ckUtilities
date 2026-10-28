@@ -14,7 +14,9 @@
 #include <optional>
 #include <stop_token>
 #include <string>
+#include <span>
 #include <vector>
+#include <string_view>
 
 namespace ck::vision {
 
@@ -28,6 +30,24 @@ enum class FilesVolumeArchiveEntryKind : std::uint8_t {
     RegularFile = 2,
     Symlink = 3,
     HardLink = 4,
+};
+
+enum class FilesVolumeArchiveLossKind : std::uint8_t {
+    UnsupportedObject = 1,
+    Metadata = 2,
+    AdditionalChannel = 3,
+    Security = 4,
+    StorageRepresentation = 5,
+    Name = 6,
+    Consistency = 7,
+};
+
+struct FilesVolumeArchiveLoss final {
+    std::size_t entry_index = 0;
+    std::string path;
+    FilesVolumeArchiveLossKind kind = FilesVolumeArchiveLossKind::Metadata;
+    bool hard_failure = false;
+    std::string diagnostic;
 };
 
 struct FilesVolumeArchiveExtent final {
@@ -49,7 +69,85 @@ struct FilesVolumeArchiveEntry final {
 struct FilesVolumeArchiveDocument final {
     FilesVolumeRecord source;
     FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live;
+    // POSIX archive paths are exact native bytes. Windows paths remain
+    // intentionally unavailable until the archive format has a UTF-16 path
+    // codec; accepting display UTF-8 here would lose names or merge aliases.
+    ck::files::NameEncoding path_encoding = ck::files::NameEncoding::PosixBytes;
     std::vector<FilesVolumeArchiveEntry> entries;
+    std::vector<FilesVolumeArchiveLoss> losses;
+    bool losses_reviewed = false;
+};
+
+enum class FilesVolumeArchiveDestinationState : std::uint8_t {
+    Ready,
+    Conflict,
+    Unknown,
+};
+
+struct FilesVolumeArchiveReviewSummary final {
+    std::uint64_t logical_bytes = 0;
+    std::uint64_t data_bytes = 0;
+    std::size_t entries = 0;
+    std::size_t directories = 0;
+    std::size_t regular_files = 0;
+    std::size_t links = 0;
+    std::size_t hard_links = 0;
+    std::size_t sparse_files = 0;
+    std::size_t losses = 0;
+    std::size_t hard_losses = 0;
+    bool destination_conflict = false;
+};
+
+enum class FilesVolumeArchiveReviewDecision : std::uint8_t {
+    Cancel,
+    Proceed,
+    ContinueWithListedLosses,
+};
+
+class FilesVolumeArchiveReview;
+
+struct FilesVolumeArchiveApproval final {
+    std::shared_ptr<const FilesVolumeArchiveReview> review;
+    bool continued_with_listed_losses = false;
+};
+
+class FilesVolumeArchiveReview final : public std::enable_shared_from_this<FilesVolumeArchiveReview> {
+  public:
+    using Pointer = std::shared_ptr<const FilesVolumeArchiveReview>;
+
+    static ck::files::Observation<Pointer> create(
+        FilesVolumeArchiveDocument document, ck::files::NativeAbsolutePath destination_directory,
+        std::string archive_name, FilesVolumeArchiveDestinationState destination_state);
+
+    static std::string default_archive_name(std::string_view volume_name);
+
+    const FilesVolumeArchiveDocument &document() const noexcept { return document_; }
+    const ck::files::NativeAbsolutePath &destination_directory() const noexcept { return destination_directory_; }
+    const std::string &archive_name() const noexcept { return archive_name_; }
+    const FilesVolumeArchiveReviewSummary &summary() const noexcept { return summary_; }
+    bool cancel_is_default() const noexcept { return true; }
+    bool requires_loss_consent() const noexcept { return !document_.losses.empty(); }
+
+    // Approval binds the immutable document, destination, archive name and
+    // loss list together. It performs no I/O and never authorizes mutation by
+    // itself; the future worker must retain this review pointer and recheck
+    // the source/destination identities before writing.
+    ck::files::Observation<FilesVolumeArchiveApproval> approve(
+        FilesVolumeArchiveReviewDecision decision,
+        std::span<const std::size_t> reviewed_losses = {}) const;
+
+  private:
+    FilesVolumeArchiveReview(FilesVolumeArchiveDocument document,
+                             ck::files::NativeAbsolutePath destination_directory,
+                             std::string archive_name,
+                             FilesVolumeArchiveReviewSummary summary) noexcept
+        : document_(std::move(document)), destination_directory_(std::move(destination_directory)),
+          archive_name_(std::move(archive_name)), summary_(summary) {}
+
+    FilesVolumeArchiveDocument document_;
+    ck::files::NativeAbsolutePath destination_directory_;
+    std::string archive_name_;
+    FilesVolumeArchiveReviewSummary summary_;
 };
 
 struct FilesVolumeArchiveWriteRequest final {
