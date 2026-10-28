@@ -1,5 +1,5 @@
 {
-  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda", "b5afc33", "7946c61"],
+  "implementation_commits": ["2e1dd08", "1020591", "486d48d", "c71f906", "9ed7eda", "b5afc33", "7946c61", "28a4634"],
   "contract": {
     "expected_utilities": [
       "ck-utilities",
@@ -42,7 +42,8 @@
     "build": "V:\\tmp\\ckutilities-settings-20261028-01\\build-mt",
     "development_drive": "V:",
     "documentation_contract": "1/1 passed",
-    "full_ctest": "223/223 passed, exit code 0; 68.55s total",
+    "full_ctest": "223/223 passed, exit code 0; 35.36s total",
+    "full_ctest_window": "2026-10-28T07:24:40.6665936Z–2026-10-28T07:25:16.0266014Z, 35.36s total; refreshed after 28a4634",
     "files_label": "107/107 Files-labelled tests passed",
     "conpty_contract": "1/1 passed; all ten Release tools including ck-files",
     "toolchain": "Visual Studio 2022 Build Tools 17.14.40; MSVC 19.44.35207.0; CMake 3.31.6-msvc6",
@@ -53,6 +54,7 @@
     "install": "V:\\dev\\ckutilities-install-7946c61",
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
     "documentation_payload": "10 guides and 28 SVG screenshots; extracted ZIP matches the installed payload",
-    "package_tool": "CMake cpack.exe invoked by absolute path because Chocolatey's deprecated cpack alias precedes it on PATH"
+    "package_tool": "CMake cpack.exe invoked by absolute path because Chocolatey's deprecated cpack alias precedes it on PATH",
+    "test_only_follow_up": "28a4634 refreshed files_settings_tests.cpp from the matching source archive; the incremental Release target passed the four settings cases, and the full refreshed CTest suite passed 223/223"
   }
 }

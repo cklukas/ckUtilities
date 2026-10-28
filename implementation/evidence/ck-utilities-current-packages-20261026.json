@@ -16,7 +16,8 @@
     "release_build": "2026-10-28T06:51:54.149758Z–2026-10-28T06:54:43.490372Z; clean Release restore after 7946c61",
     "binary_sha256": "03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55",
     "ctest": "224/224 passed, exit code 0, 20.43s total; Files-labelled 107/107",
-    "settings_tests": "4 new persistence cases passed: 3 codec/store cases and 1 acknowledged app integration case"
+    "settings_tests": "4 new persistence cases passed: 3 codec/store cases and 1 acknowledged app integration case",
+    "qualification_follow_up": "28a4634 adds the store-level atomic/conflict case; macOS focused settings tests passed 4/4 and the refreshed Windows full suite passed 223/223"
   },
   "linux_arm64_rpi4": {
     "package": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-linux.tar.gz",
@@ -38,12 +39,13 @@
     "runtime": "MultiThreaded (/MT), matching the staged ckVision SDK",
     "versions": "10/10 utilities report 0.2.0 (ckVision 1.4.0)",
     "documentation_payload": "10 guides and 28 SVG screenshots; installed and extracted ZIP payloads both verified",
-    "ctest": "223/223 passed, exit code 0, 68.55s total",
+    "ctest": "223/223 passed, exit code 0, 35.36s total",
     "files_label": "107/107 Files-labelled tests passed",
     "conpty_contract": "current-source Release ck_windows_tools_contract 1/1 passed, exit code 0; launches all ten build outputs including ck-files",
-    "source_sync": "Source archive 7946c61, archive SHA-256 D879AAD07088D7E698BB3A393D0476C3A0D82A2B6C605BED4B0F56DCA5A43D2; current guide and settings-source hashes matched the Mac source",
+    "source_sync": "Product package source archive 7946c61, archive SHA-256 D879AAD07088D7E698BB3A393D0476C3A0D82A2B6C605BED4B0F56DCA5A43D2; test-only follow-up archive 28a4634 SHA-256 3EAA5F8867539184CCC16417D4AECD368A3B608A31980A2F10B5B347B372B027; current guide and settings-source hashes matched the Mac source",
     "build_window": "2026-10-28T06:58:20.3483413Z–2026-10-28T07:10:51.9801611Z, 12m31.632s; Release, v143, /MT",
     "ck_files_binary_sha256": "3B3C1BF087599915638CCA02FAB89D81CB8372F73999195BBF6D8DC6903F3756",
-    "package_verification": "Installed and extracted package each contain 10 guides and 28 SVG screenshots, including the durable-settings Files guide; 10/10 utility versions verified"
+    "package_verification": "Installed and extracted package each contain 10 guides and 28 SVG screenshots, including the durable-settings Files guide; 10/10 utility versions verified",
+    "qualification_follow_up": "28a4634 incremental Release target produced ck_vision_files_tests.exe SHA-256 BB59477237AEA2E16B5CD66CCE65095B4E6CAA967F0158A94657971B8393B574; focused files_settings run passed 4/4; refreshed full CTest passed 223/223"
   }
 }

@@ -3,6 +3,22 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — 28a4634 store-level settings qualification
+
+The settings follow-up now exercises the actual `FilesSettingsStore`, not only
+the codec: a fresh instance restores the saved state, a stale instance is
+rejected after a newer save, and the current file remains the newer version.
+The test-only commit is `28a4634`; it does not change the packaged product
+bytes. The focused macOS settings run passed **4/4**, and the matching source
+was refreshed on the Windows `V:` workspace. The Windows Release target
+produced `ck_vision_files_tests.exe` SHA-256
+`BB59477237AEA2E16B5CD66CCE65095B4E6CAA967F0158A94657971B8393B574`; the
+focused settings run passed **4/4**, and the refreshed full suite passed
+**223/223** in 35.36 seconds, including **107/107** Files-labelled tests.
+
+The product package evidence remains tied to `7946c61`; this entry records the
+subsequent cross-platform test qualification separately.
+
 ## 2026-10-28 — 7946c61 durable Files display settings and bookmarks
 
 Files now loads and atomically persists bounded, versioned display settings and
