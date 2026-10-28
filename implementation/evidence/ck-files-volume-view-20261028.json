@@ -1,19 +1,19 @@
 {
   "date": "2026-10-28",
   "feature": "Root-boundary volume and mount information view",
-  "implementation_commit": "628d858",
+  "implementation_commit": "pending",
   "behavior": {
-    "macos_linux": "At a POSIX namespace root, Backspace opens a read-only mount-table view instead of claiming a parent directory.",
-    "windows": "At a Windows drive root, Backspace opens a read-only volume view with drive letters or volume mount paths.",
+    "macos_linux": "At a POSIX namespace root, Backspace replaces the requested pane's file rows with a read-only mount-table listing instead of claiming a parent directory; the other pane remains unchanged.",
+    "windows": "At a Windows drive root, Backspace replaces the requested pane's file rows with a read-only volume listing with drive letters or volume mount paths; the other pane remains unchanged.",
     "privilege_boundary": "No administrator or elevation API is requested; rows are informational and never operation targets.",
-    "reported_fields": ["name/source", "mount point or drive letter", "filesystem", "free space", "total space", "read-only state"]
+    "reported_fields": ["mount point or drive letter", "filesystem", "compact free/total space", "selected-row read-only state"]
   },
   "macos": {
     "suite": "ck_vision_files_tests",
-    "result": "212/212 application cases passed; the root-boundary modal case is included",
+    "result": "212/212 application cases passed; the root-boundary pane-local listing and footer-selection case are included",
     "files_gate": "107/107 Files-labelled tests passed",
     "documentation_screenshot": "docs/generated/screenshots/ck-files-volumes.svg",
-    "documentation_screenshot_sha256": "b240c331eddb378b9e2b6c9243ebc4b8f554459e7997a86ebc7ee44bfe550a01"
+    "documentation_screenshot_sha256": "fc05995c2abc3d18fc75ab8d3788abc043f88434a69122fbfd4252e7c1ae8ec6"
   },
   "windows": {
     "host": "Windows x64 workstation",
@@ -24,7 +24,7 @@
     "configuration": "Release; Visual Studio multi-config; /MT for the installed ckVision static SDK",
     "version": "ck-files 0.2.0 (ckVision 1.4.0)",
     "executable_sha256": "0A3130D5A1F5A71D560D52BF5BE9FF54303C1D3068129867E5CE076EBD111E2A",
-    "status": "Build and install succeeded; --version passed. The existing all-tools ConPTY contract remains separately qualified, but this checkpoint does not claim a new interactive root-modal capture on Windows."
+    "status": "Build and install succeeded; --version passed. The existing all-tools ConPTY contract remains separately qualified, but this checkpoint does not claim a new interactive pane-local capture on Windows."
   },
   "linux": {
     "host": "rpi4 aarch64 Debian Linux",

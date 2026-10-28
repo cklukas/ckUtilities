@@ -5,13 +5,16 @@ Progress here does not enable unimplemented capabilities or relax release gates.
 
 ## 2026-10-28 — root-boundary volume and mount information view
 
-At the namespace boundary, **Backspace** now opens a read-only system-information
-view rather than attempting an impossible parent navigation. Windows enumerates
+At the namespace boundary, **Backspace** now replaces the requested pane's file
+rows with a read-only volume/mount listing rather than attempting an impossible
+parent navigation. Windows enumerates
 volumes and their drive letters or mount paths with `FindFirstVolumeW` and
 ordinary filesystem queries. macOS uses `getmntinfo`/`statvfs`, and Linux reads
 the process-visible `/proc/self/mountinfo` table and queries space with
-`statvfs`. No elevation API is requested on any platform, and the view cannot
-feed rows into copy, move, trash, rename, or delete operations.
+`statvfs`. The pane-local rows show Mount, Type, and compact Space (free/total);
+the selected row's footer shows the corresponding mount, filesystem, full space
+values, and read-only marker. The view cannot feed rows into copy, move, trash,
+rename, or delete operations.
 
 The real app test case passed on macOS as part of the **212/212** application
 cases and **107/107** Files-labelled gate. The deterministic documentation

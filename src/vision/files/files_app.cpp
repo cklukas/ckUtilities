@@ -204,6 +204,7 @@ struct FilesApp::State {
         std::optional<std::uint64_t> worker_focus;
         std::optional<ck::files::PaneRowId> range_start;
         std::string error;
+        bool volume_view = false;
     };
     ckv::ui::Application &application;
     std::array<FilesPaneService *, 2> services;
@@ -233,7 +234,6 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
-    std::optional<ckv::widgets::DescriptorDialogPresentation> volume_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
@@ -258,8 +258,6 @@ struct FilesApp::State {
     std::weak_ptr<void> trash_lifetime;
     ckv::widgets::Window *delete_window = nullptr;
     std::weak_ptr<void> delete_lifetime;
-    ckv::widgets::Window *volume_dialog_window = nullptr;
-    std::weak_ptr<void> volume_dialog_lifetime;
     bool volume_request = false;
     std::size_t volume_pane = 0;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
@@ -305,11 +303,13 @@ struct FilesApp::State {
                 throw std::logic_error("missing Files command metadata");
             application.commands().set_command_scope(switch_id, {.contexts = {"ck.files.pane"}});
             application.commands().set_command_scope(cancel_id, {.contexts = {"ck.files.pane"}});
+            application.commands().bind_key({ckv::Key::Escape, ckv::Modifier::None, {}}, cancel_id);
             application.commands().set_enabled_predicate(switch_id, [this] { return !closing && !modal_pending(); });
             application.commands().set_enabled_predicate(
                 cancel_id, [this] {
                     return !closing && !modal_pending() &&
-                           (operation_execution_request.has_value() || pending(panes[active]));
+                           (operation_execution_request.has_value() || pending(panes[active]) ||
+                            panes[active].volume_view);
                 });
             const auto own = [&](std::string_view key, std::function<void()> handler, std::function<bool()> enabled) {
                 const auto id =
@@ -324,8 +324,11 @@ struct FilesApp::State {
             const auto location_id =
                 own("ck.files.location", [this] { show_location(); }, [this] { return can_edit_location(active); });
             const auto parent_id = own(
-                "ck.files.parent", [this] { navigate_relative(active, false); },
-                [this] { return relative_ready(active, false); });
+                "ck.files.parent",
+                [this] {
+                    navigate_relative(active, false);
+                },
+                [this] { return panes[active].volume_view || relative_ready(active, false); });
             const auto root_id = own(
                 "ck.files.root", [this] { navigate_relative(active, true); },
                 [this] { return relative_ready(active, true); });
@@ -521,8 +524,6 @@ struct FilesApp::State {
         trash_window = nullptr;
         delete_dialog.reset();
         delete_window = nullptr;
-        volume_dialog.reset();
-        volume_dialog_window = nullptr;
         volume_request = false;
         operation_review_dialog.reset();
         operation_planning_request.reset();
@@ -577,7 +578,10 @@ struct FilesApp::State {
                 if (active == i)
                     application.execute_command(enter_id);
             };
-            surface->grid->on_changed = [this] { wake.request(); };
+            surface->grid->on_changed = [this] {
+                labels();
+                wake.request();
+            };
             surface->grid->on_bounds_changed = [this](ckv::Rect) {
                 if (bound && !closing)
                     wake.request();
@@ -615,7 +619,7 @@ struct FilesApp::State {
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
-               (volume_dialog && !volume_dialog->completed()) || volume_request ||
+               volume_request ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
@@ -627,7 +631,7 @@ struct FilesApp::State {
     }
     bool ready(std::size_t i, bool continuation = false) const {
         return i < 2 && !closing && !operation_execution_request && (continuation || !modal_pending()) &&
-               !pending(panes[i]) && panes[i].active &&
+               !pending(panes[i]) && !panes[i].volume_view && panes[i].active &&
                panes[i].model.current() && services[i]->running();
     }
     std::string status(std::size_t i) const {
@@ -636,6 +640,16 @@ struct FilesApp::State {
         if (operation_execution_request)
             text = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
                 ? "Moving to the other pane..." : "Copying to the other pane...";
+        else if (p.volume_view) {
+            const auto volume = p.model.volume_cursor();
+            if (volume)
+                text = (volume->read_only ? "RO" : "RW") + std::string(" | ") +
+                       (volume->mount_point.empty() ? volume->name : volume->mount_point) + " | " +
+                       (volume->filesystem.empty() ? "Unknown" : volume->filesystem) + " | " +
+                       volume_bytes(volume->free_bytes) + " free / " + volume_bytes(volume->total_bytes);
+            else
+                text = "No visible volumes";
+        }
         else if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
@@ -696,7 +710,8 @@ struct FilesApp::State {
             auto &p = panes[i];
             const std::string side = i == 0 ? "Left" : "Right";
             auto location = p.active ? p.active->display_text() : std::string("No completed location");
-            auto title = (active == i ? "[Active] " : "[Other] ") + side + "\n" + location;
+            auto title = (active == i ? "[Active] " : "[Other] ") + side + "\n" +
+                         (p.volume_view ? "Volumes and mounts above " + location : location);
             if (surfaces[i]->heading->text() != title)
                 surfaces[i]->heading->set_text(std::move(title));
             auto text = status(i);
@@ -735,7 +750,7 @@ struct FilesApp::State {
     }
     bool show_volume_info(std::size_t i) {
         if (i >= 2 || closing || !volume_service || !volume_service->running() || !panes[i].active ||
-            !panes[i].active->components().empty() || volume_request || modal_pending())
+            !panes[i].active->components().empty() || panes[i].volume_view || volume_request || modal_pending())
             return false;
         if (!volume_service->request()) {
             panes[i].error = "Volume information is busy";
@@ -757,40 +772,10 @@ struct FilesApp::State {
             labels();
             return;
         }
-        using namespace ckv::widgets;
-        DialogDescriptor descriptor;
-        descriptor.title = "Volumes and mounts";
-        descriptor.resizable = true;
-        descriptor.fields = {
-            {.label = "Read-only system view. No administrator rights are requested and no volume can be modified here.",
-             .kind = FieldKind::Note},
-            {.label = "Name | Mount point / drive letter | Filesystem | Free / total", .kind = FieldKind::Note}};
-        for (const auto &volume : reply.volumes) {
-            descriptor.fields.push_back({.label = "Name: " + (volume.name.empty() ? "Unnamed" : volume.name),
-                                         .kind = FieldKind::Note});
-            descriptor.fields.push_back(
-                {.label = "Mount: " + (volume.mount_point.empty() ? "Unknown mount" : volume.mount_point) +
-                          " | Filesystem: " +
-                          (volume.filesystem.empty() ? "Unknown filesystem" : volume.filesystem),
-                 .kind = FieldKind::Note});
-            descriptor.fields.push_back({.label = "Free: " + volume_bytes(volume.free_bytes) +
-                                                   " | Total: " + volume_bytes(volume.total_bytes) +
-                                                   (volume.read_only ? " | Read-only" : " | Writable"),
-                                         .kind = FieldKind::Note});
-        }
-        if (reply.volumes.empty())
-            descriptor.fields.push_back({.label = "No visible volumes or mounts were returned.", .kind = FieldKind::Note});
-        descriptor.fields.push_back({.label = "Space values are read-only observations and may change after this view opens.",
-                                     .kind = FieldKind::Note});
-        descriptor.buttons = {{"&Close", ButtonRole::Dismiss, {}}};
-        volume_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
-        volume_dialog_window = shell->desktop().active_window();
-        volume_dialog_lifetime = volume_dialog_window->lifetime_token();
-        volume_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime)](const DialogResult &) {
-                if (!weak.expired())
-                    volume_dialog_window = nullptr;
-            });
+        panes[pane].volume_view = true;
+        panes[pane].model.publish_volumes(std::move(reply.volumes));
+        panes[pane].error.clear();
+        application.set_focus(surfaces[pane]->grid);
         labels();
     }
     bool relative_ready(std::size_t i, bool root) const {
@@ -804,6 +789,11 @@ struct FilesApp::State {
         return true;
     }
     bool navigate_relative(std::size_t i, bool root) {
+        if (i < 2 && !root && panes[i].volume_view) {
+            panes[i].volume_view = false;
+            panes[i].model.clear();
+            return navigate(i, *panes[i].active, panes[i].view);
+        }
         if (!relative_ready(i, root))
             return false;
         auto next = root ? panes[i].active->namespace_root() : panes[i].active->parent();
@@ -1924,6 +1914,10 @@ struct FilesApp::State {
             labels();
             return;
         }
+        if (!closing && !modal_pending() && panes[active].volume_view) {
+            (void)navigate_relative(active, false);
+            return;
+        }
         if (!closing && !modal_pending() && pending(panes[active])) {
             panes[active].queued_view.reset();
             const auto request = panes[active].preview_request.value_or(panes[active].request);
@@ -1999,11 +1993,6 @@ struct FilesApp::State {
         if (delete_dialog && !delete_dialog->completed()) {
             if (delete_window && !delete_lifetime.expired())
                 delete_window->close();
-            return;
-        }
-        if (volume_dialog && !volume_dialog->completed()) {
-            if (volume_dialog_window && !volume_dialog_lifetime.expired())
-                volume_dialog_window->close();
             return;
         }
         if (operation_review_dialog && !operation_review_dialog->completed()) {
@@ -2174,7 +2163,7 @@ bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }
 bool FilesApp::volume_info_pending() const {
-    return state_->volume_request || (state_->volume_dialog && !state_->volume_dialog->completed());
+    return state_->volume_request;
 }
 bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
     ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,

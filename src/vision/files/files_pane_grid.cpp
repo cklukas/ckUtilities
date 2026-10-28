@@ -56,6 +56,23 @@ std::string time_text(const ck::files::Observation<ck::files::FileTimestamp> &ti
         << std::setw(2) << clock.seconds().count();
     return out.str(); // Display seconds only; no change to retained native precision.
 }
+std::string volume_short(const std::optional<std::uint64_t> &value) {
+    if (!value)
+        return "?";
+    static constexpr const char *units[] = {"B", "K", "M", "G", "T", "P"};
+    double scaled = static_cast<double>(*value);
+    std::size_t unit = 0;
+    while (scaled >= 1024.0 && unit + 1 < std::size(units)) {
+        scaled /= 1024.0;
+        ++unit;
+    }
+    std::ostringstream out;
+    if (unit == 0)
+        out << *value;
+    else
+        out << std::fixed << std::setprecision(scaled >= 10.0 ? 1 : 2) << scaled;
+    return out.str() + units[unit];
+}
 std::uint64_t shift(std::uint64_t at, int delta, std::uint64_t maximum) {
     if (delta >= 0)
         return at + std::min<std::uint64_t>(static_cast<unsigned>(delta), maximum - at);
@@ -83,7 +100,7 @@ const ck::files::PaneStateStamp *FilesPaneGridModel::stamp() const noexcept {
         },
         page_);
 }
-bool FilesPaneGridModel::current() const noexcept { return stamp() && stamp()->current(); }
+bool FilesPaneGridModel::current() const noexcept { return volume_current_ || (stamp() && stamp()->current()); }
 std::uint64_t FilesPaneGridModel::row_count() const noexcept { return total_; }
 FilesPaneViewport FilesPaneGridModel::viewport() const noexcept {
     return {first_, static_cast<std::size_t>(std::max(1, height_))};
@@ -93,6 +110,8 @@ template <class P> bool FilesPaneGridModel::adopt(std::shared_ptr<const P> page,
         page->visible_rows() > std::numeric_limits<std::size_t>::max())
         return false;
     // Sealed producers validate row IDs, text budgets and complete capture.
+    volume_current_ = false;
+    volumes_.clear();
     total_ = page->visible_rows();
     page_first_ = page->first();
     page_ = std::move(page);
@@ -115,11 +134,23 @@ bool FilesPaneGridModel::publish(std::shared_ptr<const ck::files::PanePage> page
 bool FilesPaneGridModel::publish(std::shared_ptr<const ck::files::IndexedPanePage> page, bool follow_worker_focus) {
     return adopt(std::move(page), follow_worker_focus);
 }
+void FilesPaneGridModel::publish_volumes(std::vector<FilesVolumeRecord> volumes) {
+    page_ = std::monostate{};
+    volumes_ = std::move(volumes);
+    total_ = volumes_.size();
+    page_first_ = first_ = 0;
+    cursor_ = std::min<std::size_t>(cursor_, total_ ? static_cast<std::size_t>(total_ - 1) : 0);
+    volume_current_ = true;
+    input_locked_ = false;
+    reveal();
+}
 void FilesPaneGridModel::clear() noexcept {
     page_ = std::monostate{};
+    volumes_.clear();
     total_ = page_first_ = first_ = 0;
     cursor_ = 0;
     input_locked_ = false;
+    volume_current_ = false;
 }
 const ck::files::PaneDisplayRow *FilesPaneGridModel::row(std::uint64_t at) const noexcept {
     const auto *values = rows();
@@ -128,6 +159,8 @@ const ck::files::PaneDisplayRow *FilesPaneGridModel::row(std::uint64_t at) const
     return &(*values)[static_cast<std::size_t>(at - page_first_)];
 }
 std::optional<FilesPaneRowTarget> FilesPaneGridModel::target() const {
+    if (volume_current_)
+        return {};
     const auto *value = row(cursor_);
     if (!current() || !value)
         return {};
@@ -137,14 +170,23 @@ const ck::files::PaneDisplayRow *FilesPaneGridModel::cursor_row() const noexcept
     return current() ? row(cursor_) : nullptr;
 }
 std::optional<bool> FilesPaneGridModel::cursor_marked() const {
+    if (volume_current_)
+        return std::nullopt;
     const auto *value = row(cursor_);
     return current() && value ? std::optional<bool>(value->marked) : std::nullopt;
 }
 std::optional<ck::files::ObjectKind> FilesPaneGridModel::cursor_kind() const {
+    if (volume_current_)
+        return std::nullopt;
     const auto *value = row(cursor_);
     return current() && value && value->metadata.kind.value()
                ? std::optional<ck::files::ObjectKind>(*value->metadata.kind.value())
                : std::nullopt;
+}
+std::optional<FilesVolumeRecord> FilesPaneGridModel::volume_cursor() const {
+    if (!volume_current_ || cursor_ >= volumes_.size())
+        return std::nullopt;
+    return volumes_[cursor_];
 }
 void FilesPaneGridModel::set_viewport(int rows_count, int width) {
     const auto previous_height = height_;
@@ -159,6 +201,10 @@ ckv::widgets::GridFrame FilesPaneGridModel::frame() const {
     result.rows.reserve(static_cast<std::size_t>(count));
     for (std::uint64_t i = 0; i < count; ++i)
         result.rows.push_back(static_cast<std::size_t>(first_ + i));
+    if (volume_current_) {
+        result.columns = {1, 2, 3};
+        return result;
+    }
     result.columns = {0, 1};
     if (width_ >= 52)
         result.columns.push_back(2);
@@ -169,6 +215,20 @@ ckv::widgets::GridFrame FilesPaneGridModel::frame() const {
     return result;
 }
 int FilesPaneGridModel::column_width(ckv::widgets::GridIndex column) const {
+    if (volume_current_) {
+        switch (column) {
+        case 1:
+            // Keep the filesystem and combined space column visible in the
+            // normal two-pane layout; long mount paths clip in their cell.
+            return std::min(20, std::max(5, width_ - 8 - 20));
+        case 2:
+            return 8;
+        case 3:
+            return 20;
+        default:
+            return 1;
+        }
+    }
     switch (column) {
     case 0:
         return 2;
@@ -185,6 +245,18 @@ int FilesPaneGridModel::column_width(ckv::widgets::GridIndex column) const {
     }
 }
 std::string FilesPaneGridModel::column_label(ckv::widgets::GridIndex column) const {
+    if (volume_current_) {
+        switch (column) {
+        case 1:
+            return "Mount";
+        case 2:
+            return "Type";
+        case 3:
+            return "Space";
+        default:
+            return {};
+        }
+    }
     switch (column) {
     case 0:
         return "M";
@@ -204,6 +276,26 @@ ckv::widgets::GridCell FilesPaneGridModel::cell(ckv::widgets::GridIndex at, ckv:
     ckv::widgets::GridCell result;
     if (at >= total_)
         return result;
+    if (volume_current_) {
+        if (at >= volumes_.size())
+            return result;
+        const auto &volume = volumes_[at];
+        switch (column) {
+        case 1:
+            result.text = volume.mount_point.empty() ? volume.name : volume.mount_point;
+            break;
+        case 2:
+            result.text = volume.filesystem.empty() ? "Unknown" : volume.filesystem;
+            break;
+        case 3:
+            result.text = volume_short(volume.free_bytes) + "/" + volume_short(volume.total_bytes);
+            result.alignment = ckv::widgets::CellAlignment::End;
+            break;
+        default:
+            break;
+        }
+        return result;
+    }
     const auto *value = row(at);
     if (!value) {
         if (column == 1)

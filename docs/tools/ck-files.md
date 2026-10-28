@@ -7,8 +7,8 @@ keeping every mutating operation reviewed and capability-checked.
 ![Files two-pane manager](../generated/screenshots/ck-files.svg)
 
 At a filesystem namespace root, **Backspace** opens the read-only volume and
-mount view shown below. It is a system-information view, not a writable parent
-directory.
+mount view in that pane, shown below. It is a system-information view, not a
+writable parent directory.
 
 ![Files volume and mount information](../generated/screenshots/ck-files-volumes.svg)
 
@@ -27,11 +27,12 @@ execute files or provide an embedded shell.
 - Two independent panes with an explicit active-pane indicator, resizable
   layout, narrow-terminal fallback, location fields, breadcrumbs, history,
   bookmarks, parent/home/root navigation, and Windows drive/UNC entry.
-- At a namespace root, pressing **Backspace** once opens a read-only volume
-  and mount view above the normal filesystem boundary. It lists Windows drive
-  letters or POSIX mount points, source/name, filesystem, read-only status, and
-  current free/total space. The view uses ordinary read permissions, requests
-  no elevation, and never exposes volume rows as operation targets.
+- At a namespace root, pressing **Backspace** once replaces that pane's file
+  rows with a read-only volume and mount listing above the normal filesystem
+  boundary. Mount shows the mount/drive name; Type shows the filesystem format;
+  Space shows free and total capacity together. The selected row's footer adds
+  its mount, filesystem, space, and read-only state. The view uses
+  ordinary read permissions and never exposes volume rows as operation targets.
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.

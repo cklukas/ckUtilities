@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "indexed_pane.hpp"
+#include "files_volume_service.hpp"
 #include <cvision/widgets/cell_grid.hpp>
 #include <variant>
 namespace ck::vision {
@@ -26,6 +27,7 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     static constexpr int max_viewport_rows = 4096;
     bool publish(std::shared_ptr<const ck::files::PanePage> page, bool follow_worker_focus = false);
     bool publish(std::shared_ptr<const ck::files::IndexedPanePage> page, bool follow_worker_focus = false);
+    void publish_volumes(std::vector<FilesVolumeRecord> volumes);
     void clear() noexcept;
     FilesPaneViewport viewport() const noexcept;
     std::uint64_t row_count() const noexcept;
@@ -34,6 +36,8 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     const ck::files::PaneDisplayRow *cursor_row() const noexcept;
     std::optional<bool> cursor_marked() const;
     std::optional<ck::files::ObjectKind> cursor_kind() const;
+    std::optional<FilesVolumeRecord> volume_cursor() const;
+    bool volume_view() const noexcept { return volume_current_; }
     // Acknowledged state changes pause input without dropping focus or hiding
     // the retained page. Geometry updates and rendering remain available.
     void set_input_locked(bool locked) noexcept { input_locked_ = locked; }
@@ -62,9 +66,10 @@ class FilesPaneGridModel final : public ckv::widgets::CellGridModel {
     const ck::files::PaneDisplayRow *row(std::uint64_t at) const noexcept;
     void reveal() noexcept;
     Page page_;
+    std::vector<FilesVolumeRecord> volumes_;
     std::uint64_t total_ = 0, page_first_ = 0, first_ = 0;
     std::size_t cursor_ = 0;
     int height_ = 0, width_ = 0;
-    bool input_locked_ = false;
+    bool input_locked_ = false, volume_current_ = false;
 };
 } // namespace ck::vision

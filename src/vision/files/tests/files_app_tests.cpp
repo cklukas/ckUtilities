@@ -1313,7 +1313,7 @@ CK_TEST(files_app_parent_failure_retains_exact_route_rows_and_range_without_affe
     CK_CHECK(f.app->selection(0).marks->total == 1 && f.app->status(0).find("Range start set") != std::string::npos);
     CK_CHECK(f.app->status(0).find("previous location retained") != std::string::npos);
 }
-CK_TEST(files_app_root_menu_opens_read_only_volume_info_above_namespace_root) {
+CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     Fixture f(ThemeScheme::HighContrast, {}, {}, {80, 24});
     f.loaded();
     const auto expected = f.app->location(0)->namespace_root();
@@ -1324,13 +1324,17 @@ CK_TEST(files_app_root_menu_opens_read_only_volume_info_above_namespace_root) {
     CK_CHECK(*f.app->location(0) == *expected.value() && f.app->location(1) == other);
     CK_CHECK(!f.command("ck.files.root"));
     CK_CHECK(f.command("ck.files.parent"));
-    f.until([&] { return f.painted().find("Volumes and mounts") != std::string::npos; });
+    f.until([&] { return f.painted().find("Volumes and mounts above") != std::string::npos; });
+    CK_CHECK(f.app->model(0).frame().columns.size() == 3);
     const auto text = f.painted();
-    CK_CHECK(text.find("Fixture volume") != text.npos && text.find("/fixture") != text.npos);
-    CK_CHECK(text.find("Free: 3.00 MiB | Total: 10.0 MiB") != text.npos);
-    CK_CHECK(text.find("Read-only") != text.npos);
+    CK_CHECK(text.find("/fixture") != text.npos && text.find("fixturefs") != text.npos);
+    CK_CHECK(text.find("3.00 MiB") != text.npos && text.find("10.0 MiB") != text.npos);
+    CK_CHECK(f.key(ckv::Key::Down));
+    CK_CHECK(f.app->active_pane() == 0 && f.app->model(0).cursor().row == 1);
+    CK_CHECK(f.app->status(0).find("RO") != std::string::npos);
+    CK_CHECK(f.painted().find("RO") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
-    f.application.step(f.clock.now_nanos());
+    f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });
     CK_CHECK(!f.app->volume_info_pending());
     CK_CHECK(!f.app->navigate_root(0) && !f.app->navigate_parent(2));
 }
