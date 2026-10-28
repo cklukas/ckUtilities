@@ -153,6 +153,76 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
     FilesVolumeArchiveReviewSummary summary_;
 };
 
+// Worker-owned planning boundary. It builds and validates the immutable source
+// document and destination conflict state, then returns the review model to the
+// UI. It never writes an archive; approval is a separate UI action.
+struct FilesVolumeArchivePlanningRequest final {
+    FilesVolumeRecord source;
+    ck::files::NativeAbsolutePath destination_directory;
+    std::string archive_name;
+    FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live;
+    std::function<ck::files::Observation<FilesVolumeArchiveDocument>(std::stop_token)> build_document;
+};
+
+enum class FilesVolumeArchivePlanningSubmission {
+    Accepted,
+    Busy,
+    Stopped,
+    Invalid,
+};
+
+enum class FilesVolumeArchivePlanningState {
+    Ready,
+    Failed,
+    Cancelled,
+    WorkerFault,
+};
+
+struct FilesVolumeArchivePlanningTicket final {
+    FilesVolumeArchivePlanningTicket() = default;
+    std::uint64_t number() const noexcept { return identity_ ? *identity_ : 0; }
+    bool valid() const noexcept { return identity_ != nullptr; }
+    friend bool operator==(const FilesVolumeArchivePlanningTicket &, const FilesVolumeArchivePlanningTicket &) = default;
+
+  private:
+    friend class FilesVolumeArchivePlanningService;
+    explicit FilesVolumeArchivePlanningTicket(std::uint64_t number)
+        : identity_(std::make_shared<const std::uint64_t>(number)) {}
+    std::shared_ptr<const std::uint64_t> identity_;
+};
+
+struct FilesVolumeArchivePlanningSubmitted final {
+    FilesVolumeArchivePlanningSubmission state = FilesVolumeArchivePlanningSubmission::Invalid;
+    FilesVolumeArchivePlanningTicket ticket;
+};
+
+struct FilesVolumeArchivePlanningReply final {
+    FilesVolumeArchivePlanningTicket request;
+    FilesVolumeArchivePlanningState state = FilesVolumeArchivePlanningState::Failed;
+    FilesVolumeArchiveReview::Pointer review;
+    std::optional<ck::files::UnavailableObservation> error;
+};
+
+class FilesVolumeArchivePlanningService final {
+  public:
+    explicit FilesVolumeArchivePlanningService(std::function<void()> wake = {});
+    ~FilesVolumeArchivePlanningService();
+    FilesVolumeArchivePlanningService(const FilesVolumeArchivePlanningService &) = delete;
+    FilesVolumeArchivePlanningService &operator=(const FilesVolumeArchivePlanningService &) = delete;
+
+    FilesVolumeArchivePlanningSubmitted request(FilesVolumeArchivePlanningRequest request);
+    bool cancel(const FilesVolumeArchivePlanningTicket &request);
+    std::optional<FilesVolumeArchivePlanningReply> take();
+    void request_stop() noexcept;
+    void join();
+    bool running() const noexcept;
+    bool working() const;
+
+  private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
+
 struct FilesVolumeArchiveWriteRequest final {
     FilesVolumeArchiveDocument document;
     std::filesystem::path destination_directory;

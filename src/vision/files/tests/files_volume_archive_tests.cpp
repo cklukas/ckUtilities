@@ -171,6 +171,29 @@ CK_TEST(volume_archive_review_refuses_unrepresentable_windows_path_encoding) {
     CK_CHECK(review.state() == ObservationState::Unsupported);
 }
 
+CK_TEST(volume_archive_planning_service_returns_review_without_writing) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-planning", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchivePlanningService service;
+    FilesVolumeArchivePlanningRequest request{
+        source(), address(scratch.path()), "planned.ckarchive", FilesVolumeArchiveConsistency::Live,
+        [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }};
+    const auto submitted = service.request(std::move(request));
+    CK_CHECK(submitted.state == FilesVolumeArchivePlanningSubmission::Accepted);
+    std::optional<FilesVolumeArchivePlanningReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply && reply->state == FilesVolumeArchivePlanningState::Ready);
+    CK_CHECK(reply->review);
+    if (reply && reply->review)
+        CK_CHECK(reply->review->archive_name() == "planned.ckarchive");
+    CK_CHECK(!std::filesystem::exists(scratch.path() / "planned.ckarchive"));
+    service.request_stop();
+    service.join();
+}
+
 CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveService service;

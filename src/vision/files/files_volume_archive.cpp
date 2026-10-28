@@ -648,6 +648,40 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
         std::move(document), std::move(destination_directory), std::move(archive_name), summary)));
 }
 
+namespace {
+
+Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
+    const ck::files::NativeAbsolutePath &destination_directory, std::string_view archive_name) {
+    auto host = destination_directory.host_path();
+    if (!host.value())
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            host.unavailable_detail()->state, host.unavailable_detail()->error);
+    std::error_code ec;
+    const auto directory_status = std::filesystem::symlink_status(*host.value(), ec);
+    if (ec)
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            ObservationState::Denied, filesystem_error("volume_archive.plan.destination", ec.value()).error);
+    if (!std::filesystem::exists(directory_status))
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            ObservationState::Unknown, error(AdapterError::PlanDecisionStale, "volume_archive.plan.destination").error);
+    if (!std::filesystem::is_directory(directory_status))
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.plan.destination").error);
+
+    const auto target = *host.value() / std::filesystem::path(std::string(archive_name));
+    const auto target_status = std::filesystem::symlink_status(target, ec);
+    if (ec && ec != std::errc::no_such_file_or_directory)
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            ObservationState::Unknown, filesystem_error("volume_archive.plan.conflict", ec.value()).error);
+    if (ec == std::errc::no_such_file_or_directory)
+        return Observation<FilesVolumeArchiveDestinationState>::available(FilesVolumeArchiveDestinationState::Ready);
+    return Observation<FilesVolumeArchiveDestinationState>::available(
+        std::filesystem::exists(target_status) ? FilesVolumeArchiveDestinationState::Conflict
+                                                : FilesVolumeArchiveDestinationState::Ready);
+}
+
+} // namespace
+
 Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
     FilesVolumeArchiveReviewDecision decision, std::span<const std::size_t> reviewed_losses) const {
     if (decision == FilesVolumeArchiveReviewDecision::Cancel)
@@ -671,6 +705,177 @@ Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
                                                            AdapterError::ProviderReviewRequired,
                                                            "volume_archive.review.loss_consent");
     return Observation<FilesVolumeArchiveApproval>::available({shared_from_this(), true});
+}
+
+struct FilesVolumeArchivePlanningService::State final {
+    std::function<void()> wake;
+    std::mutex mutex;
+    std::condition_variable condition;
+    std::optional<std::pair<FilesVolumeArchivePlanningTicket, FilesVolumeArchivePlanningRequest>> pending;
+    std::optional<FilesVolumeArchivePlanningReply> reply;
+    FilesVolumeArchivePlanningTicket latest;
+    std::uint64_t next = 1;
+    std::stop_source stop;
+    bool stopping = false, busy = false, signalled = false;
+    std::thread worker;
+
+    explicit State(std::function<void()> callback) : wake(std::move(callback)), worker([this] { run(); }) {}
+    ~State() {
+        request_stop();
+        join();
+    }
+    void request_stop() noexcept {
+        std::lock_guard lock(mutex);
+        stopping = true;
+        stop.request_stop();
+        condition.notify_all();
+    }
+    void join() {
+        if (worker.joinable())
+            worker.join();
+    }
+    void signal() {
+        if (signalled || !wake)
+            return;
+        signalled = true;
+        try { wake(); } catch (...) {}
+    }
+    void emit(FilesVolumeArchivePlanningReply value) {
+        std::lock_guard lock(mutex);
+        if (stopping || value.request != latest)
+            return;
+        reply = std::move(value);
+        busy = false;
+        signal();
+    }
+    static bool valid(const FilesVolumeArchivePlanningRequest &value) {
+        return !value.source.identity.empty() && !value.source.mount_point.empty() &&
+               value.destination_directory.is_valid() &&
+               (value.archive_name.empty() || safe_archive_name(value.archive_name)) &&
+               static_cast<bool>(value.build_document);
+    }
+    void run_one(FilesVolumeArchivePlanningTicket ticket, FilesVolumeArchivePlanningRequest value,
+                 std::stop_token token) {
+        FilesVolumeArchivePlanningReply result;
+        result.request = ticket;
+        auto fail = [&](UnavailableObservation detail) {
+            result.state = token.stop_requested() ? FilesVolumeArchivePlanningState::Cancelled
+                                                   : FilesVolumeArchivePlanningState::Failed;
+            result.error = std::move(detail);
+            emit(std::move(result));
+        };
+        try {
+            auto document = value.build_document(token);
+            if (!document.value()) {
+                fail(*document.unavailable_detail());
+                return;
+            }
+            auto complete = std::move(document).take_value();
+            complete.consistency = value.consistency;
+            if (complete.source.identity != value.source.identity ||
+                complete.source.mount_point != value.source.mount_point ||
+                complete.source.filesystem != value.source.filesystem ||
+                complete.source.archive.support != value.source.archive.support ||
+                complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
+                fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.plan.identity_revalidation",
+                            ObservationState::Changed));
+                return;
+            }
+            auto destination = probe_archive_destination(value.destination_directory,
+                                                         value.archive_name.empty()
+                                                             ? FilesVolumeArchiveReview::default_archive_name(value.source.name)
+                                                             : value.archive_name);
+            if (!destination.value()) {
+                fail(*destination.unavailable_detail());
+                return;
+            }
+            auto review = FilesVolumeArchiveReview::create(std::move(complete), value.destination_directory,
+                                                           std::move(value.archive_name), *destination.value());
+            if (!review.value()) {
+                fail(*review.unavailable_detail());
+                return;
+            }
+            result.review = std::move(review).take_value();
+            result.state = FilesVolumeArchivePlanningState::Ready;
+            emit(std::move(result));
+        } catch (...) {
+            fail(error(AdapterError::PlanInvalid, "volume_archive.plan.worker_fault"));
+        }
+    }
+    void run() {
+        for (;;) {
+            std::optional<std::pair<FilesVolumeArchivePlanningTicket, FilesVolumeArchivePlanningRequest>> job;
+            {
+                std::unique_lock lock(mutex);
+                condition.wait(lock, [this] { return stopping || pending.has_value(); });
+                if (stopping) {
+                    pending.reset();
+                    return;
+                }
+                job = std::move(*pending);
+                pending.reset();
+                busy = true;
+                stop = std::stop_source{};
+                signalled = false;
+            }
+            run_one(std::move(job->first), std::move(job->second), stop.get_token());
+        }
+    }
+};
+
+FilesVolumeArchivePlanningService::FilesVolumeArchivePlanningService(std::function<void()> wake)
+    : state_(std::make_unique<State>(std::move(wake))) {}
+FilesVolumeArchivePlanningService::~FilesVolumeArchivePlanningService() = default;
+FilesVolumeArchivePlanningSubmitted FilesVolumeArchivePlanningService::request(
+    FilesVolumeArchivePlanningRequest request) {
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping)
+        return {FilesVolumeArchivePlanningSubmission::Stopped, {}};
+    if (!State::valid(request))
+        return {FilesVolumeArchivePlanningSubmission::Invalid, {}};
+    if (state_->busy || state_->pending)
+        return {FilesVolumeArchivePlanningSubmission::Busy, {}};
+    auto ticket = FilesVolumeArchivePlanningTicket(state_->next++);
+    state_->latest = ticket;
+    state_->pending = std::make_pair(ticket, std::move(request));
+    state_->condition.notify_one();
+    return {FilesVolumeArchivePlanningSubmission::Accepted, ticket};
+}
+bool FilesVolumeArchivePlanningService::cancel(const FilesVolumeArchivePlanningTicket &request) {
+    std::lock_guard lock(state_->mutex);
+    if (!request.valid() || request != state_->latest || (!state_->busy && !state_->pending))
+        return false;
+    if (state_->pending && !state_->busy) {
+        state_->pending.reset();
+        FilesVolumeArchivePlanningReply cancelled;
+        cancelled.request = request;
+        cancelled.state = FilesVolumeArchivePlanningState::Cancelled;
+        cancelled.error = error(AdapterError::InterruptedRead, "volume_archive.plan.cancelled",
+                                ObservationState::Unknown);
+        state_->reply = std::move(cancelled);
+        state_->signal();
+        return true;
+    }
+    state_->stop.request_stop();
+    state_->condition.notify_all();
+    return true;
+}
+std::optional<FilesVolumeArchivePlanningReply> FilesVolumeArchivePlanningService::take() {
+    std::lock_guard lock(state_->mutex);
+    auto result = std::move(state_->reply);
+    state_->reply.reset();
+    state_->signalled = false;
+    return result;
+}
+void FilesVolumeArchivePlanningService::request_stop() noexcept { state_->request_stop(); }
+void FilesVolumeArchivePlanningService::join() { state_->join(); }
+bool FilesVolumeArchivePlanningService::running() const noexcept {
+    std::lock_guard lock(state_->mutex);
+    return !state_->stopping;
+}
+bool FilesVolumeArchivePlanningService::working() const {
+    std::lock_guard lock(state_->mutex);
+    return state_->busy || state_->pending.has_value();
 }
 
 struct FilesVolumeArchiveService::State final {
