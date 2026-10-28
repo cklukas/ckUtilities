@@ -6969,6 +6969,19 @@ are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matr
 Launcher launch/return and real interactive terminal acceptance remain open.
 
 
+## 2026-10-28 — Volume archive digest qualification
+
+The sparse volume archive worker now independently computes SHA-256 digests for
+each staged extent and its readback bytes before publication. The digest result
+is exposed in the write evidence and is required by the archive worker test.
+The current macOS Files-labelled gate passed **107/107**, and the Windows
+`V:` Release archive-focused run passed **5/5** after the change. The focused
+archive suite also passed **5/5** in both fresh ASan and TSan builds. This
+qualifies extent-integrity verification; native snapshot/inventory adapters,
+production UI enablement, and full Windows/Linux archive integration remain
+open.
+
+
 ## 2026-10-26 — Windows current-source package and test checkpoint
 
 The current Windows Release package was rebuilt with the installed Visual
