@@ -7009,6 +7009,13 @@ on POSIX, one distinct from the mount-point display path). The updated Files
 test executable passed on macOS in 3.69 seconds and on Windows in 19.20
 seconds; the test uses only read-only enumeration.
 
+The same current source was then synchronized by hash to the ARM64 `rpi4`
+workspace and built from scratch against the installed ckVision 1.4.0 SDK.
+The clean Ninja build completed all **128/128** compilation/link steps, and
+the integrated Linux `ck_vision_files_tests` CTest gate passed **1/1** in
+10.91 seconds. The Linux build and test roots were task-owned remote paths;
+the private fixture root remained separate from the build tree.
+
 
 ## 2026-10-28 — Volume archive digest qualification
 
