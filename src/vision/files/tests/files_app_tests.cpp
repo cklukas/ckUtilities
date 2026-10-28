@@ -321,6 +321,16 @@ CK_TEST(files_app_composes_independent_native_panes_in_every_suite_theme) {
         CK_CHECK(f.app->status(0) == "Last scan: 100 items");
     }
 }
+CK_TEST(files_app_status_reports_contextual_reason_for_empty_listing) {
+    Fixture f;
+    f.loaded();
+    const auto empty = f.scratch.path() / "empty";
+    std::filesystem::create_directory(empty);
+    CK_CHECK(f.app->navigate(0, address(empty)));
+    f.loaded();
+    CK_CHECK(f.app->status(0).find("Hint: Enter folder unavailable: select a folder") != std::string::npos);
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.enter_directory")));
+}
 CK_TEST(files_app_narrow_layout_switches_without_discarding_either_pane) {
     Fixture f;
     f.loaded();

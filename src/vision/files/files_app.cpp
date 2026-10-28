@@ -802,10 +802,30 @@ struct FilesApp::State {
         }
         if (p.range_start)
             text += " | Range start set";
+        std::string hint;
         if (p.volume_view) {
-            const auto copy = availability("ck.files.copy");
-            text += "\nHint: " + copy.reason;
+            // A volume row has one meaningful operation: archive Copy. Keep
+            // its reason visible beside the row so the disabled menu, palette
+            // and keyboard command never leave the user guessing.
+            hint = availability("ck.files.copy").reason;
+        } else if (i == active && !closing && !pending(p) && !p.model.target()) {
+            // The status-line commands are deliberately ordered by immediate
+            // relevance. Report only the first unavailable contextual action;
+            // listing every disabled command would turn ordinary browsing
+            // into a stream of boilerplate.
+            static constexpr std::string_view contextual[] = {
+                "ck.files.enter_directory", "ck.files.parent", "ck.files.toggle_mark",
+                "ck.files.cancel_read", "ck.files.view_options"};
+            for (const auto command : contextual) {
+                const auto candidate = availability(command);
+                if (!candidate.enabled) {
+                    hint = candidate.reason;
+                    break;
+                }
+            }
         }
+        if (!hint.empty())
+            text += "\nHint: " + hint;
         if (!settings.diagnostic.empty())
             text += " | " + settings.diagnostic;
         return text;
