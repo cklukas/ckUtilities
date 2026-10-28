@@ -71,6 +71,7 @@ struct FilesVolumeArchiveWriteResult final {
     std::size_t entry_count = 0;
     FilesVolumeArchivePublication publication = FilesVolumeArchivePublication::Durable;
     std::string diagnostic;
+    bool digests_verified = false;
 };
 
 ck::files::Observation<FilesVolumeArchiveWriteResult> write_volume_archive(

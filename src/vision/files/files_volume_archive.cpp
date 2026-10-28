@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
+#include "sha256.hpp"
 
 #include <algorithm>
 #include <array>
@@ -469,7 +470,11 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
             verify.seekg(static_cast<std::streamoff>(data_offset + extent.archive_offset));
             bytes_check.resize(extent.bytes->size());
             verify.read(bytes_check.data(), static_cast<std::streamsize>(bytes_check.size()));
-            if (!verify || std::memcmp(bytes_check.data(), extent.bytes->data(), bytes_check.size()) != 0) {
+            ck::files::Sha256 expected_digest;
+            expected_digest.update(std::span<const std::byte>(*extent.bytes));
+            ck::files::Sha256 actual_digest;
+            actual_digest.update(std::as_bytes(std::span<const char>(bytes_check)));
+            if (!verify || expected_digest.digest() != actual_digest.digest()) {
                 verify.close();
                 std::filesystem::remove(temp, ec);
                 return Observation<FilesVolumeArchiveWriteResult>::unavailable(
@@ -485,11 +490,11 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
                 return Observation<FilesVolumeArchiveWriteResult>::available(
                     {published, logical_size, data_bytes, encoded.size(),
                      FilesVolumeArchivePublication::PublishedDurabilityUnknown,
-                     failure_detail.error.operation});
+                     failure_detail.error.operation, true});
             }
             return Observation<FilesVolumeArchiveWriteResult>::available(
                 {published, logical_size, data_bytes, encoded.size(),
-                 FilesVolumeArchivePublication::PublishedDurabilityUnknown, diagnostic});
+                 FilesVolumeArchivePublication::PublishedDurabilityUnknown, diagnostic, true});
         }
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
@@ -497,9 +502,9 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (!durable_directory(request.destination_directory, failure_detail))
         return Observation<FilesVolumeArchiveWriteResult>::available(
             {published, logical_size, data_bytes, encoded.size(),
-             FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation});
+             FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation, true});
     return Observation<FilesVolumeArchiveWriteResult>::available(
-        {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}});
+        {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}, true});
 }
 
 struct FilesVolumeArchiveService::State final {
