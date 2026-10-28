@@ -3,6 +3,26 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — native volume source and capability qualification
+
+Commits `2cc983c` and `c0407ff` add the worker-owned native volume source
+adapter and a read-only live-capability probe. The adapter revalidates the
+opaque mount identity before and after traversal, stays within the original
+mount, reads regular-file extents through native handles, records hard-link
+and symlink information, and records every unencoded metadata/channel or
+unsupported-object loss. Hard losses cannot reach the sparse writer. The
+probe only qualifies a POSIX mount as live-readable after its native directory,
+filesystem kind, identity, and mount boundary are observable; it does not
+request elevation or unmount anything. Windows remains explicitly gated on a
+native UTF-16 archive path codec.
+
+The source and archive suites passed **13/13** on macOS arm64, Linux arm64,
+and Windows x64/MSVC v143. Volume Copy remains disabled in Files until the
+archive-specific review, journal/recovery, and worker wiring are connected;
+the disabled command now exposes that exact reason in the pane footer.
+
+Evidence: [native volume source record](evidence/ck-files-volume-source-current-20261028.json).
+
 ## 2026-10-28 — volume archive review and loss model
 
 Commit `393d9f2` adds the archive-specific review boundary. The versioned

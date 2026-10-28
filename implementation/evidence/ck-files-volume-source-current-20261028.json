@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-28",
+  "scope": "native volume source adapter and live capability probe",
+  "source_commits": ["2cc983c", "c0407ff"],
+  "platforms": {
+    "macos_arm64": {
+      "build": "ck_vision_files_tests",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-archive-review-20261028-01/build",
+      "tests": {
+        "files_volume_source_tests.cpp": "3/3",
+        "files_volume_archive_tests.cpp": "10/10"
+      }
+    },
+    "linux_arm64_rpi4": {
+      "build": "ck_vision_files_tests",
+      "build_root": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+      "tests": {
+        "files_volume_source_tests.cpp": "3/3",
+        "files_volume_archive_tests.cpp": "10/10"
+      }
+    },
+    "windows_x64_msvc_v143": {
+      "build": "ck_vision_files_tests.exe Release",
+      "build_root": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build",
+      "toolset": "v143",
+      "tests": {
+        "files_volume_source_tests.cpp": "3/3",
+        "files_volume_archive_tests.cpp": "10/10"
+      }
+    }
+  },
+  "qualified_behavior": [
+    "The worker source adapter revalidates volume mount point and opaque identity before and after traversal.",
+    "POSIX source traversal uses native handles, refuses mount-boundary traversal, preserves sparse extents, and records explicit loss records.",
+    "Live capability probing is read-only and does not request elevation or unmount a volume.",
+    "Windows remains unsupported until the archive manifest has a native UTF-16 path codec.",
+    "The Files Copy command reports that volume archive review is not connected; it is not falsely enabled."
+  ],
+  "not_yet_qualified": [
+    "Snapshot providers and consistency freezes",
+    "Windows native source inventory",
+    "Durable archive journal/recovery integration",
+    "Production Files UI review and archive worker wiring"
+  ]
+}

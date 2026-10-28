@@ -26,7 +26,8 @@ read-only archive source, never a movable or deletable entry.
 5. Every command surface uses the same availability predicate. When Copy is
    disabled, the active pane status gives the specific reason, such as
    `archive capability is unknown`, `snapshot provider unavailable`,
-   `destination is not writable`, or `source contains an unsupported object`.
+   `destination is not writable`, `source contains an unsupported object`, or
+   `volume archive review is not connected`.
 
 ## Privilege and mount policy
 
@@ -118,11 +119,11 @@ are never upgraded because a filesystem label looks familiar.
 
 ## Current state
 
-The versioned sparse writer, single-worker boundary and archive-specific review
-model are implemented and focused-qualified on macOS, Linux ARM64 and Windows
-x64. The format now records exact POSIX path encoding and explicit loss
-records; unreviewed losses and hard losses cannot reach the writer. Windows
-UTF-16 paths remain gated until a native-unit archive codec is implemented.
-The native source adapter, snapshot/provider qualification, journal integration
-and production Copy wiring remain intentionally gated and are the next
-implementation slices.
+The versioned sparse writer, single-worker boundary, archive-specific review
+model, native POSIX source adapter, and read-only live capability probe are
+implemented and focused-qualified on macOS, Linux ARM64 and Windows x64. The
+format records exact POSIX path encoding and explicit loss records; unreviewed
+losses and hard losses cannot reach the writer. Windows UTF-16 paths remain
+gated until a native-unit archive codec is implemented. Snapshot/provider
+qualification, durable journal integration, the archive-specific Files review,
+and production Copy wiring remain intentionally gated.
