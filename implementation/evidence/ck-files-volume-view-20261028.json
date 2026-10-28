@@ -1,7 +1,7 @@
 {
   "date": "2026-10-28",
   "feature": "Root-boundary volume and mount information view",
-  "implementation_commit": "pending",
+  "implementation_commit": "d062ba8",
   "behavior": {
     "macos_linux": "At a POSIX namespace root, Backspace replaces the requested pane's file rows with a read-only mount-table listing instead of claiming a parent directory; the other pane remains unchanged.",
     "windows": "At a Windows drive root, Backspace replaces the requested pane's file rows with a read-only volume listing with drive letters or volume mount paths; the other pane remains unchanged.",
