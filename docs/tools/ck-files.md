@@ -33,12 +33,17 @@ execute files or provide an embedded shell.
   Space shows free and total capacity together. The selected row's footer adds
   its mount, filesystem, space, and read-only state. The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
-  Copy is reserved for a separately qualified Volume archive worker: until
-  native identity and archive capability checks pass, it remains visibly
-  disabled and the active-pane status explains the reason. A qualified Volume
-  archive will be a versioned sparse filesystem archive, not a raw block image;
-  Move is never used for this operation. The staged enablement, privilege,
-  snapshot, preservation and recovery rules are in the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
+  Copy starts a separate Volume archive planning/review worker only after
+  native identity, live-read capability, destination, and private-journal
+  checks pass. It remains visibly disabled otherwise, with the specific reason
+  in the active-pane status. Approval creates a versioned sparse filesystem
+  archive, not a raw block image; Move is never used for this operation. The
+  review shows consistency, logical/data bytes, sparse shape, links, and
+  explicit preservation losses. The worker revalidates the source, records
+  durable journal states, verifies data before no-replace publication, and
+  reports indeterminate durability when publication has happened but a later
+  flush or journal step cannot be proven. Snapshot providers and restart
+  reconciliation remain capability-gated. See the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.
@@ -116,7 +121,10 @@ and clean `Alt+X` shutdown for the installed utility set. The same three
 profiles pass for all ten utilities in the Linux aarch64 archive. This is still
 an implementation checkpoint, not a claim that every release gate is complete:
 recovery execution, full filesystem-matrix coverage, and final
-mouse/restricted-key acceptance remain tracked work.
+mouse/restricted-key acceptance remain tracked work. Volume archive live
+traversal is focused-qualified on the three build platforms; native snapshot providers,
+archive restart reconciliation, and real-volume interactive archive fixtures
+remain open release gates.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and
