@@ -90,6 +90,14 @@ recorded as an open sanitizer qualification item, not a pass. The current
 normal macOS Files-labelled gate passed **107/107** in 12.70 seconds after the
 worker revalidation change.
 
+Commit `36e80bf` also makes post-publish cleanup or containing-directory flush
+failure explicit: the worker returns an `Indeterminate` publication state with
+the published path and diagnostic instead of reporting a generic failure that
+could be mistaken for no output. The five archive tests were rebuilt and
+passed under the fresh macOS ASan/UBSan and TSan builds, and the Windows
+current-source `V:` Release Files-labelled gate passed **107/107** in 26.59
+seconds after this change.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
