@@ -59,11 +59,18 @@ struct FilesVolumeArchiveWriteRequest final {
     std::uint64_t transaction_id = 1;
 };
 
+enum class FilesVolumeArchivePublication {
+    Durable,
+    PublishedDurabilityUnknown,
+};
+
 struct FilesVolumeArchiveWriteResult final {
     std::filesystem::path published_path;
     std::uint64_t logical_size = 0;
     std::uint64_t data_bytes = 0;
     std::size_t entry_count = 0;
+    FilesVolumeArchivePublication publication = FilesVolumeArchivePublication::Durable;
+    std::string diagnostic;
 };
 
 ck::files::Observation<FilesVolumeArchiveWriteResult> write_volume_archive(
@@ -90,6 +97,7 @@ enum class FilesVolumeArchiveSubmission {
 
 enum class FilesVolumeArchiveState {
     Complete,
+    Indeterminate,
     Failed,
     Cancelled,
     WorkerFault,

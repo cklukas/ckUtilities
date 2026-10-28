@@ -48,6 +48,7 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     CK_CHECK(written.value());
     CK_CHECK(written.value()->entry_count == 3);
     CK_CHECK(written.value()->data_bytes == 4);
+    CK_CHECK(written.value()->publication == FilesVolumeArchivePublication::Durable);
     CK_CHECK(std::filesystem::file_size(written.value()->published_path) == written.value()->logical_size);
 
     std::ifstream archive(written.value()->published_path, std::ios::binary);

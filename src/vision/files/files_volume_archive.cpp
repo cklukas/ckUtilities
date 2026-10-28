@@ -327,13 +327,15 @@ bool durable_directory(const std::filesystem::path &path, UnavailableObservation
 }
 
 bool publish_without_replace(const std::filesystem::path &temporary, const std::filesystem::path &published,
-                             UnavailableObservation &failure_detail) {
+                             UnavailableObservation &failure_detail, bool &published_result) {
+    published_result = false;
     std::error_code ec;
     std::filesystem::create_hard_link(temporary, published, ec);
     if (ec) {
         failure_detail = filesystem_error("volume_archive.publish", ec.value());
         return false;
     }
+    published_result = true;
     std::filesystem::remove(temporary, ec);
     if (ec) {
         failure_detail = filesystem_error("volume_archive.remove_temp", ec.value());
@@ -475,14 +477,29 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
             }
         }
     verify.close();
-    if (!publish_without_replace(temp, published, failure_detail)) {
+    bool published_result = false;
+    if (!publish_without_replace(temp, published, failure_detail, published_result)) {
+        if (published_result) {
+            const auto diagnostic = failure_detail.error.operation;
+            if (!durable_directory(request.destination_directory, failure_detail)) {
+                return Observation<FilesVolumeArchiveWriteResult>::available(
+                    {published, logical_size, data_bytes, encoded.size(),
+                     FilesVolumeArchivePublication::PublishedDurabilityUnknown,
+                     failure_detail.error.operation});
+            }
+            return Observation<FilesVolumeArchiveWriteResult>::available(
+                {published, logical_size, data_bytes, encoded.size(),
+                 FilesVolumeArchivePublication::PublishedDurabilityUnknown, diagnostic});
+        }
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
     if (!durable_directory(request.destination_directory, failure_detail))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+        return Observation<FilesVolumeArchiveWriteResult>::available(
+            {published, logical_size, data_bytes, encoded.size(),
+             FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation});
     return Observation<FilesVolumeArchiveWriteResult>::available(
-        {published, logical_size, data_bytes, encoded.size()});
+        {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}});
 }
 
 struct FilesVolumeArchiveService::State final {
@@ -568,8 +585,10 @@ struct FilesVolumeArchiveService::State final {
                 fail(*written.unavailable_detail());
                 return;
             }
-            result.state = FilesVolumeArchiveState::Complete;
             result.result = std::move(written).take_value();
+            result.state = result.result->publication == FilesVolumeArchivePublication::Durable
+                               ? FilesVolumeArchiveState::Complete
+                               : FilesVolumeArchiveState::Indeterminate;
             emit(std::move(result));
         } catch (...) {
             fail(error(AdapterError::PlanInvalid, "volume_archive.worker_fault"));
