@@ -3,6 +3,21 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — Linux sanitizer qualification of recovery gate
+
+The fresh ARM64 `RelWithDebInfo` build at
+`/home/klukas/tmp/ckutilities-volume-recovery-sanitizer-20261028-01/build`
+used the pinned ckVision 1.4.0 prefix and
+`-DCKVISION_SANITIZE=address,undefined`. With
+`ASAN_OPTIONS=halt_on_error=1:detect_leaks=0` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`, the current archive suite
+passed **15/15** and the integrated Files app suite passed **68/68**. No
+address, undefined-behavior, leak, or thread-lifetime diagnostic was emitted.
+This is a Linux sanitizer qualification only; the broad macOS app fixture
+still has the separately documented libc++ container-overflow limitation.
+
+Evidence: [Linux sanitizer record](evidence/ck-files-volume-archive-sanitizer-current-20261028.json).
+
 ## 2026-10-28 — startup recovery gate and dynamic archive readiness
 
 Commit `be821c2` connects the bounded read-only volume-archive journal scan to

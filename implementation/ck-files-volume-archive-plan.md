@@ -134,4 +134,6 @@ qualification and user-facing startup inspect/cleanup/revalidated-retry actions
 remain open. Real-volume interactive acceptance also remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
-not suppressed.
+not suppressed. Linux ARM64 address/undefined sanitizer qualification of the
+archive and Files app suites passed 15/15 and 68/68 respectively; TSan and the
+full filesystem/fault matrix remain open WP-07 work.
