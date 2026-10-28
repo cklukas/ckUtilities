@@ -57,7 +57,11 @@ settings cases with no sanitizer diagnostics. ASan+UBSan ran from
 This closes the focused sanitizer check for durable Files settings. The full
 UI sanitizer suite remains blocked by the pinned ckVision
 `Desktop::install_default_handler` defect; no suppression or product
-workaround was introduced. See the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
+workaround was introduced. An attempted complete TSan Files run also remains
+open: the first completion-service case timed out its five-second test gate
+(`gate not entered`, exit 134) without a TSan diagnostic, while the same 26
+completion-service cases passed under the current normal build. This result is
+recorded as a failure, not a pass, in the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
 
 ## 2026-10-28 — 28a4634 store-level settings qualification
 

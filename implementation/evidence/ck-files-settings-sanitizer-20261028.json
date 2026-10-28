@@ -23,5 +23,13 @@
     "tests": "4/4 files_settings cases passed",
     "binary_sha256": "058e6bb93844a475a850b38f7f24d3a8ee97523f79e9dc7e3f931b44045cfe1b"
   },
+  "thread_sanitizer_full_files_attempt": {
+    "build": "/Volumes/S8T/tmp/ckutilities-tsan-settings-20261028-01/build/src/vision/files/ck_vision_files_tests",
+    "test_window": "2026-10-28T11:15:18.398408000Z–2026-10-28T11:15:23.482362000Z",
+    "result": "failed; exit code 134 in the first completion-service case",
+    "diagnostic": "The test's five-second Gate::wait timed out with std::runtime_error: gate not entered; no TSan race report was emitted",
+    "normal_comparison": "The same current normal build passed all 26 completion-service cases",
+    "status": "not counted as a TSan pass; full Files TSan qualification remains open"
+  },
   "remaining_gate": "The full UI sanitizer suite remains blocked by the pinned ckVision Desktop::install_default_handler defect; this focused settings evidence does not suppress or work around it."
 }
