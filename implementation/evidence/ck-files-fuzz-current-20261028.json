@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-28",
+  "host": "macOS arm64",
+  "source": "current checkout at commit 615f90c plus evidence-only commits",
+  "temporary_root": "/Volumes/S8T/tmp/ckutilities-fuzz-current-20261028-01",
+  "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja; CKTOOLS_BUILD_FUZZERS=ON",
+    "start": "2026-10-28T11:23:19.157908000Z",
+    "end": "2026-10-28T11:23:26.363555000Z",
+    "exit_code": 0,
+    "target": "cktools_fuzzers",
+    "binaries": {
+      "fuzz_todo_codec": "4b67c172d87af633715cb8d3b54289930993e72775e70b8b6d9eaed5947d9e9d",
+      "fuzz_sysmon": "1a350b6983ac1b36538321967b80ed410184cbbeec3faddc29327efaa8de4e37"
+    }
+  },
+  "corpus": {
+    "start": "2026-10-28T11:23:29.145352000Z",
+    "end": "2026-10-28T11:23:29.622795000Z",
+    "result": "2/2 passed",
+    "targets": ["fuzz_todo_codec_corpus", "fuzz_sysmon_corpus"]
+  },
+  "mutation": {
+    "fuzz_todo_codec": {
+      "start": "2026-10-28T11:23:37.606091000Z",
+      "end": "2026-10-28T11:23:58.618006000Z",
+      "exit_code": 0,
+      "runs": 37571011,
+      "peak_rss_mb": 28,
+      "new_units_added": 12,
+      "finding": "none"
+    },
+    "fuzz_sysmon": {
+      "start": "2026-10-28T11:23:37.606681000Z",
+      "end": "2026-10-28T11:23:58.618021000Z",
+      "exit_code": 0,
+      "runs": 6563418,
+      "peak_rss_mb": 29,
+      "new_units_added": 838,
+      "finding": "none"
+    }
+  }
+}

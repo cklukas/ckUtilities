@@ -43,6 +43,16 @@ behavior. It does not close the remaining mouse/restricted-key, full
 filesystem matrix, controlled crash/power-loss, or full UI sanitizer gates.
 Detailed run data is in the [interactive evidence](evidence/ck-files-interactive-current-20261028.json).
 
+## 2026-10-28 — current LLVM fuzz qualification
+
+The current source built the opt-in LLVM libFuzzer targets with Homebrew LLVM
+Clang 23. The corpus contract passed **2/2**. Corrected bounded mutation runs
+then completed with no findings: `fuzz_todo_codec` executed **37,571,011**
+cases with 28 MiB peak RSS, and `fuzz_sysmon` executed **6,563,418** cases
+with 29 MiB peak RSS. The initial invalid placeholder-directory invocation
+was not counted; the recorded runs used the repository corpus directories.
+See the [current fuzz evidence](evidence/ck-files-fuzz-current-20261028.json).
+
 ## 2026-10-28 — current Files settings sanitizer qualification
 
 The current settings implementation passed focused sanitizer coverage on macOS
