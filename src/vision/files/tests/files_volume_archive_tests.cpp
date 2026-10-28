@@ -100,6 +100,30 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     service.join();
 }
 
+CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-revalidation", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchiveService service;
+    auto request_source = source(FilesVolumeArchiveSupport::Unknown);
+    FilesVolumeArchiveRequest request{
+        request_source, address(scratch.path()), "revalidation.ckarchive", FilesVolumeArchiveConsistency::Live, 13,
+        [](std::stop_token) {
+            return Observation<FilesVolumeArchiveDocument>::available(document(FilesVolumeArchiveSupport::LiveReadable));
+        }};
+    const auto submitted = service.request(std::move(request));
+    CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
+    std::optional<FilesVolumeArchiveReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveState::Failed);
+    CK_CHECK(reply->error && reply->error->state == ObservationState::Changed);
+    CK_CHECK(!std::filesystem::exists(scratch.path() / "revalidation.ckarchive"));
+    service.request_stop();
+    service.join();
+}
+
 CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-cancel", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     std::mutex mutex;

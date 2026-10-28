@@ -547,7 +547,11 @@ struct FilesVolumeArchiveService::State final {
             }
             auto complete = std::move(document).take_value();
             complete.consistency = value.consistency;
-            if (complete.source.identity != value.source.identity || complete.source.mount_point != value.source.mount_point) {
+            if (complete.source.identity != value.source.identity ||
+                complete.source.mount_point != value.source.mount_point ||
+                complete.source.filesystem != value.source.filesystem ||
+                complete.source.archive.support != value.source.archive.support ||
+                complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
                 fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.identity_revalidation",
                             ObservationState::Changed));
                 return;
