@@ -178,8 +178,15 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
         const std::string mount = mounts[i].f_mntonname;
         if (!seen.insert(mount).second)
             continue;
+        // A device path or volume label can be reused after an unmount. Keep
+        // the filesystem identity and source only as an opaque revalidation
+        // token; the archive worker compares this token again before reading.
+        const std::string identity =
+            "macos:" + std::to_string(static_cast<std::int64_t>(mounts[i].f_fsid.val[0])) + ":" +
+            std::to_string(static_cast<std::int64_t>(mounts[i].f_fsid.val[1])) + ":" +
+            std::string(mounts[i].f_mntfromname);
         append_posix_volume(result, mounts[i].f_mntfromname, mount, mounts[i].f_fstypename,
-                             (mounts[i].f_flags & MNT_RDONLY) != 0, mounts[i].f_mntfromname);
+                             (mounts[i].f_flags & MNT_RDONLY) != 0, identity);
     }
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
@@ -222,8 +229,14 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_linux() {
                                (options.size() > 3 && options.ends_with(",ro")) ||
                                options.find(",ro,") != std::string::npos;
         const auto decoded_source = decode_mountinfo(source);
+        // mountinfo's mount ID changes when the mount instance is replaced,
+        // while major:minor distinguishes the backing device. Neither a
+        // display path nor the source string alone is sufficient for archive
+        // revalidation after an unmount/remount cycle.
+        const std::string identity = "linux:" + before_separator[0] + ":" + before_separator[2] + ":" +
+                                     decoded_source;
         append_posix_volume(result, decoded_source, mount_point, decode_mountinfo(filesystem), read_only,
-                             decoded_source.empty() ? mount_point : decoded_source);
+                             identity);
     }
     if (result.empty())
         return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Unknown,

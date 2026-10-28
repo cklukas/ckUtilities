@@ -6986,6 +6986,22 @@ multi-config). The Windows source hashes for the changed application and test
 files were recorded before configuration; no application process was running.
 
 
+## 2026-10-28 — Native volume identity revalidation boundary
+
+The read-only volume enumerator now publishes stronger opaque identities for
+future archive revalidation: Linux combines the process-visible mount ID,
+major/minor device and decoded source; macOS combines the filesystem ID pair
+and source. A display label or reusable device path is no longer the sole
+identity token. The archive worker remains disabled until its source adapter
+also revalidates this token, mount point, filesystem and complete immutable
+document before traversal.
+
+The fresh macOS Files application suite passed **213/213**, and the current
+Windows v143 `V:` build passed **107/107** in 20.13 seconds. The change is
+enumeration/revalidation data only; it does not request elevation, unmount a
+volume, or enable volume Copy.
+
+
 ## 2026-10-28 — Volume archive digest qualification
 
 The sparse volume archive worker now independently computes SHA-256 digests for
