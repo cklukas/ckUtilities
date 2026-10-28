@@ -63,7 +63,11 @@ timed out before entering the first completion gate and are retained as
 non-qualification diagnostics; they did not alter code or test timeouts. The
 full UI ASan/UBSan suite remains blocked by the pinned ckVision
 `Desktop::install_default_handler` defect; no suppression or product
-workaround was introduced. See the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
+workaround was introduced. The same current-source Files test binary passed
+**212/212** under ASan+UBSan with no diagnostics, including the app and
+Right-to-accept cases. The remaining sanitizer blocker is limited to the
+separate real `ck-files` UI startup path and its pinned ckVision
+`Desktop::install_default_handler` defect. See the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
 
 ## 2026-10-28 — 28a4634 store-level settings qualification
 

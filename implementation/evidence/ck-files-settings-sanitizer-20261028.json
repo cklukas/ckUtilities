@@ -13,6 +13,19 @@
     "tests": "4/4 files_settings cases passed",
     "binary_sha256": "59c97536d095408e40c745302d3b57127c54d6c216c2f0e656b630e191867a8d"
   },
+  "asan_ubsan_full_files_qualified": {
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-asan-current-20261028-01",
+    "private_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-asan-current-20261028-01-private",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "configuration": "RelWithDebInfo/Ninja; -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer; ASAN detect_leaks=0, halt_on_error=1, abort_on_error=1; UBSAN halt_on_error=1",
+    "build_window": "2026-10-28T11:21:20.657082000Z–2026-10-28T11:22:36.505979000Z",
+    "build_steps": 125,
+    "build_exit_code": 0,
+    "test_window": "2026-10-28T11:22:39.589133000Z–2026-10-28T11:22:45.729540000Z",
+    "tests": "212/212 ck_vision_files_tests cases passed",
+    "binary_sha256": "66c9d8d85dba8fb1b626ce4b98924504610e6219b82f82b4cfca774adb17edf4",
+    "diagnostics": "No ASan or UBSan diagnostics"
+  },
   "thread_sanitizer": {
     "temporary_root": "/Volumes/S8T/tmp/ckutilities-tsan-settings-20261028-01",
     "configuration": "RelWithDebInfo/Ninja; -fsanitize=thread -fno-omit-frame-pointer; TSAN halt_on_error=1",
@@ -55,5 +68,5 @@
     "binary_sha256": "643308c4e14d67f9c5f3ebdaecb933f32892bb55421b6c5fc172d9021051384d",
     "diagnostics": "No TSan diagnostics"
   },
-  "remaining_gate": "The full UI ASan/UBSan suite remains blocked by the pinned ckVision Desktop::install_default_handler defect; no suppression or product workaround is used."
+  "remaining_gate": "The separate real ck-files UI sanitizer startup path remains blocked by the pinned ckVision Desktop::install_default_handler defect; the complete ck_vision_files_tests suite is qualified under both ASan/UBSan and TSan."
 }
