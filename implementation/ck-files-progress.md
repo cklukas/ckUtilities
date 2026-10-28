@@ -3,6 +3,30 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — 28a4634 Linux full build, CTest and package qualification
+
+The current Linux ARM64 qualification completed from the protected
+`rpi4` source/build tree after the focused settings follow-up. The full
+current-source build passed from
+`2026-10-28T09:40:39.657880070Z` to
+`2026-10-28T11:05:28.760919309Z` (1h24m49.102s), exit code 0. The full CTest
+run then passed **223/223** in 53.63 seconds, including **107/107**
+Files-labelled tests and the documentation contract. The installed `ck-files`
+binary SHA-256 is
+`cdc8b6acc57da247809167878ca951c63b12814c0282a35a17f9e47282233ad9`.
+
+The protected package rehearsal produced tar.gz, Debian arm64 and RPM
+aarch64 artifacts under
+`/home/klukas/ckutilities-settings-20261028-01/packages/`. The tarball is
+`ck-utilities-0.2.0-linux.tar.gz`, 14,541,826 bytes, SHA-256
+`43f4614416f819f3687dc426975370256e72f472317465c67f17349cb2427383`;
+the installed and tarball payloads contain all ten guides and 28 SVG
+screenshots. Disposable default CPack output created outside the protected
+tree was removed after hashes and payload counts were recorded.
+
+Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
+and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-28 — 28a4634 store-level settings qualification
 
 The settings follow-up now exercises the actual `FilesSettingsStore`, not only

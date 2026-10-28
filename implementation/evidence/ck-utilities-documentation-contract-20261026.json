@@ -32,11 +32,20 @@
     "documentation_payload": "10 guides and 28 SVG screenshots"
   },
   "linux_arm64_rpi4": {
-    "source": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/source",
-    "build": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build",
-    "documentation_contract_and_native_trash": "2/2 passed",
-    "files_native_foreign_volume_trash": "9/9 passed",
-    "settings_follow_up": "Source archive 28a4634 SHA-256 3EAA5F8867539184CCC16417D4AECD368A3B608A31980A2F10B5B347B372B027; protected source /home/klukas/ckutilities-settings-20261028-01/source; ckVision 1.4.0 SDK rebuilt from a791f10 archive SHA-256 C4471FC699648658F63F1BAADBF17D9072B598CA109EE545B6E5310793D7B0EF; focused files_settings run passed 4/4; binary SHA-256 84DFEAEB99423568D36F1D9F80D53ED7EDA2E87DCBF77B83CBE3E310D0726CA9"
+    "source": "/home/klukas/ckutilities-settings-20261028-01/source",
+    "build": "/home/klukas/ckutilities-settings-20261028-01/build",
+    "documentation_contract": "1/1 passed as part of the full current-source CTest run",
+    "full_ctest": "223/223 passed, exit code 0; 53.63s total",
+    "full_ctest_window": "2026-10-28T11:05:32.496632626Z–2026-10-28T11:06:26.185525185Z",
+    "files_label": "107/107 Files-labelled tests passed",
+    "build_window": "2026-10-28T09:40:39.657880070Z–2026-10-28T11:05:28.760919309Z; Release-equivalent current-source build; exit code 0",
+    "ck_files_binary_sha256": "CDC8B6ACC57DA247809167878CA951C63B12814C0282A35A17F9E47282233AD9",
+    "ckvision_sdk": "ckVision 1.4.0 rebuilt from pinned source a791f10; source archive SHA-256 C4471FC699648658F63F1BAADBF17D9072B598CA109EE545B6E5310793D7B0EF; installed prefix /home/klukas/ckvision-settings-sdk-20261028-01/prefix",
+    "package": "/home/klukas/ckutilities-settings-20261028-01/packages/ck-utilities-0.2.0-linux.tar.gz",
+    "package_sha256": "43F4614416F819F3687DC426975370256E72F472317465C67F17349CB2427383",
+    "package_formats": "tar.gz 14,541,826 bytes; Debian arm64 SHA-256 A4CC8CC8C584FB82E9A89AB0D4662AFE067F0091045820A571E814F4E68CBA61; RPM aarch64 SHA-256 A892E8B7615E1CAA8EB31D64ECEEA5C90119D2D7342085F23EBF1F32D766A131",
+    "documentation_payload": "10 guides and 28 SVG screenshots in install and tar.gz payloads",
+    "settings_follow_up": "Source archive 28a4634 SHA-256 3EAA5F8867539184CCC16417D4AECD368A3B608A31980A2F10B5B347B372B027; focused files_settings run passed 4/4; current full build, CTest and package rehearsal now completed from the protected source/build tree"
   },
   "windows_x64_workstation": {
     "source": "V:\\dev\\ckutilities-goal-20261028-01",
