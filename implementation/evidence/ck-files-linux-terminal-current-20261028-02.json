@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-28",
+  "host": "Linux arm64 rpi4",
+  "source_commit": "fc26692722f7a91842d3b321320eaf88e234d81e",
+  "build": {
+    "source": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/source",
+    "build_root": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+    "target": "ckfiles_ckvision",
+    "binary": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/bin/ck-files",
+    "binary_sha256": "568c23ad8ba659edc4213d1391418d29b9b6f6a83736485d663e6d8c04416af8",
+    "binary_bytes": 5473864,
+    "binary_mtime": "2026-10-28 15:51:29.395056032 +0100"
+  },
+  "terminal_smoke": {
+    "helper": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/src/vision/ck_vision_terminal_smoke",
+    "profiles": ["xterm-256color", "xterm", "vt100"],
+    "size": "80x24",
+    "run_window": "2026-10-28T14:52:06Z–2026-10-28T14:52:07Z",
+    "exit_code": 0
+  },
+  "environment": {
+    "TMPDIR": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/tmp",
+    "config_root": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/pty-config-current"
+  },
+  "observed": [
+    "The exact current-source ck-files executable passed all three real POSIX PTY terminal profiles.",
+    "The terminal helper completed its resize, draw and standard Alt+X quit contract for each profile.",
+    "The exact ck-files process was absent after the runs and the disposable PTY configuration root was removed."
+  ]
+}

@@ -3,6 +3,17 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — current Linux real-terminal smoke from integrated build
+
+The exact current-source ARM64 `ck-files` executable from the integrated Linux
+build passed the real PTY helper for `xterm-256color`, `xterm`, and `vt100` at
+80x24. The helper completed the resize/draw/terminal-mode and standard Alt+X
+shutdown contract for each profile; exit code was 0 and the exact process was
+absent afterward. The executable SHA-256 is
+`568c23ad8ba659edc4213d1391418d29b9b6f6a83736485d663e6d8c04416af8`.
+
+Evidence: [current integrated Linux terminal record](evidence/ck-files-linux-terminal-current-20261028-02.json).
+
 ## 2026-10-28 — WP-00 volume archive and command availability contract
 
 The WP-00 contract was extended for the pane-local volume view. A volume row
