@@ -304,6 +304,7 @@ CK_TEST(files_app_composes_independent_native_panes_in_every_suite_theme) {
         const auto text = f.painted();
         CK_CHECK(text.find("left-item-") != text.npos && text.find("right-item-") != text.npos);
         CK_CHECK(text.find("[Active] Left") != text.npos && text.find("[Other] Right") != text.npos);
+        CK_CHECK(text.find("Active: Left | Items: L 100 / R 3 | Marked: L 0 / R 0 | Ready") != text.npos);
         CK_CHECK(f.app->status(0) == "Last scan: 100 items");
     }
 }
@@ -320,7 +321,7 @@ CK_TEST(files_app_narrow_layout_switches_without_discarding_either_pane) {
     CK_CHECK(f.app->active_pane() == 1 && f.application.focused() == f.app->grid(1));
     CK_CHECK(f.app->target(0)->row.row == left && f.app->target(1)->row.row == right);
     const auto text = f.painted();
-    CK_CHECK(text.find("[Active] Right") != text.npos && text.find("Other: Left") != text.npos);
+    CK_CHECK(text.find("[Active] Right") != text.npos && text.find("Active: Right") != text.npos);
     f.terminal.resize({120, 34});
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->narrow() && f.app->active_pane() == 1);
@@ -1166,7 +1167,7 @@ CK_TEST(files_app_explicit_navigation_supersedes_blocked_folder_entry) {
     CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "right") &&
              f.app->location(0)->components().empty());
     CK_CHECK(f.app->model(0).row_count() == 3 && f.app->narrow());
-    CK_CHECK(f.painted().find("Other: Right") != std::string::npos);
+    CK_CHECK(f.painted().find("Active: Left") != std::string::npos);
 }
 CK_TEST(files_app_folder_notification_fault_blocks_only_that_pane_without_claiming_navigation_success) {
     auto fault = std::make_shared<std::atomic<bool>>(false);

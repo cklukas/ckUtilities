@@ -659,10 +659,28 @@ struct FilesApp::State {
             if (surfaces[i]->footer->text() != text)
                 surfaces[i]->footer->set_text(std::move(text));
         }
-        const auto &other = panes[1 - active];
-        window->set_footer(compact ? "F4 Switch pane | Other: " + std::string(active == 0 ? "Right " : "Left ") +
-                                         (other.active ? other.active->display_text() : "Loading")
-                                   : "Left and right locations are independent");
+        const auto pane_items = [](const Pane &pane) {
+            if (!pane.model.current())
+                return pending(pane) ? std::string("loading") : std::string("stale");
+            return std::to_string(pane.model.row_count());
+        };
+        const auto pane_marks = [](const Pane &pane) {
+            return pane.selection.marks ? pane.selection.marks->total : std::size_t{0};
+        };
+        std::string activity;
+        if (operation_execution_request)
+            activity = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
+                ? "Moving" : "Copying";
+        else if (modal_pending())
+            activity = "Dialog open";
+        else if (pending(panes[0]) || pending(panes[1]))
+            activity = "Scanning";
+        else
+            activity = "Ready";
+        window->set_footer("Active: " + std::string(active == 0 ? "Left" : "Right") +
+                           " | Items: L " + pane_items(panes[0]) + " / R " + pane_items(panes[1]) +
+                           " | Marked: L " + std::to_string(pane_marks(panes[0])) +
+                           " / R " + std::to_string(pane_marks(panes[1])) + " | " + activity);
     }
     bool navigate(std::size_t i, ck::files::NativeAbsolutePath location) {
         if (i >= 2 || closing || !location.is_valid())
