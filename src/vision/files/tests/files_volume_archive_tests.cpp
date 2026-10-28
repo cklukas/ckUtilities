@@ -41,6 +41,21 @@ FilesVolumeArchiveDocument document(FilesVolumeArchiveSupport support = FilesVol
 
 } // namespace
 
+CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
+    const auto volumes = enumerate_native_volumes();
+    CK_CHECK(volumes.value());
+    CK_CHECK(!volumes.value()->empty());
+    for (const auto &volume : *volumes.value()) {
+        CK_CHECK(!volume.mount_point.empty());
+        CK_CHECK(!volume.identity.empty());
+#if !defined(_WIN32)
+        // POSIX source paths can be reused after unmount/remount. They must
+        // not be the complete identity handed to a future archive worker.
+        CK_CHECK(volume.identity != volume.mount_point);
+#endif
+    }
+}
+
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7};

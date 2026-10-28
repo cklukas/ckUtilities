@@ -7003,6 +7003,12 @@ volume, or enable volume Copy. The synchronized Windows source hash for
 `files_volume_service.cpp` was
 `9c40668e081e9824040788fa6eb59c7951061a3435503f6fe7cbe8143683bc1b`.
 
+The native enumerator boundary test now runs against the host mount table and
+requires every returned row to carry a non-empty revalidation identity (and,
+on POSIX, one distinct from the mount-point display path). The updated Files
+test executable passed on macOS in 3.69 seconds and on Windows in 19.20
+seconds; the test uses only read-only enumeration.
+
 
 ## 2026-10-28 — Volume archive digest qualification
 
