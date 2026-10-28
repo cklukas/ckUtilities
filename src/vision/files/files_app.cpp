@@ -732,6 +732,11 @@ struct FilesApp::State {
                                        : volume->archive.support == FilesVolumeArchiveSupport::Unsupported
                                            ? "Copy unavailable: volume archive format is unsupported"
                                            : "Copy unavailable: archive capability is unknown");
+                if (!operation_journal_root || !operation_journal_root->is_valid())
+                    return unavailable("Copy unavailable: archive journal is not configured");
+                if (!volume_archive_planning_service || !volume_archive_service ||
+                    !volume_archive_planning_service->running() || !volume_archive_service->running())
+                    return unavailable("Copy unavailable: archive worker is unavailable");
                 if (!archive_destination_ready(active))
                     return unavailable("Copy unavailable: destination pane is not ready");
                 return FilesCommandAvailability::available();
