@@ -34,6 +34,19 @@ std::string loss_kind(FilesVolumeArchiveLossKind value) {
 
 std::string bytes(std::uint64_t value) { return std::to_string(value) + " bytes"; }
 
+std::string display_archive_path(const std::string &value, ck::files::NameEncoding encoding) {
+    if (encoding == ck::files::NameEncoding::PosixBytes)
+        return ck::files::display_native_text(value);
+    if (encoding != ck::files::NameEncoding::WindowsUtf16 || value.size() % 2 != 0)
+        return "<unrepresentable native path>";
+    std::u16string units;
+    units.reserve(value.size() / 2);
+    for (std::size_t i = 0; i < value.size(); i += 2)
+        units.push_back(static_cast<char16_t>(static_cast<unsigned char>(value[i])) |
+                        static_cast<char16_t>(static_cast<unsigned char>(value[i + 1])) << 8);
+    return ck::files::display_native_text(units);
+}
+
 } // namespace
 
 struct FilesVolumeArchiveReviewDialog::State final : std::enable_shared_from_this<State> {
@@ -94,7 +107,8 @@ struct FilesVolumeArchiveReviewDialog::State final : std::enable_shared_from_thi
                                          .kind = FieldKind::Note});
             for (const auto &loss : document.losses) {
                 loss_fields.push_back(descriptor.fields.size());
-                descriptor.fields.push_back({.label = loss.path + ": " + loss_kind(loss.kind) + " — " +
+                descriptor.fields.push_back({.label = display_archive_path(loss.path, document.path_encoding) + ": " +
+                                                     loss_kind(loss.kind) + " — " +
                                                      loss.diagnostic + (loss.hard_failure ? " [cannot continue]" : ""),
                                              .kind = FieldKind::Check,
                                              .initial_checked = false});

@@ -71,9 +71,8 @@ struct FilesVolumeArchiveEntry final {
 struct FilesVolumeArchiveDocument final {
     FilesVolumeRecord source;
     FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live;
-    // POSIX archive paths are exact native bytes. Windows paths remain
-    // intentionally unavailable until the archive format has a UTF-16 path
-    // codec; accepting display UTF-8 here would lose names or merge aliases.
+    // Archive paths are exact native bytes for POSIX or little-endian UTF-16
+    // code units for Windows. Display UTF-8 is never used as an archive path.
     ck::files::NameEncoding path_encoding = ck::files::NameEncoding::PosixBytes;
     std::vector<FilesVolumeArchiveEntry> entries;
     std::vector<FilesVolumeArchiveLoss> losses;

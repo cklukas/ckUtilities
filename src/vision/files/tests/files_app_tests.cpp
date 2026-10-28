@@ -215,10 +215,10 @@ struct Fixture {
             std::vector<FilesVolumeRecord> records;
             records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
                                3ull * 1024 * 1024, false, "fixture-volume", {
-                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}});
+                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
             records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
                                2ull * 1024 * 1024, true, "fixture-read-only", {
-                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}});
+                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
             return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
         });
         app = std::make_unique<FilesApp>(

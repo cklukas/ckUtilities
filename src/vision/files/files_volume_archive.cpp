@@ -85,22 +85,46 @@ bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t &result)
 }
 
 bool safe_relative_path(std::string_view path, ck::files::NameEncoding encoding, bool allow_root = false) {
-    // A std::string cannot carry Windows UTF-16 code units without an
-    // irreversible conversion. Keep that path family fail-closed until the
-    // archive gets its explicit UTF-16 codec.
-    if (encoding != ck::files::NameEncoding::PosixBytes)
-        return false;
-    if (allow_root && path == ".")
+    if (encoding == ck::files::NameEncoding::PosixBytes) {
+        if (allow_root && path == ".")
+            return true;
+        if (path.empty() || path.front() == '/' || path.find('\0') != std::string_view::npos)
+            return false;
+        std::size_t start = 0;
+        while (start <= path.size()) {
+            const auto end = path.find('/', start);
+            const auto component = path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
+            if (component.empty() || component == "." || component == "..")
+                return false;
+            if (end == std::string_view::npos)
+                break;
+            start = end + 1;
+        }
         return true;
-    if (path.empty() || path.front() == '/' || path.find('\0') != std::string_view::npos)
+    }
+    if (encoding != ck::files::NameEncoding::WindowsUtf16 || path.empty() || path.size() % 2 != 0)
+        return false;
+    auto unit = [&](std::size_t index) {
+        return static_cast<char16_t>(static_cast<unsigned char>(path[index * 2])) |
+               static_cast<char16_t>(static_cast<unsigned char>(path[index * 2 + 1])) << 8;
+    };
+    const auto units = path.size() / 2;
+    if (allow_root && units == 1 && unit(0) == u'.')
+        return true;
+    if (units == 0 || unit(0) == u'\\' || unit(0) == u'/')
         return false;
     std::size_t start = 0;
-    while (start <= path.size()) {
-        const auto end = path.find('/', start);
-        const auto component = path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
-        if (component.empty() || component == "." || component == "..")
+    while (start <= units) {
+        std::size_t end = start;
+        while (end < units && unit(end) != u'\\')
+            ++end;
+        if (end == start)
             return false;
-        if (end == std::string_view::npos)
+        if (end - start == 1 && unit(start) == u'.')
+            return false;
+        if (end - start == 2 && unit(start) == u'.' && unit(start + 1) == u'.')
+            return false;
+        if (end == units)
             break;
         start = end + 1;
     }
@@ -145,7 +169,8 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
     if (document.entries.empty())
         return Observation<std::vector<EncodedEntry>>::unavailable(
             ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.empty_document"));
-    if (document.path_encoding != ck::files::NameEncoding::PosixBytes)
+    if (document.path_encoding != ck::files::NameEncoding::PosixBytes &&
+        document.path_encoding != ck::files::NameEncoding::WindowsUtf16)
         return Observation<std::vector<EncodedEntry>>::unavailable(
             ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.path_encoding"));
     for (const auto &loss : document.losses) {
@@ -168,7 +193,10 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
             entry.kind > FilesVolumeArchiveEntryKind::Unsupported)
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.entry_kind"));
-        const bool root_entry = entry.kind == FilesVolumeArchiveEntryKind::Directory && entry.path == ".";
+        const bool root_entry = entry.kind == FilesVolumeArchiveEntryKind::Directory &&
+            ((document.path_encoding == ck::files::NameEncoding::PosixBytes && entry.path == ".") ||
+             (document.path_encoding == ck::files::NameEncoding::WindowsUtf16 && entry.path.size() == 2 &&
+              entry.path[0] == '.' && entry.path[1] == '\0'));
         if (!safe_relative_path(entry.path, document.path_encoding, root_entry) || !paths.insert(entry.path).second)
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.entry_path"));
@@ -775,6 +803,7 @@ struct FilesVolumeArchivePlanningService::State final {
             if (complete.source.identity != value.source.identity ||
                 complete.source.mount_point != value.source.mount_point ||
                 complete.source.filesystem != value.source.filesystem ||
+                complete.source.native_mount_units != value.source.native_mount_units ||
                 complete.source.archive.support != value.source.archive.support ||
                 complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
                 fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.plan.identity_revalidation",
@@ -943,6 +972,7 @@ struct FilesVolumeArchiveService::State final {
             if (complete.source.identity != value.source.identity ||
                 complete.source.mount_point != value.source.mount_point ||
                 complete.source.filesystem != value.source.filesystem ||
+                complete.source.native_mount_units != value.source.native_mount_units ||
                 complete.source.archive.support != value.source.archive.support ||
                 complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
                 fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.identity_revalidation",

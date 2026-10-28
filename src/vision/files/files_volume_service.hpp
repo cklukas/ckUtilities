@@ -37,6 +37,10 @@ struct FilesVolumeRecord {
     // opaque to the UI and must be revalidated before an archive worker uses it.
     std::string identity;
     FilesVolumeArchiveCapability archive;
+    // Exact native mount units when the platform path is not safely carried by
+    // the display string. POSIX records leave this empty; Windows records use
+    // the volume/mount UTF-16 units without a UTF-8 round trip.
+    std::u16string native_mount_units;
 };
 
 enum class FilesVolumeReplyState { Ready, Failed, Cancelled, WorkerFault };

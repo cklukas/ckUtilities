@@ -15,6 +15,9 @@ FilesVolumeRecord fixture(FilesVolumeArchiveSupport support) {
     result.filesystem = "fixturefs";
     result.identity = "fixture-volume";
     result.archive = {support, support == FilesVolumeArchiveSupport::SnapshotPreferred, {}};
+#if defined(_WIN32)
+    result.native_mount_units = u"C:\\volume-archive-source-fixture-that-does-not-exist";
+#endif
     return result;
 }
 } // namespace
@@ -22,38 +25,21 @@ FilesVolumeRecord fixture(FilesVolumeArchiveSupport support) {
 CK_TEST(native_volume_source_refuses_unqualified_capability_before_traversal) {
     const auto result = build_native_volume_archive_document(fixture(FilesVolumeArchiveSupport::Unknown));
     CK_CHECK(!result.value());
-#if defined(_WIN32)
-    CK_CHECK(result.state() == ObservationState::Unsupported);
-    CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.windows_utf16_codec");
-#else
     CK_CHECK(result.state() == ObservationState::Unknown);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.capability");
-#endif
 }
 
 CK_TEST(native_volume_source_revalidates_identity_before_opening_mount) {
     const auto result = build_native_volume_archive_document(fixture(FilesVolumeArchiveSupport::LiveReadable));
-#if defined(_WIN32)
-    CK_CHECK(!result.value());
-    CK_CHECK(result.state() == ObservationState::Unsupported);
-    CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.windows_utf16_codec");
-#else
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Changed);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.revalidation");
-#endif
 }
 
 CK_TEST(native_volume_source_does_not_emulate_snapshot_provider) {
     auto value = fixture(FilesVolumeArchiveSupport::SnapshotPreferred);
     const auto result = build_native_volume_archive_document(value, FilesVolumeArchiveConsistency::Snapshot);
-#if defined(_WIN32)
-    CK_CHECK(!result.value());
-    CK_CHECK(result.state() == ObservationState::Unsupported);
-    CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.windows_utf16_codec");
-#else
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Unsupported);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.snapshot_provider");
-#endif
 }

@@ -85,16 +85,55 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
     record.mount_point = mount.empty() ? utf8(volume) : utf8(mount);
     record.filesystem = info && filesystem[0] ? utf8(filesystem) : "Unknown";
     record.identity = utf8(volume);
-    // The volume inventory uses UTF-8 only for display. Until the archive
-    // manifest has its native UTF-16 path codec, Windows must remain an
-    // explicit unsupported source rather than accepting lossy conversions.
-    record.archive.support = FilesVolumeArchiveSupport::Unsupported;
-    record.archive.diagnostic = "Native UTF-16 archive path codec is not qualified";
+    const auto native_mount = mount.empty() ? volume : mount;
+    record.native_mount_units.assign(reinterpret_cast<const char16_t *>(native_mount.data()), native_mount.size());
     if (space) {
         record.total_bytes = total_bytes.QuadPart;
         record.free_bytes = available_bytes.QuadPart;
     }
     record.read_only = info && (flags & FILE_READ_ONLY_VOLUME) != 0;
+    // The inventory uses UTF-8 only for display. Archive traversal retains
+    // exact UTF-16 units and qualifies them with a native read-only probe.
+    auto address = ck::files::NativeAbsolutePath::from_windows(record.native_mount_units);
+    if (!address.value()) {
+        record.archive.support = FilesVolumeArchiveSupport::Unsupported;
+        record.archive.diagnostic = "Native mount path is not representable";
+    } else {
+        ck::files::NativeFileSystem filesystem_adapter;
+        auto opened = filesystem_adapter.open_native_directory(*address.value());
+        if (!opened.value()) {
+            const auto *detail = opened.unavailable_detail();
+            record.archive.support = detail && detail->state == ObservationState::Denied
+                                         ? FilesVolumeArchiveSupport::Denied
+                                     : detail && detail->state == ObservationState::Unsupported
+                                         ? FilesVolumeArchiveSupport::Unsupported
+                                         : FilesVolumeArchiveSupport::Unknown;
+            record.archive.diagnostic = detail ? "Archive capability probe failed: " + detail->error.operation
+                                               : "Archive capability probe failed";
+        } else {
+            auto metadata = (*opened.value())->inspect_basic();
+            if (!metadata.value()) {
+                const auto *detail = metadata.unavailable_detail();
+                record.archive.support = detail && detail->state == ObservationState::Denied
+                                             ? FilesVolumeArchiveSupport::Denied
+                                         : detail && detail->state == ObservationState::Unsupported
+                                             ? FilesVolumeArchiveSupport::Unsupported
+                                             : FilesVolumeArchiveSupport::Unknown;
+                record.archive.diagnostic = detail ? "Archive capability probe failed: " + detail->error.operation
+                                                   : "Archive capability probe failed";
+            } else if (!metadata.value()->kind.value() ||
+                       *metadata.value()->kind.value() != ck::files::ObjectKind::Directory ||
+                       !metadata.value()->identity.value() || !metadata.value()->mount_id.value()) {
+                record.archive.support = FilesVolumeArchiveSupport::Unknown;
+                record.archive.diagnostic = "Archive capability probe could not qualify the mount identity";
+            } else {
+                record.archive.support = FilesVolumeArchiveSupport::LiveReadable;
+                record.archive.snapshot_available = false;
+                record.archive.diagnostic =
+                    "Live source traversal qualified; snapshot provider not configured";
+            }
+        }
+    }
     result.push_back(std::move(record));
 }
 
@@ -158,7 +197,7 @@ std::string decode_mountinfo(std::string value) {
 void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string name, std::string mount,
                          std::string filesystem, bool read_only, std::string identity) {
     struct statvfs stats{};
-    FilesVolumeRecord record{std::move(name), std::move(mount), std::move(filesystem), {}, {}, read_only, {}, {}};
+    FilesVolumeRecord record{std::move(name), std::move(mount), std::move(filesystem), {}, {}, read_only, {}, {}, {}};
     record.identity = std::move(identity);
     record.archive.diagnostic = "Archive capability probe not run";
     if (statvfs(record.mount_point.c_str(), &stats) == 0) {

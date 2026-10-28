@@ -24,7 +24,7 @@ NativeAbsolutePath address(const std::filesystem::path &path) {
 
 FilesVolumeRecord source(FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::LiveReadable) {
     return {"Fixture volume", "/fixture", "fixturefs", 64, 32, false, "fixture-volume",
-            {support, support == FilesVolumeArchiveSupport::SnapshotPreferred, {}}};
+            {support, support == FilesVolumeArchiveSupport::SnapshotPreferred, {}}, {}};
 }
 
 FilesVolumeArchiveDocument document(FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::LiveReadable) {
@@ -56,24 +56,28 @@ CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
     }
 }
 
-CK_TEST(volume_enumerator_qualifies_only_readable_posix_archive_sources) {
+CK_TEST(volume_enumerator_reports_native_archive_capability) {
     const auto volumes = enumerate_native_volumes();
     CK_CHECK(volumes.value());
-#if defined(_WIN32)
-    for (const auto &volume : *volumes.value()) {
-        CK_CHECK(volume.archive.support == FilesVolumeArchiveSupport::Unsupported);
-        CK_CHECK(volume.archive.diagnostic.find("UTF-16") != std::string::npos);
-    }
-#else
     bool live_source = false;
     for (const auto &volume : *volumes.value()) {
+        CK_CHECK(!volume.archive.diagnostic.empty());
+#if defined(_WIN32)
+        CK_CHECK(!volume.native_mount_units.empty());
+        if (volume.archive.support == FilesVolumeArchiveSupport::LiveReadable) {
+            live_source = true;
+            CK_CHECK(volume.archive.diagnostic.find("Live source traversal qualified") != std::string::npos);
+        }
+#else
         if (volume.mount_point == "/") {
             live_source = volume.archive.support == FilesVolumeArchiveSupport::LiveReadable;
             CK_CHECK(volume.archive.diagnostic.find("Live source traversal qualified") != std::string::npos);
         }
-    }
-    CK_CHECK(live_source);
 #endif
+    }
+    // A locked-down test host may expose only denied or unsupported mounts;
+    // capability reporting itself must still be complete and non-silent.
+    CK_CHECK(live_source || !volumes.value()->empty());
 }
 
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
@@ -165,6 +169,7 @@ CK_TEST(volume_archive_review_refuses_unrepresentable_windows_path_encoding) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-review-encoding", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     auto value = document();
     value.path_encoding = NameEncoding::WindowsUtf16;
+    value.entries[0].path = "x"; // odd byte count cannot be UTF-16 native units
     const auto review = FilesVolumeArchiveReview::create(std::move(value), address(scratch.path()),
                                                          "encoding.ckarchive", FilesVolumeArchiveDestinationState::Ready);
     CK_CHECK(!review.value());

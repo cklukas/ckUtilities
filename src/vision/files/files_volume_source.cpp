@@ -77,13 +77,40 @@ bool same_identity(const ObjectIdentity &left, const ObjectIdentity &right) {
     return ck::files::compare_identity(left, right) == ck::files::IdentityComparison::Same;
 }
 
-std::string relative_path(const std::string &parent, const ck::files::NativeName &name) {
-    const auto *bytes = name.posix_bytes();
-    if (!bytes)
-        return {};
-    if (parent.empty())
-        return *bytes;
-    return parent + "/" + *bytes;
+std::string utf16_bytes(std::u16string_view units) {
+    std::string result;
+    result.reserve(units.size() * 2);
+    for (const auto unit : units) {
+        result.push_back(static_cast<char>(unit & 0xff));
+        result.push_back(static_cast<char>(unit >> 8));
+    }
+    return result;
+}
+
+std::string archive_root_path(ck::files::NameEncoding encoding) {
+    return encoding == ck::files::NameEncoding::WindowsUtf16 ? utf16_bytes(u".") : ".";
+}
+
+std::string relative_path(const std::string &parent, const ck::files::NativeName &name,
+                         ck::files::NameEncoding encoding) {
+    std::string component;
+    if (encoding == ck::files::NameEncoding::PosixBytes) {
+        const auto *bytes = name.posix_bytes();
+        if (!bytes)
+            return {};
+        component = *bytes;
+    } else {
+        const auto *units = name.windows_units();
+        if (!units)
+            return {};
+        component = utf16_bytes(*units);
+    }
+    if (parent.empty() || parent == archive_root_path(encoding))
+        return component;
+    const std::string separator = encoding == ck::files::NameEncoding::WindowsUtf16
+                                       ? utf16_bytes(u"\\")
+                                       : "/";
+    return parent + separator + component;
 }
 
 void add_loss(FilesVolumeArchiveDocument &document, std::size_t entry_index, std::string path,
@@ -191,7 +218,8 @@ bool revalidate_volume(const FilesVolumeRecord &source, UnavailableObservation &
         return false;
     }
     const auto found = std::any_of(volumes.value()->begin(), volumes.value()->end(), [&](const auto &current) {
-        return current.mount_point == source.mount_point && current.identity == source.identity;
+        return current.mount_point == source.mount_point && current.identity == source.identity &&
+               (source.native_mount_units.empty() || current.native_mount_units == source.native_mount_units);
     });
     if (found)
         return true;
@@ -205,17 +233,14 @@ bool revalidate_volume(const FilesVolumeRecord &source, UnavailableObservation &
 Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
     const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
     FilesVolumeArchiveSourceLimits limits) {
-#if defined(_WIN32)
-    (void)source;
-    (void)consistency;
-    (void)stop_token;
-    (void)limits;
-    return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
-        AdapterError::UnrepresentableName, "volume_archive.source.windows_utf16_codec");
-#else
     if (source.identity.empty() || source.mount_point.empty())
         return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
             AdapterError::UnqualifiedIdentity, "volume_archive.source.identity");
+#if defined(_WIN32)
+    if (source.native_mount_units.empty())
+        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
+            AdapterError::UnrepresentableName, "volume_archive.source.windows_native_mount");
+#endif
     if (source.archive.support != FilesVolumeArchiveSupport::LiveReadable &&
         source.archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
         return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
@@ -235,7 +260,18 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
     if (!revalidate_volume(source, revalidation))
         return unavailable<FilesVolumeArchiveDocument>(revalidation);
 
-    auto root_address = NativeAbsolutePath::from_posix(source.mount_point);
+    const auto path_encoding =
+#if defined(_WIN32)
+        ck::files::NameEncoding::WindowsUtf16;
+#else
+        ck::files::NameEncoding::PosixBytes;
+#endif
+    auto root_address =
+#if defined(_WIN32)
+        NativeAbsolutePath::from_windows(source.native_mount_units);
+#else
+        NativeAbsolutePath::from_posix(source.mount_point);
+#endif
     if (!root_address.value())
         return unavailable<FilesVolumeArchiveDocument>(*root_address.unavailable_detail());
     NativeFileSystem filesystem;
@@ -260,9 +296,10 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
     FilesVolumeArchiveDocument document;
     document.source = source;
     document.consistency = consistency;
-    document.path_encoding = ck::files::NameEncoding::PosixBytes;
-    document.entries.push_back({".", FilesVolumeArchiveEntryKind::Directory, 0, {}, {}, 0});
-    add_loss(document, 0, ".", FilesVolumeArchiveLossKind::Metadata, false,
+    document.path_encoding = path_encoding;
+    const auto root_path = archive_root_path(path_encoding);
+    document.entries.push_back({root_path, FilesVolumeArchiveEntryKind::Directory, 0, {}, {}, 0});
+    add_loss(document, 0, root_path, FilesVolumeArchiveLossKind::Metadata, false,
              "portable root-directory metadata is not encoded");
 
     std::vector<Frame> frames;
@@ -290,7 +327,7 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
             return unavailable<FilesVolumeArchiveDocument>(ObservationState::Failed,
                 AdapterError::InvalidNativeResult, "volume_archive.source.name");
         const auto name = std::move(batch.names.front());
-        const auto path = relative_path(frame.path, name);
+        const auto path = relative_path(frame.path, name, path_encoding);
         if (path.empty())
             return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
                 AdapterError::UnrepresentableName, "volume_archive.source.name_encoding");
@@ -412,12 +449,19 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
             entry.kind = FilesVolumeArchiveEntryKind::Symlink;
             const auto &link = data.link;
             if (link.value()) {
-                if (const auto *posix = std::get_if<ck::files::PosixSymlinkData>(&link.value()->payload))
+                if (const auto *posix = std::get_if<ck::files::PosixSymlinkData>(&link.value()->payload)) {
                     entry.link_target = posix->target;
-                else
+                } else if (const auto *windows = std::get_if<ck::files::WindowsReparseData>(&link.value()->payload);
+                           windows && windows->kind == ck::files::WindowsReparseKind::SymbolicLink &&
+                           windows->names) {
+                    entry.link_target = utf16_bytes(windows->names->print);
+                } else {
+                    entry.kind = FilesVolumeArchiveEntryKind::Unsupported;
                     add_loss(document, index, path, FilesVolumeArchiveLossKind::UnsupportedObject, true,
                              "link representation is not a POSIX symlink");
+                }
             } else {
+                entry.kind = FilesVolumeArchiveEntryKind::Unsupported;
                 add_loss(document, index, path, FilesVolumeArchiveLossKind::UnsupportedObject, true,
                          "symlink target could not be read");
             }
@@ -447,7 +491,6 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
     if (!revalidate_volume(source, revalidation))
         return unavailable<FilesVolumeArchiveDocument>(revalidation);
     return Observation<FilesVolumeArchiveDocument>::available(std::move(document));
-#endif
 }
 
 } // namespace ck::vision
