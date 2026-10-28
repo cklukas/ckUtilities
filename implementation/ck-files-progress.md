@@ -51,6 +51,19 @@ existing capability gate keeps volume Copy disabled. The new archive unit and
 worker tests pass inside the current macOS Files test executable; Windows and
 Linux qualification of this new code remains open.
 
+The follow-up qualification completed the portable worker boundary on Windows:
+the current sources were hash-verified into the required ReFS `V:` workspace,
+rebuilt with the installed v143 toolset, and the complete Files-labelled gate
+passed **107/107** in 24.02 seconds. The Linux ARM64 host has only ckVision
+1.3.0 installed while this checkout requires the validated 1.4.0 package, so
+the integrated Linux configure was intentionally refused rather than relaxing
+the package floor. The archive translation unit nevertheless passed a strict
+standalone Linux ARM64 compile with GCC 14, `-std=c++20 -Wall -Wextra
+-Wpedantic -Werror`; integrated Linux archive tests remain open until the
+required ckVision 1.4.0 SDK is installed. These results qualify the worker's
+Windows build and Linux compiler boundary, not native source enumeration or
+snapshot support.
+
 ## 2026-10-28 — root-boundary volume and mount information view
 
 At the namespace boundary, **Backspace** now replaces the requested pane's file
