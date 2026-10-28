@@ -43,6 +43,22 @@ behavior. It does not close the remaining mouse/restricted-key, full
 filesystem matrix, controlled crash/power-loss, or full UI sanitizer gates.
 Detailed run data is in the [interactive evidence](evidence/ck-files-interactive-current-20261028.json).
 
+## 2026-10-28 — current Files settings sanitizer qualification
+
+The current settings implementation passed focused sanitizer coverage on macOS
+arm64. Fresh ASan+UBSan and ThreadSanitizer/Ninja builds each compiled 125
+steps, including `files_settings.cpp`, and each focused run passed **4/4**
+settings cases with no sanitizer diagnostics. ASan+UBSan ran from
+`11:12:16.779934Z` to `11:13:35.739407Z`, with tests at
+`11:13:39.265531Z`–`11:13:39.675603Z`. TSan ran from
+`11:13:51.481349Z` to `11:14:54.688066Z`, with tests at
+`11:14:57.226719Z`–`11:14:57.613031Z`.
+
+This closes the focused sanitizer check for durable Files settings. The full
+UI sanitizer suite remains blocked by the pinned ckVision
+`Desktop::install_default_handler` defect; no suppression or product
+workaround was introduced. See the [settings sanitizer evidence](evidence/ck-files-settings-sanitizer-20261028.json).
+
 ## 2026-10-28 — 28a4634 store-level settings qualification
 
 The settings follow-up now exercises the actual `FilesSettingsStore`, not only

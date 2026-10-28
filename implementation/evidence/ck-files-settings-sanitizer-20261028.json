@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-28",
+  "host": "macOS arm64",
+  "source": "current checkout at commit 28a4634 plus evidence-only commits; product implementation is 7946c61",
+  "sdk": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckvision-sdk, ckVision 1.4.0, pinned source a791f10",
+  "asan_ubsan": {
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-sanitizers-settings-20261028-01",
+    "configuration": "RelWithDebInfo/Ninja; -fsanitize=address,undefined -fno-omit-frame-pointer; UBSAN halt_on_error=1; ASAN halt_on_error=1, detect_leaks=0",
+    "build_window": "2026-10-28T11:12:16.779934000Z–2026-10-28T11:13:35.739407000Z",
+    "build_steps": 125,
+    "build_exit_code": 0,
+    "test_window": "2026-10-28T11:13:39.265531000Z–2026-10-28T11:13:39.675603000Z",
+    "tests": "4/4 files_settings cases passed",
+    "binary_sha256": "59c97536d095408e40c745302d3b57127c54d6c216c2f0e656b630e191867a8d"
+  },
+  "thread_sanitizer": {
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-tsan-settings-20261028-01",
+    "configuration": "RelWithDebInfo/Ninja; -fsanitize=thread -fno-omit-frame-pointer; TSAN halt_on_error=1",
+    "build_window": "2026-10-28T11:13:51.481349000Z–2026-10-28T11:14:54.688066000Z",
+    "build_steps": 125,
+    "build_exit_code": 0,
+    "test_window": "2026-10-28T11:14:57.226719000Z–2026-10-28T11:14:57.613031000Z",
+    "tests": "4/4 files_settings cases passed",
+    "binary_sha256": "058e6bb93844a475a850b38f7f24d3a8ee97523f79e9dc7e3f931b44045cfe1b"
+  },
+  "remaining_gate": "The full UI sanitizer suite remains blocked by the pinned ckVision Desktop::install_default_handler defect; this focused settings evidence does not suppress or work around it."
+}
