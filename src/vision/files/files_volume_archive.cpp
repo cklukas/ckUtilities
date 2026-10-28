@@ -84,12 +84,14 @@ bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t &result)
     return true;
 }
 
-bool safe_relative_path(std::string_view path, ck::files::NameEncoding encoding) {
+bool safe_relative_path(std::string_view path, ck::files::NameEncoding encoding, bool allow_root = false) {
     // A std::string cannot carry Windows UTF-16 code units without an
     // irreversible conversion. Keep that path family fail-closed until the
     // archive gets its explicit UTF-16 codec.
     if (encoding != ck::files::NameEncoding::PosixBytes)
         return false;
+    if (allow_root && path == ".")
+        return true;
     if (path.empty() || path.front() == '/' || path.find('\0') != std::string_view::npos)
         return false;
     std::size_t start = 0;
@@ -148,7 +150,7 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
             ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.path_encoding"));
     for (const auto &loss : document.losses) {
         if (loss.entry_index >= document.entries.size() ||
-            (!loss.path.empty() && !safe_relative_path(loss.path, document.path_encoding)) ||
+            (!loss.path.empty() && !safe_relative_path(loss.path, document.path_encoding, true)) ||
             loss.diagnostic.empty())
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.loss_record"));
@@ -162,13 +164,19 @@ Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArch
         if (stop_token.stop_requested())
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
-        if (!safe_relative_path(entry.path, document.path_encoding) || !paths.insert(entry.path).second)
+        if (entry.kind < FilesVolumeArchiveEntryKind::Directory ||
+            entry.kind > FilesVolumeArchiveEntryKind::Unsupported)
+            return Observation<std::vector<EncodedEntry>>::unavailable(
+                ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.entry_kind"));
+        const bool root_entry = entry.kind == FilesVolumeArchiveEntryKind::Directory && entry.path == ".";
+        if (!safe_relative_path(entry.path, document.path_encoding, root_entry) || !paths.insert(entry.path).second)
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.entry_path"));
         if (entry.kind == FilesVolumeArchiveEntryKind::HardLink && entry.hard_link_group == 0)
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unknown, error(AdapterError::InvalidIdentifier, "volume_archive.hard_link"));
         if (entry.kind != FilesVolumeArchiveEntryKind::RegularFile &&
+            entry.kind != FilesVolumeArchiveEntryKind::Unsupported &&
             (entry.logical_size != 0 || !entry.extents.empty()))
             return Observation<std::vector<EncodedEntry>>::unavailable(
                 ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.non_file_data"));
@@ -387,6 +395,10 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (!request.document.losses.empty() && !request.document.losses_reviewed)
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unknown, error(AdapterError::ProviderReviewRequired, "volume_archive.loss_consent"));
+    if (std::any_of(request.document.losses.begin(), request.document.losses.end(),
+                    [](const auto &loss) { return loss.hard_failure; }))
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::ProviderReviewRequired, "volume_archive.hard_loss"));
     std::error_code ec;
     const auto destination_status = std::filesystem::symlink_status(request.destination_directory, ec);
     if (ec)
@@ -626,6 +638,7 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
             break;
         case FilesVolumeArchiveEntryKind::Symlink: ++summary.links; break;
         case FilesVolumeArchiveEntryKind::HardLink: ++summary.hard_links; break;
+        case FilesVolumeArchiveEntryKind::Unsupported: ++summary.unsupported_objects; break;
         }
     }
     summary.losses = document.losses.size();

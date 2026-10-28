@@ -30,6 +30,7 @@ enum class FilesVolumeArchiveEntryKind : std::uint8_t {
     RegularFile = 2,
     Symlink = 3,
     HardLink = 4,
+    Unsupported = 5,
 };
 
 enum class FilesVolumeArchiveLossKind : std::uint8_t {
@@ -40,6 +41,7 @@ enum class FilesVolumeArchiveLossKind : std::uint8_t {
     StorageRepresentation = 5,
     Name = 6,
     Consistency = 7,
+    Data = 8,
 };
 
 struct FilesVolumeArchiveLoss final {
@@ -92,6 +94,7 @@ struct FilesVolumeArchiveReviewSummary final {
     std::size_t regular_files = 0;
     std::size_t links = 0;
     std::size_t hard_links = 0;
+    std::size_t unsupported_objects = 0;
     std::size_t sparse_files = 0;
     std::size_t losses = 0;
     std::size_t hard_losses = 0;
