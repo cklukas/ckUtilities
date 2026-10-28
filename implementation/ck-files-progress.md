@@ -27,6 +27,22 @@ tree was removed after hashes and payload counts were recorded.
 Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
 and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
 
+## 2026-10-28 — current macOS real-terminal smoke qualification
+
+The current production `ck-files` binary was launched in a real 80x24 PTY with
+independent left/right locations. It rendered both panes, completed a left
+directory scan, opened `benchmarks` with Enter, returned with Backspace,
+refreshed with Ctrl+R, and switched with F4 to a populated right-side `docs`
+listing. Pressing Alt+X while the right scan was active showed the explicit
+stop-activity-and-exit confirmation; accepting it stopped the activity and the
+process exited with code 0. The binary SHA-256 is
+`03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55`.
+
+This qualifies the current read-only two-pane smoke path and safe close
+behavior. It does not close the remaining mouse/restricted-key, full
+filesystem matrix, controlled crash/power-loss, or full UI sanitizer gates.
+Detailed run data is in the [interactive evidence](evidence/ck-files-interactive-current-20261028.json).
+
 ## 2026-10-28 — 28a4634 store-level settings qualification
 
 The settings follow-up now exercises the actual `FilesSettingsStore`, not only

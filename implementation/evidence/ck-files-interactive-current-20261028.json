@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-28",
+  "host": "macOS arm64",
+  "terminal": "PTY, 80 columns x 24 rows",
+  "binary": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/bin/ck-files",
+  "binary_sha256": "03aa6bec736f3500c18fb1eeaa8afb26cd5c098e0d1d84ec39702d93358f1a55",
+  "config_and_temp_root": "/Volumes/PRO-BLADE/tmp/ckutilities-current-interactive-20261028-01",
+  "left": "/Volumes/PRO-BLADE/Development/ckUtilities",
+  "right": "/Volumes/PRO-BLADE/Development/ckUtilities/docs",
+  "run_window": "2026-10-28T11:11:23.553582000Z–2026-10-28T11:11:36.166402000Z",
+  "exit_code": 0,
+  "observed": [
+    "Both panes rendered in the real terminal with independent locations.",
+    "Left scan completed with 27 items; Enter opened benchmarks and displayed 3 items.",
+    "Backspace returned to the parent location and Ctrl+R refreshed the listing.",
+    "F4 switched to the right pane; docs rendered with generated, images and migration directories plus files.",
+    "Alt+X while the right scan was active presented the explicit stop-activity-and-exit confirmation; accepting it stopped the activity and the process exited cleanly."
+  ],
+  "scope": "Current production binary interactive smoke qualification; no mutation command was used. The product binary is from 7946c61; 28a4634 is test-only over that implementation."
+}
