@@ -3,6 +3,22 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — b5afc33 refreshed macOS package with current documentation
+
+The macOS ARM64 archive was refreshed after the Files guide was corrected to
+avoid advertising durable preference persistence that is not implemented in
+this checkpoint. The Release build completed from the current source and the
+archive at
+`/Volumes/S8T/tmp/ckutilities-docs-refresh-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz`
+contains all ten guides and 28 SVG screenshots. Its SHA-256 is
+`a25458c64a8b555ca3e86d0cf33c7235a3bf100fe888de854f621f8bf5930cff` and it is
+11,704,615 bytes. The existing macOS qualification remains **224/224** for
+the full CTest suite, **107/107** Files-labelled tests, and **30/30** terminal
+profiles; this refresh changes only the packaged documentation payload.
+
+Evidence: [current package record](evidence/ck-utilities-current-packages-20261026.json)
+and [documentation contract record](evidence/ck-utilities-documentation-contract-20261026.json).
+
 ## 2026-10-28 — b5afc33 refreshed Windows package with current documentation
 
 The Windows package was rebuilt after the Files guide was corrected to avoid

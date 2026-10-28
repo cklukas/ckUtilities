@@ -7,9 +7,13 @@
     "guides_have_embedded_screenshots": true
   },
   "macos_arm64": {
-    "package": "/Volumes/S8T/tmp/ckutilities-docs-all-20261026/ckutilities-docs-build/ck-utilities-0.2.0-macos.tar.gz",
-    "sha256": "8bd11549dbf751c0bfc5e7c31f3fcd5fffc7e3f88648b51c40fe69631f155668",
-    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
+    "package": "/Volumes/S8T/tmp/ckutilities-docs-refresh-20261028-01/packages/ck-utilities-0.2.0-macos.tar.gz",
+    "sha256": "a25458c64a8b555ca3e86d0cf33c7235a3bf100fe888de854f621f8bf5930cff",
+    "package_bytes": 11704615,
+    "package_timestamp": "2026-10-28T07:45:09+0100",
+    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100",
+    "package_verification": "10 guides and 28 SVG screenshots; extracted ck-files guide contains the current feature and preference-persistence qualification text",
+    "refresh_note": "Documentation-only package refresh from source commit b5afc33; existing current-source macOS interactive and full-suite qualification remains recorded below"
   },
   "linux_arm64_rpi4": {
     "package": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build/ck-utilities-0.2.0-linux.tar.gz",
