@@ -3,6 +3,21 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — Linux 100,000-entry directory qualification slice
+
+The installed current Linux ARM64 `ck-files` binary scanned a real ext4
+directory containing **100,000** empty regular files. In the real 80x24 PTY it
+completed and displayed `Last scan: 100000 items` after 55.13 seconds; the
+sampled process RSS was 12,616 KiB and CPU use was 85.4%. Alt+X then shut the
+application down cleanly, the exact process was absent, and the task-owned
+fixture root was removed.
+
+Evidence: [Linux large-directory record](evidence/ck-files-linux-large-directory-20261028.json).
+
+This is a measured qualification slice only; low-memory, index-exhaustion,
+slow/disconnected mounts, full-disk, cancellation, crash, and the other
+filesystem-matrix rows remain release gates.
+
 ## 2026-10-28 — current macOS Files suite qualification
 
 The current Files implementation suite passed on macOS arm64: the real

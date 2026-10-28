@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-28",
+  "host": "Linux arm64 rpi4",
+  "filesystem": {
+    "type": "ext4",
+    "mount": "/",
+    "source": "/dev/mmcblk0p2"
+  },
+  "binary": "/home/klukas/ckutilities-settings-20261028-01/install/bin/ck-files",
+  "binary_sha256": "cdc8b6acc57da247809167878ca951c63b12814c0282a35a17f9e47282233ad9",
+  "terminal": "PTY, 80 columns x 24 rows",
+  "fixture": {
+    "root": "/home/klukas/ckutilities-large-dir-20261028-01",
+    "directory": "/home/klukas/ckutilities-large-dir-20261028-01/large",
+    "entries": 100000,
+    "entry_shape": "100000 empty regular files named item-00000 through item-99999",
+    "creation_start": "2026-10-28T11:31:55.555414697Z",
+    "creation_end": "2026-10-28T11:32:15.042387941Z",
+    "creation_elapsed_seconds": 19.49
+  },
+  "scan": {
+    "start": "2026-10-28T11:32:20.526830813Z",
+    "completion_observed": "2026-10-28T11:33:15.656318322Z",
+    "elapsed_seconds": 55.13,
+    "observed_status": "Last scan: 100000 items",
+    "sampled_process_rss_kib": 12616,
+    "sampled_process_cpu_percent": 85.4,
+    "exit_code": 0,
+    "scope": "Initial left-pane scan with an independent one-file right pane; no mutation command"
+  },
+  "cleanup": {
+    "process_absent_after_alt_x": true,
+    "fixture_root_removed": true,
+    "verification_time": "2026-10-28T11:33:41.511870664Z"
+  },
+  "limitations": [
+    "This is one ext4 large-directory slice; it does not establish approval thresholds for low memory, index exhaustion, or other filesystem rows.",
+    "The fixture was generated in a task-owned remote test root and was not part of the source tree."
+  ]
+}
