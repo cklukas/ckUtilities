@@ -24,7 +24,8 @@
     "sha256": "934e26517b57f97aa28799dd6b92b4256d58d3bc4f64c4e74c57c299da1997ea",
     "deb_sha256": "4dfee76513a935f22dd80f7c88a3418e46ecf1355a1d55f146eaabda9393d241",
     "rpm_sha256": "5b35cbcfb0348e71fce39ca52a2a3e0b46a24d15ad989a0a31ca6f2b58cac35a",
-    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100"
+    "terminal_profiles": "30/30 passed: ten utilities across xterm-256color, xterm, and vt100",
+    "settings_follow_up": "28a4634 focused qualification passed 4/4 on aarch64; protected build /home/klukas/ckutilities-settings-20261028-01/build; ck_vision_files_tests SHA-256 84DFEAEB99423568D36F1D9F80D53ED7EDA2E87DCBF77B83CBE3E310D0726CA9; this is test-only follow-up evidence and does not replace the current Linux package"
   },
   "windows_x64_workstation": {
     "install": "V:\\dev\\ckutilities-install-7946c61",

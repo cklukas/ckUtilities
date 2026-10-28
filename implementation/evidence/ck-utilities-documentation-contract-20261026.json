@@ -35,7 +35,8 @@
     "source": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/source",
     "build": "/home/klukas/tmp/ckutilities-goal-20261026-linux-01/build",
     "documentation_contract_and_native_trash": "2/2 passed",
-    "files_native_foreign_volume_trash": "9/9 passed"
+    "files_native_foreign_volume_trash": "9/9 passed",
+    "settings_follow_up": "Source archive 28a4634 SHA-256 3EAA5F8867539184CCC16417D4AECD368A3B608A31980A2F10B5B347B372B027; protected source /home/klukas/ckutilities-settings-20261028-01/source; ckVision 1.4.0 SDK rebuilt from a791f10 archive SHA-256 C4471FC699648658F63F1BAADBF17D9072B598CA109EE545B6E5310793D7B0EF; focused files_settings run passed 4/4; binary SHA-256 84DFEAEB99423568D36F1D9F80D53ED7EDA2E87DCBF77B83CBE3E310D0726CA9"
   },
   "windows_x64_workstation": {
     "source": "V:\\dev\\ckutilities-goal-20261028-01",

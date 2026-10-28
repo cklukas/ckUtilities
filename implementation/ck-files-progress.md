@@ -19,6 +19,18 @@ focused settings run passed **4/4**, and the refreshed full suite passed
 The product package evidence remains tied to `7946c61`; this entry records the
 subsequent cross-platform test qualification separately.
 
+Linux aarch64 follow-up used the exact `28a4634` source archive and a rebuilt
+ckVision 1.4.0 SDK from pinned source `a791f10`; both archive hashes and the
+protected source/build paths are recorded in the evidence JSON. The focused
+`ck_vision_files_tests` target built from
+`2026-10-28T09:06:36.867954553Z` to `2026-10-28T09:39:24.239728154Z`
+(32m47.372s), and the four settings cases passed at
+`2026-10-28T09:39:34.920995113Z`–`2026-10-28T09:39:35.064777739Z`. The verified
+test binary SHA-256 is
+`84dfeaeb99423568d36f1d9f80d53ed7eda2e87dcbf77b83cbe3e310d0726ca9`.
+This is focused follow-up evidence; the earlier Linux package remains the
+current packaged artifact until a full Linux package rehearsal is run.
+
 ## 2026-10-28 — 7946c61 durable Files display settings and bookmarks
 
 Files now loads and atomically persists bounded, versioned display settings and
