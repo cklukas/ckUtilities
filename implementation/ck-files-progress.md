@@ -3,6 +3,28 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-10-28 — root-boundary volume and mount information view
+
+At the namespace boundary, **Backspace** now opens a read-only system-information
+view rather than attempting an impossible parent navigation. Windows enumerates
+volumes and their drive letters or mount paths with `FindFirstVolumeW` and
+ordinary filesystem queries. macOS uses `getmntinfo`/`statvfs`, and Linux reads
+the process-visible `/proc/self/mountinfo` table and queries space with
+`statvfs`. No elevation API is requested on any platform, and the view cannot
+feed rows into copy, move, trash, rename, or delete operations.
+
+The real app test case passed on macOS as part of the **212/212** application
+cases and **107/107** Files-labelled gate. The deterministic documentation
+capture contains the complete feature view in
+`docs/generated/screenshots/ck-files-volumes.svg`. The Windows v143 Release
+build compiled and was installed at
+`V:\\dev\\ckutilities-install\\bin\\ck-files.exe`; the Linux aarch64
+mount-table adapter compiled with warnings-as-errors. These records qualify
+the feature implementation and platform adapter boundaries; they do not close
+the remaining WP-07 filesystem/fault matrix or WP-08 final release rehearsal.
+
+Evidence: [root-boundary volume view record](evidence/ck-files-volume-view-20261028.json).
+
 ## 2026-10-28 — Windows workstation filesystem availability
 
 The mandatory `V:` development volume is confirmed as writable **ReFS**, not

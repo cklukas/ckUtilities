@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-28",
+  "feature": "Root-boundary volume and mount information view",
+  "implementation_commit": "628d858",
+  "behavior": {
+    "macos_linux": "At a POSIX namespace root, Backspace opens a read-only mount-table view instead of claiming a parent directory.",
+    "windows": "At a Windows drive root, Backspace opens a read-only volume view with drive letters or volume mount paths.",
+    "privilege_boundary": "No administrator or elevation API is requested; rows are informational and never operation targets.",
+    "reported_fields": ["name/source", "mount point or drive letter", "filesystem", "free space", "total space", "read-only state"]
+  },
+  "macos": {
+    "suite": "ck_vision_files_tests",
+    "result": "212/212 application cases passed; the root-boundary modal case is included",
+    "files_gate": "107/107 Files-labelled tests passed",
+    "documentation_screenshot": "docs/generated/screenshots/ck-files-volumes.svg",
+    "documentation_screenshot_sha256": "b240c331eddb378b9e2b6c9243ebc4b8f554459e7997a86ebc7ee44bfe550a01"
+  },
+  "windows": {
+    "host": "Windows x64 workstation",
+    "development_drive": "V:",
+    "toolset": "Visual Studio 2022 v143; MSVC 19.44.35228; Windows SDK 10.0.26100.0",
+    "build": "V:\\tmp\\ck-files-volume-build-20261028-02\\bin\\Release\\ck-files.exe",
+    "installed_executable": "V:\\dev\\ckutilities-install\\bin\\ck-files.exe",
+    "configuration": "Release; Visual Studio multi-config; /MT for the installed ckVision static SDK",
+    "version": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "executable_sha256": "0A3130D5A1F5A71D560D52BF5BE9FF54303C1D3068129867E5CE076EBD111E2A",
+    "status": "Build and install succeeded; --version passed. The existing all-tools ConPTY contract remains separately qualified, but this checkpoint does not claim a new interactive root-modal capture on Windows."
+  },
+  "linux": {
+    "host": "rpi4 aarch64 Debian Linux",
+    "adapter_compile": "files_volume_service.cpp compiled with C++20 -Wall -Wextra -Wpedantic -Werror",
+    "object_sha256": "19ed5f42e5b640b5b65dd46e56a8e9e57b2041e07c75faaa88ef0479fd6ecdf7",
+    "status": "Linux /proc/self/mountinfo adapter compile passed; full Linux product qualification remains covered by the existing current-source records."
+  },
+  "safety": [
+    "Native enumeration runs on a worker and publishes bounded value records to the UI.",
+    "Failed, denied, unknown, and worker-fault outcomes remain explicit.",
+    "Volume free-space values are observations and are not used to authorize or execute file operations."
+  ]
+}
