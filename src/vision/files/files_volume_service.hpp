@@ -12,6 +12,20 @@
 #include <vector>
 
 namespace ck::vision {
+enum class FilesVolumeArchiveSupport {
+    Unknown,
+    LiveReadable,
+    SnapshotPreferred,
+    Denied,
+    Unsupported,
+};
+
+struct FilesVolumeArchiveCapability {
+    FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::Unknown;
+    bool snapshot_available = false;
+    std::string diagnostic;
+};
+
 struct FilesVolumeRecord {
     std::string name;
     std::string mount_point;
@@ -19,6 +33,10 @@ struct FilesVolumeRecord {
     std::optional<std::uint64_t> total_bytes;
     std::optional<std::uint64_t> free_bytes;
     bool read_only = false;
+    // Native volume/device identity, not a display label or a path. It is
+    // opaque to the UI and must be revalidated before an archive worker uses it.
+    std::string identity;
+    FilesVolumeArchiveCapability archive;
 };
 
 enum class FilesVolumeReplyState { Ready, Failed, Cancelled, WorkerFault };

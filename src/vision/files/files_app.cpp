@@ -697,10 +697,18 @@ struct FilesApp::State {
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");
             if (operation_execution_request)
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: another operation is running");
-            if (panes[active].volume_view)
-                return unavailable(std::string(move ? "Move" : "Copy") +
-                                   (move ? " unavailable: volume rows are archive sources, not movable entries"
-                                         : " unavailable: volume archive worker is not enabled yet"));
+            if (panes[active].volume_view) {
+                if (move)
+                    return unavailable("Move unavailable: volume rows are archive sources, not movable entries");
+                const auto volume = panes[active].model.volume_cursor();
+                if (!volume)
+                    return unavailable("Copy unavailable: no volume is selected");
+                if (volume->archive.support != FilesVolumeArchiveSupport::LiveReadable &&
+                    volume->archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
+                    return unavailable("Copy unavailable: volume archive capability is not qualified" +
+                                       (volume->archive.diagnostic.empty() ? std::string{}
+                                                                           : ": " + volume->archive.diagnostic));
+            }
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");

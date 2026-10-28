@@ -214,9 +214,11 @@ struct Fixture {
         volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [] {
             std::vector<FilesVolumeRecord> records;
             records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
-                               3ull * 1024 * 1024, false});
+                               3ull * 1024 * 1024, false, "fixture-volume", {
+                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}});
             records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
-                               2ull * 1024 * 1024, true});
+                               2ull * 1024 * 1024, true, "fixture-read-only", {
+                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}});
             return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
         });
         app = std::make_unique<FilesApp>(
@@ -1338,7 +1340,7 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.permanently_delete")));
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.toggle_mark")));
     CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.parent")));
-    CK_CHECK(f.app->status(0).find("volume archive worker is not enabled yet") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("volume archive capability is not qualified") != std::string::npos);
     CK_CHECK(f.app->status(0).find("volume rows are archive sources") != std::string::npos);
     CK_CHECK(f.painted().find("RO") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));

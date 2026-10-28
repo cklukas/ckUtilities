@@ -83,6 +83,8 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
     record.name = info && label[0] ? utf8(label) : utf8(volume);
     record.mount_point = mount.empty() ? utf8(volume) : utf8(mount);
     record.filesystem = info && filesystem[0] ? utf8(filesystem) : "Unknown";
+    record.identity = utf8(volume);
+    record.archive.diagnostic = "Archive capability probe not run";
     if (space) {
         record.total_bytes = total_bytes.QuadPart;
         record.free_bytes = available_bytes.QuadPart;
@@ -149,9 +151,11 @@ std::string decode_mountinfo(std::string value) {
 #endif
 
 void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string name, std::string mount,
-                         std::string filesystem, bool read_only) {
+                         std::string filesystem, bool read_only, std::string identity) {
     struct statvfs stats{};
-    FilesVolumeRecord record{std::move(name), std::move(mount), std::move(filesystem), {}, {}, read_only};
+    FilesVolumeRecord record{std::move(name), std::move(mount), std::move(filesystem), {}, {}, read_only, {}, {}};
+    record.identity = std::move(identity);
+    record.archive.diagnostic = "Archive capability probe not run";
     if (statvfs(record.mount_point.c_str(), &stats) == 0) {
         record.total_bytes = filesystem_bytes(stats.f_blocks, stats.f_frsize);
         record.free_bytes = filesystem_bytes(stats.f_bavail, stats.f_frsize);
@@ -175,7 +179,7 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
         if (!seen.insert(mount).second)
             continue;
         append_posix_volume(result, mounts[i].f_mntfromname, mount, mounts[i].f_fstypename,
-                             (mounts[i].f_flags & MNT_RDONLY) != 0);
+                             (mounts[i].f_flags & MNT_RDONLY) != 0, mounts[i].f_mntfromname);
     }
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
@@ -217,7 +221,9 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_linux() {
         const bool read_only = options == "ro" || options.rfind("ro,", 0) == 0 ||
                                (options.size() > 3 && options.ends_with(",ro")) ||
                                options.find(",ro,") != std::string::npos;
-        append_posix_volume(result, decode_mountinfo(source), mount_point, decode_mountinfo(filesystem), read_only);
+        const auto decoded_source = decode_mountinfo(source);
+        append_posix_volume(result, decoded_source, mount_point, decode_mountinfo(filesystem), read_only,
+                             decoded_source.empty() ? mount_point : decoded_source);
     }
     if (result.empty())
         return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Unknown,
