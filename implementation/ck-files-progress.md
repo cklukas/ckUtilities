@@ -6999,7 +6999,9 @@ document before traversal.
 The fresh macOS Files application suite passed **213/213**, and the current
 Windows v143 `V:` build passed **107/107** in 20.13 seconds. The change is
 enumeration/revalidation data only; it does not request elevation, unmount a
-volume, or enable volume Copy.
+volume, or enable volume Copy. The synchronized Windows source hash for
+`files_volume_service.cpp` was
+`9c40668e081e9824040788fa6eb59c7951061a3435503f6fe7cbe8143683bc1b`.
 
 
 ## 2026-10-28 — Volume archive digest qualification
