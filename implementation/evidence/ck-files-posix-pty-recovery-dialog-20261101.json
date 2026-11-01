@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "85e1d4f",
+  "platform": "macOS arm64",
+  "configuration": "Release/Ninja",
+  "executable": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/bin/ck-files",
+  "helper": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/ck_vision_terminal_smoke",
+  "build": {
+    "started": "2026-11-01T12:36:08Z",
+    "ended": "2026-11-01T12:36:09Z",
+    "elapsed_seconds": 1,
+    "target": "ck-files"
+  },
+  "profiles": {
+    "xterm-256color": "passed",
+    "xterm": "passed",
+    "vt100": "passed"
+  },
+  "checks": ["startup draw", "resize to 100x30", "Alt+X shutdown", "successful exit", "PTY mode restoration"],
+  "environment": {
+    "TMPDIR": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/tmp-terminal-recovery-dialog-20261101",
+    "ASAN_OPTIONS": "detect_container_overflow=0"
+  }
+}

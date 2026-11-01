@@ -1,4 +1,11 @@
 # Files implementation evidence
+## 2026-11-01 — POSIX PTY after recovery inspection
+
+The exact `ck-files` executable rebuilt from `85e1d4f` passed the real POSIX
+PTY helper for `xterm-256color`, `xterm`, and `vt100`, including startup draw,
+resize, `Alt+X`, successful exit, and terminal-mode restoration. Evidence is
+recorded in [the recovery-dialog PTY record](evidence/ck-files-posix-pty-recovery-dialog-20261101.json).
+
 ## 2026-11-01 — Bounded archive recovery inspection
 
 Files now exposes `Inspect archive recovery` through the shared command
