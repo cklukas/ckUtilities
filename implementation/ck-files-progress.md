@@ -1,4 +1,13 @@
 # Files implementation evidence
+## 2026-11-02 — Linux ARM64 pane-page fuzzer qualification
+
+The current pane-page fuzzer was overlaid onto the Linux ARM64 qualification
+source, built with the pinned normal ckVision SDK, and then removed after
+byte-for-byte restoration of the original source file. The seed corpus passed;
+the bounded run completed **65,826 executions** in 9 seconds with 131 coverage
+points, 28 MB peak RSS, exit code 0, and no crash or timeout. Evidence: [Linux
+pane-page fuzzer record](evidence/ck-files-pane-page-linux-fuzz-20261102.json).
+
 ## 2026-11-02 — TSan pane-page fuzzer qualification
 
 The same real `fuzz_files_pane_page` target was rebuilt with ThreadSanitizer

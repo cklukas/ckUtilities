@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "4c589ebcf773753f1d984be6ce68ff62a939d74e",
+  "target": "fuzz_files_pane_page",
+  "host": "uconsole Linux ARM64",
+  "build": {
+    "build_type": "RelWithDebInfo",
+    "compiler": "/usr/bin/clang++",
+    "sdk_prefix": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/ckvision-normal-sdk",
+    "source_overlay": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/source",
+    "task_root": "/home/klukas/tmp/ckutilities-pane-page-linux-20261102-01",
+    "build_root": "/home/klukas/tmp/ckutilities-pane-page-linux-20261102-01/build",
+    "configure_start": "2026-11-01T23:56:26+00:00",
+    "configure_end": "2026-11-01T23:57:07+00:00",
+    "build_end": "2026-11-01T23:59:18+00:00",
+    "configure_and_build_elapsed_seconds": 172,
+    "binary": "/home/klukas/tmp/ckutilities-pane-page-linux-20261102-01/build/fuzz/fuzz_files_pane_page",
+    "binary_sha256": "f1ab931e2405cb700fb8d1cebffe8ebc1b527b795c0937be662bc7b04333c19a"
+  },
+  "runs": {
+    "corpus": {
+      "result": "passed",
+      "runs": 2,
+      "corpus_files": 1,
+      "corpus_bytes": 38,
+      "crashes": 0,
+      "timeouts": 0
+    },
+    "bounded_mutation": {
+      "command": "fuzz_files_pane_page -max_total_time=8 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261107 -print_final_stats=1 fuzz/corpus/files_pane_page",
+      "result": "passed",
+      "elapsed_seconds": 9,
+      "executions": 65826,
+      "coverage_points": 131,
+      "peak_rss_mb": 28,
+      "exit_code": 0,
+      "crashes": 0,
+      "timeouts": 0
+    }
+  },
+  "source_restoration": {
+    "original_cmake_sha256": "9bf6fb68accadc2cf4d6903f906fb6d023b77c192281463d71d949816368fe5e",
+    "restored_cmake_sha256": "9bf6fb68accadc2cf4d6903f906fb6d023b77c192281463d71d949816368fe5e",
+    "fuzzer_source_removed": true,
+    "temporary_corpus_removed": true
+  },
+  "scope": "This qualifies the pane model/page fuzzer on Linux ARM64. It does not close Linux sanitizer coverage, application-wide races, resource exhaustion, filesystem/provider matrix, or controlled storage-fault gates."
+}
