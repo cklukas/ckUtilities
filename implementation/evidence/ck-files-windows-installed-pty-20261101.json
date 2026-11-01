@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-01",
+  "host": "Windows x64 workstation via ssh workstation",
+  "source_commit": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "executable": "V:\\dev\\ckutilities-install-2702ee7-runtime\\bin\\ck-files.exe",
+  "fixture_root": "V:\\tmp\\ckutilities-windows-installed-pty-20261101-01",
+  "terminal": "Windows OpenSSH ConPTY",
+  "checks": [
+    "exact installed executable path",
+    "live two-pane frame rendered",
+    "menus and active-pane markers rendered",
+    "location fields and Name/Type/Bytes columns rendered",
+    "dynamic footer hint and status bar rendered",
+    "Alt+X clean exit"
+  ],
+  "exit_code": 0,
+  "process_after_exit": false,
+  "sha256": "189315eb1765e2f305c7eb7fb8925994b897dd23271a5c550afa201456cc34a8",
+  "status": "pass"
+}

@@ -249,6 +249,13 @@ reports the same version, passes `--help`, and has SHA-256
 
 Evidence: [current Windows Release record](evidence/ck-files-windows-release-current-20261101.json).
 
+The exact installed Runtime executable at
+`V:\\dev\\ckutilities-install-2702ee7-runtime\\bin\\ck-files.exe` was also
+launched through a real Windows OpenSSH ConPTY session. The live frame showed
+the menus, active-pane markers, locations, `Name`/`Type`/`Bytes` columns,
+dynamic footer hint, and status bar; Alt+X returned exit code 0 and left no
+process running. Evidence: [installed Windows PTY record](evidence/ck-files-windows-installed-pty-20261101.json).
+
 ## 2026-11-01 — Linux 100,000-entry directory qualification
 
 A real ARM64 Linux fixture containing **100,000** zero-byte regular files was
