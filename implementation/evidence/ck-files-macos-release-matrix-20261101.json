@@ -34,11 +34,18 @@
     "index_file_native_focused": "17/17 passed, including 100000-record scan/sort/filter workloads",
     "asan_compatibility": "ASAN_OPTIONS=detect_container_overflow=0",
     "documentation_contract": "passed",
-    "architecture_boundaries": "passed"
+    "architecture_boundaries": "passed",
+    "packaged_help": "10/10 executable entry points passed --help",
+    "packaged_contents": "10 executables, 10 Markdown guides, 29 SVG screenshots"
+  },
+  "package": {
+    "path": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/packages/ck-utilities-0.2.0-macos.tar.gz",
+    "sha256": "1e2d5b5ada44cecac2d979425a89d4c694d9d3fbc81ae850327b22123b7d9a8c",
+    "verification_root": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/archive-check"
   },
   "notes": [
     "The libc++ container-overflow compatibility setting is the documented Apple fixture requirement; the first unqualified run was not counted.",
     "The dedicated private index root was placed on PRO-BLADE and mode-checked before the final run because its native DACL/ownership contract is not satisfied by the S8T root.",
-    "This is a current-source test qualification record, not a macOS package or interactive real-window release acceptance record."
+    "This record covers current-source tests and the macOS TGZ package; interactive real-window release acceptance remains open."
   ]
 }

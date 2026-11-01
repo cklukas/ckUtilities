@@ -7,8 +7,10 @@ setting and a dedicated mode-0700 PRO-BLADE private index root, the complete
 matrix passed **224/224** in 53.77 seconds. The focused Files completion suite
 passed **26/26** and the native index suite passed **17/17**, including the
 100,000-record scan/sort/filter workload. Exact hashes, fixture roots and the
-open package/interactive-acceptance boundary are in the [macOS release matrix
-record](evidence/ck-files-macos-release-matrix-20261101.json).
+100,000-record scan/sort/filter workload. The verified macOS TGZ contains 10
+executables, 10 guides and 29 screenshots; all executable entry points passed
+`--help`. Exact hashes, fixture roots and the remaining interactive-acceptance
+boundary are in the [macOS release matrix record](evidence/ck-files-macos-release-matrix-20261101.json).
 
 ## 2026-11-01 — Linux release package and terminal rehearsal
 
