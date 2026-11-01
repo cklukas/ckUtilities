@@ -1,21 +1,21 @@
 {
   "date": "2026-11-01",
-  "commit": "0e30f4b",
+  "commit": "b21a3a4",
   "feature": "volume archive verified staging evidence",
   "source": {
     "root": "/Volumes/PRO-BLADE/Development/ckUtilities",
     "files": [
       {
         "path": "src/vision/files/files_volume_archive.cpp",
-        "sha256": "dbb352b41b4b9fb4b91e398feaf40ddca8cf99d46814cc552b32e85b4b643de9"
+        "sha256": "92f5ee1c14e7256257244a1b458bd1cf1f1fffb2465545f078c6f911cb4d2d1b"
       },
       {
         "path": "src/vision/files/files_volume_archive.hpp",
-        "sha256": "8e4d58cf3979f918808d70f7635a7fbbee1804d1cdc0bb30a16650295c2b2d390"
+        "sha256": "071aebeea1dfdeacd706f2ccf1ef0e2abf67a2b02148813a083f98db9b0d8fa2"
       },
       {
         "path": "src/vision/files/tests/files_volume_archive_tests.cpp",
-        "sha256": "e34c5cca5bb648618dc0a28cd683e9e9351917d2776b24e949fdcffbaf8f5673"
+        "sha256": "17c048ae0a7bef5eba435f9c45603a1d5d2288a356ceabf99af5b4dbdceb63df"
       }
     ]
   },
@@ -25,12 +25,27 @@
     "Recovery rejects identity or staging-address changes, digest removal, and digest flags without a staging path.",
     "Legacy journals remain readable but are not eligible for future mutating recovery actions."
   ],
+  "cleanup_boundary": {
+    "worker_only": true,
+    "accepted_states": ["Copied", "Verified"],
+    "checks": [
+      "journal operation ID and native journal name match",
+      "exact native destination and deterministic staging address match",
+      "complete staging-file digest matches journal evidence",
+      "held destination and child identities revalidate before discard",
+      "Cancelled is appended only after successful discard"
+    ],
+    "windows": "qualified and passing",
+    "macos": "explicit Unsupported refusal; artifact retained",
+    "linux": "explicit Unsupported refusal; artifact retained",
+    "ui_exposed": false
+  },
   "qualification": {
     "macos": {
       "focused_archive_tests": "15/15",
       "files_suite": "232/232",
       "binary": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/files/ck_vision_files_tests",
-      "binary_sha256": "bb0f32099df10003faed50f285583ede2e9a0bf4bf74963cdc3fd92b0f2cd065"
+      "binary_sha256": "de505f3075c6d3b462d9ef4abe276b621944fcee9460ff13172c53498e20865a"
     },
     "windows_x64": {
       "focused_archive_tests": "15/15",
@@ -38,7 +53,7 @@
       "source": "V:\\dev\\ckutilities",
       "build": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build",
       "binary": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
-      "binary_sha256": "EA51EFDA4E10186D9677CDE3729672EFED4EC1F5FFE955C27DCD32A8676E2839",
+      "binary_sha256": "1331ECD0CED9EA4848F43FC591E4F69DEEBDF46352B03BD1CCDB3A416D7E19BC",
       "toolchain": "Visual Studio 2022 v143"
     },
     "linux_arm64": {
@@ -47,11 +62,11 @@
       "source": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/source",
       "build": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
       "binary": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/src/vision/files/ck_vision_files_tests",
-      "binary_sha256": "0b0098f0eac7aae789f05801fbb92fc6cdf6f03ea3d9ee60235872127616a4c8"
+      "binary_sha256": "1fcd4a29806dd137037e19f27b0d1f0675303c39bcd6f119ee8d189bbe04f612"
     }
   },
   "not_enabled": [
-    "worker-owned staging cleanup",
+    "UI cleanup command",
     "resume or revalidated retry",
     "automatic publication or deletion during recovery",
     "snapshot-provider mode"

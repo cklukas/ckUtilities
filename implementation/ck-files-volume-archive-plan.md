@@ -134,10 +134,13 @@ native encoding, the deterministic staging address, and a post-flush
 whole-file SHA-256 digest, while legacy journals without those fields remain
 inspect-only; malformed or non-monotonic evidence is rejected. Unreviewed
 losses and hard losses cannot reach the writer. Snapshot/provider
-qualification and worker-owned cleanup/revalidated-retry actions remain open:
-the digest is evidence for a future identity-bound action, not permission to
-delete or resume anything. Real-volume interactive archive acceptance also
-remains open. The macOS broad app ASan
+qualification and worker-owned revalidated-retry actions remain open. The
+worker-only cleanup boundary is implemented and qualified on Windows using the
+existing handle-bound discard adapter; macOS/Linux explicitly refuse it until
+their adapters provide the same race-safe protocol. The digest is not
+permission to resume, publish, or delete through a pathname. The cleanup
+boundary is not exposed as a UI command yet. Real-volume interactive archive
+acceptance also remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
 not suppressed. Linux ARM64 address/undefined sanitizer qualification of the

@@ -46,12 +46,13 @@ execute files or provide an embedded shell.
   recovery scan checks private archive journals; Copy remains disabled until
   the scan is complete and no reconciliation-required journal is present.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
-  available as a bounded, read-only review of matching journals; cleanup and
-  revalidated retry remain unavailable until their staging artifact digest,
-  exact destination evidence, and identity checks are bound to a worker action.
-  New journals retain the exact native staging address and a post-flush
-  whole-file digest for that future check; this does not enable cleanup by
-  itself. See the [volume archive
+  available as a bounded, read-only review of matching journals. A separate
+  worker-only cleanup boundary now proves the exact native staging address,
+  post-flush whole-file digest, held destination identity, and held child
+  identity before discarding an unpublished staging file; it is qualified on
+  Windows only. macOS/Linux refuse this mutation until their native adapter
+  provides the same handle-bound discard protocol. It is not exposed as a UI
+  command yet, and resume/retry/publication remain unavailable. See the [volume archive
   plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,

@@ -1,4 +1,17 @@
 # Files implementation evidence
+## 2026-11-01 — Worker-owned recovery cleanup boundary
+
+Commit `b21a3a4` adds a separate recovery cleanup
+worker. It reloads the private journal, binds the requested native journal name
+to its operation ID, permits only Copied/Verified unpublished staging with
+exact destination/staging evidence and a matching full-file digest, opens the
+destination as a held native directory, verifies the child identity, and then
+uses the platform discard boundary. Windows passed the positive cleanup and
+digest-mismatch refusal cases; macOS and Linux passed the explicit Unsupported
+refusal cases and preserved the staging artifact. The successful Windows path
+appends Cancelled only after the child disposition succeeds. No UI command is
+enabled; ambiguous publication and retry remain review-only.
+
 ## 2026-11-01 — Verified staging evidence and cross-platform qualification
 
 Volume archive journals now retain the deterministic native staging address
