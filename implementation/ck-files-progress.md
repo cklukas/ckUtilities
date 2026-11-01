@@ -7643,6 +7643,6 @@ rename; the POSIX hard-link guard was corrected to apply only to regular files,
 because directory link counts include structural `.`/`..` links. New native
 fixtures move a directory tree containing descendants to Trash/Recycle Bin and
 restore it from the platform payload, checking the descendant bytes. The Files
-command surface now leaves directory Trash enabled and the app test verifies
-that availability. No permanent-delete fallback is introduced. Foreign-mount,
+command surface now leaves directory Trash enabled. No permanent-delete fallback
+is introduced. Foreign-mount,
 quota, permission, collision and unsupported-share qualification remains open.
