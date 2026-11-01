@@ -228,6 +228,23 @@ evidence](evidence/ck-files-windows-conpty-current-20261101.json).
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-11-01 — Current Windows Release ZIP qualification
+
+The current source checkpoint `2702ee7` was rebuilt on the Windows workstation
+using a freshly built pinned ckVision 1.4.0 SDK on `V:` with the matching static
+MSVC runtime (`/MT`). The earlier `/MD` SDK was rejected at link time and was
+not worked around. The independent ckVision package consumer passed **1/1**;
+the complete Windows CTest suite passed **223/223** in 32.71 seconds, including
+the real ConPTY contract for all ten utilities and the 107-test Files suite.
+
+The exact CPack ZIP was extracted into a task-owned `V:` directory. It contains
+only `bin` and `share`, all ten executables pass `--help`, the installed
+`ck-files` reports `ck-files 0.2.0 (ckVision 1.4.0)`, and the documentation
+contains 11 Markdown guides plus 29 generated SVG screenshots. The ZIP SHA-256
+is `fc341a4d5e9c633aea04dee263c377d60f3569c4e829e32406582b8333774cd0`.
+
+Evidence: [current Windows Release record](evidence/ck-files-windows-release-current-20261101.json).
+
 ## 2026-11-01 — current ck-files POSIX PTY acceptance
 
 The exact rebuilt macOS arm64 `ck-files` executable passed the repository PTY

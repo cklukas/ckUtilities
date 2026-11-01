@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "platform": "Windows x64",
+  "host": "ssh workstation",
+  "development_drive": "V:",
+  "task_root": "V:\\tmp\\ckutilities-windows-release-20261101-02",
+  "source_root": "V:\\dev\\ckutilities-46d6278",
+  "toolchain": {
+    "compiler": "MSVC v143 19.44.35228",
+    "visual_studio_toolset": "14.44.35207",
+    "runtime": "MultiThreaded (/MT)",
+    "windows_sdk": "installed Windows SDK"
+  },
+  "ckvision": {
+    "source": "pinned ckVision 1.4.0 source revision a791f103c3bc67f9fe398cf5c5010f7c460ae7ba",
+    "sdk_root": "V:\\tmp\\ckutilities-windows-release-20261101-02\\ckvision-sdk",
+    "cvision_lib_sha256": "fea5e889d25e4dcf93e2851e78990911ee13e36a3241ed9856aafcff0202bd33",
+    "runtime_match": "consumer and suite both use static /MT; the pre-existing /MD SDK was rejected and discarded"
+  },
+  "build": {
+    "build_root": "V:\\tmp\\ckutilities-windows-release-20261101-02\\build",
+    "target": "Release",
+    "completed_steps": 470,
+    "expected_output": "V:\\tmp\\ckutilities-windows-release-20261101-02\\build\\bin\\ck-files.exe",
+    "package_consumer": "1/1 passed",
+    "ctest": "223/223 passed",
+    "ctest_total_time_seconds": 32.71,
+    "windows_conpty_contract": "1/1 passed inside the full CTest run"
+  },
+  "archive": {
+    "path": "V:\\tmp\\ckutilities-windows-release-20261101-02\\packages\\ck-utilities-0.2.0-windows-x64.zip",
+    "sha256": "fc341a4d5e9c633aea04dee263c377d60f3569c4e829e32406582b8333774cd0",
+    "extracted_root": "V:\\tmp\\ckutilities-windows-release-20261101-02\\zip-check\\ck-utilities-0.2.0-windows-x64",
+    "top_level_entries": ["bin", "share"],
+    "tools_with_help_passing": 10,
+    "guides": 11,
+    "svg_screenshots": 29,
+    "ck_files_sha256": "189315eb1765e2f305c7eb7fb8925994b897dd23271a5c550afa201456cc34a8",
+    "ck_files_version": "ck-files 0.2.0 (ckVision 1.4.0)"
+  },
+  "checks": [
+    "fresh pinned ckVision SDK built on V: with static /MT runtime",
+    "independent ckVision package consumer",
+    "full CTest suite",
+    "ZIP extraction with exact top-level layout",
+    "all ten archived executables --help",
+    "current ck-files version and SHA-256",
+    "documentation guide and SVG screenshot inventory",
+    "Windows ConPTY launch/draw/Alt+X clean-exit contract"
+  ],
+  "status": "pass"
+}
