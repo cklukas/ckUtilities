@@ -62,7 +62,7 @@ if (($top -join ',') -ne 'bin,share') { throw "The archive holds more than the p
 $tools = 'ck-utilities','ck-json-view','ck-find','ck-du','ck-files','ck-edit','ck-chat','ck-todo','ck-sysmon','ck-config'
 $docRoot = Join-Path $root.FullName 'share/doc/ck-utilities'
 $guides = @(Get-ChildItem (Join-Path $docRoot 'tools') -Filter '*.md' -File)
-if ($guides.Count -ne $tools.Count + 1) { throw "The archive holds $($guides.Count) utility guides; expected $($tools.Count + 1)" }
+if ($guides.Count -ne $tools.Count) { throw "The archive holds $($guides.Count) utility guides; expected $($tools.Count)" }
 $screenshots = @(Get-ChildItem (Join-Path $docRoot 'generated/screenshots') -Filter '*.svg' -File)
 if ($screenshots.Count -lt 1) { throw 'The archive holds no generated SVG screenshots' }
 foreach ($tool in $tools) {
@@ -72,4 +72,4 @@ foreach ($tool in $tools) {
 (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $zip.Name |
     Set-Content -Encoding ascii -NoNewline (Join-Path $packages ($zip.Name + '.sha256'))
 Write-Host "PASS $($zip.Name): $($tools.Count) tools start from the archive"
-Write-Host "PASS documentation: $($guides.Count) guides and $($screenshots.Count) SVG screenshots"
+Write-Host "PASS documentation: $($guides.Count) utility guides and $($screenshots.Count) SVG screenshots"
