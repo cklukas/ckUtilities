@@ -11,6 +11,18 @@ full 223-test CTest rehearsal passed before the final UI-only patch; the final
 Files suite passed again after it. Exact package hashes and output paths are in
 the [Linux release rehearsal record](evidence/ck-files-linux-release-rehearsal-20261101.json).
 
+## 2026-11-01 — Windows v143 Files and ZIP rehearsal
+
+The mandatory Windows workstation was qualified on `V:` with the repaired
+v143 SDK. The current Files executable and test binary rebuilt successfully;
+the Files CTest entry passed **1/1** in 17.77 seconds. The documentation
+contract passed directly, and the final ZIP was generated under
+`V:\\tmp\\ckutilities-windows-refresh-20261101\\packages` after an explicit
+cleanup of an initial CPack default-path mistake. The extracted archive has
+10 executable entry points, 11 Markdown utility guides and 29 SVG screenshots;
+all 10 extracted executables passed `--help`. See the [Windows release
+rehearsal record](evidence/ck-files-windows-release-rehearsal-20261101.json).
+
 ## 2026-11-01 — Archive journal-boundary fault handling
 
 Commit `e03fd8b` adds deterministic writer fault injection at `Copied`,

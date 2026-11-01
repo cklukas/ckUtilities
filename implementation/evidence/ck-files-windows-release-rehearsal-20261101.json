@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "49f7a06",
+  "host": "Windows x64 workstation",
+  "development_drive": "V:",
+  "toolchain": "Visual Studio 2022 BuildTools 17.14.35, MSVC 19.44.35228.0, v143",
+  "ckvision_sdk": "V:\\tmp\\ckutilities-v143-install-20261101\\ckvision-sdk",
+  "build": {
+    "source": "V:\\dev\\ckutilities",
+    "build": "V:\\tmp\\ck-files-windows-integrated-20261028-01\\build",
+    "configuration": "Release",
+    "temporary_root": "V:\\tmp\\ckutilities-windows-refresh-20261101",
+    "files_executable": {
+      "path": "V:\\tmp\\ck-files-windows-integrated-20261028-01\\build\\bin\\Release\\ck-files.exe",
+      "sha256": "80fefefcda7debfb7096dbcdf2d59301cffb2b8c30c1e197a6d28228a00ec692",
+      "bytes": 3486208,
+      "build_timestamp": "2026-11-01T17:56:45"
+    },
+    "files_tests": {
+      "path": "V:\\tmp\\ck-files-windows-integrated-20261028-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+      "sha256": "6aff72ddf7a32b485ff5cef9798c7000459176fefdc0308d743b45ac2cd5f92a",
+      "result": "passed"
+    }
+  },
+  "tests": {
+    "files_ctest": "1/1 passed in 17.77 seconds",
+    "documentation_contract": "passed directly with VerifyToolDocumentation.cmake",
+    "installed_zip_help": "10/10 executable entry points passed --help",
+    "package_contents": "10 executables, 11 Markdown guides, 29 SVG screenshots",
+    "v143_repair": "configured and built successfully against the V: SDK"
+  },
+  "package": {
+    "path": "V:\\tmp\\ckutilities-windows-refresh-20261101\\packages\\ck-utilities-0.2.0-windows-x64.zip",
+    "sha256": "9a18864890f661309337ad8afb1567a10a4230febfe39378b5186c3485eae50",
+    "verification_root": "V:\\tmp\\ckutilities-windows-refresh-20261101\\zip-check"
+  },
+  "notes": [
+    "An initial CPack invocation defaulted to a C: user-profile destination; that task-created archive was removed immediately and the final package was regenerated with an explicit V: destination.",
+    "The final archive contains the current documentation and screenshot tree; no missing utility or documentation entry was substituted."
+  ]
+}
