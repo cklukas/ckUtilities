@@ -1,4 +1,13 @@
 # Files implementation evidence
+## 2026-11-01 — Linux TSan qualification of recovery cleanup
+
+The current Linux ARM64 ThreadSanitizer build was rebuilt from the committed
+worker cleanup boundary with explicit `-fsanitize=thread` and
+`TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:history_size=7:report_signal_unsafe=0`.
+The archive suite passed **17/17** and the focused Files app suite passed
+**69/69**, with no race, deadlock, or thread-lifetime diagnostic. Evidence:
+[recovery cleanup TSan record](evidence/ck-files-volume-archive-cleanup-tsan-20261101.json).
+
 ## 2026-11-01 — Worker-owned recovery cleanup boundary
 
 Commit `b21a3a4` adds a separate recovery cleanup

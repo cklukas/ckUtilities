@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "b21a3a4",
+  "platform": "Linux ARM64",
+  "feature": "worker-owned volume archive recovery cleanup boundary",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler_flags": "-fsanitize=thread -fno-omit-frame-pointer",
+    "linker_flags": "-fsanitize=thread",
+    "build_directory": "/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/build",
+    "executable": "/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/build/src/vision/files/ck_vision_files_tests",
+    "sha256": "8f2743a501234ac5b8570464063a69bc6332e59ea2905868dc5ffb55e78f6888",
+    "runtime_link": "libtsan.so.2"
+  },
+  "environment": {
+    "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1:history_size=7:report_signal_unsafe=0",
+    "TMPDIR": "/home/klukas/tmp/ckutilities-recovery-cleanup-tsan-20261101"
+  },
+  "results": {
+    "files_volume_archive_tests.cpp": "17/17 passed",
+    "files_app_tests.cpp": "69/69 passed",
+    "sanitizer_diagnostics": "none"
+  },
+  "platform_policy": {
+    "windows": "handle-bound cleanup qualified by normal tests",
+    "macos": "explicit Unsupported cleanup refusal retained",
+    "linux": "explicit Unsupported cleanup refusal retained"
+  },
+  "remaining": "full WP-07 filesystem/fault matrix, crash injection, and interactive release acceptance"
+}
