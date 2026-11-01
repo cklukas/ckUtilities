@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "d33d1e1",
+  "feature": "Native destination evidence in volume archive journals",
+  "compatibility": "Legacy four-field evidence remains readable and has no mutation authority.",
+  "platforms": {
+    "macOS arm64": "232/232 Files tests passed",
+    "Windows x64": "231/231 Files tests passed",
+    "Linux aarch64": "232/232 Files tests passed"
+  },
+  "new_record": [
+    "destination encoding is POSIX bytes or Windows UTF-16",
+    "destination bytes are validated as an absolute native path before Planned",
+    "the worker test verifies the exact native destination bytes"
+  ],
+  "safety": "No cleanup, resume, replacement, or retry action is enabled by this evidence alone."
+}

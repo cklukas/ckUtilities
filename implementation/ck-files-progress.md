@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-01 — Native destination evidence for archive recovery
+
+New volume archive journal records now retain the exact destination address in
+POSIX bytes or Windows UTF-16 units, validated as an absolute native path
+before the journal reaches `Planned`. Legacy four-field journals still decode
+but remain inspect-only. macOS, Windows x64, and Linux ARM64 Files suites all
+passed their current full suites after this change (**232/232**, **231/231**,
+and **232/232** respectively). Cleanup and retry are still deliberately not
+enabled; this evidence is the prerequisite for later identity-bound actions.
+Details: [native destination evidence](evidence/ck-files-native-destination-evidence-20261101.json).
+
 ## 2026-11-01 — Recovery dialog modal-path qualification
 
 The real Inspect archive recovery command path was exercised on macOS

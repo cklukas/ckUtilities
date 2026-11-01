@@ -129,6 +129,8 @@ journal discovery, startup recovery worker, bounded Files recovery inspection
 dialog, and Files planning/review/execution/readiness wiring are implemented and
 focused-qualified on macOS, Linux ARM64 and Windows x64. The format records
 exact POSIX bytes or Windows UTF-16 units plus explicit loss records;
+new archive journal evidence also records the exact destination address in its
+native encoding, while legacy journals without that field remain inspect-only;
 unreviewed losses and hard losses cannot reach the writer. Snapshot/provider
 qualification and cleanup/revalidated-retry actions remain open. Real-volume
 interactive archive acceptance also remains open. The macOS broad app ASan

@@ -110,6 +110,9 @@ execute files or provide an embedded shell.
 `Operations > Inspect archive recovery` opens a bounded read-only review when
 the startup scan finds an archive journal. It does not resume, delete,
 replace, or retry an archive.
+  New archive journals retain the exact destination address in native
+  encoding for future identity-bound reconciliation; legacy journals without
+  that evidence remain inspect-only.
 
 All actions also have visible menu or dialog commands, and shortcut bindings
 can be reviewed through the suite configuration UI. Completion retains
