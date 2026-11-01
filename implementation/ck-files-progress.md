@@ -7634,3 +7634,15 @@ all eight `--help` checks, and contains the complete documentation payload:
 rehearsal interval and package path are recorded in [Windows package evidence](evidence/ck-utilities-windows-package-20261026.json).
 
 Launcher launch/return and real interactive terminal acceptance remain open.
+## 2026-11-01 — Native directory Trash qualification checkpoint
+
+This checkpoint adds the first cross-platform recursive Trash
+qualification slice. The POSIX and Windows native adapters already move a
+directory through their platform Trash protocols as one identity-bound native
+rename; the POSIX hard-link guard was corrected to apply only to regular files,
+because directory link counts include structural `.`/`..` links. New native
+fixtures move a directory tree containing descendants to Trash/Recycle Bin and
+restore it from the platform payload, checking the descendant bytes. The Files
+command surface now leaves directory Trash enabled and the app test verifies
+that availability. No permanent-delete fallback is introduced. Foreign-mount,
+quota, permission, collision and unsupported-share qualification remains open.

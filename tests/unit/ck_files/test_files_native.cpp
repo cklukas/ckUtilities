@@ -96,7 +96,9 @@ std::size_t remove_recycle_fixture(const std::wstring &root, const std::wstring 
             }
             if (recorded != original) continue;
             const auto restored_path = directory + L"\\$R" + metadata_name.substr(2);
-            const bool restored_removed = DeleteFileW(restored_path.c_str()) != FALSE;
+            std::error_code cleanup;
+            const bool restored_removed = std::filesystem::remove_all(
+                std::filesystem::path(restored_path), cleanup) > 0 && !cleanup;
             const bool metadata_removed = DeleteFileW(metadata_path.c_str()) != FALSE;
             if (restored_removed && metadata_removed) ++removed;
         } while (FindNextFileW(metadata_search, &metadata_data));
@@ -104,6 +106,53 @@ std::size_t remove_recycle_fixture(const std::wstring &root, const std::wstring 
     } while (FindNextFileW(directory_search, &directory_data));
     FindClose(directory_search);
     return removed;
+}
+
+std::size_t restore_recycle_fixture(const std::wstring &root, const std::wstring &original) {
+    const auto pattern = root + L"\\$Recycle.Bin\\*";
+    WIN32_FIND_DATAW directory_data{};
+    const auto directory_search = FindFirstFileW(pattern.c_str(), &directory_data);
+    if (directory_search == INVALID_HANDLE_VALUE) return 0;
+    std::size_t restored = 0;
+    do {
+        if ((directory_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+            std::wstring(directory_data.cFileName) == L"." || std::wstring(directory_data.cFileName) == L"..")
+            continue;
+        const auto directory = root + L"\\$Recycle.Bin\\" + directory_data.cFileName;
+        WIN32_FIND_DATAW metadata_data{};
+        const auto metadata_search = FindFirstFileW((directory + L"\\$I*").c_str(), &metadata_data);
+        if (metadata_search == INVALID_HANDLE_VALUE) continue;
+        do {
+            const std::wstring metadata_name(metadata_data.cFileName);
+            if (metadata_name.size() < 3 || metadata_name[0] != L'$' || metadata_name[1] != L'I') continue;
+            const auto metadata_path = directory + L"\\" + metadata_name;
+            const auto handle = CreateFileW(metadata_path.c_str(), GENERIC_READ,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (handle == INVALID_HANDLE_VALUE) continue;
+            std::array<std::byte, 544> bytes{};
+            DWORD read = 0;
+            const bool read_ok = ReadFile(handle, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) &&
+                                 read == bytes.size();
+            CloseHandle(handle);
+            if (!read_ok) continue;
+            std::wstring recorded;
+            for (std::size_t offset = 24; offset + sizeof(wchar_t) <= bytes.size(); offset += sizeof(wchar_t)) {
+                wchar_t unit{};
+                std::memcpy(&unit, bytes.data() + offset, sizeof(unit));
+                if (!unit) break;
+                recorded.push_back(unit);
+            }
+            if (recorded != original) continue;
+            const auto restored_path = directory + L"\\$R" + metadata_name.substr(2);
+            if (!MoveFileExW(restored_path.c_str(), original.c_str(), MOVEFILE_COPY_ALLOWED)) continue;
+            if (!DeleteFileW(metadata_path.c_str())) continue;
+            ++restored;
+        } while (FindNextFileW(metadata_search, &metadata_data));
+        FindClose(metadata_search);
+    } while (FindNextFileW(directory_search, &directory_data));
+    FindClose(directory_search);
+    return restored;
 }
 #endif
 }
@@ -200,6 +249,78 @@ CK_TEST(native_trash_boundary_uses_platform_metadata_and_retires_source) {
                 CK_CHECK(metadata_text.find("[Trash Info]") != std::string::npos &&
                          metadata_text.find("Path=file://") != std::string::npos &&
                          metadata_text.find("DeletionDate=") != std::string::npos);
+            }
+        }
+    }
+#if defined(__APPLE__)
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+#else
+    if (had_home) CK_CHECK(::setenv("HOME", previous_home_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("HOME") == 0);
+    if (had_xdg) CK_CHECK(::setenv("XDG_DATA_HOME", previous_xdg_value.c_str(), 1) == 0);
+    else CK_CHECK(::unsetenv("XDG_DATA_HOME") == 0);
+#endif
+}
+
+CK_TEST(native_trash_moves_directory_tree_and_restores_it) {
+    const ck::testing::ScratchDirectory scratch("files-trash-directory");
+    const ck::testing::ScratchDirectory trash_home("files-trash-directory-home");
+#if defined(__APPLE__)
+    const char *previous_home = std::getenv("HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const bool had_home = previous_home != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+#else
+    const ck::testing::ScratchDirectory trash_data("files-trash-directory-data");
+    const char *previous_home = std::getenv("HOME");
+    const char *previous_xdg = std::getenv("XDG_DATA_HOME");
+    const std::string previous_home_value = previous_home ? previous_home : "";
+    const std::string previous_xdg_value = previous_xdg ? previous_xdg : "";
+    const bool had_home = previous_home != nullptr;
+    const bool had_xdg = previous_xdg != nullptr;
+    CK_CHECK(::setenv("HOME", trash_home.path().c_str(), 1) == 0);
+    CK_CHECK(::setenv("XDG_DATA_HOME", trash_data.path().c_str(), 1) == 0);
+#endif
+    const auto source = scratch.path() / "tree";
+    const auto nested = source / "nested";
+    fs::create_directories(nested);
+    write_file(nested / "payload", "directory Trash must retain descendants");
+#if !defined(_WIN32)
+    fs::permissions(source, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec,
+                    fs::perm_options::replace);
+#endif
+
+    NativeFileSystem filesystem;
+    auto directory = filesystem.open_directory(scratch.path());
+    CK_CHECK(directory.value());
+    if (directory.value()) {
+        auto child = (*directory.value())->open_child(component("tree"), EntryAccess::MetadataOnly);
+        CK_CHECK(child.value());
+        if (child.value()) {
+            const auto metadata = (*child.value())->inspect_basic();
+            CK_CHECK(metadata.value() && metadata.value()->identity.value());
+            if (metadata.value() && metadata.value()->identity.value()) {
+                const auto moved = (*directory.value())->trash_child(component("tree"),
+                                                                      *metadata.value()->identity.value());
+                CK_CHECK(moved.value() && *moved.value());
+                CK_CHECK(!fs::exists(source));
+#if defined(__APPLE__)
+                const auto trash_root = trash_home.path() / ".Trash";
+#else
+                const auto trash_root = trash_data.path() / "Trash";
+#endif
+                const auto trashed = trash_root / "files" / "tree";
+                const auto info_path = trash_root / "info" / "tree.trashinfo";
+                CK_CHECK(fs::is_directory(trashed) && fs::exists(trashed / "nested" / "payload"));
+                CK_CHECK(fs::exists(info_path));
+                std::error_code restore_error;
+                fs::rename(trashed, source, restore_error);
+                CK_CHECK(!restore_error && fs::exists(source / "nested" / "payload"));
+                std::ifstream restored(source / "nested" / "payload");
+                const std::string bytes((std::istreambuf_iterator<char>(restored)), std::istreambuf_iterator<char>());
+                CK_CHECK(bytes == "directory Trash must retain descendants");
+                fs::remove(info_path, restore_error);
             }
         }
     }
@@ -438,6 +559,35 @@ CK_TEST(native_windows_trash_moves_fixture_to_recycle_bin_with_restore_metadata)
     CK_CHECK(moved.value() && *moved.value());
     CK_CHECK(!std::filesystem::exists(path));
     CK_CHECK(removed == 1);
+}
+
+CK_TEST(native_windows_trash_moves_directory_tree_and_restores_it) {
+    const ck::testing::ScratchDirectory scratch("files-trash-directory");
+    const auto source = scratch.path() / L"trash-directory";
+    fs::create_directories(source / L"nested");
+    write_file(source / L"nested" / L"payload", "directory Recycle Bin must retain descendants");
+    const auto original = final_path(source);
+    wchar_t volume[MAX_PATH]{};
+    if (!GetVolumePathNameW(source.c_str(), volume, ARRAYSIZE(volume)))
+        throw std::runtime_error("cannot resolve Recycle Bin volume");
+
+    NativeFileSystem filesystem;
+    auto directory_observed = filesystem.open_directory(scratch.path());
+    auto directory = std::move(directory_observed).take_value();
+    auto child_observed = directory->open_child(*NativeName::from_windows(u"trash-directory"), EntryAccess::MetadataOnly);
+    auto child = std::move(child_observed).take_value();
+    const auto metadata = available(child->inspect_basic());
+    const auto moved = directory->trash_child(*NativeName::from_windows(u"trash-directory"), *metadata.identity.value());
+    CK_CHECK(moved.value() && *moved.value());
+    CK_CHECK(!fs::exists(source));
+    child.reset();
+    directory.reset();
+    const auto restored = restore_recycle_fixture(volume, original);
+    CK_CHECK(restored == 1);
+    CK_CHECK(fs::is_directory(source) && fs::exists(source / L"nested" / L"payload"));
+    std::ifstream payload(source / L"nested" / L"payload");
+    const std::string bytes((std::istreambuf_iterator<char>(payload)), std::istreambuf_iterator<char>());
+    CK_CHECK(bytes == "directory Recycle Bin must retain descendants");
 }
 
 CK_TEST(native_windows_metadata_refuses_device_namespaces_before_any_open) {

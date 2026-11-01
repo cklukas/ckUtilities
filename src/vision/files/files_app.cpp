@@ -787,9 +787,6 @@ struct FilesApp::State {
                                    " unavailable: volume rows are archive sources, not entries");
             if (!ready(active) || !panes[active].model.target())
                 return unavailable("Operation unavailable: select a current entry");
-            if (command == "ck.files.trash" &&
-                panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
-                return unavailable("Trash unavailable: recursive Trash / Recycle Bin is not qualified");
             if (command == "ck.files.permanently_delete") {
                 if (panes[active].model.cursor_kind() != ck::files::ObjectKind::Directory)
                     return FilesCommandAvailability::available();
@@ -1338,7 +1335,7 @@ struct FilesApp::State {
         return true;
     }
     bool trash(std::size_t i, FilesPaneRowTarget target) {
-        if (!ready(i) || panes[i].model.cursor_kind() == ck::files::ObjectKind::Directory)
+        if (!ready(i))
             return false;
         auto &p = panes[i];
         const auto range = p.model.viewport();

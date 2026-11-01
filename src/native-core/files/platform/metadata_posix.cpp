@@ -1219,7 +1219,8 @@ public:
             *metadata.value()->kind.value() == ObjectKind::Other)
             return Result::unavailable(ObservationState::Unsupported,
                 adapter_error(AdapterError::NotApplicable, "trash_child.kind"));
-        if (metadata.value()->link_count.value() && *metadata.value()->link_count.value() > 1)
+        if (*metadata.value()->kind.value() == ObjectKind::RegularFile &&
+            metadata.value()->link_count.value() && *metadata.value()->link_count.value() > 1)
             return Result::unavailable(ObservationState::Unsupported,
                 adapter_error(AdapterError::UnsupportedQuery, "trash_child.hard_link"));
 
