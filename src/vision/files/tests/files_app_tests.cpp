@@ -362,7 +362,7 @@ CK_TEST(files_app_status_reports_operation_reason_for_selected_row_when_other_pa
     auto gate = std::make_shared<Gate>();
     Fixture f(ThemeScheme::Classic, gate);
     gate->wait();
-    f.until([&] { return f.app->target(1) != nullptr; });
+    f.until([&] { return f.app->target(1).has_value(); });
     f.app->switch_pane();
     f.application.step(f.clock.now_nanos());
     CK_CHECK(f.app->active_pane() == 1 && f.app->target(1));

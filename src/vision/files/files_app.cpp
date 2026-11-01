@@ -944,7 +944,7 @@ struct FilesApp::State {
         } else if (i == active && volume_archive_recovery_scan &&
                    volume_archive_recovery_scan->requires_reconciliation) {
             hint = "Inspect archive recovery: review is required before volume Copy";
-        } else if (i == active && !closing && !pending(p)) {
+        } else if (i == active && !closing && !modal_pending() && !pending(p)) {
             // The status-line commands are deliberately ordered by immediate
             // relevance. Report only the first unavailable contextual action;
             // listing every disabled command would turn ordinary browsing
@@ -956,14 +956,19 @@ struct FilesApp::State {
                 "ck.files.cancel_read", "ck.files.view_options"};
             static constexpr std::string_view selected_contextual[] = {
                 "ck.files.copy", "ck.files.move"};
-            const auto &contextual = p.model.target() ? selected_contextual : empty_listing_contextual;
-            for (const auto command : contextual) {
-                const auto candidate = availability(command);
-                if (!candidate.enabled) {
-                    hint = candidate.reason;
-                    break;
+            const auto report_first_unavailable = [&](const auto &contextual) {
+                for (const auto command : contextual) {
+                    const auto candidate = availability(command);
+                    if (!candidate.enabled) {
+                        hint = candidate.reason;
+                        break;
+                    }
                 }
-            }
+            };
+            if (p.model.target())
+                report_first_unavailable(selected_contextual);
+            else
+                report_first_unavailable(empty_listing_contextual);
         }
         if (!hint.empty())
             text += "\nHint: " + hint;
