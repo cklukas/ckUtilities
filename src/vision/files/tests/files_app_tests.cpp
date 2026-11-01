@@ -118,13 +118,15 @@ struct Fixture {
     std::unique_ptr<FilesVolumeArchivePlanningService> volume_archive_planning_service;
     std::unique_ptr<FilesVolumeArchiveService> volume_archive_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
+    std::unique_ptr<FilesOperationRecoveryService> operation_recovery_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
                      FilesPaneServiceLimits limits = {}, ckv::Size size = {120, 34},
                      std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
                      bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {},
-                     bool qualified_volume = false, bool recovery_journal = false)
+                     bool qualified_volume = false, bool recovery_journal = false,
+                     bool operation_recovery_journal = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -220,6 +222,13 @@ struct Fixture {
             if (!journal)
                 throw std::runtime_error("cannot create app recovery fixture");
         }
+        if (operation_recovery_journal) {
+            std::ofstream journal(operation_root / ".ck-copy-journal-00000000000000000000000000000032",
+                                  std::ios::binary);
+            journal << "malformed operation recovery journal";
+            if (!journal)
+                throw std::runtime_error("cannot create operation recovery fixture");
+        }
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         if (qualified_volume || recovery_journal) {
@@ -227,6 +236,8 @@ struct Fixture {
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
             volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
         }
+        if (operation_recovery_journal)
+            operation_recovery_service = std::make_unique<FilesOperationRecoveryService>(wake.callback());
         volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [qualified_volume] {
             std::vector<FilesVolumeRecord> records;
             records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
@@ -252,7 +263,7 @@ struct Fixture {
             planning_service.get(), execution_service.get(),
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
             volume_service.get(), volume_archive_planning_service.get(), volume_archive_service.get(),
-            volume_archive_recovery_service.get());
+            volume_archive_recovery_service.get(), operation_recovery_service.get());
     }
     ~Fixture() {
         app.reset();
@@ -273,6 +284,8 @@ struct Fixture {
             volume_archive_service->join();
         if (volume_archive_recovery_service)
             volume_archive_recovery_service->join();
+        if (operation_recovery_service)
+            operation_recovery_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
     template <class Predicate> void until(Predicate ready) {
@@ -1419,6 +1432,24 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
+}
+CK_TEST(files_app_operation_recovery_without_service_reports_status_reason) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.inspect_operation_recovery")));
+    CK_CHECK(f.app->availability("ck.files.inspect_operation_recovery").reason.find(
+                 "operation recovery scan is not ready") != std::string::npos);
+}
+CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, true);
+    f.loaded();
+    f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
+    CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
+    f.until([&] { return f.painted().find("Operation recovery review") != std::string::npos; });
+    const auto text = f.painted();
+    CK_CHECK(text.find("Read-only inspection") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.painted().find("Operation recovery review") == std::string::npos; });
 }
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);

@@ -7686,3 +7686,28 @@ Files UI and native suites passed **4/4** in 10.73 seconds. The complete
 configured Windows CTest matrix then passed **223/223** in 47.27 seconds with
 the required temporary root under `V:\\tmp`. No production executable was
 launched by this checkpoint.
+
+## 2026-11-01 — Operation recovery UI acceptance checkpoint
+
+Files now has explicit application coverage for the recovery command's two
+user-visible states: without a configured service it remains disabled with the
+reason `operation recovery scan is not ready`, and with a malformed ordinary
+journal it opens a modal `Operation recovery review` that states its
+read-only boundary. The review test does not enable cleanup, retry, resume,
+publication or source-retirement actions.
+
+The qualified macOS Release build used the APFS-backed private test root under
+`/Volumes/PRO-BLADE/tmp` and passed the complete `ck_vision_files_tests`
+executable **242/242**. The earlier sanitizer build was not counted as green:
+Apple libc++/ASan reported a pre-existing `container-overflow` diagnostic while
+copying `NativeName` into `DirectoryCursor::read`'s reserved vector storage;
+no sanitizer suppression or application workaround was applied.
+
+The same application acceptance slice was synchronized to the Windows
+workstation from a `V:` source archive with SHA-256
+`24478beafc77399578902be36592c65d0b3544fb785e78ecd84821d418be4280`.
+The Windows Release output rebuilt under
+`V:\\tmp\\ckutilities-windows-1495c78\\build`, and the complete configured
+CTest matrix passed **223/223** in 51.37 seconds, including both new
+operation-recovery UI tests. No production executable was launched by this
+checkpoint.
