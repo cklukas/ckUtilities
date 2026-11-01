@@ -107,6 +107,10 @@ execute files or provide an embedded shell.
 | F1 | Context help |
 | Alt+X | Quit |
 
+`Operations > Inspect archive recovery` opens a bounded read-only review when
+the startup scan finds an archive journal. It does not resume, delete,
+replace, or retry an archive.
+
 All actions also have visible menu or dialog commands, and shortcut bindings
 can be reviewed through the suite configuration UI. Completion retains
 ckVision's Right-to-accept behavior.
