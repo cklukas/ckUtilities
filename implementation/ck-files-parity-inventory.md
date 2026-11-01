@@ -1,6 +1,6 @@
 # Files — Commander parity inventory
 
-Status: CP-00 review record, 2026-11-01. This is an implementation inventory,
+Status: CP-00 review record, refreshed 2026-11-02. This is an implementation inventory,
 not a claim of feature-complete Norton Commander or Midnight Commander parity.
 Every row is either implemented and qualified, in a named follow-on package,
 or explicitly out of scope/blocked. A disabled operation remains disabled when
@@ -15,6 +15,28 @@ syntax, terminal and shell behavior belongs in ckVision or shared ckUtilities
 components. A sibling utility executable is never used as an in-process
 implementation.
 
+The pinned public comparison reference is GNU Midnight Commander **4.8.33**:
+the [official release announcement](https://lists.midnight-commander.org/pipermail/mc/2025-January/005798.html)
+is the 2025-01 release notice, and the [official online `mc(1)`
+manual](https://source.midnight-commander.org/man/mc.html) was captured on
+2026-11-02. The manual is used
+for the two-panel model, panel modes/columns, selection, navigation, menus,
+copy/move/view/edit, search, hotlist/history, archives/VFS and terminal
+workflows. The repository contains no licensed Norton Commander 5.x manual or
+other lawful reference asset. Therefore this inventory does not claim
+exhaustive Norton Commander parity; a licensed NC reference remains an open
+CP-00 input and every NC-specific row stays explicitly mapped or deferred.
+
+| Reusable seam | Verified public/current consumer | Ownership and boundary |
+|---|---|---|
+| Application, command registry, menus, scopes, dialogs and standard roles | `src/vision/files/files_app.cpp`, `src/vision/find/find_app.hpp`, `src/vision/du/disk_usage_app.hpp` use ckVision UI APIs | ckVision owns dispatch/focus/presentation primitives; Files owns `ck.files.*` commands and operation availability |
+| Completion and editor Right-to-accept | `src/vision/files/files_location_dialog.cpp` uses `cvision/widgets/completion.hpp`; `files_app_tests.cpp` covers exact proposal acceptance | ckVision owns completion widget behavior; Files owns native location query, revision/ticket validation and route commit |
+| Native terminal and host lifecycle | `src/vision/host/native_host.hpp`, `src/vision/files/main.cpp`, `src/vision/tests/terminal_smoke.cpp` | ckVision/host owns terminal mode and lifecycle; Files owns one application/session and joins workers outside dispatch |
+| Text editor/document | `src/vision/todo/todo_app.cpp` uses `cvision/widgets/editor_document.hpp` and `text_editor.hpp` | reusable editor behavior is a candidate for CP-10; Files does not duplicate or launch `ck-edit` |
+| Search services | `src/vision/find/find_services.hpp/.cpp`, `ck_find_core` | CP-07 must extract/use the service in-process; no sibling executable shell-out |
+| Disk-usage/tree services | `src/vision/du/disk_usage_services.hpp/.cpp`, `ck_du_core` | CP-07 may reuse bounded discovery/tree logic; Files retains native identity and mutation rules |
+| Filesystem identity, preservation, journals and recovery | `src/native-core/files`, `src/vision/files/files_operation_*` | ckUtilities owns native adapters and safety protocol; ckVision filesystem APIs are discovery/presentation inputs, not transactional mutation guarantees |
+
 | Area | Current implementation | Owner / next package | Acceptance evidence |
 |---|---|---|---|
 | Two panes, locations, sorting, filtering and marks | Implemented in the Files app and pane model; navigation/completion is worker-owned | `ck-files`; CP-00/CP-04 for real-window limits | Files suite and generated ck-files guide |
@@ -23,7 +45,7 @@ implementation.
 | Ordinary file/tree copy | Implemented through frozen inventory, loss review, no-replace staging/publication and verification | `ck-files`; CP-04 filesystem matrix | operation and native Files suites |
 | Same-volume rename/move | Implemented with identity-checked native no-replace rename | `ck-files`; CP-04 race/crash matrix | move and native adapter tests |
 | Cross-volume file/tree move | Windows source exclusion is qualified; POSIX source-side quarantine is not yet enabled | `ck-files`; CP-01 | operation status explains refusal where unsupported |
-| Recursive permanent deletion | Journaled worker freezes the tree, revalidates identities and retires bottom-up; the Windows directory command path is qualified, while POSIX recursive retirement remains disabled until its adapter protocol is qualified | `ck-files`; CP-02/CP-04 | Windows 223-test matrix and native deletion test; macOS safety-retention test |
+| Recursive permanent deletion | Journaled worker freezes the tree, revalidates identities and retires bottom-up; the Windows directory command path is qualified, while POSIX recursive retirement remains disabled until its adapter protocol is qualified | `ck-files`; CP-02/CP-04 | Windows 223-test matrix and native deletion test; macOS/Linux safety-retention evidence |
 | Native Trash / Recycle Bin | Single-entry native disposition with restore metadata; recursive Trash remains disabled and never falls back to permanent deletion | `ck-files`; CP-02 for recursive/foreign mounts | native Trash tests; recursive Trash acceptance still open |
 | Create empty files and links | Not yet exposed in the Files command surface | `ck-files`; CP-05 | disabled-command status reason |
 | Attributes, permissions, ownership and ACLs | Read-only capability/metadata inventory and qualified move/copy preservation decisions | `ck-files`; CP-05 | metadata/security tests |
