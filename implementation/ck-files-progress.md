@@ -1,4 +1,14 @@
 # Files implementation evidence
+## 2026-11-02 — Bounded pane-page model fuzzer
+
+Commit `c4307d9` adds `fuzz_files_pane_page`, a bounded libFuzzer target that
+publishes generated `PaneEntry` models and exercises `capture_pane_page` with
+bounded row/text budgets. The seed corpus passed, followed by a 30-second
+mutation run with **383,329 executions**, **149 coverage points**, peak RSS of
+31 MB, and no crash, timeout, assertion, or terminal-control leakage finding.
+The run is limited to this model/page seam; sanitizer, race, resource, fault,
+and full WP-07 gates remain open. Evidence: [pane-page fuzzer record](evidence/ck-files-pane-page-fuzz-20261102.json).
+
 ## 2026-11-02 — Retained-source state propagation on all platforms
 
 Commit `bcf47a3` preserves the native `RetainedSource` and

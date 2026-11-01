@@ -1,0 +1,45 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "c4307d9fd3b28894a699de041843f95aea026d1b",
+  "change": "Add a bounded libFuzzer target for PaneModel publication and capture_pane_page rendering.",
+  "build": {
+    "host": "macOS arm64",
+    "build_type": "RelWithDebInfo",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "sdk_prefix": "/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-model-fuzz-20261102-01/build",
+    "binary": "/Volumes/S8T/tmp/ckutilities-model-fuzz-20261102-01/build/fuzz/fuzz_files_pane_page",
+    "binary_sha256": "ce42a02a1f8139d190590e2684bcfb743dc496de7554f8846cdf5fd35e41a103",
+    "binary_mtime": "2026-11-02T00:50:05+0100",
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-model-fuzz-20261102-01",
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-model-fuzz-20261102-01",
+    "build_note": "Configured with CKTOOLS_BUILD_FUZZERS=ON and built successfully; the target was rebuilt after strict harness fixes before this checkpoint."
+  },
+  "runs": {
+    "corpus": {
+      "command": "fuzz_files_pane_page fuzz/corpus/files_pane_page -runs=1 -max_len=4096 -timeout=2 -rss_limit_mb=512",
+      "result": "passed",
+      "runs": 2,
+      "corpus_files": 1,
+      "corpus_bytes": 38
+    },
+    "bounded_mutation": {
+      "command": "fuzz_files_pane_page -max_total_time=30 -rss_limit_mb=512 -timeout=2 -seed=20261102 fuzz/corpus/files_pane_page",
+      "result": "passed",
+      "elapsed_seconds": 31,
+      "executions": 383329,
+      "coverage_points": 149,
+      "peak_rss_mb": 31,
+      "crashes": 0,
+      "timeouts": 0,
+      "assertion_failures": 0
+    }
+  },
+  "invariants": [
+    "Pane entries are generated from bounded input and valid NativeName values.",
+    "capture_pane_page receives bounded row and text-byte budgets.",
+    "Captured rows never expose terminal ESC or BEL controls through display_name.",
+    "No filesystem mutation, pathname compare-delete, privilege escalation, or volume retirement is exercised by this fuzzer.",
+    "This is a libFuzzer qualification gate, not a sanitizer or full WP-07 completion claim."
+  ]
+}
