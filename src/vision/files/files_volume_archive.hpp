@@ -257,6 +257,10 @@ struct FilesVolumeArchiveJournalEvidence final {
     std::string source_identity;
     std::string source_mount_point;
     std::string archive_name;
+    // Version-2 journals retain the exact destination address in its native
+    // encoding. Legacy journals may omit it and remain inspect-only.
+    std::optional<ck::files::NameEncoding> destination_encoding;
+    std::string destination_native_path;
     friend bool operator==(const FilesVolumeArchiveJournalEvidence &,
                            const FilesVolumeArchiveJournalEvidence &) = default;
 };

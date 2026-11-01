@@ -257,7 +257,8 @@ CK_TEST(volume_archive_planning_service_returns_review_without_writing) {
 CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveService service;
-    FilesVolumeArchiveRequest request{source(), address(scratch.path()), "worker.ckarchive",
+    const auto destination = address(scratch.path());
+    FilesVolumeArchiveRequest request{source(), destination, "worker.ckarchive",
                                       FilesVolumeArchiveConsistency::Live, 11,
                                       [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); },
                                       journal_root(scratch.path()), journal_id(11), {}, open_journal()};
@@ -302,6 +303,18 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                             CK_CHECK(!recovery.value()->operation.requires_reconciliation);
                             CK_CHECK(recovery.value()->evidence.transaction_id == 11);
                             CK_CHECK(recovery.value()->evidence.archive_name == "worker.ckarchive");
+#if defined(_WIN32)
+                            std::string expected_destination;
+                            for (const auto unit : *destination.windows_units()) {
+                                expected_destination.push_back(static_cast<char>(unit & 0xff));
+                                expected_destination.push_back(static_cast<char>(unit >> 8));
+                            }
+                            CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::WindowsUtf16);
+#else
+                            const auto expected_destination = *destination.posix_bytes();
+                            CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::PosixBytes);
+#endif
+                            CK_CHECK(recovery.value()->evidence.destination_native_path == expected_destination);
                         }
                     }
                 }

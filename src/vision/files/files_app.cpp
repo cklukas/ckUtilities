@@ -983,6 +983,14 @@ struct FilesApp::State {
                 summary << "Source: " << report.evidence.source_mount_point << '\n'
                         << "Archive: " << report.evidence.archive_name << '\n'
                         << "Transaction: " << report.evidence.transaction_id << '\n';
+                if (report.evidence.destination_encoding) {
+                    summary << "Destination: exact native path recorded ("
+                            << (*report.evidence.destination_encoding == ck::files::NameEncoding::PosixBytes
+                                    ? "POSIX bytes" : "Windows UTF-16")
+                            << ")\n";
+                } else {
+                    summary << "Destination: not recorded in this legacy journal\n";
+                }
                 for (const auto &recovery : report.operation.items)
                     summary << "State: " << archive_recovery_state(recovery.state)
                             << "; action: " << archive_recovery_action(recovery.action) << '\n';
