@@ -1,6 +1,6 @@
 {
   "date": "2026-11-01",
-  "source_commit": "b21a3a4",
+  "source_commit": "1a48d7a",
   "platform": "Linux ARM64",
   "feature": "worker-owned volume archive recovery cleanup boundary",
   "build": {
@@ -16,6 +16,11 @@
     "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1:history_size=7:report_signal_unsafe=0",
     "TMPDIR": "/home/klukas/tmp/ckutilities-recovery-cleanup-tsan-20261101"
   },
+  "regressions": [
+    "digest removal after Copied is rejected",
+    "digest replacement after Copied is rejected",
+    "staging-address replacement after Copied is rejected"
+  ],
   "results": {
     "files_volume_archive_tests.cpp": "17/17 passed",
     "files_app_tests.cpp": "69/69 passed",

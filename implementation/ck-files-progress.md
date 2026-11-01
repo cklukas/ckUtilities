@@ -1,4 +1,14 @@
 # Files implementation evidence
+## 2026-11-01 — Archive recovery evidence monotonicity regression suite
+
+Commit `1a48d7a` adds explicit journal-state regression cases proving that a
+previously recorded staging digest cannot be removed or replaced and that a
+verified staging address cannot change across later records. The focused
+volume archive suite passed **17/17** on macOS, Windows x64, and Linux ARM64;
+the first Linux attempt exceeded its existing 500 ms fixture wait, then the
+same rebuilt binary passed on immediate rerun. No implementation behavior was
+changed to hide the timing sensitivity.
+
 ## 2026-11-01 — macOS TSan qualification of recovery cleanup
 
 The current macOS arm64 ThreadSanitizer build under the required S8T temporary
