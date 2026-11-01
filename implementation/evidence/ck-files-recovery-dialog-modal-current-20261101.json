@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "10d41f4",
+  "feature": "Inspect archive recovery modal",
+  "platforms": {
+    "macOS arm64": {
+      "files_suite": "232/232 passed",
+      "checks": ["command opens the dialog", "read-only wording is rendered", "Escape closes the dialog"]
+    },
+    "Windows x64": {
+      "files_suite": "231/231 passed",
+      "checks": ["command opens the dialog", "read-only wording is rendered", "Escape closes the dialog"]
+    },
+    "Linux aarch64": {
+      "files_suite": "232/232 passed",
+      "checks": ["command opens the dialog", "read-only wording is rendered", "Escape closes the dialog"]
+    }
+  },
+  "safety": "The dialog performs no resume, delete, replacement, or retry."
+}

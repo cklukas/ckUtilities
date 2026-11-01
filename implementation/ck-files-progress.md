@@ -1,4 +1,13 @@
 # Files implementation evidence
+## 2026-11-01 — Recovery dialog modal-path qualification
+
+The real Inspect archive recovery command path was exercised on macOS
+(**232/232**), Windows (**231/231**), and Linux ARM64 (**232/232**). Each
+platform opened the modal, rendered its read-only wording, and closed it with
+Escape. The modal remains non-mutating; recovery resume, cleanup, and retry
+are not enabled. Evidence is recorded in [the current recovery-dialog modal
+record](evidence/ck-files-recovery-dialog-modal-current-20261101.json).
+
 ## 2026-11-01 — Linux Files qualification after recovery inspection
 
 The current Linux ARM64 build rebuilt the Files app and test executable from
