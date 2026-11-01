@@ -39,6 +39,13 @@
     "ck_files_sha256": "189315eb1765e2f305c7eb7fb8925994b897dd23271a5c550afa201456cc34a8",
     "ck_files_version": "ck-files 0.2.0 (ckVision 1.4.0)"
   },
+  "runtime_install": {
+    "path": "V:\\dev\\ckutilities-install-2702ee7-runtime",
+    "component": "Runtime",
+    "ck_files_version": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "ck_files_sha256": "189315eb1765e2f305c7eb7fb8925994b897dd23271a5c550afa201456cc34a8",
+    "help": "passed"
+  },
   "checks": [
     "fresh pinned ckVision SDK built on V: with static /MT runtime",
     "independent ckVision package consumer",

@@ -242,6 +242,10 @@ only `bin` and `share`, all ten executables pass `--help`, the installed
 `ck-files` reports `ck-files 0.2.0 (ckVision 1.4.0)`, and the documentation
 contains 11 Markdown guides plus 29 generated SVG screenshots. The ZIP SHA-256
 is `fc341a4d5e9c633aea04dee263c377d60f3569c4e829e32406582b8333774cd0`.
+The same verified Runtime component is installed at
+`V:\\dev\\ckutilities-install-2702ee7-runtime`; its exact `ck-files.exe`
+reports the same version, passes `--help`, and has SHA-256
+`189315eb1765e2f305c7eb7fb8925994b897dd23271a5c550afa201456cc34a8`.
 
 Evidence: [current Windows Release record](evidence/ck-files-windows-release-current-20261101.json).
 
