@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-02",
+  "platform": "Linux ARM64",
+  "host": "uconsole",
+  "source_checkpoint": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "executable": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/build/bin/ck-files",
+  "executable_sha256": "69372472d9d7cd8ddc5caca0293aa42ef73fefddcbe929999fcf2664d91f0178",
+  "fixture_root": "/home/klukas/tmp/ckutilities-wp07-pty-20261102-02",
+  "fixture": {
+    "directory": "left",
+    "regular_files": 100000,
+    "name_pattern": "entry-NNNNNN.txt",
+    "logical_bytes": 1,
+    "filesystem": {
+      "mount": "/",
+      "source": "/dev/mmcblk0p2",
+      "type": "ext4"
+    }
+  },
+  "terminal": "real SSH PTY with terminal-query responses, xterm-256color",
+  "observation": {
+    "fresh_fixture_and_home": true,
+    "scanning_frame_rendered": true,
+    "listing_ready_text": "Last scan: 100000 items",
+    "measured_process_interval_seconds": 16.156,
+    "readiness_upper_bound_seconds": 16.156,
+    "quit_sequence": "Alt+X",
+    "exit_code": 0,
+    "residual_process": false,
+    "peak_rss_kib": null
+  },
+  "status": "pass_current_large_directory_qualification"
+}

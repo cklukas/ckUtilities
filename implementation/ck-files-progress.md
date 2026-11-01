@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-02 — Fresh Linux 100,000-entry interactive qualification
+
+The current ARM64/ext4 qualification was repeated through a real SSH PTY that
+answered terminal queries, using a fresh 100,000-file fixture and a fresh
+per-user home/cache. The actual `ck-files` frame rendered its scanning state,
+then reached `Last scan: 100000 items`; Alt+X exited with code 0 and no process
+remained. The measured process interval was **16.156 seconds**. This replaces
+the earlier script-backed 45-second observation as the current interactive
+result; the earlier record remains retained as historical evidence of the
+terminal-harness limitation. Evidence: [fresh Linux large-directory record](evidence/ck-files-linux-large-directory-current-20261102.json).
+
 ## 2026-11-02 — Windows installed layout and current ConPTY acceptance
 
 The Windows package was rebuilt from source commit `134cfaf` on the required
