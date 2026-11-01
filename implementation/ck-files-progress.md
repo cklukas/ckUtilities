@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-02 — Windows pane-local volume view in a real ConPTY
+
+The refreshed Runtime install was launched in a real Windows OpenSSH ConPTY
+with both panes at `C:\\`. Backspace above the root opened the pane-local
+`Volumes and mounts above C:\\` view. It rendered the drive-letter rows
+`C:\\`, `D:\\`, `E:\\`, and `V:\\`, filesystem types (`NTFS` and `ReFS`),
+space/free-space values, and the selected-volume footer. Alt+X exited cleanly;
+the exact installed process count was zero afterward and the task profile was
+removed from `V:`. Evidence: [current Windows volume-view
+record](evidence/ck-files-windows-volume-view-current-20261102.json).
+
 ## 2026-11-02 — Linux pane-local volume view in a real terminal
 
 On the real ARM64 Linux host, starting both panes at `/` and pressing

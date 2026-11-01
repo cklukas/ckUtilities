@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-02",
+  "platform": "Windows x64",
+  "host": "ssh workstation",
+  "source_checkpoint": "134cfafdb0239278b673f1ac4470790b1693b52a",
+  "executable": "V:\\dev\\ckutilities-install-134cfaf-runtime\\bin\\ck-files.exe",
+  "executable_sha256": "2b94238bd4782a52514da510b6a10c6ebad22f2400f73fc547369626b50ceaee",
+  "terminal": "real Windows OpenSSH ConPTY",
+  "fixture_root": "C:\\",
+  "checks": [
+    "started both panes at C:\\",
+    "Backspace above C:\\ opened pane-local volume view",
+    "view heading rendered as Volumes and mounts above C:\\",
+    "drive-letter rows rendered in the requested pane",
+    "filesystem type column rendered",
+    "space and free-space values rendered",
+    "selected footer rendered RW, drive, filesystem, free-space and total-space values",
+    "Alt+X clean exit",
+    "task profile removed from V:",
+    "zero remaining process at exact installed executable path"
+  ],
+  "observed_volumes": ["C:\\", "D:\\", "E:\\", "V:\\"],
+  "observed_filesystems": {"C:\\": "NTFS", "D:\\": "NTFS", "E:\\": "NTFS", "V:\\": "ReFS"},
+  "observed_selected_footer": "RW | C:\\ | NTFS | 212.0 GiB free / 952.0 GiB",
+  "status": "pass"
+}
