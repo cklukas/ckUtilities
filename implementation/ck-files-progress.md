@@ -1,4 +1,14 @@
 # Files implementation evidence
+## 2026-11-02 — Linux pane-local volume view in a real terminal
+
+On the real ARM64 Linux host, starting both panes at `/` and pressing
+Backspace opened the pane-local `Volumes and mounts above /` view. The view
+rendered mount points in the requested pane, filesystem type, space/free-space
+values, and the selected-volume footer
+`RW | / | ext4 | 16.6 GiB free / 56.7 GiB`. Alt+X exited cleanly and the exact
+task process was absent afterward. Evidence: [current Linux volume-view
+record](evidence/ck-files-linux-volume-view-current-20261102.json).
+
 ## 2026-11-02 — Fresh Linux 100,000-entry interactive qualification
 
 The current ARM64/ext4 qualification was repeated through a real SSH PTY that

@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-02",
+  "platform": "Linux ARM64",
+  "host": "uconsole",
+  "source_checkpoint": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "executable": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/build/bin/ck-files",
+  "terminal": "real SSH PTY with terminal-query responses, xterm-256color",
+  "fixture_root": "/",
+  "checks": [
+    "started both panes at root",
+    "Backspace above / opened pane-local volume view",
+    "view heading rendered as Volumes and mounts above /",
+    "mount-point rows rendered in the requested pane",
+    "filesystem type column rendered",
+    "space and free-space values rendered",
+    "selected footer rendered RW, mount, filesystem, free-space and total-space values",
+    "Alt+X clean exit",
+    "exact task process absent after exit"
+  ],
+  "observed_selected_footer": "RW | / | ext4 | 16.6 GiB free / 56.7 GiB",
+  "observed_mount_rows": 19,
+  "status": "pass"
+}
