@@ -301,6 +301,34 @@ struct FilesVolumeArchiveRecoveryScan final {
     bool requires_reconciliation = false;
 };
 
+struct FilesVolumeArchiveRecoveryCleanupLimits final {
+    // Cleanup re-reads the complete staging artifact through a held native
+    // object before disposition. Keep the per-read request bounded and make
+    // the total amount an explicit worker policy rather than an accidental
+    // unbounded recovery scan.
+    std::uint64_t max_staging_bytes = 16ULL * 1024ULL * 1024ULL * 1024ULL;
+    static constexpr std::uint64_t hard_max_staging_bytes = 64ULL * 1024ULL * 1024ULL * 1024ULL;
+};
+
+enum class FilesVolumeArchiveRecoveryCleanupSubmission {
+    Accepted,
+    Busy,
+    Stopped,
+    Invalid,
+};
+
+enum class FilesVolumeArchiveRecoveryCleanupState {
+    Complete,
+    Failed,
+    WorkerFault,
+};
+
+struct FilesVolumeArchiveRecoveryCleanupReply final {
+    FilesVolumeArchiveRecoveryCleanupState state = FilesVolumeArchiveRecoveryCleanupState::Failed;
+    bool removed = false;
+    std::optional<ck::files::UnavailableObservation> error;
+};
+
 enum class FilesVolumeArchiveRecoverySubmission {
     Accepted,
     Busy,
@@ -351,6 +379,36 @@ class FilesVolumeArchiveRecoveryService final {
     FilesVolumeArchiveRecoverySubmission request(
         ck::files::NativeAbsolutePath private_root, FilesVolumeArchiveRecoveryLimits limits = {});
     std::optional<FilesVolumeArchiveRecoveryReply> take();
+    void request_stop() noexcept;
+    void join();
+    bool running() const noexcept;
+    bool working() const;
+
+  private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
+
+// A separate worker-only boundary for the one recovery mutation that can be
+// made unambiguous: discard an unpublished archive staging file after the
+// journal state, exact native destination/staging addresses, full-file digest,
+// held directory identity, and held child identity all revalidate. It never
+// touches Planned/Prepared artifacts, ambiguous publication, destination
+// files, or source volumes. The UI must submit the native journal name from a
+// prior scan; this service reloads and revalidates the journal before acting.
+class FilesVolumeArchiveRecoveryCleanupService final {
+  public:
+    explicit FilesVolumeArchiveRecoveryCleanupService(std::function<void()> wake = {});
+    ~FilesVolumeArchiveRecoveryCleanupService();
+    FilesVolumeArchiveRecoveryCleanupService(const FilesVolumeArchiveRecoveryCleanupService &) = delete;
+    FilesVolumeArchiveRecoveryCleanupService &operator=(const FilesVolumeArchiveRecoveryCleanupService &) = delete;
+
+    FilesVolumeArchiveRecoveryCleanupSubmission request(
+        ck::files::NativeAbsolutePath private_root, ck::files::NativeName journal_name,
+        ck::files::OperationJournalId journal_id,
+        FilesVolumeArchiveRecoveryLimits journal_limits = {},
+        FilesVolumeArchiveRecoveryCleanupLimits cleanup_limits = {});
+    std::optional<FilesVolumeArchiveRecoveryCleanupReply> take();
     void request_stop() noexcept;
     void join();
     bool running() const noexcept;

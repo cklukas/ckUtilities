@@ -1,4 +1,5 @@
 #include "files_volume_archive.hpp"
+#include "sha256.hpp"
 #include "scratch_directory.hpp"
 
 #include <cvision/testing/cktest.hpp>
@@ -92,6 +93,42 @@ std::optional<NativeName> archive_journal_name(std::string_view suffix) {
 #else
     return NativeName::from_posix(value);
 #endif
+}
+
+void append_native_path(std::vector<std::byte> &out, const NativeAbsolutePath &path) {
+    append_le<std::uint8_t>(out, static_cast<std::uint8_t>(path.encoding()));
+    if (path.posix_bytes()) {
+        append_string(out, *path.posix_bytes());
+        return;
+    }
+    std::string bytes;
+    for (const auto unit : *path.windows_units()) {
+        bytes.push_back(static_cast<char>(unit & 0xff));
+        bytes.push_back(static_cast<char>(unit >> 8));
+    }
+    append_string(out, bytes);
+}
+
+std::vector<std::byte> archive_recovery_evidence(
+    std::uint64_t transaction, const NativeAbsolutePath &destination, const NativeAbsolutePath &staging,
+    std::string_view archive, std::optional<std::array<std::byte, 32>> digest = {}) {
+    std::vector<std::byte> result;
+    append_le<std::uint64_t>(result, transaction);
+    append_string(result, "fixture-volume");
+    append_string(result, "/fixture");
+    append_string(result, archive);
+    append_native_path(result, destination);
+    append_le<std::uint8_t>(result, digest ? 3U : 1U);
+    append_native_path(result, staging);
+    if (digest)
+        result.insert(result.end(), digest->begin(), digest->end());
+    return result;
+}
+
+std::array<std::byte, 32> digest_bytes(std::span<const std::byte> bytes) {
+    ck::files::Sha256 digest;
+    digest.update(bytes);
+    return digest.digest();
 }
 
 } // namespace
@@ -447,6 +484,152 @@ CK_TEST(volume_archive_recovery_service_scans_off_ui_thread_and_rejects_invalid_
     service.request_stop();
     service.join();
     CK_CHECK(!service.running());
+}
+
+CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellation) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-cleanup", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    const auto destination = address(scratch.path());
+    constexpr std::uint64_t transaction = 41;
+    constexpr std::string_view archive = "cleanup.ckarchive";
+#if defined(_WIN32)
+    const auto staging_name = NativeName::from_windows(u".cleanup.ckarchive.cktmp-41");
+#else
+    const auto staging_name = NativeName::from_posix(".cleanup.ckarchive.cktmp-41");
+#endif
+    CK_CHECK(staging_name.has_value());
+    if (!staging_name)
+        return;
+    const auto staging_address = destination.child_address(*staging_name);
+    CK_CHECK(staging_address.value());
+    if (!staging_address.value())
+        return;
+    const auto staging_path = scratch.path() / ".cleanup.ckarchive.cktmp-41";
+    const std::array<std::byte, 12> content{
+        std::byte{'a'}, std::byte{'r'}, std::byte{'c'}, std::byte{'h'}, std::byte{'i'}, std::byte{'v'},
+        std::byte{'e'}, std::byte{'-'}, std::byte{'s'}, std::byte{'t'}, std::byte{'a'}, std::byte{'g'}};
+    {
+        std::ofstream stream(staging_path, std::ios::binary);
+        stream.write(reinterpret_cast<const char *>(content.data()), static_cast<std::streamsize>(content.size()));
+    }
+    const auto digest = digest_bytes(content);
+    const auto name = archive_journal_name("29000000000000000000000000000000");
+    CK_CHECK(name.has_value());
+    if (!name)
+        return;
+    auto file = open_native_operation_journal_file(root, *name, true);
+    CK_CHECK(file.value());
+    if (!file.value())
+        return;
+    auto journal = OperationJournal::create(FileOperation::Copy, journal_id(transaction));
+    CK_CHECK(journal.value());
+    if (!journal.value())
+        return;
+    const auto before_digest = archive_recovery_evidence(transaction, destination, *staging_address.value(), archive);
+    const auto after_digest = archive_recovery_evidence(transaction, destination, *staging_address.value(), archive, digest);
+    auto journal_file = std::move(file).take_value();
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {1, 0, OperationJournalState::Planned, before_digest}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {2, 0, OperationJournalState::Prepared, before_digest}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {3, 0, OperationJournalState::Copied, after_digest}).value());
+    journal_file.reset();
+
+    std::atomic_bool woke = false;
+    FilesVolumeArchiveRecoveryCleanupService service([&woke] { woke.store(true); });
+    CK_CHECK(service.request(root, *name, journal_id(transaction)) ==
+             FilesVolumeArchiveRecoveryCleanupSubmission::Accepted);
+    std::optional<FilesVolumeArchiveRecoveryCleanupReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(woke.load());
+#if defined(_WIN32)
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Complete);
+    CK_CHECK(reply && reply->removed);
+    CK_CHECK(!std::filesystem::exists(staging_path));
+#else
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Failed);
+    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Unsupported);
+    CK_CHECK(std::filesystem::exists(staging_path));
+#endif
+    service.request_stop();
+    service.join();
+
+    auto reopened = open_native_operation_journal_file(root, *name, false);
+    CK_CHECK(reopened.value());
+    if (reopened.value()) {
+        auto loaded = load_operation_journal(**reopened.value());
+        CK_CHECK(loaded.value());
+        if (loaded.value()) {
+#if defined(_WIN32)
+            CK_CHECK(loaded.value()->journal->records().size() == 4);
+            CK_CHECK(loaded.value()->journal->records().back().state == OperationJournalState::Cancelled);
+#else
+            CK_CHECK(loaded.value()->journal->records().size() == 3);
+            CK_CHECK(loaded.value()->journal->records().back().state == OperationJournalState::Copied);
+#endif
+            auto inspected = inspect_volume_archive_recovery(*loaded.value()->journal, loaded.value()->tail);
+            CK_CHECK(inspected.value());
+            if (inspected.value())
+#if defined(_WIN32)
+                CK_CHECK(!inspected.value()->operation.requires_reconciliation);
+#else
+                CK_CHECK(inspected.value()->operation.requires_reconciliation);
+#endif
+        }
+    }
+}
+
+CK_TEST(volume_archive_recovery_cleanup_refuses_changed_staging_bytes) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-cleanup-mismatch", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    const auto destination = address(scratch.path());
+    constexpr std::uint64_t transaction = 42;
+#if defined(_WIN32)
+    const auto staging_name = NativeName::from_windows(u".mismatch.ckarchive.cktmp-42");
+#else
+    const auto staging_name = NativeName::from_posix(".mismatch.ckarchive.cktmp-42");
+#endif
+    const auto staging_address = destination.child_address(*staging_name);
+    const auto staging_path = scratch.path() / ".mismatch.ckarchive.cktmp-42";
+    const std::array<std::byte, 3> actual{std::byte{'b'}, std::byte{'a'}, std::byte{'d'}};
+    const std::array<std::byte, 3> expected{std::byte{'g'}, std::byte{'o'}, std::byte{'o'}};
+    {
+        std::ofstream stream(staging_path, std::ios::binary);
+        stream.write(reinterpret_cast<const char *>(actual.data()), static_cast<std::streamsize>(actual.size()));
+    }
+    const auto name = archive_journal_name("2a000000000000000000000000000000");
+    CK_CHECK(staging_address.value() && name.has_value());
+    if (!staging_address.value() || !name)
+        return;
+    auto file = open_native_operation_journal_file(root, *name, true);
+    auto journal = OperationJournal::create(FileOperation::Copy, journal_id(transaction));
+    CK_CHECK(file.value() && journal.value());
+    if (!file.value() || !journal.value())
+        return;
+    const auto before_digest = archive_recovery_evidence(transaction, destination, *staging_address.value(), "mismatch.ckarchive");
+    const auto after_digest = archive_recovery_evidence(transaction, destination, *staging_address.value(),
+                                                        "mismatch.ckarchive", digest_bytes(expected));
+    auto journal_file = std::move(file).take_value();
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {1, 0, OperationJournalState::Planned, before_digest}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {2, 0, OperationJournalState::Prepared, before_digest}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {3, 0, OperationJournalState::Copied, after_digest}).value());
+    journal_file.reset();
+    FilesVolumeArchiveRecoveryCleanupService service;
+    CK_CHECK(service.request(root, *name, journal_id(transaction)) ==
+             FilesVolumeArchiveRecoveryCleanupSubmission::Accepted);
+    std::optional<FilesVolumeArchiveRecoveryCleanupReply> reply;
+    for (int i = 0; i != 500 && !reply; ++i) {
+        reply = service.take();
+        if (!reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Failed);
+    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Changed);
+    CK_CHECK(std::filesystem::exists(staging_path));
+    service.request_stop();
+    service.join();
 }
 
 CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) {

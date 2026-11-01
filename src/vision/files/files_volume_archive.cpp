@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
+#include "native_filesystem.hpp"
 #include "sha256.hpp"
 
 #include <algorithm>
@@ -18,6 +19,7 @@
 #include <system_error>
 #include <thread>
 #include <type_traits>
+#include <tuple>
 #include <utility>
 #include <string_view>
 
@@ -886,6 +888,246 @@ bool FilesVolumeArchiveRecoveryService::running() const noexcept {
     return !state_->stopping;
 }
 bool FilesVolumeArchiveRecoveryService::working() const {
+    std::lock_guard lock(state_->mutex);
+    return state_->busy || state_->pending.has_value();
+}
+
+namespace {
+
+Observation<bool> forward_cleanup_failure(const UnavailableObservation &detail) {
+    return Observation<bool>::unavailable(detail.state, detail.error);
+}
+
+Observation<std::array<std::byte, 32>> digest_opened_archive(
+    const ck::files::OpenedEntry &entry, std::uint64_t max_bytes) {
+    constexpr std::size_t chunk_size = 64 * 1024;
+    ck::files::Sha256 digest;
+    std::uint64_t offset = 0;
+    for (;;) {
+        auto content = entry.read_content({chunk_size}, offset);
+        if (!content.value())
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                content.state(), content.unavailable_detail()->error);
+        if (content.value()->bytes.size() > max_bytes - std::min(offset, max_bytes))
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.cleanup_bytes"));
+        if (content.value()->bytes.empty() && !content.value()->complete)
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                ObservationState::Unknown, error(AdapterError::InvalidNativeResult,
+                                                  "volume_archive.cleanup_read_progress"));
+        digest.update(std::span<const std::byte>(content.value()->bytes));
+        offset += content.value()->bytes.size();
+        if (content.value()->complete)
+            return Observation<std::array<std::byte, 32>>::available(digest.digest());
+        if (offset >= max_bytes)
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.cleanup_bytes"));
+    }
+}
+
+Observation<bool> cleanup_volume_archive_recovery(
+    const ck::files::NativeAbsolutePath &private_root, const ck::files::NativeName &journal_name,
+    const ck::files::OperationJournalId &journal_id, FilesVolumeArchiveRecoveryLimits journal_limits,
+    FilesVolumeArchiveRecoveryCleanupLimits cleanup_limits) {
+    if (!private_root.is_valid() || !journal_name.is_valid() ||
+        !cleanup_limits.max_staging_bytes ||
+        cleanup_limits.max_staging_bytes > FilesVolumeArchiveRecoveryCleanupLimits::hard_max_staging_bytes)
+        return Observation<bool>::unavailable(
+            ObservationState::Failed, error(AdapterError::InvalidLimit, "volume_archive.cleanup_limits"));
+    auto expected_journal_name = archive_journal_name(private_root, journal_id);
+    if (!expected_journal_name || *expected_journal_name != journal_name)
+        return Observation<bool>::unavailable(
+            ObservationState::Changed, error(AdapterError::PlanDecisionStale, "volume_archive.cleanup_journal"));
+    auto file = ck::files::open_native_operation_journal_file(private_root, journal_name, false);
+    if (!file.value())
+        return forward_cleanup_failure(*file.unavailable_detail());
+    auto loaded = ck::files::load_operation_journal(**file.value(), journal_limits.journal, journal_limits.codec);
+    if (!loaded.value())
+        return forward_cleanup_failure(*loaded.unavailable_detail());
+    if (loaded.value()->journal->id() != journal_id || loaded.value()->tail)
+        return Observation<bool>::unavailable(
+            ObservationState::Unknown, error(AdapterError::PlanDecisionStale, "volume_archive.cleanup_journal"));
+    auto report = inspect_volume_archive_recovery(*loaded.value()->journal, loaded.value()->tail);
+    if (!report.value())
+        return forward_cleanup_failure(*report.unavailable_detail());
+    if (report.value()->operation.items.size() != 1 ||
+        report.value()->operation.items.front().item != 0 ||
+        report.value()->operation.items.front().action != ck::files::OperationRecoveryAction::InspectUnpublishedStaging ||
+        (report.value()->operation.items.front().state != ck::files::OperationJournalState::Copied &&
+         report.value()->operation.items.front().state != ck::files::OperationJournalState::Verified) ||
+        !report.value()->evidence.destination_encoding || report.value()->evidence.destination_native_path.empty() ||
+        !report.value()->evidence.staging_encoding || report.value()->evidence.staging_native_path.empty() ||
+        !report.value()->evidence.staging_digest)
+        return Observation<bool>::unavailable(
+            ObservationState::Unknown, error(AdapterError::PlanDecisionStale, "volume_archive.cleanup_state"));
+
+    auto destination = decode_native_absolute_path(
+        *report.value()->evidence.destination_encoding, report.value()->evidence.destination_native_path);
+    if (!destination.value())
+        return forward_cleanup_failure(*destination.unavailable_detail());
+    auto staging = decode_native_absolute_path(
+        *report.value()->evidence.staging_encoding, report.value()->evidence.staging_native_path);
+    if (!staging.value())
+        return forward_cleanup_failure(*staging.unavailable_detail());
+    auto staging_name = archive_staging_name(
+        *destination.value(), report.value()->evidence.archive_name, report.value()->evidence.transaction_id);
+    if (!staging_name)
+        return Observation<bool>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.cleanup_name"));
+    auto expected_staging = destination.value()->child_address(*staging_name);
+    if (!expected_staging.value() || *expected_staging.value() != *staging.value())
+        return Observation<bool>::unavailable(
+            ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.cleanup_staging"));
+
+    ck::files::NativeFileSystem filesystem;
+    auto destination_cursor = filesystem.open_native_directory(*destination.value());
+    if (!destination_cursor.value())
+        return forward_cleanup_failure(*destination_cursor.unavailable_detail());
+    auto child = (*destination_cursor.value())->open_child(*staging_name, ck::files::EntryAccess::ContentRead);
+    if (!child.value())
+        return forward_cleanup_failure(*child.unavailable_detail());
+    auto metadata = (*child.value())->inspect_basic();
+    if (!metadata.value() || !metadata.value()->kind.value() ||
+        *metadata.value()->kind.value() != ck::files::ObjectKind::RegularFile ||
+        !metadata.value()->identity.value())
+        return Observation<bool>::unavailable(
+            ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.cleanup_kind"));
+    auto digest = digest_opened_archive(**child.value(), cleanup_limits.max_staging_bytes);
+    if (!digest.value())
+        return forward_cleanup_failure(*digest.unavailable_detail());
+    if (*digest.value() != *report.value()->evidence.staging_digest)
+        return Observation<bool>::unavailable(
+            ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.cleanup_digest"));
+    auto discarded = (*destination_cursor.value())->discard_child(
+        *staging_name, *metadata.value()->identity.value());
+    if (!discarded.value())
+        return forward_cleanup_failure(*discarded.unavailable_detail());
+    if (!*discarded.value())
+        return Observation<bool>::unavailable(
+            ObservationState::Unknown, error(AdapterError::InvalidNativeResult, "volume_archive.cleanup_result"));
+
+    const auto sequence = static_cast<std::uint64_t>(loaded.value()->journal->records().size()) + 1;
+    auto cancelled = ck::files::append_operation_journal_file(
+        **file.value(), *loaded.value()->journal,
+        {sequence, 0, ck::files::OperationJournalState::Cancelled,
+         loaded.value()->journal->records().back().evidence});
+    if (!cancelled.value())
+        return forward_cleanup_failure(*cancelled.unavailable_detail());
+    return Observation<bool>::available(true);
+}
+
+} // namespace
+
+struct FilesVolumeArchiveRecoveryCleanupService::State final {
+    using Job = std::tuple<ck::files::NativeAbsolutePath, ck::files::NativeName,
+                           ck::files::OperationJournalId, FilesVolumeArchiveRecoveryLimits,
+                           FilesVolumeArchiveRecoveryCleanupLimits>;
+    std::function<void()> wake;
+    std::mutex mutex;
+    std::condition_variable condition;
+    std::optional<Job> pending;
+    std::optional<FilesVolumeArchiveRecoveryCleanupReply> reply;
+    std::stop_source stop;
+    bool stopping = false, busy = false, signalled = false;
+    std::thread worker;
+
+    explicit State(std::function<void()> callback) : wake(std::move(callback)), worker([this] { run(); }) {}
+    ~State() {
+        request_stop();
+        join();
+    }
+    void request_stop() noexcept {
+        std::lock_guard lock(mutex);
+        stopping = true;
+        stop.request_stop();
+        condition.notify_all();
+    }
+    void join() {
+        if (worker.joinable()) worker.join();
+    }
+    void signal() {
+        if (signalled || !wake) return;
+        signalled = true;
+        try { wake(); } catch (...) {}
+    }
+    void emit(FilesVolumeArchiveRecoveryCleanupReply value) {
+        std::lock_guard lock(mutex);
+        if (stopping) return;
+        reply = std::move(value);
+        busy = false;
+        signal();
+    }
+    void run_one(Job job) {
+        try {
+            auto result = cleanup_volume_archive_recovery(
+                std::get<0>(job), std::get<1>(job), std::get<2>(job), std::get<3>(job), std::get<4>(job));
+            FilesVolumeArchiveRecoveryCleanupReply local_reply;
+            if (result.value()) {
+                local_reply.state = FilesVolumeArchiveRecoveryCleanupState::Complete;
+                local_reply.removed = true;
+            } else {
+                local_reply.state = FilesVolumeArchiveRecoveryCleanupState::Failed;
+                local_reply.error = *result.unavailable_detail();
+            }
+            emit(std::move(local_reply));
+        } catch (...) {
+            FilesVolumeArchiveRecoveryCleanupReply local_reply;
+            local_reply.state = FilesVolumeArchiveRecoveryCleanupState::WorkerFault;
+            local_reply.error = error(AdapterError::PlanInvalid, "volume_archive.cleanup.worker_fault");
+            emit(std::move(local_reply));
+        }
+    }
+    void run() {
+        for (;;) {
+            std::optional<Job> job;
+            {
+                std::unique_lock lock(mutex);
+                condition.wait(lock, [this] { return stopping || pending.has_value(); });
+                if (stopping) { pending.reset(); return; }
+                job = std::move(*pending);
+                pending.reset();
+                busy = true;
+                stop = std::stop_source{};
+                signalled = false;
+            }
+            run_one(std::move(*job));
+        }
+    }
+};
+
+FilesVolumeArchiveRecoveryCleanupService::FilesVolumeArchiveRecoveryCleanupService(std::function<void()> wake)
+    : state_(std::make_unique<State>(std::move(wake))) {}
+FilesVolumeArchiveRecoveryCleanupService::~FilesVolumeArchiveRecoveryCleanupService() = default;
+FilesVolumeArchiveRecoveryCleanupSubmission FilesVolumeArchiveRecoveryCleanupService::request(
+    ck::files::NativeAbsolutePath private_root, ck::files::NativeName journal_name,
+    ck::files::OperationJournalId journal_id, FilesVolumeArchiveRecoveryLimits journal_limits,
+    FilesVolumeArchiveRecoveryCleanupLimits cleanup_limits) {
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping) return FilesVolumeArchiveRecoveryCleanupSubmission::Stopped;
+    if (!private_root.is_valid() || !journal_name.is_valid() ||
+        !cleanup_limits.max_staging_bytes ||
+        cleanup_limits.max_staging_bytes > FilesVolumeArchiveRecoveryCleanupLimits::hard_max_staging_bytes)
+        return FilesVolumeArchiveRecoveryCleanupSubmission::Invalid;
+    if (state_->busy || state_->pending) return FilesVolumeArchiveRecoveryCleanupSubmission::Busy;
+    state_->pending.emplace(std::move(private_root), std::move(journal_name), journal_id,
+                            journal_limits, cleanup_limits);
+    state_->condition.notify_one();
+    return FilesVolumeArchiveRecoveryCleanupSubmission::Accepted;
+}
+std::optional<FilesVolumeArchiveRecoveryCleanupReply> FilesVolumeArchiveRecoveryCleanupService::take() {
+    std::lock_guard lock(state_->mutex);
+    auto result = std::move(state_->reply);
+    state_->reply.reset();
+    state_->signalled = false;
+    return result;
+}
+void FilesVolumeArchiveRecoveryCleanupService::request_stop() noexcept { state_->request_stop(); }
+void FilesVolumeArchiveRecoveryCleanupService::join() { state_->join(); }
+bool FilesVolumeArchiveRecoveryCleanupService::running() const noexcept {
+    std::lock_guard lock(state_->mutex);
+    return !state_->stopping;
+}
+bool FilesVolumeArchiveRecoveryCleanupService::working() const {
     std::lock_guard lock(state_->mutex);
     return state_->busy || state_->pending.has_value();
 }
