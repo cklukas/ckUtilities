@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <condition_variable>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -129,6 +130,37 @@ std::array<std::byte, 32> digest_bytes(std::span<const std::byte> bytes) {
     ck::files::Sha256 digest;
     digest.update(bytes);
     return digest.digest();
+}
+
+std::uint32_t little_u32(std::span<const std::byte> bytes) {
+    std::uint32_t result = 0;
+    for (unsigned index = 0; index != 4; ++index)
+        result |= static_cast<std::uint32_t>(std::to_integer<unsigned char>(bytes[index])) << (index * 8);
+    return result;
+}
+
+void write_little_u32(std::vector<std::byte> &bytes, std::size_t offset, std::uint32_t value) {
+    for (unsigned index = 0; index != 4; ++index)
+        bytes[offset + index] = std::byte{static_cast<unsigned char>((value >> (index * 8)) & 0xffU)};
+}
+
+std::uint32_t journal_checksum(std::span<const std::byte> bytes) {
+    std::uint32_t result = 2166136261U;
+    for (const auto byte : bytes) {
+        result ^= std::to_integer<unsigned char>(byte);
+        result *= 16777619U;
+    }
+    return result;
+}
+
+void refresh_journal_frame_checksum(std::vector<std::byte> &bytes, std::size_t offset) {
+    const auto body_size = static_cast<std::size_t>(little_u32(std::span<const std::byte>(bytes).subspan(offset + 5, 4)));
+    const auto body = std::span<const std::byte>(bytes).subspan(offset + 9, body_size);
+    write_little_u32(bytes, offset + 9 + body_size, journal_checksum(body));
+}
+
+std::size_t journal_frame_size(std::span<const std::byte> bytes, std::size_t offset) {
+    return 9 + static_cast<std::size_t>(little_u32(bytes.subspan(offset + 5, 4))) + sizeof(std::uint32_t);
 }
 
 } // namespace
@@ -502,6 +534,86 @@ CK_TEST(volume_archive_recovery_rejects_malformed_or_changed_identity_evidence) 
         CK_CHECK(!refused.value());
         CK_CHECK(refused.state() == ObservationState::Changed);
     }
+}
+
+CK_TEST(volume_archive_journal_decoder_mutations_are_bounded_and_monotonic) {
+    auto journal = OperationJournal::create(FileOperation::Copy, journal_id(51));
+    CK_CHECK(journal.value());
+    if (!journal.value())
+        return;
+    CK_CHECK((*journal.value())->append({1, 0, OperationJournalState::Planned, {std::byte{'p'}}}).value());
+    CK_CHECK((*journal.value())->append({2, 0, OperationJournalState::Prepared, {std::byte{'r'}}}).value());
+    CK_CHECK((*journal.value())->append({3, 0, OperationJournalState::Copied, {std::byte{'c'}}}).value());
+    const auto encoded = encode_operation_journal(**journal.value());
+    CK_CHECK(encoded.value());
+    if (!encoded.value())
+        return;
+
+    const auto baseline = *encoded.value();
+    OperationJournalCodecLimits bounded;
+    bounded.max_bytes = baseline.size();
+    auto check_mutation = [&](const std::vector<std::byte> &mutated, bool exact_baseline = false) {
+        const auto decoded = decode_operation_journal(mutated, {}, bounded);
+        if (exact_baseline) {
+            CK_CHECK(decoded.value());
+            if (decoded.value())
+                CK_CHECK(!decoded.value()->tail.has_value());
+            return;
+        }
+        // A mutation may invalidate the first frame or leave a verified prefix,
+        // but it must never become a clean, longer journal.
+        CK_CHECK(!decoded.value() || decoded.value()->tail.has_value() ||
+                 decoded.value()->journal->records().size() < (*journal.value())->records().size());
+        if (decoded.value())
+            CK_CHECK(!decoded.value()->journal->records().empty());
+    };
+
+    check_mutation(baseline, true);
+    for (std::size_t length = 0; length != baseline.size(); ++length) {
+        std::vector<std::byte> truncated(baseline.begin(), baseline.begin() + length);
+        check_mutation(truncated);
+    }
+    for (std::size_t index = 0; index != baseline.size(); ++index) {
+        auto mutated = baseline;
+        mutated[index] = std::byte{static_cast<unsigned char>(std::to_integer<unsigned char>(mutated[index]) ^ 0x5aU)};
+        check_mutation(mutated);
+    }
+
+    const auto first_size = journal_frame_size(baseline, 0);
+    const auto second_size = journal_frame_size(baseline, first_size);
+    CK_CHECK(first_size < baseline.size());
+    CK_CHECK(first_size + second_size <= baseline.size());
+    if (first_size + second_size <= baseline.size()) {
+        auto reordered = baseline;
+        std::copy_n(baseline.begin() + first_size, second_size, reordered.begin());
+        std::copy_n(baseline.begin(), first_size, reordered.begin() + second_size);
+        check_mutation(reordered);
+    }
+
+    auto invalid_operation = baseline;
+    invalid_operation[9] = std::byte{0xff};
+    refresh_journal_frame_checksum(invalid_operation, 0);
+    check_mutation(invalid_operation);
+
+    auto invalid_sequence = baseline;
+    write_little_u32(invalid_sequence, 9 + 17, 9);
+    write_little_u32(invalid_sequence, 9 + 21, 0);
+    refresh_journal_frame_checksum(invalid_sequence, 0);
+    check_mutation(invalid_sequence);
+
+    auto invalid_state = baseline;
+    invalid_state[9 + 33] = std::byte{static_cast<unsigned char>(OperationJournalState::Verified)};
+    refresh_journal_frame_checksum(invalid_state, 0);
+    check_mutation(invalid_state);
+
+    auto identity_changed = baseline;
+    identity_changed[first_size + 9 + 1] = std::byte{0x7f};
+    refresh_journal_frame_checksum(identity_changed, first_size);
+    check_mutation(identity_changed);
+
+    auto oversized_frame = baseline;
+    write_little_u32(oversized_frame, 5, std::numeric_limits<std::uint32_t>::max());
+    check_mutation(oversized_frame);
 }
 
 CK_TEST(volume_archive_recovery_scan_preserves_native_names_and_reports_unfinished_journals) {
