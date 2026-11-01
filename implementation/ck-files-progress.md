@@ -7757,3 +7757,45 @@ The final log reported zero linker mismatch/ignored-option diagnostics and
 zero C++ exception/sanitizer configuration warnings. No sanitizer
 suppression or product workaround was used. Linux sanitizer/race
 qualification and interactive production-launch acceptance remain open.
+
+## 2026-11-01 — Linux ARM64 sanitizer and terminal acceptance checkpoint
+
+The current Files source was staged on the reachable `uconsole` ARM64 Linux
+workstation with SHA-256
+`3e47456d818379dd886454561b165d6093125d4ba2841ef108dd8d2d6e63349f`.
+The matching ckVision 1.4.0 source revision is
+`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`. A fresh ckVision
+AddressSanitizer/UndefinedBehaviorSanitizer SDK was built under
+`/home/klukas/tmp/ckutilities-linux-20261101/ckvision-build-1.4.0` and
+installed under
+`/home/klukas/tmp/ckutilities-linux-20261101/ckvision-sdk-1.4.0`; its
+`libcvision.a` SHA-256 is
+`8a1d8249423e9c615e2141ce909c29e19720a20a0a538a69d15a6edac6a30eb6`.
+
+The Files ASan/UBSan build completed from 2026-11-01T20:20:07Z through
+2026-11-01T20:32:19Z. The runnable test output is
+`/home/klukas/tmp/ckutilities-linux-20261101/files-build-sanitizer-1.4.0/src/vision/files/ck_vision_files_tests`,
+with SHA-256
+`389a87736f48a0d7f5f7c7bc3f3805e951d0a882fc0358c654e4117dbf5efded`.
+The complete Files executable passed **242/242** under ASan/UBSan.
+
+A separate Linux ThreadSanitizer SDK and Files build were also produced. The
+test executable was built successfully, but the `uconsole` runtime has a
+47-bit virtual-address layout while this TSan build supports only 39, 42, or
+48 bits; it stopped before test execution with
+`FATAL: ThreadSanitizer: unsupported VMA range` and exit 66. This is recorded
+as an environment limitation, not as a race result. No TSan suppression,
+address-space workaround, or product change was applied.
+
+The production `ck-files` target was built from the same qualified source and
+SDK at
+`/home/klukas/tmp/ckutilities-linux-20261101/files-build-sanitizer-1.4.0/bin/ck-files`,
+SHA-256
+`32c2135f759f47be3129676e893577051e66d1f9fdca8271caa10d6794a32b6e`.
+One real PTY launch of that exact absolute executable rendered both live
+panes, the menu bar, active-pane marker, location, file columns and footer;
+the session exited cleanly with the standard `Alt+X` command after terminal
+flow control was disabled with `stty -ixon`. No instance was left running.
+
+Linux TSan on a supported VMA host, broader filesystem/fault-injection matrix
+coverage, and final cross-platform release/interactive gates remain open.
