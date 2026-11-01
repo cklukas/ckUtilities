@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
 #include "native_operation_copy_job.hpp"
+#include "native_operation_delete_tree.hpp"
 #include "native_operation_move_job.hpp"
 #include "native_operation_recovery_evidence.hpp"
 #include "native_operation_recovery.hpp"
@@ -460,9 +461,9 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_dispo
     if (!staging_durable || !destination_durable) return;
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
-         {name(".ck-crash-staging"), name("published"),
-          *destination_durable, *destination_durable, *destination_durable, staging_durable}},
-        destination, destination_identity};
+         NativeOperationRecoveryEvidence{name(".ck-crash-staging"), name("published"),
+          *destination_durable, *destination_durable, *destination_durable, staging_durable},
+         std::nullopt}, destination, destination_identity};
     staging.reset();
     auto cleaned = cleanup_native_unpublished_staging(request);
 #if defined(_WIN32)
@@ -507,7 +508,8 @@ CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) 
     replacement.reset();
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
-         {name(".ck-substituted-staging"), name("published"), *durable, *durable, *durable, original_durable}},
+         NativeOperationRecoveryEvidence{name(".ck-substituted-staging"), name("published"),
+          *durable, *durable, *durable, original_durable}, std::nullopt},
         destination, destination_identity};
     auto cleaned = cleanup_native_unpublished_staging(request);
     CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Changed &&
@@ -1007,4 +1009,58 @@ CK_TEST(native_operation_folder_creation_is_exclusive_and_returns_a_held_directo
     std::string content;
     std::getline(input, content);
     CK_CHECK(content == "preserve this file");
+}
+
+CK_TEST(native_operation_delete_tree_retires_only_the_frozen_tree) {
+    const ck::testing::ScratchDirectory scratch("files-native-operation-delete-tree",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+#if !defined(_WIN32)
+    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
+#endif
+    const auto source_path = scratch.path() / "source";
+    fs::create_directory(source_path);
+    fs::create_directory(source_path / "nested");
+    {
+        std::ofstream root_file(source_path / "root.bin", std::ios::binary);
+        root_file << "delete root";
+        std::ofstream nested_file(source_path / "nested" / "child.bin", std::ios::binary);
+        nested_file << "delete child";
+    }
+
+    NativeFileSystem filesystem;
+    auto fixture_root = std::shared_ptr<const DirectoryCursor>(take(filesystem.open_directory(scratch.path())));
+    auto root_source = take(HeldChild::observe_with_access(fixture_root, name("source"), EntryAccess::MetadataOnly));
+    auto source_root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_directory(source_path)));
+    auto source_native_path = take(NativeAbsolutePath::from_host(source_path));
+    RecursiveInventoryJob inventory(source_root, source_native_path, InventoryMountPolicy::StayOnRootMount,
+                                    InventoryLinkPolicy::PreserveLinks, {}, system_monotonic_clock(), root_source);
+    for (unsigned step = 0; step != 200 && inventory.state() != RecursiveInventoryState::Complete &&
+         inventory.state() != RecursiveInventoryState::Failed; ++step)
+        inventory.advance();
+    CK_CHECK(inventory.state() == RecursiveInventoryState::Complete);
+    if (inventory.state() != RecursiveInventoryState::Complete) return;
+    auto completed = take(inventory.completed_sources());
+
+    auto journal_file = take(open_native_operation_journal_file(
+        take(NativeAbsolutePath::from_host(scratch.path())), name(".ck-delete-journal"), true));
+    NativeOperationDeleteTreeRequest request;
+    request.inventory = std::move(completed);
+    request.journal_file = std::shared_ptr<OperationJournalFile>(std::move(journal_file));
+    request.journal_id.bytes[0] = std::byte{0x76};
+    auto created = NativeOperationDeleteTreeJob::create(std::move(request));
+    CK_CHECK(created.value());
+    if (!created.value()) return;
+    auto job = std::move(created).take_value();
+    for (unsigned step = 0; step != 200 && job->state() != OperationExecutionState::Complete &&
+         job->state() != OperationExecutionState::Failed &&
+         job->state() != OperationExecutionState::Cancelled &&
+         job->state() != OperationExecutionState::NeedsReconciliation; ++step)
+        job->advance();
+#if defined(_WIN32)
+    CK_CHECK(job->state() == OperationExecutionState::Complete);
+    CK_CHECK(!fs::exists(source_path));
+#else
+    CK_CHECK(job->state() == OperationExecutionState::Failed);
+    CK_CHECK(fs::exists(source_path) && fs::exists(source_path / "nested" / "child.bin"));
+#endif
 }

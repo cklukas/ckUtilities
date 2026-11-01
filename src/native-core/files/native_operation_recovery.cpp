@@ -34,7 +34,7 @@ Observation<bool> cleanup_native_unpublished_staging(
     if (!request.destination || !request.destination_identity.scope.is_valid() ||
         request.destination_identity.scheme == IdentityScheme::Unknown)
         return rejected<bool>(AdapterError::PlanInvalid, "native_recovery.cleanup_request");
-    if (!request.artifact.evidence.staging_identity)
+    if (!request.artifact.evidence || !request.artifact.evidence->staging_identity)
         return rejected<bool>(AdapterError::UnqualifiedIdentity,
                               "native_recovery.cleanup_staging_identity", ObservationState::Unknown);
 
@@ -47,12 +47,12 @@ Observation<bool> cleanup_native_unpublished_staging(
                               "native_recovery.cleanup_destination_changed",
                               destination_comparison == IdentityComparison::Different
                                   ? ObservationState::Changed : ObservationState::Unknown);
-    if (!request.artifact.evidence.destination_identity.matches_live(*current_destination.value()))
+    if (!request.artifact.evidence->destination_identity.matches_live(*current_destination.value()))
         return rejected<bool>(AdapterError::PlanDecisionStale,
                               "native_recovery.cleanup_destination_evidence",
                               ObservationState::Changed);
 
-    auto opened = request.destination->open_child(request.artifact.evidence.staging_name,
+    auto opened = request.destination->open_child(request.artifact.evidence->staging_name,
                                                   EntryAccess::MetadataOnly);
     if (!opened.value()) return forward(*opened.unavailable_detail());
     auto metadata = (*opened.value())->inspect_basic();
@@ -62,14 +62,14 @@ Observation<bool> cleanup_native_unpublished_staging(
         return rejected<bool>(AdapterError::MetadataChanged,
                               "native_recovery.cleanup_kind", ObservationState::Changed);
     if (metadata.value()->identity.value()->scope != current_destination.value()->scope ||
-        !request.artifact.evidence.staging_identity->matches_live(
+        !request.artifact.evidence->staging_identity->matches_live(
             *metadata.value()->identity.value()))
         return rejected<bool>(AdapterError::PlanDecisionStale,
                               "native_recovery.cleanup_staging_changed",
                               ObservationState::Changed);
 
     auto discarded = request.destination->discard_child(
-        request.artifact.evidence.staging_name, *metadata.value()->identity.value());
+        request.artifact.evidence->staging_name, *metadata.value()->identity.value());
     if (!discarded.value()) return forward(*discarded.unavailable_detail());
     if (!*discarded.value())
         return rejected<bool>(AdapterError::InvalidNativeResult,

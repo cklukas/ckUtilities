@@ -101,6 +101,27 @@ CK_TEST(operation_recovery_maps_commit_and_retirement_boundaries_to_review_actio
              OperationRecoveryAction::InspectAmbiguousSourceRetirement);
 }
 
+CK_TEST(operation_recovery_keeps_recursive_delete_review_only) {
+    auto value = journal(FileOperation::Delete);
+    append(value, 1, 0, OperationJournalState::Planned);
+    const auto source_evidence = NativeDeleteRecoveryEvidence{
+        *NativeName::from_posix("tree-entry"),
+        evidence().source_parent_identity,
+        evidence().source_identity};
+    const auto encoded = encode_native_delete_recovery_evidence(source_evidence);
+    CK_CHECK(encoded.value());
+    if (!encoded.value()) return;
+    CK_CHECK(value->append({2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
+    auto prepared = inspect_native_operation_recovery_evidence(*value);
+    CK_CHECK(prepared.value() && prepared.value()->artifacts.size() == 1 &&
+             prepared.value()->artifacts[0].deletion_evidence &&
+             prepared.value()->report.items[0].action == OperationRecoveryAction::RequireReview);
+    CK_CHECK(value->append({3, 0, OperationJournalState::SourceRemovalIntended, *encoded.value()}).value());
+    auto ambiguous = inspect_operation_recovery(*value);
+    CK_CHECK(ambiguous.value() && ambiguous.value()->items[0].action == OperationRecoveryAction::InspectAmbiguousDeletion &&
+             ambiguous.value()->requires_reconciliation);
+}
+
 CK_TEST(operation_recovery_requires_review_for_untrusted_tail_and_reconciliation_state) {
     auto value = journal(FileOperation::Copy);
     append(value, 1, 0, OperationJournalState::Planned);
@@ -137,7 +158,8 @@ CK_TEST(native_operation_recovery_projection_decodes_evidence_without_authorizin
     CK_CHECK(inspection.value() && inspection.value()->artifacts.size() == 1 &&
              !inspection.value()->has_untrusted_evidence);
     if (inspection.value()) {
-        CK_CHECK(inspection.value()->artifacts[0].evidence.staging_name == evidence.staging_name);
+        CK_CHECK(inspection.value()->artifacts[0].evidence &&
+                 inspection.value()->artifacts[0].evidence->staging_name == evidence.staging_name);
         CK_CHECK(inspection.value()->report.items[0].action == OperationRecoveryAction::InspectUnpublishedStaging);
     }
 }
@@ -174,7 +196,8 @@ CK_TEST(native_operation_recovery_file_projection_loads_durable_evidence) {
     CK_CHECK(inspection.value() && inspection.value()->artifacts.size() == 1 &&
              !inspection.value()->has_untrusted_evidence);
     if (inspection.value())
-        CK_CHECK(inspection.value()->artifacts[0].evidence.staging_identity.has_value() &&
+        CK_CHECK(inspection.value()->artifacts[0].evidence &&
+                 inspection.value()->artifacts[0].evidence->staging_identity.has_value() &&
                  inspection.value()->report.items[0].action == OperationRecoveryAction::InspectUnpublishedStaging);
 }
 

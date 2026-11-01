@@ -3,6 +3,7 @@
 #pragma once
 
 #include "native_operation_recovery_evidence.hpp"
+#include "native_delete_recovery_evidence.hpp"
 #include "operation_journal.hpp"
 #include "operation_journal_file.hpp"
 
@@ -18,6 +19,7 @@ enum class OperationRecoveryAction {
     VerifyDestinationBeforeSourceRetirement,
     InspectAmbiguousPublication,
     InspectAmbiguousSourceRetirement,
+    InspectAmbiguousDeletion,
     RequireReview
 };
 
@@ -37,7 +39,8 @@ struct OperationRecoveryReport final {
 struct NativeOperationRecoveryArtifact final {
     std::size_t item = 0;
     OperationJournalState state = OperationJournalState::Planned;
-    NativeOperationRecoveryEvidence evidence;
+    std::optional<NativeOperationRecoveryEvidence> evidence;
+    std::optional<NativeDeleteRecoveryEvidence> deletion_evidence;
 };
 
 struct NativeOperationRecoveryInspection final {

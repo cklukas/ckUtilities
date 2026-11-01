@@ -115,6 +115,7 @@ const char *archive_recovery_action(ck::files::OperationRecoveryAction action) n
     case Action::VerifyDestinationBeforeSourceRetirement: return "verify destination before source retirement";
     case Action::InspectAmbiguousPublication: return "inspect ambiguous publication";
     case Action::InspectAmbiguousSourceRetirement: return "inspect ambiguous source retirement";
+    case Action::InspectAmbiguousDeletion: return "inspect ambiguous deletion";
     case Action::RequireReview: return "manual review required";
     }
     return "unknown recovery action";

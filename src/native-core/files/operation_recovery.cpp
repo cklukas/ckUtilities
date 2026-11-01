@@ -15,6 +15,21 @@ Observation<T> rejected(AdapterError code, const char* operation) {
 }
 
 OperationRecoveryAction action(OperationJournalState state, FileOperation operation) noexcept {
+    if (operation == FileOperation::Delete) {
+        switch (state) {
+        case OperationJournalState::Complete:
+        case OperationJournalState::Failed:
+        case OperationJournalState::Cancelled:
+        case OperationJournalState::RetainedSource:
+        case OperationJournalState::NeedsReconciliation:
+            return OperationRecoveryAction::IgnoreTerminal;
+        case OperationJournalState::SourceRemovalIntended:
+        case OperationJournalState::SourceRetired:
+            return OperationRecoveryAction::InspectAmbiguousDeletion;
+        default:
+            return OperationRecoveryAction::RequireReview;
+        }
+    }
     switch (state) {
     case OperationJournalState::Planned:
         return operation == FileOperation::Move ? OperationRecoveryAction::RequireReview
@@ -107,6 +122,22 @@ Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery
             result.has_untrusted_evidence = true;
             continue;
         }
+        if (journal.operation() == FileOperation::Delete) {
+            auto evidence = decode_native_delete_recovery_evidence(record->evidence, evidence_limits);
+            if (!evidence.value()) {
+                item.action = OperationRecoveryAction::RequireReview;
+                item.requires_reconciliation = true;
+                result.report.requires_reconciliation = true;
+                result.has_untrusted_evidence = true;
+                continue;
+            }
+            NativeOperationRecoveryArtifact artifact;
+            artifact.item = item.item;
+            artifact.state = item.state;
+            artifact.deletion_evidence = std::move(evidence).take_value();
+            result.artifacts.push_back(std::move(artifact));
+            continue;
+        }
         auto evidence = decode_native_operation_recovery_evidence(record->evidence, evidence_limits);
         if (!evidence.value()) {
             item.action = OperationRecoveryAction::RequireReview;
@@ -115,7 +146,7 @@ Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery
             result.has_untrusted_evidence = true;
             continue;
         }
-        result.artifacts.push_back({item.item, item.state, std::move(evidence).take_value()});
+        result.artifacts.push_back({item.item, item.state, std::move(evidence).take_value(), std::nullopt});
     }
     return Observation<NativeOperationRecoveryInspection>::available(std::move(result));
 }

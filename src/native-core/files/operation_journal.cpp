@@ -96,7 +96,8 @@ bool operation_journal_transition(FileOperation operation, OperationJournalState
         return to == OperationJournalState::Prepared;
     case OperationJournalState::Prepared:
         return to == OperationJournalState::Copied ||
-            (operation == FileOperation::Move && to == OperationJournalState::CommitIntended);
+            (operation == FileOperation::Move && to == OperationJournalState::CommitIntended) ||
+            (operation == FileOperation::Delete && to == OperationJournalState::SourceRemovalIntended);
     case OperationJournalState::Copied:
         return to == OperationJournalState::Verified;
     case OperationJournalState::Verified:
@@ -107,9 +108,11 @@ bool operation_journal_transition(FileOperation operation, OperationJournalState
         return operation == FileOperation::Copy ? to == OperationJournalState::Complete
                                                  : to == OperationJournalState::SourceRemovalIntended;
     case OperationJournalState::SourceRemovalIntended:
-        return operation == FileOperation::Move && to == OperationJournalState::SourceRetired;
+        return (operation == FileOperation::Move || operation == FileOperation::Delete) &&
+            to == OperationJournalState::SourceRetired;
     case OperationJournalState::SourceRetired:
-        return operation == FileOperation::Move && to == OperationJournalState::Complete;
+        return (operation == FileOperation::Move || operation == FileOperation::Delete) &&
+            to == OperationJournalState::Complete;
     case OperationJournalState::Complete:
     case OperationJournalState::Failed:
     case OperationJournalState::Cancelled:
@@ -122,7 +125,7 @@ bool operation_journal_transition(FileOperation operation, OperationJournalState
 
 Observation<OperationJournal::Pointer> OperationJournal::create(FileOperation operation, OperationJournalId id,
                                                                 OperationJournalLimits limits) {
-    if (operation != FileOperation::Copy && operation != FileOperation::Move)
+    if (operation != FileOperation::Copy && operation != FileOperation::Move && operation != FileOperation::Delete)
         return rejected<Pointer>(AdapterError::PlanInvalid, "operation_journal.operation");
     if (!valid_id(id))
         return rejected<Pointer>(AdapterError::UnqualifiedIdentity, "operation_journal.id");
@@ -183,7 +186,8 @@ Observation<std::vector<std::byte>> encode_frame_unchecked(const OperationJourna
                 journal_error(AdapterError::InventoryLimit, "operation_journal.frame", ObservationState::Unknown));
         std::vector<std::byte> body;
         body.reserve(body_size);
-        body.push_back(journal.operation() == FileOperation::Copy ? std::byte{0} : std::byte{1});
+        body.push_back(journal.operation() == FileOperation::Copy ? std::byte{0} :
+                       journal.operation() == FileOperation::Move ? std::byte{1} : std::byte{2});
         body.insert(body.end(), journal.id().bytes.begin(), journal.id().bytes.end());
         put_u64(body, record.sequence);
         put_u64(body, static_cast<std::uint64_t>(record.item));
@@ -333,7 +337,8 @@ Observation<OperationJournalDecode> decode_operation_journal(std::span<const std
             break;
         }
         const auto operation = body[0] == std::byte{0} ? FileOperation::Copy :
-            body[0] == std::byte{1} ? FileOperation::Move : static_cast<FileOperation>(255);
+            body[0] == std::byte{1} ? FileOperation::Move :
+            body[0] == std::byte{2} ? FileOperation::Delete : static_cast<FileOperation>(255);
         OperationJournalId id;
         std::copy_n(body.begin() + 1, id.bytes.size(), id.bytes.begin());
         const auto sequence = get_u64(body.subspan(17, 8));

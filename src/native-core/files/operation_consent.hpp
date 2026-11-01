@@ -49,7 +49,7 @@ struct DestinationConflict final {
     DestinationConflictKind kind = DestinationConflictKind::Unknown;
 };
 
-enum class FileOperation { Copy, Move };
+enum class FileOperation { Copy, Move, Delete };
 enum class ConsentAction {
     Cancel,
     ChooseAnotherDestination,
