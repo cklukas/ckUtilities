@@ -1,4 +1,17 @@
 # Files implementation evidence
+## 2026-11-01 — Material sparse allocation is verified before publication
+
+Commit `7f2ad85` adds native allocated-size inspection after staging flush:
+POSIX uses `st_blocks`, Windows uses `GetCompressedFileSizeW`. A material hole
+of at least 64 KiB must remain materially sparse; a dense representation is
+refused before the journal reaches `Copied` and before publication. Small holes
+remain represented by explicit archive extents without making a filesystem
+block-size assumption. The new focused archive suite passed **19/19** on all
+three platforms. macOS APFS correctly exercised the refusal path; Linux ext4
+and Windows ReFS exercised the positive sparse path. Complete Files suites
+passed **236/236** on macOS, **236/236** on Linux ARM64 and **235/235** on
+Windows x64. Evidence: [sparse allocation record](evidence/ck-files-volume-archive-allocation-20261101.json).
+
 ## 2026-11-01 — Published archive sparse shape independently inspected
 
 Commit `c0869e4` extends the volume-archive writer qualification with an

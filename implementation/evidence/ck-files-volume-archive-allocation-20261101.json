@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "7f2ad85",
+  "feature": "native allocated-size verification for material sparse archives",
+  "policy": {
+    "material_hole_bytes": 65536,
+    "dense_material_representation": "refuse publication with volume_archive.sparse_allocation",
+    "small_holes": "retain format extents without a filesystem-block-size-dependent refusal"
+  },
+  "native_queries": {
+    "macos": "POSIX stat st_blocks multiplied by 512",
+    "linux": "POSIX stat st_blocks multiplied by 512",
+    "windows": "GetCompressedFileSizeW"
+  },
+  "fixture": {
+    "logical_file_bytes": 4194304,
+    "payload_bytes": 4,
+    "payload_extents": [
+      {"offset": 0, "length": 3},
+      {"offset": 4194303, "length": 1}
+    ]
+  },
+  "results": {
+    "macos_apfs": "19/19 focused archive tests passed; material dense representation refused and no archive was published",
+    "linux_ext4": "19/19 focused archive tests passed; material sparse representation published",
+    "windows_refs": "19/19 focused archive tests passed; material sparse representation published",
+    "macos_complete_files": "236/236 passed",
+    "linux_complete_files": "236/236 passed",
+    "windows_complete_files": "235/235 passed"
+  },
+  "remaining": "filesystem matrix, fault injection and release acceptance remain WP-07/WP-08 gates"
+}
