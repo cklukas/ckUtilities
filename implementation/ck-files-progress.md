@@ -1,4 +1,16 @@
 # Files implementation evidence
+## 2026-11-01 — Linux release package and terminal rehearsal
+
+Commit `49f7a06` completes the selected-row disabled-operation status hint and
+the native source cancellation boundary test. On the Linux ARM64/ext4 release
+tree, the final Files test executable and documentation contract passed after
+the patch. The release rehearsal produced and independently verified TGZ, DEB
+and RPM outputs, refreshed the installed executable tree, passed all installed
+utility `--help` smoke checks, and passed the real terminal-profile check. The
+full 223-test CTest rehearsal passed before the final UI-only patch; the final
+Files suite passed again after it. Exact package hashes and output paths are in
+the [Linux release rehearsal record](evidence/ck-files-linux-release-rehearsal-20261101.json).
+
 ## 2026-11-01 — Archive journal-boundary fault handling
 
 Commit `e03fd8b` adds deterministic writer fault injection at `Copied`,

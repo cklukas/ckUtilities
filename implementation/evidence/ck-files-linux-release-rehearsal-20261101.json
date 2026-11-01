@@ -1,0 +1,56 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "49f7a06",
+  "host": "rpi4 Linux ARM64, Debian 13, ext4",
+  "ckvision_sdk": "/home/klukas/ckvision-settings-sdk-20261028-01/prefix",
+  "build": {
+    "generator": "Ninja",
+    "configuration": "Release",
+    "qualified_build": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+    "fresh_package_rehearsal_start": "2026-11-01T15:14:16Z",
+    "fresh_package_rehearsal_end": "2026-11-01T16:30:38Z",
+    "final_files_patch_build_start": "2026-11-01T16:32:39Z",
+    "final_files_patch_build_end": "2026-11-01T16:35:09Z",
+    "final_files_binary": {
+      "path": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/bin/ck-files",
+      "sha256": "c335dc3461faf83f81ab784fb3cca9c37662bf19280f98851a7ee155f373e1ee",
+      "bytes": 5831376
+    },
+    "final_files_tests": {
+      "path": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/src/vision/files/ck_vision_files_tests",
+      "sha256": "c1722b710f8a60953a8e1765779ff672776b3faab0e94dd4faf0d196f16faa7d",
+      "bytes": 7093512,
+      "result": "passed"
+    }
+  },
+  "tests": {
+    "pre_patch_full_ctest": "223/223 passed",
+    "final_files_and_documentation_contract": "2/2 passed",
+    "final_terminal_profiles": "passed",
+    "installed_help_smoke": "all installed utility entry points passed"
+  },
+  "packages": {
+    "tgz": {
+      "path": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/ck-utilities-0.2.0-linux.tar.gz",
+      "sha256": "54b9315ead45414bd0ed856d4c1f3810f152c30847f37009ffb576b8943579c9",
+      "bytes": 14736050,
+      "verification": "extract, installed executable smoke and cutover passed"
+    },
+    "deb": {
+      "path": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/ck-utilities_0.2.0_arm64.deb",
+      "sha256": "64a75f25e484a9afc18361b4d09f43b5a2c7be4e7d21e7b05cc39d047bd52e33",
+      "bytes": 14740012,
+      "verification": "DEB layout passed"
+    },
+    "rpm": {
+      "path": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/ck-utilities-0.2.0-1.aarch64.rpm",
+      "sha256": "e2dc31883bcb3f0a84c928bd85be8f8e79dded2fc44552e6716a526af9dc8a6e",
+      "bytes": 14688955,
+      "verification": "RPM layout passed"
+    }
+  },
+  "notes": [
+    "The initial clean rebuild was stopped after proving the expected dependency-heavy build path; the release rehearsal used the existing byte-matched, fully qualified build tree and refreshed all package/install outputs.",
+    "The final UI/status-hint change was rebuilt and passed the complete Files test executable and documentation contract before package regeneration."
+  ]
+}
