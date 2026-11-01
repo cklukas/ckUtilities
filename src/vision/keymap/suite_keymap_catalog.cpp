@@ -82,6 +82,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.create_directory", "&New folder...", "Files", "F7"},
     CommandDefinition{"ck.files.trash", "Move to &Trash / Recycle Bin...", "Files", ""},
     CommandDefinition{"ck.files.permanently_delete", "&Delete permanently...", "Files", ""},
+    CommandDefinition{"ck.files.inspect_archive_recovery", "Inspect archive &recovery...", "Files", ""},
     CommandDefinition{"ck.files.copy", "&Copy to other pane", "Files", "F5"},
     CommandDefinition{"ck.files.move", "&Move to other pane", "Files", "F6"},
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},

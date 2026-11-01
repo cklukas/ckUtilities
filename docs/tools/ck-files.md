@@ -45,8 +45,11 @@ execute files or provide an embedded shell.
   flush or journal step cannot be proven. On startup, a bounded read-only
   recovery scan checks private archive journals; Copy remains disabled until
   the scan is complete and no reconciliation-required journal is present.
-  Snapshot providers and explicit inspect/cleanup/revalidated-retry actions
-  remain capability-gated. See the [volume archive plan](../../implementation/ck-files-volume-archive-plan.md).
+  Snapshot providers remain capability-gated. **Inspect archive recovery** is
+  available as a bounded, read-only review of matching journals; cleanup and
+  revalidated retry remain unavailable until their exact destination evidence
+  and identity checks are implemented. See the [volume archive
+  plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.

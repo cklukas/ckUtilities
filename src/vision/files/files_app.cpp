@@ -105,6 +105,40 @@ std::string failure(const FilesPaneReply &reply) {
     }
     return "Read failed";
 }
+
+const char *archive_recovery_action(ck::files::OperationRecoveryAction action) noexcept {
+    using Action = ck::files::OperationRecoveryAction;
+    switch (action) {
+    case Action::IgnoreTerminal: return "terminal";
+    case Action::InspectUnpublishedStaging: return "inspect unpublished staging";
+    case Action::VerifyDestination: return "verify destination";
+    case Action::VerifyDestinationBeforeSourceRetirement: return "verify destination before source retirement";
+    case Action::InspectAmbiguousPublication: return "inspect ambiguous publication";
+    case Action::InspectAmbiguousSourceRetirement: return "inspect ambiguous source retirement";
+    case Action::RequireReview: return "manual review required";
+    }
+    return "unknown recovery action";
+}
+
+const char *archive_recovery_state(ck::files::OperationJournalState state) noexcept {
+    using State = ck::files::OperationJournalState;
+    switch (state) {
+    case State::Planned: return "planned";
+    case State::Prepared: return "prepared";
+    case State::Copied: return "copied";
+    case State::Verified: return "verified";
+    case State::CommitIntended: return "commit intended";
+    case State::DestinationCommitted: return "destination committed";
+    case State::SourceRemovalIntended: return "source removal intended";
+    case State::SourceRetired: return "source retired";
+    case State::Complete: return "complete";
+    case State::Failed: return "failed";
+    case State::Cancelled: return "cancelled";
+    case State::RetainedSource: return "source retained";
+    case State::NeedsReconciliation: return "needs reconciliation";
+    }
+    return "unknown state";
+}
 std::string preview_text(const FilesPanePreview &preview) {
     static constexpr char digits[] = "0123456789abcdef";
     std::ostringstream out;
@@ -238,6 +272,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> archive_recovery_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
@@ -270,6 +305,8 @@ struct FilesApp::State {
     std::weak_ptr<void> trash_lifetime;
     ckv::widgets::Window *delete_window = nullptr;
     std::weak_ptr<void> delete_lifetime;
+    ckv::widgets::Window *archive_recovery_window = nullptr;
+    std::weak_ptr<void> archive_recovery_lifetime;
     bool volume_request = false;
     std::size_t volume_pane = 0;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
@@ -280,6 +317,7 @@ struct FilesApp::State {
     ckv::ui::CommandId delete_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId copy_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId move_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId archive_recovery_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -381,6 +419,8 @@ struct FilesApp::State {
                           [this] { return availability("ck.files.copy").enabled; });
             move_id = own("ck.files.move", [this] { prepare_copy(ck::files::FileOperation::Move); },
                           [this] { return availability("ck.files.move").enabled; });
+            archive_recovery_id = own("ck.files.inspect_archive_recovery", [this] { show_archive_recovery(); },
+                                      [this] { return availability("ck.files.inspect_archive_recovery").enabled; });
             const auto visible_ready = [this] { return availability("ck.files.mark_visible").enabled; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -439,6 +479,7 @@ struct FilesApp::State {
                                                             item(create_directory_id, "&New folder..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
+                                                            item(archive_recovery_id, "Inspect archive &recovery..."),
                                                             item(copy_id, "&Copy to other pane"),
                                                             item(move_id, "&Move to other pane")}},
                 ckv::widgets::MenuBarItem{
@@ -454,6 +495,8 @@ struct FilesApp::State {
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{switch_id, "&Switch pane"}, 30},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{toggle, "&Mark"}, 28},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{cancel_id, "&Cancel activity"}, 25},
+                ckv::widgets::StatusLineItem{
+                    ckv::widgets::CommandPresentation{archive_recovery_id, "&Inspect archive recovery"}, 24},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{options_id, "&View options"}, 20}};
             shell = std::make_unique<SuiteShell>(application, std::move(options));
             create_window();
@@ -530,6 +573,8 @@ struct FilesApp::State {
         trash_window = nullptr;
         delete_dialog.reset();
         delete_window = nullptr;
+        archive_recovery_dialog.reset();
+        archive_recovery_window = nullptr;
         volume_request = false;
         operation_review_dialog.reset();
         operation_planning_request.reset();
@@ -635,6 +680,7 @@ struct FilesApp::State {
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
+               (archive_recovery_dialog && !archive_recovery_dialog->completed()) ||
                volume_request ||
                (volume_archive_review_dialog && !volume_archive_review_dialog->completed()) ||
                volume_archive_planning_request.has_value() ||
@@ -658,6 +704,17 @@ struct FilesApp::State {
             if (operation_execution_request || pending(panes[active]) || panes[active].volume_view)
                 return FilesCommandAvailability::available();
             return unavailable("Cancel unavailable: no activity is running");
+        }
+        if (command == "ck.files.inspect_archive_recovery") {
+            if (volume_archive_recovery_request)
+                return unavailable("Recovery inspection unavailable: archive recovery scan is still running");
+            if (!volume_archive_recovery_scan)
+                return unavailable(volume_archive_recovery_error.empty()
+                                       ? "Recovery inspection unavailable: archive recovery scan is not ready"
+                                       : "Recovery inspection unavailable: " + volume_archive_recovery_error);
+            return volume_archive_recovery_scan->journals.empty()
+                       ? unavailable("Recovery inspection unavailable: no archive journals were found")
+                       : FilesCommandAvailability::available();
         }
         if (command == "ck.files.parent") {
             if (panes[active].volume_view)
@@ -884,6 +941,9 @@ struct FilesApp::State {
             // its reason visible beside the row so the disabled menu, palette
             // and keyboard command never leave the user guessing.
             hint = availability("ck.files.copy").reason;
+        } else if (i == active && volume_archive_recovery_scan &&
+                   volume_archive_recovery_scan->requires_reconciliation) {
+            hint = "Inspect archive recovery: review is required before volume Copy";
         } else if (i == active && !closing && !pending(p) && !p.model.target()) {
             // The status-line commands are deliberately ordered by immediate
             // relevance. Report only the first unavailable contextual action;
@@ -905,6 +965,52 @@ struct FilesApp::State {
         if (!settings.diagnostic.empty())
             text += " | " + settings.diagnostic;
         return text;
+    }
+    void show_archive_recovery() {
+        if (!availability("ck.files.inspect_archive_recovery").enabled ||
+            !volume_archive_recovery_scan || modal_pending())
+            return;
+        std::ostringstream summary;
+        summary << "Read-only inspection. No archive is resumed, deleted, replaced, or retried.\n\n";
+        constexpr std::size_t max_items = 64;
+        const auto &journals = volume_archive_recovery_scan->journals;
+        const auto count = std::min(max_items, journals.size());
+        for (std::size_t index = 0; index != count; ++index) {
+            const auto &item = journals[index];
+            summary << "Journal: " << item.display_name << '\n';
+            if (item.report) {
+                const auto &report = *item.report;
+                summary << "Source: " << report.evidence.source_mount_point << '\n'
+                        << "Archive: " << report.evidence.archive_name << '\n'
+                        << "Transaction: " << report.evidence.transaction_id << '\n';
+                for (const auto &recovery : report.operation.items)
+                    summary << "State: " << archive_recovery_state(recovery.state)
+                            << "; action: " << archive_recovery_action(recovery.action) << '\n';
+                if (report.operation.has_untrusted_tail)
+                    summary << "Journal tail: untrusted\n";
+            } else if (item.error) {
+                summary << "Inspection error: " << item.error->error.operation << '\n';
+            }
+            summary << '\n';
+        }
+        if (journals.size() > count)
+            summary << "Additional journal entries omitted from this bounded view: "
+                    << (journals.size() - count) << '\n';
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Archive recovery review";
+        descriptor.resizable = true;
+        descriptor.fields = {ckv::widgets::FieldDescriptor{.label = summary.str(),
+                                                            .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
+        archive_recovery_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        archive_recovery_window = shell->desktop().active_window();
+        archive_recovery_lifetime = archive_recovery_window->lifetime_token();
+        archive_recovery_dialog->set_completion_handler([this](const ckv::widgets::DialogResult &) {
+            archive_recovery_window = nullptr;
+            archive_recovery_dialog.reset();
+            labels();
+        });
     }
     void save_settings() {
         if (!settings.save)
@@ -2417,6 +2523,11 @@ struct FilesApp::State {
         if (delete_dialog && !delete_dialog->completed()) {
             if (delete_window && !delete_lifetime.expired())
                 delete_window->close();
+            return;
+        }
+        if (archive_recovery_dialog && !archive_recovery_dialog->completed()) {
+            if (archive_recovery_window && !archive_recovery_lifetime.expired())
+                archive_recovery_window->close();
             return;
         }
         if (operation_review_dialog && !operation_review_dialog->completed()) {

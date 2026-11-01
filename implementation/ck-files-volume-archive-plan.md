@@ -125,13 +125,13 @@ are never upgraded because a filesystem label looks familiar.
 The versioned sparse writer, single-worker boundary, archive-specific review
 model, native source adapter, read-only live capability probe, durable archive
 journal transitions, archive-specific read-only recovery projection, bounded
-journal discovery, startup recovery worker, and Files
-planning/review/execution/readiness wiring are implemented and
+journal discovery, startup recovery worker, bounded Files recovery inspection
+dialog, and Files planning/review/execution/readiness wiring are implemented and
 focused-qualified on macOS, Linux ARM64 and Windows x64. The format records
 exact POSIX bytes or Windows UTF-16 units plus explicit loss records;
 unreviewed losses and hard losses cannot reach the writer. Snapshot/provider
-qualification and user-facing startup inspect/cleanup/revalidated-retry actions
-remain open. Real-volume interactive acceptance also remains open. The macOS broad app ASan
+qualification and cleanup/revalidated-retry actions remain open. Real-volume
+interactive archive acceptance also remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
 not suppressed. Linux ARM64 address/undefined sanitizer qualification of the

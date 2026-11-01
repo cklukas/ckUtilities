@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-01 — Bounded archive recovery inspection
+
+Files now exposes `Inspect archive recovery` through the shared command
+catalog, Operations menu, and status line when the startup scan finds matching
+journals. The dialog is bounded and read-only: it shows the journal name,
+source mount, archive name, transaction, recovery state/action, and decode
+errors, while explicitly performing no resume, delete, replacement, or retry.
+Copy remains disabled while reconciliation is required. The current macOS
+Files suite passed **232/232** with the documented Apple libc++ container
+overflow compatibility setting.
+
 ## 2026-11-01 — Current Windows ConPTY qualification
 
 The current Windows `V:` build completed the focused `ck_windows_tools_contract`

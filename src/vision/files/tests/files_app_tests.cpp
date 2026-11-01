@@ -1397,6 +1397,8 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
     CK_CHECK(f.app->availability("ck.files.copy").reason.find("archive recovery review is required") != std::string::npos);
     CK_CHECK(f.app->status(0).find("Hint: Copy unavailable: archive recovery review is required") != std::string::npos);
+    CK_CHECK(f.app->availability("ck.files.inspect_archive_recovery").enabled);
+    CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.inspect_archive_recovery")));
 }
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
