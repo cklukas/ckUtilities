@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "cbad890",
+  "platform": "Linux ARM64",
+  "feature": "bounded operation-journal decoder libFuzzer target",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "/usr/bin/clang++ 19.1.7",
+    "sanitizer": "libFuzzer runtime",
+    "build_directory": "/home/klukas/tmp/ckutilities-journal-fuzz-linux-20261101/build",
+    "executable": "/home/klukas/tmp/ckutilities-journal-fuzz-linux-20261101/build/fuzz/fuzz_operation_journal",
+    "sha256": "41dd02984e1a538f6662a3644906c1916387fbb030a5d97d90c67cbc7c3e1cfb",
+    "binary_mtime": "2026-11-01 15:47:08.159458047 +0100"
+  },
+  "limits": {
+    "max_items": 64,
+    "max_records": 256,
+    "max_evidence_bytes": 4096,
+    "max_codec_bytes": 65536
+  },
+  "run": {
+    "executions": 100000,
+    "max_len": 4096,
+    "timeout_seconds": 2,
+    "rss_limit_mb": 512,
+    "peak_rss_mb": 27,
+    "new_coverage_units": 13,
+    "slowest_unit_seconds": 0,
+    "sanitizer_or_crash_findings": "none",
+    "exit_code": 0
+  },
+  "remaining": "cross-platform fuzz runs and broader WP-07 filesystem/fault qualification remain release gates"
+}

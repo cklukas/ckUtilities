@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "c0869e4",
+  "feature": "published CKARV01 archive format and sparse extent qualification",
+  "fixture": {
+    "entries": 3,
+    "regular_file_logical_bytes": 16,
+    "regular_file_data_bytes": 4,
+    "extents": [
+      {"source_offset": 0, "archive_offset": 0, "length": 3},
+      {"source_offset": 8, "archive_offset": 8, "length": 1}
+    ],
+    "independent_checks": [
+      "header and manifest bounds",
+      "directory, regular-file and symlink records",
+      "logical hole bytes are zero-filled on disk",
+      "extent payload bytes are read back from the published archive",
+      "no-replacement publication conflict"
+    ]
+  },
+  "results": {
+    "macos_arm64_focused_archive_suite": "18/18 passed",
+    "linux_arm64_focused_archive_suite": "18/18 passed",
+    "windows_x64_focused_archive_suite": "18/18 passed",
+    "macos_arm64_complete_files_suite": "235/235 passed",
+    "linux_arm64_complete_files_suite": "235/235 passed",
+    "windows_x64_complete_files_suite": "234/234 passed"
+  },
+  "notes": [
+    "macOS complete suite used the documented detect_container_overflow=0 compatibility setting for the existing libc++ DirectoryCursor::read diagnostic",
+    "the independent parser is test-only and does not grant archive restore or raw-volume-image semantics",
+    "allocated-size inspection remains filesystem-specific and is not inferred from logical archive length"
+  ]
+}

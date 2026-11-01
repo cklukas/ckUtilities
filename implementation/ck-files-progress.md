@@ -1,4 +1,27 @@
 # Files implementation evidence
+## 2026-11-01 — Published archive sparse shape independently inspected
+
+Commit `c0869e4` extends the volume-archive writer qualification with an
+independent CKARV01 byte parser. It checks header/manifest bounds, entry kinds,
+logical lengths, sparse extent offsets and lengths, the published data bytes,
+zero-filled logical holes, and the no-replacement publication conflict from
+the bytes on disk rather than trusting the writer's in-memory model. The
+focused archive suite passed **18/18** on macOS arm64, Linux ARM64 and Windows
+x64. The complete Files suites passed **235/235** on macOS, **235/235** on
+Linux ARM64 and **234/234** on Windows x64. The macOS full run used the
+documented libc++ container-overflow compatibility setting; no new diagnostic
+was observed. Evidence: [published archive format record](evidence/ck-files-volume-archive-format-current-20261101.json).
+
+## 2026-11-01 — Bounded operation-journal decoder fuzz target
+
+Commit `cbad890` adds an opt-in LLVM libFuzzer target for the real bounded
+operation-journal decoder. The target is linked directly with
+`operation_journal.cpp`, applies explicit item/record/evidence/byte limits, and
+checks every accepted result remains within those limits. Linux ARM64 Clang
+qualification ran **100,000** arbitrary-input executions with no crash or
+sanitizer finding, 27 MiB peak RSS and 13 new coverage units. Evidence:
+[operation-journal fuzz record](evidence/ck-files-operation-journal-fuzz-20261101.json).
+
 ## 2026-11-01 — Bounded archive-journal mutation matrix
 
 Commit `babb9c4` adds a deterministic decoder mutation matrix covering every
