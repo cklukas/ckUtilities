@@ -4,6 +4,8 @@
 
 #include <cvision/testing/cktest.hpp>
 
+#include <stop_token>
+
 namespace {
 using namespace ck::files;
 using namespace ck::vision;
@@ -42,4 +44,15 @@ CK_TEST(native_volume_source_does_not_emulate_snapshot_provider) {
     CK_CHECK(!result.value());
     CK_CHECK(result.state() == ObservationState::Unsupported);
     CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.snapshot_provider");
+}
+
+CK_TEST(native_volume_source_honors_cancellation_before_revalidation) {
+    auto value = fixture(FilesVolumeArchiveSupport::LiveReadable);
+    std::stop_source stop;
+    stop.request_stop();
+    const auto result = build_native_volume_archive_document(value, FilesVolumeArchiveConsistency::Live,
+                                                             stop.get_token());
+    CK_CHECK(!result.value());
+    CK_CHECK(result.state() == ObservationState::Unknown);
+    CK_CHECK(result.unavailable_detail()->error.operation == "volume_archive.source.cancelled");
 }

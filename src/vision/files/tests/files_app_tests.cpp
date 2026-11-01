@@ -358,6 +358,21 @@ CK_TEST(files_app_status_reports_contextual_reason_for_empty_listing) {
     CK_CHECK(f.app->status(0).find("Hint: Enter folder unavailable: select a folder") != std::string::npos);
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.enter_directory")));
 }
+CK_TEST(files_app_status_reports_operation_reason_for_selected_row_when_other_pane_is_busy) {
+    auto gate = std::make_shared<Gate>();
+    Fixture f(ThemeScheme::Classic, gate);
+    gate->wait();
+    f.until([&] { return f.app->target(1) != nullptr; });
+    f.app->switch_pane();
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.app->active_pane() == 1 && f.app->target(1));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
+    CK_CHECK(f.app->availability("ck.files.copy").reason ==
+             "Copy unavailable: both panes must be ready");
+    CK_CHECK(f.app->status(1).find("Hint: Copy unavailable: both panes must be ready") != std::string::npos);
+    gate->release();
+    f.loaded();
+}
 CK_TEST(files_app_narrow_layout_switches_without_discarding_either_pane) {
     Fixture f;
     f.loaded();
