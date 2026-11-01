@@ -298,6 +298,25 @@ struct EncodedEntry final {
     std::vector<EncodedExtent> extents;
 };
 
+constexpr std::uint64_t kMaterialSparseHoleBytes = 64 * 1024;
+
+bool has_material_sparse_hole(const std::vector<EncodedEntry> &entries) {
+    for (const auto &encoded : entries) {
+        const auto &entry = *encoded.source;
+        if (entry.kind != FilesVolumeArchiveEntryKind::RegularFile)
+            continue;
+        std::uint64_t previous_end = 0;
+        for (const auto &extent : entry.extents) {
+            if (extent.offset >= previous_end && extent.offset - previous_end >= kMaterialSparseHoleBytes)
+                return true;
+            previous_end = extent.offset + extent.bytes.size();
+        }
+        if (entry.logical_size >= previous_end && entry.logical_size - previous_end >= kMaterialSparseHoleBytes)
+            return true;
+    }
+    return false;
+}
+
 Observation<std::vector<EncodedEntry>> validate_and_encode(const FilesVolumeArchiveDocument &document,
                                                             std::uint64_t &data_size,
                                                             std::uint64_t &data_bytes,
@@ -485,6 +504,28 @@ bool enable_sparse(const std::filesystem::path &path, UnavailableObservation &fa
     (void)path;
     (void)failure_detail;
     return true;
+#endif
+}
+
+Observation<std::uint64_t> allocated_file_bytes(const std::filesystem::path &path) {
+#if defined(_WIN32)
+    DWORD high = 0;
+    SetLastError(ERROR_SUCCESS);
+    const DWORD low = GetCompressedFileSizeW(path.c_str(), &high);
+    if (low == INVALID_FILE_SIZE && GetLastError() != ERROR_SUCCESS)
+        return Observation<std::uint64_t>::unavailable(
+            ObservationState::Denied, filesystem_error("volume_archive.allocated_size", GetLastError()).error);
+    return Observation<std::uint64_t>::available((static_cast<std::uint64_t>(high) << 32U) | low);
+#else
+    struct stat native {};
+    if (::stat(path.c_str(), &native) != 0)
+        return Observation<std::uint64_t>::unavailable(
+            ObservationState::Denied, filesystem_error("volume_archive.allocated_size", errno).error);
+    if (native.st_blocks < 0 || static_cast<std::uintmax_t>(native.st_blocks) >
+                                  std::numeric_limits<std::uint64_t>::max() / 512U)
+        return Observation<std::uint64_t>::unavailable(
+            ObservationState::Failed, error(AdapterError::InvalidNativeResult, "volume_archive.allocated_size"));
+    return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(native.st_blocks) * 512U);
 #endif
 }
 
@@ -1240,6 +1281,18 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (!durable_flush(temp, failure_detail)) {
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+    }
+    const auto allocated = allocated_file_bytes(temp);
+    if (!allocated.value()) {
+        std::filesystem::remove(temp, ec);
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            allocated.state(), allocated.unavailable_detail()->error);
+    }
+    if (has_material_sparse_hole(encoded) && *allocated.value() >= logical_size) {
+        std::filesystem::remove(temp, ec);
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported,
+            error(AdapterError::ProviderReviewRequired, "volume_archive.sparse_allocation"));
     }
     auto staging_digest = digest_file(temp);
     if (!staging_digest.value()) {

@@ -385,6 +385,29 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     CK_CHECK(second.state() == ObservationState::Changed);
 }
 
+CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-material-sparse", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto sparse_document = document();
+    constexpr std::uint64_t logical_bytes = 4 * 1024 * 1024;
+    sparse_document.entries[1].logical_size = logical_bytes;
+    sparse_document.entries[1].extents = {
+        {0, {std::byte{'a'}, std::byte{'b'}, std::byte{'c'}}},
+        {logical_bytes - 1, {std::byte{'z'}}}};
+    FilesVolumeArchiveWriteRequest request{std::move(sparse_document), scratch.path(), "material.ckarchive", 8,
+                                           {}, {}};
+    const auto written = write_volume_archive(request);
+    if (written.value()) {
+        CK_CHECK(written.value()->data_bytes == 4);
+        CK_CHECK(written.value()->logical_size > logical_bytes);
+        CK_CHECK(std::filesystem::file_size(written.value()->published_path) == written.value()->logical_size);
+    } else {
+        CK_CHECK(written.state() == ObservationState::Unsupported);
+        if (written.unavailable_detail())
+            CK_CHECK(written.unavailable_detail()->error.operation == "volume_archive.sparse_allocation");
+        CK_CHECK(!std::filesystem::exists(scratch.path() / "material.ckarchive"));
+    }
+}
+
 CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
