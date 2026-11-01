@@ -7667,4 +7667,6 @@ decodes the durable native evidence projection, and keeps malformed, truncated,
 symlink and non-regular journal entries as explicit reconciliation items. The
 focused discovery test passed on macOS Release. No recovery cleanup, retry,
 resume, publication, or source-retirement action is exposed by this checkpoint;
-Files command integration is the next CP-03 slice.
+the Files command surface now exposes a bounded `Inspect operation recovery`
+review after the scan completes. Cleanup, retry, resume, publication, and
+source-retirement actions remain disabled.
