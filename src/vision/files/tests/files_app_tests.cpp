@@ -115,12 +115,16 @@ struct Fixture {
     std::unique_ptr<FilesOperationPlanningService> planning_service;
     std::unique_ptr<FilesOperationExecutionService> execution_service;
     std::unique_ptr<FilesVolumeService> volume_service;
+    std::unique_ptr<FilesVolumeArchivePlanningService> volume_archive_planning_service;
+    std::unique_ptr<FilesVolumeArchiveService> volume_archive_service;
+    std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
                      FilesPaneServiceLimits limits = {}, ckv::Size size = {120, 34},
                      std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
-                     bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {})
+                     bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {},
+                     bool qualified_volume = false, bool recovery_journal = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -209,13 +213,29 @@ struct Fixture {
         auto prepared_journal_root = prepare_native_operation_journal_root(operation_root_address);
         if (!prepared_journal_root.value())
             throw std::runtime_error("cannot prepare app operation journal root");
+        if (recovery_journal) {
+            std::ofstream journal(operation_root / ".ck-volume-archive-00000000000000000000000000000031",
+                                  std::ios::binary);
+            journal << "malformed recovery journal";
+            if (!journal)
+                throw std::runtime_error("cannot create app recovery fixture");
+        }
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
-        volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [] {
+        if (qualified_volume || recovery_journal) {
+            volume_archive_planning_service = std::make_unique<FilesVolumeArchivePlanningService>(wake.callback());
+            volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
+            volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
+        }
+        volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [qualified_volume] {
             std::vector<FilesVolumeRecord> records;
             records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
                                3ull * 1024 * 1024, false, "fixture-volume", {
-                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
+                                   qualified_volume ? FilesVolumeArchiveSupport::LiveReadable
+                                                    : FilesVolumeArchiveSupport::Unknown,
+                                   false,
+                                   qualified_volume ? "Live source traversal qualified"
+                                                    : "fixture capability probe pending"}, {}});
             records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
                                2ull * 1024 * 1024, true, "fixture-read-only", {
                                    FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
@@ -231,7 +251,8 @@ struct Fixture {
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
             planning_service.get(), execution_service.get(),
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
-            volume_service.get());
+            volume_service.get(), volume_archive_planning_service.get(), volume_archive_service.get(),
+            volume_archive_recovery_service.get());
     }
     ~Fixture() {
         app.reset();
@@ -246,6 +267,12 @@ struct Fixture {
             service->join();
         planning_service->join();
         execution_service->join();
+        if (volume_archive_planning_service)
+            volume_archive_planning_service->join();
+        if (volume_archive_service)
+            volume_archive_service->join();
+        if (volume_archive_recovery_service)
+            volume_archive_recovery_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
     template <class Predicate> void until(Predicate ready) {
@@ -1357,6 +1384,19 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });
     CK_CHECK(!f.app->volume_info_pending());
     CK_CHECK(!f.app->navigate_root(0) && !f.app->navigate_parent(2));
+}
+CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, true, true);
+    f.loaded();
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "l"}}));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "r"}}));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.parent"));
+    f.until([&] { return f.painted().find("Volumes and mounts above") != std::string::npos; });
+    f.until([&] { return f.app->status(0).find("archive recovery review is required") != std::string::npos; });
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
+    CK_CHECK(f.app->availability("ck.files.copy").reason.find("archive recovery review is required") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("Hint: Copy unavailable: archive recovery review is required") != std::string::npos);
 }
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
