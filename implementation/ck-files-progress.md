@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-01 — macOS current-source Release matrix
+
+The fresh macOS arm64 Release build completed from the current checkout under
+the mandated S8T temporary root. With the documented Apple libc++ compatibility
+setting and a dedicated mode-0700 PRO-BLADE private index root, the complete
+matrix passed **224/224** in 53.77 seconds. The focused Files completion suite
+passed **26/26** and the native index suite passed **17/17**, including the
+100,000-record scan/sort/filter workload. Exact hashes, fixture roots and the
+open package/interactive-acceptance boundary are in the [macOS release matrix
+record](evidence/ck-files-macos-release-matrix-20261101.json).
+
 ## 2026-11-01 — Linux release package and terminal rehearsal
 
 Commit `49f7a06` completes the selected-row disabled-operation status hint and

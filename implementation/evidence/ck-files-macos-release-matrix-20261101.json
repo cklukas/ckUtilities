@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "8bb66abf7e3b9b27e783c4ec9610766958cc7126",
+  "host": "macOS arm64 workstation",
+  "sdk": "/Volumes/S8T/tmp/ckvision-1.4.0-sanitized-20261028-01/sdk",
+  "build": {
+    "generator": "Ninja",
+    "configuration": "Release",
+    "path": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/build",
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101",
+    "clean_build_start_observed": "2026-11-01T17:08:03Z",
+    "clean_build_elapsed_seconds": 265.27,
+    "targeted_fixture_refresh_end": "2026-11-01T17:16:28Z",
+    "files_executable": {
+      "path": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/build/bin/ck-files",
+      "sha256": "e53ace23bd4d5987fd92efe578741731af07076aca254297ead027a481b22470",
+      "build_timestamp": "2026-11-01T17:09:48Z"
+    },
+    "files_tests": {
+      "path": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/build/src/vision/files/ck_vision_files_tests",
+      "sha256": "dd1ef0d9a1ba02bbd7feec7f8a81ea9634f9473446f78a12b41d5e2d576a3b29",
+      "build_timestamp": "2026-11-01T17:16:28Z"
+    },
+    "screenshot_tree_sha256": "6e6fbcf14227870c6b8548875fdeb4b2e1cb7593686e321452234598105d91f1"
+  },
+  "fixtures": {
+    "test_root": "/Volumes/S8T/tmp/ckutilities-mac-release-20261101/build/test-scratch",
+    "private_index_root": "/Volumes/PRO-BLADE/tmp/ckutilities-mac-release-20261101-private-index",
+    "private_index_root_mode": "0700"
+  },
+  "tests": {
+    "full_ctest": "224/224 passed in 53.77 seconds",
+    "files_completion_focused": "26/26 passed",
+    "index_file_native_focused": "17/17 passed, including 100000-record scan/sort/filter workloads",
+    "asan_compatibility": "ASAN_OPTIONS=detect_container_overflow=0",
+    "documentation_contract": "passed",
+    "architecture_boundaries": "passed"
+  },
+  "notes": [
+    "The libc++ container-overflow compatibility setting is the documented Apple fixture requirement; the first unqualified run was not counted.",
+    "The dedicated private index root was placed on PRO-BLADE and mode-checked before the final run because its native DACL/ownership contract is not satisfied by the S8T root.",
+    "This is a current-source test qualification record, not a macOS package or interactive real-window release acceptance record."
+  ]
+}
