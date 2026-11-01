@@ -7711,3 +7711,22 @@ The Windows Release output rebuilt under
 CTest matrix passed **223/223** in 51.37 seconds, including both new
 operation-recovery UI tests. No production executable was launched by this
 checkpoint.
+
+## 2026-11-01 — Fresh macOS ASan/UBSan Files qualification checkpoint
+
+The earlier sanitizer probe was discarded as an unqualified build after it
+reported an Apple libc++ `container-overflow` diagnostic while copying
+`NativeName` into `DirectoryCursor::read` storage. A fresh Release build was
+configured explicitly with ASan and UBSan in both the application and the
+ckVision SDK, with no sanitizer suppression or product workaround. The final
+target refresh completed at 2026-11-01T20:35:09+0100 in 2 seconds; the
+runnable output is
+`/Volumes/S8T/tmp/ckutilities-operation-recovery-sanitizer-20261101/build/src/vision/files/ck_vision_files_tests`.
+
+The full Files executable passed **242/242** under the sanitizer runtime,
+including the previously reported completion-service case and the new
+operation-recovery UI cases. The qualified private-index scratch root was
+`/Volumes/PRO-BLADE/tmp/ckutilities-operation-recovery-sanitizer-20261101-test-scratch`.
+This checkpoint establishes a clean fresh macOS sanitizer result; Linux,
+Windows sanitizer/race qualification, and interactive production-launch
+acceptance remain open.
