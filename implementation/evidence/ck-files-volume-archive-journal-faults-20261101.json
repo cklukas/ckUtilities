@@ -15,7 +15,10 @@
   "results": {
     "macos_arm64": "20/20 focused archive tests passed",
     "linux_arm64": "20/20 focused archive tests passed",
-    "windows_x64": "20/20 focused archive tests passed"
+    "windows_x64": "20/20 focused archive tests passed",
+    "macos_complete_files": "237/237 passed",
+    "linux_complete_files": "237/237 passed",
+    "windows_complete_files": "236/236 passed"
   },
   "remaining": "process-crash and controlled storage/VM fault tests remain release gates"
 }

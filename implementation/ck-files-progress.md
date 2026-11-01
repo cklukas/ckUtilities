@@ -8,6 +8,8 @@ archive. A failure after publication returns `PublishedDurabilityUnknown` and
 retains the destination for reconciliation. The focused archive suite passed
 **20/20** on macOS arm64, Linux ARM64 and Windows x64. Evidence: [archive
 journal fault record](evidence/ck-files-volume-archive-journal-faults-20261101.json).
+The subsequent complete Files suites passed **237/237** on macOS arm64,
+**237/237** on Linux ARM64 and **236/236** on Windows x64.
 
 ## 2026-11-01 — Material sparse allocation is verified before publication
 
