@@ -3,6 +3,20 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-11-01 — Linux TSan qualification of archive and Files workers
+
+The fresh ARM64 TSan build at
+`/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/build` uses
+explicit `-fsanitize=thread -fno-omit-frame-pointer` compiler and linker flags
+against the pinned ckVision 1.4.0 prefix. The verified executable links
+`libtsan.so.2`. With bounded deadlock reporting enabled, the volume archive
+suite passed **15/15** and the Files application suite passed **68/68** with no
+race, deadlock, or thread-lifetime diagnostic. The repository's unused
+`CKVISION_SANITIZE` option was not counted; the explicit flags are recorded so
+the result is reproducible.
+
+Evidence: [Linux TSan record](evidence/ck-files-volume-archive-tsan-current-20261101.json).
+
 ## 2026-10-28 — current macOS aggregate regression run
 
 The current committed macOS arm64 Release/Ninja test executable completed the

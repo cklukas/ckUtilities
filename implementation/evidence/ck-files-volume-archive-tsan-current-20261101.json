@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "fa15364",
+  "platform": "Linux ARM64",
+  "sdk": "ckVision 1.4.0 pinned prefix",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler_flags": "-fsanitize=thread -fno-omit-frame-pointer",
+    "linker_flags": "-fsanitize=thread",
+    "build_directory": "/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/build",
+    "executable": "/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/build/src/vision/files/ck_vision_files_tests",
+    "runtime_link": "libtsan.so.2"
+  },
+  "environment": {
+    "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1:history_size=7:report_signal_unsafe=0",
+    "TMPDIR": "/home/klukas/tmp/ckutilities-volume-recovery-tsan-20261028-01/tmp"
+  },
+  "results": {
+    "files_volume_archive_tests.cpp": "15/15 passed",
+    "files_app_tests.cpp": "68/68 passed",
+    "sanitizer_diagnostics": "none"
+  },
+  "remaining": "full WP-07 filesystem/fault matrix and interactive release acceptance"
+}
