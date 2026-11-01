@@ -245,6 +245,22 @@ is `fc341a4d5e9c633aea04dee263c377d60f3569c4e829e32406582b8333774cd0`.
 
 Evidence: [current Windows Release record](evidence/ck-files-windows-release-current-20261101.json).
 
+## 2026-11-01 — Linux 100,000-entry directory qualification
+
+A real ARM64 Linux fixture containing **100,000** zero-byte regular files was
+created under a task-owned remote workspace and opened by the current staged
+`ck-files` executable. The uninterrupted scan did not publish a ready listing
+within a 45-second observation window; no mutation was attempted. The measured
+peak RSS stayed at **12,768 KiB**. Escape cancellation followed by the explicit
+stop-and-exit confirmation completed cleanly in **11.217 seconds**, with no
+residual process. A plain single Alt+X terminal-smoke attempt correctly did not
+silently terminate an active read and hit its 10-second bound.
+
+This is an open WP-07 performance/large-directory result, not a pass. The
+release remains gated until a measured threshold is established and the
+100,000-entry readiness/interaction behavior is either qualified or corrected.
+Evidence: [Linux large-directory record](evidence/ck-files-linux-large-directory-20261101.json).
+
 ## 2026-11-01 — current ck-files POSIX PTY acceptance
 
 The exact rebuilt macOS arm64 `ck-files` executable passed the repository PTY

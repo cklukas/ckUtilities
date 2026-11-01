@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-01",
+  "platform": "Linux ARM64",
+  "host": "uconsole",
+  "source_checkpoint": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "executable": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/build/ckvision-install-check/bin/ck-files",
+  "fixture_root": "/home/klukas/tmp/ckutilities-wp07-large-20261101-01",
+  "fixture": {
+    "directory": "left",
+    "regular_files": 100000,
+    "name_pattern": "file-N.dat",
+    "logical_bytes": 0,
+    "fixture_creation_seconds": 3,
+    "filesystem": {
+      "mount": "/",
+      "source": "/dev/mmcblk0p2",
+      "type": "ext4",
+      "options": "rw,noatime",
+      "block_size": 4096,
+      "free_blocks_at_measurement": 4984347
+    }
+  },
+  "steady_state_observation": {
+    "terminal": "script-backed xterm-256color PTY",
+    "observation_seconds": 45,
+    "result": "The listing did not become ready within the observation window; no mutation was attempted.",
+    "quit_sequence": "Alt+X followed by the dialog's second-button selection",
+    "elapsed_ms": 46006,
+    "exit_code": 0,
+    "peak_rss_kib": 12768,
+    "residual_process": false
+  },
+  "cancellation_observation": {
+    "terminal": "script-backed xterm-256color PTY",
+    "sequence": "Escape to cancel the active scan, Alt+X, then explicit stop-and-exit confirmation",
+    "elapsed_ms": 11217,
+    "exit_code": 0,
+    "peak_rss_kib": 12768,
+    "residual_process": false
+  },
+  "plain_quit_observation": {
+    "terminal_profile_helper": "xterm-256color",
+    "result": "The helper's single standard Alt+X contract did not complete within its 10-second bound while the 100000-entry scan was active.",
+    "exit_code": 1,
+    "interpretation": "This is a bounded active-read/close-confirmation observation, not a product pass. The explicit cancellation path above is the qualified result."
+  },
+  "status": "open_wp07_performance_gate"
+}
