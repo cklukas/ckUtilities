@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_execution_service.hpp"
 
+#include "native_operation_delete_tree.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -16,14 +18,16 @@ ck::files::UnavailableObservation error(ck::files::AdapterError code, const char
 }
 
 bool valid(const FilesOperationExecutionRequest& request) noexcept {
-    return (request.operation == ck::files::FileOperation::Copy ||
-            request.operation == ck::files::FileOperation::Move) &&
-           request.source_service && request.destination_service &&
-           request.source_service != request.destination_service && request.source_navigation.valid() &&
-           request.destination_navigation.valid() && request.source_stamp.current() &&
-           request.destination_stamp.current() && request.source_limits.held_entries != 0 &&
-           request.journal_root.is_valid() && request.open_journal && request.policy.copy_limits.valid() &&
-           request.policy.journal_limits.max_items != 0;
+    const bool deletion = request.operation == ck::files::FileOperation::Delete;
+    const bool copy_or_move = request.operation == ck::files::FileOperation::Copy ||
+        request.operation == ck::files::FileOperation::Move;
+    return (deletion || copy_or_move) && request.source_service && request.source_navigation.valid() &&
+           request.source_stamp.current() && request.source_limits.held_entries != 0 &&
+           request.journal_root.is_valid() && request.open_journal && request.policy.journal_limits.max_items != 0 &&
+           (deletion ? !request.destination_service
+                     : request.destination_service && request.destination_service != request.source_service &&
+                           request.destination_navigation.valid() && request.destination_stamp.current() &&
+                           request.policy.copy_limits.valid());
 }
 
 } // namespace
@@ -66,11 +70,13 @@ struct FilesOperationExecutionService::State final {
             condition.notify_all();
         }
 
-        bool wait(std::stop_token stop_token) {
+        bool wait(std::stop_token stop_token, bool destination_required) {
             std::unique_lock lock(mutex);
-            while (!failure && !(source_done && destination_done) && !stop_token.stop_requested())
+            while (!failure && !(source_done && (!destination_required || destination_done)) &&
+                   !stop_token.stop_requested())
                 condition.wait_for(lock, std::chrono::milliseconds(10));
-            return !stop_token.stop_requested() && !failure && source_done && destination_done;
+            return !stop_token.stop_requested() && !failure && source_done &&
+                   (!destination_required || destination_done);
         }
     };
 
@@ -129,29 +135,34 @@ struct FilesOperationExecutionService::State final {
         };
 
         auto handoff = std::make_shared<Handoff>();
+        const bool deletion = value.operation == ck::files::FileOperation::Delete;
         const auto source_submission = value.source_service->acquire_operation_sources(
             value.source_navigation, value.source_stamp, value.source_limits,
             [handoff](ck::files::Observation<FilesPaneOperationSources> sources) {
                 handoff->source(std::move(sources));
             });
-        const auto destination_submission = value.destination_service->acquire_operation_destination(
-            value.destination_navigation, value.destination_stamp,
-            [handoff](ck::files::Observation<FilesPaneOperationDestination> destination) {
-                handoff->destination(std::move(destination));
-            });
+        FilesPaneSubmitted destination_submission{FilesPaneSubmission::Accepted, {}};
+        if (!deletion) {
+            destination_submission = value.destination_service->acquire_operation_destination(
+                value.destination_navigation, value.destination_stamp,
+                [handoff](ck::files::Observation<FilesPaneOperationDestination> destination) {
+                    handoff->destination(std::move(destination));
+                });
+        }
         if (source_submission.state != FilesPaneSubmission::Accepted ||
-            destination_submission.state != FilesPaneSubmission::Accepted) {
+            (!deletion && destination_submission.state != FilesPaneSubmission::Accepted)) {
             if (source_submission.state == FilesPaneSubmission::Accepted)
                 value.source_service->cancel(source_submission.ticket);
-            if (destination_submission.state == FilesPaneSubmission::Accepted)
+            if (!deletion && destination_submission.state == FilesPaneSubmission::Accepted)
                 value.destination_service->cancel(destination_submission.ticket);
             fail(error(ck::files::AdapterError::InvalidAccess, "files_execution.pane_submission",
                        ck::files::ObservationState::Changed));
             return;
         }
-        if (!handoff->wait(stop_token)) {
+        if (!handoff->wait(stop_token, !deletion)) {
             value.source_service->cancel(source_submission.ticket);
-            value.destination_service->cancel(destination_submission.ticket);
+            if (!deletion)
+                value.destination_service->cancel(destination_submission.ticket);
             if (handoff->failure)
                 fail(*handoff->failure);
             else
@@ -159,8 +170,9 @@ struct FilesOperationExecutionService::State final {
                            ck::files::ObservationState::Unknown));
             return;
         }
-        if (!handoff->sources || !handoff->destination_result || !handoff->destination_result->directory ||
-            !handoff->destination_result->provider_root) {
+        if (!handoff->sources || (!deletion &&
+            (!handoff->destination_result || !handoff->destination_result->directory ||
+             !handoff->destination_result->provider_root))) {
             fail(error(ck::files::AdapterError::PlanInvalid, "files_execution.handoff_shape"));
             return;
         }
@@ -173,6 +185,87 @@ struct FilesOperationExecutionService::State final {
         if (!recursive && !flat) {
             fail(error(ck::files::AdapterError::PlanInvalid,
                        "files_execution.source_handoff_shape"));
+            return;
+        }
+        if (deletion) {
+            if (!recursive) {
+                fail(error(ck::files::AdapterError::UnsupportedQuery,
+                           "files_execution.delete_requires_recursive_directory",
+                           ck::files::ObservationState::Unsupported));
+                return;
+            }
+            ck::files::RecursiveInventoryLimits limits;
+            limits.inventory.max_entries = value.source_limits.held_entries;
+            auto inventory_job = std::make_unique<ck::files::RecursiveInventoryJob>(
+                std::move(handoff->sources->source_root),
+                std::move(*handoff->sources->source_path),
+                ck::files::InventoryMountPolicy::StayOnRootMount,
+                ck::files::InventoryLinkPolicy::PreserveLinks,
+                limits, ck::files::system_monotonic_clock(),
+                std::move(handoff->sources->root_source));
+            while (inventory_job->state() != ck::files::RecursiveInventoryState::Complete &&
+                   inventory_job->state() != ck::files::RecursiveInventoryState::Failed) {
+                if (stop_token.stop_requested()) {
+                    fail(error(ck::files::AdapterError::InterruptedRead,
+                               "files_execution.delete_inventory_cancelled",
+                               ck::files::ObservationState::Unknown));
+                    return;
+                }
+                inventory_job->advance(stop_token);
+            }
+            if (inventory_job->state() != ck::files::RecursiveInventoryState::Complete) {
+                if (inventory_job->failure()) fail(*inventory_job->failure());
+                else fail(error(ck::files::AdapterError::InvalidNativeResult,
+                                "files_execution.delete_inventory"));
+                return;
+            }
+            auto completed = inventory_job->completed_sources();
+            if (!completed.value()) {
+                fail(completed.unavailable_detail() ? *completed.unavailable_detail() :
+                     error(ck::files::AdapterError::InvalidNativeResult,
+                           "files_execution.delete_inventory_result"));
+                return;
+            }
+            ck::files::NativeOperationDeleteTreeRequest delete_request;
+            delete_request.inventory = std::move(completed).take_value();
+            delete_request.journal_root = std::move(value.journal_root);
+            delete_request.journal_id = value.journal_id;
+            delete_request.journal_limits = value.policy.journal_limits;
+            delete_request.open_journal = std::move(value.open_journal);
+            auto job = ck::files::NativeOperationDeleteTreeJob::create(std::move(delete_request));
+            if (!job.value()) {
+                fail(*job.unavailable_detail());
+                return;
+            }
+            auto deletion_job = std::move(job).take_value();
+            while (deletion_job->state() != ck::files::OperationExecutionState::Complete &&
+                   deletion_job->state() != ck::files::OperationExecutionState::Failed &&
+                   deletion_job->state() != ck::files::OperationExecutionState::Cancelled &&
+                   deletion_job->state() != ck::files::OperationExecutionState::NeedsReconciliation)
+                deletion_job->advance(stop_token);
+            const auto deletion_state = deletion_job->state();
+            const auto outcome = deletion_state == ck::files::OperationExecutionState::Complete
+                ? ck::files::OperationItemOutcome::Complete
+                : deletion_state == ck::files::OperationExecutionState::Cancelled
+                    ? ck::files::OperationItemOutcome::Cancelled
+                    : deletion_state == ck::files::OperationExecutionState::NeedsReconciliation
+                        ? ck::files::OperationItemOutcome::NeedsReconciliation
+                        : ck::files::OperationItemOutcome::Failed;
+            result.result.items.push_back({0, outcome, deletion_job->result().failure});
+            result.result.state = outcome == ck::files::OperationItemOutcome::Complete
+                ? ck::files::OperationBatchState::Complete
+                : outcome == ck::files::OperationItemOutcome::Cancelled
+                    ? ck::files::OperationBatchState::Cancelled
+                    : outcome == ck::files::OperationItemOutcome::NeedsReconciliation
+                        ? ck::files::OperationBatchState::NeedsReconciliation
+                        : ck::files::OperationBatchState::Failed;
+            result.state = outcome == ck::files::OperationItemOutcome::Complete
+                ? FilesOperationExecutionState::Complete
+                : stop_token.stop_requested() || outcome == ck::files::OperationItemOutcome::Cancelled
+                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            if (result.state != FilesOperationExecutionState::Complete)
+                result.error = deletion_job->result().failure;
+            emit(std::move(result));
             return;
         }
         if (value.operation == ck::files::FileOperation::Move && flat) {

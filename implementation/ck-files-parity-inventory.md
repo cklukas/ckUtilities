@@ -23,8 +23,8 @@ implementation.
 | Ordinary file/tree copy | Implemented through frozen inventory, loss review, no-replace staging/publication and verification | `ck-files`; CP-04 filesystem matrix | operation and native Files suites |
 | Same-volume rename/move | Implemented with identity-checked native no-replace rename | `ck-files`; CP-04 race/crash matrix | move and native adapter tests |
 | Cross-volume file/tree move | Windows source exclusion is qualified; POSIX source-side quarantine is not yet enabled | `ck-files`; CP-01 | operation status explains refusal where unsupported |
-| Recursive permanent deletion | Direct native retirement exists; reviewed non-empty tree deletion is not exposed | `ck-files`; CP-02 | no recursive-delete acceptance yet |
-| Native Trash / Recycle Bin | Single-entry native disposition with restore metadata; no permanent-delete fallback | `ck-files`; CP-02 for recursive/foreign mounts | native Trash tests |
+| Recursive permanent deletion | Journaled worker core now freezes the tree, revalidates identities and retires bottom-up; Windows directory command wiring is present, while POSIX recursive retirement remains disabled until its adapter protocol is qualified | `ck-files`; CP-02/CP-04 | macOS safety-retention test; Windows qualification still required |
+| Native Trash / Recycle Bin | Single-entry native disposition with restore metadata; recursive Trash remains disabled and never falls back to permanent deletion | `ck-files`; CP-02 for recursive/foreign mounts | native Trash tests; recursive Trash acceptance still open |
 | Create empty files and links | Not yet exposed in the Files command surface | `ck-files`; CP-05 | disabled-command status reason |
 | Attributes, permissions, ownership and ACLs | Read-only capability/metadata inventory and qualified move/copy preservation decisions | `ck-files`; CP-05 | metadata/security tests |
 | Selection masks and batch rename/copy/move | Marked batches and destination-name planning exist; glob/regex masks and rename previews remain open | `ck-files`; CP-06 | destination batch/name tests |

@@ -3,6 +3,7 @@
 #include "native_operation_delete_tree.hpp"
 
 #include <algorithm>
+#include <string>
 
 namespace ck::files {
 namespace {
@@ -21,6 +22,25 @@ UnavailableObservation error(AdapterError code, const char* operation,
 bool terminal(OperationExecutionState state) noexcept {
     return state == OperationExecutionState::Complete || state == OperationExecutionState::Failed ||
         state == OperationExecutionState::Cancelled || state == OperationExecutionState::NeedsReconciliation;
+}
+
+std::optional<NativeName> generated_name(NameEncoding encoding, const char* prefix,
+                                         const OperationJournalId& id) {
+    std::string text(prefix);
+    constexpr char hex[] = "0123456789abcdef";
+    for (const auto byte : id.bytes) {
+        const auto value = std::to_integer<unsigned char>(byte);
+        text.push_back(hex[value >> 4U]);
+        text.push_back(hex[value & 0x0FU]);
+    }
+    if (encoding == NameEncoding::PosixBytes) return NativeName::from_posix(text);
+    if (encoding == NameEncoding::WindowsUtf16) {
+        std::u16string units;
+        units.reserve(text.size());
+        for (const auto character : text) units.push_back(static_cast<char16_t>(static_cast<unsigned char>(character)));
+        return NativeName::from_windows(std::move(units));
+    }
+    return std::nullopt;
 }
 } // namespace
 
@@ -81,7 +101,8 @@ struct NativeOperationDeleteTreeJob::State final {
 
 Observation<NativeOperationDeleteTreeJob::Pointer> NativeOperationDeleteTreeJob::create(
     NativeOperationDeleteTreeRequest request) {
-    if (!request.inventory || !request.inventory->inventory() || !request.journal_file ||
+    if (!request.inventory || !request.inventory->inventory() ||
+        (!request.journal_file && (!request.journal_root || !request.journal_root->is_valid() || !request.open_journal)) ||
         !std::any_of(request.journal_id.bytes.begin(), request.journal_id.bytes.end(),
                      [](std::byte value) { return value != std::byte{}; }) ||
         request.journal_limits.max_items == 0 || request.journal_limits.max_records == 0)
@@ -113,6 +134,17 @@ Observation<NativeOperationDeleteTreeJob::Pointer> NativeOperationDeleteTreeJob:
     if (!journal.value())
         return Observation<Pointer>::unavailable(journal.state(), journal.unavailable_detail()->error);
     auto journal_pointer = std::move(journal).take_value();
+    if (!request.journal_file) {
+        const auto journal_name = generated_name(request.journal_root->encoding(), ".ck-delete-tree-journal-",
+                                                 request.journal_id);
+        if (!journal_name)
+            return rejected<Pointer>(AdapterError::UnrepresentableName,
+                                    "native_operation_delete_tree.generated_name");
+        auto opened = request.open_journal(*request.journal_root, *journal_name, true);
+        if (!opened.value())
+            return Observation<Pointer>::unavailable(opened.state(), opened.unavailable_detail()->error);
+        request.journal_file = std::shared_ptr<OperationJournalFile>(std::move(opened).take_value());
+    }
     for (std::size_t item = 0; item != entries.size(); ++item) {
         const auto sequence = static_cast<std::uint64_t>(journal_pointer->records().size()) + 1;
         auto appended = append_operation_journal_file(*request.journal_file, *journal_pointer,

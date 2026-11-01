@@ -12,8 +12,11 @@ namespace ck::files {
 struct NativeOperationDeleteTreeRequest final {
     std::shared_ptr<const CompletedRecursiveInventory> inventory;
     std::shared_ptr<OperationJournalFile> journal_file;
+    std::optional<NativeAbsolutePath> journal_root;
     OperationJournalId journal_id{};
     OperationJournalLimits journal_limits{};
+    std::function<Observation<std::unique_ptr<OperationJournalFile>>(
+        const NativeAbsolutePath&, const NativeName&, bool)> open_journal;
 };
 
 // Worker-owned recursive permanent deletion. The inventory is frozen before

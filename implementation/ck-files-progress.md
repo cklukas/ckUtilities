@@ -7442,6 +7442,21 @@ Exact build intervals, absolute V: paths, executable hashes, and check counts
 are recorded in [the CLI matrix evidence](evidence/ck-utilities-cli-version-matrix-20261026.json).
 Launcher launch/return and real interactive terminal acceptance remain open.
 
+## 2026-11-01 — CP-02 journaled deletion-worker checkpoint
+
+Added the first CP-02 mutation slice. Recursive permanent deletion now has a
+worker-owned frozen-inventory path with reverse-order identity-bound retirement,
+durable per-item journal records, cancellation/partial-failure outcomes, and
+dedicated `CKDE` source evidence. Recovery classifies an interrupted deletion
+as inspect-only; it never resumes by pathname. The Windows Files command is
+wired to this worker for directory selections. POSIX recursive retirement and
+recursive Trash remain explicitly disabled pending their native qualification.
+
+Focused macOS journal/recovery/native tests passed 5/5, including the safety
+test that keeps the tree intact when the platform retirement adapter is
+unsupported. The core checkpoint is commit `f44fce6`; the UI/execution wiring
+continues in the next bounded commit.
+
 
 ## 2026-10-28 — Cross-platform contextual availability qualification
 

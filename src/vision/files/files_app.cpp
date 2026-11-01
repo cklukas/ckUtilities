@@ -785,9 +785,23 @@ struct FilesApp::State {
                 return unavailable(std::string(command == "ck.files.rename" ? "Rename" :
                                                        command == "ck.files.trash" ? "Trash / Recycle Bin" : "Delete") +
                                    " unavailable: volume rows are archive sources, not entries");
-            return ready(active) && panes[active].model.target()
-                       ? FilesCommandAvailability::available()
-                       : unavailable("Operation unavailable: select a current entry");
+            if (!ready(active) || !panes[active].model.target())
+                return unavailable("Operation unavailable: select a current entry");
+            if (command == "ck.files.trash" &&
+                panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
+                return unavailable("Trash unavailable: recursive Trash / Recycle Bin is not qualified");
+            if (command == "ck.files.permanently_delete") {
+                if (panes[active].model.cursor_kind() != ck::files::ObjectKind::Directory)
+                    return FilesCommandAvailability::available();
+#if !defined(_WIN32)
+                return unavailable("Delete unavailable: identity-bound retirement is not qualified on this platform");
+#else
+                if (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory &&
+                    (!execution_service || !operation_journal_root || operation_execution_request))
+                    return unavailable("Delete unavailable: recursive deletion worker is not ready");
+#endif
+            }
+            return FilesCommandAvailability::available();
         }
         if (command == "ck.files.copy" || command == "ck.files.move") {
             const bool move = command == "ck.files.move";
@@ -889,7 +903,9 @@ struct FilesApp::State {
             text = "Creating volume archive...";
         else if (operation_execution_request)
             text = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
-                ? "Moving to the other pane..." : "Copying to the other pane...";
+                ? "Moving to the other pane..."
+                : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                    ? "Deleting selected tree..." : "Copying to the other pane...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (volume)
@@ -1074,7 +1090,9 @@ struct FilesApp::State {
             activity = "Archiving volume";
         else if (operation_execution_request)
             activity = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
-                ? "Moving" : "Copying";
+                ? "Moving"
+                : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                    ? "Deleting" : "Copying";
         else if (modal_pending())
             activity = "Dialog open";
         else if (pending(panes[0]) || pending(panes[1]))
@@ -1320,7 +1338,7 @@ struct FilesApp::State {
         return true;
     }
     bool trash(std::size_t i, FilesPaneRowTarget target) {
-        if (!ready(i))
+        if (!ready(i) || panes[i].model.cursor_kind() == ck::files::ObjectKind::Directory)
             return false;
         auto &p = panes[i];
         const auto range = p.model.viewport();
@@ -1347,6 +1365,45 @@ struct FilesApp::State {
         if (!ready(i))
             return false;
         auto &p = panes[i];
+#if !defined(_WIN32)
+        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
+            p.error = "Permanent deletion unavailable: recursive identity-bound retirement is not qualified on this platform";
+            labels();
+            return false;
+        }
+#else
+        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
+            if (!execution_service || !operation_journal_root || operation_execution_request) {
+                p.error = "Permanent deletion unavailable: the recursive deletion worker is not configured";
+                labels();
+                return false;
+            }
+            ck::files::OperationJournalId journal_id;
+            const auto serial = operation_serial++;
+            for (unsigned byte = 0; byte != sizeof(serial); ++byte)
+                journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
+            FilesOperationExecutionRequest execution{
+                ck::files::FileOperation::Delete, services[i], nullptr,
+                p.navigation, {}, p.stamp, {}, {}, *operation_journal_root, journal_id, {}, {}};
+            execution.source_limits.held_entries = 1024;
+            execution.source_limits.access = ck::files::EntryAccess::MetadataOnly;
+            execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
+                                        const ck::files::NativeName &basename, bool create_new) {
+                return ck::files::open_native_operation_journal_file(root, basename, create_new);
+            };
+            const auto submitted = execution_service->request(std::move(execution));
+            if (submitted.state != FilesOperationExecutionSubmission::Accepted) {
+                p.error = "Permanent deletion worker rejected the request";
+                labels();
+                return false;
+            }
+            operation_execution_request = submitted.ticket;
+            operation_execution_kind = ck::files::FileOperation::Delete;
+            p.error.clear();
+            labels();
+            return true;
+        }
+#endif
         const auto range = p.model.viewport();
         const auto submitted = services[i]->permanently_delete(p.navigation, target.stamp, target.row,
                                                                {range.first, range.rows});
@@ -2305,21 +2362,23 @@ struct FilesApp::State {
         if (!operation_execution_request || reply.request != *operation_execution_request)
             return;
         operation_execution_request.reset();
+        const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
         if (reply.state == FilesOperationExecutionState::Complete) {
             const auto source = active;
-            const auto destination = 1 - active;
             const bool source_refreshed = refresh(source);
-            const bool destination_refreshed = refresh(destination);
+            const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - active);
             if (!source_refreshed || !destination_refreshed) {
-                panes[source].error = std::string(*operation_execution_kind == ck::files::FileOperation::Move ? "Move" : "Copy") +
+                panes[source].error = std::string(operation == ck::files::FileOperation::Move ? "Move" :
+                                                   operation == ck::files::FileOperation::Delete ? "Delete" : "Copy") +
                     " completed; refresh could not be started";
-                panes[destination].error = panes[source].error;
+                if (operation != ck::files::FileOperation::Delete)
+                    panes[1 - active].error = panes[source].error;
             }
         } else {
-            const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
+            const std::string label = operation == ck::files::FileOperation::Move ? "Move" :
+                operation == ck::files::FileOperation::Delete ? "Delete" : "Copy";
             std::string detail = reply.state == FilesOperationExecutionState::Cancelled
-                ? (operation == ck::files::FileOperation::Move ? "Move cancelled" : "Copy cancelled")
-                : (operation == ck::files::FileOperation::Move ? "Move failed" : "Copy failed");
+                ? label + " cancelled" : label + " failed";
             if (reply.error)
                 detail += ": " + reply.error->error.operation;
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
@@ -2404,7 +2463,9 @@ struct FilesApp::State {
                     operation_execution_request.reset();
                     panes[active].error = operation_execution_kind &&
                             *operation_execution_kind == ck::files::FileOperation::Move
-                        ? "Move worker stopped" : "Copy worker stopped";
+                        ? "Move worker stopped"
+                        : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                            ? "Delete worker stopped" : "Copy worker stopped";
                     labels();
                 }
             }

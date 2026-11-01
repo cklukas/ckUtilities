@@ -120,6 +120,15 @@ scope and irreversibility; block namespace roots, volume rows and operation
 artifacts. Do not include newly appeared children. Cancellation reports already
 removed items and retained remainder; there is no secure-erasure claim.
 
+Current implementation checkpoint: the native worker and `CKDE` recovery
+evidence are implemented. The worker journals every planned/prepared/removal
+intent/retired/complete boundary, revalidates each held parent and child
+identity, and processes the sealed inventory in reverse order. The Files
+command surface only routes recursive directory deletion through that worker
+on the qualified Windows path; POSIX recursive retirement remains disabled
+with a status reason. Native Trash is still single-entry only, so recursive
+Trash remains disabled rather than falling back to permanent deletion.
+
 Qualify recursive Trash/Recycle Bin on native and foreign mounts, including
 restore metadata, permissions, collisions, quota and unsupported shares. Restore
 through the OS must recover fixture bytes/metadata. No fallback to permanent
