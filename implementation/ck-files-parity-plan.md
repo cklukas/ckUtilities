@@ -304,4 +304,9 @@ on 2026-11-01, then explicitly required ckVision and suite component reuse.
 The peer was sent the proposed priority order and reuse constraints. This chat
 owns this new file and the roadmap link while preparing the handoff; the peer
 retains active implementation/build ownership. No builds or app launches were
-started by this planning task. Record review feedback below before handoff.
+started by this planning task. The review is recorded in
+[ck-files-parity-inventory.md](ck-files-parity-inventory.md). It confirms
+CP-00 and WP-02 implementation facts, keeps POSIX cross-volume retirement and
+recursive deletion disabled until their P0 protocols are journaled and
+qualified, and orders the remaining work as CP-01 through CP-04 before the
+Commander feature packages.
