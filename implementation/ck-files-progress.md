@@ -11,13 +11,17 @@ on macOS arm64 and Linux ARM64. The current complete Files suites passed
 **235/235** on both platforms; macOS used the documented ASan fixture
 compatibility setting because the existing libc++ `DirectoryCursor::read`
 container-overflow remains a known diagnostic. Windows source bytes were
-synchronized and match the commit, but no Windows test result is claimed:
+synchronized and match the commit:
 the v143 repair completed successfully, and a native ckVision 1.4.0 SDK was
 rebuilt from the staged 1.4.0 source with **130/130** Ninja steps and installed
-on `V:`. The ckUtilities CMake consumer still rejects that staged package
-during package discovery, so Windows source/test qualification remains open
-until that consumer boundary is resolved without using the incompatible
-1.3.0/0.1.8 packages.
+on `V:`. The consumer was then configured with that SDK using the corrected
+Windows SDK tool paths. The focused archive suite passed **18/18** and the
+complete Files suite passed **234/234**. The synchronized test-source hash is
+`e69f75018b4f2eb1bcf3f190e033465e7f361d38ecd88b8229e1f636f7dd17b2`; the
+verified test binary at
+`V:\\tmp\\ckutilities-journal-mutation-win-20261101\\consumer-cmd2\\src\\vision\\files\\ck_vision_files_tests.exe`
+has SHA-256
+`a29e9287a7c76c2d7e788996c371eefcc9ecc5428b765e7058703257be5bccfc`.
 
 ## 2026-11-01 — Archive recovery evidence monotonicity regression suite
 
