@@ -23,6 +23,7 @@
     }
   },
   "tests": {
+    "final_full_ctest": "223/223 passed in 62.46 seconds",
     "files_ctest": "1/1 passed in 17.77 seconds",
     "documentation_contract": "passed directly with VerifyToolDocumentation.cmake",
     "installed_zip_help": "10/10 executable entry points passed --help",

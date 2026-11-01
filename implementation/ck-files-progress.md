@@ -15,7 +15,8 @@ the [Linux release rehearsal record](evidence/ck-files-linux-release-rehearsal-2
 
 The mandatory Windows workstation was qualified on `V:` with the repaired
 v143 SDK. The current Files executable and test binary rebuilt successfully;
-the Files CTest entry passed **1/1** in 17.77 seconds. The documentation
+the complete Release CTest matrix passed **223/223** in 62.46 seconds,
+including the Files entry (**1/1** in 17.77 seconds). The documentation
 contract passed directly, and the final ZIP was generated under
 `V:\\tmp\\ckutilities-windows-refresh-20261101\\packages` after an explicit
 cleanup of an initial CPack default-path mistake. The extracted archive has
