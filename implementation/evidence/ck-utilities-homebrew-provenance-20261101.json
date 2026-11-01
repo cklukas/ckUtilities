@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-01",
+  "formula_generator": "scripts/generate_homebrew_formula.py",
+  "checks": {
+    "ruby_syntax": "passed",
+    "mutable_branch_url_rejection": "implemented",
+    "brew_audit": "not run: this Homebrew build disables direct path audits and requires a named tap formula"
+  },
+  "release_source": {
+    "public_version_tag": "v0.2.0",
+    "tag_commit": "b4567983cc0510d55e88378da7c0ff3463e864f8",
+    "tag_contains_ck_files_guide": false,
+    "current_required_source_commit": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+    "current_commit_public_archive": "not available; GitHub archive request returned 404"
+  },
+  "status": "blocked_release_provenance",
+  "reason": "The published v0.2.0 source predates ck-files, while the current qualification commits have not been published as an immutable release source. No Homebrew formula is advertised as release-ready until that provenance is resolved."
+}

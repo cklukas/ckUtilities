@@ -36,6 +36,8 @@ def main() -> None:
         raise SystemExit("version must be numeric semantic-version text without a leading 'v'")
     if not args.source_url.startswith("https://"):
         raise SystemExit("source URL must use HTTPS")
+    if "/archive/" not in args.source_url or "/refs/heads/" in args.source_url:
+        raise SystemExit("source URL must be an immutable archive tag or commit, not a branch")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", args.source_sha256):
         raise SystemExit("source SHA-256 must be a 64-character hexadecimal digest")
 

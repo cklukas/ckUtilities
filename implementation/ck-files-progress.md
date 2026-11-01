@@ -261,6 +261,19 @@ release remains gated until a measured threshold is established and the
 100,000-entry readiness/interaction behavior is either qualified or corrected.
 Evidence: [Linux large-directory record](evidence/ck-files-linux-large-directory-20261101.json).
 
+## 2026-11-01 — Homebrew provenance gate remains open
+
+The Homebrew formula generator now rejects mutable branch archives and accepts
+only immutable tag or commit archive URLs. The public `v0.2.0` tag currently
+points to `b4567983` and predates `ck-files`; the current qualification
+checkpoint `2702ee7` is not yet available from the public GitHub archive. Ruby
+syntax validation passed, but no formula is being called release-ready from a
+stale or mutable source. The installed Homebrew audit cannot audit a direct
+formula path and requires a named tap formula, so that audit remains pending
+until immutable release provenance exists.
+
+Evidence: [Homebrew provenance record](evidence/ck-utilities-homebrew-provenance-20261101.json).
+
 ## 2026-11-01 — current ck-files POSIX PTY acceptance
 
 The exact rebuilt macOS arm64 `ck-files` executable passed the repository PTY
