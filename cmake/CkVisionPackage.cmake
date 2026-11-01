@@ -34,7 +34,20 @@ option(CKTOOLS_VERIFY_CKVISION_TERMINAL
        OFF)
 
 function(cktools_require_ckvision)
-  find_package(ckvision 1.4.0 CONFIG REQUIRED)
+  if(CKTOOLS_CKVISION_PREFIX)
+    # A qualification or release build that names an SDK must not silently
+    # resolve a different package from a system prefix.  PATHS plus
+    # NO_DEFAULT_PATH keeps the dependency provenance bound to the requested
+    # installed SDK while still allowing ordinary developer builds to use the
+    # platform's normal package search below.
+    get_filename_component(_ckvision_prefix
+                           "${CKTOOLS_CKVISION_PREFIX}" ABSOLUTE
+                           BASE_DIR "${CMAKE_SOURCE_DIR}")
+    find_package(ckvision 1.4.0 CONFIG REQUIRED
+                 PATHS "${_ckvision_prefix}" NO_DEFAULT_PATH)
+  else()
+    find_package(ckvision 1.4.0 CONFIG REQUIRED)
+  endif()
 
   if(NOT TARGET ckvision::cvision)
     message(FATAL_ERROR

@@ -18,7 +18,10 @@ add_custom_target(cktools_fuzzers)
 function(cktools_add_fuzzer name source corpus)
   add_executable(${name} ${source})
   add_dependencies(cktools_fuzzers ${name})
-  target_link_libraries(${name} PRIVATE ${ARGN} ckvision::cvision)
+  # Product libraries carry ckvision transitively.  Adding it here as well
+  # makes the linker see the same static archive twice for those fuzzers.
+  # Targets with no product-library dependency add ckvision explicitly below.
+  target_link_libraries(${name} PRIVATE ${ARGN})
   target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   cktools_strict(${name})
   target_compile_options(${name} PRIVATE -fsanitize=fuzzer)
@@ -34,6 +37,7 @@ endfunction()
 cktools_add_fuzzer(fuzz_todo_codec fuzz_todo_codec.cpp todo_codec ck_vision_todo)
 cktools_add_fuzzer(fuzz_sysmon fuzz_sysmon.cpp sysmon ck_vision_sysmon)
 cktools_add_fuzzer(fuzz_operation_journal fuzz_operation_journal.cpp operation_journal)
+target_link_libraries(fuzz_operation_journal PRIVATE ckvision::cvision)
 target_sources(fuzz_operation_journal PRIVATE
   ${PROJECT_SOURCE_DIR}/src/native-core/files/operation_journal.cpp)
 target_include_directories(fuzz_operation_journal PRIVATE

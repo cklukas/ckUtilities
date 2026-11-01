@@ -7799,3 +7799,24 @@ flow control was disabled with `stty -ixon`. No instance was left running.
 
 Linux TSan on a supported VMA host, broader filesystem/fault-injection matrix
 coverage, and final cross-platform release/interactive gates remain open.
+
+## 2026-11-01 — pinned-SDK libFuzzer corpus checkpoint
+
+The fuzz qualification build now binds `CKTOOLS_CKVISION_PREFIX` to the
+requested installed SDK instead of allowing a system package to win CMake's
+default search. This prevents sanitizer/fuzzer and release evidence from
+silently using a different ckVision build. The fuzzer link setup also avoids
+adding the static ckVision archive twice when a product library already carries
+it transitively.
+
+On macOS arm64, LLVM Clang 23.1.4 built the three libFuzzer targets from
+2026-11-01T22:00:52+0100 through 22:01:21+0100 (29 seconds), using the pinned
+SDK at
+`/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk` and
+the pre-fetched llama source under the same task-owned temporary workspace.
+The resolved CMake package was verified as
+`/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk/lib/cmake/ckvision`.
+The `fuzz-corpus` CTest label passed **3/3**: todo codec, sysmon and operation
+journal. No linker warnings, sanitizer suppressions or corpus workarounds were
+used. This is corpus coverage, not a claim that the full long-running fuzz
+budget or the remaining filesystem/fault matrix is complete.
