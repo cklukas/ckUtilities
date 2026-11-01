@@ -7670,3 +7670,19 @@ resume, publication, or source-retirement action is exposed by this checkpoint;
 the Files command surface now exposes a bounded `Inspect operation recovery`
 review after the scan completes. Cleanup, retry, resume, publication, and
 source-retirement actions remain disabled.
+
+## 2026-11-01 — Ordinary operation recovery Windows qualification checkpoint
+
+The recovery-discovery fixture now constructs its journal basename in the
+host-native encoding on both POSIX and Windows; Windows correctly refuses a
+POSIX-byte basename rather than silently transcoding it. The macOS Release
+focused discovery test passed. The synchronized Windows `V:` source archive
+has SHA-256
+`20cc6c93dc85a52392f971ccd68f845c844d588fea671a58899a3b641d859523`.
+
+The Windows Release build completed under
+`V:\\tmp\\ckutilities-windows-1495c78\\build`; the focused recovery, keymap,
+Files UI and native suites passed **4/4** in 10.73 seconds. The complete
+configured Windows CTest matrix then passed **223/223** in 47.27 seconds with
+the required temporary root under `V:\\tmp`. No production executable was
+launched by this checkpoint.

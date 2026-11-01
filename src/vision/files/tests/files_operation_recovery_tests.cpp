@@ -44,7 +44,11 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
     const auto root = address(scratch.path());
     CK_CHECK(prepare_native_operation_journal_root(root).value());
 
+#if defined(_WIN32)
+    const auto name = *NativeName::from_windows(u".ck-copy-journal-0001");
+#else
     const auto name = *NativeName::from_posix(".ck-copy-journal-0001");
+#endif
     auto created = OperationJournal::create(FileOperation::Copy, journal_id(), {4, 32, 4096});
     CK_CHECK(created.value());
     if (!created.value()) return;
