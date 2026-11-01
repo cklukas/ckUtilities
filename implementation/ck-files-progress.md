@@ -7657,3 +7657,14 @@ standalone rerun passed in 0.60 seconds and the complete rerun was green.
 The macOS native Trash suite passed after the same source change. The known
 macOS aggregate Files fixture remains separate from this qualification and is
 not claimed green here.
+
+## 2026-11-01 — Ordinary operation recovery discovery boundary
+
+The new `FilesOperationRecoveryService` adds worker-owned, read-only discovery
+for ordinary copy/tree-copy/move/recursive-delete journals, separate from the
+volume-archive recovery protocol. It retains exact native journal names,
+decodes the durable native evidence projection, and keeps malformed, truncated,
+symlink and non-regular journal entries as explicit reconciliation items. The
+focused discovery test passed on macOS Release. No recovery cleanup, retry,
+resume, publication, or source-retirement action is exposed by this checkpoint;
+Files command integration is the next CP-03 slice.

@@ -156,6 +156,15 @@ post-publication flush failure. Repeated actions are safe; completed copies are
 not recopied or sources retired based on an uncertain receipt. UI explains
 remaining effects and manual reconciliation without promising global rollback.
 
+Current implementation checkpoint: a separate worker-facing ordinary-operation
+recovery discovery service now scans the private root for copy/tree-copy/move/
+recursive-delete journals. It retains exact native journal names, keeps display
+text non-authoritative, decodes native evidence read-only, and reports malformed,
+truncated, symlink and non-regular entries as explicit reconciliation items.
+The service is not yet exposed as a Files command; cleanup, retry/resume and
+publication reconciliation remain disabled until their identity-bound workers
+and UI presentation are wired and qualified.
+
 ## CP-04 — Close the actual safety and release matrix
 
 Carry forward all unclosed WP-07/WP-08 gates: native NTFS/APFS/ext4 plus

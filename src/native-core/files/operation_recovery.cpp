@@ -110,6 +110,7 @@ Observation<NativeOperationRecoveryInspection> inspect_native_operation_recovery
     }
 
     NativeOperationRecoveryInspection result;
+    result.journal_id = journal.id();
     result.report = std::move(generic).take_value();
     result.has_untrusted_evidence = result.report.has_untrusted_tail;
     for (auto& item : result.report.items) {

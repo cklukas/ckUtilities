@@ -44,6 +44,7 @@ struct NativeOperationRecoveryArtifact final {
 };
 
 struct NativeOperationRecoveryInspection final {
+    OperationJournalId journal_id{};
     OperationRecoveryReport report;
     std::vector<NativeOperationRecoveryArtifact> artifacts;
     bool has_untrusted_evidence = false;
