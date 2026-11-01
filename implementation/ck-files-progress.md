@@ -7730,3 +7730,30 @@ operation-recovery UI cases. The qualified private-index scratch root was
 This checkpoint establishes a clean fresh macOS sanitizer result; Linux,
 Windows sanitizer/race qualification, and interactive production-launch
 acceptance remain open.
+
+## 2026-11-01 — Windows MSVC ASan Files qualification checkpoint
+
+The Windows sanitizer dependency is now qualified consistently instead of
+mixing the normal ckVision SDK with instrumented Files objects. ckVision was
+built from source revision `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba`, with
+`CKVISION_SANITIZE=address`, `/MT`, `/Zi`, and `/MP4`, then installed at
+`V:\\tmp\\ckutilities-windows-ckvision-sanitizer-20261101-02\\sdk`. The
+installed `cvision.lib` SHA-256 is
+`BB33998864F92B7B0FF1AC8E29942BA904E4A9D17E98DC6EA760D487A1E092B6`.
+
+The current Files checkout was configured with Visual Studio 17 2022 x64,
+MSVC v143 14.44.35207, `/MT`, `/EHsc`, `/fsanitize=address`, `/Zi`, and
+`/MP4`; the ignored MSVC linker sanitizer token was removed. The final
+build/test interval was 2026-11-01T21:05:51+0100 through
+2026-11-01T21:07:14+0100 (83 seconds). The runnable output is
+`V:\\tmp\\ckutilities-windows-files-sanitizer-20261101-05\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe`,
+with SHA-256
+`375F8DCC0F6E9A8C2C67AE8C184FC4E2EB85E5A4FF52F944003160B008B660C7`.
+
+The Files executable passed **241/241** tests under the MSVC ASan runtime,
+using the private-index scratch root under
+`V:\\tmp\\ckutilities-windows-files-sanitizer-20261101-05\\test-scratch`.
+The final log reported zero linker mismatch/ignored-option diagnostics and
+zero C++ exception/sanitizer configuration warnings. No sanitizer
+suppression or product workaround was used. Linux sanitizer/race
+qualification and interactive production-launch acceptance remain open.
