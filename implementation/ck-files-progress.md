@@ -3,6 +3,17 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-11-01 — current ck-files POSIX PTY acceptance
+
+The exact rebuilt macOS arm64 `ck-files` executable passed the repository PTY
+helper for `xterm-256color`, `xterm`, and `vt100`. Each profile verified
+startup draw, resize to 100x30, the standard Alt+X shutdown, successful child
+exit, and restoration of the PTY mode. The ASan-built executable used the
+already documented Apple libc++ compatibility setting; this is terminal
+acceptance evidence, not a clean broad macOS ASan result.
+
+Evidence: [current POSIX PTY record](evidence/ck-files-posix-pty-current-20261101.json).
+
 ## 2026-11-01 — current macOS aggregate after recovery-gate coverage
 
 The current macOS arm64 Release/Ninja executable completed the full Files

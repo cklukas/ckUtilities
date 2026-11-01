@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "dae7702",
+  "platform": "macOS arm64",
+  "executable": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/bin/ck-files",
+  "helper": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/ck_vision_terminal_smoke",
+  "profiles": {
+    "xterm-256color": "passed",
+    "xterm": "passed",
+    "vt100": "passed"
+  },
+  "checks": ["startup draw", "resize to 100x30", "Alt+X shutdown", "successful exit", "PTY mode restoration"],
+  "environment": {
+    "TMPDIR": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/tmp-terminal-20261101b",
+    "ASAN_OPTIONS": "detect_container_overflow=0"
+  }
+}
