@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "b21a3a4",
+  "platform": "macOS arm64",
+  "feature": "worker-owned volume archive recovery cleanup boundary",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler_flags": "-fsanitize=thread -fno-sanitize-recover=all -fno-omit-frame-pointer",
+    "linker_flags": "-fsanitize=thread -fno-sanitize-recover=all",
+    "build_directory": "/Volumes/S8T/tmp/ckutilities-volume-archive-tsan-20261028-01/build",
+    "executable": "/Volumes/S8T/tmp/ckutilities-volume-archive-tsan-20261028-01/build/src/vision/files/ck_vision_files_tests",
+    "sha256": "bf9ecc479457ee5978451b024bc05daedc9784396c5efc7a48d0cccbb2ba5aae"
+  },
+  "environment": {
+    "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1:history_size=7:report_signal_unsafe=0",
+    "TMPDIR": "/Volumes/S8T/tmp/ckutilities-volume-archive-tsan-20261101"
+  },
+  "results": {
+    "files_volume_archive_tests.cpp": "17/17 passed",
+    "sanitizer_diagnostics": "none"
+  },
+  "platform_policy": {
+    "windows": "handle-bound cleanup qualified by normal tests",
+    "macos": "explicit Unsupported cleanup refusal retained",
+    "linux": "explicit Unsupported cleanup refusal retained"
+  },
+  "remaining": "broad app sanitizer fixture limitation, full WP-07 filesystem/fault matrix, and interactive release acceptance"
+}

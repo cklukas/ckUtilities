@@ -1,4 +1,13 @@
 # Files implementation evidence
+## 2026-11-01 — macOS TSan qualification of recovery cleanup
+
+The current macOS arm64 ThreadSanitizer build under the required S8T temporary
+volume rebuilt the archive worker and test executable. The volume archive suite
+passed **17/17** with bounded deadlock/race reporting enabled and no sanitizer
+diagnostic. This is focused worker evidence; the broad app sanitizer fixture
+limitation remains separately documented. Evidence:
+[macOS recovery cleanup TSan record](evidence/ck-files-volume-archive-cleanup-macos-tsan-20261101.json).
+
 ## 2026-11-01 — Linux TSan qualification of recovery cleanup
 
 The current Linux ARM64 ThreadSanitizer build was rebuilt from the committed
