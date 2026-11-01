@@ -1,4 +1,12 @@
 # Files implementation evidence
+## 2026-11-01 — Linux Files qualification after recovery inspection
+
+The current Linux ARM64 build rebuilt the Files app and test executable from
+`85e1d4f`; the Files suite passed **232/232**. The exact `ck-files` binary also
+passed the real PTY helper for `xterm-256color`, `xterm`, and `vt100`, including
+startup draw, resize, `Alt+X`, clean exit, and terminal-mode restoration.
+Evidence is recorded in [the Linux recovery-dialog record](evidence/ck-files-linux-recovery-dialog-20261101.json).
+
 ## 2026-11-01 — Windows Files qualification after recovery inspection
 
 The current `V:` MSVC v143 build rebuilt `ck-files` from `85e1d4f`; the Files
