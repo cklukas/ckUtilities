@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <condition_variable>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
@@ -163,6 +164,129 @@ std::size_t journal_frame_size(std::span<const std::byte> bytes, std::size_t off
     return 9 + static_cast<std::size_t>(little_u32(bytes.subspan(offset + 5, 4))) + sizeof(std::uint32_t);
 }
 
+template <class T>
+bool read_archive_le(std::span<const std::byte> bytes, std::size_t &offset, T &value) {
+    if (offset > bytes.size() || bytes.size() - offset < sizeof(T))
+        return false;
+    value = 0;
+    for (std::size_t index = 0; index != sizeof(T); ++index)
+        value |= static_cast<T>(std::to_integer<unsigned char>(bytes[offset + index])) << (index * 8U);
+    offset += sizeof(T);
+    return true;
+}
+
+bool skip_archive_string(std::span<const std::byte> bytes, std::size_t &offset) {
+    std::uint64_t length = 0;
+    if (!read_archive_le(bytes, offset, length) || length > bytes.size() - offset)
+        return false;
+    offset += static_cast<std::size_t>(length);
+    return true;
+}
+
+struct ParsedArchiveExtent final {
+    std::uint64_t source_offset = 0;
+    std::uint64_t archive_offset = 0;
+    std::uint64_t length = 0;
+};
+
+struct ParsedArchiveEntry final {
+    std::uint8_t kind = 0;
+    std::uint64_t logical_size = 0;
+    std::vector<ParsedArchiveExtent> extents;
+};
+
+struct ParsedArchive final {
+    std::uint64_t data_offset = 0;
+    std::uint64_t data_size = 0;
+    std::vector<ParsedArchiveEntry> entries;
+};
+
+std::optional<ParsedArchive> parse_archive_fixture(std::span<const std::byte> bytes) {
+    if (bytes.size() < 56 ||
+        std::memcmp(bytes.data(), "CKARV01\0", 8) != 0)
+        return std::nullopt;
+    std::size_t offset = 8;
+    std::uint32_t version = 0;
+    std::uint32_t flags = 0;
+    std::uint64_t manifest_size = 0;
+    std::uint64_t data_offset = 0;
+    std::uint64_t data_size = 0;
+    std::uint64_t entry_count = 0;
+    std::uint64_t reserved = 0;
+    if (!read_archive_le(bytes, offset, version) || !read_archive_le(bytes, offset, flags) ||
+        !read_archive_le(bytes, offset, manifest_size) || !read_archive_le(bytes, offset, data_offset) ||
+        !read_archive_le(bytes, offset, data_size) || !read_archive_le(bytes, offset, entry_count) ||
+        !read_archive_le(bytes, offset, reserved) || version != 2 || flags != 0 || reserved != 0 ||
+        manifest_size > bytes.size() - 56 || data_offset != 56 + manifest_size ||
+        data_size > bytes.size() - data_offset || data_offset + data_size != bytes.size() ||
+        entry_count > bytes.size())
+        return std::nullopt;
+
+    const auto manifest_end = static_cast<std::size_t>(data_offset);
+    ParsedArchive result{data_offset, data_size, {}};
+    result.entries.reserve(static_cast<std::size_t>(entry_count));
+    if (offset > manifest_end)
+        return std::nullopt;
+    for (std::size_t index = 0; index != 4; ++index)
+        if (!skip_archive_string(bytes.subspan(0, manifest_end), offset))
+            return std::nullopt;
+    std::uint8_t consistency = 0;
+    std::uint8_t path_encoding = 0;
+    if (!read_archive_le(bytes, offset, consistency) || !read_archive_le(bytes, offset, path_encoding) ||
+        offset > manifest_end || manifest_end - offset < 6)
+        return std::nullopt;
+    offset += 6;
+    for (std::uint64_t index = 0; index != entry_count; ++index) {
+        ParsedArchiveEntry entry;
+        std::uint8_t padding = 0;
+        if (!read_archive_le(bytes, offset, entry.kind))
+            return std::nullopt;
+        for (int pad = 0; pad != 7; ++pad)
+            if (!read_archive_le(bytes, offset, padding))
+                return std::nullopt;
+        std::uint64_t hard_link_group = 0;
+        if (!read_archive_le(bytes, offset, entry.logical_size) ||
+            !read_archive_le(bytes, offset, hard_link_group) ||
+            !skip_archive_string(bytes.subspan(0, manifest_end), offset) ||
+            !skip_archive_string(bytes.subspan(0, manifest_end), offset))
+            return std::nullopt;
+        std::uint64_t extent_count = 0;
+        if (!read_archive_le(bytes, offset, extent_count) || extent_count > manifest_end)
+            return std::nullopt;
+        entry.extents.reserve(static_cast<std::size_t>(extent_count));
+        for (std::uint64_t extent_index = 0; extent_index != extent_count; ++extent_index) {
+            ParsedArchiveExtent extent;
+            if (!read_archive_le(bytes, offset, extent.source_offset) ||
+                !read_archive_le(bytes, offset, extent.archive_offset) ||
+                !read_archive_le(bytes, offset, extent.length))
+                return std::nullopt;
+            entry.extents.push_back(extent);
+        }
+        result.entries.push_back(std::move(entry));
+    }
+    std::uint64_t loss_count = 0;
+    if (!read_archive_le(bytes, offset, loss_count) || loss_count > manifest_end)
+        return std::nullopt;
+    for (std::uint64_t loss_index = 0; loss_index != loss_count; ++loss_index) {
+        std::uint64_t entry_index = 0;
+        std::uint8_t loss_kind = 0;
+        std::uint8_t hard_failure = 0;
+        std::uint8_t padding = 0;
+        if (!read_archive_le(bytes, offset, entry_index) || !read_archive_le(bytes, offset, loss_kind) ||
+            !read_archive_le(bytes, offset, hard_failure))
+            return std::nullopt;
+        for (int pad = 0; pad != 6; ++pad)
+            if (!read_archive_le(bytes, offset, padding))
+                return std::nullopt;
+        if (!skip_archive_string(bytes.subspan(0, manifest_end), offset) ||
+            !skip_archive_string(bytes.subspan(0, manifest_end), offset))
+            return std::nullopt;
+    }
+    if (offset != manifest_end)
+        return std::nullopt;
+    return result;
+}
+
 } // namespace
 
 CK_TEST(volume_enumerator_publishes_native_revalidation_identity) {
@@ -222,6 +346,39 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     archive.seekg(0);
     archive.read(all.data(), static_cast<std::streamsize>(all.size()));
     CK_CHECK(archive.good() || archive.eof());
+
+    const auto parsed = parse_archive_fixture(std::as_bytes(std::span<const char>(all.data(), all.size())));
+    CK_CHECK(parsed.has_value());
+    if (parsed) {
+        CK_CHECK(parsed->data_size == 16);
+        CK_CHECK(parsed->entries.size() == 3);
+        if (parsed->entries.size() == 3) {
+            CK_CHECK(parsed->entries[0].logical_size == 0);
+            CK_CHECK(parsed->entries[0].extents.empty());
+            CK_CHECK(parsed->entries[1].kind == 2);
+            CK_CHECK(parsed->entries[1].logical_size == 16);
+            CK_CHECK(parsed->entries[1].extents.size() == 2);
+            if (parsed->entries[1].extents.size() == 2) {
+                CK_CHECK(parsed->entries[1].extents[0].source_offset == 0);
+                CK_CHECK(parsed->entries[1].extents[0].archive_offset == 0);
+                CK_CHECK(parsed->entries[1].extents[0].length == 3);
+                CK_CHECK(parsed->entries[1].extents[1].source_offset == 8);
+                CK_CHECK(parsed->entries[1].extents[1].archive_offset == 8);
+                CK_CHECK(parsed->entries[1].extents[1].length == 1);
+            }
+            CK_CHECK(parsed->entries[2].kind == 3);
+            CK_CHECK(parsed->entries[2].extents.empty());
+        }
+        const auto data_begin = static_cast<std::size_t>(parsed->data_offset);
+        CK_CHECK(static_cast<unsigned char>(all[data_begin + 0]) == 'a');
+        CK_CHECK(static_cast<unsigned char>(all[data_begin + 1]) == 'b');
+        CK_CHECK(static_cast<unsigned char>(all[data_begin + 2]) == 'c');
+        for (std::size_t index = 3; index != 8; ++index)
+            CK_CHECK(static_cast<unsigned char>(all[data_begin + index]) == 0);
+        CK_CHECK(static_cast<unsigned char>(all[data_begin + 8]) == 'z');
+        for (std::size_t index = 9; index != 16; ++index)
+            CK_CHECK(static_cast<unsigned char>(all[data_begin + index]) == 0);
+    }
 
     const auto second = write_volume_archive(request);
     CK_CHECK(!second.value());
