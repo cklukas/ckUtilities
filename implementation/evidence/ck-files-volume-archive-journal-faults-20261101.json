@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "e03fd8b",
+  "feature": "archive writer journal-boundary fault handling",
+  "injected_boundaries": [
+    "Copied",
+    "Verified",
+    "CommitIntended",
+    "DestinationCommitted"
+  ],
+  "expected_effects": {
+    "before_publication": "write fails, owned staging is removed, destination archive does not exist",
+    "after_publication": "write returns PublishedDurabilityUnknown and retains the published destination"
+  },
+  "results": {
+    "macos_arm64": "20/20 focused archive tests passed",
+    "linux_arm64": "20/20 focused archive tests passed",
+    "windows_x64": "20/20 focused archive tests passed"
+  },
+  "remaining": "process-crash and controlled storage/VM fault tests remain release gates"
+}

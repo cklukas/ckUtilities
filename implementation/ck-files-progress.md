@@ -1,4 +1,14 @@
 # Files implementation evidence
+## 2026-11-01 — Archive journal-boundary fault handling
+
+Commit `e03fd8b` adds deterministic writer fault injection at `Copied`,
+`Verified`, `CommitIntended`, and `DestinationCommitted`. Failures before
+publication remove only the owned staging object and leave no destination
+archive. A failure after publication returns `PublishedDurabilityUnknown` and
+retains the destination for reconciliation. The focused archive suite passed
+**20/20** on macOS arm64, Linux ARM64 and Windows x64. Evidence: [archive
+journal fault record](evidence/ck-files-volume-archive-journal-faults-20261101.json).
+
 ## 2026-11-01 — Material sparse allocation is verified before publication
 
 Commit `7f2ad85` adds native allocated-size inspection after staging flush:
