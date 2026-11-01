@@ -85,7 +85,10 @@ endif()
 
 install(FILES README.md DESTINATION share/doc/ck-utilities COMPONENT Runtime)
 install(DIRECTORY docs/tools/ DESTINATION share/doc/ck-utilities/tools COMPONENT Runtime)
-install(DIRECTORY docs/generated/screenshots/ DESTINATION share/doc/ck-utilities/screenshots COMPONENT Runtime)
+# Utility guides refer to ../generated/screenshots/<name>.svg. Preserve that
+# relative layout in installed packages so the shipped documentation links do
+# not silently break after installation.
+install(DIRECTORY docs/generated/screenshots/ DESTINATION share/doc/ck-utilities/generated/screenshots COMPONENT Runtime)
 install(FILES LICENSE DESTINATION share/licenses/ck-utilities COMPONENT Runtime)
 install(FILES configs/ckai.example.toml DESTINATION share/ck-utilities/configs COMPONENT Runtime)
 

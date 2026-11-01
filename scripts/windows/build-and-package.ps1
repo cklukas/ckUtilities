@@ -63,7 +63,7 @@ $tools = 'ck-utilities','ck-json-view','ck-find','ck-du','ck-files','ck-edit','c
 $docRoot = Join-Path $root.FullName 'share/doc/ck-utilities'
 $guides = @(Get-ChildItem (Join-Path $docRoot 'tools') -Filter '*.md' -File)
 if ($guides.Count -ne $tools.Count + 1) { throw "The archive holds $($guides.Count) utility guides; expected $($tools.Count + 1)" }
-$screenshots = @(Get-ChildItem (Join-Path $docRoot 'screenshots') -Filter '*.svg' -File)
+$screenshots = @(Get-ChildItem (Join-Path $docRoot 'generated/screenshots') -Filter '*.svg' -File)
 if ($screenshots.Count -lt 1) { throw 'The archive holds no generated SVG screenshots' }
 foreach ($tool in $tools) {
     & (Join-Path $root.FullName "bin/$tool.exe") --help | Out-Null
