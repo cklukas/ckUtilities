@@ -1,4 +1,16 @@
 # Files implementation evidence
+## 2026-11-02 — ASan+UBSan pane-page fuzzer qualification
+
+The real `fuzz_files_pane_page` target was rebuilt in a dedicated macOS arm64
+ASan+UBSan tree with strict halt-on-error settings. The seed corpus passed;
+the accepted bounded run used `-max_len=4096` and completed **14,468
+executions** in 9 seconds with **395 coverage points**, peak RSS **385 MB**
+under the 512 MB limit, exit code 0, and no sanitizer diagnostics. An earlier
+15-second exploratory run also stayed below the cap but reached 491 MB, so the
+bounded result and that observation are both recorded. This closes only the
+macOS sanitizer gate for this seam; TSan, other hosts, resource/fault tests,
+and the full WP-07 matrix remain open. Evidence: [pane-page sanitizer record](evidence/ck-files-pane-page-sanitizer-20261102.json).
+
 ## 2026-11-02 — Bounded pane-page model fuzzer
 
 Commit `c4307d9` adds `fuzz_files_pane_page`, a bounded libFuzzer target that

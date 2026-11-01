@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "a33383886b867a82eb43f0cd05dc98e8f3be2e4a",
+  "target": "fuzz_files_pane_page",
+  "build": {
+    "host": "macOS arm64",
+    "build_type": "RelWithDebInfo",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "sanitizers": ["address", "undefined"],
+    "flags": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+    "sdk_prefix": "/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-pane-page-sanitizer-20261102-01/build",
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-pane-page-sanitizer-20261102-01",
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-pane-page-sanitizer-20261102-01",
+    "configure_start": "2026-11-02T00:51:44+01:00",
+    "configure_end": "2026-11-02T00:52:25+01:00",
+    "build_start": "2026-11-02T00:52:28+01:00",
+    "build_end": "2026-11-02T00:53:15+01:00",
+    "build_elapsed_seconds": 47,
+    "binary": "/Volumes/S8T/tmp/ckutilities-pane-page-sanitizer-20261102-01/build/fuzz/fuzz_files_pane_page",
+    "binary_sha256": "ece1baaf624113d4fcfd2b2a72e463805ca7cd7e1e9bb0dc52ab10de5ed3d897"
+  },
+  "environment": {
+    "TMPDIR": "/Volumes/S8T/tmp/ckutilities-pane-page-sanitizer-20261102-01/tmp",
+    "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=0",
+    "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
+    "rss_limit_mb": 512,
+    "timeout_seconds": 2,
+    "artifact_prefix": "/Volumes/S8T/tmp/ckutilities-pane-page-sanitizer-20261102-01/artifacts/"
+  },
+  "runs": {
+    "corpus": {
+      "result": "passed",
+      "runs": 2,
+      "corpus_files": 1,
+      "corpus_bytes": 38,
+      "sanitizer_diagnostics": "none"
+    },
+    "bounded_mutation": {
+      "command": "fuzz_files_pane_page -max_total_time=8 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261105 -print_final_stats=1 fuzz/corpus/files_pane_page",
+      "result": "passed",
+      "elapsed_seconds": 9,
+      "executions": 14468,
+      "coverage_points": 395,
+      "peak_rss_mb": 385,
+      "exit_code": 0,
+      "sanitizer_diagnostics": "none",
+      "crashes": 0,
+      "timeouts": 0
+    },
+    "exploratory_15_second_run": {
+      "result": "passed",
+      "peak_rss_mb": 491,
+      "rss_limit_mb": 512,
+      "note": "The exploratory run stayed below the cap; the accepted run above uses the explicit 4096-byte input bound and lower observed RSS."
+    }
+  },
+  "scope": "This qualifies the pane model/page fuzzer under ASan+UBSan on macOS. It does not close TSan, Windows/Linux sanitizer coverage, filesystem/provider matrix, resource exhaustion, or controlled storage-fault gates."
+}
