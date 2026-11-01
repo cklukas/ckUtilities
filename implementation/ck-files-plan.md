@@ -60,6 +60,11 @@ release instead of bypassing its contract locally.
 
 ## First-release scope
 
+The follow-on [Commander parity work packages](ck-files-parity-plan.md) close
+the remaining mutation safety limits first, then add the deferred Commander
+workflows. They require reuse of ckVision editor/terminal facilities and shared
+ckUtilities components. They do not close the current release gates below.
+
 The release includes all of these, subject to the explicit filesystem capability
 and confirmation rules below:
 
@@ -74,8 +79,9 @@ and confirmation rules below:
 - Conflict decisions, preservation/loss previews, cancellable jobs, progress,
   per-item outcomes, durable operation records, and interrupted-job recovery.
 - Bounded read-only text/hex preview and copying a path. No automatic execution
-  of files. Full-text/advanced search can use the existing Find tool through an
-  explicit, tested handoff; basic filtering remains available inside Files.
+  of files. Full-text/advanced search will reuse existing Find UI/services
+  in-process under CP-07 of the parity plan; basic filtering remains available
+  inside Files. Do not invoke a sibling tool executable as integration glue.
 - Saved layout, display settings and bookmarks; suite help, themes, shortcut
   configuration, launcher registration, CLI help/version, installation and docs.
 
