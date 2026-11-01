@@ -7646,3 +7646,14 @@ restore it from the platform payload, checking the descendant bytes. The Files
 command surface now leaves directory Trash enabled. No permanent-delete fallback
 is introduced. Foreign-mount,
 quota, permission, collision and unsupported-share qualification remains open.
+
+Windows qualification used the refreshed `V:` source archive (`SHA-256
+7cd6bcd568e71699dcafa7c24d8af5cfbe280807d78cabb7cf055c3cce46dca6`), the
+Release output under `V:\\tmp\\ckutilities-windows-1495c78\\build`, and a
+fresh `V:\\tmp` test scratch root. The focused native Trash test passed, and
+the complete configured Windows matrix passed **223/223** in 43.43 seconds.
+The first matrix attempt had one transient `ck_sysmon_sample` timeout; its
+standalone rerun passed in 0.60 seconds and the complete rerun was green.
+The macOS native Trash suite passed after the same source change. The known
+macOS aggregate Files fixture remains separate from this qualification and is
+not claimed green here.
