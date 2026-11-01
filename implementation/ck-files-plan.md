@@ -470,6 +470,9 @@ reported. All first-release features are present with no placeholder actions.
   independent inspection, not only mocked capability responses.
 - [ ] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
+  The deterministic archive-journal mutation baseline is now committed and
+  separately qualified; broad model fuzzing and the remaining resource/cost
+  gates are still required before this item can be checked off.
 - [ ] Test very large directories and operation inventories (including at least
   100,000 entries), long names, low memory, index exhaustion, slow/disconnected
   network mounts, full disks and repeated cancellation. Report measured input,

@@ -1,4 +1,21 @@
 # Files implementation evidence
+## 2026-11-01 — Bounded archive-journal mutation matrix
+
+Commit `babb9c4` adds a deterministic decoder mutation matrix covering every
+truncation prefix, every single-byte corruption position, frame reordering,
+invalid operation/sequence/state fields, identity changes, and an oversized
+frame length. The bounded decoder must either reject or return only a shorter
+verified prefix with an explicitly untrusted tail; it may not turn corrupted
+bytes into a clean longer journal. The focused archive suite passed **18/18**
+on macOS arm64 and Linux ARM64. The current complete Files suites passed
+**235/235** on both platforms; macOS used the documented ASan fixture
+compatibility setting because the existing libc++ `DirectoryCursor::read`
+container-overflow remains a known diagnostic. Windows source bytes were
+synchronized and match the commit, but no Windows test result is claimed:
+the v143 toolset repair completed successfully and the required ckVision 1.4
+SDK is not currently staged on `V:` (only incompatible 1.3.0/0.1.8 configs
+were found).
+
 ## 2026-11-01 — Archive recovery evidence monotonicity regression suite
 
 Commit `1a48d7a` adds explicit journal-state regression cases proving that a

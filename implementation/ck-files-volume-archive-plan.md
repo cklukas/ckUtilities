@@ -143,6 +143,9 @@ boundary is not exposed as a UI command yet. Real-volume interactive archive
 acceptance also remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
-not suppressed. Linux ARM64 address/undefined sanitizer qualification of the
+not suppressed. The archive decoder now has a deterministic bounded mutation
+baseline covering truncation, corruption, reordered frames, invalid semantic
+fields, identity changes and oversized lengths; it passed 18/18 on macOS and
+Linux. Linux ARM64 address/undefined sanitizer qualification of the
 archive and Files app suites passed 15/15 and 68/68 respectively; TSan and the
 full filesystem/fault matrix remain open WP-07 work.
