@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "85e1d4f",
+  "platform": "Windows x64",
+  "toolchain": "MSVC v143",
+  "development_drive": "V:",
+  "build_root": "V:/tmp/ckutilities-archive-review-20261028-01/build",
+  "build_target": "ckfiles_ckvision",
+  "build_started": "2026-11-01T13:38:02+01:00",
+  "build_ended": "2026-11-01T13:38:06+01:00",
+  "executable": "V:/tmp/ckutilities-archive-review-20261028-01/build/bin/Release/ck-files.exe",
+  "files_suite": "231/231 tests passed",
+  "conpty_contract": "1/1 passed",
+  "ctest_elapsed_seconds": 4.40,
+  "checks": ["current Files app build", "Windows ConPTY launch/draw/Alt+X contract"],
+  "environment": {
+    "TEMP": "V:/tmp/ckutilities-archive-review-20261028-01/tmp-recovery-dialog-conpty-20261101",
+    "TMP": "V:/tmp/ckutilities-archive-review-20261028-01/tmp-recovery-dialog-conpty-20261101",
+    "TMPDIR": "V:/tmp/ckutilities-archive-review-20261028-01/tmp-recovery-dialog-conpty-20261101"
+  }
+}

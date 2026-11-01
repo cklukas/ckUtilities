@@ -1,4 +1,11 @@
 # Files implementation evidence
+## 2026-11-01 — Windows Files qualification after recovery inspection
+
+The current `V:` MSVC v143 build rebuilt `ck-files` from `85e1d4f`; the Files
+suite passed **231/231**, and the Windows ConPTY contract passed **1/1** in
+4.40 seconds. Evidence is recorded in [the Windows recovery-dialog
+record](evidence/ck-files-windows-recovery-dialog-20261101.json).
+
 ## 2026-11-01 — POSIX PTY after recovery inspection
 
 The exact `ck-files` executable rebuilt from `85e1d4f` passed the real POSIX
