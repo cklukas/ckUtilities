@@ -96,6 +96,11 @@ std::optional<std::string> native_path_bytes(const ck::files::NativeAbsolutePath
     return std::nullopt;
 }
 
+void append_native_path_evidence(std::vector<std::byte> &out, const ck::files::NativeAbsolutePath &path) {
+    append_le<std::uint8_t>(out, static_cast<std::uint8_t>(path.encoding()));
+    append_string(out, *native_path_bytes(path));
+}
+
 bool safe_archive_name(std::string_view name);
 
 constexpr std::string_view archive_journal_prefix = ".ck-volume-archive-";
@@ -142,6 +147,40 @@ bool read_string(std::span<const std::byte> bytes, std::size_t &offset, std::str
     return true;
 }
 
+constexpr std::uint8_t kStagingPathEvidence = 1U;
+constexpr std::uint8_t kStagingDigestEvidence = 2U;
+
+Observation<ck::files::NativeAbsolutePath> decode_native_absolute_path(
+    ck::files::NameEncoding encoding, std::string_view bytes) {
+    if (encoding == ck::files::NameEncoding::PosixBytes)
+        return ck::files::NativeAbsolutePath::from_posix(bytes);
+    if (encoding == ck::files::NameEncoding::WindowsUtf16) {
+        if (bytes.size() % 2 != 0)
+            return Observation<ck::files::NativeAbsolutePath>::unavailable(
+                ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_utf16_path"));
+        std::u16string units;
+        units.reserve(bytes.size() / 2);
+        for (std::size_t index = 0; index != bytes.size(); index += 2)
+            units.push_back(static_cast<char16_t>(static_cast<unsigned char>(bytes[index]) |
+                                                  static_cast<unsigned char>(bytes[index + 1]) << 8));
+        return ck::files::NativeAbsolutePath::from_windows(units);
+    }
+    return Observation<ck::files::NativeAbsolutePath>::unavailable(
+        ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_path_encoding"));
+}
+
+bool read_native_absolute_path(std::span<const std::byte> bytes, std::size_t &offset,
+                               std::optional<ck::files::NameEncoding> &encoding, std::string &path) {
+    std::uint8_t value = 0;
+    if (!read_le(bytes, offset, value) ||
+        (value != static_cast<std::uint8_t>(ck::files::NameEncoding::PosixBytes) &&
+         value != static_cast<std::uint8_t>(ck::files::NameEncoding::WindowsUtf16)) ||
+        !read_string(bytes, offset, path) || path.empty())
+        return false;
+    encoding = static_cast<ck::files::NameEncoding>(value);
+    return decode_native_absolute_path(*encoding, path).value();
+}
+
 Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(
     std::span<const std::byte> bytes) {
     FilesVolumeArchiveJournalEvidence result;
@@ -153,33 +192,33 @@ Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(
         return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
             ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence"));
     if (offset != bytes.size()) {
-        std::uint8_t encoding = 0;
-        if (!read_le(bytes, offset, encoding) ||
-            (encoding != static_cast<std::uint8_t>(ck::files::NameEncoding::PosixBytes) &&
-             encoding != static_cast<std::uint8_t>(ck::files::NameEncoding::WindowsUtf16)) ||
-            !read_string(bytes, offset, result.destination_native_path) ||
-            result.destination_native_path.empty() || offset != bytes.size())
+        if (!read_native_absolute_path(bytes, offset, result.destination_encoding, result.destination_native_path))
             return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
                 ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_destination"));
-        result.destination_encoding = static_cast<ck::files::NameEncoding>(encoding);
-        if (*result.destination_encoding == ck::files::NameEncoding::WindowsUtf16 &&
-            result.destination_native_path.size() % 2 != 0)
+        if (offset == bytes.size())
+            return Observation<FilesVolumeArchiveJournalEvidence>::available(std::move(result));
+        std::uint8_t flags = 0;
+        if (!read_le(bytes, offset, flags) || (flags & ~(kStagingPathEvidence | kStagingDigestEvidence)) != 0 ||
+            ((flags & kStagingDigestEvidence) != 0 && (flags & kStagingPathEvidence) == 0))
             return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
-                ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_destination"));
-        const auto destination = *result.destination_encoding == ck::files::NameEncoding::PosixBytes
-                                     ? ck::files::NativeAbsolutePath::from_posix(result.destination_native_path)
-                                     : ck::files::NativeAbsolutePath::from_windows([&] {
-                                           std::u16string units;
-                                           units.reserve(result.destination_native_path.size() / 2);
-                                           for (std::size_t index = 0; index != result.destination_native_path.size(); index += 2)
-                                               units.push_back(static_cast<char16_t>(
-                                                   static_cast<unsigned char>(result.destination_native_path[index]) |
-                                                   static_cast<unsigned char>(result.destination_native_path[index + 1]) << 8));
-                                           return units;
-                                       }());
-        if (!destination.value())
+                ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence_flags"));
+        if (flags & kStagingPathEvidence) {
+            if (!read_native_absolute_path(bytes, offset, result.staging_encoding, result.staging_native_path))
+                return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
+                    ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_staging"));
+        }
+        if (flags & kStagingDigestEvidence) {
+            if (bytes.size() - offset < 32)
+                return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
+                    ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_digest"));
+            std::array<std::byte, 32> digest{};
+            std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(offset), digest.size(), digest.begin());
+            offset += digest.size();
+            result.staging_digest = digest;
+        }
+        if (offset != bytes.size())
             return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
-                destination.state(), destination.unavailable_detail()->error);
+                ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence_tail"));
     }
     return Observation<FilesVolumeArchiveJournalEvidence>::available(std::move(result));
 }
@@ -474,6 +513,25 @@ bool durable_flush(const std::filesystem::path &path, UnavailableObservation &fa
 #endif
 }
 
+Observation<std::array<std::byte, 32>> digest_file(const std::filesystem::path &path) {
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream)
+        return Observation<std::array<std::byte, 32>>::unavailable(
+            ObservationState::Denied, filesystem_error("volume_archive.open_digest", errno).error);
+    std::array<char, 64 * 1024> buffer{};
+    ck::files::Sha256 digest;
+    while (stream) {
+        stream.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto count = stream.gcount();
+        if (count > 0)
+            digest.update(std::as_bytes(std::span<const char>(buffer.data(), static_cast<std::size_t>(count))));
+        if (stream.bad())
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                ObservationState::Failed, filesystem_error("volume_archive.read_digest", errno).error);
+    }
+    return Observation<std::array<std::byte, 32>>::available(digest.digest());
+}
+
 bool durable_directory(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
 #if defined(_WIN32)
     (void)path;
@@ -541,15 +599,43 @@ std::optional<ck::files::NativeName> archive_journal_name(const ck::files::Nativ
     return std::nullopt;
 }
 
+std::optional<ck::files::NativeName> archive_staging_name(const ck::files::NativeAbsolutePath &destination,
+                                                          std::string_view archive_name,
+                                                          std::uint64_t transaction_id) {
+    const auto text = "." + std::string(archive_name) + ".cktmp-" + std::to_string(transaction_id);
+    if (destination.encoding() == ck::files::NameEncoding::PosixBytes)
+        return ck::files::NativeName::from_posix(text);
+    if (destination.encoding() == ck::files::NameEncoding::WindowsUtf16) {
+        std::u16string units;
+        units.reserve(text.size());
+        for (const auto character : text)
+            units.push_back(static_cast<char16_t>(static_cast<unsigned char>(character)));
+        return ck::files::NativeName::from_windows(std::move(units));
+    }
+    return std::nullopt;
+}
+
 struct ArchiveJournalBinding final {
     ck::files::OperationJournal::Pointer journal;
     std::shared_ptr<ck::files::OperationJournalFile> file;
     std::vector<std::byte> evidence;
+    std::optional<std::size_t> staging_flags_offset;
 
     ck::files::Observation<bool> append(ck::files::OperationJournalState state) {
         const auto sequence = static_cast<std::uint64_t>(journal->records().size()) + 1;
         return ck::files::append_operation_journal_file(
             *file, *journal, {sequence, 0, state, evidence});
+    }
+
+    ck::files::Observation<bool> append_staging_digest(
+        ck::files::OperationJournalState state, std::span<const std::byte> digest) {
+        if (digest.size() != 32 || !staging_flags_offset || *staging_flags_offset >= evidence.size() ||
+            std::to_integer<std::uint8_t>(evidence[*staging_flags_offset]) != kStagingPathEvidence)
+            return ck::files::Observation<bool>::unavailable(
+                ObservationState::Failed, error(AdapterError::PlanInvalid, "volume_archive.staging_evidence"));
+        evidence[*staging_flags_offset] = std::byte{kStagingPathEvidence | kStagingDigestEvidence};
+        evidence.insert(evidence.end(), digest.begin(), digest.end());
+        return append(state);
     }
 };
 
@@ -574,9 +660,23 @@ Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
         if (!decoded.value())
             return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
                 decoded.state(), decoded.unavailable_detail()->error);
-        if (evidence && *evidence != *decoded.value())
-            return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
-                ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.recovery_identity"));
+        if (evidence) {
+            const auto &current = *decoded.value();
+            const bool identity_changed = evidence->transaction_id != current.transaction_id ||
+                evidence->source_identity != current.source_identity ||
+                evidence->source_mount_point != current.source_mount_point ||
+                evidence->archive_name != current.archive_name ||
+                evidence->destination_encoding != current.destination_encoding ||
+                evidence->destination_native_path != current.destination_native_path ||
+                evidence->staging_encoding != current.staging_encoding ||
+                evidence->staging_native_path != current.staging_native_path ||
+                (evidence->staging_digest && !current.staging_digest) ||
+                (evidence->staging_digest && current.staging_digest &&
+                 *evidence->staging_digest != *current.staging_digest);
+            if (identity_changed)
+                return Observation<FilesVolumeArchiveRecoveryReport>::unavailable(
+                    ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.recovery_identity"));
+        }
         evidence = std::move(decoded).take_value();
     }
     if (!evidence)
@@ -899,7 +999,22 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         std::filesystem::remove(temp, ec);
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
-    if (request.append_journal) {
+    auto staging_digest = digest_file(temp);
+    if (!staging_digest.value()) {
+        std::filesystem::remove(temp, ec);
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            staging_digest.state(), staging_digest.unavailable_detail()->error);
+    }
+    if (request.append_journal_evidence) {
+        auto journal = request.append_journal_evidence(
+            ck::files::OperationJournalState::Copied,
+            std::span<const std::byte>(staging_digest.value()->data(), staging_digest.value()->size()));
+        if (!journal.value()) {
+            std::filesystem::remove(temp, ec);
+            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
+        }
+    } else if (request.append_journal) {
         auto journal = request.append_journal(ck::files::OperationJournalState::Copied);
         if (!journal.value()) {
             std::filesystem::remove(temp, ec);
@@ -1403,6 +1518,21 @@ struct FilesVolumeArchiveService::State final {
                             ObservationState::Unsupported));
                 return;
             }
+            const auto staging_name = archive_staging_name(value.destination_directory, value.archive_name,
+                                                            value.transaction_id);
+            if (!staging_name) {
+                fail(error(AdapterError::UnrepresentableName, "volume_archive.staging_name",
+                            ObservationState::Unsupported));
+                return;
+            }
+            const auto staging_address = value.destination_directory.child_address(*staging_name);
+            if (!staging_address.value() || !native_path_bytes(*staging_address.value())) {
+                fail(staging_address.unavailable_detail()
+                         ? *staging_address.unavailable_detail()
+                         : error(AdapterError::UnrepresentableName, "volume_archive.staging_address",
+                                 ObservationState::Unsupported));
+                return;
+            }
             auto journal_name = archive_journal_name(*value.journal_root, journal_id);
             if (!journal_name) {
                 fail(error(AdapterError::UnrepresentableName, "volume_archive.journal_name",
@@ -1425,12 +1555,14 @@ struct FilesVolumeArchiveService::State final {
             append_string(evidence, value.source.identity);
             append_string(evidence, value.source.mount_point);
             append_string(evidence, value.archive_name);
-            append_le<std::uint8_t>(evidence, static_cast<std::uint8_t>(value.destination_directory.encoding()));
-            append_string(evidence, *destination_native_path);
+            append_native_path_evidence(evidence, value.destination_directory);
+            const auto staging_flags_offset = evidence.size();
+            append_le<std::uint8_t>(evidence, kStagingPathEvidence);
+            append_native_path_evidence(evidence, *staging_address.value());
             journal = std::make_shared<ArchiveJournalBinding>(
                 std::move(created_journal).take_value(),
                 std::shared_ptr<ck::files::OperationJournalFile>(std::move(opened_journal).take_value()),
-                std::move(evidence));
+                std::move(evidence), staging_flags_offset);
             auto planned = journal->append(ck::files::OperationJournalState::Planned);
             if (!planned.value()) {
                 fail(*planned.unavailable_detail());
@@ -1465,7 +1597,10 @@ struct FilesVolumeArchiveService::State final {
             }
             FilesVolumeArchiveWriteRequest write_request{
                 std::move(complete), *destination.value(), std::move(value.archive_name), value.transaction_id,
-                [journal](ck::files::OperationJournalState state) { return journal->append(state); }};
+                [journal](ck::files::OperationJournalState state) { return journal->append(state); },
+                [journal](ck::files::OperationJournalState state, std::span<const std::byte> digest) {
+                    return journal->append_staging_digest(state, digest);
+                }};
             auto written = write_volume_archive(write_request, token);
             if (!written.value()) {
                 fail(*written.unavailable_detail());

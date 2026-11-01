@@ -137,7 +137,7 @@ CK_TEST(volume_enumerator_reports_native_archive_capability) {
 
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7, {}};
+    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7, {}, {}};
     const auto written = write_volume_archive(request);
     CK_CHECK(written.value());
     CK_CHECK(written.value()->entry_count == 3);
@@ -162,14 +162,14 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
 CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
-                                           "unknown.ckarchive", 1, {}};
+                                           "unknown.ckarchive", 1, {}, {}};
     const auto refused = write_volume_archive(unknown);
     CK_CHECK(!refused.value());
     CK_CHECK(refused.state() == ObservationState::Unknown);
 
     auto unsafe_document = document();
     unsafe_document.entries[1].path = "../escape";
-    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2, {}};
+    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2, {}, {}};
     const auto unsafe_result = write_volume_archive(unsafe);
     CK_CHECK(!unsafe_result.value());
     CK_CHECK(unsafe_result.state() == ObservationState::Unsupported);
@@ -214,7 +214,7 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     CK_CHECK(approved.value()->continued_with_listed_losses);
 
     auto unreviewed = model->document();
-    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17, {}};
+    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17, {}, {}};
     const auto write_result = write_volume_archive(write_request);
     CK_CHECK(!write_result.value());
     CK_CHECK(write_result.state() == ObservationState::Unknown);
@@ -310,11 +310,30 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                                 expected_destination.push_back(static_cast<char>(unit >> 8));
                             }
                             CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::WindowsUtf16);
+                            const auto staging_name = NativeName::from_windows(u".worker.ckarchive.cktmp-11");
 #else
                             const auto expected_destination = *destination.posix_bytes();
                             CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::PosixBytes);
+                            const auto staging_name = NativeName::from_posix(".worker.ckarchive.cktmp-11");
 #endif
                             CK_CHECK(recovery.value()->evidence.destination_native_path == expected_destination);
+                            const auto expected_staging_address = destination.child_address(*staging_name);
+                            CK_CHECK(expected_staging_address.value());
+                            if (expected_staging_address.value()) {
+                                CK_CHECK(recovery.value()->evidence.staging_encoding ==
+                                         expected_staging_address.value()->encoding());
+#if defined(_WIN32)
+                                std::string expected_staging;
+                                for (const auto unit : *expected_staging_address.value()->windows_units()) {
+                                    expected_staging.push_back(static_cast<char>(unit & 0xff));
+                                    expected_staging.push_back(static_cast<char>(unit >> 8));
+                                }
+#else
+                                const auto expected_staging = *expected_staging_address.value()->posix_bytes();
+#endif
+                                CK_CHECK(recovery.value()->evidence.staging_native_path == expected_staging);
+                            }
+                            CK_CHECK(recovery.value()->evidence.staging_digest.has_value());
                         }
                     }
                 }

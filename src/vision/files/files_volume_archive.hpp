@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -232,6 +233,11 @@ struct FilesVolumeArchiveWriteRequest final {
     // Optional for the standalone format writer; the Files archive service
     // supplies this worker-owned durable transition callback.
     std::function<ck::files::Observation<bool>(ck::files::OperationJournalState)> append_journal;
+    // Optional evidence-aware variant. The extra bytes are opaque to the
+    // writer and are used by the archive service to publish verified staging
+    // evidence at the same durable journal boundary as the state.
+    std::function<ck::files::Observation<bool>(ck::files::OperationJournalState,
+                                                std::span<const std::byte>)> append_journal_evidence;
 };
 
 enum class FilesVolumeArchivePublication {
@@ -249,7 +255,8 @@ struct FilesVolumeArchiveWriteResult final {
     bool digests_verified = false;
 };
 
-// The archive journal's evidence is intentionally small and identity-only.
+// The archive journal's evidence is intentionally bounded identity and
+// staging-artifact evidence.
 // Startup inspection returns it together with the generic recovery projection;
 // it never opens, deletes, resumes or publishes an archive.
 struct FilesVolumeArchiveJournalEvidence final {
@@ -261,6 +268,9 @@ struct FilesVolumeArchiveJournalEvidence final {
     // encoding. Legacy journals may omit it and remain inspect-only.
     std::optional<ck::files::NameEncoding> destination_encoding;
     std::string destination_native_path;
+    std::optional<ck::files::NameEncoding> staging_encoding;
+    std::string staging_native_path;
+    std::optional<std::array<std::byte, 32>> staging_digest;
     friend bool operator==(const FilesVolumeArchiveJournalEvidence &,
                            const FilesVolumeArchiveJournalEvidence &) = default;
 };
