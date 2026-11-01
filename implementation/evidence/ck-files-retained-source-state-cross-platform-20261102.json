@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "bcf47a351b8ed889d63722c59ae392e94cbf234d",
+  "change": "Preserve RetainedSource and NeedsReconciliation through the Files execution service and expose precise completion status text.",
+  "tests": {
+    "macos": {
+      "host": "macOS arm64",
+      "build_target": "ck_vision_files_tests",
+      "build_output": "/Volumes/S8T/tmp/ckutilities-retained-state-20261102-01/build/src/vision/files/ck_vision_files_tests",
+      "build_sha256": "092994b4e2cf240d5026501be2275151b4e76405f4b7045f57fdd2fc16588844",
+      "focused_execution_service": "1/1 passed",
+      "files_app": "72/72 passed",
+      "private_fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-retained-state-20261102-02"
+    },
+    "linux": {
+      "host": "uconsole Linux ARM64 7.1.4-v8-16k+",
+      "build_target": "ck_vision_files_tests",
+      "build_output": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/build/src/vision/files/ck_vision_files_tests",
+      "build_sha256": "1a709db8bcb8227740f9c8c00d201ec3899f1d3dfa0643bcfe9bfbdb8a6e9065",
+      "focused_execution_service": "1/1 passed",
+      "files_app": "72/72 passed",
+      "source_overlay": "/home/klukas/tmp/ckutilities-retained-state-linux-20261102-01",
+      "source_restored_sha256": {
+        "files_app.cpp": "3e47456d818379dd886454561b165d6093125d4ba2841ef108dd8d2d6e63349f",
+        "files_operation_execution_service.cpp": "e359e75b070feb91cb9f3e06bd8c0f7355323e06214de95005e19dc2f702b2ab",
+        "files_operation_execution_service.hpp": "857b1c0fd4df1140848cd011c47b49464a56c8eb6d2bd7364323f8c7b6a1dca9"
+      }
+    },
+    "windows": {
+      "host": "Windows workstation x64, MSVC 19.44.35228, v143",
+      "build_target": "ck_vision_files_tests",
+      "build_output": "V:\\tmp\\ckutilities-windows-release-20261101-03\\build\\src\\vision\\files\\ck_vision_files_tests.exe",
+      "build_sha256": "2b15bfd4f743ffa10df3a61969eeb78c18cc4a76a6df5bf74c024011fc41f2fc",
+      "focused_execution_service": "1/1 passed",
+      "files_app": "72/72 passed",
+      "source_overlay": "V:\\tmp\\ckutilities-retained-state-win-20261102-01",
+      "git_checkout": "V:\\dev\\ckutilities-git-bcf47a3",
+      "git_checkout_commit": "bcf47a351b8ed889d63722c59ae392e94cbf234d",
+      "git_checkout_status": "clean",
+      "source_restored": true
+    }
+  },
+  "safety_boundary": "POSIX cross-filesystem source retirement remains disabled when source exclusion or snapshot proof is unavailable; no pathname compare-delete or privilege escalation was introduced."
+}

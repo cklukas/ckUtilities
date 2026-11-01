@@ -1,4 +1,17 @@
 # Files implementation evidence
+## 2026-11-02 — Retained-source state propagation on all platforms
+
+Commit `bcf47a3` preserves the native `RetainedSource` and
+`NeedsReconciliation` outcomes through the Files execution service instead of
+collapsing them into generic failure. The UI now reports when a destination was
+published while the source was retained, and distinguishes reconciliation from
+ordinary failure. The focused execution-service test passed **1/1** and the
+full Files app suite passed **72/72** on macOS arm64, Linux ARM64, and Windows
+x64/v143. The Windows workstation now also has a clean git checkout at
+`V:\\dev\\ckutilities-git-bcf47a3` for subsequent work. Exact output hashes,
+overlay restoration and safety limits are in the [cross-platform state
+qualification record](evidence/ck-files-retained-source-state-cross-platform-20261102.json).
+
 ## 2026-11-02 — CP-01 Linux source-retirement safety boundary
 
 The current Linux ARM64 native operation-content suite passed **21/21**. It
