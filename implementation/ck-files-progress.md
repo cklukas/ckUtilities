@@ -3,6 +3,17 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-11-01 — current macOS aggregate after recovery-gate coverage
+
+The current macOS arm64 Release/Ninja executable completed the full Files
+aggregate at **232/232 tests passed**, including the new malformed-journal
+recovery-gate application test. The run used the documented Apple libc++
+compatibility setting `ASAN_OPTIONS=detect_container_overflow=0`; the known
+`DirectoryCursor::read` container-overflow fixture limitation remains open and
+is not presented as a clean broad ASan result.
+
+Evidence: [current aggregate record](evidence/ck-files-current-aggregate-20261101.json).
+
 ## 2026-11-01 — Files recovery-gate integration test
 
 Commit `cd93435` adds an application-level fixture with a qualified live volume

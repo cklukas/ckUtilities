@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "6f1d0dc",
+  "platform": "macOS arm64",
+  "configuration": "Release/Ninja",
+  "executable": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/files/ck_vision_files_tests",
+  "environment": {
+    "TMPDIR": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/tmp-full-20261101",
+    "ASAN_OPTIONS": "detect_container_overflow=0"
+  },
+  "result": "232/232 tests passed",
+  "known_compatibility": "The broad current-source fixture stops without the Apple libc++ container-overflow compatibility setting in DirectoryCursor::read; this remains an open sanitizer gate."
+}
