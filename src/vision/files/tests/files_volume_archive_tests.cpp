@@ -408,6 +408,47 @@ CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
     }
 }
 
+CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_completion) {
+    const std::array<OperationJournalState, 4> boundaries{
+        OperationJournalState::Copied,
+        OperationJournalState::Verified,
+        OperationJournalState::CommitIntended,
+        OperationJournalState::DestinationCommitted};
+    ck::testing::ScratchDirectory scratch("files-volume-archive-journal-faults", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    for (std::size_t index = 0; index != boundaries.size(); ++index) {
+        const auto destination = scratch.path() / std::to_string(index);
+        std::filesystem::create_directories(destination);
+        const auto failed_state = boundaries[index];
+        std::vector<OperationJournalState> observed;
+        FilesVolumeArchiveWriteRequest request{
+            document(), destination, "fault.ckarchive", static_cast<std::uint64_t>(100 + index),
+            [&observed, failed_state](OperationJournalState state) {
+                observed.push_back(state);
+                if (state == failed_state)
+                    return Observation<bool>::unavailable(
+                        ObservationState::Failed,
+                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+                         "test.journal_fault"});
+                return Observation<bool>::available(true);
+            },
+            {}};
+        const auto result = write_volume_archive(request);
+        CK_CHECK(std::find(observed.begin(), observed.end(), failed_state) != observed.end());
+        const auto published = destination / "fault.ckarchive";
+        if (failed_state == OperationJournalState::DestinationCommitted) {
+            CK_CHECK(result.value());
+            CK_CHECK(result.value() && result.value()->publication ==
+                     FilesVolumeArchivePublication::PublishedDurabilityUnknown);
+            CK_CHECK(std::filesystem::exists(published));
+        } else {
+            CK_CHECK(!result.value());
+            CK_CHECK(!std::filesystem::exists(published));
+            CK_CHECK(!std::filesystem::exists(destination / (".fault.ckarchive.cktmp-" +
+                                               std::to_string(100 + index))));
+        }
+    }
+}
+
 CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
