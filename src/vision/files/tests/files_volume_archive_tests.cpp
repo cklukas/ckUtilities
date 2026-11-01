@@ -427,6 +427,81 @@ CK_TEST(volume_archive_recovery_rejects_malformed_or_changed_identity_evidence) 
         CK_CHECK(!refused.value());
         CK_CHECK(refused.state() == ObservationState::Changed);
     }
+
+    const auto destination = address(std::filesystem::current_path());
+#if defined(_WIN32)
+    const auto staging_name = NativeName::from_windows(u".recovery.ckarchive.cktmp-24");
+    const auto changed_staging_name = NativeName::from_windows(u".recovery-other.ckarchive.cktmp-24");
+#else
+    const auto staging_name = NativeName::from_posix(".recovery.ckarchive.cktmp-24");
+    const auto changed_staging_name = NativeName::from_posix(".recovery-other.ckarchive.cktmp-24");
+#endif
+    CK_CHECK(staging_name && changed_staging_name);
+    if (!staging_name || !changed_staging_name)
+        return;
+    auto staging = destination.child_address(*staging_name);
+    auto changed_staging = destination.child_address(*changed_staging_name);
+    CK_CHECK(staging.value() && changed_staging.value());
+    if (!staging.value() || !changed_staging.value())
+        return;
+    std::array<std::byte, 32> digest_a{};
+    std::array<std::byte, 32> digest_b{};
+    digest_b[0] = std::byte{1};
+    const auto evidence_without_digest = archive_recovery_evidence(
+        24, destination, *staging.value(), "recovery.ckarchive");
+    const auto evidence_with_digest = archive_recovery_evidence(
+        24, destination, *staging.value(), "recovery.ckarchive", digest_a);
+    const auto evidence_changed_digest = archive_recovery_evidence(
+        24, destination, *staging.value(), "recovery.ckarchive", digest_b);
+
+    auto digest_removed = OperationJournal::create(FileOperation::Copy, journal_id(24));
+    CK_CHECK(digest_removed.value());
+    if (digest_removed.value()) {
+        CK_CHECK((*digest_removed.value())->append({1, 0, OperationJournalState::Planned,
+                                                     evidence_without_digest}).value());
+        CK_CHECK((*digest_removed.value())->append({2, 0, OperationJournalState::Prepared,
+                                                     evidence_without_digest}).value());
+        CK_CHECK((*digest_removed.value())->append({3, 0, OperationJournalState::Copied,
+                                                     evidence_with_digest}).value());
+        CK_CHECK((*digest_removed.value())->append({4, 0, OperationJournalState::Verified,
+                                                     evidence_without_digest}).value());
+        const auto refused = inspect_volume_archive_recovery(**digest_removed.value());
+        CK_CHECK(!refused.value());
+        CK_CHECK(refused.state() == ObservationState::Changed);
+    }
+
+    auto digest_changed = OperationJournal::create(FileOperation::Copy, journal_id(25));
+    CK_CHECK(digest_changed.value());
+    if (digest_changed.value()) {
+        const auto before = archive_recovery_evidence(25, destination, *staging.value(), "recovery.ckarchive");
+        const auto first = archive_recovery_evidence(25, destination, *staging.value(), "recovery.ckarchive", digest_a);
+        const auto changed_evidence = archive_recovery_evidence(
+            25, destination, *staging.value(), "recovery.ckarchive", digest_b);
+        CK_CHECK((*digest_changed.value())->append({1, 0, OperationJournalState::Planned, before}).value());
+        CK_CHECK((*digest_changed.value())->append({2, 0, OperationJournalState::Prepared, before}).value());
+        CK_CHECK((*digest_changed.value())->append({3, 0, OperationJournalState::Copied, first}).value());
+        CK_CHECK((*digest_changed.value())->append({4, 0, OperationJournalState::Verified, changed_evidence}).value());
+        const auto refused = inspect_volume_archive_recovery(**digest_changed.value());
+        CK_CHECK(!refused.value());
+        CK_CHECK(refused.state() == ObservationState::Changed);
+    }
+
+    auto staging_changed = OperationJournal::create(FileOperation::Copy, journal_id(26));
+    CK_CHECK(staging_changed.value());
+    if (staging_changed.value()) {
+        const auto before = archive_recovery_evidence(26, destination, *staging.value(), "recovery.ckarchive");
+        const auto first = archive_recovery_evidence(26, destination, *staging.value(), "recovery.ckarchive", digest_a);
+        const auto changed_staging_evidence = archive_recovery_evidence(
+            26, destination, *changed_staging.value(), "recovery.ckarchive", digest_a);
+        CK_CHECK((*staging_changed.value())->append({1, 0, OperationJournalState::Planned, before}).value());
+        CK_CHECK((*staging_changed.value())->append({2, 0, OperationJournalState::Prepared, before}).value());
+        CK_CHECK((*staging_changed.value())->append({3, 0, OperationJournalState::Copied, first}).value());
+        CK_CHECK((*staging_changed.value())->append({4, 0, OperationJournalState::Verified,
+                                                      changed_staging_evidence}).value());
+        const auto refused = inspect_volume_archive_recovery(**staging_changed.value());
+        CK_CHECK(!refused.value());
+        CK_CHECK(refused.state() == ObservationState::Changed);
+    }
 }
 
 CK_TEST(volume_archive_recovery_scan_preserves_native_names_and_reports_unfinished_journals) {
