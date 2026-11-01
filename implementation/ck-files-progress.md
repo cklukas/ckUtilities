@@ -7912,3 +7912,40 @@ suppression or workaround added.
 An earlier rehearsal using the S8T path as the private fixture root was
 rejected by the native ownership gate and is not counted as validation; the
 passing result above is the corrected run.
+
+## 2026-11-01 — Linux ARM64 Release packages and terminal acceptance
+
+The current source checkpoint `46d6278` was staged on `uconsole` under
+`/home/klukas/tmp/ckutilities-wp08-linux-20261101/source`. A fresh, normal
+ckVision 1.4.0 Release SDK was built from the pinned revision
+`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` with
+`CKVISION_SANITIZE` empty; its `libcvision.a` SHA-256 is
+`b6f2d83b331c19c1780f463fd7d6341643477c8b31cfee9fedf88d83d58c608d`.
+The ckUtilities Release configure completed at 2026-11-01T22:07:48Z with
+empty explicit C/C++ extra flags, the pinned SDK path, and the private index
+root at `/home/klukas/tmp/ckutilities-wp08-linux-20261101/private-index`.
+
+The independent ckVision consumer passed 1/1. The staged install and cutover
+checks passed. CPack produced and verified all three Linux deliverables:
+
+- `ck-utilities-0.2.0-linux.tar.gz` — SHA-256
+  `00b591385972f7b7b368bb7e9190dea6c2ce49b8d5b9922ddb33749654f2ae6b`
+- `ck-utilities_0.2.0_arm64.deb` — SHA-256
+  `fa2a80f963a712de0ecdac00ed462ed1a56f62ba7385500b6b031634333f186f`
+- `ck-utilities-0.2.0-1.aarch64.rpm` — SHA-256
+  `942137413fe4556a73f60719a01defe7b6c34a5304498560bcc5fd4a71424a36`
+
+The DEB/RPM layout verifier passed, and the complete CTest release rehearsal
+passed **223/223**, including the Files suite at 107/107. Real terminal-profile
+verification passed for the staged installed tools. A separate exact-path PTY
+launch of the staged `ck-files` rendered the menu bar, active left pane,
+location, `Name`/`Type`/`Bytes`/`Modified (UTC)` columns and footer; `Alt+X`
+closed it cleanly and the exact process-path check found no remaining instance.
+The staged `ck-files` SHA-256 is
+`5f928991ec90b2e7886e701b5b06c0db8c394526c273ddeedfdeb8f2e80c92d0`.
+
+An earlier Linux rehearsal was rejected from evidence because it used the
+ASan/UBSan ckVision SDK for a Release build; that SDK propagated sanitizer
+options into the consumer. Its build tree was discarded and the passing
+rehearsal above was rebuilt from the clean non-sanitized 1.4.0 SDK. No warning
+was disabled and no source workaround was applied.
