@@ -3,6 +3,18 @@
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.
 
+## 2026-11-01 — Files recovery-gate integration test
+
+Commit `cd93435` adds an application-level fixture with a qualified live volume
+and a malformed private archive journal. The real Files command path opens the
+volume view, leaves Copy disabled, and exposes `archive recovery review is
+required` through the shared availability result and pane footer. The focused
+Files app suite passed **69/69** on macOS arm64, Linux ARM64, and Windows
+x64/MSVC v143. No cleanup, resume, retry, or other recovery mutation is
+performed by this test or by startup scanning.
+
+Evidence: [Files recovery-gate integration record](evidence/ck-files-volume-archive-recovery-gate-current-20261101.json).
+
 ## 2026-11-01 — Linux TSan qualification of archive and Files workers
 
 The fresh ARM64 TSan build at

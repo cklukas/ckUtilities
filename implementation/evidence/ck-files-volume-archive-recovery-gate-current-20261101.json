@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "cd93435",
+  "scope": "FilesApp command/status integration for unfinished volume-archive journals",
+  "fixture": {
+    "volume_capability": "LiveReadable",
+    "journal": "malformed matching private archive journal",
+    "expected_behavior": "Copy disabled and recovery-review reason visible in pane footer"
+  },
+  "validation": {
+    "macos_arm64": "69/69 Files app tests",
+    "linux_arm64": "69/69 Files app tests",
+    "windows_x64_msvc_v143": "69/69 Files app tests"
+  },
+  "mutation": "none"
+}
