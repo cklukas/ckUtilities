@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "134cfafdb0239278b673f1ac4470790b1693b52a",
+  "validation_commit": "a7587c8",
+  "platform": "Windows x64",
+  "host": "ssh workstation",
+  "development_drive": "V:",
+  "task_root": "V:\\tmp\\ckutilities-windows-release-20261101-03",
+  "source_root": "V:\\dev\\ckutilities-134cfaf",
+  "toolchain": {
+    "compiler": "MSVC v143 19.44.35228",
+    "visual_studio_toolset": "14.44.35207",
+    "runtime": "MultiThreaded (/MT)",
+    "windows_sdk": "installed Windows SDK"
+  },
+  "ckvision": {
+    "source": "pinned ckVision 1.4.0 source revision a791f103c3bc67f9fe398cf5c5010f7c460ae7ba",
+    "sdk_root": "V:\\tmp\\ckutilities-windows-release-20261101-02\\ckvision-sdk",
+    "runtime_match": "consumer and suite both use static /MT"
+  },
+  "build": {
+    "build_root": "V:\\tmp\\ckutilities-windows-release-20261101-03\\build",
+    "target": "Release",
+    "completed_steps": 470,
+    "ck_files_output": "V:\\tmp\\ckutilities-windows-release-20261101-03\\build\\bin\\ck-files.exe",
+    "ck_files_output_last_write": "2026-11-02T00:07:57.0186271+01:00",
+    "package_consumer": "1/1 passed",
+    "ctest": "223/223 passed",
+    "windows_conpty_contract": "1/1 passed inside the full CTest run"
+  },
+  "archive": {
+    "path": "V:\\tmp\\ckutilities-windows-release-20261101-03\\packages\\ck-utilities-0.2.0-windows-x64.zip",
+    "sha256": "0f16dd3a5199984085732e93f512d8d36de2644bd55f27d4d5163b10832bd142",
+    "extracted_root": "V:\\tmp\\ckutilities-windows-release-20261101-03\\zip-check\\ck-utilities-0.2.0-windows-x64",
+    "top_level_entries": ["bin", "share"],
+    "tools_with_help_passing": 10,
+    "utility_guides": 10,
+    "markdown_files": 11,
+    "svg_screenshots": 29,
+    "resolved_screenshot_links": 29
+  },
+  "runtime_install": {
+    "path": "V:\\dev\\ckutilities-install-134cfaf-runtime",
+    "component": "Runtime",
+    "executable": "V:\\dev\\ckutilities-install-134cfaf-runtime\\bin\\ck-files.exe",
+    "ck_files_version": "ck-files 0.2.0 (ckVision 1.4.0)",
+    "ck_files_sha256": "2b94238bd4782a52514da510b6a10c6ebad22f2400f73fc547369626b50ceaee",
+    "help": "passed",
+    "utility_guides": 10,
+    "svg_screenshots": 29
+  },
+  "installed_conpty": {
+    "terminal": "Windows OpenSSH ConPTY",
+    "fixture_root": "V:\\tmp\\ckutilities-windows-installed-pty-20261102-01",
+    "checks": [
+      "exact installed executable path",
+      "live two-pane frame rendered",
+      "menus and active-pane markers rendered",
+      "location fields and Name/Type/Bytes columns rendered",
+      "dynamic footer hint and status bar rendered",
+      "Alt+X clean exit",
+      "zero remaining process at exact executable path"
+    ],
+    "status": "pass"
+  },
+  "status": "pass"
+}

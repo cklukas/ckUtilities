@@ -1,4 +1,26 @@
 # Files implementation evidence
+## 2026-11-02 — Windows installed layout and current ConPTY acceptance
+
+The Windows package was rebuilt from source commit `134cfaf` on the required
+`V:` development drive with 470/470 build steps completed, the independent
+ckVision package consumer passing **1/1**, and the complete CTest matrix
+passing **223/223**. The corrected package contract now distinguishes the ten
+utility guides from the top-level README: the extracted ZIP contains exactly
+`bin` and `share`, 10 executable entry points, 10 utility guides, 11 Markdown
+files total, and 29 SVG screenshots. All 29 guide screenshot references resolve
+inside the installed `generated/screenshots` tree. ZIP SHA-256 is
+`0f16dd3a5199984085732e93f512d8d36de2644bd55f27d4d5163b10832bd142`.
+
+The Runtime component is installed at
+`V:\\dev\\ckutilities-install-134cfaf-runtime`. Its exact `ck-files.exe`
+reports `ck-files 0.2.0 (ckVision 1.4.0)`, has SHA-256
+`2b94238bd4782a52514da510b6a10c6ebad22f2400f73fc547369626b50ceaee`, and
+passes `--help`. A real Windows OpenSSH ConPTY launch of that exact installed
+path rendered the live two-pane frame, menus, active-pane markers, location
+fields, Name/Type/Bytes columns, dynamic footer and status bar, then exited
+through Alt+X with no process remaining. Evidence: [current Windows layout
+record](evidence/ck-files-windows-release-layout-current-20261102.json).
+
 ## 2026-11-01 — macOS current-source Release matrix
 
 The fresh macOS arm64 Release build completed from the current checkout under
