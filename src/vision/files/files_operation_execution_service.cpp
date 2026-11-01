@@ -30,6 +30,28 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
                            request.policy.copy_limits.valid());
 }
 
+FilesOperationExecutionState execution_state(ck::files::OperationBatchState state,
+                                             bool stop_requested) noexcept {
+    using BatchState = ck::files::OperationBatchState;
+    switch (state) {
+    case BatchState::Complete:
+        return FilesOperationExecutionState::Complete;
+    case BatchState::Cancelled:
+        return FilesOperationExecutionState::Cancelled;
+    case BatchState::RetainedSource:
+        return FilesOperationExecutionState::RetainedSource;
+    case BatchState::NeedsReconciliation:
+        return FilesOperationExecutionState::NeedsReconciliation;
+    case BatchState::Ready:
+    case BatchState::Running:
+    case BatchState::Failed:
+        return stop_requested ? FilesOperationExecutionState::Cancelled
+                               : FilesOperationExecutionState::Failed;
+    }
+    return stop_requested ? FilesOperationExecutionState::Cancelled
+                          : FilesOperationExecutionState::Failed;
+}
+
 } // namespace
 
 struct FilesOperationExecutionService::State final {
@@ -259,10 +281,7 @@ struct FilesOperationExecutionService::State final {
                     : outcome == ck::files::OperationItemOutcome::NeedsReconciliation
                         ? ck::files::OperationBatchState::NeedsReconciliation
                         : ck::files::OperationBatchState::Failed;
-            result.state = outcome == ck::files::OperationItemOutcome::Complete
-                ? FilesOperationExecutionState::Complete
-                : stop_token.stop_requested() || outcome == ck::files::OperationItemOutcome::Cancelled
-                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            result.state = execution_state(result.result.state, stop_token.stop_requested());
             if (result.state != FilesOperationExecutionState::Complete)
                 result.error = deletion_job->result().failure;
             emit(std::move(result));
@@ -305,10 +324,7 @@ struct FilesOperationExecutionService::State final {
                    job->state() != ck::files::OperationBatchState::NeedsReconciliation)
                 job->advance(stop_token);
             result.result = job->result();
-            result.state = job->state() == ck::files::OperationBatchState::Complete
-                ? FilesOperationExecutionState::Complete
-                : stop_token.stop_requested() || job->state() == ck::files::OperationBatchState::Cancelled
-                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            result.state = execution_state(job->state(), stop_token.stop_requested());
             if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
                 result.error = result.result.items.back().failure;
             emit(std::move(result));
@@ -360,10 +376,7 @@ struct FilesOperationExecutionService::State final {
                            job->state() != ck::files::OperationBatchState::NeedsReconciliation)
                         job->advance(stop_token);
                     result.result = job->result();
-                    result.state = job->state() == ck::files::OperationBatchState::Complete
-                        ? FilesOperationExecutionState::Complete
-                        : stop_token.stop_requested() || job->state() == ck::files::OperationBatchState::Cancelled
-                            ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+                    result.state = execution_state(job->state(), stop_token.stop_requested());
                     if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
                         result.error = result.result.items.back().failure;
                     emit(std::move(result));
@@ -443,10 +456,7 @@ struct FilesOperationExecutionService::State final {
                     : outcome == ck::files::OperationItemOutcome::RetainedSource
                         ? ck::files::OperationBatchState::RetainedSource
                         : ck::files::OperationBatchState::Failed;
-            result.state = outcome == ck::files::OperationItemOutcome::Complete
-                ? FilesOperationExecutionState::Complete
-                : stop_token.stop_requested() || outcome == ck::files::OperationItemOutcome::Cancelled
-                    ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+            result.state = execution_state(result.result.state, stop_token.stop_requested());
             if (result.state != FilesOperationExecutionState::Complete)
                 result.error = job->result().failure;
             emit(std::move(result));
@@ -473,10 +483,7 @@ struct FilesOperationExecutionService::State final {
                job->state() != ck::files::OperationBatchState::NeedsReconciliation)
             job->advance(stop_token);
         result.result = job->result();
-        result.state = job->state() == ck::files::OperationBatchState::Complete
-            ? FilesOperationExecutionState::Complete
-            : stop_token.stop_requested() || job->state() == ck::files::OperationBatchState::Cancelled
-                ? FilesOperationExecutionState::Cancelled : FilesOperationExecutionState::Failed;
+        result.state = execution_state(job->state(), stop_token.stop_requested());
         if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
             result.error = result.result.items.back().failure;
         emit(std::move(result));

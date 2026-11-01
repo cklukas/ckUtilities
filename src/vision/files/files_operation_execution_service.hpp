@@ -33,7 +33,14 @@ struct FilesOperationExecutionRequest final {
 };
 
 enum class FilesOperationExecutionSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
-enum class FilesOperationExecutionState { Complete, Failed, Cancelled, WorkerFault };
+enum class FilesOperationExecutionState {
+    Complete,
+    Failed,
+    Cancelled,
+    RetainedSource,
+    NeedsReconciliation,
+    WorkerFault
+};
 
 struct FilesOperationExecutionTicket final {
     FilesOperationExecutionTicket() = default;

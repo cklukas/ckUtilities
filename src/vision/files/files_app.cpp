@@ -2447,22 +2447,42 @@ struct FilesApp::State {
             return;
         operation_execution_request.reset();
         const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
-        if (reply.state == FilesOperationExecutionState::Complete) {
+        if (reply.state == FilesOperationExecutionState::Complete ||
+            reply.state == FilesOperationExecutionState::RetainedSource) {
             const auto source = active;
             const bool source_refreshed = refresh(source);
             const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - active);
             if (!source_refreshed || !destination_refreshed) {
-                panes[source].error = std::string(operation == ck::files::FileOperation::Move ? "Move" :
-                                                   operation == ck::files::FileOperation::Delete ? "Delete" : "Copy") +
-                    " completed; refresh could not be started";
+                std::string detail = std::string(operation == ck::files::FileOperation::Move ? "Move" :
+                                                  operation == ck::files::FileOperation::Delete ? "Delete" : "Copy") +
+                    (reply.state == FilesOperationExecutionState::RetainedSource
+                         ? " completed; destination published, source retained"
+                         : " completed; refresh could not be started");
+                if (reply.state == FilesOperationExecutionState::RetainedSource && reply.error)
+                    detail += ": " + reply.error->error.operation;
+                if (reply.state == FilesOperationExecutionState::RetainedSource)
+                    detail += "; refresh could not be started";
+                panes[source].error = std::move(detail);
                 if (operation != ck::files::FileOperation::Delete)
                     panes[1 - active].error = panes[source].error;
+            } else if (reply.state == FilesOperationExecutionState::RetainedSource) {
+                std::string detail = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
+                    " completed; destination published, source retained";
+                if (reply.error)
+                    detail += ": " + reply.error->error.operation;
+                panes[source].error = detail;
+                panes[1 - source].error = detail;
             }
         } else {
             const std::string label = operation == ck::files::FileOperation::Move ? "Move" :
                 operation == ck::files::FileOperation::Delete ? "Delete" : "Copy";
-            std::string detail = reply.state == FilesOperationExecutionState::Cancelled
-                ? label + " cancelled" : label + " failed";
+            std::string detail;
+            if (reply.state == FilesOperationExecutionState::Cancelled)
+                detail = label + " cancelled";
+            else if (reply.state == FilesOperationExecutionState::NeedsReconciliation)
+                detail = label + " needs reconciliation; no source retirement was attempted";
+            else
+                detail = label + " failed";
             if (reply.error)
                 detail += ": " + reply.error->error.operation;
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
