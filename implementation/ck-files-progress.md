@@ -12,9 +12,12 @@ on macOS arm64 and Linux ARM64. The current complete Files suites passed
 compatibility setting because the existing libc++ `DirectoryCursor::read`
 container-overflow remains a known diagnostic. Windows source bytes were
 synchronized and match the commit, but no Windows test result is claimed:
-the v143 toolset repair completed successfully and the required ckVision 1.4
-SDK is not currently staged on `V:` (only incompatible 1.3.0/0.1.8 configs
-were found).
+the v143 repair completed successfully, and a native ckVision 1.4.0 SDK was
+rebuilt from the staged 1.4.0 source with **130/130** Ninja steps and installed
+on `V:`. The ckUtilities CMake consumer still rejects that staged package
+during package discovery, so Windows source/test qualification remains open
+until that consumer boundary is resolved without using the incompatible
+1.3.0/0.1.8 packages.
 
 ## 2026-11-01 — Archive recovery evidence monotonicity regression suite
 
