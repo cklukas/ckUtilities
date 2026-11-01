@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-01",
+  "platform": "Linux ARM64",
+  "host": "uconsole",
+  "source_checkpoint": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "executable": "/home/klukas/tmp/ckutilities-wp08-linux-20261101/build/tests/unit/ck_files/ck_files_native_tests",
+  "suite": "test_files_operation_content_native.cpp",
+  "result": "21/21 passed",
+  "critical_cases": [
+    "cross-filesystem move retains source when POSIX source exclusion is unsupported",
+    "source retirement refuses unqualified POSIX compare-delete",
+    "destination publication precedes any qualified source retirement",
+    "staging cleanup uses handle-bound disposition",
+    "operation journals preserve item receipts and recovery identity checks",
+    "frozen-tree retirement does not include newly appeared children"
+  ],
+  "task_root": "/home/klukas/tmp/ckutilities-cp01-20261102-01",
+  "task_root_cleaned": true,
+  "status": "pass_safety_boundary_posix_move_remains_disabled"
+}

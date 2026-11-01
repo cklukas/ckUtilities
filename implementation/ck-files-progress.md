@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-02 — CP-01 Linux source-retirement safety boundary
+
+The current Linux ARM64 native operation-content suite passed **21/21**. It
+includes a real cross-filesystem move case that retains the source when POSIX
+source exclusion is unsupported, plus the explicit refusal of unqualified
+POSIX compare-delete. Destination publication, handle-bound staging cleanup,
+journal receipts, and frozen-tree retirement boundaries also passed. This
+evidence strengthens the safety boundary; it does not enable POSIX
+cross-filesystem source retirement without a proven exclusion or snapshot
+protocol. Evidence: [current CP-01 Linux safety record](evidence/ck-files-linux-cp01-safety-current-20261102.json).
+
 ## 2026-11-02 — Windows pane-local volume view in a real ConPTY
 
 The refreshed Runtime install was launched in a real Windows OpenSSH ConPTY
