@@ -7820,3 +7820,31 @@ The `fuzz-corpus` CTest label passed **3/3**: todo codec, sysmon and operation
 journal. No linker warnings, sanitizer suppressions or corpus workarounds were
 used. This is corpus coverage, not a claim that the full long-running fuzz
 budget or the remaining filesystem/fault matrix is complete.
+
+## 2026-11-01 — macOS pinned-SDK Files normal qualification
+
+A fresh Release build was configured against the same explicitly resolved
+ckVision 1.4.0 SDK used by the fuzzer checkpoint. Build configuration began at
+2026-11-01T22:04:03+0100, the three Files test executables finished building at
+22:06:24, and testing finished at 22:06:38. Build and test scratch data stayed
+under
+`/Volumes/S8T/tmp/ckutilities-wp07-files-normal-20261101-02`; the private
+index root was explicitly placed at the ownership-enabled
+`/Volumes/PRO-BLADE/tmp/ckutilities-wp07-files-normal-20261101-02-test-scratch`.
+
+The complete `files` CTest label passed **107/107** in 14.30 seconds: the
+Files application suite, 69 core suites and 37 native suites. The verified
+outputs were:
+
+- `ck_vision_files_tests` — SHA-256
+  `73d161fc309f18e166cf0453a0f07a06dcc7c3bf90eb28b58f2a072e7e929794`
+- `ck_files_core_tests` — SHA-256
+  `ce358a27803dfda2e8b949314bbc081e62843c6ee640be0da44ae6a7369298e7`
+- `ck_files_native_tests` — SHA-256
+  `ace18803ab784fe477ab10668eab5fa38c0ad61f116c1e573bf6bb5ce1666686`
+
+The CMake package path was verified as
+`/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk/lib/cmake/ckvision`.
+No test was counted when the ownership-disabled S8T root was selected; the
+fixture refused that root before native work, as required by the private-index
+contract.
