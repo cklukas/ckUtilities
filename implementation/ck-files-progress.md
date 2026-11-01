@@ -1,4 +1,13 @@
 # Files implementation evidence
+## 2026-11-02 — TSan pane-page fuzzer qualification
+
+The same real `fuzz_files_pane_page` target was rebuilt with ThreadSanitizer
+on macOS arm64. The seed corpus passed; the explicit bounded run completed
+**22,688 executions** in 9 seconds with 86 MB peak RSS, exit code 0, no race
+reports, and no timeout. This closes only the pane model/page TSan seam;
+application-wide race coverage, other hosts, resource/fault tests, and the
+full WP-07 matrix remain open. Evidence: [pane-page TSan record](evidence/ck-files-pane-page-tsan-20261102.json).
+
 ## 2026-11-02 — ASan+UBSan pane-page fuzzer qualification
 
 The real `fuzz_files_pane_page` target was rebuilt in a dedicated macOS arm64

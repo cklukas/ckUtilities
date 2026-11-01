@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "bf8104735cbd6278dff7e54c6eb4c64c28c4c8d6",
+  "target": "fuzz_files_pane_page",
+  "build": {
+    "host": "macOS arm64",
+    "build_type": "RelWithDebInfo",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "sanitizers": ["thread"],
+    "flags": "-fsanitize=thread -fno-omit-frame-pointer",
+    "sdk_prefix": "/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-pane-page-tsan-20261102-01/build",
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-pane-page-tsan-20261102-01",
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-pane-page-tsan-20261102-01",
+    "configure_start": "2026-11-02T00:54:28+01:00",
+    "configure_end": "2026-11-02T00:55:03+01:00",
+    "build_start": "2026-11-02T00:55:03+01:00",
+    "build_end": "2026-11-02T00:55:22+01:00",
+    "build_elapsed_seconds": 54,
+    "binary": "/Volumes/S8T/tmp/ckutilities-pane-page-tsan-20261102-01/build/fuzz/fuzz_files_pane_page",
+    "binary_sha256": "a7812dabe1a9e943790c032689d4c0e5b3836a82d148cf3e176b6c55e7fd814b"
+  },
+  "environment": {
+    "TMPDIR": "/Volumes/S8T/tmp/ckutilities-pane-page-tsan-20261102-01/tmp",
+    "TSAN_OPTIONS": "halt_on_error=1:report_bugs=1",
+    "rss_limit_mb": 512,
+    "timeout_seconds": 2,
+    "artifact_prefix": "/Volumes/S8T/tmp/ckutilities-pane-page-tsan-20261102-01/artifacts/"
+  },
+  "runs": {
+    "corpus": {
+      "result": "passed",
+      "runs": 2,
+      "corpus_files": 1,
+      "corpus_bytes": 38,
+      "race_reports": 0
+    },
+    "bounded_mutation": {
+      "command": "fuzz_files_pane_page -max_total_time=8 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261106 -print_final_stats=1 fuzz/corpus/files_pane_page",
+      "result": "passed",
+      "elapsed_seconds": 9,
+      "executions": 22688,
+      "coverage_points": 149,
+      "peak_rss_mb": 86,
+      "exit_code": 0,
+      "race_reports": 0,
+      "timeouts": 0
+    }
+  },
+  "scope": "This qualifies the pane model/page fuzzer under TSan on macOS. It does not close application-wide race coverage, Windows/Linux sanitizer coverage, resource exhaustion, filesystem/provider matrix, or controlled storage-fault gates."
+}
