@@ -37,6 +37,7 @@ endfunction()
 cktools_add_fuzzer(fuzz_todo_codec fuzz_todo_codec.cpp todo_codec ck_vision_todo)
 cktools_add_fuzzer(fuzz_sysmon fuzz_sysmon.cpp sysmon ck_vision_sysmon)
 cktools_add_fuzzer(fuzz_operation_journal fuzz_operation_journal.cpp operation_journal)
+cktools_add_fuzzer(fuzz_files_pane_page fuzz_files_pane_page.cpp files_pane_page ck_files_core)
 target_link_libraries(fuzz_operation_journal PRIVATE ckvision::cvision)
 target_sources(fuzz_operation_journal PRIVATE
   ${PROJECT_SOURCE_DIR}/src/native-core/files/operation_journal.cpp)
