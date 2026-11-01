@@ -7455,7 +7455,18 @@ recursive Trash remain explicitly disabled pending their native qualification.
 Focused macOS journal/recovery/native tests passed 5/5, including the safety
 test that keeps the tree intact when the platform retirement adapter is
 unsupported. The core checkpoint is commit `f44fce6`; the UI/execution wiring
-continues in the next bounded commit.
+checkpoint is commit `1495c78`.
+
+## 2026-11-01 — Windows recursive-deletion qualification
+
+The Windows qualification found and fixed a native-handle ownership defect:
+the delete worker copied the frozen source handles but left the inventory's
+duplicate owners alive, so Windows correctly refused a parent directory that
+still appeared non-empty. The worker now releases the transferred inventory
+owners and retains only its controlled source vector. The Windows Release
+build using the repaired v143-compatible ckVision SDK passed 223/223 CTest
+entries, including the recursive deletion test; the macOS focused journal,
+recovery and native set passed 5/5. Fix is pending the next repository commit.
 
 
 ## 2026-10-28 — Cross-platform contextual availability qualification

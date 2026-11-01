@@ -1057,7 +1057,12 @@ CK_TEST(native_operation_delete_tree_retires_only_the_frozen_tree) {
          job->state() != OperationExecutionState::NeedsReconciliation; ++step)
         job->advance();
 #if defined(_WIN32)
-    CK_CHECK(job->state() == OperationExecutionState::Complete);
+    const auto final_state = job->state();
+    job.reset();
+    root_source.reset();
+    source_root.reset();
+    fixture_root.reset();
+    CK_CHECK(final_state == OperationExecutionState::Complete);
     CK_CHECK(!fs::exists(source_path));
 #else
     CK_CHECK(job->state() == OperationExecutionState::Failed);

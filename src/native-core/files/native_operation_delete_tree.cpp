@@ -46,14 +46,20 @@ std::optional<NativeName> generated_name(NameEncoding encoding, const char* pref
 
 struct NativeOperationDeleteTreeJob::State final {
     explicit State(NativeOperationDeleteTreeRequest value, OperationJournal::Pointer journal_value)
-        : request(std::move(value)), journal(std::move(journal_value)), sources(request.inventory->sources()) {}
+        : request(std::move(value)), journal(std::move(journal_value)) {
+        frozen_inventory = request.inventory->inventory();
+        sources = request.inventory->sources();
+        request.inventory->release_sources();
+        request.inventory.reset();
+    }
 
     NativeOperationDeleteTreeRequest request;
     OperationJournal::Pointer journal;
+    FrozenInventory::Pointer frozen_inventory;
     std::vector<HeldChild::Pointer> sources;
     std::size_t next = 0;
 
-    const FrozenInventory& inventory() const noexcept { return *request.inventory->inventory(); }
+    const FrozenInventory& inventory() const noexcept { return *frozen_inventory; }
 
     Observation<bool> append(std::size_t item, OperationJournalState state) {
         std::vector<std::byte> evidence;
@@ -160,8 +166,8 @@ Observation<NativeOperationDeleteTreeJob::Pointer> NativeOperationDeleteTreeJob:
 }
 
 OperationProgress NativeOperationDeleteTreeJob::progress() const noexcept {
-    const auto total = state_data_ && state_data_->request.inventory && state_data_->request.inventory->inventory()
-        ? std::optional<std::uint64_t>(state_data_->request.inventory->inventory()->logical_bytes()) : std::nullopt;
+    const auto total = state_data_ && state_data_->frozen_inventory
+        ? std::optional<std::uint64_t>(state_data_->frozen_inventory->logical_bytes()) : std::nullopt;
     return {state_, 0, total};
 }
 

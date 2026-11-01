@@ -124,8 +124,8 @@ Current implementation checkpoint: the native worker and `CKDE` recovery
 evidence are implemented. The worker journals every planned/prepared/removal
 intent/retired/complete boundary, revalidates each held parent and child
 identity, and processes the sealed inventory in reverse order. The Files
-command surface only routes recursive directory deletion through that worker
-on the qualified Windows path; POSIX recursive retirement remains disabled
+command surface routes recursive directory deletion through that worker on the
+qualified Windows path; POSIX recursive retirement remains disabled
 with a status reason. Native Trash is still single-entry only, so recursive
 Trash remains disabled rather than falling back to permanent deletion.
 
