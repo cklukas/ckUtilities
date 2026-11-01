@@ -47,8 +47,11 @@ execute files or provide an embedded shell.
   the scan is complete and no reconciliation-required journal is present.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals; cleanup and
-  revalidated retry remain unavailable until their exact destination evidence
-  and identity checks are implemented. See the [volume archive
+  revalidated retry remain unavailable until their staging artifact digest,
+  exact destination evidence, and identity checks are bound to a worker action.
+  New journals retain the exact native staging address and a post-flush
+  whole-file digest for that future check; this does not enable cleanup by
+  itself. See the [volume archive
   plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,

@@ -130,10 +130,14 @@ dialog, and Files planning/review/execution/readiness wiring are implemented and
 focused-qualified on macOS, Linux ARM64 and Windows x64. The format records
 exact POSIX bytes or Windows UTF-16 units plus explicit loss records;
 new archive journal evidence also records the exact destination address in its
-native encoding, while legacy journals without that field remain inspect-only;
-unreviewed losses and hard losses cannot reach the writer. Snapshot/provider
-qualification and cleanup/revalidated-retry actions remain open. Real-volume
-interactive archive acceptance also remains open. The macOS broad app ASan
+native encoding, the deterministic staging address, and a post-flush
+whole-file SHA-256 digest, while legacy journals without those fields remain
+inspect-only; malformed or non-monotonic evidence is rejected. Unreviewed
+losses and hard losses cannot reach the writer. Snapshot/provider
+qualification and worker-owned cleanup/revalidated-retry actions remain open:
+the digest is evidence for a future identity-bound action, not permission to
+delete or resume anything. Real-volume interactive archive acceptance also
+remains open. The macOS broad app ASan
 fixture currently reports an existing libc++ container-overflow diagnostic in
 `DirectoryCursor::read`; this is retained as an explicit validation blocker,
 not suppressed. Linux ARM64 address/undefined sanitizer qualification of the

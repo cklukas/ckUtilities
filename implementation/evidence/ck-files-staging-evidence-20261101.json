@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-01",
+  "commit": "0e30f4b",
+  "feature": "volume archive verified staging evidence",
+  "source": {
+    "root": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "files": [
+      {
+        "path": "src/vision/files/files_volume_archive.cpp",
+        "sha256": "dbb352b41b4b9fb4b91e398feaf40ddca8cf99d46814cc552b32e85b4b643de9"
+      },
+      {
+        "path": "src/vision/files/files_volume_archive.hpp",
+        "sha256": "8e4d58cf3979f918808d70f7635a7fbbee1804d1cdc0bb30a16650295c2b2d390"
+      },
+      {
+        "path": "src/vision/files/tests/files_volume_archive_tests.cpp",
+        "sha256": "e34c5cca5bb648618dc0a28cd683e9e9351917d2776b24e949fdcffbaf8f5673"
+      }
+    ]
+  },
+  "behavior": [
+    "New journals retain the exact native destination and deterministic staging address.",
+    "The writer computes a whole-file SHA-256 after durable staging flush and records it at Copied.",
+    "Recovery rejects identity or staging-address changes, digest removal, and digest flags without a staging path.",
+    "Legacy journals remain readable but are not eligible for future mutating recovery actions."
+  ],
+  "qualification": {
+    "macos": {
+      "focused_archive_tests": "15/15",
+      "files_suite": "232/232",
+      "binary": "/Volumes/PRO-BLADE/tmp/ckutilities-volume-recovery-20261028-02/build/src/vision/files/ck_vision_files_tests",
+      "binary_sha256": "bb0f32099df10003faed50f285583ede2e9a0bf4bf74963cdc3fd92b0f2cd065"
+    },
+    "windows_x64": {
+      "focused_archive_tests": "15/15",
+      "files_suite": "231/231",
+      "source": "V:\\dev\\ckutilities",
+      "build": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build",
+      "binary": "V:\\tmp\\ckutilities-archive-review-20261028-01\\build\\src\\vision\\files\\Release\\ck_vision_files_tests.exe",
+      "binary_sha256": "EA51EFDA4E10186D9677CDE3729672EFED4EC1F5FFE955C27DCD32A8676E2839",
+      "toolchain": "Visual Studio 2022 v143"
+    },
+    "linux_arm64": {
+      "focused_archive_tests": "15/15",
+      "files_suite": "232/232",
+      "source": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/source",
+      "build": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build",
+      "binary": "/home/klukas/tmp/ckutilities-linux-identity-20261028-01/build/src/vision/files/ck_vision_files_tests",
+      "binary_sha256": "0b0098f0eac7aae789f05801fbb92fc6cdf6f03ea3d9ee60235872127616a4c8"
+    }
+  },
+  "not_enabled": [
+    "worker-owned staging cleanup",
+    "resume or revalidated retry",
+    "automatic publication or deletion during recovery",
+    "snapshot-provider mode"
+  ]
+}

@@ -1,4 +1,17 @@
 # Files implementation evidence
+## 2026-11-01 — Verified staging evidence and cross-platform qualification
+
+Volume archive journals now retain the deterministic native staging address
+alongside a whole-file SHA-256 digest computed after the staging file is
+flushed. Recovery accepts the digest only as a monotonic addition; it rejects
+identity changes, staging-address changes, digest removal, and malformed
+digest-without-staging records. The focused archive suite passed **15/15** on
+macOS, Windows x64, and Linux ARM64. The complete Files suites passed
+**232/232** on macOS, **231/231** on Windows x64, and **232/232** on Linux
+ARM64. This remains evidence for future worker-owned cleanup only; no cleanup,
+resume, retry, or publication action is enabled by it.
+Details: [verified staging evidence](evidence/ck-files-staging-evidence-20261101.json).
+
 ## 2026-11-01 — Native destination evidence for archive recovery
 
 New volume archive journal records now retain the exact destination address in
