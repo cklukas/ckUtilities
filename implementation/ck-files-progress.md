@@ -7848,3 +7848,32 @@ The CMake package path was verified as
 No test was counted when the ownership-disabled S8T root was selected; the
 fixture refused that root before native work, as required by the private-index
 contract.
+
+## 2026-11-01 — Windows V: Release install and ConPTY acceptance
+
+The exact committed source snapshot `905940837109c9aa655ce84b8db3c302272b3a01`
+was synchronized to `V:\\dev\\ckutilities-9059408`; its `files_app.cpp`
+SHA-256 is
+`3E47456D818379DD886454561B165D6093125D4BA2841EF108DD8D2D6E63349F`.
+Windows development used the required ReFS `V:` drive for source, SDK, build,
+temporary files and install output. A fresh normal ckVision 1.4.0 SDK was built
+from the workstation checkout and installed into the task staging tree; its
+`cvision.lib` SHA-256 is
+`E617D6593DAE052E7A634B7ADE7A0D7D62BCE9280D8697F2B76141349D6BEDF0`.
+
+The current `ck-files` Release build tree was created at
+2026-11-01T22:11:45.2536432+01:00 and produced the verified executable at
+2026-11-01T22:26:26.4646938+01:00. The installed executable is
+`V:\\dev\\ckutilities-install-9059408\\bin\\ck-files.exe`, with SHA-256
+`7F890A9600A1437192248EEB3DA31FFDDCF24104D780CA72B8B77E2BE6F67728`.
+It reports `ck-files 0.2.0 (ckVision 1.4.0)` and its help output is valid.
+The install prefix also contains the complete utility documentation and the
+current Files screenshots.
+
+One real SSH/ConPTY launch of that exact installed absolute path rendered the
+menu bar, focused left pane, Windows home location, both pane columns, live
+110-item listing, selection summary and footer. The process exited cleanly
+with the standard `Alt+X` command, and an exact executable-path process check
+confirmed no instance remained. This is Windows real-window evidence for the
+current installed build; mouse/restricted-key coverage and the broader
+filesystem/provider/fault matrix remain open WP-07/WP-08 gates.
