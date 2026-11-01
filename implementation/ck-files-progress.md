@@ -7877,3 +7877,38 @@ with the standard `Alt+X` command, and an exact executable-path process check
 confirmed no instance remained. This is Windows real-window evidence for the
 current installed build; mouse/restricted-key coverage and the broader
 filesystem/provider/fault matrix remain open WP-07/WP-08 gates.
+
+## 2026-11-01 — macOS Release rehearsal and package cutover
+
+A fresh macOS arm64 Release rehearsal was configured at
+2026-11-01T22:37:39+0100 under
+`/Volumes/S8T/tmp/ckutilities-wp08-rehearsal-20261101/build`, using the pinned
+ckVision 1.4.0 package at
+`/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk`.
+The private Files index fixture root was explicitly placed at
+`/Volumes/PRO-BLADE/tmp/ckutilities-wp08-rehearsal-20261101-private-index` so
+the ownership gate could be exercised without placing private test state on
+the temporary S8T volume.
+
+The independent ckVision package consumer passed 1/1. The staged install
+passed executable help/version smoke tests and the cutover check; CPack
+produced and verified
+`/Volumes/S8T/tmp/ckutilities-wp08-rehearsal-20261101/build/ck-utilities-0.2.0-macos.tar.gz`.
+Its SHA-256 is
+`80a4cb145c1e9b23b072f7fad5278c196a5b08dd725555df6a08d6f198c13119`.
+The complete CTest rehearsal passed **224/224** in 14.80 seconds, including
+the Files suite at 107/107. Real terminal-profile verification also passed
+for `xterm-256color`, `xterm`, and `vt100`.
+
+The staged `ck-files` executable was produced at 2026-11-01T22:42:51+0100
+with SHA-256
+`084546abc3a314e13958cd5ffdd26cdff27f2ede3c5accc771297b8762150cb0`.
+The benchmark target no longer links the ckVision archive redundantly through
+both the product library and the direct dependency; the final project-owned
+link warning is gone. The remaining configure warnings are from optional
+OpenMP availability and third-party llama/GoogleTest sources, with no
+suppression or workaround added.
+
+An earlier rehearsal using the S8T path as the private fixture root was
+rejected by the native ownership gate and is not counted as validation; the
+passing result above is the corrected run.

@@ -5,7 +5,7 @@
 # `--gate` CTest run checks the deterministic work budgets only, never
 # wall-clock speed, so it is safe on shared machines.
 add_executable(todo_bench bench_todo.cpp)
-target_link_libraries(todo_bench PRIVATE ck_vision_todo ckvision::cvision)
+target_link_libraries(todo_bench PRIVATE ck_vision_todo)
 target_include_directories(todo_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 cktools_strict(todo_bench)
 
