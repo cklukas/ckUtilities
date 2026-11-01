@@ -1,7 +1,8 @@
 # Copyright (c) 2026 C. Klukas. All rights reserved.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# libFuzzer targets for ck-todo's workspace codec and ck-sysmon's parsers.
+# libFuzzer targets for ck-todo's workspace codec, ck-sysmon's parsers, and
+# the bounded Files operation-journal decoder.
 # Opt-in with CKTOOLS_BUILD_FUZZERS=ON: they need an LLVM Clang with the
 # libFuzzer runtime, which ordinary and release builds do not.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -32,3 +33,8 @@ endfunction()
 
 cktools_add_fuzzer(fuzz_todo_codec fuzz_todo_codec.cpp todo_codec ck_vision_todo)
 cktools_add_fuzzer(fuzz_sysmon fuzz_sysmon.cpp sysmon ck_vision_sysmon)
+cktools_add_fuzzer(fuzz_operation_journal fuzz_operation_journal.cpp operation_journal)
+target_sources(fuzz_operation_journal PRIVATE
+  ${PROJECT_SOURCE_DIR}/src/native-core/files/operation_journal.cpp)
+target_include_directories(fuzz_operation_journal PRIVATE
+  ${PROJECT_SOURCE_DIR}/src/native-core/files)
