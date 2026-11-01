@@ -1,4 +1,12 @@
 # Files implementation evidence
+## 2026-11-01 — Current Windows ConPTY qualification
+
+The current Windows `V:` build completed the focused `ck_windows_tools_contract`
+target with MSVC v143, including the current `ck-files` Release output. The
+real Windows ConPTY contract passed **1/1**. Exact paths, environment, source
+commit, and the 9.94-second CTest result are recorded in [Windows ConPTY
+evidence](evidence/ck-files-windows-conpty-current-20261101.json).
+
 
 The complete scope and acceptance criteria remain in [the work-package plan](ck-files-plan.md).
 Progress here does not enable unimplemented capabilities or relax release gates.

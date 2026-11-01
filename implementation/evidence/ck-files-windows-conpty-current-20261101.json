@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-01",
+  "source_commit": "cd93435",
+  "platform": "Windows x64",
+  "toolchain": "MSVC v143",
+  "development_drive": "V:",
+  "build_root": "V:/tmp/ckutilities-archive-review-20261028-01/build",
+  "executable": "V:/tmp/ckutilities-archive-review-20261028-01/build/tests/Release/ck_windows_tools_contract.exe",
+  "test": "ck_windows_tools_contract",
+  "result": "1/1 passed",
+  "ctest_elapsed_seconds": 9.94,
+  "checks": [
+    "Windows ConPTY launch and return contract",
+    "current ck-files Release output included in the focused build"
+  ],
+  "environment": {
+    "TEMP": "V:/tmp/ckutilities-archive-review-20261028-01/tmp",
+    "TMP": "V:/tmp/ckutilities-archive-review-20261028-01/tmp",
+    "TMPDIR": "V:/tmp/ckutilities-archive-review-20261028-01/tmp"
+  }
+}
