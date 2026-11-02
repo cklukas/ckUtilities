@@ -102,6 +102,33 @@ CK_TEST(native_move_source_access_is_explicitly_qualified) {
 #endif
 }
 
+#if defined(_WIN32)
+CK_TEST(native_move_source_access_refuses_an_existing_writer) {
+    const ck::testing::ScratchDirectory scratch("files-move-source-writer");
+    const auto path = scratch.path() / "file";
+    write_file(path);
+    const auto writer = CreateFileW(path.c_str(), GENERIC_WRITE,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CK_CHECK(writer != INVALID_HANDLE_VALUE);
+    if (writer == INVALID_HANDLE_VALUE) return;
+
+    NativeFileSystem filesystem;
+    auto parent_result = filesystem.open_directory(scratch.path());
+    CK_CHECK(parent_result.value());
+    if (!parent_result.value()) {
+        CloseHandle(writer);
+        return;
+    }
+    auto parent = std::move(parent_result).take_value();
+    const auto opened = parent->open_child(NativeName::from_windows(u"file").value(),
+                                           EntryAccess::ContentRead | EntryAccess::MoveSource);
+    CK_CHECK(!opened.value() && opened.state() == ObservationState::Denied &&
+             opened.unavailable_detail()->error.code == ERROR_SHARING_VIOLATION);
+    CloseHandle(writer);
+}
+#endif
+
 #if defined(__linux__)
 namespace {
 NativeBytes linux_acl_fixture() {
