@@ -12,12 +12,13 @@ The new `test_files_native_walk` regression creates a nested tree with a
 deepest entry beyond 260 characters using `CreateDirectoryW`/`CreateFileW`,
 then verifies the native walker discovers the long-path directory and file.
 The fresh Windows v143 Release build started at
-`2026-11-02T18:19:19.6356555+01:00`, ended at
-`2026-11-02T18:20:29.8446142+01:00` (70.2 seconds), and passed the independent
+`2026-11-02T18:20:46.2865269+01:00`, ended at
+`2026-11-02T18:22:13.4098081+01:00` (87.1 seconds), and passed the independent
 ckVision package consumer plus **225/225** CTest entries. The archive
 `V:\tmp\ckutilities-native-walk-20261102-01\packages\ck-utilities-0.2.0-windows-x64.zip`
-has SHA-256
-`e0d24a4a10d555eee454a8c83f2fd4a05f64e11013fddf871e9059075c49e94d`.
+was independently hashed after packaging; the final validation hash is
+recorded in the task handoff rather than embedded here, so the documentation
+does not self-reference its own archive hash.
 The package check started all ten tools and found ten guides and 29 SVG
 screenshots. No product utility processes remained running after validation.
 
