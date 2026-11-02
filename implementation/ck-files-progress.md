@@ -1,5 +1,22 @@
 # Files implementation evidence
 
+## 2026-11-02 — WP-07 isolated LLVM libFuzzer qualification
+
+The four current LLVM-Clang fuzzer targets built from the current source and
+passed their corpus contracts: todo codec, sysmon, operation journal, and
+Files pane page. Bounded 10-second mutation runs completed **23,233,151**,
+**3,268,853**, **10,422,534**, and **190,261** executions respectively, with
+peak RSS of **28**, **29**, **29**, and **32 MiB** and no crash or timeout.
+The operation-journal target has no checked-in seed corpus and was run from an
+explicit empty corpus.
+
+The corpus-test CMake contract was hardened in commit `39a7151` after the
+qualification exposed that direct libFuzzer corpus arguments can write new
+units into the source tree. CTest now copies seeds into disposable build-local
+scratch and removes them afterward. The generated mutation units from this
+run were retained under `/Volumes/S8T/tmp` only. Evidence: [Mac LLVM fuzzer
+record](evidence/ck-files-macos-fuzz-20261102.json).
+
 ## 2026-11-02 — WP-07 matching Linux TSan qualification
 
 The Linux ARM64 race gate now uses a ckVision v1.4.2 SDK built from the

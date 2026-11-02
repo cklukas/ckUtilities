@@ -1,0 +1,44 @@
+{
+  "record_type": "files_macos_llvm_fuzzers",
+  "recorded_at": "2026-11-02T16:34:25Z",
+  "result": "passed",
+  "source": {
+    "repository": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "commit": "39a71511304fc3822cbd07e9e2c9f2d65a94e034",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++",
+    "compiler_version": "Clang 23.1.4"
+  },
+  "paths": {
+    "build": "/Volumes/S8T/tmp/ckutilities-fuzz-20261102-01/build",
+    "scratch": "/Volumes/S8T/tmp/ckutilities-fuzz-20261102-01",
+    "ckvision_sdk": "/Volumes/S8T/tmp/ckutilities-modern-io-20261102-01/ckvision-sdk"
+  },
+  "build": {
+    "configuration": "RelWithDebInfo",
+    "target": "cktools_fuzzers",
+    "freshness_check": {
+      "start": "2026-11-02T16:34:25Z",
+      "end": "2026-11-02T16:34:25Z",
+      "elapsed_seconds": 0
+    },
+    "outputs": {
+      "fuzz_todo_codec": "12f8ed6a2f65ed79a5b1b54a32775c127a81cc04306b45995d78e477ee59b077",
+      "fuzz_sysmon": "1dcf2a8f64b71693c44754227c908f3d0554c6d1b1aa44f85adb7d38081923ca",
+      "fuzz_operation_journal": "9c741f0dd521f687e98f9b2a4f797f57ed5c632288a637a5d212bda2df078d78",
+      "fuzz_files_pane_page": "7799cdd2da1e3924b5e9f7fbc027cad97129bb33714dd929157b1a0e5a7f58a4"
+    }
+  },
+  "corpus_contract": {
+    "tests": 4,
+    "passed": 4,
+    "isolation": "Each CTest contract copies its seeds to a disposable build-local corpus and removes it after execution; source corpus directories are never passed directly to libFuzzer."
+  },
+  "mutation_runs": [
+    {"target": "fuzz_todo_codec", "runs": 23233151, "elapsed_seconds": 11, "new_units": 19, "peak_rss_mb": 28, "result": "passed"},
+    {"target": "fuzz_sysmon", "runs": 3268853, "elapsed_seconds": 11, "new_units": 981, "peak_rss_mb": 29, "result": "passed"},
+    {"target": "fuzz_operation_journal", "runs": 10422534, "elapsed_seconds": 11, "new_units": 108, "peak_rss_mb": 29, "result": "passed", "seed_corpus": "empty"},
+    {"target": "fuzz_files_pane_page", "runs": 190261, "elapsed_seconds": 11, "new_units": 282, "peak_rss_mb": 32, "result": "passed"}
+  ],
+  "limits": {"max_len": 4096, "per_input_timeout_seconds": 2, "rss_limit_mb": 512, "seed": 20261102},
+  "diagnostics": "No crash, timeout, sanitizer diagnostic, or artifact was produced. Generated corpus units were preserved under the task scratch root and not added to the repository."
+}
