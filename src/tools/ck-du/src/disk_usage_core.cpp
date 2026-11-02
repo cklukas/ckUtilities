@@ -396,8 +396,10 @@ std::uintmax_t native_identifier_value(const ck::files::NativeIdentifier &identi
 std::chrono::system_clock::time_point native_time(const ck::files::Observation<ck::files::FileTimestamp> &value) {
     if (!value.value())
         return {};
-    return std::chrono::system_clock::time_point(std::chrono::seconds(value.value()->seconds()) +
-                                                 std::chrono::nanoseconds(value.value()->nanoseconds()));
+    const auto duration = std::chrono::seconds(value.value()->seconds()) +
+                          std::chrono::nanoseconds(value.value()->nanoseconds());
+    return std::chrono::system_clock::time_point(
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(duration));
 }
 
 platform::FileMetadata file_metadata_from_native(const ck::files::NativeWalkEntry &entry) {

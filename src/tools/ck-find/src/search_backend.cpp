@@ -1757,9 +1757,10 @@ bool matchesTimeFilters(const PreparedSpecification &prepared, const ck::files::
     const int days = presetDays(prepared.timeOptions.preset);
     if (days <= 0)
         return true;
+    const auto duration = std::chrono::seconds(entry.metadata.modified.value()->seconds()) +
+                          std::chrono::nanoseconds(entry.metadata.modified.value()->nanoseconds());
     const auto timestamp = std::chrono::system_clock::time_point(
-        std::chrono::seconds(entry.metadata.modified.value()->seconds()) +
-        std::chrono::nanoseconds(entry.metadata.modified.value()->nanoseconds()));
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(duration));
     return timestamp >= std::chrono::system_clock::now() - std::chrono::hours(24 * days);
 }
 
