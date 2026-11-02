@@ -39,7 +39,22 @@ struct Gate {
     }
     void wait() {
         std::unique_lock lock(mutex);
-        if (!cv.wait_for(lock, std::chrono::seconds(5), [&] { return entered; }))
+        // Sanitizer-instrumented worker startup can legitimately exceed the
+        // normal test watchdog on a loaded host. Keep the ordinary timeout
+        // unchanged; only an instrumented test binary gets the qualification
+        // budget, and a missing gate still fails deterministically.
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+        constexpr auto timeout = std::chrono::seconds(30);
+#else
+        constexpr auto timeout = std::chrono::seconds(5);
+#endif
+#elif defined(__SANITIZE_ADDRESS__)
+        constexpr auto timeout = std::chrono::seconds(30);
+#else
+        constexpr auto timeout = std::chrono::seconds(5);
+#endif
+        if (!cv.wait_for(lock, timeout, [&] { return entered; }))
             throw std::runtime_error("gate not entered");
     }
     void release() {
