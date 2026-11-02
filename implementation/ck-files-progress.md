@@ -1,4 +1,22 @@
 # Files implementation evidence
+## 2026-11-02 — CP-03 read-only operation recovery boundary
+
+The ordinary-operation recovery discovery and review boundary passed on the
+current macOS arm64, Windows x64/v143 and Linux ARM64 qualification builds.
+The native discovery fixture retained a valid unfinished journal and explicit
+malformed, truncated/non-regular review items without following symlinks or
+turning display text into authority. Native decoder tests kept untrusted
+evidence and journal tails review-only. The Files UI suite passed **73/73** on
+each platform, including the worker-backed scan, unavailable-before-ready
+reason, bounded modal review, and Close-only interaction; the focused discovery
+suite passed **1/1** on macOS and the core recovery/evidence suites passed
+**8/8** and **3/3**. Evidence: [CP-03 read-only recovery record](evidence/ck-files-cp03-operation-recovery-readonly-current-20261102.json).
+
+This is deliberately a boundary qualification, not CP-03 completion:
+identity-proven cleanup, retry/resume, publication reconciliation, crash
+restart coverage and cross-platform native recovery workers remain open and
+are not exposed by the application.
+
 ## 2026-11-02 — CP-02 recursive Trash command safety guard
 
 The Files command and its direct handler now refuse directories for
