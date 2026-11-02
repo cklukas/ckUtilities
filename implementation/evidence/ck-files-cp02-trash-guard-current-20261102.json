@@ -22,6 +22,18 @@
     "suite": "files_app_tests.cpp",
     "result": "73/73 passed"
   },
+  "linux_arm64": {
+    "host": "uconsole",
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "GNU g++ 14.2.0",
+    "source_checkout": "/home/klukas/ckUtilities",
+    "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+    "temporary_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01",
+    "executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests",
+    "executable_sha256": "31bde861c404d9a194cadbdb599870c655937eb1866ace1614ead0aea1dde409",
+    "suite": "files_app_tests.cpp",
+    "result": "73/73 passed"
+  },
   "rejected_attempt": "The isolated Windows build first linked against an /MT ckVision SDK with the default /MD project runtime; LNK2038/LNK2005 rejected the mixed runtime. That output was not run or counted. Reconfiguration with CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded rebuilt the target and produced the qualified result above.",
   "status": "pass_cp02_command_safety_guard_macos_windows"
 }
