@@ -298,7 +298,7 @@ struct Fixture {
             if (!file.value())
                 throw std::runtime_error("cannot open eligible archive recovery journal");
             auto journal = std::move(created).take_value();
-            for (const auto [sequence, state] : std::array{
+            for (const auto &[sequence, state] : std::array{
                      std::pair<std::uint64_t, OperationJournalState>{1, OperationJournalState::Planned},
                      std::pair<std::uint64_t, OperationJournalState>{2, OperationJournalState::Prepared},
                      std::pair<std::uint64_t, OperationJournalState>{3, OperationJournalState::Copied}}) {
