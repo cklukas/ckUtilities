@@ -75,9 +75,9 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
     CK_CHECK(append_operation_journal_file(**file.value(), *journal,
                                           {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
 
-    std::ofstream malformed(scratch.path() / ".ck-move-journal-0002", std::ios::binary);
+    std::ofstream malformed(journal_path / ".ck-move-journal-0002", std::ios::binary);
     malformed << "torn";
-    std::filesystem::create_directory(scratch.path() / ".ck-delete-tree-journal-0003");
+    std::filesystem::create_directory(journal_path / ".ck-delete-tree-journal-0003");
 
     const auto scan = discover_operation_recovery(root);
     CK_CHECK(scan.value() && scan.value()->journals.size() == 3 &&

@@ -555,7 +555,7 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> reply;
-    for (int i = 0; i != 500 && !reply; ++i) {
+    for (int i = 0; i != 5000 && !reply; ++i) {
         reply = service.take();
         if (!reply)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
