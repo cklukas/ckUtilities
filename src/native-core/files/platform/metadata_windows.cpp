@@ -90,6 +90,21 @@ Observation<std::wstring> current_user_sid() {
     return Result::available(std::move(result));
 }
 
+Observation<std::wstring> volume_path_for(std::wstring_view file_path) {
+    using Result = Observation<std::wstring>;
+    const std::wstring input(file_path);
+    std::vector<wchar_t> buffer(256);
+    for (;;) {
+        if (GetVolumePathNameW(input.c_str(), buffer.data(), static_cast<DWORD>(buffer.size()))) {
+            return Result::available(std::wstring(buffer.data()));
+        }
+        const DWORD code = GetLastError();
+        if ((code != ERROR_MORE_DATA && code != ERROR_INSUFFICIENT_BUFFER) || buffer.size() >= 32768)
+            return failure<std::wstring>(code, "trash_child.volume_path");
+        buffer.resize(buffer.size() * 2);
+    }
+}
+
 std::wstring hex_suffix(std::uint64_t value) {
     constexpr wchar_t digits[] = L"0123456789abcdef";
     std::wstring result(16, L'0');
@@ -1300,10 +1315,10 @@ public:
             return Result::unavailable(ObservationState::Unsupported,
                 {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "trash_child.original_path_limit"});
 
-        wchar_t volume[MAX_PATH]{};
-        if (!GetVolumePathNameW(parent_path.value()->c_str(), volume, ARRAYSIZE(volume)))
-            return failure<bool>(GetLastError(), "trash_child.volume_path");
-        std::wstring recycle_root(volume);
+        const auto volume = volume_path_for(*parent_path.value());
+        if (!volume.value())
+            return Result::unavailable(volume.unavailable_detail()->state, volume.unavailable_detail()->error);
+        std::wstring recycle_root = *volume.value();
         if (recycle_root.empty() || recycle_root.back() != L'\\') recycle_root.push_back(L'\\');
         recycle_root += L"$Recycle.Bin";
         if (!CreateDirectoryW(recycle_root.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)

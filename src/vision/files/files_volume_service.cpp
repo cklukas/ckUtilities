@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_service.hpp"
 #include "native_filesystem.hpp"
+#include "windows_name.hpp"
 #include <algorithm>
 #include <condition_variable>
 #include <cwchar>
@@ -74,12 +75,14 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
     wchar_t filesystem[256]{};
     DWORD serial = 0, maximum_component = 0, flags = 0;
     const std::wstring volume_path(volume);
-    const bool info = GetVolumeInformationW(volume_path.c_str(), label, static_cast<DWORD>(std::size(label)), &serial,
+    const auto extended_volume = ck::files::windows_extended_path(volume_path);
+    const bool info = extended_volume && GetVolumeInformationW(extended_volume->c_str(), label, static_cast<DWORD>(std::size(label)), &serial,
                                             &maximum_component, &flags, filesystem,
                                             static_cast<DWORD>(std::size(filesystem))) != 0;
     ULARGE_INTEGER free_bytes{}, total_bytes{}, available_bytes{};
     const std::wstring space_path = mount.empty() ? volume_path : std::wstring(mount);
-    const bool space = GetDiskFreeSpaceExW(space_path.c_str(), &available_bytes, &total_bytes, &free_bytes) != 0;
+    const auto extended_space = ck::files::windows_extended_path(space_path);
+    const bool space = extended_space && GetDiskFreeSpaceExW(extended_space->c_str(), &available_bytes, &total_bytes, &free_bytes) != 0;
     FilesVolumeRecord record;
     record.name = info && label[0] ? utf8(label) : utf8(volume);
     record.mount_point = mount.empty() ? utf8(volume) : utf8(mount);

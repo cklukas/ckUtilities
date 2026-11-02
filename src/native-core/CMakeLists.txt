@@ -33,9 +33,12 @@ target_include_directories(ck_du_core
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/tools/ck-du/include>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+  PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/native-core/files
 )
 target_compile_features(ck_du_core PUBLIC cxx_std_20)
 target_link_libraries(ck_du_core PUBLIC ck_options)
+target_link_libraries(ck_du_core PRIVATE ck_files_core)
 if(APPLE)
   target_link_libraries(ck_du_core PUBLIC "-framework CoreFoundation" "-framework CoreServices")
 endif()

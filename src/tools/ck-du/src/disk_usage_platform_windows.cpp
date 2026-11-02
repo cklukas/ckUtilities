@@ -7,6 +7,7 @@
 // FileAttributeTagInfo, FileIdInfo), GetNamedSecurityInfoW and
 // LookupAccountSidW.
 #include "disk_usage_platform.hpp"
+#include "windows_name.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -84,8 +85,14 @@ bool read_metadata(const std::filesystem::path &path, FileMetadata &metadata, st
 {
     // Directories need backup semantics; a reparse point is opened itself,
     // never its target.
+    const auto native_path = ck::files::windows_extended_path(path.native());
+    if (!native_path)
+    {
+        error = std::make_error_code(std::errc::invalid_argument);
+        return false;
+    }
     const std::unique_ptr<void, HandleCloser> file(CreateFileW(
-        path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+        native_path->c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
         OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (file.get() == INVALID_HANDLE_VALUE)
     {
@@ -150,9 +157,11 @@ std::pair<std::string, std::string> owner_and_group(const std::filesystem::path 
     PSID owner = nullptr;
     PSID group = nullptr;
     PSECURITY_DESCRIPTOR descriptor = nullptr;
-    std::wstring native = path.wstring();
+    const auto native = ck::files::windows_extended_path(path.native());
     std::pair<std::string, std::string> names;
-    if (GetNamedSecurityInfoW(native.data(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION,
+    if (!native)
+        return {"-", "-"};
+    if (GetNamedSecurityInfoW(native->c_str(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION,
                               &owner, &group, nullptr, nullptr, &descriptor) == ERROR_SUCCESS)
     {
         names.first = account_name(owner);
