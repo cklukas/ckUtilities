@@ -8,8 +8,11 @@
 #include <cvision/testing/cktest.hpp>
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <stdexcept>
 
 namespace {
@@ -87,4 +90,48 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
                                              [](const auto &item) { return item.display_name == ".ck-delete-tree-journal-0003"; });
     CK_CHECK(malformed_item != scan.value()->journals.end() && malformed_item->error.has_value());
     CK_CHECK(directory_item != scan.value()->journals.end() && directory_item->error.has_value());
+}
+
+CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-service");
+    const auto root = address(scratch.path());
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+    std::ofstream journal(scratch.path() / ".ck-copy-journal-repeated", std::ios::binary);
+    journal << "malformed but retained for review";
+    CK_CHECK(static_cast<bool>(journal));
+
+    std::mutex wake_mutex;
+    std::condition_variable wake_condition;
+    FilesOperationRecoveryService service([&] { wake_condition.notify_all(); });
+    const auto wait_for_reply = [&]() -> std::optional<FilesOperationRecoveryReply> {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        for (;;) {
+            if (auto reply = service.take())
+                return reply;
+            if (std::chrono::steady_clock::now() >= deadline)
+                return std::nullopt;
+            std::unique_lock lock(wake_mutex);
+            wake_condition.wait_for(lock, std::chrono::milliseconds(10));
+        }
+    };
+
+    CK_CHECK(service.request(root) == FilesOperationRecoverySubmission::Accepted);
+    const auto first = wait_for_reply();
+    CK_CHECK(first && first->state == FilesOperationRecoveryState::Ready && first->scan);
+    if (!first || !first->scan)
+        return;
+    CK_CHECK(first->scan->journals.size() == 1 && first->scan->journals[0].error.has_value());
+
+    // A second request is a fresh bounded observation, not a continuation or
+    // mutation of the first result. This models repeated startup inspection.
+    CK_CHECK(service.request(root) == FilesOperationRecoverySubmission::Accepted);
+    const auto second = wait_for_reply();
+    CK_CHECK(second && second->state == FilesOperationRecoveryState::Ready && second->scan);
+    if (second && second->scan)
+        CK_CHECK(second->scan->journals.size() == 1 && second->scan->journals[0].error.has_value());
+    CK_CHECK(std::filesystem::exists(scratch.path() / ".ck-copy-journal-repeated"));
+
+    service.request_stop();
+    service.join();
+    CK_CHECK(service.request(root) == FilesOperationRecoverySubmission::Stopped);
 }
