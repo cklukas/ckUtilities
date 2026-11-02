@@ -12,7 +12,10 @@ int main()
     const std::filesystem::path root = CKTOOLS_FILE_IO_TEST_ROOT;
     std::error_code error;
     std::filesystem::remove_all(root, error);
-    if (error || !std::filesystem::create_directories(root, error) || error)
+    if (error)
+        return 1;
+    std::filesystem::create_directories(root, error);
+    if (error)
         return 1;
 
 #if defined(_WIN32)

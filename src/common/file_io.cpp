@@ -61,7 +61,11 @@ std::optional<std::wstring> absolute_windows_path(const std::filesystem::path &p
             return std::wstring(buffer.data(), length);
         if (length >= 32768 * 16)
             return std::nullopt;
-        buffer.resize(static_cast<std::size_t>(length) + 1);
+        const std::size_t required = static_cast<std::size_t>(length) + 2;
+        const std::size_t grown = buffer.size() > std::numeric_limits<std::size_t>::max() / 2
+                                      ? required
+                                      : buffer.size() * 2;
+        buffer.resize(std::max(required, grown));
     }
 }
 

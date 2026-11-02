@@ -73,7 +73,7 @@ bool read_document(nlohmann::json &document)
     ckv::term::WindowsFileSystem filesystem;
     const auto input = filesystem.read_file(utf8_path(path));
     if (!input)
-        return false;
+        return !filesystem.exists(utf8_path(path));
 #else
     std::error_code error;
     if (!std::filesystem::exists(path, error))
