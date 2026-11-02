@@ -1,0 +1,28 @@
+{
+  "checkpoint": "CP-05 sanitizer qualification boundary",
+  "date": "2026-11-02",
+  "host": "macOS arm64",
+  "build": {
+    "directory": "/Volumes/S8T/tmp/ckutilities-cp05-asan-20261102-01/build",
+    "flags": [
+      "-fsanitize=address,undefined",
+      "-fno-sanitize-recover=all",
+      "-fno-omit-frame-pointer"
+    ],
+    "runtime": {
+      "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1:abort_on_error=1",
+      "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+    },
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-asan-index-20261102-01"
+  },
+  "results": {
+    "focused_native_files": "189/189",
+    "full_files_ui_service": "not qualified: gate not entered under sanitizer timing"
+  },
+  "scope": [
+    "100000-record index scan and external merge sort exercised",
+    "native operation content and source-retirement refusal cases exercised",
+    "no ASan or UBSan diagnostic emitted",
+    "full UI/service sanitizer gate remains open; no timeout workaround added"
+  ]
+}

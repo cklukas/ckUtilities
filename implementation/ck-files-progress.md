@@ -1,5 +1,23 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 sanitizer qualification boundary
+
+A fresh macOS arm64 Debug/Ninja tree under `/Volumes/S8T/tmp` was configured
+against the pinned ckVision SDK with AddressSanitizer and UndefinedBehaviorSanitizer,
+`-fno-sanitize-recover=all`, and frame pointers. The focused native Files
+aggregate passed **189/189**, including the real 100,000-record index scan and
+external-sort stress cases, with `ASAN_OPTIONS=detect_leaks=0:halt_on_error=1`
+and `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. No sanitizer or
+undefined-behavior diagnostic was emitted. The private index fixture was placed
+on the owner-enabled project volume because S8T intentionally disables native
+ownership checks.
+
+The complete `ck_vision_files_tests` UI/service aggregate was not counted as a
+pass: two runs of the same sanitized executable stopped in the first gate test
+with the existing `gate not entered` five-second timing boundary, before any
+sanitizer diagnostic. This remains an open broad UI sanitizer gate; no timeout
+was enlarged or hidden for this checkpoint. Evidence: [CP-05 sanitizer record](evidence/ck-files-cp05-sanitizer-20261102.json).
+
 ## 2026-11-02 — CP-05 worker-owned link-target inspection
 
 The Files pane service now exposes **Inspect link target** as a read-only,
