@@ -63,7 +63,7 @@ execute files or provide an embedded shell.
 - Bounded read-only text and hexadecimal preview, properties, and path copy.
   Preview never runs a file, hydrates provider-managed content implicitly, or
   treats a display name as a rewritten native path.
-- Rename, create-folder, create-empty-file, and hard-link actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Hard links are regular-file-only, identity-bound, no-replace mutations, flushed before success, and currently target the selected file's pane. Case-only
+- Rename, create-folder, create-empty-file, hard-link, and qualified symbolic-link actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Hard links are regular-file-only, identity-bound, no-replace mutations, flushed before success, and currently target the selected file's pane. POSIX symbolic links store an opaque target without normalization or traversal; Windows keeps this command disabled until handle-relative reparse publication is qualified. Case-only
   renames and platform-specific name rules are capability-checked rather than
   silently normalized.
 - Copy and move planning that shows the exact sources, destination, conflicts,
@@ -124,6 +124,7 @@ execute files or provide an embedded shell.
 | F7 | Create folder |
 | Operations menu | Create empty file |
 | Operations menu | Create hard link |
+| Operations menu | Create symbolic link (qualified POSIX adapters) |
 | F2 | Rename |
 | Ctrl+R | Refresh |
 | F1 | Context help |

@@ -1,5 +1,29 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 qualified POSIX symbolic-link creation
+
+The Files native boundary, worker service, and UI now provide **New symbolic
+link...** on qualified POSIX adapters. The dialog accepts one exact
+destination component and one opaque target payload. The worker creates the
+entry relative to its held directory with no replacement, reopens and
+verifies the published link payload, flushes the parent directory, and only
+then reports success. It never normalizes, resolves, traverses, or rebuilds
+the target as a path. Windows keeps the command visibly disabled with the
+specific reason that handle-relative reparse publication is not qualified;
+there is no privilege-dependent or path-reconstruction fallback.
+
+The focused native/service/app tests passed on the qualified hosts. The
+complete Files aggregate passed from fresh builds on macOS arm64 **256/256**,
+Linux ARM64 **256/256**, and Windows x64 **254/254**. The native directory
+suite passed on macOS and Linux with the creation case, and Windows passed its
+shared directory suite with the capability-disabled branch. Windows used the
+v143 environment and V: development drive. Evidence: [CP-05 symbolic-link
+record](evidence/ck-files-cp05-symbolic-link-20261102.json).
+
+This closes only the qualified POSIX symbolic-link creation slice of CP-05.
+Windows symbolic links/reparse publication, symlink target inspection/edit,
+junction operations, and cross-pane hard-link workflow remain open.
+
 ## 2026-11-02 — CP-05 identity-bound hard-link creation
 
 The Files native adapter, worker service, and UI now provide **New hard

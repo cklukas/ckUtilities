@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-02",
+  "scope": "CP-05 qualified POSIX symbolic-link creation",
+  "operation": {
+    "native": "opaque POSIX target publication relative to a held directory",
+    "safety": "no replacement, no target traversal, published-link payload verification, parent-directory flush",
+    "worker": "service owns the held directory and all native I/O; UI receives only the mutation outcome",
+    "ui": "strict destination-name and non-empty-target dialog with capability-scoped Windows disablement",
+    "scope_boundary": "POSIX adapters only; Windows reparse publication remains unqualified"
+  },
+  "tests": {
+    "macos_arm64": {
+      "repository_commit": "cbbd86d",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-new-file-fixtures-20261102-01",
+      "result": "256/256 Files tests passed; native directory suite passed"
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "repository_commit": "ee4f31a97",
+      "build_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/fixtures",
+      "result": "256/256 Files tests passed; native directory suite passed"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "repository_commit": "4e06bdc87",
+      "development_drive": "V:",
+      "build_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\build",
+      "fixture_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\fixtures",
+      "toolchain": "MSVC v143 vcvars64.bat",
+      "runtime_abi": "/MT matched to the installed ckVision static SDK",
+      "result": "254/254 Files tests passed; symbolic-link command disabled with the qualified capability reason"
+    }
+  },
+  "safety": [
+    "POSIX target bytes are preserved exactly and are never parsed as a path by the UI or adapter.",
+    "The destination is created with symlinkat relative to the held directory and existing names are refused.",
+    "The published entry is reopened without following the final link and its exact payload is compared before success.",
+    "Temporary/build/fixture paths obey the Mac, Linux, and Windows workstation drive policies.",
+    "No production app instance was launched or left running."
+  ],
+  "status": "pass_qualified_posix_symbolic_link; windows_reparse_and_remaining_cp05_gates_open"
+}
