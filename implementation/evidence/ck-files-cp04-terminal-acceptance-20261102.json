@@ -95,11 +95,21 @@
       "result": "passed: 1/1 ConPTY contract test; every utility rendered and exited successfully"
     }
   },
+  "windows_files_row_selection": {
+    "source_commit": "7732e77f2",
+    "host": "workstation",
+    "contract_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\ck_windows_tools_contract.exe",
+    "contract_executable_sha256": "9604cdd96132b0abe6f438c475616c0127e4ad56ee291f0fe03fc32a4aee7d66",
+    "fixture": "FilesLeft contains a-mouse-target.txt and b-mouse-target.txt; FilesRight is empty",
+    "input": "SGR left click on the second visible file row, then Insert",
+    "assertion": "the live ConPTY cell snapshot contains the Files status line Marked: 1 before Alt+X",
+    "result": "passed: functional row selection and marking through ConPTY input; 1/1 contract test"
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
     "No production app instance was left running.",
-    "This is a terminal contract result, not proof of real-window mouse or restricted-key acceptance."
+    "The Windows row-selection case is functional ConPTY evidence; it does not prove equivalent macOS/Linux desktop-terminal mouse behavior."
   ],
   "status": "pass_terminal_contract; real_window_input_and_linux_tsan_gates_remain_open"
 }

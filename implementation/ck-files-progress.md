@@ -32,6 +32,12 @@ for all ten utilities. This proves input-path resilience and clean terminal
 restoration; it is not a claim that full mouse selection/menu behavior has
 been accepted in a real desktop terminal window.
 
+The Windows ConPTY contract now adds a functional Files case: it creates two
+fixture files, clicks the second visible row through SGR mouse input, sends
+Insert, and asserts the live cell snapshot contains `Marked: 1`. This proves
+row selection and marking through the real Windows terminal path; equivalent
+macOS/Linux desktop-terminal mouse behavior remains separately unqualified.
+
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 
 Post-publication ordinary-copy journal records now carry a separate durable
