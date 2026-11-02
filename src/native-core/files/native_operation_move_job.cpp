@@ -171,6 +171,7 @@ Observation<NativeOperationMoveJob::Pointer> NativeOperationMoveJob::create(
             *request.source->metadata().identity.value(),
             request.destination,
             *destination_identity.value(),
+            std::nullopt,
             *staging_name,
             request.destination_name,
             request.copy_limits,
