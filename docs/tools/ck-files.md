@@ -84,8 +84,12 @@ execute files or provide an embedded shell.
 - A separate **Inspect operation recovery** review scans ordinary copy, tree
   copy, move, and recursive-delete journals after startup. It is read-only:
   malformed, truncated, legacy, ambiguous, or untrusted records remain
-  visible as reconciliation items, and no resume, retry, cleanup, replacement,
-  or source retirement is offered without a later qualified worker boundary.
+  visible as reconciliation items. **Clean up operation staging** is separately
+  confirmed and enabled only on qualified Windows builds when one complete
+  receipt-backed unpublished copy staging file can be identity-revalidated;
+  macOS/Linux report the unavailable adapter boundary instead of deleting by
+  pathname. No resume, retry, replacement, publication, or source retirement
+  is offered without a later qualified worker boundary.
 - A separate irreversible **Delete permanently** action with explicit scope
   confirmation and identity-bound checks. It does not follow links, recurse
   through non-empty directories, or claim secure erasure.
@@ -119,11 +123,11 @@ execute files or provide an embedded shell.
 
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching
-journals. `Operations > Clean up archive staging` is a separately confirmed,
-worker-revalidated Windows-only action for one fully evidenced unpublished
-archive staging file. The inspect actions never resume, delete, replace,
-retry, or retire a source; the cleanup action never touches a published archive
-or source volume.
+journals. `Operations > Clean up archive staging` and `Operations > Clean up
+operation staging` are separately confirmed, worker-revalidated Windows-only
+actions for one fully evidenced unpublished staging file of the corresponding
+kind. The inspect actions never resume, delete, replace, retry, or retire a
+source; either cleanup action never touches a published destination or source.
   New archive journals retain the exact destination address in native
   encoding for future identity-bound reconciliation; legacy journals without
   that evidence remain inspect-only.

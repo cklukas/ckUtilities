@@ -171,9 +171,10 @@ command only for one fully evidenced Copied/Verified unpublished archive item
 on the qualified Windows adapter; it confirms the action, dispatches the
 identity/digest-revalidating cleanup worker, and rescans the journal after
 success. macOS/Linux keep that command disabled with an explicit reason until
-their native discard protocols are qualified. Ordinary-operation cleanup,
-retry/resume and publication reconciliation remain disabled until their
-identity-bound workers and UI presentation are wired and qualified. New
+their native discard protocols are qualified. Ordinary-operation cleanup is
+now exposed under the same Windows-only guard for one complete receipt-backed
+regular-file copy; retry/resume and publication reconciliation remain
+disabled until their identity-bound workers are wired and qualified. New
 regular-file copy composition now records an optional exact native destination
 address in versioned recovery evidence; legacy journals and copy paths without
 that receipt remain inspect-only and cannot be reopened for mutation after a
