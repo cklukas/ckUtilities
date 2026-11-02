@@ -135,3 +135,53 @@ CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
     service.join();
     CK_CHECK(service.request(root) == FilesOperationRecoverySubmission::Stopped);
 }
+
+CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_restart) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-restart");
+    const auto root = address(scratch.path());
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+#if defined(_WIN32)
+    const auto name = *NativeName::from_windows(u".ck-copy-journal-restart");
+#else
+    const auto name = *NativeName::from_posix(".ck-copy-journal-restart");
+#endif
+    const auto id = journal_id();
+    auto journal = OperationJournal::create(FileOperation::Copy, id, {1, 8, 4096});
+    CK_CHECK(journal.value());
+    if (!journal.value())
+        return;
+    auto file_result = open_native_operation_journal_file(root, name, true);
+    CK_CHECK(file_result.value());
+    if (!file_result.value())
+        return;
+    auto file = std::move(file_result).take_value();
+    CK_CHECK(append_operation_journal_file(*file, **journal.value(),
+                                           {1, 0, OperationJournalState::Planned, {}}).value());
+    file.reset(); // The next discovery is a fresh worker/process boundary.
+
+    const auto first = discover_operation_recovery(root);
+    CK_CHECK(first.value() && first.value()->journals.size() == 1);
+    if (!first.value() || first.value()->journals.empty())
+        return;
+    CK_CHECK(first.value()->journals.front().report.has_value());
+    if (first.value()->journals.front().report)
+        CK_CHECK(first.value()->journals.front().report->journal_id == id &&
+                 first.value()->journals.front().report->inspection.report.requires_reconciliation);
+
+    auto reopened_result = open_native_operation_journal_file(root, name, false);
+    CK_CHECK(reopened_result.value());
+    if (!reopened_result.value())
+        return;
+    auto reopened = std::move(reopened_result).take_value();
+    const auto loaded = load_operation_journal(*reopened);
+    CK_CHECK(loaded.value() && loaded.value()->journal->id() == id &&
+             loaded.value()->journal->records().size() == 1 && !loaded.value()->tail.has_value());
+    reopened.reset();
+
+    const auto second = discover_operation_recovery(root);
+    CK_CHECK(second.value() && second.value()->journals.size() == 1 &&
+             second.value()->journals.front().report.has_value());
+    if (second.value() && !second.value()->journals.empty() && second.value()->journals.front().report)
+        CK_CHECK(second.value()->journals.front().report->journal_id == id &&
+                 second.value()->journals.front().report->inspection.report.requires_reconciliation);
+}
