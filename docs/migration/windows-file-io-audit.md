@@ -45,6 +45,13 @@ directory creation, profile enumeration, and cleanup. `std::filesystem` may
 still be used for lexical path composition or in POSIX-only branches, but it
 is not an accepted final Windows I/O operation for product paths.
 
+The volume-archive writer is also audited at its native boundary: archive and
+staging names are decoded strictly from UTF-8 to exact UTF-16 components,
+combined with `NativeAbsolutePath`, and only then passed to extended wide
+file APIs. This covers long and non-ASCII archive names without allowing a
+locale-dependent `std::filesystem::path(std::string)` conversion to become a
+Windows I/O operation.
+
 ## ckVision 1.4.2
 
 The pinned source revision was audited directly at

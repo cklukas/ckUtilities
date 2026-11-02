@@ -3,6 +3,7 @@
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
 #include "sha256.hpp"
+#include "unicode_scalar.hpp"
 #if defined(_WIN32)
 #include "windows_name.hpp"
 #endif
@@ -289,6 +290,22 @@ bool safe_archive_name(std::string_view name) {
            name != "." && name != ".." && name.find('\0') == std::string_view::npos &&
            name.size() >= std::string_view{".ckarchive"}.size() &&
            name.ends_with(".ckarchive");
+}
+
+std::optional<ck::files::NativeName> windows_name_from_utf8(std::string_view text) {
+    std::u16string units;
+    units.reserve(text.size());
+    for (std::size_t offset = 0; offset < text.size();) {
+        const auto scalar = ck::files::detail::decode_utf8_scalar(text.substr(offset));
+        if (scalar.units == 0)
+            return std::nullopt;
+        const auto encoded = ck::files::detail::encode_utf16_scalar(scalar.value);
+        if (encoded.units == 0)
+            return std::nullopt;
+        units.append(encoded.data.data(), encoded.units);
+        offset += scalar.units;
+    }
+    return ck::files::NativeName::from_windows(std::move(units));
 }
 
 struct EncodedExtent final {
@@ -877,11 +894,7 @@ std::optional<ck::files::NativeName> archive_staging_name(const ck::files::Nativ
     if (destination.encoding() == ck::files::NameEncoding::PosixBytes)
         return ck::files::NativeName::from_posix(text);
     if (destination.encoding() == ck::files::NameEncoding::WindowsUtf16) {
-        std::u16string units;
-        units.reserve(text.size());
-        for (const auto character : text)
-            units.push_back(static_cast<char16_t>(static_cast<unsigned char>(character)));
-        return ck::files::NativeName::from_windows(std::move(units));
+        return windows_name_from_utf8(text);
     }
     return std::nullopt;
 }
@@ -973,6 +986,68 @@ Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
         !limits.journal.max_items || !limits.journal.max_records || !limits.codec.max_bytes)
         return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
             ObservationState::Failed, error(AdapterError::InvalidLimit, "volume_archive.recovery_scan_limits"));
+    FilesVolumeArchiveRecoveryScan result;
+#if defined(_WIN32)
+    // Recovery is a product filesystem boundary. Keep the directory handle
+    // open while enumerating and inspect each journal through the native
+    // child handle; never reopen a long Windows path through std::filesystem.
+    ck::files::NativeFileSystem filesystem;
+    auto cursor = filesystem.open_native_directory(private_root);
+    if (!cursor.value())
+        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
+            cursor.state(), cursor.unavailable_detail()->error);
+    for (;;) {
+        const auto batch = (*cursor.value())->read(ck::files::DirectoryCursor::max_batch_size);
+        if (batch.error)
+            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
+                batch.error->state, batch.error->error);
+        for (const auto &name : batch.names) {
+            const auto basename = name.display_name();
+            if (!is_archive_journal_name(basename))
+                continue;
+            if (result.journals.size() >= limits.max_journals)
+                return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
+                    ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.recovery_count"));
+            FilesVolumeArchiveRecoveryItem item;
+            item.display_name = basename;
+            item.native_name = name;
+            auto child = (*cursor.value())->open_child(name, ck::files::EntryAccess::MetadataOnly);
+            if (!child.value()) {
+                item.error = *child.unavailable_detail();
+                result.requires_reconciliation = true;
+            } else {
+                auto metadata = (*child.value())->inspect_basic();
+                if (!metadata.value() || !metadata.value()->kind.value() ||
+                    *metadata.value()->kind.value() != ck::files::ObjectKind::RegularFile) {
+                    item.error = error(AdapterError::UnsupportedQuery, "volume_archive.recovery_entry_kind");
+                    result.requires_reconciliation = true;
+                } else {
+                    auto file = ck::files::open_native_operation_journal_file(private_root, name, false);
+                    if (!file.value()) {
+                        item.error = *file.unavailable_detail();
+                        result.requires_reconciliation = true;
+                    } else {
+                        auto report = inspect_volume_archive_recovery(**file.value(), limits.journal, limits.codec);
+                        if (report.value()) {
+                            result.requires_reconciliation = result.requires_reconciliation ||
+                                report.value()->operation.requires_reconciliation;
+                            item.report = std::move(report).take_value();
+                        } else {
+                            item.error = *report.unavailable_detail();
+                            result.requires_reconciliation = true;
+                        }
+                    }
+                }
+            }
+            result.journals.push_back(std::move(item));
+        }
+        if (batch.state == ck::files::DirectoryReadState::End)
+            break;
+        if (batch.state != ck::files::DirectoryReadState::More)
+            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
+                ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.recovery_enumerate"));
+    }
+#else
     auto host = private_root.host_path();
     if (!host.value())
         return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
@@ -986,7 +1061,6 @@ Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
         return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
             ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.recovery_root"));
 
-    FilesVolumeArchiveRecoveryScan result;
     std::filesystem::directory_iterator iterator(*host.value(), ec);
     if (ec)
         return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
@@ -1040,6 +1114,7 @@ Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
     if (ec)
         return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
             ObservationState::Denied, filesystem_error("volume_archive.recovery_enumerate", ec.value()).error);
+#endif
     return Observation<FilesVolumeArchiveRecoveryScan>::available(std::move(result));
 }
 
@@ -1454,9 +1529,36 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.file_size"));
 
-    const auto published = request.destination_directory / request.archive_name;
-    const auto temp = request.destination_directory /
-                      ("." + request.archive_name + ".cktmp-" + std::to_string(request.transaction_id));
+    std::filesystem::path published;
+    std::filesystem::path temp;
+#if defined(_WIN32)
+    auto native_destination = ck::files::NativeAbsolutePath::from_host(request.destination_directory);
+    if (!native_destination.value())
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_destination"));
+    const auto published_name = windows_name_from_utf8(request.archive_name);
+    const auto staging_name = archive_staging_name(*native_destination.value(), request.archive_name,
+                                                    request.transaction_id);
+    if (!published_name || !staging_name)
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_name"));
+    const auto published_address = native_destination.value()->child_address(*published_name);
+    const auto temp_address = native_destination.value()->child_address(*staging_name);
+    if (!published_address.value() || !temp_address.value())
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_path"));
+    auto published_host = published_address.value()->host_path();
+    auto temp_host = temp_address.value()->host_path();
+    if (!published_host.value() || !temp_host.value())
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_host_path"));
+    published = std::move(published_host).take_value();
+    temp = std::move(temp_host).take_value();
+#else
+    published = request.destination_directory / request.archive_name;
+    temp = request.destination_directory /
+           ("." + request.archive_name + ".cktmp-" + std::to_string(request.transaction_id));
+#endif
     UnavailableObservation failure_detail;
     const auto remove_temp = [&] {
 #if defined(_WIN32)
@@ -1850,6 +1952,25 @@ namespace {
 
 Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
     const ck::files::NativeAbsolutePath &destination_directory, std::string_view archive_name) {
+#if defined(_WIN32)
+    ck::files::NativeFileSystem filesystem;
+    auto cursor = filesystem.open_native_directory(destination_directory);
+    if (!cursor.value())
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            cursor.state(), cursor.unavailable_detail()->error);
+    const auto name = windows_name_from_utf8(archive_name);
+    if (!name)
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.plan.name"));
+    auto lookup = (*cursor.value())->lookup_child(*name, ck::files::ChildLookupMode::NativeDefault);
+    if (!lookup.value())
+        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
+            lookup.state(), lookup.unavailable_detail()->error);
+    return Observation<FilesVolumeArchiveDestinationState>::available(
+        lookup.value()->state() == ck::files::ChildLookupState::Found
+            ? FilesVolumeArchiveDestinationState::Conflict
+            : FilesVolumeArchiveDestinationState::Ready);
+#else
     auto host = destination_directory.host_path();
     if (!host.value())
         return Observation<FilesVolumeArchiveDestinationState>::unavailable(
@@ -1876,6 +1997,7 @@ Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
     return Observation<FilesVolumeArchiveDestinationState>::available(
         std::filesystem::exists(target_status) ? FilesVolumeArchiveDestinationState::Conflict
                                                 : FilesVolumeArchiveDestinationState::Ready);
+#endif
 }
 
 } // namespace

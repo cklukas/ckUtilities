@@ -257,6 +257,28 @@ bool remove_tree_windows(const std::filesystem::path &path)
     return RemoveDirectoryW(native->c_str()) != 0 || GetLastError() == ERROR_PATH_NOT_FOUND;
 }
 
+bool remove_regular_windows(const std::filesystem::path &path)
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return false;
+    const DWORD attributes = GetFileAttributesW(native->c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return false;
+    return DeleteFileW(native->c_str()) != 0;
+}
+
+bool is_regular_windows(const std::filesystem::path &path) noexcept
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return false;
+    const DWORD attributes = GetFileAttributesW(native->c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+           (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0;
+}
+
 bool remove_windows(const std::filesystem::path &path)
 {
     const auto native = extended_windows_path(path);
@@ -352,6 +374,30 @@ bool remove_tree(const std::filesystem::path &path)
     std::error_code error;
     std::filesystem::remove_all(path, error);
     return !error;
+#endif
+}
+
+bool remove_regular_file(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return remove_regular_windows(path);
+#else
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(path, error);
+    if (error || !std::filesystem::is_regular_file(status))
+        return false;
+    return std::filesystem::remove(path, error) && !error;
+#endif
+}
+
+bool is_regular_file(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return is_regular_windows(path);
+#else
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(path, error);
+    return !error && std::filesystem::is_regular_file(status);
 #endif
 }
 

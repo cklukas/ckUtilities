@@ -1,5 +1,7 @@
 #include "find_services.hpp"
 
+#include "ck/file_io.hpp"
+
 #include <filesystem>
 #include <utility>
 
@@ -129,6 +131,17 @@ void ThreadedFindExecutionService::start(ck::find::SearchSpecification specifica
             options.on_match = [cancellation, &deleted_count, &failed_deletion_count](const std::filesystem::path &path) {
                 if (cancellation->load(std::memory_order_acquire))
                     return;
+#if defined(_WIN32)
+                // Windows deletion is deliberately limited to ordinary files;
+                // reparse points and directories require the native files
+                // operation planner and are not path-deleted here.
+                if (!ck::io::is_regular_file(path))
+                    return;
+                if (ck::io::remove_regular_file(path))
+                    ++deleted_count;
+                else
+                    ++failed_deletion_count;
+#else
                 std::error_code error;
                 const std::filesystem::file_status status = std::filesystem::symlink_status(path, error);
                 if (error)
@@ -142,6 +155,7 @@ void ThreadedFindExecutionService::start(ck::find::SearchSpecification specifica
                     ++deleted_count;
                 else
                     ++failed_deletion_count;
+#endif
             };
         }
         else if (custom_command_enabled)

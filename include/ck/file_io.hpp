@@ -42,6 +42,13 @@ std::vector<std::filesystem::path> list_directories(const std::filesystem::path 
 // extended-length traversal and does not recurse through reparse points.
 bool remove_tree(const std::filesystem::path &path);
 
+// Removes only an ordinary regular file. Directories and reparse/symlink
+// entries are refused so callers cannot accidentally turn a path cleanup into
+// recursive or link-following deletion.
+bool remove_regular_file(const std::filesystem::path &path);
+
+bool is_regular_file(const std::filesystem::path &path);
+
 bool remove_file(const std::filesystem::path &path);
 
 } // namespace ck::io

@@ -1,4 +1,5 @@
 #include "files_volume_archive.hpp"
+#include "native_filesystem.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
 
@@ -406,6 +407,23 @@ CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
             CK_CHECK(written.unavailable_detail()->error.operation == "volume_archive.sparse_allocation");
         CK_CHECK(!std::filesystem::exists(scratch.path() / "material.ckarchive"));
     }
+}
+
+CK_TEST(volume_archive_writer_preserves_utf8_archive_name) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-unicode", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "gr\xC3\xB6\xC3\x9F" "e.ckarchive", 19, {}, {}};
+    const auto written = write_volume_archive(request);
+    CK_CHECK(written.value());
+#if defined(_WIN32)
+    const auto directory = address(scratch.path());
+    const auto name = NativeName::from_windows(u"gr\u00F6\u00DFe.ckarchive");
+    CK_CHECK(name.has_value());
+    const auto cursor = ck::files::NativeFileSystem{}.open_native_directory(directory);
+    CK_CHECK(cursor.value());
+    const auto found = (*cursor.value())->lookup_child(*name, ChildLookupMode::NativeDefault);
+    CK_CHECK(found.value());
+    CK_CHECK(found.value()->state() == ChildLookupState::Found);
+#endif
 }
 
 CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_completion) {

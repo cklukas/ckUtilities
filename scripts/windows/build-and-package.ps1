@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 $source = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
 $WorkRoot = (Resolve-Path $WorkRoot).Path
-foreach ($name in 'TMP','TEMP') { [Environment]::SetEnvironmentVariable($name, (Join-Path $WorkRoot 'tmp'), 'Process') }
+foreach ($name in 'TMP','TEMP','TMPDIR') { [Environment]::SetEnvironmentVariable($name, (Join-Path $WorkRoot 'tmp'), 'Process') }
 New-Item -ItemType Directory -Force -Path (Join-Path $WorkRoot 'tmp') | Out-Null
 
 # The MSVC developer environment of the newest Visual Studio with C++ tools,
