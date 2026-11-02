@@ -155,3 +155,69 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
         waits.clear();
     }
 }
+
+CK_TEST(windows_launcher_starts_files_and_returns_through_conpty)
+{
+    ck::testing::ScratchDirectory scratch("windows-launcher");
+    const auto home = scratch.path() / std::filesystem::path(u8"Données-日本");
+    std::filesystem::create_directories(home / "AppData" / "Roaming");
+    std::filesystem::create_directories(home / "AppData" / "Local");
+    const auto files_left = home / "FilesLeft";
+    const auto files_right = home / "FilesRight";
+    std::filesystem::create_directories(files_left);
+    std::filesystem::create_directories(files_right);
+
+    const std::string home_text = utf8(home);
+    const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / "ck-utilities.exe");
+    auto spec = ckv::term::TerminalLaunchSpec::program(image);
+    spec.arguments = {"--launch", "ck-files", utf8(files_left), utf8(files_right)};
+    spec.exit_policy = ckv::core::TerminalExitPolicy::TerminateAfterGrace;
+    spec.working_directory = home_text;
+    spec.environment = {{"USERPROFILE", home_text},
+                        {"HOME", home_text},
+                        {"APPDATA", utf8(home / "AppData" / "Roaming")},
+                        {"LOCALAPPDATA", utf8(home / "AppData" / "Local")},
+                        {"CK_AI_FORCE_STUB", "1"}};
+    spec.profile.cells = {100, 30};
+    spec.profile.query_policy = ckv::term::TerminalQueryPolicy::NoResponse;
+
+    ckv::term::WindowsClock clock;
+    ckv::term::WindowsWaitSet waits(clock);
+    auto child = ckv::term::WindowsTerminalSubsession::launch(std::move(spec));
+    if (child->state() == ckv::term::TerminalSubsessionState::Failed) {
+        for (const auto &diagnostic : child->diagnostics())
+            std::fprintf(stderr, "ConPTY launcher diagnostic: %s\n", diagnostic.message.c_str());
+    }
+    CK_CHECK(child->state() != ckv::term::TerminalSubsessionState::Failed);
+
+    const auto pump = [&](bool until_exit) {
+        const auto deadline = clock.now_nanos() + 15'000'000'000LL;
+        while (clock.now_nanos() < deadline) {
+            (void)waits.wait(clock.now_nanos() + 20'000'000LL, child->wait_handles());
+            (void)child->drain(64 * 1024);
+            if (child->state() == ckv::term::TerminalSubsessionState::Exited)
+                return until_exit;
+            if (child->state() == ckv::term::TerminalSubsessionState::Failed)
+                return false;
+            if (!until_exit) {
+                std::size_t visible = 0;
+                for (const auto &cell : child->snapshot().cell_buffer)
+                    if (!cell.is_continuation() && !cell.grapheme().empty() && cell.grapheme() != " ")
+                        ++visible;
+                if (visible > 80)
+                    return true;
+            }
+        }
+        return false;
+    };
+
+    const bool drew = pump(false);
+    CK_CHECK(drew);
+    if (drew) {
+        child->send_input("\x1b"
+                          "x");
+        CK_CHECK(pump(true));
+    }
+    CK_CHECK(child->exit_code() == 0);
+    waits.clear();
+}
