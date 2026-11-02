@@ -1,5 +1,18 @@
 # Files implementation evidence
 
+## 2026-11-02 — WP-08 CLI metadata and launcher contract
+
+All ten shipped utilities passed `--help` and `--version` checks on macOS
+arm64, Linux ARM64, and Windows x64. The actual launcher path also passed on
+all three platforms: `ck-utilities --launch ck-files LEFT RIGHT` opened Files
+through the real POSIX PTY or Windows ConPTY path, then returned cleanly
+through Alt+X. Windows rebuilt the contract with the v143 environment imported
+and all **2/2** ConPTY tests passed. Evidence: [CLI and launcher contract](evidence/ck-utilities-cli-launch-contract-20261102.json).
+
+This closes the command metadata and launcher-return portion of WP-08. It does
+not close the filesystem qualification matrix, native desktop-window
+acceptance, sanitizer/runtime gates, or release packaging rehearsal.
+
 ## 2026-11-02 — CP-04 current-source terminal acceptance
 
 The current production `ck-files` target passed the real terminal contract on

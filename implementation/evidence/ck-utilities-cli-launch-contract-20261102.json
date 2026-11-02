@@ -1,0 +1,72 @@
+{
+  "date": "2026-11-02",
+  "scope": "WP-08 command-line metadata and launcher launch/return contract",
+  "tools": [
+    "ck-utilities",
+    "ck-json-view",
+    "ck-find",
+    "ck-du",
+    "ck-files",
+    "ck-edit",
+    "ck-chat",
+    "ck-todo",
+    "ck-sysmon",
+    "ck-config"
+  ],
+  "cli_contract": {
+    "macos_arm64": {
+      "host": "local Mac",
+      "repository_at_validation": "fa07a94",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+      "artifact_root": "/Volumes/S8T/tmp/ckutilities-cli-contract-20261102-01",
+      "command": "each production executable with --help and --version",
+      "result": "10/10 help and 10/10 version checks passed; no stderr"
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "repository_commit": "b9c75c77e",
+      "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+      "artifact_root": "/home/klukas/tmp/ckutilities-cli-contract-20261102-01",
+      "command": "each production executable with --help and --version",
+      "result": "10/10 help and 10/10 version checks passed; no stderr"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "development_drive": "V:",
+      "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+      "artifact_root": "V:\\tmp\\ckutilities-cli-contract-20261102-02",
+      "command": "each production executable with --help and --version under v143 environment",
+      "result": "10/10 help and 10/10 version checks passed; no stderr"
+    }
+  },
+  "launcher_contract": {
+    "macos_arm64": {
+      "helper": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "launcher": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/bin/ck-utilities",
+      "launcher_sha256": "88edd1dbd14f96b4a408467acb8da62eb6293cd9bc5e0dcd0d0c625fca15bf44",
+      "command": "ck-utilities --launch ck-files LEFT RIGHT through POSIX PTY, then Alt+X",
+      "result": "passed: ck-files launched and returned cleanly with terminal restoration"
+    },
+    "linux_arm64": {
+      "helper": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "launcher": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/bin/ck-utilities",
+      "launcher_sha256": "d31312652fffb2896de1bc4ca9f96561f9f7407c68544df6e1b9afff7d207925",
+      "command": "ck-utilities --launch ck-files LEFT RIGHT through POSIX PTY, then Alt+X",
+      "result": "passed: ck-files launched and returned cleanly with terminal restoration"
+    },
+    "windows_x64": {
+      "source_commit": "0608893d3",
+      "development_drive": "V:",
+      "contract_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\ck_windows_tools_contract.exe",
+      "contract_executable_sha256": "FC7D116BDD398C541EE5F26ED2CE6324F85D34ACA1939F7B79875D5F094403B0",
+      "command": "ck-utilities --launch ck-files LEFT RIGHT through ConPTY, then Alt+X",
+      "result": "passed: 2/2 tests; existing ten-tool contract and launcher return contract"
+    }
+  },
+  "safety": [
+    "All validation artifacts and configuration roots were under task-specific S8T, remote temporary, or V: roots.",
+    "Windows TEMP, TMP, and TMPDIR were set beneath the V: task directory and v143 vcvars64.bat was imported before rebuilding.",
+    "No production utility instance was left running."
+  ],
+  "status": "pass_cli_and_launcher_contract; release_filesystem_and_real_window_gates_remain_open"
+}
