@@ -14,7 +14,7 @@ the remaining WP-07/WP-08 gates remain open.
 ## 2026-11-02 — Windows v143 fuzzer toolchain boundary
 
 The clean Windows checkout at `V:\dev\ckutilities-git-bcf47a3` is now at
-`07f7937`. The v143/MSVC 19.44.35228.0 environment configures the normal
+`e08f817`. The v143/MSVC 19.44.35228.0 environment configures the normal
 project, but `CKTOOLS_BUILD_FUZZERS=ON` is intentionally rejected at
 `fuzz/CMakeLists.txt:9`: this target requires an LLVM Clang toolchain with the
 libFuzzer runtime. No alternate compiler or source workaround was used, and no
