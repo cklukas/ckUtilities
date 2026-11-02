@@ -249,11 +249,11 @@ Proposed new modules (names are design targets, not existing APIs):
 
 | Area | Responsibility |
 | --- | --- |
-| `src/native-core/files/` → `ck_files_core` | Lossless paths/identities, pane state, selection, inventory, capability comparison, operation plans, consent and job/recovery state machines; no UI dependency. |
-| `src/native-core/files/platform/` → `ck_files_platform` | POSIX/Windows/macOS discovery, native metadata/stream adapters, safe publication, Trash, journal durability and capability queries. Platform-specific sources selected by CMake. |
+| [`ck-core-fs-lib`](https://github.com/cklukas/ck-core-fs-lib) → `ck_files_core` | Lossless paths/identities, pane state, selection, inventory, capability comparison, operation plans, consent and job/recovery state machines; no UI dependency. The sibling checkout is selected with `CK_CORE_FS_LIB_SOURCE_DIR`. |
+| [`ck-core-fs-lib/src/files/platform`](https://github.com/cklukas/ck-core-fs-lib/tree/master/src/files/platform) → `ck_files_platform` | POSIX/Windows/macOS discovery, native metadata/stream adapters, safe publication, journal durability and capability queries. Platform-specific sources are selected by the library's CMake project. |
 | `src/vision/files/` → `ck_vision_files` | `FilesApp`, pane/list providers, dialogs, preview, worker coordination and UI-thread publication. |
 | `src/vision/files/main.cpp` → `ckfiles_ckvision` | Host ownership, native arguments, explicit scratch/index roots, settings and executable `ck-files`. |
-| `src/native-core/files/tests/`, `src/vision/files/tests/` | State-machine/fault-injection tests, native conformance, headless/golden and lifecycle tests. |
+| `ck-core-fs-lib/tests/`, `src/vision/files/tests/` | State-machine/fault-injection tests, native conformance, headless/golden and lifecycle tests. |
 
 Reuse `ck_vision_host`, `SuiteShell`, `SuiteCommandScope`, suite keymap metadata,
 and strict warning/test conventions. Use provider-backed Table/ListView and
