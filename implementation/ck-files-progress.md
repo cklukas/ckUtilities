@@ -20,7 +20,8 @@ was independently hashed after packaging; the final validation hash is
 recorded in the task handoff rather than embedded here, so the documentation
 does not self-reference its own archive hash.
 The package check started all ten tools and found ten guides and 29 SVG
-screenshots. No product utility processes remained running after validation.
+screenshots. No task-owned package tool remained running after validation; a
+pre-existing installed `ck-sysmon` process was identified and left untouched.
 
 ## 2026-11-02 — Windows native-I/O boundary checkpoint
 
