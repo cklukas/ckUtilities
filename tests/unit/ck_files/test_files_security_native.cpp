@@ -127,9 +127,10 @@ CK_TEST(native_move_source_access_refuses_an_existing_writer) {
     if (!opened.value() && opened.unavailable_detail()) {
         // NtCreateFile preserves the native status domain; compare the
         // documented status value rather than the Win32 translation.
+        constexpr std::uint32_t nt_status_sharing_violation = 0xC0000043U;
         CK_CHECK(opened.unavailable_detail()->error.domain == ErrorDomain::NtStatus);
         CK_CHECK(static_cast<std::uint32_t>(opened.unavailable_detail()->error.code) ==
-                 static_cast<std::uint32_t>(STATUS_SHARING_VIOLATION));
+                 nt_status_sharing_violation);
     }
     CloseHandle(writer);
 }
