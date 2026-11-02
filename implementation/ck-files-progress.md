@@ -40,7 +40,7 @@ v143 environment and V: development drive. Evidence: [CP-05 symbolic-link
 record](evidence/ck-files-cp05-symbolic-link-20261102.json).
 
 This closes only the qualified POSIX symbolic-link creation slice of CP-05.
-Windows symbolic links/reparse publication, symlink target inspection/edit,
+Windows symbolic links/reparse publication, symlink target editing,
 junction operations, and cross-pane hard-link workflow remain open.
 
 ## 2026-11-02 — CP-05 identity-bound hard-link creation
