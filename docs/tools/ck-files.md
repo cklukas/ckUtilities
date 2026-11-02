@@ -49,10 +49,10 @@ execute files or provide an embedded shell.
   available as a bounded, read-only review of matching journals. A separate
   worker-only cleanup boundary now proves the exact native staging address,
   post-flush whole-file digest, held destination identity, and held child
-  identity before discarding an unpublished staging file; it is qualified on
-  Windows only. macOS/Linux refuse this mutation until their native adapter
-  provides the same handle-bound discard protocol. It is not exposed as a UI
-  command yet, and resume/retry/publication remain unavailable. See the [volume archive
+  identity before discarding an unpublished staging file; it is exposed as
+  **Clean up archive staging** only on qualified Windows builds. macOS/Linux
+  refuse this mutation until their native adapter provides the same handle-bound
+  discard protocol. Resume/retry/publication remain unavailable. See the [volume archive
   plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
@@ -119,8 +119,11 @@ execute files or provide an embedded shell.
 
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching
-journals. Neither action resumes, deletes, replaces, retries, or retires a
-source.
+journals. `Operations > Clean up archive staging` is a separately confirmed,
+worker-revalidated Windows-only action for one fully evidenced unpublished
+archive staging file. The inspect actions never resume, delete, replace,
+retry, or retire a source; the cleanup action never touches a published archive
+or source volume.
   New archive journals retain the exact destination address in native
   encoding for future identity-bound reconciliation; legacy journals without
   that evidence remain inspect-only.
