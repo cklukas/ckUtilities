@@ -1,0 +1,51 @@
+{
+  "checkpoint": "ckVision 1.4.2 downstream package integration and Windows path qualification",
+  "date": "2026-11-02",
+  "ckvision": {
+    "version": "1.4.2",
+    "commit": "7ad5bd67553414e7dc0882069482864034cb31f9",
+    "source_archive_sha256": "d8043bbc33dfb702b4dfe7dc5c99de2c93c71ec80b35d0da7605aa9ba2279648",
+    "github_tag": "v1.4.2",
+    "mac_installed_prefix": "/Volumes/S8T/tmp/ckvision-1.4.2-validation-20261102-01/install",
+    "windows_source": "V:\\dev\\ckvision-1.4.2-qualification-20261102"
+  },
+  "ckutilities_source": "84a0b36",
+  "checks": [
+    {
+      "name": "ckVision macOS release qualification",
+      "build": "/Volumes/S8T/tmp/ckvision-1.4.2-validation-20261102-01/build",
+      "command": "ctest --output-on-failure --timeout 180",
+      "result": "188/188 passed; 84.65 seconds; 2026-11-02T07:19:23Z to 2026-11-02T07:20:47Z"
+    },
+    {
+      "name": "ckVision Windows release qualification",
+      "build": "V:\\tmp\\ckvision-1.4.2-qualification-20261102\\build",
+      "command": "build.ps1; ctest --output-on-failure --timeout 180",
+      "result": "238/238 passed; 219.98 seconds; MSVC v143 19.44.35228; V: scratch and TEMP/TMP/TMPDIR"
+    },
+    {
+      "name": "independent ckVision package consumer",
+      "build": "/Volumes/S8T/tmp/ckutilities-ckvision-1.4.2-integration-20261102-01/build/ckvision-package-consumer",
+      "command": "cmake --build ... --target verify_ckvision_package",
+      "result": "ckvision_package_consumer_runs 1/1 passed"
+    },
+    {
+      "name": "ckUtilities documentation capture pipeline",
+      "build": "/Volumes/S8T/tmp/ckutilities-ckvision-1.4.2-integration-20261102-01/docs-build",
+      "command": "tools/docgen/generate_screenshots.sh",
+      "result": "completed; ck-json-view.svg changed only for the displayed ckVision version; generated artifacts were reviewed"
+    },
+    {
+      "name": "ckUtilities complete macOS suite against installed ckVision 1.4.2",
+      "build": "/Volumes/S8T/tmp/ckutilities-ckvision-1.4.2-integration-20261102-01/build",
+      "command": "ctest --output-on-failure --timeout 180",
+      "result": "224/224 passed; 13.69 seconds; private index fixture on ownership-enabled /Volumes/PRO-BLADE/tmp"
+    }
+  ],
+  "notes": [
+    "Windows nested ConPTY qualification initially exposed the cross-platform default '/' working-directory sentinel at the strict modern Windows process boundary; it now resolves only that sentinel through GetCurrentDirectoryW and continues to reject arbitrary relative Windows paths.",
+    "Windows qualification uses wide/native file I/O and extended-length paths at file boundaries; the 238-test run passed including widget screenshot, layer, ConPTY, and process suites.",
+    "The ckUtilities build and general scratch data remained under S8T. The private index fixture is intentionally on PRO-BLADE because S8T has APFS ownership disabled and the contract requires ownership-enabled storage.",
+    "The prior mixed-sanitizer SDK finding remains rejected as invalid evidence; no sanitizer finding was suppressed."
+  ]
+}
