@@ -482,11 +482,9 @@ bool FileChatTranscriptStore::write(const std::filesystem::path &path, const std
 {
     if (path.empty())
         return false;
-    std::error_code error;
     if (!path.parent_path().empty())
     {
-        std::filesystem::create_directories(path.parent_path(), error);
-        if (error)
+        if (!ck::io::create_directories(path.parent_path()))
             return false;
     }
     return ck::io::write_file(path, transcript);

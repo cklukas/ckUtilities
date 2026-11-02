@@ -147,6 +147,116 @@ bool write_windows(const std::filesystem::path &path, std::string_view contents,
     return FlushFileBuffers(file.get()) != 0;
 }
 
+std::optional<std::wstring> plain_absolute_windows_path(const std::filesystem::path &path)
+{
+    const auto absolute = absolute_windows_path(path);
+    if (!absolute)
+        return std::nullopt;
+    if (starts_with(*absolute, L"\\\\?\\UNC\\"))
+        return L"\\\\" + absolute->substr(8);
+    if (starts_with(*absolute, L"\\\\?\\"))
+        return absolute->substr(4);
+    return absolute;
+}
+
+std::size_t windows_root_length(std::wstring_view path) noexcept
+{
+    if (path.size() >= 3 && path[1] == L':' && path[2] == L'\\')
+        return 3;
+    if (!starts_with(path, L"\\\\"))
+        return 0;
+    const auto server = path.find(L'\\', 2);
+    if (server == std::wstring_view::npos || server == 2)
+        return 0;
+    const auto share = path.find(L'\\', server + 1);
+    if (share == server + 1)
+        return 0;
+    return share == std::wstring_view::npos ? path.size() : share;
+}
+
+bool is_directory_windows(std::wstring_view extended) noexcept
+{
+    const DWORD attributes = GetFileAttributesW(std::wstring(extended).c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+bool create_directories_windows(const std::filesystem::path &path)
+{
+    const auto plain = plain_absolute_windows_path(path);
+    if (!plain)
+        return false;
+    const auto root = windows_root_length(*plain);
+    if (root == 0)
+        return false;
+    for (std::size_t end = root; end <= plain->size(); ++end)
+    {
+        if (end != plain->size() && (*plain)[end] != L'\\')
+            continue;
+        const std::wstring prefix = plain->substr(0, end);
+        const auto extended = extended_windows_path(std::filesystem::path(prefix));
+        if (!extended)
+            return false;
+        if (is_directory_windows(*extended))
+            continue;
+        if (CreateDirectoryW(extended->c_str(), nullptr) == 0 && !is_directory_windows(*extended))
+            return false;
+    }
+    return true;
+}
+
+std::vector<std::filesystem::path> list_directories_windows(const std::filesystem::path &path)
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return {};
+    const std::wstring pattern = *native + L"\\*";
+    WIN32_FIND_DATAW data{};
+    Handle enumeration(FindFirstFileW(pattern.c_str(), &data));
+    if (!enumeration)
+        return {};
+    std::vector<std::filesystem::path> result;
+    for (;;)
+    {
+        const std::wstring_view name(data.cFileName);
+        if (name != L"." && name != L".." && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+            result.emplace_back(path / std::wstring(name));
+        if (FindNextFileW(enumeration.get(), &data) == 0)
+            break;
+    }
+    return GetLastError() == ERROR_NO_MORE_FILES ? result : std::vector<std::filesystem::path>{};
+}
+
+bool remove_tree_windows(const std::filesystem::path &path)
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return false;
+    const DWORD attributes = GetFileAttributesW(native->c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+        return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        return DeleteFileW(native->c_str()) != 0 || GetLastError() == ERROR_FILE_NOT_FOUND;
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return RemoveDirectoryW(native->c_str()) != 0 || GetLastError() == ERROR_PATH_NOT_FOUND;
+
+    const std::wstring pattern = *native + L"\\*";
+    WIN32_FIND_DATAW data{};
+    Handle enumeration(FindFirstFileW(pattern.c_str(), &data));
+    if (!enumeration)
+        return GetLastError() == ERROR_FILE_NOT_FOUND;
+    for (;;)
+    {
+        const std::wstring_view name(data.cFileName);
+        if (name != L"." && name != L".." && !remove_tree_windows(path / std::wstring(name)))
+            return false;
+        if (FindNextFileW(enumeration.get(), &data) == 0)
+            break;
+    }
+    if (GetLastError() != ERROR_NO_MORE_FILES)
+        return false;
+    return RemoveDirectoryW(native->c_str()) != 0 || GetLastError() == ERROR_PATH_NOT_FOUND;
+}
+
 bool remove_windows(const std::filesystem::path &path)
 {
     const auto native = extended_windows_path(path);
@@ -200,6 +310,48 @@ bool write_file(const std::filesystem::path &path, std::string_view contents, Wr
     output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
     output.flush();
     return static_cast<bool>(output);
+#endif
+}
+
+bool create_directories(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return create_directories_windows(path);
+#else
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    return !error && std::filesystem::is_directory(path, error) && !error;
+#endif
+}
+
+std::vector<std::filesystem::path> list_directories(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return list_directories_windows(path);
+#else
+    std::error_code error;
+    std::vector<std::filesystem::path> result;
+    for (const auto &entry : std::filesystem::directory_iterator(path, error))
+    {
+        if (error)
+            return {};
+        if (entry.is_directory(error))
+            result.push_back(entry.path());
+        if (error)
+            return {};
+    }
+    return error ? std::vector<std::filesystem::path>{} : result;
+#endif
+}
+
+bool remove_tree(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return remove_tree_windows(path);
+#else
+    std::error_code error;
+    std::filesystem::remove_all(path, error);
+    return !error;
 #endif
 }
 

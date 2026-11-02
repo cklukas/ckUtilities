@@ -7,6 +7,7 @@
 #include "files_app.hpp"
 
 #include "ck/vision/keymap.hpp"
+#include "ck/file_io.hpp"
 #include "host_about.hpp"
 #include "native_host.hpp"
 #include "operation_journal_file.hpp"
@@ -33,16 +34,18 @@ std::optional<NativeAbsolutePath> absolute(const std::filesystem::path &path, co
 }
 
 bool make_private_directory(const std::filesystem::path &path) {
+#if defined(_WIN32)
+    return ck::io::create_directories(path);
+#else
     try {
         std::filesystem::create_directories(path);
-#if !defined(_WIN32)
         std::filesystem::permissions(path, std::filesystem::perms::owner_all,
                                       std::filesystem::perm_options::replace);
-#endif
         return std::filesystem::is_directory(path);
     } catch (const std::filesystem::filesystem_error &) {
         return false;
     }
+#endif
 }
 
 int run(const std::vector<std::string> &args) {

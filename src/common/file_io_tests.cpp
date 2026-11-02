@@ -13,26 +13,27 @@ int main()
 #if defined(_WIN32)
     std::wstring filename(230, L'x');
     filename[17] = L'\u00e4';
-    const std::filesystem::path file = root / filename;
+    const std::filesystem::path directory = root / filename;
+    const std::filesystem::path file = directory / L"payload.txt";
 #else
-    const std::filesystem::path file = root / (std::string(230, 'x') + "-\xc3\xa4.txt");
+    const std::filesystem::path directory = root / (std::string(230, 'x') + "-\xc3\xa4");
+    const std::filesystem::path file = directory / "payload.txt";
 #endif
-    std::error_code error;
     ck::io::remove_file(file);
-    std::filesystem::remove_all(root, error);
-    if (error)
-        return 1;
-    std::filesystem::create_directories(root, error);
-    if (error)
-        return 1;
+    if (!ck::io::remove_tree(root))
+        return 11;
+    if (!ck::io::create_directories(root))
+        return 12;
+    if (!ck::io::create_directories(directory))
+        return 13;
 
     ck::io::remove_file(file);
-    std::filesystem::remove_all(root, error);
-    if (error)
-        return 1;
-    std::filesystem::create_directories(root, error);
-    if (error)
-        return 1;
+    if (!ck::io::remove_tree(root))
+        return 14;
+    if (!ck::io::create_directories(root))
+        return 15;
+    if (!ck::io::create_directories(directory))
+        return 16;
     const std::string first = "first line\n\x00\xc3\xbc";
     const std::string second = "\nsecond line\n";
     if (!ck::io::write_file(file, first) || !ck::io::write_file(file, second, ck::io::WriteMode::Append))
@@ -47,6 +48,5 @@ int main()
 
     if (!ck::io::remove_file(file))
         return 5;
-    std::filesystem::remove_all(root, error);
-    return error ? 6 : 0;
+    return ck::io::remove_tree(root) ? 0 : 6;
 }

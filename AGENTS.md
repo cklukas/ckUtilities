@@ -36,3 +36,9 @@ When auditing or adding a Windows dependency such as ckVision, inspect its
 Windows filesystem and process boundaries for the same legacy API assumptions;
 document any unavoidable compatibility call and keep it outside the exact
 filesystem path used by ckUtilities.
+
+This is a mandatory implementation rule, not a portability suggestion: new or
+modified Windows file, directory, archive, profile, cache, and process-path
+code must use the repository's modern wide/native boundary or an audited
+ckVision native adapter. Do not add a direct `std::filesystem` or narrow Win32
+final I/O call merely because the ordinary test path is short.

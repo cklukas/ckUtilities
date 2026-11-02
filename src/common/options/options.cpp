@@ -428,19 +428,15 @@ bool OptionRegistry::saveToFile(const std::filesystem::path &filePath) const
         data[key] = toJson(current);
     }
 
-    std::error_code ec;
-    std::filesystem::create_directories(filePath.parent_path(), ec);
+    if (!ck::io::create_directories(filePath.parent_path()))
+        return false;
 
     return ck::io::write_file(filePath, data.dump(2) + '\n');
 }
 
 bool OptionRegistry::loadDefaults()
 {
-    std::filesystem::path path = defaultOptionsPath();
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return false;
-    return loadFromFile(path);
+    return loadFromFile(defaultOptionsPath());
 }
 
 bool OptionRegistry::saveDefaults() const
@@ -450,11 +446,7 @@ bool OptionRegistry::saveDefaults() const
 
 bool OptionRegistry::clearDefaults() const
 {
-    std::filesystem::path path = defaultOptionsPath();
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec))
-        return true;
-    return std::filesystem::remove(path, ec);
+    return ck::io::remove_file(defaultOptionsPath());
 }
 
 std::filesystem::path OptionRegistry::defaultOptionsPath() const
@@ -500,22 +492,15 @@ std::vector<std::string> OptionRegistry::availableProfiles()
 {
     std::vector<std::string> profiles;
     std::filesystem::path root = configRoot();
-    std::error_code ec;
-    if (!std::filesystem::exists(root, ec))
-        return profiles;
-
-    for (const auto &entry : std::filesystem::directory_iterator(root, std::filesystem::directory_options::skip_permission_denied, ec))
+    for (const auto &entry : ck::io::list_directories(root))
     {
-        if (ec)
+        std::filesystem::path defaults = entry / "defaults.json";
+        std::string default_contents;
+        if (ck::io::read_file(defaults, default_contents, 1))
         {
-            ec.clear();
-            continue;
+            const auto name = entry.filename().u8string();
+            profiles.emplace_back(reinterpret_cast<const char *>(name.data()), name.size());
         }
-        if (!entry.is_directory(ec))
-            continue;
-        std::filesystem::path defaults = entry.path() / "defaults.json";
-        if (std::filesystem::exists(defaults, ec))
-            profiles.push_back(entry.path().filename().string());
     }
 
     std::sort(profiles.begin(), profiles.end());

@@ -32,9 +32,18 @@ cross-platform sysmon target but only used on Linux). POSIX-only `/proc`,
 non-Windows preprocessor branches.
 
 The shared boundary has regression coverage for long paths, exact UTF-16 names,
-non-ASCII bytes, append/truncate behavior, and bounded reads. UNC spelling is
-handled by the same extended-path conversion; an environment-provided UNC
-fixture can be added to workstation qualification when a share is available.
+non-ASCII bytes, append/truncate behavior, bounded reads, recursive directory
+creation/listing, and extended-length tree cleanup that does not recurse
+through reparse points. UNC spelling is handled by the same extended-path
+conversion; an environment-provided UNC fixture can be added to workstation
+qualification when a share is available. Windows search-model and dialog path
+buffers are heap-backed, so the extended path capacity cannot exhaust the
+worker or UI stack.
+
+Windows-compiled product callers use this boundary for file contents,
+directory creation, profile enumeration, and cleanup. `std::filesystem` may
+still be used for lexical path composition or in POSIX-only branches, but it
+is not an accepted final Windows I/O operation for product paths.
 
 ## ckVision 1.4.2
 
