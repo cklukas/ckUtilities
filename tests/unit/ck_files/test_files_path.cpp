@@ -1,6 +1,9 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#ifdef _WIN32
+#include "windows_name.hpp"
+#endif
 #include "cvision/testing/cktest.hpp"
 #include <stdexcept>
 namespace {
