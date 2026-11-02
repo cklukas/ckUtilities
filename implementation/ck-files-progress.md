@@ -14,6 +14,12 @@ This closes the available real-PTY/ConPTY terminal contract for the current
 source. It does not close the required real-window mouse/restricted-key
 acceptance or the Linux TSan runtime gate.
 
+The complete registered test matrices were also rebuilt from the current
+source and passed: macOS **224/224** in 18.19 seconds, Linux ARM64 **223/223**
+in 15.17 seconds, and Windows x64 **223/223** in 66.60 seconds. The Windows
+run used the complete `all` target on V:, so every registered executable was
+present; an earlier incomplete run with missing test binaries is not counted.
+
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 
 Post-publication ordinary-copy journal records now carry a separate durable
