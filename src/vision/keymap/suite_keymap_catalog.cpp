@@ -85,6 +85,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.inspect_archive_recovery", "Inspect archive &recovery...", "Files", ""},
     CommandDefinition{"ck.files.cleanup_archive_recovery", "Clean up archive staging...", "Files", ""},
     CommandDefinition{"ck.files.inspect_operation_recovery", "Inspect operation recover&y...", "Files", ""},
+    CommandDefinition{"ck.files.cleanup_operation_recovery", "Clean up operation staging...", "Files", ""},
     CommandDefinition{"ck.files.copy", "&Copy to other pane", "Files", "F5"},
     CommandDefinition{"ck.files.move", "&Move to other pane", "Files", "F6"},
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},

@@ -253,6 +253,7 @@ struct FilesApp::State {
     FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr;
     FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr;
     FilesOperationRecoveryService *operation_recovery_service = nullptr;
+    FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr;
     std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
     FilesSettingsBinding settings;
     FilesAppWake &wake;
@@ -278,6 +279,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> archive_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> archive_cleanup_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_cleanup_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
@@ -291,6 +293,8 @@ struct FilesApp::State {
     bool operation_recovery_request = false;
     std::optional<FilesOperationRecoveryScan> operation_recovery_scan;
     std::string operation_recovery_error;
+    bool operation_recovery_cleanup_request = false;
+    std::string operation_recovery_cleanup_error;
     std::unique_ptr<FilesVolumeArchiveReviewDialog> volume_archive_review_dialog;
     FilesVolumeRecord volume_archive_source;
     std::shared_ptr<const FilesPaneLocation> volume_archive_destination;
@@ -321,6 +325,8 @@ struct FilesApp::State {
     std::weak_ptr<void> archive_cleanup_lifetime;
     ckv::widgets::Window *operation_recovery_window = nullptr;
     std::weak_ptr<void> operation_recovery_lifetime;
+    ckv::widgets::Window *operation_recovery_cleanup_window = nullptr;
+    std::weak_ptr<void> operation_recovery_cleanup_lifetime;
     bool volume_request = false;
     std::size_t volume_pane = 0;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
@@ -334,6 +340,7 @@ struct FilesApp::State {
     ckv::ui::CommandId archive_recovery_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId archive_cleanup_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId operation_recovery_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId operation_recovery_cleanup_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_back_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId history_forward_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId bookmark_add_id = ckv::ui::kInvalidCommand;
@@ -351,13 +358,15 @@ struct FilesApp::State {
           FilesVolumeService *volumes, FilesVolumeArchivePlanningService *archive_planning,
           FilesVolumeArchiveService *archive_service, FilesVolumeArchiveRecoveryService *archive_recovery,
           FilesVolumeArchiveRecoveryCleanupService *archive_recovery_cleanup,
-          FilesOperationRecoveryService *operation_recovery)
+          FilesOperationRecoveryService *operation_recovery,
+          FilesOperationRecoveryCleanupService *operation_recovery_cleanup)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
           execution_service(execution), volume_service(volumes),
           volume_archive_planning_service(archive_planning), volume_archive_service(archive_service),
           volume_archive_recovery_service(archive_recovery),
           volume_archive_recovery_cleanup_service(archive_recovery_cleanup),
           operation_recovery_service(operation_recovery),
+          operation_recovery_cleanup_service(operation_recovery_cleanup),
           operation_journal_root(std::move(journal_root)),
           settings(std::move(supplied_settings)), wake(signal),
           host_quit(std::move(quit)), commands(app.commands()) {
@@ -445,6 +454,9 @@ struct FilesApp::State {
                                      [this] { return availability("ck.files.cleanup_archive_recovery").enabled; });
             operation_recovery_id = own("ck.files.inspect_operation_recovery", [this] { show_operation_recovery(); },
                                        [this] { return availability("ck.files.inspect_operation_recovery").enabled; });
+            operation_recovery_cleanup_id = own(
+                "ck.files.cleanup_operation_recovery", [this] { show_operation_recovery_cleanup(); },
+                [this] { return availability("ck.files.cleanup_operation_recovery").enabled; });
             const auto visible_ready = [this] { return availability("ck.files.mark_visible").enabled; };
             const auto toggle = own(
                 "ck.files.toggle_mark",
@@ -506,6 +518,7 @@ struct FilesApp::State {
                                                             item(archive_recovery_id, "Inspect archive &recovery..."),
                                                             item(archive_cleanup_id, "Clean up archive staging..."),
                                                             item(operation_recovery_id, "Inspect operation recover&y..."),
+                                                            item(operation_recovery_cleanup_id, "Clean up operation staging..."),
                                                             item(copy_id, "&Copy to other pane"),
                                                             item(move_id, "&Move to other pane")}},
                 ckv::widgets::MenuBarItem{
@@ -527,6 +540,8 @@ struct FilesApp::State {
                     ckv::widgets::CommandPresentation{archive_cleanup_id, "Clean up archive staging"}, 24},
                 ckv::widgets::StatusLineItem{
                     ckv::widgets::CommandPresentation{operation_recovery_id, "Inspect operation recovery"}, 24},
+                ckv::widgets::StatusLineItem{
+                    ckv::widgets::CommandPresentation{operation_recovery_cleanup_id, "Clean up operation staging"}, 24},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{options_id, "&View options"}, 20}};
             shell = std::make_unique<SuiteShell>(application, std::move(options));
             create_window();
@@ -662,6 +677,8 @@ struct FilesApp::State {
             volume_archive_recovery_cleanup_service->request_stop();
         if (operation_recovery_service)
             operation_recovery_service->request_stop();
+        if (operation_recovery_cleanup_service)
+            operation_recovery_cleanup_service->request_stop();
     }
     void create_window() {
         auto first = std::make_unique<PaneSurface>(panes[0].model),
@@ -733,6 +750,7 @@ struct FilesApp::State {
                (archive_recovery_dialog && !archive_recovery_dialog->completed()) ||
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
                (operation_recovery_dialog && !operation_recovery_dialog->completed()) ||
+               (operation_recovery_cleanup_dialog && !operation_recovery_cleanup_dialog->completed()) ||
                volume_request ||
                (volume_archive_review_dialog && !volume_archive_review_dialog->completed()) ||
                volume_archive_planning_request.has_value() ||
@@ -756,6 +774,30 @@ struct FilesApp::State {
         const auto &evidence = item.report->evidence;
         if (!evidence.destination_encoding || evidence.destination_native_path.empty() ||
             !evidence.staging_encoding || evidence.staging_native_path.empty() || !evidence.staging_digest)
+            return nullptr;
+        return &item;
+#endif
+    }
+    const FilesOperationRecoveryItem *operation_cleanup_item() const noexcept {
+#if !defined(_WIN32)
+        return nullptr;
+#else
+        if (!operation_recovery_scan || operation_recovery_scan->journals.size() != 1)
+            return nullptr;
+        const auto &item = operation_recovery_scan->journals.front();
+        if (!item.native_name || !item.report)
+            return nullptr;
+        const auto &inspection = item.report->inspection;
+        if (inspection.report.items.size() != 1 || inspection.artifacts.size() != 1 ||
+            inspection.report.has_untrusted_tail || inspection.has_untrusted_evidence)
+            return nullptr;
+        const auto &recovery = inspection.report.items.front();
+        const auto &artifact = inspection.artifacts.front();
+        if (recovery.action != ck::files::OperationRecoveryAction::InspectUnpublishedStaging ||
+            (recovery.state != ck::files::OperationJournalState::Copied &&
+             recovery.state != ck::files::OperationJournalState::Verified) ||
+            !artifact.evidence || !artifact.evidence->staging_identity ||
+            !artifact.evidence->destination_address)
             return nullptr;
         return &item;
 #endif
@@ -816,6 +858,25 @@ struct FilesApp::State {
 #else
             if (!archive_cleanup_item())
                 return unavailable("Archive staging cleanup unavailable: no single fully evidenced staging file is eligible");
+            return FilesCommandAvailability::available();
+#endif
+        }
+        if (command == "ck.files.cleanup_operation_recovery") {
+            if (!operation_recovery_cleanup_service)
+                return unavailable("Operation staging cleanup unavailable: cleanup worker is not configured");
+            if (operation_recovery_cleanup_request)
+                return unavailable("Operation staging cleanup unavailable: cleanup is still running");
+            if (modal_pending())
+                return unavailable("Operation staging cleanup unavailable: a dialog is open");
+            if (operation_recovery_request)
+                return unavailable("Operation staging cleanup unavailable: recovery scan is still running");
+            if (!operation_recovery_scan)
+                return unavailable("Operation staging cleanup unavailable: recovery scan is not ready");
+#if !defined(_WIN32)
+            return unavailable("Operation staging cleanup unavailable: identity-bound discard is not qualified on this platform");
+#else
+            if (!operation_cleanup_item())
+                return unavailable("Operation staging cleanup unavailable: no single receipt-backed unpublished copy is eligible");
             return FilesCommandAvailability::available();
 #endif
         }
@@ -1064,6 +1125,10 @@ struct FilesApp::State {
             hint = "Archive staging cleanup is running";
         } else if (i == active && !volume_archive_recovery_cleanup_error.empty()) {
             hint = volume_archive_recovery_cleanup_error;
+        } else if (i == active && operation_recovery_cleanup_request) {
+            hint = "Operation staging cleanup is running";
+        } else if (i == active && !operation_recovery_cleanup_error.empty()) {
+            hint = operation_recovery_cleanup_error;
         } else if (i == active && volume_archive_recovery_scan &&
                    volume_archive_recovery_scan->requires_reconciliation) {
             hint = "Inspect archive recovery: review is required before volume Copy";
@@ -1255,6 +1320,60 @@ struct FilesApp::State {
             operation_recovery_dialog.reset();
             labels();
         });
+    }
+    void show_operation_recovery_cleanup() {
+        if (!availability("ck.files.cleanup_operation_recovery").enabled || modal_pending())
+            return;
+#if !defined(_WIN32)
+        return;
+#else
+        const auto *item = operation_cleanup_item();
+        if (!item || !item->native_name || !item->report)
+            return;
+        const auto journal_name = *item->native_name;
+        const auto journal_id = item->report->journal_id;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Clean up unpublished operation staging";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "This removes one unpublished copy staging file only. The worker will reopen the journal and revalidate the exact destination address, destination identity, staging identity, complete receipt, and eligible journal state.",
+                .kind = ckv::widgets::FieldKind::Note},
+            ckv::widgets::FieldDescriptor{
+                .label = "No published destination or source is touched. If any check differs, cleanup fails and the staging file is retained for review.",
+                .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Clean up staging", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        operation_recovery_cleanup_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        operation_recovery_cleanup_window = shell->desktop().active_window();
+        operation_recovery_cleanup_lifetime = operation_recovery_cleanup_window->lifetime_token();
+        operation_recovery_cleanup_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), journal_name, journal_id](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                operation_recovery_cleanup_window = nullptr;
+                if (!result.accepted) {
+                    operation_recovery_cleanup_dialog.reset();
+                    return;
+                }
+                operation_recovery_cleanup_dialog.reset();
+                if (!operation_recovery_cleanup_service || !operation_journal_root ||
+                    !operation_journal_root->is_valid()) {
+                    operation_recovery_cleanup_error =
+                        "Operation staging cleanup unavailable: journal root is not configured";
+                } else if (operation_recovery_cleanup_service->request(
+                               *operation_journal_root, journal_name, journal_id) ==
+                           FilesOperationRecoveryCleanupSubmission::Accepted) {
+                    operation_recovery_cleanup_request = true;
+                    operation_recovery_cleanup_error.clear();
+                } else {
+                    operation_recovery_cleanup_error =
+                        "Operation staging cleanup could not be started";
+                }
+                labels();
+            });
+#endif
     }
     void save_settings() {
         if (!settings.save)
@@ -2719,6 +2838,34 @@ struct FilesApp::State {
                     labels();
                 }
             }
+            if (operation_recovery_cleanup_service) {
+                if (auto reply = operation_recovery_cleanup_service->take()) {
+                    operation_recovery_cleanup_request = false;
+                    if (reply->state == FilesOperationRecoveryCleanupState::Complete) {
+                        operation_recovery_cleanup_error.clear();
+                        operation_recovery_scan.reset();
+                        if (operation_recovery_service && operation_journal_root &&
+                            operation_journal_root->is_valid() &&
+                            operation_recovery_service->request(*operation_journal_root) ==
+                                FilesOperationRecoverySubmission::Accepted)
+                            operation_recovery_request = true;
+                        else
+                            operation_recovery_cleanup_error =
+                                "Operation staging cleanup completed; recovery rescan could not be started";
+                    } else {
+                        operation_recovery_cleanup_error = reply->error
+                            ? "Operation staging cleanup failed: " + reply->error->error.operation
+                            : "Operation staging cleanup failed";
+                    }
+                    labels();
+                }
+                if (operation_recovery_cleanup_request &&
+                    !operation_recovery_cleanup_service->running()) {
+                    operation_recovery_cleanup_request = false;
+                    operation_recovery_cleanup_error = "Operation staging cleanup worker stopped";
+                    labels();
+                }
+            }
             for (std::size_t i = 0; i < 2; ++i) {
                 if (auto reply = services[i]->take())
                     consume(i, std::move(*reply));
@@ -3004,13 +3151,14 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
                    FilesVolumeArchiveService *volume_archive_service,
                    FilesVolumeArchiveRecoveryService *volume_archive_recovery_service,
                    FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service,
-                   FilesOperationRecoveryService *operation_recovery_service)
+                   FilesOperationRecoveryService *operation_recovery_service,
+                   FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service)
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
                                      completion_services, planning_service, execution_service,
                                      std::move(operation_journal_root), std::move(settings), volume_service,
                                      volume_archive_planning_service, volume_archive_service,
                                      volume_archive_recovery_service, volume_archive_recovery_cleanup_service,
-                                     operation_recovery_service)) {}
+                                     operation_recovery_service, operation_recovery_cleanup_service)) {}
 FilesApp::~FilesApp() = default;
 bool FilesApp::navigate(std::size_t pane, ck::files::NativeAbsolutePath location) {
     return state_->navigate(pane, std::move(location));

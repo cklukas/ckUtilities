@@ -120,6 +120,8 @@ int run(const std::vector<std::string> &args) {
         std::make_unique<ck::vision::FilesVolumeArchiveRecoveryCleanupService>(wake.callback());
     auto operation_recovery_service =
         std::make_unique<ck::vision::FilesOperationRecoveryService>(wake.callback());
+    auto operation_recovery_cleanup_service =
+        std::make_unique<ck::vision::FilesOperationRecoveryCleanupService>(wake.callback());
     services[0] = std::make_unique<ck::vision::FilesPaneService>(
         ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     services[1] = std::make_unique<ck::vision::FilesPaneService>(
@@ -143,7 +145,8 @@ int run(const std::vector<std::string> &args) {
              return settings.save(value);
          }, std::move(loaded_settings.diagnostic)}, volume_service.get(), volume_archive_planning_service.get(),
         volume_archive_service.get(), volume_archive_recovery_service.get(),
-        volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get());
+        volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get(),
+        operation_recovery_cleanup_service.get());
     keymap.load();
     application.run();
     return 0;

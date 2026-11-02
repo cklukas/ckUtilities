@@ -6,6 +6,7 @@
 #include "files_operation_planning_service.hpp"
 #include "files_operation_execution_service.hpp"
 #include "files_operation_recovery.hpp"
+#include "files_operation_recovery_cleanup.hpp"
 #include "files_operation_review_dialog.hpp"
 #include "files_volume_archive_review_dialog.hpp"
 #include "files_settings.hpp"
@@ -61,7 +62,8 @@ class FilesApp final {
              FilesVolumeArchiveService *volume_archive_service = nullptr,
              FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr,
              FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr,
-             FilesOperationRecoveryService *operation_recovery_service = nullptr);
+             FilesOperationRecoveryService *operation_recovery_service = nullptr,
+             FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
     FilesApp &operator=(const FilesApp &) = delete;

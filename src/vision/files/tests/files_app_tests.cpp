@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
 #include "files_location_text.hpp"
+#include "native_filesystem.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
 #include <cvision/core/clock.hpp>
@@ -169,6 +170,7 @@ struct Fixture {
     std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryCleanupService> volume_archive_recovery_cleanup_service;
     std::unique_ptr<FilesOperationRecoveryService> operation_recovery_service;
+    std::unique_ptr<FilesOperationRecoveryCleanupService> operation_recovery_cleanup_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
     explicit Fixture(ThemeScheme theme = ThemeScheme::Classic, std::shared_ptr<Gate> blocked = {},
@@ -176,7 +178,8 @@ struct Fixture {
                      std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
                      bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {},
                      bool qualified_volume = false, bool recovery_journal = false,
-                     bool operation_recovery_journal = false, bool eligible_archive_recovery = false)
+                     bool operation_recovery_journal = false, bool eligible_archive_recovery = false,
+                     bool eligible_operation_recovery = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -320,6 +323,67 @@ struct Fixture {
             if (!journal)
                 throw std::runtime_error("cannot create operation recovery fixture");
         }
+        if (eligible_operation_recovery) {
+            const auto destination = scratch.path() / "operation-destination";
+            std::filesystem::create_directory(destination);
+            const auto destination_address = address(destination);
+            NativeFileSystem filesystem;
+            auto destination_result = filesystem.open_native_directory(destination_address);
+            if (!destination_result.value())
+                throw std::runtime_error("cannot open operation recovery destination");
+            auto held_destination = std::shared_ptr<const DirectoryCursor>(std::move(destination_result).take_value());
+#if defined(_WIN32)
+            const auto staging_name = NativeName::from_windows(u".ck-copy-staging-recovery");
+            const auto published_name = NativeName::from_windows(u"published");
+            const auto journal_name = NativeName::from_windows(
+                u".ck-copy-journal-1f000000000000000000000000000000");
+#else
+            const auto staging_name = NativeName::from_posix(".ck-copy-staging-recovery");
+            const auto published_name = NativeName::from_posix("published");
+            const auto journal_name = NativeName::from_posix(
+                ".ck-copy-journal-1f000000000000000000000000000000");
+#endif
+            if (!staging_name || !published_name || !journal_name)
+                throw std::runtime_error("cannot encode operation recovery fixture names");
+            auto staging_result = held_destination->create_child_file(*staging_name);
+            if (!staging_result.value())
+                throw std::runtime_error("cannot create operation recovery staging");
+            auto staging = std::move(staging_result).take_value();
+            const auto staging_metadata = staging->inspect_basic();
+            const auto destination_identity = held_destination->identity();
+            if (!staging_metadata.value() || !staging_metadata.value()->identity.value() ||
+                !destination_identity.value())
+                throw std::runtime_error("cannot inspect operation recovery fixture identities");
+            const auto staging_durable = NativeDurableIdentity::from_live(*staging_metadata.value()->identity.value());
+            const auto destination_durable = NativeDurableIdentity::from_live(*destination_identity.value());
+            if (!staging_durable || !destination_durable)
+                throw std::runtime_error("cannot derive operation recovery fixture identities");
+            OperationJournalId id;
+            id.bytes[0] = std::byte{0x32};
+            auto created = OperationJournal::create(FileOperation::Copy, id);
+            if (!created.value())
+                throw std::runtime_error("cannot create eligible operation recovery journal");
+            NativeOperationRecoveryEvidence receipt{
+                *staging_name, *published_name, *destination_durable, *destination_durable,
+                *destination_durable, *staging_durable, destination_address};
+            auto encoded = encode_native_operation_recovery_evidence(receipt);
+            if (!encoded.value())
+                throw std::runtime_error("cannot encode eligible operation recovery journal");
+            auto file = open_native_operation_journal_file(operation_root_address, *journal_name, true);
+            if (!file.value())
+                throw std::runtime_error("cannot open eligible operation recovery journal");
+            auto journal = std::move(created).take_value();
+            for (const auto &[sequence, state] : std::array{
+                     std::pair<std::uint64_t, OperationJournalState>{1, OperationJournalState::Planned},
+                     std::pair<std::uint64_t, OperationJournalState>{2, OperationJournalState::Prepared},
+                     std::pair<std::uint64_t, OperationJournalState>{3, OperationJournalState::Copied}}) {
+                if (!append_operation_journal_file(**file.value(), *journal,
+                                                   {sequence, 0, state,
+                                                    state == OperationJournalState::Planned
+                                                        ? std::vector<std::byte>{} : *encoded.value()}).value())
+                    throw std::runtime_error("cannot append eligible operation recovery journal");
+            }
+        }
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         if (qualified_volume || recovery_journal || eligible_archive_recovery) {
@@ -329,8 +393,11 @@ struct Fixture {
             volume_archive_recovery_cleanup_service =
                 std::make_unique<FilesVolumeArchiveRecoveryCleanupService>(wake.callback());
         }
-        if (operation_recovery_journal)
+        if (operation_recovery_journal || eligible_operation_recovery) {
             operation_recovery_service = std::make_unique<FilesOperationRecoveryService>(wake.callback());
+            operation_recovery_cleanup_service =
+                std::make_unique<FilesOperationRecoveryCleanupService>(wake.callback());
+        }
         volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [qualified_volume] {
             std::vector<FilesVolumeRecord> records;
             records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
@@ -357,7 +424,7 @@ struct Fixture {
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
             volume_service.get(), volume_archive_planning_service.get(), volume_archive_service.get(),
             volume_archive_recovery_service.get(), volume_archive_recovery_cleanup_service.get(),
-            operation_recovery_service.get());
+            operation_recovery_service.get(), operation_recovery_cleanup_service.get());
     }
     ~Fixture() {
         app.reset();
@@ -382,6 +449,8 @@ struct Fixture {
             volume_archive_recovery_cleanup_service->join();
         if (operation_recovery_service)
             operation_recovery_service->join();
+        if (operation_recovery_cleanup_service)
+            operation_recovery_cleanup_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
     }
     template <class Predicate> void until(Predicate ready) {
@@ -1592,6 +1661,34 @@ CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
     CK_CHECK(text.find("Read-only inspection") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Operation recovery review") == std::string::npos; });
+}
+CK_TEST(files_app_operation_cleanup_command_is_platform_guarded_and_revalidated) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, false, true);
+    f.loaded();
+    f.until([&] {
+        const auto availability = f.app->availability("ck.files.cleanup_operation_recovery");
+        return availability.enabled || availability.reason.find("not qualified") != std::string::npos;
+    });
+#if defined(_WIN32)
+    CK_CHECK(f.app->availability("ck.files.cleanup_operation_recovery").enabled);
+    CK_CHECK(f.command("ck.files.cleanup_operation_recovery"));
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *cleanup = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Clean up staging")
+            cleanup = button;
+    CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
+    f.until([&] {
+        return !std::filesystem::exists(f.scratch.path() / "operation-destination" / ".ck-copy-staging-recovery") &&
+            !f.app->availability("ck.files.cleanup_operation_recovery").enabled;
+    });
+#else
+    CK_CHECK(!f.app->availability("ck.files.cleanup_operation_recovery").enabled);
+    CK_CHECK(f.app->availability("ck.files.cleanup_operation_recovery").reason.find(
+                 "identity-bound discard is not qualified") != std::string::npos);
+#endif
 }
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
