@@ -380,7 +380,7 @@ CK_TEST(native_operation_move_batch_renames_only_after_identity_revalidation) {
 }
 
 #if defined(__linux__)
-CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_unsupported) {
+CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_unsupported_with_open_writer) {
     const ck::testing::ScratchDirectory scratch("files-native-cross-filesystem-move",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto source_path = scratch.path() / "source.bin";
@@ -391,6 +391,10 @@ CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_
         std::ofstream output(source_path, std::ios::binary);
         output << "cross-filesystem source remains on POSIX";
     }
+    std::ofstream open_writer(source_path, std::ios::binary | std::ios::app);
+    CK_CHECK(open_writer.is_open());
+    open_writer << " while another writer remains open";
+    open_writer.flush();
     const auto destination_path = fs::path("/dev/shm") /
         ("ck-files-crossmove-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     struct Cleanup final {
@@ -435,6 +439,9 @@ CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_
              job->state() == OperationExecutionState::RetainedSource);
     CK_CHECK(fs::exists(source_path));
     CK_CHECK(!fs::exists(destination_path / "moved.bin"));
+    open_writer << " after the refused move";
+    open_writer.flush();
+    CK_CHECK(fs::file_size(source_path) > 0);
 }
 #endif
 

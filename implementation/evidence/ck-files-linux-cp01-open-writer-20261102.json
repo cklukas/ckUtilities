@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-01",
+  "platform": "Linux ARM64",
+  "host": "uconsole",
+  "base_source_checkpoint": "2702ee7188293ba5f6e36f1d144cd60c243f5c4f",
+  "overlay_test_source": "local commit 2c2e05a",
+  "overlay_test_source_sha256": "4b506c98b4798b1429f52767c34d0eed72367a9fee4f79a16ca33e7ea9e7c91c",
+  "original_source_sha256_before_and_after": "ac8572bbab6edb854b2c71e4dc77ac409819e9d3466a6e0796fff5c78d31004b",
+  "build": {
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "/usr/bin/c++ (GNU 14.2.0)",
+    "build_root": "/home/klukas/tmp/ckutilities-cp01-open-writer-20261102-01/build",
+    "executable": "/home/klukas/tmp/ckutilities-cp01-open-writer-20261102-01/build/tests/unit/ck_files/ck_files_native_tests",
+    "executable_sha256": "1e303929d81cb148682d3e06b40ca11b8433901415742b662618c1735ce0a64f",
+    "temporary_root": "/home/klukas/tmp/ckutilities-cp01-open-writer-20261102-01"
+  },
+  "suite": "test_files_operation_content_native.cpp",
+  "result": "21/21 passed",
+  "critical_case": "A real writer remained open and appended before and after a cross-filesystem move attempt; POSIX source exclusion was unavailable, the source remained present, no destination move was published, and the writer continued to operate.",
+  "harness_note": "The host has no /usr/bin/time; the direct test binary was run successfully after the time-wrapper-only invocation stopped before launch.",
+  "status": "pass_safety_boundary_posix_move_remains_disabled"
+}
