@@ -80,7 +80,7 @@ CK_TEST(path_windows_extended_api_spelling_is_length_safe_and_device_safe) {
     CK_CHECK(windows_extended_path(L"\\\\server\\share\\deep\\file").value() ==
         L"\\\\?\\UNC\\server\\share\\deep\\file");
     const auto long_path = windows_extended_path(L"V:\\" + std::wstring(400, L'a'));
-    CK_CHECK(long_path.value() && long_path->starts_with(L"\\\\?\\V:\\"));
+    CK_CHECK(long_path && long_path->starts_with(L"\\\\?\\V:\\"));
     CK_CHECK(!windows_extended_path(L"V:relative") && !windows_extended_path(L"\\\\.\\PhysicalDrive0") &&
         !windows_extended_path(L"\\??\\C:\\device"));
 #endif
