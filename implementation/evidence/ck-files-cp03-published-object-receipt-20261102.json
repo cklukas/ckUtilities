@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-03",
+  "scope": "published-object recovery receipt and read-only destination verifier",
+  "source_commit_macos": "c0d4a21",
+  "source_commit_windows": "005fe3fb1",
+  "source_commit_linux": "8126f9a83",
+  "protocol": {
+    "codec": "native recovery evidence version 5",
+    "receipt": "independently verified whole-file SHA-256 plus durable published-object identity",
+    "binding": "exact native destination address, destination-parent identity, and published-object identity are distinct evidence fields",
+    "verifier": "worker-only bounded read-only verifier reopens the exact held destination child and compares identity, size, and digest",
+    "safety": "verification performs no publication, retry, resume, source retirement, cleanup, or pathname fallback"
+  },
+  "normal_matrix": {
+    "macos_arm64": {
+      "configuration": "Release/Ninja",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+      "suites": ["ck_files_core_tests: 718/718", "ck_files_native_tests: 188/188", "ck_vision_files_tests: 249/249"],
+      "outputs": [
+        {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/tests/unit/ck_files/ck_files_core_tests", "sha256": "fc7f35a81b74269a46c3f35a580749ed50f5545defaa736703a25fcaf6f8a6a3"},
+        {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "8fa58f2d9d314d4e8c716ae89ca790ab9b0ad3a35a3d03245b98e510b75ecca6"},
+        {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/files/ck_vision_files_tests", "sha256": "5ca0a8aa4e7049e9baa62910e342aacaa47478973013843c3e7c4032218167b8"}
+      ]
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "configuration": "Release/Ninja /MT",
+      "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+      "source_checkout": "V:\\dev\\ckutilities-cp02-trash-guard-20261102-01",
+      "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+      "suites": ["ck_files_core_tests: 718/718", "ck_files_native_tests: 187/187", "ck_vision_files_tests: 248/248"],
+      "outputs": [
+        {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe", "sha256": "924e6d5e0c5fefed680513c02b105f077822ff5b6177d5e645a49d0b3689e1f6"},
+        {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe", "sha256": "d46a4794e4370e129768a2881aba29f7cfbd140812e77522bfcb93b5e177be05"},
+        {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe", "sha256": "ab99de7b009f8324d714a9d9e8ac205511e5d9ef0068692292284e10242b156f"}
+      ]
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "configuration": "RelWithDebInfo/Ninja",
+      "compiler": "GNU g++ 14.2.0",
+      "source_checkout": "/home/klukas/ckUtilities",
+      "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+      "suites": ["ck_files_core_tests: 718/718", "ck_files_native_tests: 192/192", "ck_vision_files_tests: 249/249"],
+      "outputs": [
+        {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/tests/unit/ck_files/ck_files_core_tests", "sha256": "fb6c4ff46e55f6ee3495c6be56245dd5cc17b7c65f73098c4b77ee63f2846a8f"},
+        {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "8f83510b2e4948c7eb0c7ab0c26cb0a201b23849e4e98d32ab78aa17bda63414"},
+        {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests", "sha256": "e134253b7e3972ce3926e3ef29e713111e801c84f2a465400dfcc087f60b0b5f"}
+      ]
+    }
+  },
+  "sanitizers": {
+    "macos_arm64": {
+      "configuration": "ASan+UBSan, abort-on-error, leak detection disabled",
+      "scope": "published-copy native verifier focus",
+      "result": "1/1 passed; no sanitizer diagnostic"
+    },
+    "linux_arm64": {
+      "configuration": "ASan+UBSan, -fno-sanitize-recover=all, halt-on-error",
+      "build_root": "/home/klukas/tmp/ckutilities-cp03-published-identity-20261102-01/asan-build",
+      "executable_sha256": "01638df3ce5901322f703c9ef5fac2427a102bcadcc42c2065cb78b42a1f925c",
+      "scope": "published-copy native verifier focus",
+      "result": "1/1 passed; no sanitizer diagnostic"
+    },
+    "linux_arm64_tsan": {
+      "build_root": "/home/klukas/tmp/ckutilities-cp03-published-identity-20261102-01/tsan-build",
+      "result": "not qualified: runtime rejected current host VMA range 47; supported ranges reported as 39, 42, and 48",
+      "safety": "no runtime workaround or sanitizer suppression was applied"
+    }
+  },
+  "status": "pass_cp03_published_object_receipt_and_read_only_verifier; linux_tsan_environment_gate_open"
+}

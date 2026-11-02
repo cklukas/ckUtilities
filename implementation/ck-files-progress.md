@@ -14,9 +14,13 @@ retry, publication, cleanup, or source-retirement authority.
 
 The real native copy-batch fixture reopened both durable journals and verified
 the post-publication object receipt. macOS core/native/Files aggregates passed
-**718/718**, **188/188**, and **249/249**. Cross-platform qualification of
-this new checkpoint is still required. The previous cross-platform receipt
-qualification remains recorded below.
+**718/718**, **188/188**, and **249/249**; Windows passed **718/718**,
+**187/187**, and **248/248**; Linux ARM64 passed **718/718**, **192/192**,
+and **249/249**. Current-source ASan/UBSan focused verifier runs passed on
+macOS and Linux. The Linux TSan runtime rejected the host's VMA range 47, so
+that race gate remains open without a workaround. Evidence: [CP-03
+published-object receipt record](evidence/ck-files-cp03-published-object-receipt-20261102.json).
+The previous cross-platform receipt qualification remains recorded below.
 
 ## 2026-11-02 — CP-03 ordinary-copy content receipt boundary
 
