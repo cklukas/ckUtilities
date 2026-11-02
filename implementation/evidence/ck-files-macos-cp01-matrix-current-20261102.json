@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-01/WP-07",
+  "platform": "macOS arm64",
+  "host": "Mac",
+  "source_commit": "7a38cb9a9b1d042b0f2d3b63dfe5a0abea31056d",
+  "build": {
+    "configuration": "Release/Ninja",
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1)",
+    "compatibility_flags": "-Wno-elaborated-enum-base",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build",
+    "temporary_root": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02",
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp01-open-writer-20261102-02-fixture",
+    "started_at": "2026-11-02T01:45:49+01:00",
+    "ended_at": "2026-11-02T01:46:54+01:00",
+    "elapsed_seconds": 65,
+    "executables": [
+      {
+        "path": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/src/vision/files/ck_vision_files_tests",
+        "sha256": "1136782b826d1b1709dd41baacf405607e0885d895edf63d61a27b5ee46418ba"
+      },
+      {
+        "path": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/tests/unit/ck_files/ck_files_native_tests",
+        "sha256": "bdd1672dc2391ee8c14923253cde21dd634d3f37f2fb61025b4223d1d1e56973"
+      }
+    ]
+  },
+  "focused_suites": [
+    {
+      "suite": "ck_vision_files_tests",
+      "result": "242/242 passed"
+    },
+    {
+      "suite": "test_files_index_file_native.cpp",
+      "result": "17/17 passed"
+    }
+  ],
+  "full_matrix": {
+    "ctest_result": "224/224 passed",
+    "ctest_elapsed_seconds": 15.80,
+    "started_at": "2026-11-02T01:47:15+01:00",
+    "ended_at": "2026-11-02T01:47:31+01:00"
+  },
+  "rejected_attempt": {
+    "fixture_root": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/test-scratch",
+    "result": "rejected; ck_vision_files_tests stopped at gate not entered and test_files_index_file_native stopped at index_file.private_filesystem:4",
+    "cause": "S8T is case-sensitive APFS with volume ownership disabled; the private native index contract correctly refuses that storage",
+    "disposition": "not counted; the build was reconfigured with the fixture root on PRO-BLADE, where ownership is enabled, then rebuilt and rerun"
+  },
+  "status": "pass_cp01_macos_matrix_with_explicit_fixture_ownership"
+}

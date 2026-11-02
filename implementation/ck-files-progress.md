@@ -1,4 +1,16 @@
 # Files implementation evidence
+## 2026-11-02 — CP-01 current macOS full-matrix qualification
+
+The current Apple Clang arm64 Release build passed the focused ckVision Files
+suite **242/242** and the native private-index suite **17/17**. The complete
+CTest matrix passed **224/224** in 15.80 seconds. The private index fixture
+was deliberately placed on the ownership-enabled PRO-BLADE APFS volume while
+the build and temporary intermediates remained under S8T. An earlier run with
+the fixture on S8T was rejected: S8T has APFS ownership disabled, so the
+native index contract correctly returned `index_file.private_filesystem:4`
+and the dependent completion gate did not enter. That run is not counted.
+Evidence: [macOS CP-01 matrix record](evidence/ck-files-macos-cp01-matrix-current-20261102.json).
+
 ## 2026-11-02 — CP-01 Windows open-writer exclusion qualification
 
 The Windows v143 native security suite passed **5/5**, including a real
