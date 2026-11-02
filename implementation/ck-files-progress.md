@@ -18,6 +18,13 @@ The active-pane status now also reports `Inspect operation recovery: review is
 required` whenever the scan finds reconciliation work, and the affected
 application suite remained **73/73** on all three platforms.
 
+The existing native recovery-cleanup primitive was freshly qualified through
+the real filesystem operation-content suite: **21/21** on macOS, **20/20** on
+Windows v143, and **21/21** on Linux ARM64. Windows completed the
+identity-bound staging discard; POSIX correctly returned Unsupported and left
+the staging object intact. This qualifies the native boundary only; no
+ordinary-operation cleanup command is exposed in Files yet.
+
 This is deliberately a boundary qualification, not CP-03 completion:
 identity-proven cleanup, retry/resume, publication reconciliation, crash
 restart coverage and cross-platform native recovery workers remain open and

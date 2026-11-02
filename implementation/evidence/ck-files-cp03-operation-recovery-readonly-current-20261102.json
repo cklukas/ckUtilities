@@ -2,7 +2,7 @@
   "date": "2026-11-02",
   "package": "CP-03",
   "scope": "read-only ordinary-operation recovery discovery and review boundary",
-  "source_commit": "6a11a3541ec986f18ba01c699245538d5d9c3ece",
+  "source_commit": "1021067b72691f58343a924d1920fedc5b492034",
   "qualification": {
     "discovery": "bounded private-root scan retains exact native journal names and reports malformed, truncated, symlink and non-regular entries as explicit review items",
     "decoder": "native evidence is decoded without authorizing mutation; untrusted evidence and tails require reconciliation",
@@ -17,11 +17,14 @@
     "ui_executable_sha256": "30c153a8ec49d3ac3d47d252b29b9725daf157af84ff694b897bbda581df8977",
     "core_executable": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/tests/unit/ck_files/ck_files_core_tests",
     "core_executable_sha256": "7181a8b21f069ab46be13c15f896e2ac8d54a743037e19d90bd7776610f4e39f",
+    "native_executable": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/tests/unit/ck_files/ck_files_native_tests",
+    "native_executable_sha256": "1374dfaa226edb6c930fa272194a31cf53395edb069f925a7d8bda007f8784ea",
     "suites": [
       {"suite": "files_operation_recovery_tests.cpp", "result": "2/2 passed; repeated worker-owned scans retained the same review-only journal without mutation"},
       {"suite": "files_app_tests.cpp", "result": "73/73 passed"},
       {"suite": "test_files_operation_recovery.cpp", "result": "8/8 passed"},
-      {"suite": "test_files_native_recovery_evidence.cpp", "result": "3/3 passed"}
+      {"suite": "test_files_native_recovery_evidence.cpp", "result": "3/3 passed"},
+      {"suite": "test_files_operation_content_native.cpp", "result": "21/21 passed; native staging cleanup revalidated identity and retained POSIX unsupported disposition"}
     ]
   },
   "windows_x64": {
@@ -33,9 +36,12 @@
     "temporary_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01",
     "executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe",
     "executable_sha256": "F8CD8C902F609645040FE9B7C1962A657CD82B80C8D7806E1C09AE7337267753",
+    "native_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe",
+    "native_executable_sha256": "C86EF68168CC7AD733E5252FE7D39345678D5AA17E4CA3AB447B6077D5BC7AB6",
     "suite": "files_app_tests.cpp",
     "result": "73/73 passed",
-    "focused_suite": "files_operation_recovery_tests.cpp: 2/2 passed"
+    "focused_suite": "files_operation_recovery_tests.cpp: 2/2 passed",
+    "native_suite": "test_files_operation_content_native.cpp: 20/20 passed; Windows handle-bound staging cleanup qualified"
   },
   "linux_arm64": {
     "host": "uconsole",
@@ -46,9 +52,12 @@
     "temporary_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01",
     "executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests",
     "executable_sha256": "1513a18bca612b8eb230d201789c18df446e16d4dfcc09a76e4555f188fcbafd",
+    "native_executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/tests/unit/ck_files/ck_files_native_tests",
+    "native_executable_sha256": "abfbc2ca6da6e906a00a14064a701042ec5ac64016494290822251e6e5828de3",
     "suite": "files_app_tests.cpp",
     "result": "73/73 passed",
-    "focused_suite": "files_operation_recovery_tests.cpp: 2/2 passed"
+    "focused_suite": "files_operation_recovery_tests.cpp: 2/2 passed",
+    "native_suite": "test_files_operation_content_native.cpp: 21/21 passed; POSIX cleanup remains explicitly unsupported and preserves staging"
   },
   "status": "pass_cp03_readonly_recovery_inspection_boundary_only"
 }
