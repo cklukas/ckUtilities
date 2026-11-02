@@ -832,7 +832,8 @@ CK_TEST(files_app_symbolic_link_command_is_capability_scoped_and_uses_opaque_tar
     f.loaded();
 #if defined(_WIN32)
     CK_CHECK(!f.command("ck.files.create_symbolic_link"));
-    CK_CHECK(f.app->status(0).find("handle-relative Windows reparse publication is not qualified") != std::string::npos);
+    CK_CHECK(f.app->availability("ck.files.create_symbolic_link").reason ==
+             "Symbolic link unavailable: handle-relative Windows reparse publication is not qualified");
 #else
     CK_CHECK(f.command("ck.files.create_symbolic_link"));
     f.application.step(f.clock.now_nanos());
