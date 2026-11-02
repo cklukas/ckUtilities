@@ -4,8 +4,6 @@
 
 include(${PROJECT_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 
-add_subdirectory(files)
-
 add_library(ck_json_view_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/json-view/src/json_view_core.cpp
 )
@@ -34,7 +32,7 @@ target_include_directories(ck_du_core
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
   PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/native-core/files
+    ${CK_CORE_FS_LIB_SOURCE_DIR}/src/files
 )
 target_compile_features(ck_du_core PUBLIC cxx_std_20)
 target_link_libraries(ck_du_core PUBLIC ck_options)

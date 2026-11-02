@@ -8,7 +8,7 @@ target_include_directories(ck_find_cli_buffer_tests
   PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/tools/ck-find/include
-    ${PROJECT_SOURCE_DIR}/src/native-core/files
+    ${CK_CORE_FS_LIB_SOURCE_DIR}/src/files
 )
 
 target_sources(ck_find_cli_buffer_tests

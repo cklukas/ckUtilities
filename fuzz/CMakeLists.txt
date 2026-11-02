@@ -43,6 +43,6 @@ cktools_add_fuzzer(fuzz_operation_journal fuzz_operation_journal.cpp operation_j
 cktools_add_fuzzer(fuzz_files_pane_page fuzz_files_pane_page.cpp files_pane_page ck_files_core)
 target_link_libraries(fuzz_operation_journal PRIVATE ckvision::cvision)
 target_sources(fuzz_operation_journal PRIVATE
-  ${PROJECT_SOURCE_DIR}/src/native-core/files/operation_journal.cpp)
+  ${CK_CORE_FS_LIB_SOURCE_DIR}/src/files/operation_journal.cpp)
 target_include_directories(fuzz_operation_journal PRIVATE
-  ${PROJECT_SOURCE_DIR}/src/native-core/files)
+  ${CK_CORE_FS_LIB_SOURCE_DIR}/src/files)

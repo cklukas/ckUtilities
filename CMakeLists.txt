@@ -64,6 +64,13 @@ cktools_add_ckvision_cutover_verification()
 include(CkToolsStrict)
 
 add_subdirectory(src/common)
+set(CK_CORE_FS_LIB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ck-core-fs-lib" CACHE PATH
+  "Source checkout of the headless ck-core-fs-lib backend")
+if(NOT EXISTS "${CK_CORE_FS_LIB_SOURCE_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR
+    "ck-core-fs-lib is required beside ckUtilities; set CK_CORE_FS_LIB_SOURCE_DIR to its checkout")
+endif()
+add_subdirectory("${CK_CORE_FS_LIB_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/ck-core-fs-lib")
 add_subdirectory(src/native-core)
 add_subdirectory(src/vision)
 add_subdirectory(tools/docgen)

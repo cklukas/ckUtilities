@@ -17,7 +17,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOMAIN_PATHS = (
-    "src/native-core/files",
     "lib/ckai_core",
     "src/common/app-info",
     "src/common/options",
