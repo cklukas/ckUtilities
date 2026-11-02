@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-02",
+  "source_commit": "1b647a16d1590b9b8b539bca286da62c3868ffa3",
+  "change": "Directory Trash/Recycle Bin is unavailable until a frozen recursive identity-bound worker is qualified; command availability, status hint and direct handler agree.",
+  "macos": {
+    "configuration": "Release/Ninja",
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1)",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+    "suite": "files_app_tests.cpp",
+    "result": "73/73 passed"
+  },
+  "windows": {
+    "host": "workstation",
+    "configuration": "Release/Ninja /MT",
+    "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+    "source_checkout": "V:\\dev\\ckutilities-cp02-trash-guard-20261102-01",
+    "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01",
+    "executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "executable_sha256": "9438A0BDEAADA463FC14D6D0C6415B667168DBE7A8E4EEEE8DC84E514B078DDD",
+    "suite": "files_app_tests.cpp",
+    "result": "73/73 passed"
+  },
+  "rejected_attempt": "The isolated Windows build first linked against an /MT ckVision SDK with the default /MD project runtime; LNK2038/LNK2005 rejected the mixed runtime. That output was not run or counted. Reconfiguration with CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded rebuilt the target and produced the qualified result above.",
+  "status": "pass_cp02_command_safety_guard_macos_windows"
+}

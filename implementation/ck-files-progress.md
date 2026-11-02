@@ -8,7 +8,10 @@ where a directory could reach the single-entry native disposition primitive
 without a frozen recursive inventory. The reason is exposed through command
 availability, the status hint and the defensive handler check; regular-file
 Trash remains available and still has no permanent-delete fallback. The Files
-application suite passed **73/73** after the change.
+application suite passed **73/73** after the change on macOS and again on
+Windows x64 with the v143 `/MT` runtime. The first Windows `/MD` link was
+rejected for mixing runtimes and was not counted; the isolated build was
+reconfigured and rebuilt with `/MT`. Evidence: [CP-02 Trash guard record](evidence/ck-files-cp02-trash-guard-current-20261102.json).
 
 ## 2026-11-02 — CP-02 macOS foreign-mount native Trash qualification
 
