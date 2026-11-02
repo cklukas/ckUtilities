@@ -3044,10 +3044,15 @@ forward and the name filter clears. The editor remains available during blocked
 worker discovery and when no initial dataset exists, subject to modal/service
 availability. The other pane remains independent.
 
-Asynchronous completion is still pending. It must publish bounded
-revision-tagged candidates on the UI thread, retain exact native route values
-and preserve ckVision's Right-to-accept behavior. The location editor currently
-has no filesystem completion provider.
+Asynchronous completion is implemented through an instance-owned ckVision
+`CompletionProvider`. The provider submits bounded revision/tagged native
+queries without blocking the UI, receives worker replies on the UI thread,
+publishes only bounded candidates, and calls `InputLine::completion_changed()`.
+The location editor retains the exact native route value separately from its
+display text. Right-to-accept remains ckVision's window acceptance path: the
+completion candidate is accepted into the field first, while the Files dialog
+commits navigation only after the normal reviewed form acceptance. Stale
+replies, closed dialogs and detached application state are ignored.
 
 
 ### Native location-completion query boundary

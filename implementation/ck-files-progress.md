@@ -1,4 +1,16 @@
 # Files implementation evidence
+## 2026-11-02 — Current WP-02 completion contract reconciliation
+
+The current source already contains the worker-backed ckVision
+`CompletionProvider` and the real-input Right-to-accept path introduced by
+`7e4ecfa`. The application suite covers the exact-directory proposal, Right
+acceptance, subsequent Enter navigation, stale/detached dialog handling and
+route preservation; the current cross-platform Files completion/application
+qualification is recorded in the retained-source and release records below.
+The contract text was corrected here so it no longer describes this completed
+integration as pending. Full mouse/restricted-key interactive acceptance and
+the remaining WP-07/WP-08 gates remain open.
+
 ## 2026-11-02 — Windows v143 fuzzer toolchain boundary
 
 The clean Windows checkout at `V:\dev\ckutilities-git-bcf47a3` is now at
