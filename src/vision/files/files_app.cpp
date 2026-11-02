@@ -225,7 +225,7 @@ struct FilesApp::State {
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
-             deleting = false, trashing = false;
+             deleting = false, trashing = false, creating_file = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -273,6 +273,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> create_file_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
@@ -313,6 +314,8 @@ struct FilesApp::State {
     std::weak_ptr<void> preview_dialog_lifetime;
     ckv::widgets::Window *create_directory_window = nullptr;
     std::weak_ptr<void> create_directory_lifetime;
+    ckv::widgets::Window *create_file_window = nullptr;
+    std::weak_ptr<void> create_file_lifetime;
     ckv::widgets::Window *rename_window = nullptr;
     std::weak_ptr<void> rename_lifetime;
     ckv::widgets::Window *trash_window = nullptr;
@@ -332,6 +335,7 @@ struct FilesApp::State {
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId create_file_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId trash_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_id = ckv::ui::kInvalidCommand;
@@ -438,6 +442,8 @@ struct FilesApp::State {
                 [this] { return availability("ck.files.enter_directory").enabled; });
             create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
                                       [this] { return availability("ck.files.create_directory").enabled; });
+            create_file_id = own("ck.files.create_file", [this] { show_create_file(); },
+                                 [this] { return availability("ck.files.create_file").enabled; });
             rename_id = own("ck.files.rename", [this] { show_rename(); },
                             [this] { return availability("ck.files.rename").enabled; });
             trash_id = own("ck.files.trash", [this] { show_trash(); },
@@ -499,7 +505,7 @@ struct FilesApp::State {
             };
             SuiteShellOptions options;
             options.application_name = "Files";
-            options.about_text = "Two independent file locations with worker-owned folder creation.";
+            options.about_text = "Two independent file locations with worker-owned file and folder creation.";
             options.theme = theme;
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
@@ -512,7 +518,8 @@ struct FilesApp::State {
                      item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
                      item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
-                                                            item(create_directory_id, "&New folder..."),
+                                                            item(create_file_id, "New &file..."),
+                                                            item(create_directory_id, "New &folder..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
                                                             item(archive_recovery_id, "Inspect archive &recovery..."),
@@ -622,6 +629,8 @@ struct FilesApp::State {
         preview_dialog.reset();
         create_directory_dialog.reset();
         create_directory_window = nullptr;
+        create_file_dialog.reset();
+        create_file_window = nullptr;
         rename_dialog.reset();
         rename_window = nullptr;
         trash_dialog.reset();
@@ -744,6 +753,7 @@ struct FilesApp::State {
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
+               (create_file_dialog && !create_file_dialog->completed()) ||
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
@@ -942,6 +952,9 @@ struct FilesApp::State {
         if (command == "ck.files.create_directory")
             return ready(active) ? FilesCommandAvailability::available()
                                  : unavailable("New folder unavailable: active pane is not ready");
+        if (command == "ck.files.create_file")
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("New file unavailable: active pane is not ready");
         if (command == "ck.files.rename" || command == "ck.files.trash" ||
             command == "ck.files.permanently_delete") {
             if (panes[active].volume_view)
@@ -1643,6 +1656,28 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool create_file(std::size_t i, ck::files::NativeName name) {
+        if (!ready(i) || !name.is_valid())
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->create_file(p.navigation, p.stamp, std::move(name),
+                                                         {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "File creation request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.creating_file = true;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
     bool rename(std::size_t i, FilesPaneRowTarget target, ck::files::NativeName name) {
         if (!ready(i) || !name.is_valid())
             return false;
@@ -1872,6 +1907,55 @@ struct FilesApp::State {
                 create_directory_dialog.reset();
                 if (!name || !create_directory(pane, std::move(*name))) {
                     panes[pane].error = "Folder name is not representable or the location changed";
+                    labels();
+                }
+            });
+    }
+    void show_create_file() {
+        if (!ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto encoding = panes[pane].encoding;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Create empty file";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "&Name:",
+                .validate = [encoding](const std::string &value) {
+                    return parse_directory_component(value, encoding).has_value();
+                },
+                .description = encoding == ck::files::NameEncoding::WindowsUtf16
+                                   ? "Strict UTF-8 input; names that cannot be represented as Windows UTF-16 are refused."
+                                   : "One exact native component; separators, dot names and empty input are refused."},
+            ckv::widgets::FieldDescriptor{.label = "Creation is exclusive and is performed relative to the held pane directory.",
+                                          .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        create_file_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        create_file_window = shell->desktop().active_window();
+        create_file_lifetime = create_file_window->lifetime_token();
+        create_file_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, encoding](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                create_file_window = nullptr;
+                if (!result.accepted) {
+                    create_file_dialog.reset();
+                    return;
+                }
+                if (result.values.size() != 2 || panes[pane].navigation != navigation) {
+                    panes[pane].error = "Location changed while file creation was open";
+                    create_file_dialog.reset();
+                    labels();
+                    return;
+                }
+                auto name = parse_directory_component(result.values[0], encoding);
+                create_file_dialog.reset();
+                if (!name || !create_file(pane, std::move(*name))) {
+                    panes[pane].error = "File name is not representable or the location changed";
                     labels();
                 }
             });
@@ -2426,9 +2510,11 @@ struct FilesApp::State {
             const bool was_rename = p.renaming;
             const bool was_trash = p.trashing;
             const bool was_delete = p.deleting;
+            const bool was_create_file = p.creating_file;
             p.renaming = false;
             p.trashing = false;
             p.deleting = false;
+            p.creating_file = false;
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
                 p.error.clear();
@@ -2439,13 +2525,15 @@ struct FilesApp::State {
                     p.error = was_delete ? "Entry permanently deleted; refresh could not be started"
                                          : was_trash ? "Entry moved to Trash / Recycle Bin; refresh could not be started"
                                          : was_rename ? "Entry renamed; refresh could not be started"
-                                                      : "Directory created; refresh could not be started";
+                                                      : was_create_file ? "File created; refresh could not be started"
+                                                                        : "Directory created; refresh could not be started";
             } else {
                 p.error = reply.state == FilesPaneReplyState::Ready
                               ? (was_delete ? "Permanent deletion outcome unavailable"
                                             : was_trash ? "Trash / Recycle Bin outcome unavailable"
                                             : was_rename ? "Rename outcome unavailable"
-                                                         : "Directory creation outcome unavailable")
+                                                         : was_create_file ? "File creation outcome unavailable"
+                                                                            : "Directory creation outcome unavailable")
                               : failure(reply);
             }
             labels();
@@ -3021,6 +3109,11 @@ struct FilesApp::State {
                 create_directory_window->close();
             return;
         }
+        if (create_file_dialog && !create_file_dialog->completed()) {
+            if (create_file_window && !create_file_lifetime.expired())
+                create_file_window->close();
+            return;
+        }
         if (rename_dialog && !rename_dialog->completed()) {
             if (rename_window && !rename_lifetime.expired())
                 rename_window->close();
@@ -3177,6 +3270,9 @@ bool FilesApp::navigate_bookmark(std::size_t pane, std::size_t bookmark) {
 }
 bool FilesApp::create_directory(std::size_t pane, ck::files::NativeName name) {
     return state_->create_directory(pane, std::move(name));
+}
+bool FilesApp::create_file(std::size_t pane, ck::files::NativeName name) {
+    return state_->create_file(pane, std::move(name));
 }
 bool FilesApp::rename(std::size_t pane, ck::files::NativeName name) {
     const auto target = state_->panes.at(pane).model.target();

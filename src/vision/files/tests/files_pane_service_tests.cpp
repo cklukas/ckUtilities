@@ -1055,6 +1055,39 @@ CK_TEST(files_service_native_create_directory_is_exclusive_and_requires_refresh)
              std::filesystem::is_directory(source.path() / "created"));
     f.stopped();
 }
+CK_TEST(files_service_native_create_file_is_exclusive_flushes_and_requires_refresh) {
+    Fixture f;
+    ck::testing::ScratchDirectory source("files-service-create-file");
+    f.service = std::make_unique<FilesPaneService>(
+        native_files_pane_backend(take(NativeAbsolutePath::from_host(f.scratch.path()))), FilesPaneServiceLimits{},
+        [t = f.trace] { t->notify(); });
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto before = f.reply();
+    CK_CHECK(before.state == FilesPaneReplyState::Ready && before.page && before.page->rows().empty());
+
+    const auto created = f.service->create_file(before.navigation, before.stamp, child_name("created.txt"));
+    CK_CHECK(created.state == FilesPaneSubmission::Accepted);
+    const auto mutation = f.reply();
+    CK_CHECK(mutation.request == created.ticket && mutation.navigation == before.navigation &&
+             mutation.kind == FilesPaneReplyKind::Mutation && mutation.state == FilesPaneReplyState::Ready &&
+             mutation.mutation_applied.value_or(false));
+    CK_CHECK(std::filesystem::is_regular_file(source.path() / "created.txt"));
+    CK_CHECK(std::filesystem::file_size(source.path() / "created.txt") == 0);
+
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto after = f.reply();
+    CK_CHECK(after.state == FilesPaneReplyState::Ready && after.page && after.page->rows().size() == 1 &&
+             after.page->rows()[0].display_name == "created.txt");
+
+    const auto duplicate = f.service->create_file(after.navigation, after.stamp, child_name("created.txt"));
+    CK_CHECK(duplicate.state == FilesPaneSubmission::Accepted);
+    const auto refused = f.reply();
+    CK_CHECK(refused.kind == FilesPaneReplyKind::Mutation && refused.state == FilesPaneReplyState::Failed &&
+             refused.error && refused.error->state == ObservationState::Changed &&
+             std::filesystem::is_regular_file(source.path() / "created.txt"));
+    f.stopped();
+}
 CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-rename");

@@ -43,6 +43,7 @@ using OwnedHandle = std::unique_ptr<void, HandleCloser>;
 
 ObservationState error_state(DWORD code) noexcept {
     if (code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND) return ObservationState::Gone;
+    if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS) return ObservationState::Changed;
     if (code == ERROR_ACCESS_DENIED || code == ERROR_PRIVILEGE_NOT_HELD ||
         code == ERROR_SHARING_VIOLATION || code == ERROR_LOCK_VIOLATION) return ObservationState::Denied;
     if (code == ERROR_FILE_INVALID || code == ERROR_DELETE_PENDING) return ObservationState::Changed;

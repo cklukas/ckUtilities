@@ -59,6 +59,7 @@ NativeError adapter_error(AdapterError code, std::string operation) {
 ObservationState errno_state(int code) noexcept {
     if (code == EACCES || code == EPERM) return ObservationState::Denied;
     if (code == ENOENT || code == ENOTDIR) return ObservationState::Gone;
+    if (code == EEXIST) return ObservationState::Changed;
     if (code == ESTALE) return ObservationState::Changed;
     if (code == ENOSYS || code == ENOTSUP || code == EOPNOTSUPP) return ObservationState::Unsupported;
     return ObservationState::Failed;

@@ -82,6 +82,9 @@ class FilesApp final {
     // Creates one exact native directory component relative to the pane's
     // currently acknowledged route, then refreshes only after worker success.
     bool create_directory(std::size_t pane, ck::files::NativeName name);
+    // Creates one exact empty regular file relative to the pane's currently
+    // acknowledged route, then refreshes only after worker success.
+    bool create_file(std::size_t pane, ck::files::NativeName name);
     // Renames the currently acknowledged target through the worker's native
     // identity protocol, then refreshes only after success.
     bool rename(std::size_t pane, ck::files::NativeName name);

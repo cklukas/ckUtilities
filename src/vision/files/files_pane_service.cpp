@@ -50,6 +50,12 @@ struct CreateDirectory {
     NativeName name;
     FilesPaneReadRange range;
 };
+struct CreateFile {
+    FilesPaneTicket ticket, navigation;
+    PaneStateStamp stamp;
+    NativeName name;
+    FilesPaneReadRange range;
+};
 struct RenameChild {
     FilesPaneTicket ticket, navigation;
     PaneStateStamp stamp;
@@ -80,7 +86,7 @@ struct OperationDestination {
     PaneStateStamp stamp;
     FilesPaneOperationDestinationHandoff handoff;
 };
-using Operation = std::variant<OperationSources, OperationDestination, CreateDirectory, RenameChild, DeleteChild, TrashChild>;
+using Operation = std::variant<OperationSources, OperationDestination, CreateDirectory, CreateFile, RenameChild, DeleteChild, TrashChild>;
 bool valid(FilesPaneServiceLimits l) {
     return l.path_bytes && l.path_bytes <= NativePathLimits::hard_native_bytes && l.page_rows && l.page_rows <= 4096 &&
            l.page_text_bytes && l.page_text_bytes <= 16 * 1024 * 1024 && l.page_wire_bytes >= 16 &&
@@ -739,6 +745,44 @@ struct FilesPaneService::State {
                                 }
                             }
                             emit(std::move(result), false);
+                        } else if constexpr (std::is_same_v<Request, CreateFile>) {
+                            FilesPaneReply result;
+                            result.kind = FilesPaneReplyKind::Mutation;
+                            result.request = request.ticket;
+                            result.navigation = request.navigation;
+                            result.active_location = active;
+                            result.stamp = pane->state_stamp();
+                            if (!pane->data() || !active || request.navigation != active_epoch ||
+                                !pane->accepts(request.stamp) ||
+                                request.name.encoding() != active->root_address().encoding()) {
+                                result.state = FilesPaneReplyState::Stale;
+                            } else if (stop.stop_requested()) {
+                                result.state = FilesPaneReplyState::Cancelled;
+                            } else {
+                                auto parent = pane->hold_directory(request.stamp);
+                                if (!parent.value()) {
+                                    result.state = FilesPaneReplyState::Failed;
+                                    result.error = *parent.unavailable_detail();
+                                } else {
+                                    auto created = (*parent.value())->create_child_file(request.name);
+                                    if (!created.value()) {
+                                        result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled
+                                                                              : FilesPaneReplyState::Failed;
+                                        result.error = *created.unavailable_detail();
+                                    } else {
+                                        auto flushed = (*created.value())->flush_content();
+                                        if (!flushed.value()) {
+                                            result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled
+                                                                                  : FilesPaneReplyState::Failed;
+                                            result.error = *flushed.unavailable_detail();
+                                        } else {
+                                            result.state = FilesPaneReplyState::Ready;
+                                            result.mutation_applied = true;
+                                        }
+                                    }
+                                }
+                            }
+                            emit(std::move(result), false);
                         } else if constexpr (std::is_same_v<Request, DeleteChild> ||
                                              std::is_same_v<Request, TrashChild>) {
                             FilesPaneReply result;
@@ -1203,6 +1247,28 @@ FilesPaneSubmitted FilesPaneService::create_directory(FilesPaneTicket navigation
         return {FilesPaneSubmission::Exhausted, {}};
     const auto request = ticket(state_->next++);
     state_->operation.emplace(CreateDirectory{request, navigation, std::move(stamp), std::move(name), range});
+    state_->latest_request = request;
+    state_->cancelled = {};
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
+FilesPaneSubmitted FilesPaneService::create_file(FilesPaneTicket navigation, PaneStateStamp stamp,
+                                                  NativeName name, FilesPaneReadRange range) {
+    if (!navigation.valid() || !stamp.current() || !name.is_valid() || !range.rows ||
+        range.rows > state_->limits.page_rows)
+        return {FilesPaneSubmission::Invalid, {}};
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping || !state_->alive.load())
+        return {FilesPaneSubmission::Stopped, {}};
+    if (navigation != state_->latest_navigation)
+        return {FilesPaneSubmission::Invalid, {}};
+    if (state_->busy || state_->navigation || state_->read || state_->change || state_->preview ||
+        state_->operation || state_->reply)
+        return {FilesPaneSubmission::Busy, {}};
+    if (!state_->next)
+        return {FilesPaneSubmission::Exhausted, {}};
+    const auto request = ticket(state_->next++);
+    state_->operation.emplace(CreateFile{request, navigation, std::move(stamp), std::move(name), range});
     state_->latest_request = request;
     state_->cancelled = {};
     state_->condition.notify_one();

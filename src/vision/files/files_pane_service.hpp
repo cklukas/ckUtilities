@@ -170,6 +170,12 @@ class FilesPaneService final {
     FilesPaneSubmitted create_directory(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                         ck::files::NativeName name,
                                         FilesPaneReadRange range = {});
+    // Create one exclusive empty regular file relative to the currently held
+    // pane directory. The worker flushes the created object before reporting
+    // success; callers must refresh after success.
+    FilesPaneSubmitted create_file(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                   ck::files::NativeName name,
+                                   FilesPaneReadRange range = {});
     // Rename one stamped visible row to one exact native component. The
     // worker resolves the row and identity again; callers must refresh after
     // a successful native rename. Unsupported platform protocols remain
