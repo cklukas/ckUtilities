@@ -27,9 +27,12 @@ function(cktools_add_fuzzer name source corpus)
   target_compile_options(${name} PRIVATE -fsanitize=fuzzer)
   target_link_options(${name} PRIVATE -fsanitize=fuzzer)
   if(BUILD_TESTING)
-    file(GLOB _corpus CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/corpus/${corpus}/*")
     add_test(NAME ${name}_corpus
-      COMMAND ${name} ${_corpus} -runs=1 -max_len=4096 -timeout=2 -rss_limit_mb=512)
+      COMMAND ${CMAKE_COMMAND}
+        "-DFUZZER=$<TARGET_FILE:${name}>"
+        "-DCORPUS=${CMAKE_CURRENT_SOURCE_DIR}/corpus/${corpus}"
+        "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/corpus-runs/${name}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/run_corpus_test.cmake")
     set_tests_properties(${name}_corpus PROPERTIES LABELS "fuzz-corpus" TIMEOUT 45)
   endif()
 endfunction()
