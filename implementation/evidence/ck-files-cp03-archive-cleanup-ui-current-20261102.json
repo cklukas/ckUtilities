@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-03",
+  "scope": "guarded archive-staging cleanup command and recovery rescan",
+  "source_commit": "a05e93e7651aa6a97fee5c56167d071d8dcdcf7e",
+  "qualification": {
+    "command": "ck.files.cleanup_archive_recovery",
+    "guard": "Enabled only for one fully evidenced Copied/Verified unpublished archive staging item and the qualified Windows identity-bound discard adapter.",
+    "safety": "The command requires explicit confirmation, runs on the cleanup worker, revalidates the journal, destination identity, staging identity, complete staging digest and state, then rescans the journal after success.",
+    "posix_boundary": "macOS/Linux keep the command disabled with an explicit identity-bound-discard-not-qualified reason; no pathname-only fallback is used.",
+    "not_claimed": "Retry/resume, publication reconciliation, source retirement, and macOS/Linux cleanup remain open."
+  },
+  "macos_arm64": {
+    "configuration": "Release/Ninja",
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1)",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+    "test_executable": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "bce069808d3236364fbf56a3adaaf3e99e33d51582044615e3fdd72bc962fe83",
+    "production_executable": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/bin/ck-files",
+    "production_executable_sha256": "5362dc2f0772a22d131991f0a2f65c193707f20ba47362cdb29962b2e201cb1e",
+    "suites": [
+      {"suite": "files_app_tests.cpp", "result": "73/73 passed"},
+      {"suite": "files_volume_archive_tests.cpp", "result": "21/21 passed"}
+    ]
+  },
+  "windows_x64": {
+    "host": "workstation",
+    "configuration": "Release/Ninja /MT",
+    "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+    "source_checkout": "V:\\dev\\ckutilities-cp02-trash-guard-20261102-01",
+    "source_commit": "63f0e2dc3f73e58843f7b804891cf336d1e4c132",
+    "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-cp03-archive-cleanup-ui-20261102-01",
+    "test_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "test_executable_sha256": "fd2176a2475ccb21101931bc3ce10f696432c1a5116638d25def9fc705222410",
+    "production_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\bin\\ck-files.exe",
+    "production_executable_sha256": "ceb4dfa1e4d9aad978335717c929d0a7445804d82ea0b90564143c2b595d2467",
+    "suites": [
+      {"suite": "files_app_tests.cpp", "result": "73/73 passed"},
+      {"suite": "files_volume_archive_tests.cpp", "result": "21/21 passed"}
+    ]
+  },
+  "linux_arm64": {
+    "host": "uconsole",
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "GNU g++ 14.2.0",
+    "source_checkout": "/home/klukas/ckUtilities",
+    "source_commit": "837c31825eca2bb329d44e06a861eb6e787f2dca",
+    "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+    "temporary_root": "/home/klukas/tmp/ckutilities-cp03-archive-cleanup-ui-20261102-01",
+    "test_executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "048f1dd5650fd1091e1f17b4f71f21db3bc609d35d313d19542b66635acc3d00",
+    "production_executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/bin/ck-files",
+    "production_executable_sha256": "e57fecf6b8f339bad43752587db4470c4e389be306cf59345140a6c4b62c5877",
+    "suites": [
+      {"suite": "files_app_tests.cpp", "result": "73/73 passed"},
+      {"suite": "files_volume_archive_tests.cpp", "result": "21/21 passed"}
+    ]
+  },
+  "status": "pass_cp03_guarded_archive_cleanup_ui_boundary"
+}
