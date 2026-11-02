@@ -247,7 +247,7 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
     auto journal_file = take(open_native_operation_journal_file(journal_root, name("copy.journal"), true));
     OperationJournalId journal_id;
     journal_id.bytes[0] = std::byte{0x31};
-    auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 256}));
+    auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 512}));
     CK_CHECK(append_operation_journal_file(*journal_file, *journal,
         {1, 0, OperationJournalState::Planned, {}}).value());
 
@@ -413,7 +413,7 @@ CK_TEST(native_operation_cross_filesystem_move_retains_source_when_exclusion_is_
     auto journal_file = take(open_native_operation_journal_file(journal_root, name("move.journal"), true));
     OperationJournalId journal_id;
     journal_id.bytes[0] = std::byte{0x73};
-    auto journal = take(OperationJournal::create(FileOperation::Move, journal_id, {1, 32, 256}));
+    auto journal = take(OperationJournal::create(FileOperation::Move, journal_id, {1, 32, 512}));
     CK_CHECK(append_operation_journal_file(*journal_file, *journal,
         {1, 0, OperationJournalState::Planned, {}}).value());
 
@@ -470,7 +470,7 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_dispo
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-crash-staging"), name("published"),
-          *destination_durable, *destination_durable, *destination_durable, staging_durable, {}, {}},
+          *destination_durable, *destination_durable, *destination_durable, staging_durable, {}, {}, {}},
          std::nullopt}, destination, destination_identity};
     staging.reset();
     auto cleaned = cleanup_native_unpublished_staging(request);
@@ -517,7 +517,7 @@ CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) 
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-substituted-staging"), name("published"),
-          *durable, *durable, *durable, original_durable, {}, {}}, std::nullopt},
+          *durable, *durable, *durable, original_durable, {}, {}, {}}, std::nullopt},
         destination, destination_identity};
     auto cleaned = cleanup_native_unpublished_staging(request);
     CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Changed &&
@@ -636,6 +636,20 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
         if (verified != loaded.journal->records().rend()) {
             auto evidence = take(decode_native_operation_recovery_evidence(verified->evidence));
             CK_CHECK(evidence.content_digest.has_value());
+        }
+        const auto complete = std::find_if(loaded.journal->records().rbegin(), loaded.journal->records().rend(),
+            [](const OperationJournalRecord& record) {
+                return record.state == OperationJournalState::Complete;
+            });
+        CK_CHECK(complete != loaded.journal->records().rend());
+        if (complete != loaded.journal->records().rend()) {
+            auto evidence = take(decode_native_operation_recovery_evidence(complete->evidence));
+            CK_CHECK(evidence.content_digest.has_value() && evidence.published_identity.has_value());
+            NativeOperationRecoveryVerificationRequest verification{
+                {0, OperationJournalState::DestinationCommitted, evidence, std::nullopt},
+                destination, destination_identity};
+            auto publication_check = verify_native_published_destination(verification);
+            CK_CHECK(publication_check.value() && *publication_check.value());
         }
     }
 }

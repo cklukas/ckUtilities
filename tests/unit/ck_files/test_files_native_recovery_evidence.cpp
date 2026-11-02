@@ -17,7 +17,7 @@ NativeOperationRecoveryEvidence evidence(const AdapterScope& scope) {
         *NativeName::from_windows(u"report-copy.txt"),
         *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 11, 2)),
         *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 12)),
-        *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4)), {}, {}, {}};
+        *NativeDurableIdentity::from_live(live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4)), {}, {}, {}, {}};
 }
 }
 
@@ -41,9 +41,25 @@ CK_TEST(native_recovery_evidence_roundtrips_native_names_and_durable_identities)
         CK_CHECK(decoded.value()->staging_identity == original.staging_identity);
         CK_CHECK(decoded.value()->destination_address == original.destination_address);
         CK_CHECK(decoded.value()->content_digest == original.content_digest);
+        CK_CHECK(decoded.value()->published_identity == original.published_identity);
         CK_CHECK(decoded.value()->destination_identity.matches_live(
             live_identity(scope, IdentityScheme::PosixDeviceInode, 13, 4)));
     }
+}
+
+CK_TEST(native_recovery_evidence_roundtrips_published_object_identity) {
+    AdapterScope scope;
+    auto original = evidence(scope);
+    original.content_digest = std::array<std::byte, 32>{};
+    original.published_identity = *NativeDurableIdentity::from_live(
+        live_identity(scope, IdentityScheme::PosixDeviceInode, 15, 6));
+    auto encoded = encode_native_operation_recovery_evidence(original);
+    CK_CHECK(encoded.value());
+    if (!encoded.value()) return;
+    auto decoded = decode_native_operation_recovery_evidence(*encoded.value());
+    CK_CHECK(decoded.value());
+    if (decoded.value())
+        CK_CHECK(decoded.value()->published_identity == original.published_identity);
 }
 
 CK_TEST(native_recovery_evidence_roundtrips_verified_content_digest_without_destination_address) {

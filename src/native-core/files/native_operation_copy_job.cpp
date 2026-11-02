@@ -78,6 +78,7 @@ struct NativeOperationCopyJob::State final {
     std::unique_ptr<OpenedEntry> source;
     std::unique_ptr<OpenedEntry> staging;
     std::optional<std::array<std::byte, 32>> content_digest;
+    std::optional<NativeDurableIdentity> published_identity;
     bool source_exclusion = false;
 
     Observation<bool> cleanup_unpublished_staging() {
@@ -157,7 +158,7 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
         NativeOperationRecoveryEvidence recovery_evidence{
             state->request.staging_name, state->request.destination_name,
             *source_parent, *source, *destination, {}, state->request.destination_address,
-            state->content_digest};
+            state->content_digest, state->published_identity};
         if (state->staging) {
             auto metadata = state->staging->inspect_basic();
             if (!metadata.value() || !metadata.value()->identity.value() ||
@@ -173,6 +174,30 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
                 return Observation<bool>::unavailable(ObservationState::Unknown,
                     {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
                      "native_operation_copy.journal_staging_identity"});
+        }
+        if (record.state == OperationJournalState::DestinationCommitted ||
+            record.state == OperationJournalState::SourceRemovalIntended ||
+            record.state == OperationJournalState::SourceRetired ||
+            record.state == OperationJournalState::Complete) {
+            if (!state->staging)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                     "native_operation_copy.journal_published_handle"});
+            auto metadata = state->staging->inspect_basic();
+            if (!metadata.value() || !metadata.value()->identity.value() ||
+                !metadata.value()->kind.value() || *metadata.value()->kind.value() != ObjectKind::RegularFile)
+                return Observation<bool>::unavailable(
+                    metadata.value() ? ObservationState::Changed : metadata.state(),
+                    metadata.value() ? NativeError{ErrorDomain::Adapter,
+                        static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                        "native_operation_copy.journal_published"} : metadata.unavailable_detail()->error);
+            state->published_identity = NativeDurableIdentity::from_live(
+                *metadata.value()->identity.value());
+            if (!state->published_identity)
+                return Observation<bool>::unavailable(ObservationState::Unknown,
+                    {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                     "native_operation_copy.journal_published_identity"});
+            recovery_evidence.published_identity = state->published_identity;
         }
         auto evidence = encode_native_operation_recovery_evidence(recovery_evidence);
         if (!evidence.value())
@@ -520,6 +545,7 @@ struct NativeOperationCopyTreeJob::State final {
             {},
             {},
             {},
+            std::nullopt,
             std::nullopt,
             std::nullopt};
         const auto& root_metadata = inventory().entries().front();

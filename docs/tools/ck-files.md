@@ -92,7 +92,10 @@ execute files or provide an embedded shell.
   is offered without a later qualified worker boundary. Ordinary-copy journals
   also retain the independently verified whole-file SHA-256 receipt at the
   Copied and Verified boundaries; it is used for future reconciliation only,
-  never as pathname-based authority.
+  never as pathname-based authority. A worker-only read-only verifier can
+  independently rebind the destination parent and check the published object
+  identity, length, and content digest; it does not expose a mutation or
+  recovery command.
 - A separate irreversible **Delete permanently** action with explicit scope
   confirmation and identity-bound checks. It does not follow links, recurse
   through non-empty directories, or claim secure erasure.

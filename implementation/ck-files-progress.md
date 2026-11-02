@@ -1,5 +1,23 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-03 published-object receipt and read-only verifier
+
+Post-publication ordinary-copy journal records now carry a separate durable
+identity for the published file object. The parent directory identity, exact
+native destination name, content digest, and published object identity remain
+distinct; version-5 evidence is backward-compatible with versions 1–4. The
+worker-only native verifier binds a fresh held destination directory, checks
+the durable parent and object identities, checks regular-file kind and logical
+length, and independently hashes the published content. It returns a
+verified mismatch without mutating anything and is not exposed as resume,
+retry, publication, cleanup, or source-retirement authority.
+
+The real native copy-batch fixture reopened both durable journals and verified
+the post-publication object receipt. macOS core/native/Files aggregates passed
+**718/718**, **188/188**, and **249/249**. Cross-platform qualification of
+this new checkpoint is still required. The previous cross-platform receipt
+qualification remains recorded below.
+
 ## 2026-11-02 — CP-03 ordinary-copy content receipt boundary
 
 Ordinary regular-file copy journals now retain the independently verified

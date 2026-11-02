@@ -40,7 +40,7 @@ NativeOperationRecoveryEvidence evidence() {
         {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(17),
          NativeIdentifier::from_u64(18), {}});
     return {*NativeName::from_posix(".ck-staging"), *NativeName::from_posix("destination"),
-            identity, identity, identity, identity, {}, {}};
+            identity, identity, identity, identity, {}, {}, {}};
 }
 }
 
@@ -248,7 +248,7 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
     NativeOperationRecoveryEvidence receipt{
         *staging_name, published_name, *destination_durable,
         *destination_durable, *destination_durable, *staging_durable,
-        destination_address, {}};
+        destination_address, {}, {}};
     const auto encoded = encode_native_operation_recovery_evidence(receipt);
     CK_CHECK(encoded.value());
     if (!encoded.value()) return;

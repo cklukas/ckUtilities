@@ -48,6 +48,10 @@ struct NativeOperationRecoveryEvidence final {
     // receipt for later reconciliation, never authority to reopen a source or
     // mutate a destination by pathname.
     std::optional<std::array<std::byte, 32>> content_digest;
+    // Identity of the published destination object, present only after the
+    // no-replace publication boundary. The parent identity above remains a
+    // separate value and is never conflated with this object identity.
+    std::optional<NativeDurableIdentity> published_identity;
 };
 
 struct NativeOperationRecoveryEvidenceLimits final {

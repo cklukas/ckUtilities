@@ -179,8 +179,11 @@ regular-file copy composition now records an optional exact native destination
 address and the independently verified whole-file SHA-256 content receipt in
 versioned recovery evidence; legacy journals and copy paths without those
 receipts remain inspect-only and cannot be reopened for mutation after a
-restart. The content receipt is evidence for later reconciliation, not
-pathname or digest authority by itself.
+restart. A worker-only verifier now revalidates the held destination parent,
+published object identity, length, and content digest read-only. The receipts
+and verifier are evidence for later reconciliation, not pathname or digest
+authority by themselves; no resume, retry, publication, cleanup, or source
+retirement command is enabled.
 
 ## CP-04 — Close the actual safety and release matrix
 
