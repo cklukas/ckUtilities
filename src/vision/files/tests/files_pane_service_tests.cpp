@@ -1144,6 +1144,34 @@ CK_TEST(files_service_hard_link_is_worker_owned_and_requires_refresh) {
     CK_CHECK(after.state == FilesPaneReplyState::Ready && after.page && after.page->rows().size() == 2);
     f.stopped();
 }
+#if !defined(_WIN32)
+CK_TEST(files_service_symbolic_link_is_worker_owned_and_preserves_opaque_target) {
+    Fixture f;
+    ck::testing::ScratchDirectory source("files-service-symbolic-link");
+    std::filesystem::create_directory(source.path() / "target");
+    f.service = std::make_unique<FilesPaneService>(
+        native_files_pane_backend(take(NativeAbsolutePath::from_host(f.scratch.path()))), FilesPaneServiceLimits{},
+        [t = f.trace] { t->notify(); });
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto before = f.reply();
+    CK_CHECK(before.state == FilesPaneReplyState::Ready && before.page && before.page->rows().size() == 1);
+
+    const auto created = f.service->create_symbolic_link(before.navigation, before.stamp,
+                                                          SymbolicLinkTarget{std::string("../target")},
+                                                          child_name("alias"));
+    CK_CHECK(created.state == FilesPaneSubmission::Accepted);
+    const auto mutation = f.reply();
+    CK_CHECK(mutation.state == FilesPaneReplyState::Ready && mutation.mutation_applied.value_or(false));
+    CK_CHECK(std::filesystem::is_symlink(source.path() / "alias"));
+    CK_CHECK(std::filesystem::read_symlink(source.path() / "alias") == std::filesystem::path("../target"));
+
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto after = f.reply();
+    CK_CHECK(after.state == FilesPaneReplyState::Ready && after.page && after.page->rows().size() == 2);
+    f.stopped();
+}
+#endif
 CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-rename");

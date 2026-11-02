@@ -827,6 +827,38 @@ CK_TEST(files_app_new_hard_link_uses_strict_dialog_worker_mutation_and_refreshes
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0).find("Last scan: 101 items") != std::string::npos);
 }
+CK_TEST(files_app_symbolic_link_command_is_capability_scoped_and_uses_opaque_target_dialog) {
+    Fixture f;
+    f.loaded();
+#if defined(_WIN32)
+    CK_CHECK(!f.command("ck.files.create_symbolic_link"));
+    CK_CHECK(f.app->status(0).find("handle-relative Windows reparse publication is not qualified") != std::string::npos);
+#else
+    CK_CHECK(f.command("ck.files.create_symbolic_link"));
+    f.application.step(f.clock.now_nanos());
+
+    std::vector<ckv::widgets::InputLine *> inputs;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), inputs);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(inputs.size() == 2);
+    CK_CHECK(buttons.size() == 2);
+    inputs[0]->set_text("symbolic-link-by-app");
+    inputs[1]->set_text("../target");
+    f.application.set_focus(inputs[1]);
+    ckv::widgets::Button *create = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Create")
+            create = button;
+    CK_CHECK(create != nullptr && create->activate_mnemonic("c"));
+    f.until([&] { return !f.app->pending(0); });
+
+    CK_CHECK(std::filesystem::is_symlink(f.scratch.path() / "left" / "symbolic-link-by-app"));
+    CK_CHECK(std::filesystem::read_symlink(f.scratch.path() / "left" / "symbolic-link-by-app") ==
+             std::filesystem::path("../target"));
+    CK_CHECK(f.app->model(0).row_count() == 101);
+#endif
+}
 CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
     Fixture f;
     f.loaded();

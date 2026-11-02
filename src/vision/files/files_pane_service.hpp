@@ -179,6 +179,13 @@ class FilesPaneService final {
     FilesPaneSubmitted create_hard_link(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                         ck::files::PaneRowId row, ck::files::NativeName name,
                                         FilesPaneReadRange range = {});
+    // Create one opaque symbolic-link payload relative to the held pane
+    // directory. The target is never traversed or rebuilt as a path; callers
+    // must refresh after successful publication. Unsupported adapters remain
+    // explicitly unavailable.
+    FilesPaneSubmitted create_symbolic_link(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                            ck::files::SymbolicLinkTarget target, ck::files::NativeName name,
+                                            FilesPaneReadRange range = {});
     // Rename one stamped visible row to one exact native component. The
     // worker resolves the row and identity again; callers must refresh after
     // a successful native rename. Unsupported platform protocols remain

@@ -181,6 +181,12 @@ std::optional<ck::files::NativeName> parse_directory_component(std::string text,
         return std::nullopt;
     return std::move(mapped).take_value();
 }
+std::optional<ck::files::SymbolicLinkTarget> parse_symbolic_link_target(std::string text,
+                                                                         ck::files::NameEncoding encoding) {
+    if (encoding != ck::files::NameEncoding::PosixBytes || text.empty() || text.find('\0') != std::string::npos)
+        return std::nullopt;
+    return ck::files::SymbolicLinkTarget{std::move(text)};
+}
 std::string volume_bytes(const std::optional<std::uint64_t> &value) {
     if (!value)
         return "Unknown";
@@ -225,7 +231,8 @@ struct FilesApp::State {
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
-             deleting = false, trashing = false, creating_file = false, creating_hard_link = false;
+             deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
+             creating_symbolic_link = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -275,6 +282,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_file_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_hard_link_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> create_symbolic_link_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> rename_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> trash_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> delete_dialog;
@@ -319,6 +327,8 @@ struct FilesApp::State {
     std::weak_ptr<void> create_file_lifetime;
     ckv::widgets::Window *create_hard_link_window = nullptr;
     std::weak_ptr<void> create_hard_link_lifetime;
+    ckv::widgets::Window *create_symbolic_link_window = nullptr;
+    std::weak_ptr<void> create_symbolic_link_lifetime;
     ckv::widgets::Window *rename_window = nullptr;
     std::weak_ptr<void> rename_lifetime;
     ckv::widgets::Window *trash_window = nullptr;
@@ -340,6 +350,7 @@ struct FilesApp::State {
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_file_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_hard_link_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId create_symbolic_link_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId rename_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId trash_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId delete_id = ckv::ui::kInvalidCommand;
@@ -450,6 +461,8 @@ struct FilesApp::State {
                                  [this] { return availability("ck.files.create_file").enabled; });
             create_hard_link_id = own("ck.files.create_hard_link", [this] { show_create_hard_link(); },
                                       [this] { return availability("ck.files.create_hard_link").enabled; });
+            create_symbolic_link_id = own("ck.files.create_symbolic_link", [this] { show_create_symbolic_link(); },
+                                          [this] { return availability("ck.files.create_symbolic_link").enabled; });
             rename_id = own("ck.files.rename", [this] { show_rename(); },
                             [this] { return availability("ck.files.rename").enabled; });
             trash_id = own("ck.files.trash", [this] { show_trash(); },
@@ -526,6 +539,7 @@ struct FilesApp::State {
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_file_id, "New &file..."),
                                                             item(create_hard_link_id, "New &hard link..."),
+                                                            item(create_symbolic_link_id, "New &symbolic link..."),
                                                             item(create_directory_id, "New &folder..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
@@ -640,6 +654,8 @@ struct FilesApp::State {
         create_file_window = nullptr;
         create_hard_link_dialog.reset();
         create_hard_link_window = nullptr;
+        create_symbolic_link_dialog.reset();
+        create_symbolic_link_window = nullptr;
         rename_dialog.reset();
         rename_window = nullptr;
         trash_dialog.reset();
@@ -764,6 +780,7 @@ struct FilesApp::State {
                (create_directory_dialog && !create_directory_dialog->completed()) ||
                (create_file_dialog && !create_file_dialog->completed()) ||
                (create_hard_link_dialog && !create_hard_link_dialog->completed()) ||
+               (create_symbolic_link_dialog && !create_symbolic_link_dialog->completed()) ||
                (rename_dialog && !rename_dialog->completed()) ||
                (trash_dialog && !trash_dialog->completed()) ||
                (delete_dialog && !delete_dialog->completed()) ||
@@ -971,6 +988,16 @@ struct FilesApp::State {
             return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile
                        ? FilesCommandAvailability::available()
                        : unavailable("Hard link unavailable: select a regular file");
+        }
+        if (command == "ck.files.create_symbolic_link") {
+            if (panes[active].volume_view)
+                return unavailable("Symbolic link unavailable: volume rows are archive sources, not entries");
+#if defined(_WIN32)
+            return unavailable("Symbolic link unavailable: handle-relative Windows reparse publication is not qualified");
+#else
+            return ready(active) ? FilesCommandAvailability::available()
+                                 : unavailable("Symbolic link unavailable: active pane is not ready");
+#endif
         }
         if (command == "ck.files.rename" || command == "ck.files.trash" ||
             command == "ck.files.permanently_delete") {
@@ -1717,6 +1744,28 @@ struct FilesApp::State {
         labels();
         return true;
     }
+    bool create_symbolic_link(std::size_t i, ck::files::SymbolicLinkTarget target, ck::files::NativeName name) {
+        if (!ready(i) || !name.is_valid())
+            return false;
+        auto &p = panes[i];
+        const auto range = p.model.viewport();
+        const auto submitted = services[i]->create_symbolic_link(p.navigation, p.stamp, std::move(target),
+                                                                   std::move(name), {range.first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            p.error = "Symbolic-link creation request rejected";
+            labels();
+            return false;
+        }
+        p.request = submitted.ticket;
+        p.mutating = true;
+        p.creating_symbolic_link = true;
+        p.cancelling = false;
+        p.error.clear();
+        p.model.set_input_locked(true);
+        watch();
+        labels();
+        return true;
+    }
     bool rename(std::size_t i, FilesPaneRowTarget target, ck::files::NativeName name) {
         if (!ready(i) || !name.is_valid())
             return false;
@@ -2047,6 +2096,61 @@ struct FilesApp::State {
                 create_hard_link_dialog.reset();
                 if (!name || !create_hard_link(pane, source, std::move(*name))) {
                     panes[pane].error = "Hard-link name is not representable or the location changed";
+                    labels();
+                }
+            });
+    }
+    void show_create_symbolic_link() {
+        if (!availability("ck.files.create_symbolic_link").enabled || !ready(active))
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        const auto encoding = panes[pane].encoding;
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Create symbolic link";
+        descriptor.fields = {
+            ckv::widgets::FieldDescriptor{
+                .label = "&Name:",
+                .validate = [encoding](const std::string &value) {
+                    return parse_directory_component(value, encoding).has_value();
+                },
+                .description = "One exact native destination component; creation is exclusive in the current directory."},
+            ckv::widgets::FieldDescriptor{
+                .label = "&Target:",
+                .validate = [encoding](const std::string &value) {
+                    return parse_symbolic_link_target(value, encoding).has_value();
+                },
+                .description = "Opaque POSIX link payload. It is not normalized, opened, or followed."},
+            ckv::widgets::FieldDescriptor{
+                .label = "The target is stored as link data. A relative target remains relative to the new link.",
+                .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
+                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
+        create_symbolic_link_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        create_symbolic_link_window = shell->desktop().active_window();
+        create_symbolic_link_lifetime = create_symbolic_link_window->lifetime_token();
+        create_symbolic_link_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation, encoding](
+                const ckv::widgets::DialogResult &result) {
+                if (weak.expired())
+                    return;
+                create_symbolic_link_window = nullptr;
+                if (!result.accepted) {
+                    create_symbolic_link_dialog.reset();
+                    return;
+                }
+                if (result.values.size() != 3 || panes[pane].navigation != navigation) {
+                    panes[pane].error = "Location changed while symbolic-link creation was open";
+                    create_symbolic_link_dialog.reset();
+                    labels();
+                    return;
+                }
+                auto name = parse_directory_component(result.values[0], encoding);
+                auto target = parse_symbolic_link_target(result.values[1], encoding);
+                create_symbolic_link_dialog.reset();
+                if (!name || !target || !create_symbolic_link(pane, std::move(*target), std::move(*name))) {
+                    panes[pane].error = "Symbolic-link name or target is not representable, or the location changed";
                     labels();
                 }
             });
@@ -2603,11 +2707,13 @@ struct FilesApp::State {
             const bool was_delete = p.deleting;
             const bool was_create_file = p.creating_file;
             const bool was_create_hard_link = p.creating_hard_link;
+            const bool was_create_symbolic_link = p.creating_symbolic_link;
             p.renaming = false;
             p.trashing = false;
             p.deleting = false;
             p.creating_file = false;
             p.creating_hard_link = false;
+            p.creating_symbolic_link = false;
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
                 p.error.clear();
@@ -2620,6 +2726,7 @@ struct FilesApp::State {
                                          : was_rename ? "Entry renamed; refresh could not be started"
                                                       : was_create_file ? "File created; refresh could not be started"
                                                                          : was_create_hard_link ? "Hard link created; refresh could not be started"
+                                                                                                : was_create_symbolic_link ? "Symbolic link created; refresh could not be started"
                                                                                                 : "Directory created; refresh could not be started";
             } else {
                 p.error = reply.state == FilesPaneReplyState::Ready
@@ -2628,6 +2735,7 @@ struct FilesApp::State {
                                             : was_rename ? "Rename outcome unavailable"
                                                          : was_create_file ? "File creation outcome unavailable"
                                                                             : was_create_hard_link ? "Hard-link creation outcome unavailable"
+                                                                                                   : was_create_symbolic_link ? "Symbolic-link creation outcome unavailable"
                                                                                                    : "Directory creation outcome unavailable")
                               : failure(reply);
             }
@@ -3212,6 +3320,11 @@ struct FilesApp::State {
         if (create_hard_link_dialog && !create_hard_link_dialog->completed()) {
             if (create_hard_link_window && !create_hard_link_lifetime.expired())
                 create_hard_link_window->close();
+            return;
+        }
+        if (create_symbolic_link_dialog && !create_symbolic_link_dialog->completed()) {
+            if (create_symbolic_link_window && !create_symbolic_link_lifetime.expired())
+                create_symbolic_link_window->close();
             return;
         }
         if (rename_dialog && !rename_dialog->completed()) {
