@@ -199,7 +199,11 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity) {
 #endif
     NativeFileSystem filesystem;
     auto directory = take(filesystem.open_directory(scratch.path()));
-    const auto destination_identity = take(directory->identity());
+    const auto destination_observation = directory->identity();
+    CK_CHECK(destination_observation.value());
+    if (!destination_observation.value())
+        return;
+    const auto destination_identity = *destination_observation.value();
     auto staging = take(directory->create_child_file(name("recovery-staging.bin")));
     const auto staging_metadata = take(staging->inspect_basic());
     CK_CHECK(staging_metadata.identity.value() && destination_identity.scope.is_valid());
