@@ -1,5 +1,24 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 worker-owned link-target inspection
+
+The Files pane service now exposes **Inspect link target** as a read-only,
+worker-owned request. It revalidates the current pane stamp and row, opens the
+held row with metadata-only access, accepts only symbolic-link/junction/reparse
+objects, and reads bounded link metadata through the retained object. The UI
+receives only an immutable value payload: POSIX targets are displayed as
+native text, Windows symbolic-link/mount-point names are displayed when
+structurally decoded, and opaque reparse bytes are reported by bounded size
+without being interpreted as authority. The target is never followed,
+normalized, executed, or used for a mutation. Unsupported or non-link rows
+remain dynamically disabled with a status-bar reason.
+
+The complete Files aggregate passed from the committed builds on macOS arm64,
+Linux ARM64, and Windows x64: **256/256**, **256/256**, and **254/254**.
+Windows used v143 and the V: development drive. This closes only read-only
+link/reparse inspection; link editing, Windows reparse publication, junction
+operations, and cross-pane hard-link workflow remain open.
+
 ## 2026-11-02 — CP-05 qualified POSIX symbolic-link creation
 
 The Files native boundary, worker service, and UI now provide **New symbolic

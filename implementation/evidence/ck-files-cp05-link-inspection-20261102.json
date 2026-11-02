@@ -1,0 +1,36 @@
+{
+  "checkpoint": "CP-05 link target inspection",
+  "date": "2026-11-02",
+  "scope": "worker-owned bounded read-only link/reparse metadata inspection",
+  "commits": {
+    "macos": "b283db2",
+    "linux": "e9bd6a547",
+    "windows": "95614bfea"
+  },
+  "qualification": {
+    "macos": {
+      "host": "macOS arm64",
+      "files_tests": "256/256",
+      "build": "/Volumes/S8T/tmp/ckutilities-cp05-new-file-20261102-01/build"
+    },
+    "linux": {
+      "host": "Linux ARM64",
+      "files_tests": "256/256",
+      "build": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/build"
+    },
+    "windows": {
+      "host": "Windows x64",
+      "files_tests": "254/254",
+      "build": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\build",
+      "toolset": "v143",
+      "development_drive": "V:"
+    }
+  },
+  "safety": [
+    "row stamp and worker-held child are revalidated before metadata read",
+    "metadata-only access; link/reparse target is never followed or executed",
+    "payload is bounded and published to UI as immutable value data",
+    "opaque Windows reparse bytes are not reparsed as authority",
+    "non-link and unsupported rows remain dynamically unavailable"
+  ]
+}
