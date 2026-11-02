@@ -39,7 +39,7 @@ the remaining WP-07/WP-08 gates remain open.
 
 The Windows v143/MSVC 19.44.35228.0 boundary was validated at `e08f817`.
 The clean checkout at `V:\dev\ckutilities-git-bcf47a3` is now synchronized
-to current revision `2c2e05a`. The normal project configures, but
+to current revision `949c1e3`. The normal project configures, but
 `CKTOOLS_BUILD_FUZZERS=ON` is intentionally rejected at
 `fuzz/CMakeLists.txt:9`: this target requires an LLVM Clang toolchain with the
 libFuzzer runtime. No alternate compiler or source workaround was used, and no
