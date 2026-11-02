@@ -9,8 +9,13 @@ also encode a missing destination address explicitly; the digest remains a
 reconciliation receipt, never permission to reopen a source or mutate a
 destination. The native copy composition test reopened both durable batch
 journals and confirmed the Verified records carry the digest. Core evidence,
-copy-job, and native operation suites passed on macOS arm64. Cross-platform
-qualification is still required before this checkpoint is committed.
+copy-job, and native operation suites passed on macOS arm64. The same source
+commit was then rebuilt with MSVC v143 on Windows x64 and GNU g++ 14.2.0 on
+Linux ARM64; core/native/Files aggregates passed 717/717, 187/187, 248/248
+and 717/717, 192/192, 249/249 respectively. Evidence:
+[CP-03 ordinary-copy receipt record](evidence/ck-files-cp03-ordinary-copy-receipt-20261102.json).
+Commit: `a02a79c` (macOS), with equivalent synchronized commits on the
+isolated Windows and Linux checkouts.
 
 ## 2026-11-02 — CP-03 guarded ordinary-operation staging cleanup
 

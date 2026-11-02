@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-03",
+  "scope": "ordinary regular-file copy durable content receipt",
+  "source_commit_macos": "a02a79c",
+  "source_commit_windows": "1fc02751f",
+  "source_commit_linux": "ca9089bd0",
+  "protocol": {
+    "codec": "native recovery evidence version 4",
+    "receipt": "independently verified whole-file SHA-256 at Copied and Verified journal boundaries",
+    "address": "version-3 exact native destination address remains backward compatible; version 4 encodes explicit address presence",
+    "safety": "digest and address are reconciliation evidence only; no pathname reopen, resume, retry, publication, source retirement, or cleanup authorization was added"
+  },
+  "macos_arm64": {
+    "configuration": "Release/Ninja",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+    "outputs": [
+      {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/tests/unit/ck_files/ck_files_core_tests", "sha256": "2354baa4c8a2b02e55bd826587e0643bf21878e9e126a0036cd519f50fb0de43"},
+      {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "b2ae6f76af7f9b7e62447b4ed0a4086c06e00b7d6ffba8d183d6077d8dafee2e"},
+      {"path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/files/ck_vision_files_tests", "sha256": "91c42d4df4edc3565e1cf53574a982d06746ce0f15146d6396b7a82f5068230f"}
+    ],
+    "suites": ["ck_files_core_tests: 717/717", "ck_files_native_tests: 188/188", "ck_vision_files_tests: 249/249"]
+  },
+  "windows_x64": {
+    "host": "workstation",
+    "configuration": "Release/Ninja /MT",
+    "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+    "source_checkout": "V:\\dev\\ckutilities-cp02-trash-guard-20261102-01",
+    "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-cp03-digest-20261102-01",
+    "outputs": [
+      {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_core_tests.exe", "sha256": "18060c5409ad53971c7fd4955ffcb3151a9c37aa2acf1cf99728121892c53929"},
+      {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe", "sha256": "878e8f8ac14dccd51024b260581db2935aab0d1f99c05095d6a075e6c5409c3f"},
+      {"path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe", "sha256": "963eba44724e73edcc47ba4b09d2182c32c2481577b42d25173b3eec80f934ce"}
+    ],
+    "suites": ["ck_files_core_tests: 717/717", "ck_files_native_tests: 187/187", "ck_vision_files_tests: 248/248"],
+    "focused": "files_app_archive_cleanup_command_is_platform_guarded_and_revalidated; files_app_operation_recovery_without_service_reports_status_reason; files_app_operation_recovery_review_is_read_only_and_modal; files_app_operation_cleanup_command_is_platform_guarded_and_revalidated: all passed"
+  },
+  "linux_arm64": {
+    "host": "uconsole",
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "GNU g++ 14.2.0",
+    "source_checkout": "/home/klukas/ckUtilities",
+    "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+    "temporary_root": "/home/klukas/tmp/ckutilities-cp03-digest-20261102-01",
+    "outputs": [
+      {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/tests/unit/ck_files/ck_files_core_tests", "sha256": "c1bea85f8b3db5850df66680d38e3ba9174ea064afc5eb5f70e7f875cceef8cb"},
+      {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/tests/unit/ck_files/ck_files_native_tests", "sha256": "2496b91e54d605e835af07bd6861646d1350b928d334ed76aaa82aeef947653f"},
+      {"path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests", "sha256": "5b473de9d8df5980554ad1f08a509f016c02130a6f3c5d85d299c55c59dc8385"}
+    ],
+    "suites": ["ck_files_core_tests: 717/717", "ck_files_native_tests: 192/192", "ck_vision_files_tests: 249/249"]
+  },
+  "status": "pass_cp03_ordinary_copy_content_receipt_boundary"
+}
