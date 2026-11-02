@@ -13,6 +13,11 @@ destinations and sources are never touched, and no pathname-only fallback is
 provided. macOS/Linux keep the action disabled with the explicit
 `identity-bound discard is not qualified on this platform` reason.
 
+The cleanup worker also has a restart/idempotence qualification: after a
+successful Windows discard appends `Cancelled`, a fresh cleanup worker rejects
+the same journal as no longer eligible. The focused recovery-cleanup test
+passed on macOS, Windows x64/v143, and Linux ARM64. Commit: `7edb27a`.
+
 The focused UI test passed on macOS, Windows x64/v143, and Linux ARM64. The
 full Files aggregate passed **249/249** on macOS and Linux and **248/248** on
 Windows. The cross-platform recovery fixtures were corrected in the same
