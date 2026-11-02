@@ -9,9 +9,10 @@ turning display text into authority. Native decoder tests kept untrusted
 evidence and journal tails review-only. The Files UI suite passed **73/73** on
 each platform, including the worker-backed scan, unavailable-before-ready
 reason, bounded modal review, and Close-only interaction. The focused
-worker/discovery suite passed **2/2** on all three platforms, including a
-second independent scan after the first result was consumed and a stopped-
-worker submission refusal; the core recovery/evidence suites passed
+worker/discovery suite passed **3/3** on all three platforms, including a
+second independent scan after the first result was consumed, a stopped-worker
+submission refusal, and durable journal reopen after a worker restart retaining
+the same review-only evidence; the core recovery/evidence suites passed
 **8/8** and **3/3**. Evidence: [CP-03 read-only recovery record](evidence/ck-files-cp03-operation-recovery-readonly-current-20261102.json).
 
 The active-pane status now also reports `Inspect operation recovery: review is
