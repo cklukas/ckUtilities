@@ -178,6 +178,30 @@ CK_TEST(native_posix_directory_final_symlink_requires_explicit_follow_including_
     }
 }
 
+CK_TEST(native_posix_symbolic_link_creation_is_relative_no_replace_and_verifies_payload) {
+    const ck::testing::ScratchDirectory scratch("files-directory-create-symlink");
+    fs::create_directory(scratch.path() / "target");
+    NativeFileSystem filesystem;
+    auto cursor = open_directory(filesystem, scratch.path());
+    const auto name = NativeName::from_posix("link");
+    CK_CHECK(name.has_value());
+    const auto created = cursor->create_symbolic_link(SymbolicLinkTarget{std::string("../target")}, *name);
+    CK_CHECK(created.value() && *created.value());
+    std::vector<char> bytes(128, '\0');
+    const auto length = ::readlink((scratch.path() / "link").c_str(), bytes.data(), bytes.size());
+    CK_CHECK(length == 9 && std::string(bytes.data(), static_cast<std::size_t>(length)) == "../target");
+    const auto duplicate = cursor->create_symbolic_link(SymbolicLinkTarget{std::string("other")}, *name);
+    CK_CHECK(!duplicate.value() && duplicate.state() == ObservationState::Changed);
+    auto opened = cursor->open_child(*name);
+    CK_CHECK(opened.value());
+    if (opened.value()) {
+        const auto metadata = (*opened.value())->read_link_metadata();
+        CK_CHECK(metadata.value() && std::holds_alternative<PosixSymlinkData>(metadata.value()->payload));
+        if (metadata.value() && std::holds_alternative<PosixSymlinkData>(metadata.value()->payload))
+            CK_CHECK(std::get<PosixSymlinkData>(metadata.value()->payload).target == "../target");
+    }
+}
+
 CK_TEST(native_posix_directory_access_denial_is_not_an_empty_listing) {
     const ck::testing::ScratchDirectory scratch("files-directory-denied");
     if (geteuid() == 0) throw std::runtime_error("directory denial qualification needs an unprivileged user");

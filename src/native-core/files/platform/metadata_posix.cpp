@@ -1173,6 +1173,50 @@ public:
                 {ErrorDomain::Posix, errno, "fsync.create_hard_link_parent"});
         return Result::available(true);
     }
+    Observation<bool> create_symbolic_link(const SymbolicLinkTarget& target,
+                                           const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto* target_bytes = std::get_if<std::string>(&target);
+        const auto* spelling = destination_name.posix_bytes();
+        if (!destination_name.is_valid() || !spelling || !target_bytes || target_bytes->empty() ||
+            target_bytes->find('\0') != std::string::npos)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "create_symbolic_link.input"));
+        errno = 0;
+        const auto maximum = fpathconf(dirfd(directory_.get()), _PC_SYMLINK_MAX);
+        if (maximum == 0 || (maximum < 0 && errno != 0))
+            return Result::unavailable(errno_state(errno), {ErrorDomain::Posix, errno, "fpathconf.create_symbolic_link"});
+        if (maximum > 0 && target_bytes->size() > static_cast<std::size_t>(maximum))
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InventoryLimit, "create_symbolic_link.target_limit"));
+        if (symlinkat(target_bytes->c_str(), dirfd(directory_.get()), spelling->c_str()) != 0) {
+            const int code = errno;
+            if (code == EEXIST) return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Posix, code, "symlinkat.destination_occupied"});
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "symlinkat.create_symbolic_link"});
+        }
+        const auto published = stat_metadata(dirfd(directory_.get()), spelling->c_str(), false, scope_, AT_SYMLINK_NOFOLLOW);
+        if (!published.value() || !published.value()->identity.value() || !published.value()->kind.value() ||
+            *published.value()->kind.value() != ObjectKind::SymbolicLink)
+            return Result::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::InvalidNativeResult, "create_symbolic_link.published_metadata"));
+        auto opened = open_child(destination_name, EntryAccess::MetadataOnly);
+        if (!opened.value()) {
+            const auto& error = *opened.unavailable_detail();
+            return Result::unavailable(ObservationState::Unknown, error.error);
+        }
+        auto link = (*opened.value())->read_link_metadata();
+        if (!link.value() || link.value()->owner.value() == nullptr ||
+            compare_identity(*link.value()->owner.value(), *published.value()->identity.value()) != IdentityComparison::Same ||
+            !std::holds_alternative<PosixSymlinkData>(link.value()->payload) ||
+            std::get<PosixSymlinkData>(link.value()->payload).target != *target_bytes)
+            return Result::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::MetadataChanged, "create_symbolic_link.published_target"));
+        if (fsync(dirfd(directory_.get())) != 0)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, errno, "fsync.create_symbolic_link_parent"});
+        return Result::available(true);
+    }
     Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
         using Result = Observation<std::unique_ptr<DirectoryCursor>>;
         const auto* spelling = name.posix_bytes();

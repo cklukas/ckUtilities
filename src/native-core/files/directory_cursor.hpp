@@ -79,6 +79,12 @@ public:
                                                 const ObjectIdentity& expected_source,
                                                 const DirectoryCursor& destination,
                                                 const NativeName& destination_name) const;
+    // Worker-only creation of one symbolic-link name below this held
+    // directory. The target is opaque link payload, never traversed or
+    // converted from display text. The destination is no-replace and the
+    // adapter must flush and verify the published link before success.
+    virtual Observation<bool> create_symbolic_link(const SymbolicLinkTarget& target,
+                                                    const NativeName& destination_name) const;
     // Worker-only source retirement boundary. The adapter must open the exact
     // child relative to this held directory, verify expected_identity, and
     // use a handle/object-based disposition. A pathname unlink or a

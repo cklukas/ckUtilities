@@ -5,6 +5,10 @@
 
 namespace ck::files {
 struct PosixSymlinkData { std::string target; }; // raw bytes, never a display/path conversion
+// A creation target is link payload, not a native path and not a display
+// string. POSIX bytes may be non-UTF-8; Windows units may contain unpaired
+// surrogates. Neither alternative is normalized or traversed by the adapter.
+using SymbolicLinkTarget = std::variant<std::string, std::u16string>;
 enum class WindowsReparseKind { OpaqueMicrosoft, OpaqueGuid, SymbolicLink, MountPoint };
 struct WindowsLinkNames {
     std::u16string substitute;

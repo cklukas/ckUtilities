@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "directory_cursor.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace ck::files {
@@ -112,6 +113,19 @@ Observation<bool> DirectoryCursor::create_hard_link(const NativeName& source_nam
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_hard_link.cross_volume"});
     return Observation<bool>::unavailable(ObservationState::Unsupported,
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_hard_link.native_query"});
+}
+
+Observation<bool> DirectoryCursor::create_symbolic_link(const SymbolicLinkTarget& target,
+                                                         const NativeName& destination_name) const {
+    if (!destination_name.is_valid() || std::visit([](const auto& value) {
+            return value.empty() || std::find(value.begin(), value.end(), 0) != value.end();
+        }, target))
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier),
+             "create_symbolic_link.input"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery),
+         "create_symbolic_link.native_query"});
 }
 
 Observation<bool> DirectoryCursor::retire_child(const NativeName& name,
