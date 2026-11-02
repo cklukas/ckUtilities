@@ -894,6 +894,63 @@ CK_TEST(volume_archive_recovery_service_scans_off_ui_thread_and_rejects_invalid_
     CK_CHECK(!service.running());
 }
 
+CK_TEST(volume_archive_recovery_reopens_the_same_durable_journal_after_worker_restart) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-restart", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    const auto name = archive_journal_name("00000000000000000000000000000032");
+    CK_CHECK(name.has_value());
+    if (!name)
+        return;
+    const auto id = journal_id(32);
+    auto created = OperationJournal::create(FileOperation::Copy, id);
+    CK_CHECK(created.value());
+    if (!created.value())
+        return;
+    auto file = open_native_operation_journal_file(root, *name, true);
+    CK_CHECK(file.value());
+    if (!file.value())
+        return;
+    auto journal = std::move(created).take_value();
+    auto journal_file = std::move(file).take_value();
+    CK_CHECK(append_operation_journal_file(
+                 *journal_file, *journal,
+                 {1, 0, OperationJournalState::Planned, journal_evidence(32)}).value());
+    journal_file.reset();
+
+    const auto scan_once = [&](FilesVolumeArchiveRecoveryService &service) {
+        CK_CHECK(service.request(root) == FilesVolumeArchiveRecoverySubmission::Accepted);
+        std::optional<FilesVolumeArchiveRecoveryReply> reply;
+        for (int i = 0; i != 500 && !reply; ++i) {
+            reply = service.take();
+            if (!reply)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryState::Ready && reply->scan);
+        if (!reply || !reply->scan)
+            return;
+        CK_CHECK(reply->scan->journals.size() == 1 && reply->scan->journals.front().report.has_value());
+        if (reply->scan->journals.size() == 1 && reply->scan->journals.front().report)
+            CK_CHECK(reply->scan->journals.front().report->journal_id == id &&
+                     reply->scan->journals.front().report->operation.requires_reconciliation);
+    };
+
+    {
+        FilesVolumeArchiveRecoveryService service;
+        scan_once(service);
+        service.request_stop();
+        service.join();
+        CK_CHECK(!service.running());
+    }
+    {
+        FilesVolumeArchiveRecoveryService restarted;
+        scan_once(restarted);
+        restarted.request_stop();
+        restarted.join();
+        CK_CHECK(!restarted.running());
+    }
+    CK_CHECK(std::filesystem::exists(scratch.path() / "journals" / ".ck-volume-archive-00000000000000000000000000000032"));
+}
+
 CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellation) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-cleanup", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = journal_root(scratch.path());
