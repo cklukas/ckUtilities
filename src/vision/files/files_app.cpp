@@ -553,7 +553,8 @@ struct FilesApp::State {
             };
             SuiteShellOptions options;
             options.application_name = "Files";
-            options.about_text = "Two independent file locations with worker-owned file and folder creation.";
+            options.about_text =
+                "Two-pane filesystem cockpit — F5 Copy · F6 Move · F3 Preview · F7 New folder · Ctrl+L Location.";
             options.theme = theme;
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
