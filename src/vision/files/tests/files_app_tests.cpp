@@ -1634,8 +1634,15 @@ CK_TEST(files_app_archive_cleanup_command_is_platform_guarded_and_revalidated) {
             cleanup = button;
     CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
     f.until([&] {
-        return !std::filesystem::exists(f.scratch.path() / "archive-destination" / ".fixture.ckarchive.cktmp-31") &&
-            !f.app->availability("ck.files.cleanup_archive_recovery").enabled;
+        const auto availability = f.app->availability("ck.files.cleanup_archive_recovery");
+        if (availability.enabled ||
+            availability.reason.find("cleanup is still running") != std::string::npos ||
+            availability.reason.find("recovery scan is still running") != std::string::npos)
+            return false;
+        std::error_code error;
+        const bool staging_exists = std::filesystem::exists(
+            f.scratch.path() / "archive-destination" / ".fixture.ckarchive.cktmp-31", error);
+        return !error && !staging_exists;
     });
 #else
     CK_CHECK(!f.app->availability("ck.files.cleanup_archive_recovery").enabled);
@@ -1681,8 +1688,15 @@ CK_TEST(files_app_operation_cleanup_command_is_platform_guarded_and_revalidated)
             cleanup = button;
     CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
     f.until([&] {
-        return !std::filesystem::exists(f.scratch.path() / "operation-destination" / ".ck-copy-staging-recovery") &&
-            !f.app->availability("ck.files.cleanup_operation_recovery").enabled;
+        const auto availability = f.app->availability("ck.files.cleanup_operation_recovery");
+        if (availability.enabled ||
+            availability.reason.find("cleanup is still running") != std::string::npos ||
+            availability.reason.find("recovery scan is still running") != std::string::npos)
+            return false;
+        std::error_code error;
+        const bool staging_exists = std::filesystem::exists(
+            f.scratch.path() / "operation-destination" / ".ck-copy-staging-recovery", error);
+        return !error && !staging_exists;
     });
 #else
     CK_CHECK(!f.app->availability("ck.files.cleanup_operation_recovery").enabled);
