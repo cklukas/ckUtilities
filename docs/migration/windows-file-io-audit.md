@@ -68,7 +68,7 @@ to extended wide I/O only at the native boundary. Their old
 `std::filesystem` iterator implementations remain compiled only for POSIX
 targets, where they use the host-native POSIX filesystem implementation.
 
-The Windows qualification build at commit `ef57f56` compiled both migrated
+The Windows qualification build at commit `1723fcd` compiled both migrated
 cores, the long-path regression, and the SSH configuration boundary, passing
 the full **225/225** suite. The regression creates and walks a real nested
 Windows tree whose deepest entries exceed the legacy 260-character convention.
