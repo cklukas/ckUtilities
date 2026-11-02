@@ -176,9 +176,11 @@ now exposed under the same Windows-only guard for one complete receipt-backed
 regular-file copy; retry/resume and publication reconciliation remain
 disabled until their identity-bound workers are wired and qualified. New
 regular-file copy composition now records an optional exact native destination
-address in versioned recovery evidence; legacy journals and copy paths without
-that receipt remain inspect-only and cannot be reopened for mutation after a
-restart.
+address and the independently verified whole-file SHA-256 content receipt in
+versioned recovery evidence; legacy journals and copy paths without those
+receipts remain inspect-only and cannot be reopened for mutation after a
+restart. The content receipt is evidence for later reconciliation, not
+pathname or digest authority by itself.
 
 ## CP-04 — Close the actual safety and release matrix
 

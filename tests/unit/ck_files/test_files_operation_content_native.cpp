@@ -470,7 +470,7 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_dispo
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-crash-staging"), name("published"),
-          *destination_durable, *destination_durable, *destination_durable, staging_durable, {}},
+          *destination_durable, *destination_durable, *destination_durable, staging_durable, {}, {}},
          std::nullopt}, destination, destination_identity};
     staging.reset();
     auto cleaned = cleanup_native_unpublished_staging(request);
@@ -517,7 +517,7 @@ CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) 
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-substituted-staging"), name("published"),
-          *durable, *durable, *durable, original_durable, {}}, std::nullopt},
+          *durable, *durable, *durable, original_durable, {}, {}}, std::nullopt},
         destination, destination_identity};
     auto cleaned = cleanup_native_unpublished_staging(request);
     CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Changed &&
@@ -558,7 +558,7 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
         auto journal_file = take(open_native_operation_journal_file(journal_root, name(journal_text), true));
         OperationJournalId journal_id;
         journal_id.bytes[0] = journal_byte;
-        auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 256}));
+        auto journal = take(OperationJournal::create(FileOperation::Copy, journal_id, {1, 32, 512}));
         CK_CHECK(append_operation_journal_file(*journal_file, *journal,
             {1, 0, OperationJournalState::Planned, {}}).value());
 
@@ -622,6 +622,21 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
         const auto published = take(destination->open_child(destination_name, EntryAccess::ContentRead));
         const auto content = take(published->read_content({1024}, 0));
         CK_CHECK(content.complete && !content.bytes.empty());
+    }
+    batch.reset();
+    for (const auto& journal_text : {"first.journal", "second.journal"}) {
+        auto reopened = take(open_native_operation_journal_file(
+            take(NativeAbsolutePath::from_host(scratch.path())), name(journal_text), false));
+        auto loaded = take(load_operation_journal(*reopened));
+        const auto verified = std::find_if(loaded.journal->records().rbegin(), loaded.journal->records().rend(),
+            [](const OperationJournalRecord& record) {
+                return record.state == OperationJournalState::Verified;
+            });
+        CK_CHECK(verified != loaded.journal->records().rend());
+        if (verified != loaded.journal->records().rend()) {
+            auto evidence = take(decode_native_operation_recovery_evidence(verified->evidence));
+            CK_CHECK(evidence.content_digest.has_value());
+        }
     }
 }
 

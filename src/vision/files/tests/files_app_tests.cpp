@@ -365,7 +365,7 @@ struct Fixture {
                 throw std::runtime_error("cannot create eligible operation recovery journal");
             NativeOperationRecoveryEvidence receipt{
                 *staging_name, *published_name, *destination_durable, *destination_durable,
-                *destination_durable, *staging_durable, destination_address};
+                *destination_durable, *staging_durable, destination_address, {}};
             auto encoded = encode_native_operation_recovery_evidence(receipt);
             if (!encoded.value())
                 throw std::runtime_error("cannot encode eligible operation recovery journal");

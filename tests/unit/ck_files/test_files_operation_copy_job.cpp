@@ -82,6 +82,7 @@ CK_TEST(operation_copy_job_durably_orders_prepare_copy_and_verify) {
         [](std::stop_token) { return no_op_metadata_job(); },
         [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -108,6 +109,7 @@ CK_TEST(operation_copy_job_cancellation_before_prepare_is_journaled_without_nati
         [](std::stop_token) { return no_op_metadata_job(); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -139,6 +141,7 @@ CK_TEST(operation_copy_job_prepared_journal_failure_prevents_copy_preparation) {
                     {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.prepared_flush"});
             return value->append(std::move(record));
         },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -168,6 +171,7 @@ CK_TEST(operation_copy_job_copied_journal_failure_prevents_metadata_stage) {
                     {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.copied_flush"});
             return value->append(std::move(record));
         },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -199,6 +203,7 @@ CK_TEST(operation_copy_job_verified_journal_failure_requires_reconciliation_afte
                     {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead), "test.verified_flush"});
             return value->append(std::move(record));
         },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -222,6 +227,7 @@ CK_TEST(operation_copy_job_unknown_verification_failure_requires_reconciliation)
         [](std::stop_token) { return Observation<bool>::unavailable(ObservationState::Unknown,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult), "test.verify"}); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());
@@ -257,6 +263,7 @@ CK_TEST(operation_copy_job_metadata_failure_prevents_verification) {
             return Observation<bool>::available(true);
         },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto created = OperationCopyJob::create(std::move(request));
     CK_CHECK(created.value());

@@ -31,6 +31,10 @@ struct OperationCopyRequest final {
     std::function<Observation<OperationMetadataJob::Pointer>(std::stop_token)> prepare_metadata;
     std::function<Observation<bool>(std::stop_token)> verify_copy;
     std::function<Observation<bool>(OperationJournalRecord)> append_journal;
+    // Optional worker-owned decoration of a journal record. The copy result is
+    // available for Copied/Verified records and remains outside UI state.
+    std::function<Observation<bool>(OperationJournalRecord&, const StreamCopyResult*)>
+        decorate_journal_record;
 };
 
 struct OperationCopyResult final {

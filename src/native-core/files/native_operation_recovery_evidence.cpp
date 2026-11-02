@@ -10,7 +10,8 @@ namespace ck::files {
 namespace {
 constexpr std::array<std::byte, 4> magic{
     std::byte{'C'}, std::byte{'K'}, std::byte{'R'}, std::byte{'E'}};
-constexpr std::uint8_t version = 3;
+constexpr std::uint8_t address_version = 3;
+constexpr std::uint8_t digest_version = 4;
 constexpr std::uint8_t staging_identity_version = 2;
 constexpr std::uint8_t legacy_version = 1;
 
@@ -58,6 +59,10 @@ void put_u64(std::vector<std::byte>& bytes, std::uint64_t value) {
 }
 void put_identifier(std::vector<std::byte>& bytes, const NativeIdentifier& value) {
     bytes.insert(bytes.end(), value.bytes.begin(), value.bytes.end());
+}
+
+void put_digest(std::vector<std::byte>& bytes, const std::array<std::byte, 32>& digest) {
+    bytes.insert(bytes.end(), digest.begin(), digest.end());
 }
 
 class Reader final {
@@ -248,7 +253,8 @@ Observation<std::vector<std::byte>> encode_native_operation_recovery_evidence(
     std::vector<std::byte> result;
     result.reserve(256);
     result.insert(result.end(), magic.begin(), magic.end());
-    put_u8(result, evidence.destination_address ? version : staging_identity_version);
+    put_u8(result, evidence.content_digest ? digest_version :
+        (evidence.destination_address ? address_version : staging_identity_version));
     put_u8(result, 0);
     if (!append_name(result, evidence.staging_name, limits.max_name_units) ||
         !append_name(result, evidence.destination_name, limits.max_name_units))
@@ -259,8 +265,15 @@ Observation<std::vector<std::byte>> encode_native_operation_recovery_evidence(
         !append_identity(result, evidence.source_identity) ||
         !append_identity(result, evidence.destination_identity))
         return invalid<std::vector<std::byte>>(AdapterError::InvalidNativeResult, "native_recovery_evidence.encode");
-    if (evidence.destination_address && !append_address(result, *evidence.destination_address,
-                                                         NativePathLimits::hard_native_bytes))
+    if (evidence.content_digest) {
+        put_u8(result, evidence.destination_address ? 1 : 0);
+        if (evidence.destination_address && !append_address(result, *evidence.destination_address,
+                                                             NativePathLimits::hard_native_bytes))
+            return invalid<std::vector<std::byte>>(AdapterError::InvalidNativeResult,
+                                                   "native_recovery_evidence.address");
+        put_digest(result, *evidence.content_digest);
+    } else if (evidence.destination_address && !append_address(result, *evidence.destination_address,
+                                                               NativePathLimits::hard_native_bytes))
         return invalid<std::vector<std::byte>>(AdapterError::InvalidNativeResult,
                                                "native_recovery_evidence.address");
     if (result.size() > limits.max_bytes) return invalid<std::vector<std::byte>>(AdapterError::InvalidLimit, "native_recovery_evidence.size");
@@ -276,7 +289,7 @@ Observation<NativeOperationRecoveryEvidence> decode_native_operation_recovery_ev
     std::uint8_t decoded_version = 0, reserved = 0;
     if (!reader.take(magic.size(), decoded_magic) || !std::equal(magic.begin(), magic.end(), decoded_magic.begin()) ||
         !reader.u8(decoded_version) || !reader.u8(reserved) ||
-        (decoded_version != version && decoded_version != staging_identity_version &&
+        (decoded_version != digest_version && decoded_version != address_version && decoded_version != staging_identity_version &&
          decoded_version != legacy_version) || reserved != 0)
         return invalid<NativeOperationRecoveryEvidence>(AdapterError::InvalidNativeResult, "native_recovery_evidence.header");
     auto staging = read_name(reader, limits.max_name_units);
@@ -298,12 +311,32 @@ Observation<NativeOperationRecoveryEvidence> decode_native_operation_recovery_ev
     auto source = read_identity(reader);
     auto destination_identity = read_identity(reader);
     std::optional<NativeAbsolutePath> destination_address;
-    if (decoded_version == version) {
+    std::optional<std::array<std::byte, 32>> content_digest;
+    if (decoded_version == address_version) {
         auto decoded = read_address(reader, NativePathLimits::hard_native_bytes);
         if (!decoded.value())
             return Observation<NativeOperationRecoveryEvidence>::unavailable(
                 decoded.state(), decoded.unavailable_detail()->error);
         destination_address = std::move(decoded).take_value();
+    } else if (decoded_version == digest_version) {
+        std::uint8_t address_present = 0;
+        if (!reader.u8(address_present) || address_present > 1)
+            return invalid<NativeOperationRecoveryEvidence>(AdapterError::InvalidNativeResult,
+                                                             "native_recovery_evidence.address_header");
+        if (address_present != 0) {
+            auto decoded = read_address(reader, NativePathLimits::hard_native_bytes);
+            if (!decoded.value())
+                return Observation<NativeOperationRecoveryEvidence>::unavailable(
+                    decoded.state(), decoded.unavailable_detail()->error);
+            destination_address = std::move(decoded).take_value();
+        }
+        std::span<const std::byte> digest;
+        if (!reader.take(32, digest))
+            return invalid<NativeOperationRecoveryEvidence>(AdapterError::InvalidNativeResult,
+                                                             "native_recovery_evidence.digest");
+        std::array<std::byte, 32> value{};
+        std::copy(digest.begin(), digest.end(), value.begin());
+        content_digest = value;
     }
     if (!staging.value() || !destination.value() || !source_parent.value() || !source.value() ||
         !destination_identity.value() || !reader.empty())
@@ -312,6 +345,6 @@ Observation<NativeOperationRecoveryEvidence> decode_native_operation_recovery_ev
         std::move(staging).take_value(), std::move(destination).take_value(),
         std::move(source_parent).take_value(), std::move(source).take_value(),
         std::move(destination_identity).take_value(), std::move(staging_identity),
-        std::move(destination_address)});
+        std::move(destination_address), std::move(content_digest)});
 }
 } // namespace ck::files

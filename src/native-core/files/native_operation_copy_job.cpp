@@ -77,6 +77,7 @@ struct NativeOperationCopyJob::State final {
     NativeOperationCopyRequest request;
     std::unique_ptr<OpenedEntry> source;
     std::unique_ptr<OpenedEntry> staging;
+    std::optional<std::array<std::byte, 32>> content_digest;
     bool source_exclusion = false;
 
     Observation<bool> cleanup_unpublished_staging() {
@@ -155,7 +156,8 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
                  "native_operation_copy.journal_identity"});
         NativeOperationRecoveryEvidence recovery_evidence{
             state->request.staging_name, state->request.destination_name,
-            *source_parent, *source, *destination, {}, state->request.destination_address};
+            *source_parent, *source, *destination, {}, state->request.destination_address,
+            state->content_digest};
         if (state->staging) {
             auto metadata = state->staging->inspect_basic();
             if (!metadata.value() || !metadata.value()->identity.value() ||
@@ -237,6 +239,19 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
             *source.value()->kind.value() == ObjectKind::RegularFile &&
             *destination.value()->kind.value() == ObjectKind::RegularFile &&
             *source.value()->logical_size.value() == *destination.value()->logical_size.value());
+    };
+    copy.decorate_journal_record = [state](OperationJournalRecord& record,
+                                            const StreamCopyResult* copy_result) {
+        if ((record.state == OperationJournalState::Copied ||
+             record.state == OperationJournalState::Verified) &&
+            (!copy_result || copy_result->state != StreamCopyState::Complete ||
+             copy_result->source_digest != copy_result->destination_digest))
+            return rejected<bool>(AdapterError::InvalidNativeResult,
+                                  "native_operation_copy.journal_digest", ObservationState::Unknown);
+        if (copy_result && (record.state == OperationJournalState::Copied ||
+                            record.state == OperationJournalState::Verified))
+            state->content_digest = copy_result->source_digest;
+        return Observation<bool>::available(true);
     };
     copy.append_journal = append;
 
@@ -505,6 +520,7 @@ struct NativeOperationCopyTreeJob::State final {
             {},
             {},
             {},
+            std::nullopt,
             std::nullopt};
         const auto& root_metadata = inventory().entries().front();
         if (!root_source_parent_identity || !root_source_identity ||

@@ -77,6 +77,7 @@ OperationExecutionJob::Pointer complete_job(MemoryCopy& memory, OperationJournal
         [](std::stop_token) { return metadata(); },
         [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto copy = OperationCopyJob::create(std::move(copy_request));
     if (!copy.value()) return {};
@@ -119,6 +120,7 @@ CK_TEST(operation_batch_job_serializes_items_and_preserves_partial_outcomes) {
         [](std::stop_token) { return metadata(); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [failed_journal](OperationJournalRecord record) { return failed_journal->append(std::move(record)); },
+        {},
     };
     auto failed_copy_job = OperationCopyJob::create(std::move(failed_copy));
     CK_CHECK(first && failed_copy_job.value() && third);

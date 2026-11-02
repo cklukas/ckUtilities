@@ -1,5 +1,17 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-03 ordinary-copy content receipt boundary
+
+Ordinary regular-file copy journals now retain the independently verified
+whole-file SHA-256 content digest at the Copied and Verified boundaries. The
+new version-4 native evidence codec preserves version-1/2/3 journals and can
+also encode a missing destination address explicitly; the digest remains a
+reconciliation receipt, never permission to reopen a source or mutate a
+destination. The native copy composition test reopened both durable batch
+journals and confirmed the Verified records carry the digest. Core evidence,
+copy-job, and native operation suites passed on macOS arm64. Cross-platform
+qualification is still required before this checkpoint is committed.
+
 ## 2026-11-02 — CP-03 guarded ordinary-operation staging cleanup
 
 The Files UI now exposes **Clean up operation staging** as a separate command.

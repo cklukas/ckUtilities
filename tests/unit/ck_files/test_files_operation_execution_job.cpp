@@ -79,6 +79,7 @@ CK_TEST(operation_execution_job_does_not_construct_commit_until_copy_is_verified
         [](std::stop_token) { return metadata(); },
         [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto copy = OperationCopyJob::create(std::move(copy_request));
     CK_CHECK(copy.value());
@@ -128,6 +129,7 @@ CK_TEST(operation_execution_job_preserves_copy_reconciliation_without_commit_pre
         [](std::stop_token) { return metadata(); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto copy = OperationCopyJob::create(std::move(copy_request));
     CK_CHECK(copy.value());
@@ -162,6 +164,7 @@ CK_TEST(operation_execution_job_cancellation_before_copy_never_constructs_commit
         [](std::stop_token) { return metadata(); },
         [](std::stop_token) { return Observation<bool>::available(true); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto copy = OperationCopyJob::create(std::move(copy_request));
     CK_CHECK(copy.value());
@@ -195,6 +198,7 @@ CK_TEST(operation_execution_job_cancellation_after_verification_never_constructs
         [](std::stop_token) { return metadata(); },
         [&memory](std::stop_token) { return Observation<bool>::available(memory.destination == memory.source); },
         [value](OperationJournalRecord record) { return value->append(std::move(record)); },
+        {},
     };
     auto copy = OperationCopyJob::create(std::move(copy_request));
     CK_CHECK(copy.value());

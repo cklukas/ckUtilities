@@ -33,7 +33,21 @@ void OperationCopyJob::fail(UnavailableObservation detail, bool reconciliation) 
 bool OperationCopyJob::append(OperationJournalState state) {
     const auto before = request_.journal->records().size();
     const auto sequence = static_cast<std::uint64_t>(before) + 1;
-    auto result = request_.append_journal({sequence, request_.item, state, {}});
+    OperationJournalRecord record{sequence, request_.item, state, {}};
+    if (request_.decorate_journal_record) {
+        const auto* copy_result = copy_ ? &copy_->result() : nullptr;
+        try {
+            auto decorated = request_.decorate_journal_record(record, copy_result);
+            if (!decorated.value()) {
+                fail(*decorated.unavailable_detail(), true);
+                return false;
+            }
+        } catch (...) {
+            fail(error(AdapterError::InvalidNativeResult, "operation_copy.journal_decorate"), true);
+            return false;
+        }
+    }
+    auto result = request_.append_journal(std::move(record));
     if (!result.value()) { fail(*result.unavailable_detail(), true); return false; }
     if (request_.journal->records().size() != before + 1 || request_.journal->records().back().sequence != sequence ||
         request_.journal->state(request_.item) != state) {

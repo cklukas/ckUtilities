@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <optional>
 #include <span>
 #include <vector>
@@ -43,6 +44,10 @@ struct NativeOperationRecoveryEvidence final {
     // never an identity and must be rebound to a fresh held directory before
     // any mutation.
     std::optional<NativeAbsolutePath> destination_address;
+    // The independently verified whole-file content digest. This is a
+    // receipt for later reconciliation, never authority to reopen a source or
+    // mutate a destination by pathname.
+    std::optional<std::array<std::byte, 32>> content_digest;
 };
 
 struct NativeOperationRecoveryEvidenceLimits final {

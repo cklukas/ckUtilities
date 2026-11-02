@@ -89,7 +89,10 @@ execute files or provide an embedded shell.
   receipt-backed unpublished copy staging file can be identity-revalidated;
   macOS/Linux report the unavailable adapter boundary instead of deleting by
   pathname. No resume, retry, replacement, publication, or source retirement
-  is offered without a later qualified worker boundary.
+  is offered without a later qualified worker boundary. Ordinary-copy journals
+  also retain the independently verified whole-file SHA-256 receipt at the
+  Copied and Verified boundaries; it is used for future reconciliation only,
+  never as pathname-based authority.
 - A separate irreversible **Delete permanently** action with explicit scope
   confirmation and identity-bound checks. It does not follow links, recurse
   through non-empty directories, or claim secure erasure.
