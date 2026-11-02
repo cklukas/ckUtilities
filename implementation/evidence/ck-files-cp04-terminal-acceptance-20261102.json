@@ -71,6 +71,30 @@
     "result": "1/1 passed with no race or sanitizer diagnostic",
     "scope": "native published-object verifier seam; not application-wide TSan coverage"
   },
+  "input_contract": {
+    "macos_arm64": {
+      "source_commit": "c156fc4",
+      "helper": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "f3065de5f3fae85472480c0f6a63bda16af4af29c07bc416705affc2b83b6a9c",
+      "input": "unbound modified CSI, unknown CSI, SGR mouse press/release at footer cell, then Alt+X",
+      "result": "passed: rendered, accepted input contract, restored terminal profile, exited successfully"
+    },
+    "linux_arm64": {
+      "source_commit": "0511aac8d",
+      "helper": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "81023a9e9027fe533dc6da37ac3e26e1884af27ffa22a724b0ed90f4e2266a03",
+      "input": "unbound modified CSI, unknown CSI, SGR mouse press/release at footer cell, then Alt+X",
+      "result": "passed: rendered, accepted input contract, restored terminal profile, exited successfully"
+    },
+    "windows_x64": {
+      "source_commit": "85d1925f2",
+      "contract_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\ck_windows_tools_contract.exe",
+      "contract_executable_sha256": "8f1e9a7de24687355c8fa3748fb57a273002d4a67316514173d5d11242d2d9a8",
+      "input": "unbound modified CSI, unknown CSI, SGR mouse press/release at footer cell, then Alt+X",
+      "scope": "ck-utilities, ck-json-view, ck-find, ck-du, ck-edit, ck-chat, ck-todo, ck-sysmon, ck-config, ck-files",
+      "result": "passed: 1/1 ConPTY contract test; every utility rendered and exited successfully"
+    }
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",

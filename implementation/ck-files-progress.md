@@ -25,6 +25,13 @@ verifier was rerun with `halt_on_error=1` and passed **1/1** without a race or
 sanitizer diagnostic. This is a native seam check only; it does not replace
 the unresolved Linux TSan runtime gate or application-wide sanitizer matrix.
 
+The same current terminal harnesses now also send an unbound modified CSI,
+an unknown CSI, and an SGR mouse press/release at a footer cell before Alt+X.
+The input contract passed on macOS PTY, Linux ARM64 PTY, and Windows ConPTY
+for all ten utilities. This proves input-path resilience and clean terminal
+restoration; it is not a claim that full mouse selection/menu behavior has
+been accepted in a real desktop terminal window.
+
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 
 Post-publication ordinary-copy journal records now carry a separate durable
