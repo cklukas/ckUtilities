@@ -162,9 +162,13 @@ recursive-delete journals. It retains exact native journal names, keeps display
 text non-authoritative, decodes native evidence read-only, and reports malformed,
 truncated, symlink and non-regular entries as explicit reconciliation items.
 Files now exposes a bounded `Inspect operation recovery` review after the
-worker scan completes. Cleanup, retry/resume and publication reconciliation
-remain disabled until their identity-bound workers and UI presentation are
-wired and qualified.
+worker scan completes, with a dynamic status hint when reconciliation is
+required. The native unpublished-staging cleanup primitive has been qualified
+through the real operation-content matrix: Windows completes the
+identity-bound discard, while POSIX explicitly returns Unsupported and leaves
+the object intact. Cleanup is not exposed by the Files UI; retry/resume and
+publication reconciliation remain disabled until their identity-bound workers
+and UI presentation are wired and qualified.
 
 ## CP-04 — Close the actual safety and release matrix
 
