@@ -38,7 +38,7 @@ target_include_directories(ck_du_core
 )
 target_compile_features(ck_du_core PUBLIC cxx_std_20)
 target_link_libraries(ck_du_core PUBLIC ck_options)
-target_link_libraries(ck_du_core PRIVATE ck_files_core)
+target_link_libraries(ck_du_core PRIVATE ck_files_platform)
 if(APPLE)
   target_link_libraries(ck_du_core PUBLIC "-framework CoreFoundation" "-framework CoreServices")
 endif()
@@ -67,6 +67,7 @@ target_include_directories(ck_find_core
 )
 target_compile_features(ck_find_core PUBLIC cxx_std_20)
 target_link_libraries(ck_find_core PUBLIC ck_options nlohmann_json::nlohmann_json)
+target_link_libraries(ck_find_core PRIVATE ck_files_platform)
 
 add_library(ck_markdown_core STATIC
   ${PROJECT_SOURCE_DIR}/src/tools/ck-edit/src/markdown_parser.cpp

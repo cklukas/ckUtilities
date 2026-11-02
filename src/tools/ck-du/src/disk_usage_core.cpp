@@ -4,6 +4,9 @@
 
 #include "disk_usage_core.hpp"
 #include "disk_usage_platform.hpp"
+#if defined(_WIN32)
+#include "native_directory_walk.hpp"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -380,6 +383,205 @@ struct ScanCancelled
 {
 };
 
+#if defined(_WIN32)
+FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const platform::FileMetadata &metadata,
+                        const SizeBreakdown &breakdown);
+
+std::uintmax_t native_identifier_value(const ck::files::NativeIdentifier &identifier) {
+    std::uint64_t value = 0;
+    std::memcpy(&value, identifier.bytes.data(), sizeof(value));
+    return static_cast<std::uintmax_t>(value);
+}
+
+std::chrono::system_clock::time_point native_time(const ck::files::Observation<ck::files::FileTimestamp> &value) {
+    if (!value.value())
+        return {};
+    return std::chrono::system_clock::time_point(std::chrono::seconds(value.value()->seconds()) +
+                                                 std::chrono::nanoseconds(value.value()->nanoseconds()));
+}
+
+platform::FileMetadata file_metadata_from_native(const ck::files::NativeWalkEntry &entry) {
+    platform::FileMetadata result;
+    const auto &metadata = entry.metadata;
+    if (metadata.kind.value()) {
+        result.isDirectory = *metadata.kind.value() == ck::files::ObjectKind::Directory;
+        result.isSymlink = *metadata.kind.value() == ck::files::ObjectKind::SymbolicLink ||
+                           *metadata.kind.value() == ck::files::ObjectKind::Junction;
+    }
+    if (metadata.logical_size.value())
+        result.logicalSize = *metadata.logical_size.value();
+    if (metadata.allocated_size.value())
+        result.allocatedSize = *metadata.allocated_size.value();
+    if (metadata.identity.value()) {
+        result.device = native_identifier_value(metadata.identity.value()->volume);
+        result.fileId = native_identifier_value(metadata.identity.value()->object);
+    }
+    if (metadata.windows_attributes.value()) {
+        constexpr std::uint32_t kOffline = 0x00001000U;
+        constexpr std::uint32_t kRecallOnOpen = 0x00040000U;
+        constexpr std::uint32_t kRecallOnDataAccess = 0x00400000U;
+        result.offlinePlaceholder = (*metadata.windows_attributes.value() &
+                                     (kOffline | kRecallOnOpen | kRecallOnDataAccess)) != 0;
+    }
+    result.modified = native_time(metadata.modified);
+    result.created = native_time(metadata.created);
+    return result;
+}
+
+BuildDirectoryTreeResult buildDirectoryTreeNative(const fs::path &scanPath,
+                                                  const BuildDirectoryTreeOptions &options,
+                                                  ScanContext &context) {
+    BuildDirectoryTreeResult result;
+    auto root = std::make_unique<DirectoryNode>();
+    root->parent = nullptr;
+    root->expanded = true;
+    std::vector<DirectoryNode *> byDepth;
+    std::vector<std::unique_ptr<DirectoryNode>> pending;
+    auto cancelRequested = [&]() { return options.cancelRequested && options.cancelRequested(); };
+
+    const auto walk = ck::files::walk_native_directories(
+        scanPath, true, options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        [&](const ck::files::NativeWalkEntry &entry) {
+            if (entry.root) {
+                root->path = entry.path;
+                if (entry.metadata.modified.value())
+                    root->modifiedTime = native_time(entry.metadata.modified);
+                byDepth = {root.get()};
+                return ck::files::NativeWalkAction::Continue;
+            }
+            if (byDepth.size() > static_cast<std::size_t>(entry.depth))
+                byDepth.resize(static_cast<std::size_t>(entry.depth));
+            DirectoryNode *parent = byDepth.back();
+            if (options.progressCallback)
+                options.progressCallback(entry.path);
+            const auto metadata = file_metadata_from_native(entry);
+            if (shouldIgnorePath(entry.path, context))
+                return ck::files::NativeWalkAction::SkipSubtree;
+            if (metadata.isDirectory) {
+                if (metadata.isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+                    return ck::files::NativeWalkAction::SkipSubtree;
+                auto child = std::make_unique<DirectoryNode>();
+                child->path = entry.path;
+                child->parent = parent;
+                child->expanded = false;
+                child->modifiedTime = metadata.modified;
+                if (pending.size() <= static_cast<std::size_t>(entry.depth))
+                    pending.resize(static_cast<std::size_t>(entry.depth) + 1);
+                pending[static_cast<std::size_t>(entry.depth)] = std::move(child);
+                byDepth.push_back(pending[static_cast<std::size_t>(entry.depth)].get());
+                return ck::files::NativeWalkAction::Continue;
+            }
+            if (metadata.isSymlink || entry.metadata.kind.value() != nullptr &&
+                *entry.metadata.kind.value() != ck::files::ObjectKind::RegularFile)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.ignoreNodumpFlag && metadata.noDump)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.stayOnFilesystem && context.rootDevice != 0 && metadata.device != context.rootDevice)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.countHardLinksMultipleTimes ||
+                context.visited.insert({metadata.device, metadata.fileId}).second) {
+                const auto breakdown = computeSizeBreakdown(entry.path, metadata);
+                parent->stats.totalSize += breakdown.onDiskSize;
+                parent->stats.logicalSize += breakdown.logicalSize;
+                parent->stats.cloudOnlySize += breakdown.cloudOnlySize;
+                ++parent->stats.fileCount;
+                if (breakdown.cloudOnlySize > 0)
+                    ++parent->stats.cloudOnlyFileCount;
+            }
+            return ck::files::NativeWalkAction::Continue;
+        },
+        [&](const fs::path &path, const std::error_code &error) { reportError(context, path, error); },
+        cancelRequested,
+        [&](const fs::path &, int depth) {
+            if (depth == 0 || pending.size() <= static_cast<std::size_t>(depth) || !pending[static_cast<std::size_t>(depth)])
+                return;
+            auto child = std::move(pending[static_cast<std::size_t>(depth)]);
+            DirectoryNode *parent = child->parent;
+            const DirectoryStats childStats = child->stats;
+            if (passesThreshold(child->stats.totalSize, options))
+                parent->children.push_back(std::move(child));
+            parent->stats.totalSize += childStats.totalSize;
+            parent->stats.logicalSize += childStats.logicalSize;
+            parent->stats.cloudOnlySize += childStats.cloudOnlySize;
+            parent->stats.fileCount += childStats.fileCount;
+            parent->stats.directoryCount += childStats.directoryCount + 1;
+            parent->stats.cloudOnlyFileCount += childStats.cloudOnlyFileCount;
+        });
+    result.cancelled = walk.cancelled;
+    if (!walk.cancelled)
+        result.root = std::move(root);
+    return result;
+}
+
+std::vector<FileEntry> listFilesNative(const fs::path &scanPath, bool recursive,
+                                       const BuildDirectoryTreeOptions &options) {
+    std::vector<FileEntry> files;
+    ScanContext context = makeScanContext(scanPath, options);
+    context.rootPath = scanPath;
+    const auto cancelled = [&]() { return options.cancelRequested && options.cancelRequested(); };
+    const auto walk = ck::files::walk_native_directories(
+        scanPath, recursive, options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        [&](const ck::files::NativeWalkEntry &entry) {
+            if (cancelled())
+                return ck::files::NativeWalkAction::Stop;
+            if (entry.root)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.progressCallback)
+                options.progressCallback(entry.path);
+            const auto metadata = file_metadata_from_native(entry);
+            if (shouldIgnorePath(entry.path, context))
+                return ck::files::NativeWalkAction::SkipSubtree;
+            if (metadata.isDirectory) {
+                if (metadata.isSymlink && options.symlinkPolicy != BuildDirectoryTreeOptions::SymlinkPolicy::Always)
+                    return ck::files::NativeWalkAction::SkipSubtree;
+                return ck::files::NativeWalkAction::Continue;
+            }
+            if (metadata.isSymlink || entry.metadata.kind.value() == nullptr ||
+                *entry.metadata.kind.value() != ck::files::ObjectKind::RegularFile)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.ignoreNodumpFlag && metadata.noDump)
+                return ck::files::NativeWalkAction::Continue;
+            if (options.stayOnFilesystem && context.rootDevice != 0 && metadata.device != context.rootDevice)
+                return ck::files::NativeWalkAction::Continue;
+            if (!options.countHardLinksMultipleTimes &&
+                !context.visited.insert({metadata.device, metadata.fileId}).second)
+                return ck::files::NativeWalkAction::Continue;
+            const auto breakdown = computeSizeBreakdown(entry.path, metadata);
+            if (passesThreshold(breakdown.onDiskSize, options))
+                files.push_back(makeFileEntry(entry.path, scanPath, metadata, breakdown));
+            return ck::files::NativeWalkAction::Continue;
+        },
+        [&](const fs::path &path, const std::error_code &error) { reportError(context, path, error); },
+        cancelled,
+        [](const fs::path &, int) {});
+    (void)walk;
+    return files;
+}
+
+std::vector<FileTypeSummary> summarizeFileTypesNative(const fs::path &scanPath, bool recursive,
+                                                      const BuildDirectoryTreeOptions &options) {
+    std::map<std::string, FileTypeSummary> summaries;
+    for (const auto &file : listFilesNative(scanPath, recursive, options)) {
+        const std::string type = detectFileType(file.path);
+        auto &summary = summaries[type];
+        if (summary.type.empty())
+            summary.type = type;
+        summary.totalSize += file.size;
+        summary.logicalSize += file.logicalSize;
+        summary.cloudOnlySize += file.cloudOnlySize;
+        if (file.cloudOnlySize > 0)
+            ++summary.cloudOnlyCount;
+        ++summary.count;
+    }
+    std::vector<FileTypeSummary> result;
+    result.reserve(summaries.size());
+    for (auto &[type, summary] : summaries)
+        result.push_back(summary);
+    return result;
+}
+#endif
+
+#if !defined(_WIN32)
 DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanContext &context)
 {
     if (context.options.cancelRequested && context.options.cancelRequested())
@@ -514,6 +716,7 @@ DirectoryStats populateNode(DirectoryNode &node, const fs::path &path, ScanConte
     node.stats = stats;
     return stats;
 }
+#endif
 
 FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const platform::FileMetadata &sb,
                         const SizeBreakdown &breakdown)
@@ -575,6 +778,12 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
     if (ec)
         scanPath = basePath;
 
+#if defined(_WIN32)
+    ScanContext nativeContext = makeScanContext(scanPath, options);
+    nativeContext.rootPath = scanPath;
+    return buildDirectoryTreeNative(scanPath, options, nativeContext);
+#else
+
     auto root = std::make_unique<DirectoryNode>();
     root->parent = nullptr;
     root->expanded = true;
@@ -594,6 +803,7 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
     }
 
     return result;
+#endif
 }
 
 std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive,
@@ -620,6 +830,10 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
     scanPath = fs::absolute(scanPath, ec);
     if (ec)
         scanPath = basePath;
+
+#if defined(_WIN32)
+    return listFilesNative(scanPath, recursive, options);
+#else
 
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;
@@ -763,6 +977,7 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
     }
 
     return files;
+#endif
 }
 
 std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &directory, bool recursive,
@@ -789,6 +1004,10 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
     scanPath = fs::absolute(scanPath, ec);
     if (ec)
         scanPath = basePath;
+
+#if defined(_WIN32)
+    return summarizeFileTypesNative(scanPath, recursive, options);
+#else
 
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;
@@ -945,6 +1164,7 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
     for (auto &[type, summary] : summaries)
         result.push_back(summary);
     return result;
+#endif
 }
 
 std::vector<FileEntry> listFilesByType(const std::filesystem::path &directory, bool recursive,

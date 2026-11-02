@@ -3,6 +3,9 @@
 #include "ck/find/cli_buffer_utils.hpp"
 #include "ck/file_io.hpp"
 #include "ck/options.hpp"
+#if defined(_WIN32)
+#include "native_directory_walk.hpp"
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -1666,6 +1669,120 @@ bool shouldPruneEntry(const PreparedSpecification &prepared,
     }
 }
 
+#if defined(_WIN32)
+char fileTypeLetter(ck::files::ObjectKind kind)
+{
+    switch (kind)
+    {
+    case ck::files::ObjectKind::RegularFile: return 'f';
+    case ck::files::ObjectKind::Directory: return 'd';
+    case ck::files::ObjectKind::SymbolicLink:
+    case ck::files::ObjectKind::Junction:
+    case ck::files::ObjectKind::ReparsePoint: return 'l';
+    default: return '?';
+    }
+}
+
+bool matchesTypeFilters(const PreparedSpecification &prepared, const ck::files::NativeWalkEntry &entry)
+{
+    if (!prepared.typeFiltersEnabled || !entry.metadata.kind.value())
+        return !prepared.typeFiltersEnabled;
+    if (prepared.typeEnabled && !prepared.typeLetters.empty() &&
+        std::find(prepared.typeLetters.begin(), prepared.typeLetters.end(),
+                  fileTypeLetter(*entry.metadata.kind.value())) == prepared.typeLetters.end())
+        return false;
+    if (prepared.xtypeEnabled && !prepared.xtypeLetters.empty() &&
+        std::find(prepared.xtypeLetters.begin(), prepared.xtypeLetters.end(),
+                  fileTypeLetter(*entry.metadata.kind.value())) == prepared.xtypeLetters.end())
+        return false;
+    if (!matchesExtensionFilters(prepared, entry.path.filename().string()))
+        return false;
+    return true;
+}
+
+bool matchesSizeFilters(const PreparedSpecification &prepared, const ck::files::NativeWalkEntry &entry)
+{
+    if (!prepared.sizeFiltersEnabled || !entry.metadata.kind.value())
+        return !prepared.sizeFiltersEnabled;
+    const auto kind = *entry.metadata.kind.value();
+    const bool isDirectory = kind == ck::files::ObjectKind::Directory;
+    const bool isRegular = kind == ck::files::ObjectKind::RegularFile;
+    if (!prepared.treatDirectoriesAsFiles && isDirectory && !isRegular) {
+        return !prepared.sizeEmptyRequired;
+    }
+    std::uint64_t size = 0;
+    if (entry.metadata.logical_size.value())
+        size = *entry.metadata.logical_size.value();
+    else if (!isDirectory)
+        return false;
+    if (!prepared.includeZeroByte && size == 0)
+        return false;
+    if (prepared.sizeEmptyRequired && size != 0)
+        return false;
+    if (prepared.sizeExactEnabled && size != prepared.sizeExact)
+        return false;
+    if (prepared.sizeMinEnabled && (prepared.sizeRangeInclusive ? size < prepared.sizeMin : size <= prepared.sizeMin))
+        return false;
+    if (prepared.sizeMaxEnabled && (prepared.sizeRangeInclusive ? size > prepared.sizeMax : size >= prepared.sizeMax))
+        return false;
+    return true;
+}
+
+bool matchesPermissionFilters(const PreparedSpecification &prepared, const ck::files::NativeWalkEntry &entry)
+{
+    if (!prepared.permissionFiltersEnabled || prepared.hasUnsupportedPermissionFilters)
+        return true;
+    // Windows does not expose POSIX permission bits through the native basic
+    // metadata contract. The filter is therefore not a false assertion on an
+    // unknown value; callers retain the existing unsupported-filter behavior.
+    if (!entry.metadata.posix_permissions.value())
+        return true;
+    const auto perms = static_cast<std::filesystem::perms>(*entry.metadata.posix_permissions.value());
+    auto anyOf = [](std::filesystem::perms value, std::filesystem::perms mask) {
+        return (value & mask) != std::filesystem::perms::none;
+    };
+    if (prepared.permissionOptions.readable && !anyOf(perms, std::filesystem::perms::owner_read |
+        std::filesystem::perms::group_read | std::filesystem::perms::others_read)) return false;
+    if (prepared.permissionOptions.writable && !anyOf(perms, std::filesystem::perms::owner_write |
+        std::filesystem::perms::group_write | std::filesystem::perms::others_write)) return false;
+    if (prepared.permissionOptions.executable && !anyOf(perms, std::filesystem::perms::owner_exec |
+        std::filesystem::perms::group_exec | std::filesystem::perms::others_exec)) return false;
+    return true;
+}
+
+bool matchesTimeFilters(const PreparedSpecification &prepared, const ck::files::NativeWalkEntry &entry)
+{
+    if (!prepared.timeFiltersEnabled || !entry.metadata.modified.value())
+        return !prepared.timeFiltersEnabled;
+    const int days = presetDays(prepared.timeOptions.preset);
+    if (days <= 0)
+        return true;
+    const auto timestamp = std::chrono::system_clock::time_point(
+        std::chrono::seconds(entry.metadata.modified.value()->seconds()) +
+        std::chrono::nanoseconds(entry.metadata.modified.value()->nanoseconds()));
+    return timestamp >= std::chrono::system_clock::now() - std::chrono::hours(24 * days);
+}
+
+bool shouldPruneEntry(const PreparedSpecification &prepared,
+                      const ck::files::NativeWalkEntry &entry,
+                      const std::string &name,
+                      const std::string &relativePath)
+{
+    if (!prepared.prune.enabled)
+        return false;
+    if (prepared.prune.directoriesOnly &&
+        (!entry.metadata.kind.value() || *entry.metadata.kind.value() != ck::files::ObjectKind::Directory))
+        return false;
+    switch (prepared.prune.mode)
+    {
+    case PreparedSpecification::PruneInfo::Mode::Name: return matchesAnyRegex(name, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::Path: return matchesAnyRegex(relativePath, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::Regex: return regexSearchAny(relativePath, prepared.prune.patterns);
+    case PreparedSpecification::PruneInfo::Mode::None: default: return false;
+    }
+}
+#endif
+
 bool withinDepthLimits(const PreparedSpecification &prepared, int depth)
 {
     if (prepared.maxDepthEnabled && depth > prepared.maxDepth)
@@ -2590,6 +2707,64 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
     };
 
     bool hadError = false;
+#if defined(_WIN32)
+    auto handleError = [&](const std::filesystem::path &path, const std::error_code &ec) {
+        if (forwardStderr)
+            (*forwardStderr) << "ck-find: " << path << ": " << ec.message() << '\n';
+        hadError = true;
+    };
+
+    for (const auto &start : prepared.roots)
+    {
+        if (cancellationRequested())
+        {
+            result.cancelled = true;
+            break;
+        }
+        const auto walk = ck::files::walk_native_directories(
+            start, prepared.includeSubdirectories, prepared.followSymlinks,
+            [&](const ck::files::NativeWalkEntry &entry) {
+                if (cancellationRequested())
+                    return ck::files::NativeWalkAction::Stop;
+                const std::string name = entry.path.filename().string().empty() ?
+                    entry.path.string() : entry.path.filename().string();
+                const std::string relative = relativePathString(start, entry.path);
+                if (!entry.root && prepared.maxDepthEnabled && entry.depth > prepared.maxDepth)
+                    return ck::files::NativeWalkAction::SkipSubtree;
+                if (!entry.root && shouldPruneEntry(prepared, entry, name, relative))
+                    return ck::files::NativeWalkAction::SkipSubtree;
+                if (!prepared.includeHidden && !entry.root && isHiddenPath(entry.path))
+                    return ck::files::NativeWalkAction::SkipSubtree;
+                if (entry.root) {
+                    // The root is still a match candidate, as in the legacy
+                    // engine. Its native metadata has already been observed.
+                }
+                if (!matchesIncludeExclude(prepared, name))
+                    return ck::files::NativeWalkAction::Continue;
+                if (!matchesNameFilters(prepared, entry.path, name, relative) ||
+                    !withinDepthLimits(prepared, entry.depth) || !matchesTextInName(prepared, name) ||
+                    !matchesTypeFilters(prepared, entry) || !matchesSizeFilters(prepared, entry) ||
+                    !matchesPermissionFilters(prepared, entry) || !matchesTimeFilters(prepared, entry))
+                    return ck::files::NativeWalkAction::Continue;
+                if (prepared.textSearchEnabled && prepared.textSearchContents && options.filterContent) {
+                    if (!entry.metadata.kind.value() ||
+                        *entry.metadata.kind.value() != ck::files::ObjectKind::RegularFile ||
+                        !fileMatchesContent(entry.path, prepared.textOptions, prepared.textTerms, prepared.rawSearchText))
+                        return ck::files::NativeWalkAction::Continue;
+                }
+                recordMatch(entry.path);
+                return cancellationRequested() ? ck::files::NativeWalkAction::Stop : ck::files::NativeWalkAction::Continue;
+            },
+            [&](const std::filesystem::path &path, const std::error_code &ec) { handleError(path, ec); },
+            cancellationRequested,
+            [](const std::filesystem::path &, int) {});
+        if (walk.cancelled || cancellationRequested())
+        {
+            result.cancelled = true;
+            break;
+        }
+    }
+#else
     auto handleError = [&](const std::filesystem::path &path, const std::error_code &ec) {
         if (forwardStderr)
             (*forwardStderr) << "ck-find: " << path << ": " << ec.message() << '\n';
@@ -2706,6 +2881,7 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             break;
         }
     }
+#endif
 
     if (forwardStdout)
         forwardStdout->flush();
