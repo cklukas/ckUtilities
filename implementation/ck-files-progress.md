@@ -8,8 +8,10 @@ malformed, truncated/non-regular review items without following symlinks or
 turning display text into authority. Native decoder tests kept untrusted
 evidence and journal tails review-only. The Files UI suite passed **73/73** on
 each platform, including the worker-backed scan, unavailable-before-ready
-reason, bounded modal review, and Close-only interaction; the focused discovery
-suite passed **1/1** on macOS and the core recovery/evidence suites passed
+reason, bounded modal review, and Close-only interaction. The focused
+worker/discovery suite passed **2/2** on all three platforms, including a
+second independent scan after the first result was consumed and a stopped-
+worker submission refusal; the core recovery/evidence suites passed
 **8/8** and **3/3**. Evidence: [CP-03 read-only recovery record](evidence/ck-files-cp03-operation-recovery-readonly-current-20261102.json).
 
 This is deliberately a boundary qualification, not CP-03 completion:
