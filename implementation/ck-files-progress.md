@@ -1,4 +1,14 @@
 # Files implementation evidence
+## 2026-11-02 — Windows v143 fuzzer toolchain boundary
+
+The clean Windows checkout at `V:\dev\ckutilities-git-bcf47a3` is now at
+`07f7937`. The v143/MSVC 19.44.35228.0 environment configures the normal
+project, but `CKTOOLS_BUILD_FUZZERS=ON` is intentionally rejected at
+`fuzz/CMakeLists.txt:9`: this target requires an LLVM Clang toolchain with the
+libFuzzer runtime. No alternate compiler or source workaround was used, and no
+fuzzer executable was claimed for Windows. The existing Windows normal-release
+qualification remains separate. Evidence: [Windows MSVC fuzzer boundary](evidence/ck-files-pane-page-windows-msvc-fuzz-boundary-20261102.json).
+
 ## 2026-11-02 — Linux ARM64 pane-page fuzzer qualification
 
 The current pane-page fuzzer was overlaid onto the Linux ARM64 qualification

@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "07f7937e182bda05cb9c801e902ff512fa63e053",
+  "host": "Windows workstation x64",
+  "checkout": "V:\\dev\\ckutilities-git-bcf47a3",
+  "checkout_status": "clean",
+  "toolchain": {
+    "compiler": "MSVC 19.44.35228.0",
+    "v143_tools": "14.44.35207",
+    "generator": "Ninja",
+    "cmake": "3.31.6-msvc6",
+    "sdk_prefix": "V:\\tmp\\ckutilities-windows-release-20261101-02\\ckvision-sdk",
+    "temporary_root": "V:\\tmp\\ckutilities-pane-page-msvc-20261102-03"
+  },
+  "attempt": {
+    "option": "CKTOOLS_BUILD_FUZZERS=ON",
+    "result": "blocked_by_supported_toolchain_boundary",
+    "configure_log": "V:\\tmp\\ckutilities-pane-page-msvc-20261102-03\\configure.log",
+    "configure_log_sha256": "091a89625adf08c3245b715348c8df957c59984d38270c93ed8f5a8046a0acb8",
+    "failure": "CMake stops at fuzz/CMakeLists.txt:9 because the target requires an LLVM Clang toolchain with the libFuzzer runtime; MSVC v143 is not accepted for this target.",
+    "target_built": false,
+    "fuzzer_run": "not_run",
+    "normal_v143_release_matrix": "separate existing qualification; not conflated with this unsupported fuzzer configuration"
+  },
+  "safety": "No alternate compiler, source workaround, sanitizer emulation, or partially configured executable was used. V:, TEMP, TMP, and TMPDIR were kept within the task-owned V: path during the corrected attempt."
+}
