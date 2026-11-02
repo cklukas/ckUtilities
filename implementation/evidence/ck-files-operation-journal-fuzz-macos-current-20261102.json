@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-02",
+  "source_commit": "201acc7",
+  "platform": "macOS arm64",
+  "feature": "bounded operation-journal decoder libFuzzer target",
+  "build": {
+    "configuration": "RelWithDebInfo",
+    "compiler": "/opt/homebrew/opt/llvm/bin/clang++ (LLVM 23.1.4)",
+    "sdk_prefix": "/Volumes/S8T/tmp/ckutilities-docs-capture-20261101/ckvision-normal-sdk",
+    "normal_build_root": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01/build",
+    "normal_binary": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01/build/fuzz/fuzz_operation_journal",
+    "normal_binary_sha256": "8895ec0f0eeb8f1105d2ac3f61e1f751633da7ba421b814422c2d81cfd99ad55",
+    "asan_ubsan_build_root": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-asan/build",
+    "asan_ubsan_binary": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-asan/build/fuzz/fuzz_operation_journal",
+    "asan_ubsan_binary_sha256": "3bf481ff7e149c1830501beff90731529fd716ddcb72bf1591a2b9a13981246e",
+    "sanitizers": ["address", "undefined"],
+    "temporary_roots": [
+      "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01",
+      "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-asan"
+    ]
+  },
+  "limits": {
+    "max_len": 4096,
+    "timeout_seconds": 2,
+    "rss_limit_mb": 512
+  },
+  "runs": {
+    "normal_empty_corpus_mutation": {
+      "command": "fuzz_operation_journal -max_total_time=15 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261107 -print_final_stats=1",
+      "result": "passed",
+      "elapsed_seconds": 16,
+      "executions": 20154249,
+      "new_coverage_units": 99,
+      "peak_rss_mb": 29,
+      "crashes": 0,
+      "timeouts": 0,
+      "sanitizer_diagnostics": "none",
+      "exit_code": 0
+    },
+    "asan_ubsan_empty_corpus_mutation": {
+      "command": "ASAN_OPTIONS=halt_on_error=1:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 fuzz_operation_journal -max_total_time=8 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261108 -print_final_stats=1",
+      "result": "passed",
+      "elapsed_seconds": 9,
+      "executions": 2776928,
+      "new_coverage_units": 91,
+      "peak_rss_mb": 275,
+      "crashes": 0,
+      "timeouts": 0,
+      "sanitizer_diagnostics": "none",
+      "exit_code": 0
+    }
+  },
+  "notes": [
+    "The repository has no committed operation_journal corpus directory; both runs intentionally started from libFuzzer's empty corpus rather than inventing a seed file.",
+    "This qualifies decoder mutation and ASan+UBSan coverage only. It does not close the broader Files model, filesystem/provider, resource-exhaustion, storage-fault, or release gates."
+  ]
+}
