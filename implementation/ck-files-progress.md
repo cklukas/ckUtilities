@@ -1,5 +1,22 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 matched sanitizer UI qualification
+
+The sanitizer gate was rebuilt with a matching ckVision 1.4.0 SDK compiled
+from source commit `a791f10` with the same ASan+UBSan instrumentation as the
+Files product. The worker-entry gate timeout is 30 seconds only in sanitizer
+test binaries; ordinary test binaries retain the existing five-second
+watchdog. The clean normal and matched instrumented macOS arm64 Files suites
+both passed **257/257**. No ASan or UBSan diagnostic was emitted in the valid
+run.
+
+An earlier product-ASan run linked the uninstrumented SDK and reported a
+`CommandId` vector relocation overflow while attaching the test shell. That is
+recorded as a rejected mixed-instrumentation configuration result, not a
+qualification pass. The ckVision dependency audit is separate and remains
+open until it determines whether an ABI guard or upstream fix is required.
+Evidence: [matched CP-05 sanitizer record](evidence/ck-files-cp05-sanitizer-20261102.json).
+
 ## 2026-11-02 — CP-05 sanitizer qualification boundary
 
 A fresh macOS arm64 Debug/Ninja tree under `/Volumes/S8T/tmp` was configured

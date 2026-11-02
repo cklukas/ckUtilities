@@ -3,7 +3,9 @@
   "date": "2026-11-02",
   "host": "macOS arm64",
   "build": {
-    "directory": "/Volumes/S8T/tmp/ckutilities-cp05-asan-20261102-01/build",
+    "directory": "/Volumes/S8T/tmp/ckutilities-cp05-asan-gates-20261102-01/product-sanitized-sdk-build",
+    "source_commit": "7488d04",
+    "sdk_commit": "a791f10",
     "flags": [
       "-fsanitize=address,undefined",
       "-fno-sanitize-recover=all",
@@ -13,16 +15,26 @@
       "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1:abort_on_error=1",
       "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
     },
-    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-asan-index-20261102-01"
+    "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-asan-gates-20261102-01-fixture",
+    "executable_sha256": "0708141524ca7f3ff24234635bef6c7a6a05fe4662702159c7830ee947506e2f",
+    "executable_mtime": "2026-11-02T06:44:32+0100"
   },
   "results": {
     "focused_native_files": "189/189",
-    "full_files_ui_service": "not qualified: gate not entered under sanitizer timing"
+    "full_files_ui_service": "257/257",
+    "normal_files_ui_service": "257/257"
   },
   "scope": [
     "100000-record index scan and external merge sort exercised",
     "native operation content and source-retirement refusal cases exercised",
     "no ASan or UBSan diagnostic emitted",
-    "full UI/service sanitizer gate remains open; no timeout workaround added"
-  ]
+    "sanitizer-only worker-entry gates use a bounded 30-second startup budget; normal binaries retain five seconds",
+    "the first mixed-SDK attempt was rejected after ASan reported a CommandId vector overflow; it used an uninstrumented ckVision SDK with an instrumented product and was not counted"
+  ],
+  "rejected_run": {
+    "sdk": "ckVision 1.4.0 normal/uninstrumented",
+    "product": "ASan+UBSan",
+    "finding": "ASan heap-buffer-overflow during ckv::widgets::Desktop::install_default_handler vector relocation",
+    "disposition": "invalid mixed-instrumentation ABI configuration; no suppression or pass credit"
+  }
 }
