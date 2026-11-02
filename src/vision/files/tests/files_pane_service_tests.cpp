@@ -1110,10 +1110,6 @@ CK_TEST(files_native_hard_link_is_identity_bound_and_no_replace) {
     const auto identity = *metadata.value()->identity.value();
     const auto linked = (*parent.value())->create_hard_link(child_name("original"), identity, **parent.value(),
                                                             child_name("alias"));
-#ifdef _WIN32
-    CK_CHECK(!linked.value() && linked.unavailable_detail() &&
-             linked.unavailable_detail()->state == ObservationState::Unsupported);
-#else
     CK_CHECK(linked.value() && *linked.value());
     CK_CHECK(std::filesystem::is_regular_file(source.path() / "alias") &&
              std::filesystem::hard_link_count(source.path() / "original") == 2);
@@ -1122,7 +1118,6 @@ CK_TEST(files_native_hard_link_is_identity_bound_and_no_replace) {
     CK_CHECK(!duplicate.value() && duplicate.unavailable_detail() &&
              duplicate.unavailable_detail()->state == ObservationState::Changed &&
              std::filesystem::hard_link_count(source.path() / "original") == 2);
-#endif
 }
 CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
