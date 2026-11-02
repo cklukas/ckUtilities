@@ -828,6 +828,9 @@ struct FilesApp::State {
                                    " unavailable: volume rows are archive sources, not entries");
             if (!ready(active) || !panes[active].model.target())
                 return unavailable("Operation unavailable: select a current entry");
+            if (command == "ck.files.trash" &&
+                panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
+                return unavailable("Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified");
             if (command == "ck.files.permanently_delete") {
                 if (panes[active].model.cursor_kind() != ck::files::ObjectKind::Directory)
                     return FilesCommandAvailability::available();
@@ -1010,7 +1013,7 @@ struct FilesApp::State {
                 "ck.files.enter_directory", "ck.files.parent", "ck.files.toggle_mark",
                 "ck.files.cancel_read", "ck.files.view_options"};
             static constexpr std::string_view selected_contextual[] = {
-                "ck.files.copy", "ck.files.move"};
+                "ck.files.copy", "ck.files.move", "ck.files.trash", "ck.files.permanently_delete"};
             const auto report_first_unavailable = [&](const auto &contextual) {
                 for (const auto command : contextual) {
                     const auto candidate = availability(command);
@@ -1425,6 +1428,11 @@ struct FilesApp::State {
         if (!ready(i))
             return false;
         auto &p = panes[i];
+        if (p.model.cursor_kind() == ck::files::ObjectKind::Directory) {
+            p.error = "Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified";
+            labels();
+            return false;
+        }
         const auto range = p.model.viewport();
         const auto submitted = services[i]->trash(p.navigation, target.stamp, target.row,
                                                    {range.first, range.rows});

@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-02 — CP-02 recursive Trash command safety guard
+
+The Files command and its direct handler now refuse directories for
+Trash/Recycle Bin with the contextual reason `Trash / Recycle Bin unavailable:
+recursive identity-bound Trash is not qualified`. This closes the mismatch
+where a directory could reach the single-entry native disposition primitive
+without a frozen recursive inventory. The reason is exposed through command
+availability, the status hint and the defensive handler check; regular-file
+Trash remains available and still has no permanent-delete fallback. The Files
+application suite passed **73/73** after the change.
+
 ## 2026-11-02 — CP-02 macOS foreign-mount native Trash qualification
 
 The opt-in macOS native suite passed **9/9** with a directory entry created on

@@ -386,6 +386,19 @@ CK_TEST(files_app_status_reports_operation_reason_for_selected_row_when_other_pa
     gate->release();
     f.loaded();
 }
+CK_TEST(files_app_trash_refuses_directory_until_recursive_identity_worker_is_qualified) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor_kind() == ck::files::ObjectKind::Directory);
+    const auto reason = "Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified";
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.trash")));
+    CK_CHECK(f.app->availability("ck.files.trash").reason == reason);
+    CK_CHECK(f.app->status(0).find("Hint: Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified") !=
+             std::string::npos);
+    CK_CHECK(!f.command("ck.files.trash"));
+    CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "left-item-0"));
+    CK_CHECK(std::filesystem::exists(f.scratch.path() / "left" / "left-item-0" / "inside.txt"));
+}
 CK_TEST(files_app_narrow_layout_switches_without_discarding_either_pane) {
     Fixture f;
     f.loaded();
@@ -593,7 +606,9 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
 
     CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "created-by-app"));
     CK_CHECK(f.app->model(0).row_count() == 101);
-    CK_CHECK(f.app->status(0) == "Last scan: 101 items");
+    CK_CHECK(f.app->status(0).find("Last scan: 101 items") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("Hint: Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified") !=
+             std::string::npos);
 }
 CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
     Fixture f;
