@@ -111,6 +111,13 @@ Observation<T> not_applicable(const char* operation) {
 
 using NtSetInformationFileFunction = NTSTATUS (NTAPI *)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
 
+struct FileLinkInformationCompat {
+    BOOLEAN ReplaceIfExists;
+    HANDLE RootDirectory;
+    ULONG FileNameLength;
+    WCHAR FileName[1];
+};
+
 bool set_file_rename_information(HANDLE source, PFILE_RENAME_INFO information, ULONG size) {
     const auto module = GetModuleHandleW(L"ntdll.dll");
     const auto address = module ? GetProcAddress(module, "NtSetInformationFile") : nullptr;
@@ -125,6 +132,25 @@ bool set_file_rename_information(HANDLE source, PFILE_RENAME_INFO information, U
     // by NtSetInformationFile. Unlike the Win32 wrapper, the native call
     // preserves a verified relative RootDirectory handle on local volumes.
     const auto status = set_information(source, &io, information, size, 10);
+    if (status >= 0) return true;
+    SetLastError(RtlNtStatusToDosError(status));
+    return false;
+}
+
+bool set_file_link_information(HANDLE source, FileLinkInformationCompat *information, ULONG size) {
+    const auto module = GetModuleHandleW(L"ntdll.dll");
+    const auto address = module ? GetProcAddress(module, "NtSetInformationFile") : nullptr;
+    if (!address) {
+        SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+        return false;
+    }
+    static_assert(sizeof(NtSetInformationFileFunction) == sizeof(address));
+    const auto set_information = std::bit_cast<NtSetInformationFileFunction>(address);
+    IO_STATUS_BLOCK io{};
+    // FileLinkInformation is native information class 11. The destination
+    // parent remains a verified RootDirectory handle; no absolute path is
+    // reconstructed and no replacement is permitted.
+    const auto status = set_information(source, &io, information, size, 11);
     if (status >= 0) return true;
     SetLastError(RtlNtStatusToDosError(status));
     return false;
@@ -993,9 +1019,88 @@ public:
         return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true,
             std::make_unique<WindowsPublicationContext>(std::move(retained_parent), name, std::move(parent_identity))));
     }
-    Observation<bool> create_hard_link(const NativeName&, const ObjectIdentity&, const DirectoryCursor&,
-                                        const NativeName&) const override {
-        return not_applicable<bool>("create_hard_link.native_query");
+    Observation<bool> create_hard_link(const NativeName& source_name, const ObjectIdentity& expected_source,
+                                       const DirectoryCursor& destination,
+                                       const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto *target = dynamic_cast<const WindowsDirectoryCursor *>(&destination);
+        const auto *source_units = source_name.windows_units();
+        const auto *destination_units = destination_name.windows_units();
+        if (!target || !source_units || !destination_units || !source_name.is_valid() || !destination_name.is_valid() ||
+            source_units->find(u':') != std::u16string::npos || destination_units->find(u':') != std::u16string::npos ||
+            source_units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR) ||
+            destination_units->size() > std::numeric_limits<USHORT>::max() / sizeof(WCHAR))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "create_hard_link.name"});
+        const auto destination_identity = target->identity();
+        if (!destination_identity.value() || expected_source.scope != scope_ ||
+            destination_identity.value()->scope != scope_ || expected_source.scheme != destination_identity.value()->scheme ||
+            expected_source.volume != destination_identity.value()->volume)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity),
+                 "create_hard_link.parent_identity"});
+        auto source_opened = open_native_component(source_name, FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+                                                   ChildLookupMode::NativeDefault, true);
+        if (!source_opened.value()) {
+            const auto &error = *source_opened.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        auto source = std::move(source_opened).take_value();
+        const auto source_metadata = handle_metadata(source.get(), scope_);
+        if (!source_metadata.value() || !source_metadata.value()->identity.value() ||
+            compare_identity(*source_metadata.value()->identity.value(), expected_source) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                 "create_hard_link.source_identity"});
+        if (!source_metadata.value()->kind.value() || *source_metadata.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::NotApplicable), "create_hard_link.source_kind"});
+        auto destination_access = target->open_namespace_write_handle();
+        if (!destination_access.value()) {
+            const auto &error = *destination_access.unavailable_detail();
+            return Result::unavailable(error.state, error.error);
+        }
+        std::wstring spelling;
+        spelling.reserve(destination_units->size());
+        for (const auto unit : *destination_units) spelling.push_back(static_cast<wchar_t>(unit));
+        const auto length = spelling.size() * sizeof(WCHAR);
+        if (length > std::numeric_limits<ULONG>::max() - offsetof(FileLinkInformationCompat, FileName))
+            return Result::unavailable(ObservationState::Failed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InventoryLimit),
+                 "create_hard_link.name_limit"});
+        std::vector<std::byte> buffer(offsetof(FileLinkInformationCompat, FileName) + length);
+        auto *info = reinterpret_cast<FileLinkInformationCompat *>(buffer.data());
+        info->ReplaceIfExists = FALSE;
+        info->RootDirectory = destination_access.value()->get();
+        info->FileNameLength = static_cast<ULONG>(length);
+        std::memcpy(info->FileName, spelling.data(), length);
+        if (!set_file_link_information(source.get(), info, static_cast<ULONG>(buffer.size()))) {
+            const DWORD code = GetLastError();
+            if (code == ERROR_FILE_EXISTS || code == ERROR_ALREADY_EXISTS)
+                return Result::unavailable(ObservationState::Changed,
+                    {ErrorDomain::Win32, code, "create_hard_link.destination_occupied"});
+            if (code == ERROR_INVALID_FUNCTION || code == ERROR_NOT_SUPPORTED || code == ERROR_CALL_NOT_IMPLEMENTED ||
+                code == ERROR_INVALID_PARAMETER)
+                return Result::unavailable(ObservationState::Unsupported,
+                    {ErrorDomain::Win32, code, "create_hard_link.native_query"});
+            return Result::unavailable(error_state(code), {ErrorDomain::Win32, code, "create_hard_link.native_query"});
+        }
+        auto published = target->open_native_component(destination_name, FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                                                        ChildLookupMode::NativeDefault, true);
+        if (!published.value())
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+                 "create_hard_link.published_identity"});
+        const auto published_identity = ::ck::files::identity(published.value()->get(), scope_);
+        if (!published_identity.value() ||
+            compare_identity(*published_identity.value(), *source_metadata.value()->identity.value()) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged),
+                 "create_hard_link.published_identity"});
+        if (!FlushFileBuffers(destination_access.value()->get()))
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Win32, GetLastError(), "create_hard_link.directory_flush"});
+        return Result::available(true);
     }
     Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
         using Result = Observation<std::unique_ptr<DirectoryCursor>>;
