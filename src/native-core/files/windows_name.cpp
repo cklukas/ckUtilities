@@ -28,8 +28,12 @@ std::optional<std::wstring> windows_extended_path(std::wstring_view path) {
     std::wstring normalized(path);
     std::replace(normalized.begin(), normalized.end(), L'/', L'\\');
     if (normalized.starts_with(L"\\\\?\\")) {
-        const bool volume = normalized.size() >= 45 && normalized.starts_with(L"\\\\?\\Volume{") &&
-            normalized[43] == L'}' && normalized[44] == L'\\';
+        constexpr std::wstring_view volume_prefix = L"\\\\?\\Volume{";
+        constexpr std::size_t volume_guid_units = 36;
+        const bool volume = normalized.starts_with(volume_prefix) &&
+            normalized.size() >= volume_prefix.size() + volume_guid_units + 2 &&
+            normalized[volume_prefix.size() + volume_guid_units] == L'}' &&
+            normalized[volume_prefix.size() + volume_guid_units + 1] == L'\\';
         if (normalized.starts_with(L"\\\\?\\UNC\\") || volume ||
             (normalized.size() >= 7 && ((normalized[4] >= L'A' && normalized[4] <= L'Z') ||
                 (normalized[4] >= L'a' && normalized[4] <= L'z')) && normalized[5] == L':' && normalized[6] == L'\\'))
