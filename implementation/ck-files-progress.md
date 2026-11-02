@@ -1,5 +1,27 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 identity-bound hard-link creation
+
+The Files native adapter, worker service, and UI now provide **New hard
+link...** for the selected regular file. The operation holds the pane
+directory, revalidates the source identity and kind immediately before
+publication, refuses an occupied destination, creates the link relative to
+the held destination namespace, verifies the published identity, flushes the
+destination directory, and only then reports success. The dialog uses strict
+native-name validation and the listing refresh is acknowledged separately;
+cross-pane hard-link creation remains outside this checkpoint.
+
+The focused native, service, and app tests passed on all three platforms.
+The complete Files aggregate passed from fresh builds on macOS arm64
+**254/254**, Linux ARM64 **254/254**, and Windows x64 **253/253**. Windows
+used the v143 environment, the V: development drive, and the `/MT` ABI
+matching the installed ckVision static SDK. Evidence: [CP-05 hard-link
+record](evidence/ck-files-cp05-hard-link-20261102.json).
+
+This closes the identity-bound same-pane hard-link portion of CP-05.
+Symlink/junction inspection and creation, cross-pane hard-link workflow, and
+broader filesystem/sanitizer/real-window gates remain open.
+
 ## 2026-11-02 — CP-05 worker-owned empty-file creation
 
 The Files service and UI now provide **New file...**. It validates one exact

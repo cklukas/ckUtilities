@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-02",
+  "scope": "CP-05 identity-bound same-pane hard-link creation",
+  "operation": {
+    "native": "identity-bound regular-file hard-link publication relative to a held destination directory",
+    "safety": "no replacement, source revalidation, destination identity verification, destination-directory flush",
+    "ui": "strict native-name dialog, selected regular-file requirement, modal command scope, acknowledged refresh",
+    "scope_boundary": "same-pane destination only; cross-pane hard-link workflow remains open"
+  },
+  "tests": {
+    "macos_arm64": {
+      "repository_commit": "9da699b",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-new-file-fixtures-20261102-01",
+      "result": "254/254 Files tests passed"
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "repository_commit": "1ae928810",
+      "build_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/fixtures",
+      "result": "254/254 Files tests passed"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "repository_commit": "6fca238ec",
+      "development_drive": "V:",
+      "build_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\build",
+      "fixture_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\fixtures",
+      "toolchain": "MSVC v143 vcvars64.bat",
+      "runtime_abi": "/MT matched to the installed ckVision static SDK",
+      "result": "253/253 Files tests passed"
+    }
+  },
+  "safety": [
+    "The source is reopened and its full identity is compared with the stamped identity before link creation.",
+    "Destination names are created without replacement and duplicate names are reported as Changed.",
+    "The published destination identity is verified before the destination directory flush is attempted.",
+    "Temporary/build/fixture paths obey the Mac, Linux, and Windows workstation drive policies.",
+    "No production app instance was launched or left running."
+  ],
+  "status": "pass_identity_bound_same_pane_hard_link; cross_pane_and_release_gates_open"
+}
