@@ -292,4 +292,24 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
     }
     service.request_stop();
     service.join();
+#if defined(_WIN32)
+    // A completed cleanup appends Cancelled before the worker result is
+    // published. Reopening that durable journal on a fresh worker must not
+    // reinterpret the removed staging object as eligible again.
+    FilesOperationRecoveryCleanupService restarted;
+    CK_CHECK(restarted.request(root, journal_name, id) ==
+             FilesOperationRecoveryCleanupSubmission::Accepted);
+    std::optional<FilesOperationRecoveryCleanupReply> restarted_reply;
+    const auto restart_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!restarted_reply && std::chrono::steady_clock::now() < restart_deadline) {
+        restarted_reply = restarted.take();
+        if (!restarted_reply)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CK_CHECK(restarted_reply.has_value());
+    if (restarted_reply)
+        CK_CHECK(restarted_reply->state == FilesOperationRecoveryCleanupState::Failed);
+    restarted.request_stop();
+    restarted.join();
+#endif
 }
