@@ -1088,6 +1088,42 @@ CK_TEST(files_service_native_create_file_is_exclusive_flushes_and_requires_refre
              std::filesystem::is_regular_file(source.path() / "created.txt"));
     f.stopped();
 }
+CK_TEST(files_native_hard_link_is_identity_bound_and_no_replace) {
+    ck::testing::ScratchDirectory source("files-native-hard-link");
+    {
+        std::ofstream file(source.path() / "original", std::ios::binary);
+        file << "hard-link";
+    }
+    NativeFileSystem filesystem;
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    auto parent = filesystem.open_native_directory(location);
+    CK_CHECK(parent.value());
+    if (!parent.value())
+        return;
+    auto original = (*parent.value())->open_child(child_name("original"));
+    auto metadata = original.value() ? (*original.value())->inspect_basic() : Observation<BasicMetadata>::unavailable(
+        ObservationState::Failed, {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+                                   "test.original_metadata"});
+    CK_CHECK(original.value() && metadata.value() && metadata.value()->identity.value());
+    if (!original.value() || !metadata.value() || !metadata.value()->identity.value())
+        return;
+    const auto identity = *metadata.value()->identity.value();
+    const auto linked = (*parent.value())->create_hard_link(child_name("original"), identity, **parent.value(),
+                                                            child_name("alias"));
+#ifdef _WIN32
+    CK_CHECK(!linked.value() && linked.unavailable_detail() &&
+             linked.unavailable_detail()->state == ObservationState::Unsupported);
+#else
+    CK_CHECK(linked.value() && *linked.value());
+    CK_CHECK(std::filesystem::is_regular_file(source.path() / "alias") &&
+             std::filesystem::hard_link_count(source.path() / "original") == 2);
+    const auto duplicate = (*parent.value())->create_hard_link(child_name("original"), identity, **parent.value(),
+                                                                child_name("alias"));
+    CK_CHECK(!duplicate.value() && duplicate.unavailable_detail() &&
+             duplicate.unavailable_detail()->state == ObservationState::Changed &&
+             std::filesystem::hard_link_count(source.path() / "original") == 2);
+#endif
+}
 CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-rename");

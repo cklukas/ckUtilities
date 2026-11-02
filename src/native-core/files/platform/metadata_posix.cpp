@@ -1126,6 +1126,53 @@ public:
         return Result::available(std::make_unique<PosixOpenedEntry>(std::move(descriptor), scope_, false, true, true,
             std::make_unique<PosixPublicationContext>(std::move(retained_parent), name)));
     }
+    Observation<bool> create_hard_link(const NativeName& source_name, const ObjectIdentity& expected_source,
+                                        const DirectoryCursor& destination,
+                                        const NativeName& destination_name) const override {
+        using Result = Observation<bool>;
+        const auto *source_spelling = source_name.posix_bytes();
+        const auto *destination_spelling = destination_name.posix_bytes();
+        const auto *target = dynamic_cast<const PosixDirectoryCursor *>(&destination);
+        if (!source_name.is_valid() || !destination_name.is_valid() || !source_spelling || !destination_spelling)
+            return Result::unavailable(ObservationState::Failed,
+                adapter_error(AdapterError::InvalidIdentifier, "create_hard_link.name"));
+        if (!target || !identity().value() || !target->identity().value() ||
+            scope_ != target->scope_ ||
+            identity().value()->scheme != target->identity().value()->scheme ||
+            identity().value()->volume != target->identity().value()->volume)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::UnsupportedQuery, "create_hard_link.destination"));
+        const auto source_metadata = stat_metadata(dirfd(directory_.get()), source_spelling->c_str(), false, scope_,
+                                                   AT_SYMLINK_NOFOLLOW);
+        if (!source_metadata.value())
+            return Result::unavailable(source_metadata.unavailable_detail()->state,
+                                       source_metadata.unavailable_detail()->error);
+        if (!source_metadata.value()->identity.value() ||
+            compare_identity(*source_metadata.value()->identity.value(), expected_source) != IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Changed,
+                adapter_error(AdapterError::MetadataChanged, "create_hard_link.source_identity"));
+        if (!source_metadata.value()->kind.value() ||
+            *source_metadata.value()->kind.value() != ObjectKind::RegularFile)
+            return Result::unavailable(ObservationState::Unsupported,
+                adapter_error(AdapterError::NotApplicable, "create_hard_link.source_kind"));
+        if (linkat(dirfd(directory_.get()), source_spelling->c_str(), dirfd(target->directory_.get()),
+                   destination_spelling->c_str(), 0) != 0) {
+            const int code = errno;
+            return Result::unavailable(errno_state(code), {ErrorDomain::Posix, code, "linkat.create_hard_link"});
+        }
+        const auto published = stat_metadata(dirfd(target->directory_.get()), destination_spelling->c_str(), false,
+                                             target->scope_,
+                                             AT_SYMLINK_NOFOLLOW);
+        if (!published.value() || !published.value()->identity.value() ||
+            compare_identity(*published.value()->identity.value(), *source_metadata.value()->identity.value()) !=
+                IdentityComparison::Same)
+            return Result::unavailable(ObservationState::Unknown,
+                adapter_error(AdapterError::MetadataChanged, "create_hard_link.published_identity"));
+        if (fsync(dirfd(target->directory_.get())) != 0)
+            return Result::unavailable(ObservationState::Unknown,
+                {ErrorDomain::Posix, errno, "fsync.create_hard_link_parent"});
+        return Result::available(true);
+    }
     Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
         using Result = Observation<std::unique_ptr<DirectoryCursor>>;
         const auto* spelling = name.posix_bytes();

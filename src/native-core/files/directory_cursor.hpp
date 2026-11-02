@@ -70,6 +70,15 @@ public:
     // results are refused. The returned handle is not published under a
     // destination name and must be retained by the worker.
     virtual Observation<std::unique_ptr<OpenedEntry>> create_child_file(const NativeName& name) const;
+    // Worker-only creation of a new hard-link name for one verified regular
+    // file below a held destination directory. The source identity is checked
+    // at use, the destination is no-replace, and the adapter must flush the
+    // published directory entry before reporting success. Directory hard
+    // links, pathname fallbacks and cross-volume emulation are forbidden.
+    virtual Observation<bool> create_hard_link(const NativeName& source_name,
+                                                const ObjectIdentity& expected_source,
+                                                const DirectoryCursor& destination,
+                                                const NativeName& destination_name) const;
     // Worker-only source retirement boundary. The adapter must open the exact
     // child relative to this held directory, verify expected_identity, and
     // use a handle/object-based disposition. A pathname unlink or a

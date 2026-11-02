@@ -95,6 +95,25 @@ Observation<std::unique_ptr<OpenedEntry>> DirectoryCursor::create_child_file(con
         {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_child_file.native_query"});
 }
 
+Observation<bool> DirectoryCursor::create_hard_link(const NativeName& source_name,
+                                                    const ObjectIdentity& expected_source,
+                                                    const DirectoryCursor& destination,
+                                                    const NativeName& destination_name) const {
+    if (!source_name.is_valid() || !destination_name.is_valid())
+        return Observation<bool>::unavailable(ObservationState::Failed,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidIdentifier), "create_hard_link.name"});
+    if (compare_identity(expected_source, expected_source) != IdentityComparison::Same ||
+        !identity().value() || !destination.identity().value())
+        return Observation<bool>::unavailable(ObservationState::Unknown,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity), "create_hard_link.identity"});
+    if (identity().value()->scheme != destination.identity().value()->scheme ||
+        identity().value()->volume != destination.identity().value()->volume)
+        return Observation<bool>::unavailable(ObservationState::Unsupported,
+            {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_hard_link.cross_volume"});
+    return Observation<bool>::unavailable(ObservationState::Unsupported,
+        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::UnsupportedQuery), "create_hard_link.native_query"});
+}
+
 Observation<bool> DirectoryCursor::retire_child(const NativeName& name,
                                                 const ObjectIdentity& expected_identity) const {
     if (!name.is_valid())

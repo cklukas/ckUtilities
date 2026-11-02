@@ -993,6 +993,10 @@ public:
         return Result::available(std::make_unique<WindowsOpenedEntry>(std::move(opened), scope_, false, true, true,
             std::make_unique<WindowsPublicationContext>(std::move(retained_parent), name, std::move(parent_identity))));
     }
+    Observation<bool> create_hard_link(const NativeName&, const ObjectIdentity&, const DirectoryCursor&,
+                                        const NativeName&) const override {
+        return not_applicable<bool>("create_hard_link.native_query");
+    }
     Observation<std::unique_ptr<DirectoryCursor>> create_child_directory(const NativeName& name) const override {
         using Result = Observation<std::unique_ptr<DirectoryCursor>>;
         const auto* units = name.windows_units();
