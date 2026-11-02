@@ -1,5 +1,26 @@
 # Files implementation evidence
 
+## 2026-11-02 — Windows native traversal and long-path qualification
+
+Commit `ef57f56` completes the Windows native-I/O boundary for the remaining
+product traversal paths. Windows `ck-find` and `ck-du` now use the shared
+handle-owned native directory walker; their legacy `std::filesystem` iterator
+engines are compiled only for POSIX. Windows SSH config wildcard expansion now
+uses the wide/extended-path shared listing boundary as well.
+
+The new `test_files_native_walk` regression creates a nested tree with a
+deepest entry beyond 260 characters using `CreateDirectoryW`/`CreateFileW`,
+then verifies the native walker discovers the long-path directory and file.
+The fresh Windows v143 Release build started at
+`2026-11-02T18:16:36.4559329+01:00`, ended at
+`2026-11-02T18:17:56.7341697+01:00` (80.3 seconds), and passed the independent
+ckVision package consumer plus **225/225** CTest entries. The archive
+`V:\tmp\ckutilities-native-walk-20261102-01\packages\ck-utilities-0.2.0-windows-x64.zip`
+has SHA-256
+`ef8ffc9fef13e214eb173cc2d1ff0984c881178d9bf4159582ace46c2084b59f`.
+The package check started all ten tools and found ten guides and 29 SVG
+screenshots. No product utility processes remained running after validation.
+
 ## 2026-11-02 — Windows native-I/O boundary checkpoint
 
 Commit `292ba0f` extends the shared Windows wide/extended-length boundary to
@@ -16,9 +37,9 @@ successfully. The package SHA-256 is
 The Windows source audit found no ANSI Win32 filesystem/process calls in the
 pinned ckVision production source at commit
 `7ad5bd67553414e7dc0882069482864034cb31f9`. Its `MAX_PATH` uses are bounded
-initial capacities or compatibility spellings with dynamic growth. The audit
-explicitly leaves the older recursive `ck-find` and `ck-du` iterator engines
-uncertified until they are migrated to the native filesystem adapter.
+initial capacities or compatibility spellings with dynamic growth. The older
+checkpoint below predates the native traversal qualification; the current
+status is recorded above.
 
 ## 2026-11-02 — WP-07 isolated LLVM libFuzzer qualification
 

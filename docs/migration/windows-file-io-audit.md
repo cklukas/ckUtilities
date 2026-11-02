@@ -53,6 +53,11 @@ file APIs. This covers long and non-ASCII archive names without allowing a
 locale-dependent `std::filesystem::path(std::string)` conversion to become a
 Windows I/O operation.
 
+The Windows SSH configuration include expander also uses the shared native
+directory listing for wildcard components. Its POSIX `directory_iterator`
+branch remains behind `#else`; Windows config discovery therefore uses wide
+`FindFirstFileW`/`FindNextFileW` through the extended-path boundary.
+
 The Windows branches of the recursive engines in
 `src/tools/ck-find/src/search_backend.cpp` and
 `src/tools/ck-du/src/disk_usage_core.cpp` now use the shared
@@ -63,11 +68,14 @@ to extended wide I/O only at the native boundary. Their old
 `std::filesystem` iterator implementations remain compiled only for POSIX
 targets, where they use the host-native POSIX filesystem implementation.
 
-The Windows qualification build at commit `f736631` compiled both migrated
-cores and passed the full 224-test suite. A future change that adds another
-Windows traversal must use the same adapter or an equivalent qualified native
-boundary; wrapping a new iterator-based traversal in `ck::io` is not enough to
-make its enumeration handle-safe or preserve its metadata/reparse semantics.
+The Windows qualification build at commit `ef57f56` compiled both migrated
+cores, the long-path regression, and the SSH configuration boundary, passing
+the full **225/225** suite. The regression creates and walks a real nested
+Windows tree whose deepest entries exceed the legacy 260-character convention.
+A future change that adds another Windows traversal must use the same adapter
+or an equivalent qualified native boundary; wrapping a new iterator-based
+traversal in `ck::io` is not enough to make its enumeration handle-safe or
+preserve its metadata/reparse semantics.
 
 ## ckVision 1.4.2
 
