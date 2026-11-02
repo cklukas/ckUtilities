@@ -3,6 +3,9 @@
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
 #include "sha256.hpp"
+#if defined(_WIN32)
+#include "windows_name.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -465,9 +468,171 @@ void append_manifest(std::vector<std::byte> &out, const FilesVolumeArchiveDocume
     }
 }
 
+#if defined(_WIN32)
+std::optional<std::wstring> archive_windows_path(const std::filesystem::path &path) {
+    return ck::files::windows_extended_path(path.wstring());
+}
+
+struct WindowsArchivePathStatus final {
+    bool exists = false;
+    bool directory = false;
+    bool reparse_point = false;
+    DWORD error = ERROR_SUCCESS;
+};
+
+WindowsArchivePathStatus archive_path_status(const std::filesystem::path &path) {
+    const auto native_path = archive_windows_path(path);
+    if (!native_path)
+        return {.error = ERROR_INVALID_NAME};
+    const DWORD attributes = GetFileAttributesW(native_path->c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        const DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
+            return {};
+        return {.error = error};
+    }
+    return {.exists = true,
+            .directory = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0,
+            .reparse_point = (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0};
+}
+
+bool remove_archive_file(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
+    const auto native_path = archive_windows_path(path);
+    if (!native_path) {
+        failure_detail = error(AdapterError::InvalidPath, "volume_archive.remove_path");
+        return false;
+    }
+    if (DeleteFileW(native_path->c_str()) != 0)
+        return true;
+    const auto code = GetLastError();
+    if (code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND)
+        return true;
+    failure_detail = filesystem_error("volume_archive.remove_path", code);
+    return false;
+}
+
+class WindowsArchiveFile final {
+public:
+    WindowsArchiveFile() = default;
+    WindowsArchiveFile(const WindowsArchiveFile &) = delete;
+    WindowsArchiveFile &operator=(const WindowsArchiveFile &) = delete;
+    WindowsArchiveFile(WindowsArchiveFile &&other) noexcept : handle_(other.handle_) {
+        other.handle_ = INVALID_HANDLE_VALUE;
+    }
+    WindowsArchiveFile &operator=(WindowsArchiveFile &&other) noexcept {
+        if (this != &other) {
+            if (handle_ != INVALID_HANDLE_VALUE)
+                CloseHandle(handle_);
+            handle_ = other.handle_;
+            other.handle_ = INVALID_HANDLE_VALUE;
+        }
+        return *this;
+    }
+    ~WindowsArchiveFile() {
+        if (handle_ != INVALID_HANDLE_VALUE)
+            CloseHandle(handle_);
+    }
+
+    static std::optional<WindowsArchiveFile> open(const std::filesystem::path &path,
+                                                  DWORD access, DWORD share_mode,
+                                                  UnavailableObservation &failure_detail) {
+        const auto native_path = archive_windows_path(path);
+        if (!native_path) {
+            failure_detail = error(AdapterError::InvalidPath, "volume_archive.open_path");
+            return std::nullopt;
+        }
+        const HANDLE handle = CreateFileW(native_path->c_str(), access, share_mode, nullptr, OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE) {
+            failure_detail = filesystem_error("volume_archive.open_path", GetLastError());
+            return std::nullopt;
+        }
+        WindowsArchiveFile result;
+        result.handle_ = handle;
+        return result;
+    }
+
+    bool write_at(std::uint64_t offset, std::span<const std::byte> bytes,
+                  UnavailableObservation &failure_detail) {
+        if (!seek(offset, failure_detail, "volume_archive.seek_write"))
+            return false;
+        std::size_t written = 0;
+        while (written < bytes.size()) {
+            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - written, UINT32_MAX));
+            DWORD count = 0;
+            if (!WriteFile(handle_, bytes.data() + written, request, &count, nullptr) || count == 0) {
+                failure_detail = filesystem_error("volume_archive.write", GetLastError());
+                return false;
+            }
+            written += count;
+        }
+        return true;
+    }
+
+    bool read_at(std::uint64_t offset, std::span<std::byte> bytes,
+                 UnavailableObservation &failure_detail) {
+        if (!seek(offset, failure_detail, "volume_archive.seek_read"))
+            return false;
+        std::size_t read = 0;
+        while (read < bytes.size()) {
+            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - read, UINT32_MAX));
+            DWORD count = 0;
+            if (!ReadFile(handle_, bytes.data() + read, request, &count, nullptr)) {
+                failure_detail = filesystem_error("volume_archive.read", GetLastError());
+                return false;
+            }
+            if (count == 0) {
+                failure_detail = filesystem_error("volume_archive.read", ERROR_HANDLE_EOF);
+                return false;
+            }
+            read += count;
+        }
+        return true;
+    }
+
+    bool set_size(std::uint64_t size, UnavailableObservation &failure_detail) {
+        if (!seek(size, failure_detail, "volume_archive.seek_resize"))
+            return false;
+        if (SetEndOfFile(handle_) == 0) {
+            failure_detail = filesystem_error("volume_archive.resize", GetLastError());
+            return false;
+        }
+        return true;
+    }
+
+    bool flush(UnavailableObservation &failure_detail) {
+        if (FlushFileBuffers(handle_) != 0)
+            return true;
+        failure_detail = filesystem_error("volume_archive.flush_stream", GetLastError());
+        return false;
+    }
+
+private:
+    bool seek(std::uint64_t offset, UnavailableObservation &failure_detail, const char *operation) {
+        if (offset > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max())) {
+            failure_detail = error(AdapterError::InventoryLimit, operation);
+            return false;
+        }
+        LARGE_INTEGER distance{};
+        distance.QuadPart = static_cast<LONGLONG>(offset);
+        if (SetFilePointerEx(handle_, distance, nullptr, FILE_BEGIN) != 0)
+            return true;
+        failure_detail = filesystem_error(operation, GetLastError());
+        return false;
+    }
+
+    HANDLE handle_ = INVALID_HANDLE_VALUE;
+};
+#endif
+
 bool create_exclusive(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
 #if defined(_WIN32)
-    const HANDLE handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+    const auto native_path = archive_windows_path(path);
+    if (!native_path) {
+        failure_detail = error(AdapterError::InvalidPath, "volume_archive.create_temp");
+        return false;
+    }
+    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW,
                                       FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         failure_detail = filesystem_error("volume_archive.create_temp", static_cast<int>(GetLastError()));
@@ -488,7 +653,12 @@ bool create_exclusive(const std::filesystem::path &path, UnavailableObservation 
 
 bool enable_sparse(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
 #if defined(_WIN32)
-    const HANDLE handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+    const auto native_path = archive_windows_path(path);
+    if (!native_path) {
+        failure_detail = error(AdapterError::InvalidPath, "volume_archive.open_sparse");
+        return false;
+    }
+    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         failure_detail = filesystem_error("volume_archive.open_sparse", static_cast<int>(GetLastError()));
@@ -509,9 +679,13 @@ bool enable_sparse(const std::filesystem::path &path, UnavailableObservation &fa
 
 Observation<std::uint64_t> allocated_file_bytes(const std::filesystem::path &path) {
 #if defined(_WIN32)
+    const auto native_path = archive_windows_path(path);
+    if (!native_path)
+        return Observation<std::uint64_t>::unavailable(
+            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.allocated_size").error);
     DWORD high = 0;
     SetLastError(ERROR_SUCCESS);
-    const DWORD low = GetCompressedFileSizeW(path.c_str(), &high);
+    const DWORD low = GetCompressedFileSizeW(native_path->c_str(), &high);
     if (low == INVALID_FILE_SIZE && GetLastError() != ERROR_SUCCESS)
         return Observation<std::uint64_t>::unavailable(
             ObservationState::Denied, filesystem_error("volume_archive.allocated_size", GetLastError()).error);
@@ -531,7 +705,12 @@ Observation<std::uint64_t> allocated_file_bytes(const std::filesystem::path &pat
 
 bool durable_flush(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
 #if defined(_WIN32)
-    const HANDLE handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+    const auto native_path = archive_windows_path(path);
+    if (!native_path) {
+        failure_detail = error(AdapterError::InvalidPath, "volume_archive.flush_file");
+        return false;
+    }
+    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
         failure_detail = filesystem_error("volume_archive.flush_file", static_cast<int>(GetLastError()));
@@ -557,6 +736,33 @@ bool durable_flush(const std::filesystem::path &path, UnavailableObservation &fa
 }
 
 Observation<std::array<std::byte, 32>> digest_file(const std::filesystem::path &path) {
+#if defined(_WIN32)
+    const auto native_path = ck::files::windows_extended_path(path.wstring());
+    if (!native_path)
+        return Observation<std::array<std::byte, 32>>::unavailable(
+            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.open_digest").error);
+    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE)
+        return Observation<std::array<std::byte, 32>>::unavailable(
+            ObservationState::Denied, filesystem_error("volume_archive.open_digest", GetLastError()).error);
+    std::array<char, 64 * 1024> buffer{};
+    ck::files::Sha256 digest;
+    for (;;) {
+        DWORD count = 0;
+        if (!ReadFile(handle, buffer.data(), static_cast<DWORD>(buffer.size()), &count, nullptr)) {
+            const auto code = GetLastError();
+            CloseHandle(handle);
+            return Observation<std::array<std::byte, 32>>::unavailable(
+                ObservationState::Failed, filesystem_error("volume_archive.read_digest", code).error);
+        }
+        if (count == 0)
+            break;
+        digest.update(std::as_bytes(std::span<const char>(buffer.data(), count)));
+    }
+    CloseHandle(handle);
+    return Observation<std::array<std::byte, 32>>::available(digest.digest());
+#else
     std::ifstream stream(path, std::ios::binary);
     if (!stream)
         return Observation<std::array<std::byte, 32>>::unavailable(
@@ -573,6 +779,7 @@ Observation<std::array<std::byte, 32>> digest_file(const std::filesystem::path &
                 ObservationState::Failed, filesystem_error("volume_archive.read_digest", errno).error);
     }
     return Observation<std::array<std::byte, 32>>::available(digest.digest());
+#endif
 }
 
 bool durable_directory(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
@@ -601,6 +808,24 @@ bool durable_directory(const std::filesystem::path &path, UnavailableObservation
 bool publish_without_replace(const std::filesystem::path &temporary, const std::filesystem::path &published,
                              UnavailableObservation &failure_detail, bool &published_result) {
     published_result = false;
+#if defined(_WIN32)
+    const auto temporary_path = archive_windows_path(temporary);
+    const auto published_path = archive_windows_path(published);
+    if (!temporary_path || !published_path) {
+        failure_detail = error(AdapterError::InvalidPath, "volume_archive.publish");
+        return false;
+    }
+    if (CreateHardLinkW(published_path->c_str(), temporary_path->c_str(), nullptr) == 0) {
+        failure_detail = filesystem_error("volume_archive.publish", GetLastError());
+        return false;
+    }
+    published_result = true;
+    if (DeleteFileW(temporary_path->c_str()) == 0) {
+        failure_detail = filesystem_error("volume_archive.remove_temp", GetLastError());
+        return false;
+    }
+    return true;
+#else
     std::error_code ec;
     std::filesystem::create_hard_link(temporary, published, ec);
     if (ec) {
@@ -614,6 +839,7 @@ bool publish_without_replace(const std::filesystem::path &temporary, const std::
         return false;
     }
     return true;
+#endif
 }
 
 bool valid_request(const FilesVolumeArchiveWriteRequest &request) {
@@ -1186,6 +1412,16 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unsupported, error(AdapterError::ProviderReviewRequired, "volume_archive.hard_loss"));
     std::error_code ec;
+#if defined(_WIN32)
+    const auto native_destination_status = archive_path_status(request.destination_directory);
+    if (native_destination_status.error != ERROR_SUCCESS)
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Denied,
+            filesystem_error("volume_archive.destination_status", native_destination_status.error).error);
+    if (!native_destination_status.exists || !native_destination_status.directory || native_destination_status.reparse_point)
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.destination"));
+#else
     const auto destination_status = std::filesystem::symlink_status(request.destination_directory, ec);
     if (ec)
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
@@ -1193,6 +1429,7 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (!std::filesystem::is_directory(destination_status) || std::filesystem::is_symlink(destination_status))
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.destination"));
+#endif
 
     std::uint64_t data_size = 0, data_bytes = 0;
     auto encoded_observation = validate_and_encode(request.document, data_size, data_bytes, stop_token);
@@ -1219,84 +1456,156 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     const auto temp = request.destination_directory /
                       ("." + request.archive_name + ".cktmp-" + std::to_string(request.transaction_id));
     UnavailableObservation failure_detail;
+    const auto remove_temp = [&] {
+#if defined(_WIN32)
+        UnavailableObservation ignored;
+        (void)remove_archive_file(temp, ignored);
+#else
+        std::error_code remove_error;
+        (void)std::filesystem::remove(temp, remove_error);
+#endif
+    };
+#if defined(_WIN32)
+    const auto published_status = archive_path_status(published);
+    if (published_status.error != ERROR_SUCCESS)
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
+            ObservationState::Denied,
+            filesystem_error("volume_archive.destination_conflict", published_status.error).error);
+    if (published_status.exists)
+#else
     if (std::filesystem::exists(published, ec) || ec)
+#endif
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Changed, error(AdapterError::PlanDecisionStale, "volume_archive.destination_conflict"));
     if (!create_exclusive(temp, failure_detail))
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     if (!enable_sparse(temp, failure_detail)) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
+#if defined(_WIN32)
+    auto stream = WindowsArchiveFile::open(temp, GENERIC_READ | GENERIC_WRITE,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, failure_detail);
+    if (!stream) {
+        remove_temp();
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+    }
+#else
     std::fstream stream(temp, std::ios::binary | std::ios::in | std::ios::out);
     if (!stream) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.open_temp"));
     }
+#endif
 
     std::vector<std::byte> header;
     append_header(header, request.document.consistency == FilesVolumeArchiveConsistency::Snapshot ? 1U : 0U,
                   manifest.size(), data_offset, data_size, encoded.size());
+#if defined(_WIN32)
+    if (!stream->write_at(0, std::span<const std::byte>(header), failure_detail) ||
+        !stream->write_at(header.size(), std::span<const std::byte>(manifest), failure_detail)) {
+        stream.reset();
+        remove_temp();
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+    }
+#else
     stream.write(reinterpret_cast<const char *>(header.data()), static_cast<std::streamsize>(header.size()));
     stream.write(reinterpret_cast<const char *>(manifest.data()), static_cast<std::streamsize>(manifest.size()));
     if (!stream) {
         stream.close();
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.write_manifest"));
     }
+#endif
     for (const auto &entry : encoded) {
         if (stop_token.stop_requested()) {
+#if defined(_WIN32)
+            stream.reset();
+#else
             stream.close();
-            std::filesystem::remove(temp, ec);
+#endif
+            remove_temp();
             return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                 ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
         }
         for (const auto &extent : entry.extents) {
+#if defined(_WIN32)
+            if (!stream->write_at(data_offset + extent.archive_offset, std::span<const std::byte>(*extent.bytes),
+                                  failure_detail)) {
+                stream.reset();
+                remove_temp();
+                return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state,
+                                                                                failure_detail.error);
+            }
+#else
             stream.seekp(static_cast<std::streamoff>(data_offset + extent.archive_offset));
             stream.write(reinterpret_cast<const char *>(extent.bytes->data()),
                          static_cast<std::streamsize>(extent.bytes->size()));
             if (!stream) {
                 stream.close();
-                std::filesystem::remove(temp, ec);
+                remove_temp();
                 return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                     ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.write_extent"));
             }
+#endif
         }
     }
+#if defined(_WIN32)
+    if (!stream->flush(failure_detail)) {
+        stream.reset();
+        remove_temp();
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+    }
+    stream.reset();
+#else
     stream.flush();
     stream.close();
     if (!stream) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.flush_stream"));
     }
+#endif
+#if defined(_WIN32)
+    auto resize_stream = WindowsArchiveFile::open(temp, GENERIC_READ | GENERIC_WRITE,
+                                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                   failure_detail);
+    if (!resize_stream || !resize_stream->set_size(logical_size, failure_detail) ||
+        !resize_stream->flush(failure_detail)) {
+        resize_stream.reset();
+        remove_temp();
+        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
+    }
+    resize_stream.reset();
+#else
     std::filesystem::resize_file(temp, logical_size, ec);
     if (ec) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Failed, filesystem_error("volume_archive.resize", ec.value()).error);
     }
+#endif
     if (!durable_flush(temp, failure_detail)) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
     const auto allocated = allocated_file_bytes(temp);
     if (!allocated.value()) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             allocated.state(), allocated.unavailable_detail()->error);
     }
     if (has_material_sparse_hole(encoded) && *allocated.value() >= logical_size) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Unsupported,
             error(AdapterError::ProviderReviewRequired, "volume_archive.sparse_allocation"));
     }
     auto staging_digest = digest_file(temp);
     if (!staging_digest.value()) {
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             staging_digest.state(), staging_digest.unavailable_detail()->error);
     }
@@ -1305,50 +1614,77 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
             ck::files::OperationJournalState::Copied,
             std::span<const std::byte>(staging_digest.value()->data(), staging_digest.value()->size()));
         if (!journal.value()) {
-            std::filesystem::remove(temp, ec);
+            remove_temp();
             return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                 journal.unavailable_detail()->state, journal.unavailable_detail()->error);
         }
     } else if (request.append_journal) {
         auto journal = request.append_journal(ck::files::OperationJournalState::Copied);
         if (!journal.value()) {
-            std::filesystem::remove(temp, ec);
+            remove_temp();
             return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                 journal.unavailable_detail()->state, journal.unavailable_detail()->error);
         }
     }
 
-    std::ifstream verify(temp, std::ios::binary);
     std::vector<char> header_check(header.size());
+#if defined(_WIN32)
+    auto verify = WindowsArchiveFile::open(temp, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           failure_detail);
+    const auto header_verified = verify &&
+        verify->read_at(0, std::as_writable_bytes(std::span<char>(header_check)), failure_detail) &&
+        std::memcmp(header_check.data(), header.data(), header.size()) == 0;
+#else
+    std::ifstream verify(temp, std::ios::binary);
     verify.read(header_check.data(), static_cast<std::streamsize>(header_check.size()));
-    if (!verify || std::memcmp(header_check.data(), header.data(), header.size()) != 0) {
+    const auto header_verified = verify && std::memcmp(header_check.data(), header.data(), header.size()) == 0;
+#endif
+    if (!header_verified) {
+#if defined(_WIN32)
+        verify.reset();
+#else
         verify.close();
-        std::filesystem::remove(temp, ec);
+#endif
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(
             ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.verify_header"));
     }
     std::vector<char> bytes_check;
     for (const auto &entry : encoded)
         for (const auto &extent : entry.extents) {
-            verify.seekg(static_cast<std::streamoff>(data_offset + extent.archive_offset));
             bytes_check.resize(extent.bytes->size());
+#if defined(_WIN32)
+            const auto read_ok = verify->read_at(data_offset + extent.archive_offset,
+                                                 std::as_writable_bytes(std::span<char>(bytes_check)), failure_detail);
+#else
+            verify.seekg(static_cast<std::streamoff>(data_offset + extent.archive_offset));
             verify.read(bytes_check.data(), static_cast<std::streamsize>(bytes_check.size()));
+            const auto read_ok = static_cast<bool>(verify);
+#endif
             ck::files::Sha256 expected_digest;
             expected_digest.update(std::span<const std::byte>(*extent.bytes));
             ck::files::Sha256 actual_digest;
             actual_digest.update(std::as_bytes(std::span<const char>(bytes_check)));
-            if (!verify || expected_digest.digest() != actual_digest.digest()) {
+            if (!read_ok || expected_digest.digest() != actual_digest.digest()) {
+#if defined(_WIN32)
+                verify.reset();
+#else
                 verify.close();
-                std::filesystem::remove(temp, ec);
+#endif
+                remove_temp();
                 return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                     ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.verify_extent"));
             }
         }
+#if defined(_WIN32)
+    verify.reset();
+#else
     verify.close();
+#endif
     if (request.append_journal) {
         auto journal = request.append_journal(ck::files::OperationJournalState::Verified);
         if (!journal.value()) {
-            std::filesystem::remove(temp, ec);
+            remove_temp();
             return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                 journal.unavailable_detail()->state, journal.unavailable_detail()->error);
         }
@@ -1356,7 +1692,7 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if (request.append_journal) {
         auto journal = request.append_journal(ck::files::OperationJournalState::CommitIntended);
         if (!journal.value()) {
-            std::filesystem::remove(temp, ec);
+            remove_temp();
             return Observation<FilesVolumeArchiveWriteResult>::unavailable(
                 journal.unavailable_detail()->state, journal.unavailable_detail()->error);
         }
@@ -1379,7 +1715,7 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
                 {published, logical_size, data_bytes, encoded.size(),
                  FilesVolumeArchivePublication::PublishedDurabilityUnknown, diagnostic, true});
         }
-        std::filesystem::remove(temp, ec);
+        remove_temp();
         return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
     }
     if (request.append_journal) {
