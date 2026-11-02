@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -39,6 +40,10 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
     const auto files_right = home / "FilesRight";
     std::filesystem::create_directories(files_left);
     std::filesystem::create_directories(files_right);
+    {
+        std::ofstream(files_left / "a-mouse-target.txt", std::ios::binary) << "a\n";
+        std::ofstream(files_left / "b-mouse-target.txt", std::ios::binary) << "b\n";
+    }
     const std::string home_text = utf8(home);
 
     ckv::term::WindowsClock clock;
@@ -96,6 +101,26 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
             }
             return false;
         };
+        const auto snapshot_text = [&] {
+            std::string text;
+            for (const auto &cell : child->snapshot().cell_buffer)
+                if (!cell.is_continuation())
+                    text += cell.grapheme();
+            return text;
+        };
+        const auto wait_for_text = [&](std::string_view needle) {
+            const auto deadline = clock.now_nanos() + 5'000'000'000LL;
+            while (clock.now_nanos() < deadline) {
+                (void)waits.wait(clock.now_nanos() + 20'000'000LL, child->wait_handles());
+                (void)child->drain(64 * 1024);
+                if (child->state() == ckv::term::TerminalSubsessionState::Failed ||
+                    child->state() == ckv::term::TerminalSubsessionState::Exited)
+                    return false;
+                if (snapshot_text().find(needle) != std::string::npos)
+                    return true;
+            }
+            return false;
+        };
 
         const bool drew = pump(false);
         CK_CHECK(drew);
@@ -115,8 +140,14 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
             child->send_input("\x1b[1;2A"
                               "\x1b[999~"
                               "\x1b[<0;99;23M"
-                              "\x1b[<0;99;23m"
-                              "\x1b"
+                              "\x1b[<0;99;23m");
+            if (std::string_view(name) == "ck-files") {
+                child->send_input("\x1b[<0;10;4M"
+                                  "\x1b[<0;10;4m"
+                                  "\x1b[2~");
+                CK_CHECK(wait_for_text("Marked: 1"));
+            }
+            child->send_input("\x1b"
                               "x");
             CK_CHECK(pump(true));
         }
