@@ -18,6 +18,12 @@ successful Windows discard appends `Cancelled`, a fresh cleanup worker rejects
 the same journal as no longer eligible. The focused recovery-cleanup test
 passed on macOS, Windows x64/v143, and Linux ARM64. Commit: `7edb27a`.
 
+The same focused test was rebuilt from the current source with macOS arm64
+AddressSanitizer + UndefinedBehaviorSanitizer (`-fno-sanitize-recover=all`,
+`detect_leaks=0`, halt-on-error) and passed without sanitizer diagnostics.
+This is focused worker evidence only; it does not close the known broad UI
+sanitizer limitation.
+
 The focused UI test passed on macOS, Windows x64/v143, and Linux ARM64. The
 full Files aggregate passed **249/249** on macOS and Linux and **248/248** on
 Windows. The cross-platform recovery fixtures were corrected in the same
