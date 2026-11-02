@@ -29,6 +29,7 @@ struct NativeOperationCopyRequest final {
     ObjectIdentity source_identity;
     std::shared_ptr<const DirectoryCursor> destination;
     ObjectIdentity destination_identity;
+    std::optional<NativeAbsolutePath> destination_address;
     NativeName staging_name;
     NativeName destination_name;
     StreamCopyLimits copy_limits{};
@@ -94,6 +95,7 @@ struct NativeOperationCopyBatchPolicy final {
 struct NativeOperationCopyBatchRequest final {
     std::vector<HeldChild::Pointer> sources;
     std::shared_ptr<const DirectoryCursor> destination;
+    std::optional<NativeAbsolutePath> destination_address;
     std::vector<NativeName> destination_names;
     std::optional<NativeAbsolutePath> journal_root;
     OperationJournalId journal_id{};

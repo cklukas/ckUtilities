@@ -695,8 +695,19 @@ struct FilesPaneService::State {
                                      "pane.operation_destination.provider_root_identity"}));
                                 return;
                             }
+                            auto destination_address = active->root_address();
+                            for (const auto &component : active->components()) {
+                                auto child = destination_address.child_address(component, {limits.path_bytes});
+                                if (!child.value()) {
+                                    request.handoff(Result::unavailable(child.unavailable_detail()->state,
+                                        child.unavailable_detail()->error));
+                                    return;
+                                }
+                                destination_address = std::move(child).take_value();
+                            }
                             request.handoff(Result::available({std::move(directory).take_value(),
-                                                              std::move(provider_root)}));
+                                                              std::move(provider_root),
+                                                              std::optional<NativeAbsolutePath>(std::move(destination_address))}));
                         } else if constexpr (std::is_same_v<Request, CreateDirectory>) {
                             FilesPaneReply result;
                             result.kind = FilesPaneReplyKind::Mutation;

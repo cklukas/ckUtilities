@@ -465,6 +465,7 @@ struct FilesOperationExecutionService::State final {
         ck::files::NativeOperationCopyBatchRequest copy;
         copy.sources = std::move(handoff->sources->sources);
         copy.destination = std::move(handoff->destination_result->directory);
+        copy.destination_address = handoff->destination_result->address;
         copy.destination_names = std::move(handoff->sources->names);
         copy.journal_root = std::move(value.journal_root);
         copy.journal_id = value.journal_id;

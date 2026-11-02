@@ -267,6 +267,7 @@ CK_TEST(native_operation_copy_job_journals_verifies_and_publishes_without_replac
         take(source_metadata.identity),
         destination,
         destination_identity,
+        std::nullopt,
         name(".ck-copy-staging"),
         destination_name,
         {},
@@ -469,7 +470,7 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity_and_dispo
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-crash-staging"), name("published"),
-          *destination_durable, *destination_durable, *destination_durable, staging_durable},
+          *destination_durable, *destination_durable, *destination_durable, staging_durable, {}},
          std::nullopt}, destination, destination_identity};
     staging.reset();
     auto cleaned = cleanup_native_unpublished_staging(request);
@@ -516,7 +517,7 @@ CK_TEST(native_operation_recovery_cleanup_rejects_substituted_staging_identity) 
     NativeOperationRecoveryCleanupRequest request{
         {0, OperationJournalState::Copied,
          NativeOperationRecoveryEvidence{name(".ck-substituted-staging"), name("published"),
-          *durable, *durable, *durable, original_durable}, std::nullopt},
+          *durable, *durable, *durable, original_durable, {}}, std::nullopt},
         destination, destination_identity};
     auto cleaned = cleanup_native_unpublished_staging(request);
     CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Changed &&
@@ -571,6 +572,7 @@ CK_TEST(native_operation_copy_batch_keeps_worker_handles_and_item_receipts) {
             take(source_metadata.identity),
             destination,
             destination_identity,
+            std::nullopt,
             staging_name,
             destination_name,
             {},

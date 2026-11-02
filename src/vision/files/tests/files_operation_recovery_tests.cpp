@@ -38,7 +38,7 @@ NativeOperationRecoveryEvidence evidence() {
         {scope, IdentityScheme::PosixDeviceInode, NativeIdentifier::from_u64(17),
          NativeIdentifier::from_u64(18), {}});
     return {*NativeName::from_posix(".ck-staging"), *NativeName::from_posix("destination"),
-            identity, identity, identity, identity};
+            identity, identity, identity, identity, {}};
 }
 }
 

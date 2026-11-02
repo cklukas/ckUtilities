@@ -3,6 +3,7 @@
 #pragma once
 
 #include "file_metadata.hpp"
+#include "native_path.hpp"
 #include "native_name.hpp"
 #include "observation.hpp"
 
@@ -37,6 +38,11 @@ struct NativeOperationRecoveryEvidence final {
     // Absent for Planned/Prepared records because the staging object may not
     // exist yet. Recovery must not clean a name without this identity.
     std::optional<NativeDurableIdentity> staging_identity;
+    // Optional exact requested destination address. Older journals omit it;
+    // recovery must remain inspect-only when it is absent. The address is
+    // never an identity and must be rebound to a fresh held directory before
+    // any mutation.
+    std::optional<NativeAbsolutePath> destination_address;
 };
 
 struct NativeOperationRecoveryEvidenceLimits final {

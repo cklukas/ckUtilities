@@ -96,6 +96,7 @@ struct FilesPaneOperationSources final {
 struct FilesPaneOperationDestination final {
     std::shared_ptr<const ck::files::DirectoryCursor> directory;
     std::shared_ptr<const ck::files::DirectoryCursor> provider_root;
+    std::optional<ck::files::NativeAbsolutePath> address;
 };
 using FilesPaneOperationSourceHandoff =
     std::function<void(ck::files::Observation<FilesPaneOperationSources>)>;

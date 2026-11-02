@@ -130,6 +130,7 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
         request.source_identity.scheme == IdentityScheme::Unknown ||
         !request.destination_identity.scope.is_valid() ||
         request.destination_identity.scheme == IdentityScheme::Unknown ||
+        (request.destination_address && !request.destination_address->is_valid()) ||
         !NativeDurableIdentity::from_live(request.source_parent_identity) ||
         !NativeDurableIdentity::from_live(request.source_identity) ||
         !NativeDurableIdentity::from_live(request.destination_identity) ||
@@ -154,7 +155,7 @@ Observation<NativeOperationCopyJob::Pointer> NativeOperationCopyJob::create(
                  "native_operation_copy.journal_identity"});
         NativeOperationRecoveryEvidence recovery_evidence{
             state->request.staging_name, state->request.destination_name,
-            *source_parent, *source, *destination, {}};
+            *source_parent, *source, *destination, {}, state->request.destination_address};
         if (state->staging) {
             auto metadata = state->staging->inspect_basic();
             if (!metadata.value() || !metadata.value()->identity.value() ||
@@ -408,6 +409,7 @@ Observation<OperationBatchJob::Pointer> create_native_operation_copy_batch(
             *metadata.identity.value(),
             request.destination,
             *destination_identity.value(),
+            request.destination_address,
             *staging_name,
             destination_name,
             request.policy.copy_limits,
@@ -502,7 +504,8 @@ struct NativeOperationCopyTreeJob::State final {
             {},
             {},
             {},
-            {}};
+            {},
+            std::nullopt};
         const auto& root_metadata = inventory().entries().front();
         if (!root_source_parent_identity || !root_source_identity ||
             !root_metadata.identity.scope.is_valid() || !destination_identity.scope.is_valid())
