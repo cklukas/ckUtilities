@@ -146,6 +146,16 @@ bool write_windows(const std::filesystem::path &path, std::string_view contents,
     }
     return FlushFileBuffers(file.get()) != 0;
 }
+
+bool remove_windows(const std::filesystem::path &path)
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return false;
+    if (DeleteFileW(native->c_str()) != 0)
+        return true;
+    return GetLastError() == ERROR_FILE_NOT_FOUND;
+}
 #endif
 
 } // namespace
@@ -190,6 +200,17 @@ bool write_file(const std::filesystem::path &path, std::string_view contents, Wr
     output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
     output.flush();
     return static_cast<bool>(output);
+#endif
+}
+
+bool remove_file(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return remove_windows(path);
+#else
+    std::error_code error;
+    const bool removed = std::filesystem::remove(path, error);
+    return !error && (removed || !std::filesystem::exists(path, error));
 #endif
 }
 

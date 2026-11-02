@@ -34,9 +34,9 @@ bool editTimeFilters(TimeFilterOptions &options)
         char ctime[16]{};
         char cmin[16]{};
         char used[16]{};
-        char newer[kPathBufferSize]{};
-        char anewer[kPathBufferSize]{};
-        char cnewer[kPathBufferSize]{};
+        PathBuffer newer = makePathBuffer();
+        PathBuffer anewer = makePathBuffer();
+        PathBuffer cnewer = makePathBuffer();
         char newermt[64]{};
         char newerat[64]{};
         char newerct[64]{};
@@ -59,9 +59,9 @@ bool editTimeFilters(TimeFilterOptions &options)
     std::snprintf(data.ctime, sizeof(data.ctime), "%s", bufferToString(options.ctime).c_str());
     std::snprintf(data.cmin, sizeof(data.cmin), "%s", bufferToString(options.cmin).c_str());
     std::snprintf(data.used, sizeof(data.used), "%s", bufferToString(options.used).c_str());
-    std::snprintf(data.newer, sizeof(data.newer), "%s", bufferToString(options.newer).c_str());
-    std::snprintf(data.anewer, sizeof(data.anewer), "%s", bufferToString(options.anewer).c_str());
-    std::snprintf(data.cnewer, sizeof(data.cnewer), "%s", bufferToString(options.cnewer).c_str());
+    std::snprintf(data.newer.data(), data.newer.size(), "%s", bufferToString(options.newer).c_str());
+    std::snprintf(data.anewer.data(), data.anewer.size(), "%s", bufferToString(options.anewer).c_str());
+    std::snprintf(data.cnewer.data(), data.cnewer.size(), "%s", bufferToString(options.cnewer).c_str());
     std::snprintf(data.newermt, sizeof(data.newermt), "%s", bufferToString(options.newermt).c_str());
     std::snprintf(data.newerat, sizeof(data.newerat), "%s", bufferToString(options.newerat).c_str());
     std::snprintf(data.newerct, sizeof(data.newerct), "%s", bufferToString(options.newerct).c_str());
@@ -137,21 +137,21 @@ bool editTimeFilters(TimeFilterOptions &options)
     dialog->insert(usedInput);
     usedInput->setData(data.used);
 
-    auto pathLen = std::min<int>(static_cast<int>(sizeof(data.newer)) - 1, 255);
+    auto pathLen = std::min<int>(static_cast<int>(data.newer.size()) - 1, 255);
     auto *newerInput = new TInputLine(TRect(57, 14, 74, 15), pathLen);
     dialog->insert(new TLabel(TRect(34, 14, 57, 15), "Cutoff file (~m~odified):", newerInput));
     dialog->insert(newerInput);
-    newerInput->setData(data.newer);
+    newerInput->setData(data.newer.data());
 
     auto *anewerInput = new TInputLine(TRect(57, 15, 74, 16), pathLen);
     dialog->insert(new TLabel(TRect(34, 15, 57, 16), "Cutoff file (~a~ccessed):", anewerInput));
     dialog->insert(anewerInput);
-    anewerInput->setData(data.anewer);
+    anewerInput->setData(data.anewer.data());
 
     auto *cnewerInput = new TInputLine(TRect(57, 16, 74, 17), pathLen);
     dialog->insert(new TLabel(TRect(34, 16, 57, 17), "Cutoff file (meta~d~ata):", cnewerInput));
     dialog->insert(cnewerInput);
-    cnewerInput->setData(data.cnewer);
+    cnewerInput->setData(data.cnewer.data());
 
     auto *newermtInput = new TInputLine(TRect(57, 17, 74, 18), sizeof(data.newermt) - 1);
     dialog->insert(new TLabel(TRect(34, 17, 57, 18), "Cutoff time (~m~odified):", newermtInput));

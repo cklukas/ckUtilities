@@ -5,20 +5,23 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <type_traits>
 
 namespace ck::find
 {
 
-template <std::size_t N>
-void copyToArray(std::array<char, N> &dest, const char *src)
+template <typename Buffer>
+void copyToArray(Buffer &dest, const char *src)
 {
     if (!src)
         src = "";
+    if (dest.empty())
+        return;
     std::snprintf(dest.data(), dest.size(), "%s", src);
 }
 
-template <std::size_t N>
-std::string bufferToString(const std::array<char, N> &buffer)
+template <typename Buffer>
+std::string bufferToString(const Buffer &buffer)
 {
     auto it = std::find(buffer.begin(), buffer.end(), '\0');
     if (it != buffer.end())
@@ -26,8 +29,9 @@ std::string bufferToString(const std::array<char, N> &buffer)
     return std::string(buffer.data(), buffer.size());
 }
 
-template <std::size_t N, std::size_t M>
-void copyToArray(std::array<char, N> &dest, const std::array<char, M> &src)
+template <typename Dest, typename Src>
+    requires(!std::is_convertible_v<Src, const char *>)
+void copyToArray(Dest &dest, const Src &src)
 {
     const std::string value = bufferToString(src);
     copyToArray(dest, value.c_str());

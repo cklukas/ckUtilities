@@ -27,4 +27,6 @@ bool read_file(const std::filesystem::path &path, std::string &contents,
 bool write_file(const std::filesystem::path &path, std::string_view contents,
                 WriteMode mode = WriteMode::Truncate);
 
+bool remove_file(const std::filesystem::path &path);
+
 } // namespace ck::io

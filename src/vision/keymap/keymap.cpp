@@ -146,6 +146,8 @@ bool write_document(const nlohmann::json &document)
     const std::filesystem::path path = keymap_path();
 #if defined(_WIN32)
     ckv::term::WindowsFileSystem filesystem;
+    if (!filesystem.create_directories(utf8_path(path.parent_path())))
+        return false;
     const auto result = filesystem.write_file_atomic(utf8_path(path), document.dump(2) + '\n');
     return result.status == ckv::FileWriteStatus::Ok;
 #else

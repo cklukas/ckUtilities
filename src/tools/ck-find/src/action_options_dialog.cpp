@@ -27,11 +27,11 @@ bool editActionOptions(ActionOptions &options)
         unsigned short appendFlags = 0;
         unsigned short execVariant = 0;
         char execCommand[512]{};
-        char fprintFile[kPathBufferSize]{};
-        char fprint0File[kPathBufferSize]{};
-        char flsFile[kPathBufferSize]{};
+        PathBuffer fprintFile = makePathBuffer();
+        PathBuffer fprint0File = makePathBuffer();
+        PathBuffer flsFile = makePathBuffer();
         char printfFormat[256]{};
-        char fprintfFile[kPathBufferSize]{};
+        PathBuffer fprintfFile = makePathBuffer();
         char fprintfFormat[256]{};
     } data{};
 
@@ -62,11 +62,11 @@ bool editActionOptions(ActionOptions &options)
     data.execVariant = static_cast<unsigned short>(options.execVariant);
 
     std::snprintf(data.execCommand, sizeof(data.execCommand), "%s", bufferToString(options.execCommand).c_str());
-    std::snprintf(data.fprintFile, sizeof(data.fprintFile), "%s", bufferToString(options.fprintFile).c_str());
-    std::snprintf(data.fprint0File, sizeof(data.fprint0File), "%s", bufferToString(options.fprint0File).c_str());
-    std::snprintf(data.flsFile, sizeof(data.flsFile), "%s", bufferToString(options.flsFile).c_str());
+    std::snprintf(data.fprintFile.data(), data.fprintFile.size(), "%s", bufferToString(options.fprintFile).c_str());
+    std::snprintf(data.fprint0File.data(), data.fprint0File.size(), "%s", bufferToString(options.fprint0File).c_str());
+    std::snprintf(data.flsFile.data(), data.flsFile.size(), "%s", bufferToString(options.flsFile).c_str());
     std::snprintf(data.printfFormat, sizeof(data.printfFormat), "%s", bufferToString(options.printfFormat).c_str());
-    std::snprintf(data.fprintfFile, sizeof(data.fprintfFile), "%s", bufferToString(options.fprintfFile).c_str());
+    std::snprintf(data.fprintfFile.data(), data.fprintfFile.size(), "%s", bufferToString(options.fprintfFile).c_str());
     std::snprintf(data.fprintfFormat, sizeof(data.fprintfFormat), "%s", bufferToString(options.fprintfFormat).c_str());
 
     auto *dialog = new TDialog(TRect(0, 0, 78, 24), "Actions & Output");
@@ -104,21 +104,21 @@ bool editActionOptions(ActionOptions &options)
     dialog->insert(appendBoxes);
     appendBoxes->setData(&data.appendFlags);
 
-    auto pathLen = std::min<int>(static_cast<int>(sizeof(data.fprintFile)) - 1, 255);
+    auto pathLen = std::min<int>(static_cast<int>(data.fprintFile.size()) - 1, 255);
     auto *fprintInput = new TInputLine(TRect(32, 12, 74, 13), pathLen);
     dialog->insert(new TLabel(TRect(32, 11, 58, 12), "-fprint file:", fprintInput));
     dialog->insert(fprintInput);
-    fprintInput->setData(data.fprintFile);
+    fprintInput->setData(data.fprintFile.data());
 
     auto *fprint0Input = new TInputLine(TRect(32, 13, 74, 14), pathLen);
     dialog->insert(new TLabel(TRect(32, 12, 58, 13), "-fprint0 file:", fprint0Input));
     dialog->insert(fprint0Input);
-    fprint0Input->setData(data.fprint0File);
+    fprint0Input->setData(data.fprint0File.data());
 
     auto *flsInput = new TInputLine(TRect(32, 14, 74, 15), pathLen);
     dialog->insert(new TLabel(TRect(32, 13, 58, 14), "-fls file:", flsInput));
     dialog->insert(flsInput);
-    flsInput->setData(data.flsFile);
+    flsInput->setData(data.flsFile.data());
 
     auto *printfInput = new TInputLine(TRect(32, 15, 74, 16), sizeof(data.printfFormat) - 1);
     dialog->insert(new TLabel(TRect(32, 14, 66, 15), "-printf format:", printfInput));
@@ -128,7 +128,7 @@ bool editActionOptions(ActionOptions &options)
     auto *fprintfFileInput = new TInputLine(TRect(32, 16, 74, 17), pathLen);
     dialog->insert(new TLabel(TRect(32, 15, 66, 16), "-fprintf file:", fprintfFileInput));
     dialog->insert(fprintfFileInput);
-    fprintfFileInput->setData(data.fprintfFile);
+    fprintfFileInput->setData(data.fprintfFile.data());
 
     auto *fprintfFormatInput = new TInputLine(TRect(32, 17, 74, 18), sizeof(data.fprintfFormat) - 1);
     dialog->insert(new TLabel(TRect(32, 16, 66, 17), "-fprintf format:", fprintfFormatInput));

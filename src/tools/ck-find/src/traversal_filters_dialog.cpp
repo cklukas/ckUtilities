@@ -29,10 +29,10 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
         unsigned short warningMode = 0;
         char maxDepth[8]{};
         char minDepth[8]{};
-        char filesFrom[kPathBufferSize]{};
+        PathBuffer filesFrom = makePathBuffer();
         char fsType[64]{};
         char linkCount[16]{};
-        char sameFile[kPathBufferSize]{};
+        PathBuffer sameFile = makePathBuffer();
         char inode[32]{};
     } data{};
 
@@ -69,10 +69,10 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
 
     std::snprintf(data.maxDepth, sizeof(data.maxDepth), "%s", bufferToString(options.maxDepth).c_str());
     std::snprintf(data.minDepth, sizeof(data.minDepth), "%s", bufferToString(options.minDepth).c_str());
-    std::snprintf(data.filesFrom, sizeof(data.filesFrom), "%s", bufferToString(options.filesFrom).c_str());
+    std::snprintf(data.filesFrom.data(), data.filesFrom.size(), "%s", bufferToString(options.filesFrom).c_str());
     std::snprintf(data.fsType, sizeof(data.fsType), "%s", bufferToString(options.fsType).c_str());
     std::snprintf(data.linkCount, sizeof(data.linkCount), "%s", bufferToString(options.linkCount).c_str());
-    std::snprintf(data.sameFile, sizeof(data.sameFile), "%s", bufferToString(options.sameFile).c_str());
+    std::snprintf(data.sameFile.data(), data.sameFile.size(), "%s", bufferToString(options.sameFile).c_str());
     std::snprintf(data.inode, sizeof(data.inode), "%s", bufferToString(options.inode).c_str());
 
     auto *dialog = new TDialog(TRect(0, 0, 80, 24), "Traversal & Filesystem");
@@ -123,10 +123,10 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
     dialog->insert(minInput);
     minInput->setData(data.minDepth);
 
-    auto *filesFromInput = new TInputLine(TRect(32, 12, 78, 13), std::min<int>(static_cast<int>(sizeof(data.filesFrom)) - 1, 255));
+    auto *filesFromInput = new TInputLine(TRect(32, 12, 78, 13), std::min<int>(static_cast<int>(data.filesFrom.size()) - 1, 255));
     dialog->insert(new TLabel(TRect(32, 11, 66, 12), "-files-from list:", filesFromInput));
     dialog->insert(filesFromInput);
-    filesFromInput->setData(data.filesFrom);
+    filesFromInput->setData(data.filesFrom.data());
 
     auto *fsTypeInput = new TInputLine(TRect(32, 13, 64, 14), sizeof(data.fsType) - 1);
     dialog->insert(new TLabel(TRect(32, 12, 64, 13), "Filesystem type:", fsTypeInput));
@@ -138,10 +138,10 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
     dialog->insert(linkCountInput);
     linkCountInput->setData(data.linkCount);
 
-    auto *sameFileInput = new TInputLine(TRect(32, 15, 78, 16), std::min<int>(static_cast<int>(sizeof(data.sameFile)) - 1, 255));
+    auto *sameFileInput = new TInputLine(TRect(32, 15, 78, 16), std::min<int>(static_cast<int>(data.sameFile.size()) - 1, 255));
     dialog->insert(new TLabel(TRect(32, 14, 70, 15), "-samefile target:", sameFileInput));
     dialog->insert(sameFileInput);
-    sameFileInput->setData(data.sameFile);
+    sameFileInput->setData(data.sameFile.data());
 
     auto *inodeInput = new TInputLine(TRect(32, 16, 46, 17), sizeof(data.inode) - 1);
     dialog->insert(new TLabel(TRect(32, 15, 46, 16), "Inode:", inodeInput));

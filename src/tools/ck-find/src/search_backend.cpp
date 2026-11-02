@@ -27,14 +27,14 @@ namespace ck::find
 namespace
 {
 
-template <std::size_t N>
-std::string arrayToString(const std::array<char, N> &buffer)
+template <typename Buffer>
+std::string arrayToString(const Buffer &buffer)
 {
     return bufferToString(buffer);
 }
 
-template <std::size_t N>
-void assignToArray(std::array<char, N> &buffer, const std::string &value)
+template <typename Buffer>
+void assignToArray(Buffer &buffer, const std::string &value)
 {
     copyToArray(buffer, value.c_str());
 }
@@ -1886,7 +1886,7 @@ void addManualTimeExpressions(std::vector<std::string> &tests, const TimeFilterO
             tests.emplace_back(arrayToString(value));
         }
     };
-    auto addIfPath = [&](bool enabled, const std::string &flag, const std::array<char, kPathBufferSize> &value) {
+    auto addIfPath = [&](bool enabled, const std::string &flag, const PathBuffer &value) {
         if (enabled && value[0] != '\0')
         {
             tests.emplace_back(flag);

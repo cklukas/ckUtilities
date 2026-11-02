@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <limits.h>
+#include <vector>
 
 namespace ck::find
 {
@@ -16,6 +17,13 @@ inline constexpr std::size_t kPathBufferSize = 32768;
 #else
 inline constexpr std::size_t kPathBufferSize = PATH_MAX;
 #endif
+
+using PathBuffer = std::vector<char>;
+
+inline PathBuffer makePathBuffer()
+{
+    return PathBuffer(kPathBufferSize, '\0');
+}
 
 struct TextSearchOptions
 {
@@ -109,9 +117,9 @@ struct TimeFilterOptions
     std::array<char, 16> amin{};
     std::array<char, 16> cmin{};
     std::array<char, 16> used{};
-    std::array<char, kPathBufferSize> newer{};
-    std::array<char, kPathBufferSize> anewer{};
-    std::array<char, kPathBufferSize> cnewer{};
+    PathBuffer newer = makePathBuffer();
+    PathBuffer anewer = makePathBuffer();
+    PathBuffer cnewer = makePathBuffer();
     std::array<char, 64> newermt{};
     std::array<char, 64> newerat{};
     std::array<char, 64> newerct{};
@@ -206,10 +214,10 @@ struct TraversalFilesystemOptions
     bool inumEnabled = false;
     std::array<char, 8> maxDepth{};
     std::array<char, 8> minDepth{};
-    std::array<char, kPathBufferSize> filesFrom{};
+    PathBuffer filesFrom = makePathBuffer();
     std::array<char, 64> fsType{};
     std::array<char, 16> linkCount{};
-    std::array<char, kPathBufferSize> sameFile{};
+    PathBuffer sameFile = makePathBuffer();
     std::array<char, 32> inode{};
 };
 
@@ -241,18 +249,18 @@ struct ActionOptions
     bool fprintfEnabled = false;
     bool fprintfAppend = false;
     std::array<char, 512> execCommand{};
-    std::array<char, kPathBufferSize> fprintFile{};
-    std::array<char, kPathBufferSize> fprint0File{};
-    std::array<char, kPathBufferSize> flsFile{};
+    PathBuffer fprintFile = makePathBuffer();
+    PathBuffer fprint0File = makePathBuffer();
+    PathBuffer flsFile = makePathBuffer();
     std::array<char, 256> printfFormat{};
-    std::array<char, kPathBufferSize> fprintfFile{};
+    PathBuffer fprintfFile = makePathBuffer();
     std::array<char, 256> fprintfFormat{};
 };
 
 struct SearchSpecification
 {
     std::array<char, 128> specName{};
-    std::array<char, kPathBufferSize> startLocation{};
+    PathBuffer startLocation = makePathBuffer();
     std::array<char, 256> searchText{};
     std::array<char, 256> includePatterns{};
     std::array<char, 256> excludePatterns{};

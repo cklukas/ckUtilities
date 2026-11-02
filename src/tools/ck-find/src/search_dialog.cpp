@@ -1011,8 +1011,8 @@ void GuidedSearchDialog::updateActionControls()
 
 void GuidedSearchDialog::browseStartLocation()
 {
-    char location[kPathBufferSize]{};
-    std::snprintf(location, sizeof(location), "%s", m_state.startLocation[0] ? m_state.startLocation.data() : ".");
+    PathBuffer location = makePathBuffer();
+    std::snprintf(location.data(), location.size(), "%s", m_state.startLocation[0] ? m_state.startLocation.data() : ".");
 
     std::filesystem::path originalDir;
     try
@@ -1025,7 +1025,7 @@ void GuidedSearchDialog::browseStartLocation()
 
     try
     {
-        std::filesystem::current_path(std::filesystem::path(location));
+        std::filesystem::current_path(std::filesystem::path(location.data()));
     }
     catch (...)
     {
