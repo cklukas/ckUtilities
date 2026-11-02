@@ -27,6 +27,9 @@ public:
     // Fresh metadata from the retained child, never a name reopen. Worker only;
     // this observes the held object, not current membership of parent/name.
     Observation<BasicMetadata> inspect_basic() const;
+    // Read-only link/reparse metadata through the retained child handle;
+    // never follows the link or reopens the original name.
+    Observation<LinkMetadata> read_link_metadata(InventoryLimits limits = {}) const;
     Observation<ContentRead> read_content(ContentReadLimits limits = {}, std::uint64_t offset = 0,
                                           std::stop_token stop = {}) const;
     const Observation<IdentityComparison>& previous_continuity() const noexcept { return previous_continuity_; }

@@ -43,6 +43,7 @@ struct Preview {
     PaneStateStamp stamp;
     PaneRowId row;
     FilesPanePreviewLimits limits;
+    bool link = false;
 };
 struct CreateDirectory {
     FilesPaneTicket ticket, navigation;
@@ -542,18 +543,45 @@ struct FilesPaneService::State {
                 result.request = inspection->ticket;
                 result.navigation = inspection->navigation;
                 result.active_location = result.requested_location = active;
-                result.kind = FilesPaneReplyKind::Preview;
+                result.kind = inspection->link ? FilesPaneReplyKind::Link : FilesPaneReplyKind::Preview;
                 if (!pane->data() || !pane->accepts(inspection->stamp)) {
                     result.state = FilesPaneReplyState::Stale;
                 } else if (stop.stop_requested()) {
                     result.state = FilesPaneReplyState::Cancelled;
                 } else {
-                    auto opened = pane->open_row(inspection->stamp, inspection->row, ck::files::EntryAccess::ContentRead,
+                    auto opened = pane->open_row(inspection->stamp, inspection->row,
+                                                 inspection->link ? ck::files::EntryAccess::MetadataOnly
+                                                                  : ck::files::EntryAccess::ContentRead,
                                                  {limits.page_wire_bytes, limits.path_bytes, limits.diagnostic_bytes},
                                                  stop.get_token());
                     if (!opened.value()) {
-                        result.state = FilesPaneReplyState::Failed;
+                        result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled : FilesPaneReplyState::Failed;
                         result.error = *opened.unavailable_detail();
+                    } else if (inspection->link) {
+                        const auto kind = (*opened.value()).child ? (*opened.value()).child->metadata().kind :
+                                                                 Observation<ObjectKind>::unavailable(
+                                                                     ObservationState::Unknown,
+                                                                     operation_error(AdapterError::UnqualifiedIdentity,
+                                                                                     "pane.inspect_link.kind").error);
+                        if (!kind.value() || (*kind.value() != ObjectKind::SymbolicLink &&
+                                              *kind.value() != ObjectKind::Junction &&
+                                              *kind.value() != ObjectKind::ReparsePoint)) {
+                            result.state = FilesPaneReplyState::Failed;
+                            result.error = operation_error(AdapterError::NotApplicable, "pane.inspect_link.kind",
+                                                           ObservationState::Unsupported);
+                        } else {
+                            auto link = (*opened.value()).child->read_link_metadata(
+                                {limits.diagnostic_bytes, limits.page_rows});
+                            if (!link.value()) {
+                                result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled
+                                                                      : FilesPaneReplyState::Failed;
+                                result.error = *link.unavailable_detail();
+                            } else {
+                                result.state = FilesPaneReplyState::Ready;
+                                result.link = std::make_shared<const ck::files::LinkMetadata>(
+                                    std::move(link).take_value());
+                            }
+                        }
                     } else {
                         auto content = (*opened.value()).child->read_content({inspection->limits.bytes}, 0, stop.get_token());
                         if (!content.value()) {
@@ -1289,6 +1317,29 @@ FilesPaneSubmitted FilesPaneService::preview(FilesPaneTicket navigation, PaneSta
             return {FilesPaneSubmission::Exhausted, {}};
         request = ticket(state_->next++);
         state_->preview = Preview{request, navigation, std::move(stamp), std::move(row), limits};
+        state_->latest_request = request;
+        state_->cancelled = {};
+    }
+    state_->condition.notify_one();
+    return {FilesPaneSubmission::Accepted, request};
+}
+FilesPaneSubmitted FilesPaneService::inspect_link(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row) {
+    if (!navigation.valid() || !row.scope.is_valid() || !row.number)
+        return {FilesPaneSubmission::Invalid, {}};
+    FilesPaneTicket request;
+    {
+        std::lock_guard lock(state_->mutex);
+        if (state_->stopping || !state_->alive.load())
+            return {FilesPaneSubmission::Stopped, {}};
+        if (navigation != state_->latest_navigation)
+            return {FilesPaneSubmission::Invalid, {}};
+        if (state_->navigation_busy || state_->change_busy || state_->busy || state_->navigation || state_->read ||
+            state_->change || state_->preview || state_->reply)
+            return {FilesPaneSubmission::Busy, {}};
+        if (!state_->next)
+            return {FilesPaneSubmission::Exhausted, {}};
+        request = ticket(state_->next++);
+        state_->preview = Preview{request, navigation, std::move(stamp), std::move(row), {}, true};
         state_->latest_request = request;
         state_->cancelled = {};
     }

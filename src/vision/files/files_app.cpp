@@ -167,6 +167,29 @@ std::string preview_text(const FilesPanePreview &preview) {
         out << "[Preview limited to the configured byte bound.]\n";
     return out.str();
 }
+std::string link_text(const ck::files::LinkMetadata &link) {
+    std::ostringstream out;
+    if (const auto *posix = std::get_if<ck::files::PosixSymlinkData>(&link.payload)) {
+        out << "POSIX symbolic-link target\n" << ck::files::display_native_text(posix->target);
+    } else if (const auto *windows = std::get_if<ck::files::WindowsReparseData>(&link.payload)) {
+        const char *kind = windows->kind == ck::files::WindowsReparseKind::SymbolicLink ? "symbolic link"
+                           : windows->kind == ck::files::WindowsReparseKind::MountPoint ? "mount point"
+                           : windows->kind == ck::files::WindowsReparseKind::OpaqueGuid ? "opaque GUID reparse"
+                                                                                         : "opaque Microsoft reparse";
+        out << "Windows reparse kind: " << kind << "\n"
+            << "Tag: 0x" << std::hex << windows->tag << std::dec << "\n";
+        if (windows->names) {
+            out << "Substitute name: " << ck::files::display_native_text(windows->names->substitute) << '\n'
+                << "Print name: " << ck::files::display_native_text(windows->names->print) << '\n'
+                << "Flags: 0x" << std::hex << windows->names->flags << std::dec;
+        } else {
+            out << "Opaque payload: " << windows->raw.size() << " bytes (not interpreted as a target)";
+        }
+    } else {
+        out << "No link payload was returned";
+    }
+    return out.str();
+}
 std::optional<ck::files::NativeName> parse_directory_component(std::string text,
                                                                ck::files::NameEncoding encoding) {
     auto posix = ck::files::NativeName::from_posix(std::move(text));
@@ -232,7 +255,7 @@ struct FilesApp::State {
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
              deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
-             creating_symbolic_link = false;
+             creating_symbolic_link = false, link_inspecting = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -279,6 +302,7 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> link_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_file_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_hard_link_dialog;
@@ -321,6 +345,8 @@ struct FilesApp::State {
     std::weak_ptr<void> properties_dialog_lifetime;
     ckv::widgets::Window *preview_dialog_window = nullptr;
     std::weak_ptr<void> preview_dialog_lifetime;
+    ckv::widgets::Window *link_dialog_window = nullptr;
+    std::weak_ptr<void> link_dialog_lifetime;
     ckv::widgets::Window *create_directory_window = nullptr;
     std::weak_ptr<void> create_directory_lifetime;
     ckv::widgets::Window *create_file_window = nullptr;
@@ -367,6 +393,7 @@ struct FilesApp::State {
     ckv::ui::CommandId refresh_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId properties_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId preview_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId inspect_link_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
     std::uint64_t operation_serial = 1;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
@@ -452,6 +479,8 @@ struct FilesApp::State {
                                 [this] { return availability("ck.files.properties").enabled; });
             preview_id = own("ck.files.preview", [this] { show_preview(); },
                              [this] { return availability("ck.files.preview").enabled; });
+            inspect_link_id = own("ck.files.inspect_link", [this] { show_inspect_link(); },
+                                  [this] { return availability("ck.files.inspect_link").enabled; });
             enter_id = own(
                 "ck.files.enter_directory", [this] { enter_directory(active); },
                 [this] { return availability("ck.files.enter_directory").enabled; });
@@ -540,6 +569,7 @@ struct FilesApp::State {
                                                             item(create_file_id, "New &file..."),
                                                             item(create_hard_link_id, "New &hard link..."),
                                                             item(create_symbolic_link_id, "New &symbolic link..."),
+                                                            item(inspect_link_id, "Inspect link target"),
                                                             item(create_directory_id, "New &folder..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
@@ -648,6 +678,8 @@ struct FilesApp::State {
         view_dialog.reset();
         properties_dialog.reset();
         preview_dialog.reset();
+        link_dialog.reset();
+        link_dialog_window = nullptr;
         create_directory_dialog.reset();
         create_directory_window = nullptr;
         create_file_dialog.reset();
@@ -777,6 +809,7 @@ struct FilesApp::State {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
+               (link_dialog && !link_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
                (create_file_dialog && !create_file_dialog->completed()) ||
                (create_hard_link_dialog && !create_hard_link_dialog->completed()) ||
@@ -972,6 +1005,17 @@ struct FilesApp::State {
             return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile
                        ? FilesCommandAvailability::available()
                        : unavailable("Preview unavailable: select a regular file");
+        if (command == "ck.files.inspect_link") {
+            if (panes[active].volume_view)
+                return unavailable("Link inspection unavailable: volume rows are archive sources, not entries");
+            const auto kind = panes[active].model.cursor_kind();
+            const bool link = kind == ck::files::ObjectKind::SymbolicLink ||
+                              kind == ck::files::ObjectKind::Junction ||
+                              kind == ck::files::ObjectKind::ReparsePoint;
+            return ready(active) && link
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Link inspection unavailable: select a symbolic link or reparse point");
+        }
         if (command == "ck.files.enter_directory")
             return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory
                        ? FilesCommandAvailability::available()
@@ -2641,6 +2685,24 @@ struct FilesApp::State {
         panes[pane].previewing = true;
         labels();
     }
+    void show_inspect_link() {
+        if (!availability("ck.files.inspect_link").enabled)
+            return;
+        const auto pane = active;
+        const auto target = panes[pane].model.target();
+        if (!target)
+            return;
+        const auto submitted = services[pane]->inspect_link(panes[pane].navigation, target->stamp, target->row);
+        if (submitted.state != FilesPaneSubmission::Accepted) {
+            panes[pane].error = "Link inspection request rejected";
+            labels();
+            return;
+        }
+        panes[pane].preview_request = submitted.ticket;
+        panes[pane].link_inspecting = true;
+        panes[pane].previewing = true;
+        labels();
+    }
     void watch() {
         const bool pending = operation_planning_request.has_value() || volume_request ||
             volume_archive_planning_request.has_value() || volume_archive_execution_request.has_value() ||
@@ -2691,10 +2753,46 @@ struct FilesApp::State {
             });
         labels();
     }
+    void consume_link(std::size_t i, FilesPaneReply reply) {
+        auto &p = panes[i];
+        if (!p.preview_request || reply.request != *p.preview_request)
+            return;
+        p.preview_request.reset();
+        p.previewing = false;
+        p.link_inspecting = false;
+        p.cancelling = false;
+        if (reply.state != FilesPaneReplyState::Ready || !reply.link) {
+            p.error = failure(reply);
+            labels();
+            return;
+        }
+        ckv::widgets::DialogDescriptor descriptor;
+        descriptor.title = "Link target";
+        descriptor.resizable = true;
+        descriptor.fields = {
+            {.label = "Read-only metadata from the held link/reparse object. The target was not followed or executed.",
+             .kind = ckv::widgets::FieldKind::Note},
+            {.label = "Metadata", .initial_text = link_text(*reply.link), .kind = ckv::widgets::FieldKind::Memo},
+        };
+        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
+        link_dialog.emplace(
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        link_dialog_window = shell->desktop().active_window();
+        link_dialog_lifetime = link_dialog_window->lifetime_token();
+        link_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
+                if (!weak.expired())
+                    link_dialog_window = nullptr;
+            });
+        labels();
+    }
     void consume(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
         if (p.preview_request && reply.request == *p.preview_request) {
-            consume_preview(i, std::move(reply));
+            if (p.link_inspecting)
+                consume_link(i, std::move(reply));
+            else
+                consume_preview(i, std::move(reply));
             return;
         }
         if (reply.kind == FilesPaneReplyKind::Mutation) {
@@ -3305,6 +3403,11 @@ struct FilesApp::State {
         if (preview_dialog && !preview_dialog->completed()) {
             if (preview_dialog_window && !preview_dialog_lifetime.expired())
                 preview_dialog_window->close();
+            return;
+        }
+        if (link_dialog && !link_dialog->completed()) {
+            if (link_dialog_window && !link_dialog_lifetime.expired())
+                link_dialog_window->close();
             return;
         }
         if (create_directory_dialog && !create_directory_dialog->completed()) {

@@ -52,7 +52,7 @@ struct FilesPanePreview {
     std::vector<std::byte> bytes;
     bool complete = false;
 };
-enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Mutation, Fault };
+enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Link, Mutation, Fault };
 enum class FilesPaneChangeOutcome { NotRequested, NotApplied, Applied, Unknown };
 struct FilesPaneReply {
     FilesPaneTicket request, navigation;
@@ -60,6 +60,9 @@ struct FilesPaneReply {
     ck::files::PaneStateStamp stamp;
     std::shared_ptr<const ck::files::IndexedPanePage> page;
     std::shared_ptr<const FilesPanePreview> preview;
+    // Bounded, owner-free link metadata read through the worker-held row.
+    // The payload is diagnostic data only; it is never reparsed as authority.
+    std::shared_ptr<const ck::files::LinkMetadata> link;
     // A worker-owned mutation outcome. No native owner or path authority is
     // published; a successful mutation requires a subsequent refresh before
     // the UI treats the listing as current.
@@ -164,6 +167,11 @@ class FilesPaneService final {
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
     FilesPaneSubmitted preview(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, ck::files::PaneRowId row,
                                FilesPanePreviewLimits limits = {});
+    // Read the final link/reparse payload of one stamped row without
+    // following it. The worker returns value-only metadata; no native handle
+    // or path authority crosses into the UI.
+    FilesPaneSubmitted inspect_link(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                    ck::files::PaneRowId row);
     // Create one exact native directory component relative to the currently
     // held pane directory. The worker validates the navigation stamp and
     // performs exclusive native creation; callers must refresh after success.

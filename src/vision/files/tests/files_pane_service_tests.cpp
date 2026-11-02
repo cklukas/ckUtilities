@@ -1169,6 +1169,20 @@ CK_TEST(files_service_symbolic_link_is_worker_owned_and_preserves_opaque_target)
     CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
     const auto after = f.reply();
     CK_CHECK(after.state == FilesPaneReplyState::Ready && after.page && after.page->rows().size() == 2);
+    const auto alias = std::find_if(after.page->rows().begin(), after.page->rows().end(),
+                                    [](const auto &row) { return row.display_name == "alias"; });
+    CK_CHECK(alias != after.page->rows().end() && alias->metadata.kind.value() &&
+             *alias->metadata.kind.value() == ObjectKind::SymbolicLink);
+    if (alias != after.page->rows().end()) {
+        const auto inspected = f.service->inspect_link(after.navigation, after.stamp, alias->id);
+        CK_CHECK(inspected.state == FilesPaneSubmission::Accepted);
+        const auto link = f.reply();
+        CK_CHECK(link.kind == FilesPaneReplyKind::Link && link.state == FilesPaneReplyState::Ready && link.link);
+        if (link.link) {
+            const auto payload = std::get_if<PosixSymlinkData>(&link.link->payload);
+            CK_CHECK(payload && payload->target == "../target");
+        }
+    }
     f.stopped();
 }
 #endif
