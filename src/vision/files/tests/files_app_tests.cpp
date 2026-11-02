@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
 #include "files_location_text.hpp"
+#include "sha256.hpp"
 #include "scratch_directory.hpp"
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
@@ -16,6 +17,54 @@
 namespace {
 using namespace ck::vision;
 using namespace ck::files;
+
+template <class T>
+void append_little_endian(std::vector<std::byte> &out, T value) {
+    for (std::size_t index = 0; index != sizeof(T); ++index)
+        out.push_back(std::byte{static_cast<unsigned char>(value >> (index * 8U))});
+}
+
+void append_length_string(std::vector<std::byte> &out, std::string_view value) {
+    append_little_endian<std::uint64_t>(out, value.size());
+    for (const auto byte : value)
+        out.push_back(std::byte{static_cast<unsigned char>(byte)});
+}
+
+void append_native_path(std::vector<std::byte> &out, const NativeAbsolutePath &path) {
+    append_little_endian<std::uint8_t>(out, static_cast<std::uint8_t>(path.encoding()));
+    if (path.posix_bytes()) {
+        append_length_string(out, *path.posix_bytes());
+        return;
+    }
+    std::string bytes;
+    for (const auto unit : *path.windows_units()) {
+        bytes.push_back(static_cast<char>(unit & 0xff));
+        bytes.push_back(static_cast<char>(unit >> 8));
+    }
+    append_length_string(out, bytes);
+}
+
+std::vector<std::byte> archive_recovery_evidence(
+    std::uint64_t transaction, const NativeAbsolutePath &destination,
+    const NativeAbsolutePath &staging, std::span<const std::byte> digest) {
+    std::vector<std::byte> result;
+    append_little_endian<std::uint64_t>(result, transaction);
+    append_length_string(result, "fixture-volume");
+    append_length_string(result, "/fixture");
+    append_length_string(result, "fixture.ckarchive");
+    append_native_path(result, destination);
+    append_little_endian<std::uint8_t>(result, 3U);
+    append_native_path(result, staging);
+    result.insert(result.end(), digest.begin(), digest.end());
+    return result;
+}
+
+std::array<std::byte, 32> digest_bytes(std::span<const std::byte> bytes) {
+    Sha256 digest;
+    digest.update(bytes);
+    return digest.digest();
+}
+
 template <class T> void find_views(ckv::ui::View &root, std::vector<T *> &found) {
     if (auto *view = dynamic_cast<T *>(&root))
         found.push_back(view);
@@ -127,7 +176,7 @@ struct Fixture {
                      std::shared_ptr<std::atomic<bool>> fail_notification = {}, bool folders = false,
                      bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {},
                      bool qualified_volume = false, bool recovery_journal = false,
-                     bool operation_recovery_journal = false)
+                     bool operation_recovery_journal = false, bool eligible_archive_recovery = false)
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -216,7 +265,48 @@ struct Fixture {
         auto prepared_journal_root = prepare_native_operation_journal_root(operation_root_address);
         if (!prepared_journal_root.value())
             throw std::runtime_error("cannot prepare app operation journal root");
-        if (recovery_journal) {
+        if (eligible_archive_recovery) {
+            const auto destination = scratch.path() / "archive-destination";
+            std::filesystem::create_directory(destination);
+            const auto staging = destination / ".fixture.ckarchive.cktmp-31";
+            const std::array<std::byte, 13> content{
+                std::byte{'a'}, std::byte{'r'}, std::byte{'c'}, std::byte{'h'}, std::byte{'i'},
+                std::byte{'v'}, std::byte{'e'}, std::byte{'-'}, std::byte{'s'}, std::byte{'t'},
+                std::byte{'a'}, std::byte{'g'}, std::byte{'e'}};
+            {
+                std::ofstream file(staging, std::ios::binary);
+                file.write(reinterpret_cast<const char *>(content.data()),
+                           static_cast<std::streamsize>(content.size()));
+            }
+            const auto evidence = archive_recovery_evidence(
+                31, address(destination), address(staging), digest_bytes(content));
+            OperationJournalId id;
+            id.bytes[0] = std::byte{31};
+            auto created = OperationJournal::create(FileOperation::Copy, id);
+            if (!created.value())
+                throw std::runtime_error("cannot create eligible archive recovery journal");
+#if defined(_WIN32)
+            const auto journal_name = NativeName::from_windows(
+                u".ck-volume-archive-00000000000000000000000000000031");
+#else
+            const auto journal_name = NativeName::from_posix(
+                ".ck-volume-archive-00000000000000000000000000000031");
+#endif
+            if (!journal_name)
+                throw std::runtime_error("cannot encode eligible archive recovery journal name");
+            auto file = open_native_operation_journal_file(operation_root_address, *journal_name, true);
+            if (!file.value())
+                throw std::runtime_error("cannot open eligible archive recovery journal");
+            auto journal = std::move(created).take_value();
+            for (const auto [sequence, state] : std::array{
+                     std::pair<std::uint64_t, OperationJournalState>{1, OperationJournalState::Planned},
+                     std::pair<std::uint64_t, OperationJournalState>{2, OperationJournalState::Prepared},
+                     std::pair<std::uint64_t, OperationJournalState>{3, OperationJournalState::Copied}}) {
+                if (!append_operation_journal_file(**file.value(), *journal,
+                                                   {sequence, 0, state, evidence}).value())
+                    throw std::runtime_error("cannot append eligible archive recovery journal");
+            }
+        } else if (recovery_journal) {
             std::ofstream journal(operation_root / ".ck-volume-archive-00000000000000000000000000000031",
                                   std::ios::binary);
             journal << "malformed recovery journal";
@@ -232,7 +322,7 @@ struct Fixture {
         }
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
-        if (qualified_volume || recovery_journal) {
+        if (qualified_volume || recovery_journal || eligible_archive_recovery) {
             volume_archive_planning_service = std::make_unique<FilesVolumeArchivePlanningService>(wake.callback());
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
             volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
@@ -1455,6 +1545,34 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
+}
+CK_TEST(files_app_archive_cleanup_command_is_platform_guarded_and_revalidated) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, true);
+    f.loaded();
+    f.until([&] {
+        const auto availability = f.app->availability("ck.files.cleanup_archive_recovery");
+        return availability.enabled || availability.reason.find("not qualified") != std::string::npos;
+    });
+#if defined(_WIN32)
+    CK_CHECK(f.app->availability("ck.files.cleanup_archive_recovery").enabled);
+    CK_CHECK(f.command("ck.files.cleanup_archive_recovery"));
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *cleanup = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Clean up staging")
+            cleanup = button;
+    CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
+    f.until([&] {
+        return !std::filesystem::exists(f.scratch.path() / "archive-destination" / ".fixture.ckarchive.cktmp-31") &&
+            !f.app->availability("ck.files.cleanup_archive_recovery").enabled;
+    });
+#else
+    CK_CHECK(!f.app->availability("ck.files.cleanup_archive_recovery").enabled);
+    CK_CHECK(f.app->availability("ck.files.cleanup_archive_recovery").reason.find(
+                 "identity-bound discard is not qualified") != std::string::npos);
+#endif
 }
 CK_TEST(files_app_operation_recovery_without_service_reports_status_reason) {
     Fixture f;
