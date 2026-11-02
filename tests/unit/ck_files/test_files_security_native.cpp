@@ -123,8 +123,14 @@ CK_TEST(native_move_source_access_refuses_an_existing_writer) {
     auto parent = std::move(parent_result).take_value();
     const auto opened = parent->open_child(NativeName::from_windows(u"file").value(),
                                            EntryAccess::ContentRead | EntryAccess::MoveSource);
-    CK_CHECK(!opened.value() && opened.state() == ObservationState::Denied &&
-             opened.unavailable_detail()->error.code == ERROR_SHARING_VIOLATION);
+    CK_CHECK(!opened.value() && opened.state() == ObservationState::Denied);
+    if (!opened.value() && opened.unavailable_detail()) {
+        // NtCreateFile preserves the native status domain; compare the
+        // documented status value rather than the Win32 translation.
+        CK_CHECK(opened.unavailable_detail()->error.domain == ErrorDomain::NtStatus);
+        CK_CHECK(static_cast<std::uint32_t>(opened.unavailable_detail()->error.code) ==
+                 static_cast<std::uint32_t>(STATUS_SHARING_VIOLATION));
+    }
     CloseHandle(writer);
 }
 #endif
