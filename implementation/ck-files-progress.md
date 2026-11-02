@@ -1,5 +1,25 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-05 worker-owned empty-file creation
+
+The Files service and UI now provide **New file...**. It validates one exact
+native name, creates one regular file with exclusive/no-follow semantics
+relative to the worker-held pane directory, flushes the new entry before
+reporting success, refuses duplicate names as `Changed`, and reopens the
+acknowledged route before exposing the refreshed listing. The UI operation is
+modal-scoped, command-metadata backed, and reports file-specific failure or
+refresh status text.
+
+The focused service and app tests, plus the complete Files aggregate, passed
+from fresh builds on all three platforms: macOS arm64 **251/251**, Linux
+ARM64 **251/251**, and Windows x64 **250/250**. Windows used the v143
+environment and the V: development drive; its ckVision static-runtime ABI was
+matched explicitly with `/MT`. Evidence: [CP-05 empty-file record](evidence/ck-files-cp05-empty-file-20261102.json).
+
+This closes the empty-file portion of CP-05. Hard links, symlink/junction
+inspection and creation, and broader filesystem/sanitizer/real-window gates
+remain open.
+
 ## 2026-11-02 — WP-08 CLI metadata and launcher contract
 
 All ten shipped utilities passed `--help` and `--version` checks on macOS

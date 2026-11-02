@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-02",
+  "scope": "CP-05 worker-owned empty-file creation",
+  "operation": {
+    "service": "exclusive regular-file creation relative to the worker-held pane directory",
+    "durability": "flush_content completes before Ready/mutation_applied",
+    "duplicate": "existing names are refused with ObservationState::Changed",
+    "ui": "strict native-name dialog, modal command scope, acknowledged refresh"
+  },
+  "tests": {
+    "macos_arm64": {
+      "repository_commit": "16d2f84",
+      "build_root": "/Volumes/S8T/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp05-new-file-fixtures-20261102-01",
+      "result": "251/251 Files tests passed"
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "repository_commit": "3efb1c14e",
+      "build_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/build",
+      "fixture_root": "/home/klukas/tmp/ckutilities-cp05-new-file-20261102-01/fixtures",
+      "result": "251/251 Files tests passed"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "repository_commit": "9c602a632",
+      "development_drive": "V:",
+      "build_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\build",
+      "fixture_root": "V:\\tmp\\ckutilities-cp05-new-file-20261102-01\\fixtures",
+      "toolchain": "MSVC v143 vcvars64.bat",
+      "runtime_abi": "/MT matched to the installed ckVision static SDK",
+      "result": "250/250 Files tests passed"
+    }
+  },
+  "safety": [
+    "No pathname-only mutation authority is exposed to the UI.",
+    "A flush failure cannot be reported as successful mutation_applied.",
+    "Temporary/build/fixture paths obey the Mac, Linux, and Windows workstation drive policies.",
+    "No production app instance was launched or left running."
+  ],
+  "status": "pass_empty_file_cross_platform; remaining_cp05_and_release_gates_open"
+}

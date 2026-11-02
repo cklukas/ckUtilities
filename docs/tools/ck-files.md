@@ -63,7 +63,7 @@ execute files or provide an embedded shell.
 - Bounded read-only text and hexadecimal preview, properties, and path copy.
   Preview never runs a file, hydrates provider-managed content implicitly, or
   treats a display name as a rewritten native path.
-- Rename and create-folder actions with strict name validation. Case-only
+- Rename, create-folder, and create-empty-file actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Case-only
   renames and platform-specific name rules are capability-checked rather than
   silently normalized.
 - Copy and move planning that shows the exact sources, destination, conflicts,
@@ -122,6 +122,7 @@ execute files or provide an embedded shell.
 | F5 | Copy |
 | F6 | Move |
 | F7 | Create folder |
+| Operations menu | Create empty file |
 | F2 | Rename |
 | Ctrl+R | Refresh |
 | F1 | Context help |
