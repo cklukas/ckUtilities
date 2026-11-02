@@ -28,6 +28,13 @@
       "result": "20/20 passed"
     }
   ],
+  "full_matrix": {
+    "build_target": "all",
+    "ctest_configuration": "Release",
+    "ctest_result": "223/223 passed",
+    "ctest_elapsed_seconds": 34.24,
+    "note": "An initial CTest invocation was intentionally rejected as incomplete because the prior target build had not produced all test executables; the complete all target was then built and the matrix rerun successfully."
+  },
   "freshness_note": "The initial stale binary was rejected after its failure text identified the prior assertion. The exact object and executable were removed, the current source was rebuilt, and these suites were run only from the rebuilt executable.",
   "status": "pass_safety_boundary_windows_move_source_exclusion"
 }

@@ -8,7 +8,9 @@ native NT sharing-violation status domain/value. The operation-content suite
 passed **20/20**. The first stale binary was rejected by the freshness check;
 the exact object and executable were removed, the current checkout was
 rebuilt with `/MT`, and only that rebuilt executable was used for the final
-qualification. Evidence: [Windows CP-01 open-writer record](evidence/ck-files-windows-move-source-writer-20261102.json).
+qualification. After the focused run, the complete `all` target was built and
+the full Windows CTest matrix passed **223/223**. Evidence: [Windows CP-01
+open-writer record](evidence/ck-files-windows-move-source-writer-20261102.json).
 
 ## 2026-11-02 — CP-01 Linux open-writer refusal qualification
 
