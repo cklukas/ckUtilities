@@ -1,4 +1,19 @@
 # Files implementation evidence
+## 2026-11-02 — CP-03 exact destination receipt boundary
+
+Ordinary regular-file copy composition now carries the exact requested native
+destination address into version-3 recovery evidence when the worker handoff
+can provide it. The address is explicitly not treated as an identity: a future
+recovery worker must reopen it through the native filesystem, bind a fresh
+directory identity, and compare the durable destination identity before any
+cleanup, retry, or publication action. Version-1/2 journals and receipt-less
+composition remain read-only review items. The macOS native recovery evidence
+roundtrip passed **1/1**, the native recovery projection passed **4/4**, and
+the Files recovery service and application suites passed **3/3** and **74/74**.
+Windows v143 passed the recovery service suite **3/3**; Linux ARM64 compiled
+the receipt sources and its recovery gate is being completed before this
+checkpoint is accepted.
+
 ## 2026-11-02 — CP-03 guarded archive-staging cleanup command
 
 Files now owns a plan-bound `Clean up archive staging` command. It is enabled

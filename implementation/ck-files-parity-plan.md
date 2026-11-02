@@ -173,7 +173,11 @@ identity/digest-revalidating cleanup worker, and rescans the journal after
 success. macOS/Linux keep that command disabled with an explicit reason until
 their native discard protocols are qualified. Ordinary-operation cleanup,
 retry/resume and publication reconciliation remain disabled until their
-identity-bound workers and UI presentation are wired and qualified.
+identity-bound workers and UI presentation are wired and qualified. New
+regular-file copy composition now records an optional exact native destination
+address in versioned recovery evidence; legacy journals and copy paths without
+that receipt remain inspect-only and cannot be reopened for mutation after a
+restart.
 
 ## CP-04 — Close the actual safety and release matrix
 

@@ -1,7 +1,9 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_recovery.hpp"
+#include "files_operation_recovery_cleanup.hpp"
 
+#include "native_filesystem.hpp"
 #include "operation_journal_file.hpp"
 #include "native_operation_recovery_evidence.hpp"
 #include "scratch_directory.hpp"
@@ -184,4 +186,95 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
     if (second.value() && !second.value()->journals.empty() && second.value()->journals.front().report)
         CK_CHECK(second.value()->journals.front().report->journal_id == id &&
                  second.value()->journals.front().report->inspection.report.requires_reconciliation);
+}
+
+CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_unsupported) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup");
+    const auto root = address(scratch.path());
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+    ck::files::NativeFileSystem filesystem;
+    auto destination_result = filesystem.open_native_directory(root);
+    CK_CHECK(destination_result.value());
+    if (!destination_result.value()) return;
+    auto destination = std::shared_ptr<const DirectoryCursor>(std::move(destination_result).take_value());
+    auto staging_name = NativeName::from_posix(".ck-copy-staging-recovery");
+    CK_CHECK(staging_name.has_value());
+    if (!staging_name) return;
+    auto staging_result = destination->create_child_file(*staging_name);
+    CK_CHECK(staging_result.value());
+    if (!staging_result.value()) return;
+    auto staging = std::move(staging_result).take_value();
+    const auto staging_metadata = staging->inspect_basic();
+    const auto destination_identity = destination->identity();
+    CK_CHECK(staging_metadata.value() && staging_metadata.value()->identity.value() &&
+             destination_identity.value());
+    if (!staging_metadata.value() || !staging_metadata.value()->identity.value() ||
+        !destination_identity.value()) return;
+    const auto staging_durable = NativeDurableIdentity::from_live(*staging_metadata.value()->identity.value());
+    const auto destination_durable = NativeDurableIdentity::from_live(*destination_identity.value());
+    CK_CHECK(staging_durable && destination_durable);
+    if (!staging_durable || !destination_durable) return;
+
+#if defined(_WIN32)
+    const auto journal_name = *NativeName::from_windows(u".ck-copy-journal-recovery-cleanup");
+#else
+    const auto journal_name = *NativeName::from_posix(".ck-copy-journal-recovery-cleanup");
+#endif
+    OperationJournalId id;
+    id.bytes[0] = std::byte{0xa1};
+    auto journal_result = OperationJournal::create(FileOperation::Copy, id, {1, 8, 4096});
+    CK_CHECK(journal_result.value());
+    if (!journal_result.value()) return;
+    auto journal = std::move(journal_result).take_value();
+ #if defined(_WIN32)
+    const auto published_name = *NativeName::from_windows(u"published");
+ #else
+    const auto published_name = *NativeName::from_posix("published");
+ #endif
+    NativeOperationRecoveryEvidence receipt{
+        *staging_name, published_name, *destination_durable,
+        *destination_durable, *destination_durable, *staging_durable, root};
+    const auto encoded = encode_native_operation_recovery_evidence(receipt);
+    CK_CHECK(encoded.value());
+    if (!encoded.value()) return;
+    auto journal_file_result = open_native_operation_journal_file(root, journal_name, true);
+    CK_CHECK(journal_file_result.value());
+    if (!journal_file_result.value()) return;
+    auto journal_file = std::move(journal_file_result).take_value();
+    CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+        {1, 0, OperationJournalState::Planned, {}}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+        {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
+    CK_CHECK(append_operation_journal_file(*journal_file, *journal,
+        {3, 0, OperationJournalState::Copied, *encoded.value()}).value());
+    journal_file.reset();
+    staging.reset();
+    destination.reset();
+
+    std::mutex wake_mutex;
+    std::condition_variable wake_condition;
+    FilesOperationRecoveryCleanupService service([&] { wake_condition.notify_all(); });
+    CK_CHECK(service.request(root, journal_name, id) ==
+             FilesOperationRecoveryCleanupSubmission::Accepted);
+    std::optional<FilesOperationRecoveryCleanupReply> reply;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!reply && std::chrono::steady_clock::now() < deadline) {
+        reply = service.take();
+        if (!reply) {
+            std::unique_lock lock(wake_mutex);
+            wake_condition.wait_for(lock, std::chrono::milliseconds(10));
+        }
+    }
+    CK_CHECK(reply.has_value());
+    if (reply) {
+#if defined(_WIN32)
+        CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Complete);
+        CK_CHECK(!std::filesystem::exists(scratch.path() / ".ck-copy-staging-recovery"));
+#else
+        CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Unsupported);
+        CK_CHECK(std::filesystem::exists(scratch.path() / ".ck-copy-staging-recovery"));
+#endif
+    }
+    service.request_stop();
+    service.join();
 }
