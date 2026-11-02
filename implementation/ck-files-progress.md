@@ -20,6 +20,11 @@ in 15.17 seconds, and Windows x64 **223/223** in 66.60 seconds. The Windows
 run used the complete `all` target on V:, so every registered executable was
 present; an earlier incomplete run with missing test binaries is not counted.
 
+The focused macOS AppleClang TSan case for the native published-object
+verifier was rerun with `halt_on_error=1` and passed **1/1** without a race or
+sanitizer diagnostic. This is a native seam check only; it does not replace
+the unresolved Linux TSan runtime gate or application-wide sanitizer matrix.
+
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 
 Post-publication ordinary-copy journal records now carry a separate durable

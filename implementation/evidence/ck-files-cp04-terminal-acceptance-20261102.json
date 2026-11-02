@@ -62,6 +62,15 @@
     "result": "223/223 passed",
     "ctest_elapsed_seconds": 15.17
   },
+  "macos_tsan_focused": {
+    "build_root": "/Volumes/S8T/tmp/ckutilities-af460a2-tsan-20261026-01/build",
+    "executable": "/Volumes/S8T/tmp/ckutilities-af460a2-tsan-20261026-01/build/tests/unit/ck_files/ck_files_native_tests",
+    "executable_sha256": "d7cb78100a2c4ee33455dfb5dba0d3e197c6e054a1f28ab40c144b0ee874a667",
+    "configuration": "AppleClang ThreadSanitizer, halt_on_error=1, history_size=7",
+    "case": "native_operation_copy_job_journals_verifies_and_publishes_without_replacement",
+    "result": "1/1 passed with no race or sanitizer diagnostic",
+    "scope": "native published-object verifier seam; not application-wide TSan coverage"
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
