@@ -2723,7 +2723,7 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             break;
         }
         const auto walk = ck::files::walk_native_directories(
-            start, prepared.includeSubdirectories, prepared.followSymlinks,
+            start, prepared.includeSubdirectories, prepared.followSymlinks, prepared.followSymlinks,
             [&](const ck::files::NativeWalkEntry &entry) {
                 if (cancellationRequested())
                     return ck::files::NativeWalkAction::Stop;

@@ -442,7 +442,9 @@ BuildDirectoryTreeResult buildDirectoryTreeNative(const fs::path &scanPath,
     auto cancelRequested = [&]() { return options.cancelRequested && options.cancelRequested(); };
 
     const auto walk = ck::files::walk_native_directories(
-        scanPath, true, options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        scanPath, true,
+        options.followCommandLineSymlinks || options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
         [&](const ck::files::NativeWalkEntry &entry) {
             if (entry.root) {
                 root->path = entry.path;
@@ -522,7 +524,9 @@ std::vector<FileEntry> listFilesNative(const fs::path &scanPath, bool recursive,
     context.rootPath = scanPath;
     const auto cancelled = [&]() { return options.cancelRequested && options.cancelRequested(); };
     const auto walk = ck::files::walk_native_directories(
-        scanPath, recursive, options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        scanPath, recursive,
+        options.followCommandLineSymlinks || options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
+        options.symlinkPolicy == BuildDirectoryTreeOptions::SymlinkPolicy::Always,
         [&](const ck::files::NativeWalkEntry &entry) {
             if (cancelled())
                 return ck::files::NativeWalkAction::Stop;
@@ -758,6 +762,11 @@ FileEntry makeFileEntry(const fs::path &path, const fs::path &base, const platfo
 BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPath,
                                            const BuildDirectoryTreeOptions &options)
 {
+#if defined(_WIN32)
+    ScanContext nativeContext = makeScanContext(rootPath, options);
+    nativeContext.rootPath = rootPath;
+    return buildDirectoryTreeNative(rootPath, options, nativeContext);
+#else
     BuildDirectoryTreeResult result;
     std::error_code ec;
     fs::path basePath = fs::absolute(rootPath, ec);
@@ -779,12 +788,6 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
     scanPath = fs::absolute(scanPath, ec);
     if (ec)
         scanPath = basePath;
-
-#if defined(_WIN32)
-    ScanContext nativeContext = makeScanContext(scanPath, options);
-    nativeContext.rootPath = scanPath;
-    return buildDirectoryTreeNative(scanPath, options, nativeContext);
-#else
 
     auto root = std::make_unique<DirectoryNode>();
     root->parent = nullptr;
@@ -811,6 +814,9 @@ BuildDirectoryTreeResult buildDirectoryTree(const std::filesystem::path &rootPat
 std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool recursive,
                                 const BuildDirectoryTreeOptions &options)
 {
+#if defined(_WIN32)
+    return listFilesNative(directory, recursive, options);
+#else
     std::vector<FileEntry> files;
 
     std::error_code ec;
@@ -832,10 +838,6 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
     scanPath = fs::absolute(scanPath, ec);
     if (ec)
         scanPath = basePath;
-
-#if defined(_WIN32)
-    return listFilesNative(scanPath, recursive, options);
-#else
 
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;
@@ -985,6 +987,9 @@ std::vector<FileEntry> listFiles(const std::filesystem::path &directory, bool re
 std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &directory, bool recursive,
                                                 const BuildDirectoryTreeOptions &options)
 {
+#if defined(_WIN32)
+    return summarizeFileTypesNative(directory, recursive, options);
+#else
     std::map<std::string, FileTypeSummary> summaries;
 
     std::error_code ec;
@@ -1006,10 +1011,6 @@ std::vector<FileTypeSummary> summarizeFileTypes(const std::filesystem::path &dir
     scanPath = fs::absolute(scanPath, ec);
     if (ec)
         scanPath = basePath;
-
-#if defined(_WIN32)
-    return summarizeFileTypesNative(scanPath, recursive, options);
-#else
 
     ScanContext context = makeScanContext(scanPath, options);
     context.rootPath = scanPath;

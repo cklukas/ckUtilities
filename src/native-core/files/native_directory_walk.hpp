@@ -49,7 +49,8 @@ inline std::error_code native_walk_error(const UnavailableObservation& detail) {
 template <class EntryCallback, class ErrorCallback, class CancelCallback, class ExitCallback>
 NativeWalkResult walk_native_directories(const std::filesystem::path& root,
                                          bool recursive,
-                                         bool follow_final_links,
+                                         bool follow_root_final_link,
+                                         bool follow_child_final_links,
                                          EntryCallback&& on_entry,
                                          ErrorCallback&& on_error,
                                          CancelCallback&& cancelled,
@@ -82,7 +83,7 @@ NativeWalkResult walk_native_directories(const std::filesystem::path& root,
         visited_directories.push_back(*root_entry.metadata.identity.value());
 
     auto open_root = filesystem.open_directory(root,
-        follow_final_links ? DirectoryLinkPolicy::FollowFinalLink : DirectoryLinkPolicy::RejectFinalLink);
+        follow_root_final_link ? DirectoryLinkPolicy::FollowFinalLink : DirectoryLinkPolicy::RejectFinalLink);
     if (!open_root.value()) {
         on_error(root, native_walk_error(*open_root.unavailable_detail()));
         return {true, false};
@@ -136,7 +137,7 @@ NativeWalkResult walk_native_directories(const std::filesystem::path& root,
         }
 
         std::unique_ptr<DirectoryCursor> followed_directory;
-        if (follow_final_links && metadata.value() && metadata.value()->kind.value()) {
+        if (follow_child_final_links && metadata.value() && metadata.value()->kind.value()) {
             const auto kind = *metadata.value()->kind.value();
             if (kind == ObjectKind::Directory || kind == ObjectKind::SymbolicLink ||
                 kind == ObjectKind::Junction || kind == ObjectKind::ReparsePoint) {
@@ -163,7 +164,7 @@ NativeWalkResult walk_native_directories(const std::filesystem::path& root,
         Observation<std::unique_ptr<DirectoryCursor>> child_directory;
         if (followed_directory) {
             child_directory = Observation<std::unique_ptr<DirectoryCursor>>::available(std::move(followed_directory));
-        } else if (follow_final_links) {
+        } else if (follow_child_final_links) {
             child_directory = filesystem.open_directory(entry.path, DirectoryLinkPolicy::FollowFinalLink);
         } else {
             child_directory = cursor->open_directory_child(*entry.name);

@@ -53,14 +53,21 @@ file APIs. This covers long and non-ASCII archive names without allowing a
 locale-dependent `std::filesystem::path(std::string)` conversion to become a
 Windows I/O operation.
 
-The audit deliberately does not certify the legacy recursive engines in
+The Windows branches of the recursive engines in
 `src/tools/ck-find/src/search_backend.cpp` and
-`src/tools/ck-du/src/disk_usage_core.cpp`: their Windows traversal still uses
-`std::filesystem` iterators and is a separate migration item. They must not
-be extended with new long-path-sensitive behavior until they are moved to the
-native filesystem adapter. This limitation is recorded rather than hidden by
-the shared wrapper, which cannot make an iterator-based traversal handle-safe
-or preserve its metadata/reparse semantics by itself.
+`src/tools/ck-du/src/disk_usage_core.cpp` now use the shared
+`native_directory_walk.hpp` adapter. Enumeration owns native directory
+cursors, opens child metadata through held handles, follows only the explicit
+symlink policy, tracks directory identities to stop cycles, and converts paths
+to extended wide I/O only at the native boundary. Their old
+`std::filesystem` iterator implementations remain compiled only for POSIX
+targets, where they use the host-native POSIX filesystem implementation.
+
+The Windows qualification build at commit `f736631` compiled both migrated
+cores and passed the full 224-test suite. A future change that adds another
+Windows traversal must use the same adapter or an equivalent qualified native
+boundary; wrapping a new iterator-based traversal in `ck::io` is not enough to
+make its enumeration handle-safe or preserve its metadata/reparse semantics.
 
 ## ckVision 1.4.2
 
