@@ -198,14 +198,26 @@ CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity) {
     fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
 #endif
     NativeFileSystem filesystem;
-    auto directory = take(filesystem.open_directory(scratch.path()));
+    auto directory_result = filesystem.open_directory(scratch.path());
+    CK_CHECK(directory_result.value());
+    if (!directory_result.value())
+        return;
+    auto directory = std::move(directory_result).take_value();
     const auto destination_observation = directory->identity();
     CK_CHECK(destination_observation.value());
     if (!destination_observation.value())
         return;
     const auto destination_identity = *destination_observation.value();
-    auto staging = take(directory->create_child_file(name("recovery-staging.bin")));
-    const auto staging_metadata = take(staging->inspect_basic());
+    auto staging_result = directory->create_child_file(name("recovery-staging.bin"));
+    CK_CHECK(staging_result.value());
+    if (!staging_result.value())
+        return;
+    auto staging = std::move(staging_result).take_value();
+    const auto staging_metadata_result = staging->inspect_basic();
+    CK_CHECK(staging_metadata_result.value());
+    if (!staging_metadata_result.value())
+        return;
+    const auto staging_metadata = *staging_metadata_result.value();
     CK_CHECK(staging_metadata.identity.value() && destination_identity.scope.is_valid());
     if (!staging_metadata.identity.value())
         return;
