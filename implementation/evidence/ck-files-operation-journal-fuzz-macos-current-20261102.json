@@ -13,6 +13,9 @@
     "asan_ubsan_build_root": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-asan/build",
     "asan_ubsan_binary": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-asan/build/fuzz/fuzz_operation_journal",
     "asan_ubsan_binary_sha256": "3bf481ff7e149c1830501beff90731529fd716ddcb72bf1591a2b9a13981246e",
+    "tsan_build_root": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-tsan/build",
+    "tsan_binary": "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01-tsan/build/fuzz/fuzz_operation_journal",
+    "tsan_binary_sha256": "7e0e5b74416f39fa0f51dc3f56d1dd6bc6b8c4c5bcef0e07e23645841e5ecfbf",
     "sanitizers": ["address", "undefined"],
     "temporary_roots": [
       "/Volumes/S8T/tmp/ckutilities-journal-fuzz-20261102-01",
@@ -47,6 +50,18 @@
       "crashes": 0,
       "timeouts": 0,
       "sanitizer_diagnostics": "none",
+      "exit_code": 0
+    },
+    "tsan_empty_corpus_mutation": {
+      "command": "TSAN_OPTIONS=halt_on_error=1:report_bugs=1 fuzz_operation_journal -max_total_time=8 -max_len=4096 -rss_limit_mb=512 -timeout=2 -seed=20261109 -print_final_stats=1",
+      "result": "passed",
+      "elapsed_seconds": 9,
+      "executions": 5948712,
+      "new_coverage_units": 85,
+      "peak_rss_mb": 67,
+      "crashes": 0,
+      "timeouts": 0,
+      "race_diagnostics": "none",
       "exit_code": 0
     }
   },

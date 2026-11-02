@@ -6,9 +6,11 @@ LLVM Clang 23.1.4. With the repository's absent seed directory explicitly
 recorded, an empty-corpus bounded mutation run completed **20,154,249
 executions** in 16 seconds with **99** new coverage units and 29 MB peak RSS.
 The matching ASan+UBSan run completed **2,776,928 executions** in 9 seconds
-with **91** new coverage units and 275 MB peak RSS. Both exited successfully
-with no crashes, timeouts or sanitizer diagnostics. This closes only the
-operation-journal decoder seam; the broader WP-07 matrix remains open.
+with **91** new coverage units and 275 MB peak RSS. A TSan run completed
+**5,948,712 executions** in 9 seconds with **85** new coverage units and 67 MB
+peak RSS. All three runs exited successfully with no crashes, timeouts,
+sanitizer diagnostics or race reports. This closes only the operation-journal
+decoder seam; the broader WP-07 matrix remains open.
 Evidence: [current operation-journal fuzz record](evidence/ck-files-operation-journal-fuzz-macos-current-20261102.json).
 
 ## 2026-11-02 — Current WP-02 completion contract reconciliation
