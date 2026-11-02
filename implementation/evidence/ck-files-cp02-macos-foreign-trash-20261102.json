@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-02",
+  "platform": "macOS arm64",
+  "host": "Mac",
+  "source_commit": "f9239571108f2a83f4b6776eb1160798a0bcccac",
+  "fixture": {
+    "foreign_root": "/Volumes/S8T/tmp/ckutilities-cp02-foreign-trash-macos-20261102-01/source",
+    "foreign_volume": "S8T; case-sensitive APFS; owners disabled; read-write",
+    "trash_home_root": "/Volumes/PRO-BLADE/tmp/ckutilities-cp02-foreign-trash-macos-20261102-01-home",
+    "trash_home_volume": "PRO-BLADE; case-sensitive APFS; owners enabled; read-write"
+  },
+  "build": {
+    "configuration": "Release/Ninja",
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1)",
+    "executable": "/Volumes/S8T/tmp/ckutilities-cp01-open-writer-20261102-02/build/tests/unit/ck_files/ck_files_native_tests",
+    "executable_sha256": "bdd1672dc2391ee8c14923253cde21dd634d3f37f2fb61025b4223d1d1e56973"
+  },
+  "suite": "test_files_native.cpp",
+  "result": "9/9 passed",
+  "coverage": "The opt-in foreign-mount case created a directory entry on S8T, used the mount-specific macOS .Trashes/<uid> payload and metadata, checked the identity-bound native move, verified the source disappeared and the trash payload plus .trashinfo were present, then removed only the verified fixture payload. The directory-tree Trash case also restored descendant bytes from the platform Trash payload.",
+  "safety_boundary": "This qualifies native single-entry disposition of a directory tree on a foreign mount. Recursive Files Trash remains disabled until the reviewed frozen-inventory worker and broader foreign-mount, quota, permission, collision and unsupported-share matrix are complete. No permanent-delete fallback was used.",
+  "status": "pass_cp02_macos_foreign_mount_native_trash"
+}

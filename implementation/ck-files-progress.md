@@ -1,4 +1,16 @@
 # Files implementation evidence
+## 2026-11-02 — CP-02 macOS foreign-mount native Trash qualification
+
+The opt-in macOS native suite passed **9/9** with a directory entry created on
+the separate S8T APFS volume. The adapter used the mount-specific
+`.Trashes/<uid>` layout, wrote and verified the restore metadata, preserved
+the directory-tree payload, and restored descendant bytes. The source and
+trash identities were checked through the native handle-bound path. This
+qualifies the platform primitive only; recursive Files Trash remains disabled
+until the frozen-inventory worker and the remaining foreign-mount, quota,
+permission, collision and unsupported-share cases are complete. Evidence:
+[CP-02 macOS foreign Trash record](evidence/ck-files-cp02-macos-foreign-trash-20261102.json).
+
 ## 2026-11-02 — CP-01 current macOS full-matrix qualification
 
 The current Apple Clang arm64 Release build passed the focused ckVision Files
