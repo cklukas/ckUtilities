@@ -8,6 +8,7 @@ target_include_directories(ck_find_cli_buffer_tests
   PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/tools/ck-find/include
+    ${PROJECT_SOURCE_DIR}/src/native-core/files
 )
 
 target_sources(ck_find_cli_buffer_tests
@@ -22,5 +23,6 @@ include(${PROJECT_SOURCE_DIR}/cmake/FetchNlohmannJson.cmake)
 target_link_libraries(ck_find_cli_buffer_tests
   PRIVATE
     ck_options
+    ck_files_platform
     nlohmann_json::nlohmann_json
 )
