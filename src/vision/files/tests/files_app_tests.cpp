@@ -860,6 +860,13 @@ CK_TEST(files_app_symbolic_link_command_is_capability_scoped_and_uses_opaque_tar
     CK_CHECK(f.app->model(0).row_count() == 101);
 #endif
 }
+CK_TEST(files_app_link_inspection_is_disabled_for_a_regular_file_with_status_reason) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(!f.command("ck.files.inspect_link"));
+    CK_CHECK(f.app->availability("ck.files.inspect_link").reason ==
+             "Link inspection unavailable: select a symbolic link or reparse point");
+}
 CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listing) {
     Fixture f;
     f.loaded();
