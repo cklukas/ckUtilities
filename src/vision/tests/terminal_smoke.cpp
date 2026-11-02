@@ -250,14 +250,22 @@ int main(int argc, char **argv)
 
         if (!quit_sent && elapsed >= std::chrono::milliseconds(450))
         {
-            constexpr std::array<char, 2> quit = {'\x1b', 'x'};
-            const ssize_t written = ::write(master, quit.data(), quit.size());
-            if (written != static_cast<ssize_t>(quit.size()))
+            // Exercise the real terminal input path with an unbound modified
+            // key and an SGR mouse press/release on the footer.  The footer
+            // cell is outside the file rows, so this cannot select or invoke
+            // a file operation; the following Alt+X still proves clean exit.
+            constexpr std::string_view input = "\x1b[1;2A"
+                                               "\x1b[999~"
+                                               "\x1b[<0;99;23M"
+                                               "\x1b[<0;99;23m"
+                                               "\x1bx";
+            const ssize_t written = ::write(master, input.data(), input.size());
+            if (written != static_cast<ssize_t>(input.size()))
             {
                 reap_after_failure(child);
                 close_fd(master);
                 close_fd(mode_probe);
-                return report_failure("Could not send the standard Alt+X quit chord.");
+                return report_failure("Could not send the terminal input contract.");
             }
             quit_sent = true;
         }

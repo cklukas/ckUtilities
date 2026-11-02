@@ -108,7 +108,15 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
                 (void)waits.wait(std::min(settled, clock.now_nanos() + 20'000'000LL), child->wait_handles());
                 (void)child->drain(64 * 1024);
             }
-            child->send_input("\x1b"
+            // Exercise the actual ConPTY input path with an unbound modified
+            // key and a harmless SGR mouse press/release on the footer cell.
+            // The click is outside file rows; Alt+X remains the only exit
+            // command and proves that input handling leaves the tool usable.
+            child->send_input("\x1b[1;2A"
+                              "\x1b[999~"
+                              "\x1b[<0;99;23M"
+                              "\x1b[<0;99;23m"
+                              "\x1b"
                               "x");
             CK_CHECK(pump(true));
         }
