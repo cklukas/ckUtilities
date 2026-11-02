@@ -2,8 +2,10 @@
 
 Status: implementation active; WP-00 and WP-01 complete. WP-02 feature
 implementation and current-source normal qualification are complete on
-macOS, Linux and Windows. Final WP-02 acceptance remains open for interactive
-real-window acceptance and sanitizer/runtime gates documented in the
+macOS, Linux and Windows. The current production target now passes the
+available real POSIX-PTY and Windows-ConPTY terminal contract on all three
+platforms. Final WP-02 acceptance remains open for real-window mouse and
+restricted-key acceptance plus sanitizer/runtime gates documented in the
 [implementation evidence](ck-files-progress.md). The production `ck-files`
 executable is integrated and has passed the available real-terminal checks on
 macOS and Linux. Windows v143 qualification is now available on the

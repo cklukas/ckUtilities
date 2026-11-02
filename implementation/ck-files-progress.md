@@ -1,5 +1,19 @@
 # Files implementation evidence
 
+## 2026-11-02 — CP-04 current-source terminal acceptance
+
+The current production `ck-files` target passed the real terminal contract on
+all three qualified platforms. macOS arm64 and Linux ARM64 used the POSIX PTY
+smoke helper at 80x24; each rendered, accepted Alt+X, restored the terminal
+profile, and exited successfully. Windows x64 used the V:-resident MSVC v143
+ConPTY contract at 100x30; all ten utilities, including `ck-files`, rendered
+and exited successfully through Alt+X in the 1/1 contract test. No production
+app instance was left running. Evidence: [CP-04 terminal acceptance record](evidence/ck-files-cp04-terminal-acceptance-20261102.json).
+
+This closes the available real-PTY/ConPTY terminal contract for the current
+source. It does not close the required real-window mouse/restricted-key
+acceptance or the Linux TSan runtime gate.
+
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 
 Post-publication ordinary-copy journal records now carry a separate durable

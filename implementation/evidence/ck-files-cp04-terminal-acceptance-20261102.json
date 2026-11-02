@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-04",
+  "scope": "current-source real terminal startup, rendering, standard exit, and terminal restoration",
+  "source_commit_macos": "5dcf71b",
+  "source_commit_windows": "005fe3fb1",
+  "source_commit_linux": "8126f9a83",
+  "checks": {
+    "macos_arm64": {
+      "host": "local Mac",
+      "terminal_contract": "POSIX PTY, xterm-256color, 80x24",
+      "helper": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "9225da47f8528b356c5b6c779884d6ad725f9bb17cc6b5436bd1aab15f63062c",
+      "executable": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/bin/ck-files",
+      "executable_sha256": "d32bdae4870d3aa45786915293b20485de281bbbaaad7d217121c154f4a04f53",
+      "result": "passed: rendered, accepted Alt+X, restored terminal profile, exited successfully"
+    },
+    "linux_arm64": {
+      "host": "uconsole",
+      "terminal_contract": "POSIX PTY, xterm-256color, 80x24",
+      "helper": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "3e36f570ebe6bcfa85dc2fde1c1884962b8ddc624031a1d06734c32bc9b8d53",
+      "executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/bin/ck-files",
+      "executable_sha256": "217ee561262f0fdcab719609636f798b16d3dffa766001defdc00237e2bffff6",
+      "result": "passed: rendered, accepted Alt+X, restored terminal profile, exited successfully"
+    },
+    "windows_x64": {
+      "host": "workstation",
+      "development_drive": "V:",
+      "toolchain": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+      "terminal_contract": "Windows ConPTY, 100x30",
+      "contract_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\tests\\ck_windows_tools_contract.exe",
+      "contract_executable_sha256": "7680c01bcdd04c617de004add6900e02ab81b5097e5c154c944bcb42ac96a3de",
+      "production_executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\bin\\ck-files.exe",
+      "production_executable_sha256": "d34320a2c5e07718220dcfe9d36fb1e76c27e94098448aaa0a7165743ac7a748",
+      "scope": "ck-utilities, ck-json-view, ck-find, ck-du, ck-edit, ck-chat, ck-todo, ck-sysmon, ck-config, ck-files",
+      "result": "passed: 1/1 contract test; every utility rendered and accepted Alt+X with exit code 0"
+    }
+  },
+  "safety": [
+    "All temporary/configuration data was under the mandated task-specific temporary roots.",
+    "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
+    "No production app instance was left running.",
+    "This is a terminal contract result, not proof of real-window mouse or restricted-key acceptance."
+  ],
+  "status": "pass_terminal_contract; real_window_input_and_linux_tsan_gates_remain_open"
+}
