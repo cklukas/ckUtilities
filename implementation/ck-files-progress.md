@@ -1,5 +1,25 @@
 # Files implementation evidence
 
+## 2026-11-02 — Windows native-I/O boundary checkpoint
+
+Commit `292ba0f` extends the shared Windows wide/extended-length boundary to
+ordinary-file listing and copy operations, then routes ck-config export/import,
+saved-search persistence, and launcher executable discovery through it. The
+Mac focused build and file-manager tests passed. A fresh checkout of the same
+commit on `V:\dev\ckutilities-windows-audit-20261102-01` rebuilt the pinned
+ckVision v1.4.2 SDK with MSVC v143, built all 475 configured targets, passed
+the independent ckVision package consumer and **224/224** CTest entries, and
+produced `ck-utilities-0.2.0-windows-x64.zip` with all ten utilities starting
+successfully. The package SHA-256 is
+`6b35cc3b75d6d34105adf5ea5fa63205563162870c0ffbeb832112841d28b782`.
+
+The Windows source audit found no ANSI Win32 filesystem/process calls in the
+pinned ckVision production source at commit
+`7ad5bd67553414e7dc0882069482864034cb31f9`. Its `MAX_PATH` uses are bounded
+initial capacities or compatibility spellings with dynamic growth. The audit
+explicitly leaves the older recursive `ck-find` and `ck-du` iterator engines
+uncertified until they are migrated to the native filesystem adapter.
+
 ## 2026-11-02 — WP-07 isolated LLVM libFuzzer qualification
 
 The four current LLVM-Clang fuzzer targets built from the current source and
