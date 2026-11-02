@@ -118,6 +118,7 @@ struct Fixture {
     std::unique_ptr<FilesVolumeArchivePlanningService> volume_archive_planning_service;
     std::unique_ptr<FilesVolumeArchiveService> volume_archive_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
+    std::unique_ptr<FilesVolumeArchiveRecoveryCleanupService> volume_archive_recovery_cleanup_service;
     std::unique_ptr<FilesOperationRecoveryService> operation_recovery_service;
     std::unique_ptr<FilesApp> app;
     unsigned exits = 0;
@@ -235,6 +236,8 @@ struct Fixture {
             volume_archive_planning_service = std::make_unique<FilesVolumeArchivePlanningService>(wake.callback());
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
             volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
+            volume_archive_recovery_cleanup_service =
+                std::make_unique<FilesVolumeArchiveRecoveryCleanupService>(wake.callback());
         }
         if (operation_recovery_journal)
             operation_recovery_service = std::make_unique<FilesOperationRecoveryService>(wake.callback());
@@ -263,7 +266,8 @@ struct Fixture {
             planning_service.get(), execution_service.get(),
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
             volume_service.get(), volume_archive_planning_service.get(), volume_archive_service.get(),
-            volume_archive_recovery_service.get(), operation_recovery_service.get());
+            volume_archive_recovery_service.get(), volume_archive_recovery_cleanup_service.get(),
+            operation_recovery_service.get());
     }
     ~Fixture() {
         app.reset();
@@ -284,6 +288,8 @@ struct Fixture {
             volume_archive_service->join();
         if (volume_archive_recovery_service)
             volume_archive_recovery_service->join();
+        if (volume_archive_recovery_cleanup_service)
+            volume_archive_recovery_cleanup_service->join();
         if (operation_recovery_service)
             operation_recovery_service->join();
         application.step(0); // Drain late weak posts after controller destruction.
@@ -1442,6 +1448,8 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.app->status(0).find("Hint: Copy unavailable: archive recovery review is required") != std::string::npos);
     CK_CHECK(f.app->availability("ck.files.inspect_archive_recovery").enabled);
     CK_CHECK(f.application.commands().is_enabled(f.id("ck.files.inspect_archive_recovery")));
+    CK_CHECK(!f.app->availability("ck.files.cleanup_archive_recovery").enabled);
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.cleanup_archive_recovery")));
     CK_CHECK(f.command("ck.files.inspect_archive_recovery"));
     f.until([&] { return f.painted().find("Archive recovery review") != std::string::npos; });
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);

@@ -60,6 +60,7 @@ class FilesApp final {
              FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr,
              FilesVolumeArchiveService *volume_archive_service = nullptr,
              FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr,
+             FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr,
              FilesOperationRecoveryService *operation_recovery_service = nullptr);
     ~FilesApp();
     FilesApp(const FilesApp &) = delete;
