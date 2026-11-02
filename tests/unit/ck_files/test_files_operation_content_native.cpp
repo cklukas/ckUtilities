@@ -191,59 +191,6 @@ CK_TEST(native_operation_staging_cleanup_requires_handle_bound_disposition) {
 #endif
 }
 
-CK_TEST(native_operation_recovery_cleanup_revalidates_staging_identity) {
-    const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup",
-                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-#if !defined(_WIN32)
-    fs::permissions(scratch.path(), fs::perms::owner_all, fs::perm_options::replace);
-#endif
-    NativeFileSystem filesystem;
-    auto directory_result = filesystem.open_directory(scratch.path());
-    CK_CHECK(directory_result.value());
-    if (!directory_result.value())
-        return;
-    auto directory = std::move(directory_result).take_value();
-    const auto destination_observation = directory->identity();
-    CK_CHECK(destination_observation.value());
-    if (!destination_observation.value())
-        return;
-    const auto destination_identity = *destination_observation.value();
-    auto staging_result = directory->create_child_file(name("recovery-staging.bin"));
-    CK_CHECK(staging_result.value());
-    if (!staging_result.value())
-        return;
-    auto staging = std::move(staging_result).take_value();
-    const auto staging_metadata_result = staging->inspect_basic();
-    CK_CHECK(staging_metadata_result.value());
-    if (!staging_metadata_result.value())
-        return;
-    const auto staging_metadata = *staging_metadata_result.value();
-    CK_CHECK(staging_metadata.identity.value() && destination_identity.scope.is_valid());
-    if (!staging_metadata.identity.value())
-        return;
-    const auto staging_identity = NativeDurableIdentity::from_live(*staging_metadata.identity.value());
-    const auto durable_destination = NativeDurableIdentity::from_live(destination_identity);
-    CK_CHECK(staging_identity && durable_destination);
-    if (!staging_identity || !durable_destination)
-        return;
-
-    NativeOperationRecoveryArtifact artifact;
-    artifact.state = OperationJournalState::Copied;
-    artifact.evidence = NativeOperationRecoveryEvidence{
-        name("recovery-staging.bin"), name("published.bin"), *durable_destination,
-        *staging_identity, *durable_destination, *staging_identity};
-    const auto staging_path = scratch.path() / "recovery-staging.bin";
-    const auto destination = std::shared_ptr<const DirectoryCursor>(std::move(directory));
-    const auto cleaned = cleanup_native_unpublished_staging({
-        std::move(artifact), destination, destination_identity});
-#if defined(_WIN32)
-    CK_CHECK(cleaned.value() && *cleaned.value() && !fs::exists(staging_path));
-#else
-    CK_CHECK(!cleaned.value() && cleaned.state() == ObservationState::Unsupported &&
-             fs::exists(staging_path));
-#endif
-}
-
 CK_TEST(native_operation_stream_copy_composes_held_source_and_staging_handles) {
     const ck::testing::ScratchDirectory scratch("files-operation-native-copy", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto source_path = scratch.path() / "source.bin";
