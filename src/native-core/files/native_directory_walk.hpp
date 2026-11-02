@@ -113,7 +113,7 @@ NativeWalkResult walk_native_directories(const std::filesystem::path& root,
             continue;
 
         NativeName name = std::move(read.names.front());
-        const auto child_address = std::get<1>(frame).child_address(name);
+        auto child_address = std::get<1>(frame).child_address(name);
         if (!child_address.value()) {
             on_error(std::get<2>(frame), native_walk_error(*child_address.unavailable_detail()));
             continue;
