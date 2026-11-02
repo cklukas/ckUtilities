@@ -6,6 +6,7 @@
 #include "ck/ai/config.hpp"
 #include "ck/ai/llm.hpp"
 #include "ck/app_info.hpp"
+#include "ck/file_io.hpp"
 #include "ck/launcher.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/ui/clock_view.hpp"
@@ -19,7 +20,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <thread>
@@ -103,7 +103,7 @@ ChatApp::ChatApp(int argc, char **argv)
   applyConversationSettingsToWindows();
 
   logPath_ = binaryDir_ / "chat.log";
-  std::ofstream(logPath_, std::ios::trunc).close();
+  (void)ck::io::write_file(logPath_, {});
 }
 
 ChatApp::~ChatApp() { stopModelLoading(); }
@@ -548,12 +548,10 @@ void ChatApp::appendLog(const std::string &text)
   if (logPath_.empty())
     return;
   std::lock_guard<std::mutex> lock(llmMutex_);
-  std::ofstream file(logPath_, std::ios::app);
-  if (!file.is_open())
-    return;
-  file << text;
-  if (!text.empty() && text.back() != '\n')
-    file << '\n';
+  std::string record = text;
+  if (!record.empty() && record.back() != '\n')
+    record.push_back('\n');
+  (void)ck::io::write_file(logPath_, record, ck::io::WriteMode::Append);
 }
 
 void ChatApp::persistBoolOption(const std::string &key, bool value)

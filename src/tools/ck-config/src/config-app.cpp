@@ -1,4 +1,5 @@
 #include "ck/options.hpp"
+#include "ck/file_io.hpp"
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
 #include "ck/commands/ck_config.hpp"
@@ -44,7 +45,6 @@
 #include <cstring>
 #include <climits>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -890,15 +890,13 @@ int showApplication(const CliOptions &opts)
         return 0;
     }
     std::filesystem::path path = registry.defaultOptionsPath();
-    std::ifstream in(path);
-    if (!in)
+    std::string contents;
+    if (!ck::io::read_file(path, contents))
     {
         std::cerr << "ck-config: no saved defaults for '" << opts.appId << "' at " << path << std::endl;
         return 1;
     }
-    std::cout << in.rdbuf();
-    if (!in.good())
-        return 1;
+    std::cout << contents;
     return 0;
 }
 

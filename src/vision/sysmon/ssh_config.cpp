@@ -3,8 +3,10 @@
 #include "native_monitor.hpp"
 #include <algorithm>
 #include <cctype>
-#include <fstream>
+#include <sstream>
 #include <set>
+
+#include "ck/file_io.hpp"
 
 namespace ck::sysmon {
 namespace {
@@ -95,7 +97,9 @@ struct Discovery {
         if (depth > 16 || visited.size() >= 512 || aliases.size() >= 512) return;
         const auto normalized = path.lexically_normal();
         if (!visited.insert(normalized).second) return;
-        std::ifstream input(normalized);
+        std::string contents;
+        if (!ck::io::read_file(normalized, contents, 1024 * 1024)) return;
+        std::istringstream input(contents);
         std::string line;
         std::size_t bytes = 0;
         while (std::getline(input, line) && (bytes += line.size()) <= 1024 * 1024) {

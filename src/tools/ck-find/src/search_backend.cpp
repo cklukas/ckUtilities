@@ -1,6 +1,7 @@
 #include "ck/find/search_backend.hpp"
 
 #include "ck/find/cli_buffer_utils.hpp"
+#include "ck/file_io.hpp"
 #include "ck/options.hpp"
 
 #include <nlohmann/json.hpp>
@@ -11,7 +12,6 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -635,13 +635,13 @@ std::filesystem::path specificationPathForSlug(const std::string &slug)
 
 std::optional<SearchSpecification> readSpecification(const std::filesystem::path &file)
 {
-    std::ifstream stream(file);
-    if (!stream.is_open())
+    std::string serialized;
+    if (!ck::io::read_file(file, serialized))
         return std::nullopt;
     nlohmann::json j;
     try
     {
-        stream >> j;
+        j = nlohmann::json::parse(serialized);
     }
     catch (...)
     {
@@ -655,12 +655,8 @@ std::optional<SearchSpecification> readSpecification(const std::filesystem::path
 
 bool writeSpecification(const std::filesystem::path &file, const SearchSpecification &spec)
 {
-    std::ofstream stream(file);
-    if (!stream.is_open())
-        return false;
     nlohmann::json j = toJson(spec);
-    stream << j.dump(2) << std::endl;
-    return stream.good();
+    return ck::io::write_file(file, j.dump(2) + '\n');
 }
 
 std::vector<std::string> tokenizeTerms(const std::string &input)
@@ -2225,16 +2221,12 @@ std::vector<std::string> buildTextNameExpressions(const SearchSpecification &spe
 
 bool isBinaryFile(const std::filesystem::path &path)
 {
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open())
+    std::string sample;
+    if (!ck::io::read_file(path, sample, 1024))
         return false;
-    constexpr std::size_t kSample = 1024;
-    std::array<char, kSample> buffer{};
-    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    std::streamsize count = file.gcount();
-    for (std::streamsize i = 0; i < count; ++i)
+    for (const char byte : sample)
     {
-        if (buffer[static_cast<std::size_t>(i)] == '\0')
+        if (byte == '\0')
             return true;
     }
     return false;
@@ -2301,13 +2293,9 @@ bool fileMatchesContent(const std::filesystem::path &path,
     if (!options.treatBinaryAsText && isBinaryFile(path))
         return false;
 
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open())
+    std::string content;
+    if (!ck::io::read_file(path, content))
         return false;
-
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-    std::string content = buffer.str();
 
     switch (options.mode)
     {

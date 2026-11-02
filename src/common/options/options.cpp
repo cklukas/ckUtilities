@@ -1,9 +1,9 @@
 #include "ck/options.hpp"
+#include "ck/file_io.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <fstream>
 #include <utility>
 #include <nlohmann/json.hpp>
 
@@ -349,14 +349,14 @@ void OptionRegistry::restore(Snapshot snapshot)
 
 bool OptionRegistry::loadFromFile(const std::filesystem::path &filePath)
 {
-    std::ifstream in(filePath);
-    if (!in)
+    std::string serialized;
+    if (!ck::io::read_file(filePath, serialized))
         return false;
 
     nlohmann::json data;
     try
     {
-        in >> data;
+        data = nlohmann::json::parse(serialized);
     }
     catch (...)
     {
@@ -431,11 +431,7 @@ bool OptionRegistry::saveToFile(const std::filesystem::path &filePath) const
     std::error_code ec;
     std::filesystem::create_directories(filePath.parent_path(), ec);
 
-    std::ofstream out(filePath);
-    if (!out)
-        return false;
-    out << data.dump(2) << std::endl;
-    return static_cast<bool>(out);
+    return ck::io::write_file(filePath, data.dump(2) + '\n');
 }
 
 bool OptionRegistry::loadDefaults()

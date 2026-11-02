@@ -8,12 +8,12 @@
 #include <limits>
 #include <sstream>
 #include <iostream>
-#include <fstream>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
 
 #include "ck/edit/markdown_parser.hpp"
+#include "ck/file_io.hpp"
 #include "../tvision_include.hpp"
 
 namespace
@@ -423,21 +423,20 @@ namespace
     return enabled;
   }
 
-  std::ofstream &debug_log_stream()
+  bool append_debug_log(std::string_view text)
   {
-    static std::ofstream log;
+    static std::string path;
     static bool initialized = false;
     if (!initialized)
     {
       initialized = true;
-      const char *path = std::getenv("CK_CHAT_DEBUG_LOG");
-      if (!path || !*path)
-        path = "debug.log";
-      log.open(path, std::ios::app);
-      if (!log)
-        std::cerr << "[ck-chat] failed to open debug log at '" << path << "'\n";
+      const char *configured = std::getenv("CK_CHAT_DEBUG_LOG");
+      path = configured && *configured ? configured : "debug.log";
     }
-    return log;
+    if (ck::io::write_file(path, text, ck::io::WriteMode::Append))
+      return true;
+    std::cerr << "[ck-chat] failed to open debug log at '" << path << "'\n";
+    return false;
   }
 
   void append_text_with_style(std::string &line,
@@ -1780,28 +1779,27 @@ namespace
 
       if (table_debug_enabled())
       {
-        auto &log = debug_log_stream();
-        std::ostream *out = log ? static_cast<std::ostream *>(&log)
-                                : static_cast<std::ostream *>(&std::cerr);
-        *out << "[ck-chat][table] columns=" << columnCount
+        std::ostringstream log;
+        log << "[ck-chat][table] columns=" << columnCount
              << " raw_width=" << width_ << "\n";
         for (std::size_t idx = 0; idx < columnCount; ++idx)
-          *out << "  col[" << idx << "] width=" << colWidths[idx] << "\n";
+          log << "  col[" << idx << "] width=" << colWidths[idx] << "\n";
         for (const auto &row : tableBuffer_)
         {
-          *out << "  row kind=" << static_cast<int>(row.info.kind)
+          log << "  row kind=" << static_cast<int>(row.info.kind)
                << " cells=" << row.info.tableCells.size() << "\n";
           for (std::size_t idx = 0; idx < row.info.tableCells.size(); ++idx)
           {
             const auto &cell = row.info.tableCells[idx];
             std::string normalized = normalize_html_line_breaks(cell.text);
-            *out << "    cell[" << idx << "] text='" << normalized
+            log << "    cell[" << idx << "] text='" << normalized
                  << "' display_width="
                  << compute_markdown_display_width(normalized) << "\n";
           }
         }
-        if (log)
-          log.flush();
+        const std::string diagnostic = log.str();
+        if (!append_debug_log(diagnostic))
+          std::cerr << diagnostic;
       }
 
       int borderWidth = static_cast<int>(columnCount) + 1;

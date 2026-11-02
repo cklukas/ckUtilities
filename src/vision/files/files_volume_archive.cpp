@@ -14,7 +14,9 @@
 #include <condition_variable>
 #include <cstring>
 #include <cerrno>
+#if !defined(_WIN32)
 #include <fstream>
+#endif
 #include <limits>
 #include <mutex>
 #include <set>

@@ -26,6 +26,7 @@
 
 #include "ck/about_dialog.hpp"
 #include "ck/app_info.hpp"
+#include "ck/file_io.hpp"
 #include "ck/commands/json_view.hpp"
 #include "ck/hotkeys.hpp"
 #include "ck/launcher.hpp"
@@ -33,11 +34,11 @@
 #include "ck/ui/clock_view.hpp"
 #include "ck/ui/status_line.hpp"
 
-#include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <string>
 #include <cstdlib>
+#include <filesystem>
 
 static constexpr std::string_view kToolId = "ck-json-view";
 
@@ -428,17 +429,15 @@ void JsonViewApp::openFile()
 
 bool JsonViewApp::loadFile(const std::string &name)
 {
-    std::ifstream in(name);
-    if (!in)
+    std::string contents;
+    if (!ck::io::read_file(std::filesystem::path(name), contents))
     {
         messageBox("Could not open file", mfError | mfOKButton);
         return false;
     }
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    json j = parseJsonWithSpecialNumbers(ss.str());
+    json j = parseJsonWithSpecialNumbers(contents);
     root = buildTree(&j, name, nullptr, true);
-    root->sourceSize = ss.str().size();
+    root->sourceSize = contents.size();
     search = SearchState();
     rebuildOutline();
     updateStatusBar();

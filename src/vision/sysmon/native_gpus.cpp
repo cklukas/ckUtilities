@@ -5,7 +5,6 @@
 #include <cstring>
 #include <cctype>
 #include <cwctype>
-#include <fstream>
 #include <map>
 #include <sstream>
 #include <thread>

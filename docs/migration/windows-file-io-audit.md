@@ -21,10 +21,20 @@ dynamically sized wide buffer. Windows search and disk-usage UI path buffers
 are sized for the extended Windows path contract rather than the platform's
 legacy `PATH_MAX` fallback.
 
-The remaining ordinary C++ streams in `ck-find`, configuration persistence,
-and a few utility-specific readers are tracked as the next migration slice;
-they are not treated as long-path-safe Windows boundaries. POSIX-only
-`/proc`/stream code remains behind non-Windows compilation branches.
+The remaining Windows-compiled consumers now use `ck::io` (`ck_file_io`), a
+small shared boundary that uses `CreateFileW`, extended-length DOS/UNC names,
+native handles, bounded `ReadFile`/`WriteFile` loops, and `FlushFileBuffers` on
+Windows. This covers options/config persistence, saved search specifications,
+content search, JSON loading, SSH configuration discovery, chat transcripts
+and logs, and the Linux GPU snapshot helper (which is compiled into the
+cross-platform sysmon target but only used on Linux). POSIX-only `/proc`,
+`/sys`, and archive branches retain their platform-native stream code behind
+non-Windows preprocessor branches.
+
+The shared boundary has regression coverage for long paths, exact UTF-16 names,
+non-ASCII bytes, append/truncate behavior, and bounded reads. UNC spelling is
+handled by the same extended-path conversion; an environment-provided UNC
+fixture can be added to workstation qualification when a share is available.
 
 ## ckVision 1.4.2
 

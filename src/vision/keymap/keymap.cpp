@@ -1,7 +1,9 @@
 #include "ck/vision/keymap.hpp"
 
 #include <filesystem>
+#if !defined(_WIN32)
 #include <fstream>
+#endif
 #include <system_error>
 #include <utility>
 

@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
-#include <fstream>
 #include <utility>
 
 #include "ck/ai/llm.hpp"
+#include "ck/file_io.hpp"
 #include "ck/ai/model_manager.hpp"
 #include "ck/ai/system_prompt_manager.hpp"
 
@@ -489,11 +489,7 @@ bool FileChatTranscriptStore::write(const std::filesystem::path &path, const std
         if (error)
             return false;
     }
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output)
-        return false;
-    output << transcript;
-    return static_cast<bool>(output);
+    return ck::io::write_file(path, transcript);
 }
 
 } // namespace ck::vision

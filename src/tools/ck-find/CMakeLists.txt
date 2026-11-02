@@ -42,6 +42,7 @@ add_ck_tool(ckfind
     src/type_filters_dialog.cpp
   LIBRARIES
     ck_app_info
+    ck_file_io
     ck_hotkeys
     ck_ui
     nlohmann_json::nlohmann_json

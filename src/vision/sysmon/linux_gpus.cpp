@@ -1,17 +1,15 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_monitor.hpp"
+#include "ck/file_io.hpp"
 #include <charconv>
-#include <fstream>
 
 namespace ck::sysmon {
 namespace {
 std::string snapshot(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    char buffer[4097];
-    input.read(buffer, sizeof buffer);
-    if (input.bad() || input.gcount() > 4096) return {};
-    return std::string(buffer, static_cast<std::size_t>(input.gcount()));
+    std::string contents;
+    if (!ck::io::read_file(path, contents, 4097) || contents.size() > 4096) return {};
+    return contents;
 }
 std::optional<std::uint64_t> counter(const std::filesystem::path& path) {
     const auto text = snapshot(path);

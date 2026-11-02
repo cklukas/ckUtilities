@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_monitor.hpp"
 #include <algorithm>
-#include <fstream>
 #include <sstream>
 #include <thread>
+#if defined(__linux__)
+#include <fstream>
+#endif
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
