@@ -287,10 +287,10 @@ struct Fixture {
                 throw std::runtime_error("cannot create eligible archive recovery journal");
 #if defined(_WIN32)
             const auto journal_name = NativeName::from_windows(
-                u".ck-volume-archive-00000000000000000000000000000031");
+                u".ck-volume-archive-1f000000000000000000000000000000");
 #else
             const auto journal_name = NativeName::from_posix(
-                ".ck-volume-archive-00000000000000000000000000000031");
+                ".ck-volume-archive-1f000000000000000000000000000000");
 #endif
             if (!journal_name)
                 throw std::runtime_error("cannot encode eligible archive recovery journal name");
