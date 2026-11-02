@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-01",
+  "platform": "Windows x64",
+  "host": "workstation",
+  "source_commit": "ffa8dee6b69d12e4d5b1ea30a3c9ebbea5a5adf6",
+  "source_test_sha256": "a590d60de3910c3d059b2d349569f2dd6a1e4e5f84b2fc7636c650d21b5a4b73",
+  "build": {
+    "configuration": "Release/Ninja",
+    "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+    "runtime": "/MT",
+    "build_root": "V:\\tmp\\ckutilities-cp01-windows-writer-20261102-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-cp01-windows-writer-20261102-01",
+    "started_at": "2026-11-02T01:29:57+01:00",
+    "ended_at": "2026-11-02T01:36:21+01:00",
+    "elapsed_seconds": 384,
+    "executable": "V:\\tmp\\ckutilities-cp01-windows-writer-20261102-01\\build\\tests\\unit\\ck_files\\ck_files_native_tests.exe",
+    "executable_sha256": "aa59b52f563f14f1f796f51f0a867233cf628944bbf1638d1b9ebad93e19f9e3"
+  },
+  "suites": [
+    {
+      "suite": "test_files_security_native.cpp",
+      "result": "5/5 passed",
+      "critical_case": "An existing CreateFileW writer remained open while MoveSource was requested; the Windows native adapter refused the open with ObservationState::Denied and preserved the NtStatus sharing-violation domain/value."
+    },
+    {
+      "suite": "test_files_operation_content_native.cpp",
+      "result": "20/20 passed"
+    }
+  ],
+  "freshness_note": "The initial stale binary was rejected after its failure text identified the prior assertion. The exact object and executable were removed, the current source was rebuilt, and these suites were run only from the rebuilt executable.",
+  "status": "pass_safety_boundary_windows_move_source_exclusion"
+}

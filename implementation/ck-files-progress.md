@@ -1,4 +1,15 @@
 # Files implementation evidence
+## 2026-11-02 — CP-01 Windows open-writer exclusion qualification
+
+The Windows v143 native security suite passed **5/5**, including a real
+`CreateFileW` writer held open while `MoveSource` was requested. The adapter
+refused the source handle with `ObservationState::Denied` and preserved the
+native NT sharing-violation status domain/value. The operation-content suite
+passed **20/20**. The first stale binary was rejected by the freshness check;
+the exact object and executable were removed, the current checkout was
+rebuilt with `/MT`, and only that rebuilt executable was used for the final
+qualification. Evidence: [Windows CP-01 open-writer record](evidence/ck-files-windows-move-source-writer-20261102.json).
+
 ## 2026-11-02 — CP-01 Linux open-writer refusal qualification
 
 The Linux ARM64 native operation-content suite passed **21/21** with a real
@@ -39,7 +50,7 @@ the remaining WP-07/WP-08 gates remain open.
 
 The Windows v143/MSVC 19.44.35228.0 boundary was validated at `e08f817`.
 The clean checkout at `V:\dev\ckutilities-git-bcf47a3` is now synchronized
-to current revision `949c1e3`. The normal project configures, but
+to current revision `ffa8dee`. The normal project configures, but
 `CKTOOLS_BUILD_FUZZERS=ON` is intentionally rejected at
 `fuzz/CMakeLists.txt:9`: this target requires an LLVM Clang toolchain with the
 libFuzzer runtime. No alternate compiler or source workaround was used, and no
