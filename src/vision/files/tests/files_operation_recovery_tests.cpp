@@ -46,7 +46,12 @@ NativeOperationRecoveryEvidence evidence() {
 
 CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_journals) {
     const ck::testing::ScratchDirectory scratch("files-operation-recovery-discovery");
-    const auto root = address(scratch.path());
+    const auto destination_path = scratch.path() / "destination";
+    const auto journal_path = scratch.path() / "journals";
+    std::filesystem::create_directory(destination_path);
+    std::filesystem::create_directory(journal_path);
+    const auto destination_address = address(destination_path);
+    const auto root = address(journal_path);
     CK_CHECK(prepare_native_operation_journal_root(root).value());
 
 #if defined(_WIN32)
@@ -190,14 +195,23 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
 
 CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_unsupported) {
     const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup");
-    const auto root = address(scratch.path());
+    const auto destination_path = scratch.path() / "destination";
+    const auto journal_path = scratch.path() / "journals";
+    std::filesystem::create_directory(destination_path);
+    std::filesystem::create_directory(journal_path);
+    const auto destination_address = address(destination_path);
+    const auto root = address(journal_path);
     CK_CHECK(prepare_native_operation_journal_root(root).value());
     ck::files::NativeFileSystem filesystem;
-    auto destination_result = filesystem.open_native_directory(root);
+    auto destination_result = filesystem.open_native_directory(destination_address);
     CK_CHECK(destination_result.value());
     if (!destination_result.value()) return;
     auto destination = std::shared_ptr<const DirectoryCursor>(std::move(destination_result).take_value());
+ #if defined(_WIN32)
+    auto staging_name = NativeName::from_windows(u".ck-copy-staging-recovery");
+ #else
     auto staging_name = NativeName::from_posix(".ck-copy-staging-recovery");
+ #endif
     CK_CHECK(staging_name.has_value());
     if (!staging_name) return;
     auto staging_result = destination->create_child_file(*staging_name);
@@ -233,7 +247,8 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
  #endif
     NativeOperationRecoveryEvidence receipt{
         *staging_name, published_name, *destination_durable,
-        *destination_durable, *destination_durable, *staging_durable, root};
+        *destination_durable, *destination_durable, *staging_durable,
+        destination_address};
     const auto encoded = encode_native_operation_recovery_evidence(receipt);
     CK_CHECK(encoded.value());
     if (!encoded.value()) return;
@@ -269,10 +284,10 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
     if (reply) {
 #if defined(_WIN32)
         CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Complete);
-        CK_CHECK(!std::filesystem::exists(scratch.path() / ".ck-copy-staging-recovery"));
+        CK_CHECK(!std::filesystem::exists(destination_path / ".ck-copy-staging-recovery"));
 #else
         CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Unsupported);
-        CK_CHECK(std::filesystem::exists(scratch.path() / ".ck-copy-staging-recovery"));
+        CK_CHECK(std::filesystem::exists(destination_path / ".ck-copy-staging-recovery"));
 #endif
     }
     service.request_stop();
