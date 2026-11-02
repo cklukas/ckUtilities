@@ -31,11 +31,11 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install --quiet ninja curl
 
-      - name: Checkout pinned ckVision 1.4.0 source
+      - name: Checkout pinned ckVision 1.4.1 source
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: a791f103c3bc67f9fe398cf5c5010f7c460ae7ba
+          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
           path: .deps/ckvision
           persist-credentials: false
 
@@ -88,11 +88,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
 
-      - name: Checkout pinned ckVision 1.4.0 source
+      - name: Checkout pinned ckVision 1.4.1 source
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: a791f103c3bc67f9fe398cf5c5010f7c460ae7ba
+          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
           path: .deps/ckvision
           persist-credentials: false
 
@@ -139,11 +139,11 @@ jobs:
       - name: Install dependencies
         run: brew install --quiet ninja curl
 
-      - name: Checkout pinned ckVision 1.4.0 source
+      - name: Checkout pinned ckVision 1.4.1 source
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: a791f103c3bc67f9fe398cf5c5010f7c460ae7ba
+          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
           path: .deps/ckvision
           persist-credentials: false
 
@@ -187,11 +187,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Checkout pinned ckVision 1.4.0 source
+      - name: Checkout pinned ckVision 1.4.1 source
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: a791f103c3bc67f9fe398cf5c5010f7c460ae7ba
+          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
           path: .deps/ckvision
           persist-credentials: false
 

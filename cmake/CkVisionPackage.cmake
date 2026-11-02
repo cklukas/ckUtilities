@@ -5,7 +5,7 @@ include_guard(GLOBAL)
 # find an installed package through CMAKE_PREFIX_PATH or the normal CMake
 # package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "a791f103c3bc67f9fe398cf5c5010f7c460ae7ba"
+    "5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 
@@ -43,10 +43,10 @@ function(cktools_require_ckvision)
     get_filename_component(_ckvision_prefix
                            "${CKTOOLS_CKVISION_PREFIX}" ABSOLUTE
                            BASE_DIR "${CMAKE_SOURCE_DIR}")
-    find_package(ckvision 1.4.0 CONFIG REQUIRED
+    find_package(ckvision 1.4.1 CONFIG REQUIRED
                  PATHS "${_ckvision_prefix}" NO_DEFAULT_PATH)
   else()
-    find_package(ckvision 1.4.0 CONFIG REQUIRED)
+    find_package(ckvision 1.4.1 CONFIG REQUIRED)
   endif()
 
   if(NOT TARGET ckvision::cvision)

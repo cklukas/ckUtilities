@@ -36,9 +36,9 @@ concurrent external writer; state the precise guarantees and verified limits.
 ## Baseline and source evidence
 
 The latest published ckVision release checked on this date is
-[v1.4.0](https://github.com/cklukas/ckVision/releases/tag/v1.4.0), released on
-2026-10-22. The annotated tag resolves to commit
-`a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` (verified with `git ls-remote`).
+[v1.4.1](https://github.com/cklukas/ckVision/releases/tag/v1.4.1), released on
+2026-11-02. The tag resolves to commit
+`5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf` (verified with `git ls-remote`).
 At initial review, ckUtilities required 1.3.0 and recorded revision
 `57b379d0dddd6a3b517b614a4eb2d1a1c99b474b` in
 `cmake/CkVisionPackage.cmake` and `docs/migration/ckvision-baseline.md`.
@@ -49,10 +49,10 @@ record its immutable commit, and validate it before updating the baseline.
 
 Relevant upstream contracts:
 
-- [Platform services](https://github.com/cklukas/ckVision/blob/v1.4.0/docs/platform-services.md): injected filesystem and streamed directory enumeration outside UI dispatch.
-- [Data views](https://github.com/cklukas/ckVision/blob/v1.4.0/docs/data-views.md): provider-backed views with stable item identity and UI-thread publication.
-- [Completion](https://github.com/cklukas/ckVision/blob/v1.4.0/docs/completion.md): asynchronous directory services, bounded pages, explicit index storage, and nonblocking view retirement.
-- [Commands and dialogs](https://github.com/cklukas/ckVision/blob/v1.4.0/docs/dialogs-and-commands.md): one command definition drives menus, shortcuts, enablement, and dialogs.
+- [Platform services](https://github.com/cklukas/ckVision/blob/v1.4.1/docs/platform-services.md): injected filesystem and streamed directory enumeration outside UI dispatch.
+- [Data views](https://github.com/cklukas/ckVision/blob/v1.4.1/docs/data-views.md): provider-backed views with stable item identity and UI-thread publication.
+- [Completion](https://github.com/cklukas/ckVision/blob/v1.4.1/docs/completion.md): asynchronous directory services, bounded pages, explicit index storage, and nonblocking view retirement.
+- [Commands and dialogs](https://github.com/cklukas/ckVision/blob/v1.4.1/docs/dialogs-and-commands.md): one command definition drives menus, shortcuts, enablement, and dialogs.
 
 The SDK supplies presentation and discovery infrastructure. Do not assume its
 filesystem abstraction supplies transactional copy, native metadata preservation,
@@ -156,7 +156,7 @@ The inventory and preservation report must cover at least:
 | Special and provider-managed objects | Devices, sockets, FIFOs, mount boundaries, placeholders/offline cloud data, package directories, and unavailable content. Classify explicitly; avoid blocking reads or implicit hydration. Report unavailable features before mutation. |
 
 Keep native names/handles lossless internally, including POSIX names that are
-not valid UTF-8. A display escape is not a rewritten filename. ckVision 1.4.0's
+not valid UTF-8. A display escape is not a rewritten filename. ckVision 1.4.1's
 documented directory service has a sanitized UTF-8/name-size contract; this is
 a specific integration gap to resolve in WP-00/WP-02. Unsupported entries must
 remain identifiable with a clear diagnostic and blocked unsafe actions. Do

@@ -7,11 +7,11 @@ checkout is not a build input.
 
 | Field | Value |
 | --- | --- |
-| ckVision version | `1.4.0` |
-| Pinned source revision | `a791f103c3bc67f9fe398cf5c5010f7c460ae7ba` |
+| ckVision version | `1.4.1` |
+| Pinned source revision | `5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf` |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |
-| Local evidence | See [1.4.0 validation record](ckvision-1.4.0-validation.md) for current checks |
+| Local evidence | See [1.4.0 validation record](ckvision-1.4.0-validation.md) for prior release checks and the [1.4.1 integration record](../../implementation/evidence/ckvision-1.4.1-integration-20261102.json) |
 
 CI checks out this exact public revision and builds an installed SDK on every
 Linux and macOS runner before it configures ckUtilities. This keeps the

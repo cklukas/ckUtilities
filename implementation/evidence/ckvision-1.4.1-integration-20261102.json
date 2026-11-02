@@ -1,0 +1,37 @@
+{
+  "checkpoint": "ckVision 1.4.1 downstream package integration",
+  "date": "2026-11-02",
+  "host": "macOS arm64",
+  "ckvision": {
+    "version": "1.4.1",
+    "commit": "5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf",
+    "source_archive_sha256": "f0382a3767e6a6ff74e9941fe2095b5d1e419263555c4c08d864b429c965cc7b",
+    "installed_prefix": "/Volumes/S8T/tmp/ckvision-asan-fix-release-20261102-01/normal-prefix"
+  },
+  "ckutilities_source": "680121b",
+  "checks": [
+    {
+      "name": "ckVision normal release build and install smoke",
+      "build": "/Volumes/S8T/tmp/ckvision-asan-fix-release-20261102-01/normal-build",
+      "command": "cmake --build ... && cmake --install ... && ctest --test-dir ... -R '^install_package_smoke$' --output-on-failure",
+      "result": "322/322 build steps; install_package_smoke 1/1 passed"
+    },
+    {
+      "name": "independent ckVision package consumer",
+      "build": "/Volumes/S8T/tmp/ckvision-1.4.1-integration-20261102/qualification-build/ckvision-package-consumer",
+      "command": "cmake --build ... --target verify_ckvision_package",
+      "result": "ckvision_package_consumer_runs 1/1 passed"
+    },
+    {
+      "name": "real documentation capture pipeline",
+      "build": "/Volumes/S8T/tmp/ckvision-1.4.1-integration-20261102/docs-build",
+      "command": "tools/docgen/generate_screenshots.sh",
+      "result": "completed; only ck-json-view.svg changed for the framework version"
+    }
+  ],
+  "notes": [
+    "Historical ckVision 1.4.0 validation records remain unchanged.",
+    "The 1.4.1 package guard rejects a normal static SDK combined with global sanitizer flags before a consumer target is linked.",
+    "The matching ASan+UBSan ckVision consumer was separately built and run successfully; the original mixed-SDK ASan finding remains invalid and unsuppressed."
+  ]
+}
