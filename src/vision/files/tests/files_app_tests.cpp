@@ -1459,6 +1459,7 @@ CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, true);
     f.loaded();
     f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
+    CK_CHECK(f.app->status(0).find("Inspect operation recovery: review is required") != std::string::npos);
     CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
     f.until([&] { return f.painted().find("Operation recovery review") != std::string::npos; });
     const auto text = f.painted();

@@ -1002,6 +1002,9 @@ struct FilesApp::State {
         } else if (i == active && volume_archive_recovery_scan &&
                    volume_archive_recovery_scan->requires_reconciliation) {
             hint = "Inspect archive recovery: review is required before volume Copy";
+        } else if (i == active && operation_recovery_scan &&
+                   operation_recovery_scan->requires_reconciliation) {
+            hint = "Inspect operation recovery: review is required";
         } else if (i == active && !closing && !modal_pending() && !pending(p)) {
             // The status-line commands are deliberately ordered by immediate
             // relevance. Report only the first unavailable contextual action;
