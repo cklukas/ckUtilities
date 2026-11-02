@@ -6,7 +6,7 @@ without enabling file operations. Dated 2026-10-23.
 
 ## Dependency and ownership decisions
 
-Consume ckVision 1.4.1 (`5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf`)
+Consume ckVision 1.4.2 (`7ad5bd67553414e7dc0882069482864034cb31f9`)
 through the installed `ckvision::cvision` target. The following public headers
 and methods were inspected in that exact release:
 
