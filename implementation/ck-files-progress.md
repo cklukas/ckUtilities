@@ -7,7 +7,7 @@ unpublished archive staging item and the platform's identity-bound discard
 adapter is qualified. The command requires explicit confirmation, dispatches
 cleanup to the worker, revalidates the journal, destination identity, staging
 identity, complete staging digest and journal state, then requests a fresh
-recovery scan. The application and archive suites passed **73/73** and
+recovery scan. The application and archive suites passed **74/74** and
 **21/21** respectively on macOS arm64, Windows x64/v143 and Linux ARM64.
 The production `ck-files` target also rebuilt on all three platforms. Evidence:
 [CP-03 guarded archive cleanup UI record](evidence/ck-files-cp03-archive-cleanup-ui-current-20261102.json).
