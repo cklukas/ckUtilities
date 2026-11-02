@@ -14,6 +14,10 @@ second independent scan after the first result was consumed and a stopped-
 worker submission refusal; the core recovery/evidence suites passed
 **8/8** and **3/3**. Evidence: [CP-03 read-only recovery record](evidence/ck-files-cp03-operation-recovery-readonly-current-20261102.json).
 
+The active-pane status now also reports `Inspect operation recovery: review is
+required` whenever the scan finds reconciliation work, and the affected
+application suite remained **73/73** on all three platforms.
+
 This is deliberately a boundary qualification, not CP-03 completion:
 identity-proven cleanup, retry/resume, publication reconciliation, crash
 restart coverage and cross-platform native recovery workers remain open and
