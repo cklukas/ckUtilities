@@ -1119,6 +1119,31 @@ CK_TEST(files_native_hard_link_is_identity_bound_and_no_replace) {
              duplicate.unavailable_detail()->state == ObservationState::Changed &&
              std::filesystem::hard_link_count(source.path() / "original") == 2);
 }
+CK_TEST(files_service_hard_link_is_worker_owned_and_requires_refresh) {
+    Fixture f;
+    ck::testing::ScratchDirectory source("files-service-hard-link");
+    {
+        std::ofstream file(source.path() / "original", std::ios::binary);
+        file << "hard-link";
+    }
+    f.service = std::make_unique<FilesPaneService>(
+        native_files_pane_backend(take(NativeAbsolutePath::from_host(f.scratch.path()))), FilesPaneServiceLimits{},
+        [t = f.trace] { t->notify(); });
+    const auto location = take(NativeAbsolutePath::from_host(source.path()));
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto before = f.reply();
+    CK_CHECK(before.state == FilesPaneReplyState::Ready && before.page && before.page->rows().size() == 1);
+    const auto linked = f.service->create_hard_link(before.navigation, before.stamp, before.page->rows()[0].id,
+                                                    child_name("alias"));
+    CK_CHECK(linked.state == FilesPaneSubmission::Accepted);
+    const auto mutation = f.reply();
+    CK_CHECK(mutation.state == FilesPaneReplyState::Ready && mutation.mutation_applied.value_or(false));
+    CK_CHECK(std::filesystem::hard_link_count(source.path() / "original") == 2);
+    CK_CHECK(f.service->navigate(location).state == FilesPaneSubmission::Accepted);
+    const auto after = f.reply();
+    CK_CHECK(after.state == FilesPaneReplyState::Ready && after.page && after.page->rows().size() == 2);
+    f.stopped();
+}
 CK_TEST(files_service_native_rename_revalidates_row_and_refreshes_cross_platform) {
     Fixture f;
     ck::testing::ScratchDirectory source("files-service-rename");

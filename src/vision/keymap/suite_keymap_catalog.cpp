@@ -80,6 +80,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},
     CommandDefinition{"ck.files.rename", "&Rename...", "Files", "F2"},
     CommandDefinition{"ck.files.create_file", "New &file...", "Files", ""},
+    CommandDefinition{"ck.files.create_hard_link", "New &hard link...", "Files", ""},
     CommandDefinition{"ck.files.create_directory", "&New folder...", "Files", "F7"},
     CommandDefinition{"ck.files.trash", "Move to &Trash / Recycle Bin...", "Files", ""},
     CommandDefinition{"ck.files.permanently_delete", "&Delete permanently...", "Files", ""},

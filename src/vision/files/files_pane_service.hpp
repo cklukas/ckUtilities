@@ -176,6 +176,9 @@ class FilesPaneService final {
     FilesPaneSubmitted create_file(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                    ck::files::NativeName name,
                                    FilesPaneReadRange range = {});
+    FilesPaneSubmitted create_hard_link(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                        ck::files::PaneRowId row, ck::files::NativeName name,
+                                        FilesPaneReadRange range = {});
     // Rename one stamped visible row to one exact native component. The
     // worker resolves the row and identity again; callers must refresh after
     // a successful native rename. Unsupported platform protocols remain
