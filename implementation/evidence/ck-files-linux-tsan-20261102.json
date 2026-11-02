@@ -1,0 +1,79 @@
+{
+  "record_type": "files_linux_arm64_matching_tsan",
+  "recorded_at": "2026-11-02T16:28:40Z",
+  "result": "passed",
+  "source": {
+    "repository": "/Volumes/PRO-BLADE/Development/ckUtilities",
+    "commit": "77cfed045b8c8d239e8f3a258cd3f778befca7a5",
+    "test_fixture_change": "ThreadSanitizer-instrumented test binaries receive the same 30-second worker-start gate budget as AddressSanitizer binaries; ordinary tests retain five seconds."
+  },
+  "host": {
+    "machine": "Lima ckdev",
+    "os": "Debian 13 ARM64",
+    "kernel": "6.12.113+deb13-cloud-arm64",
+    "architecture": "aarch64"
+  },
+  "instrumentation": {
+    "product": "-fsanitize=thread -fno-omit-frame-pointer -g",
+    "product_link": "-fsanitize=thread",
+    "ckvision": {
+      "tag": "v1.4.2",
+      "commit": "7ad5bd67553414e7dc0882069482864034cb31f9",
+      "build_option": "CKVISION_SANITIZE=thread",
+      "matching": true
+    },
+    "runtime": {
+      "TSAN_OPTIONS": "halt_on_error=1:history_size=7:second_deadlock_stack=1:report_thread_leaks=1",
+      "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+    }
+  },
+  "paths": {
+    "source": "/Volumes/PRO-BLADE/tmp/ckutilities-linux-tsan-20261102-01/source",
+    "build": "/Volumes/PRO-BLADE/tmp/ckutilities-linux-tsan-20261102-01/ckutilities-tsan-files-build",
+    "ckvision_sdk": "/home/klukas.guest/tmp/ckutilities-linux-tsan-20261102-01/ckvision-tsan-sdk",
+    "test_scratch": "/home/klukas.guest/tmp/ckutilities-linux-tsan-20261102-01/test-scratch",
+    "private_index_scratch": "/home/klukas.guest/tmp/ckutilities-linux-tsan-20261102-01/private-index-scratch"
+  },
+  "build": {
+    "configuration": "Debug",
+    "freshness_check": {
+      "start": "2026-11-02T16:27:08Z",
+      "end": "2026-11-02T16:28:01Z",
+      "elapsed_seconds": 53,
+      "targets": ["ck_files_core_tests", "ck_files_native_tests", "ck_vision_files_tests"]
+    },
+    "outputs": {
+      "ck_files_core_tests": {
+        "path": "/Volumes/PRO-BLADE/tmp/ckutilities-linux-tsan-20261102-01/ckutilities-tsan-files-build/tests/unit/ck_files/ck_files_core_tests",
+        "sha256": "22e8cd34a9cee5ba9ff2daeb8938edadbdfc8e029410d8b181858ed79cfef61f"
+      },
+      "ck_files_native_tests": {
+        "path": "/Volumes/PRO-BLADE/tmp/ckutilities-linux-tsan-20261102-01/ckutilities-tsan-files-build/tests/unit/ck_files/ck_files_native_tests",
+        "sha256": "cd451a029e4a7ab68a5391c7ee3a97269e239a2d410f440690b7249a68fd70b9"
+      },
+      "ck_vision_files_tests": {
+        "path": "/Volumes/PRO-BLADE/tmp/ckutilities-linux-tsan-20261102-01/ckutilities-tsan-files-build/src/vision/files/ck_vision_files_tests",
+        "sha256": "f8a2b9448d485662ed4671aaba06bdc3d84be9af98792c177c62c360e80e5d5e"
+      }
+    }
+  },
+  "tests": [
+    {"target": "ck_files_core_tests", "cases": 719, "result": "passed"},
+    {"target": "ck_files_native_tests", "cases": 193, "result": "passed"},
+    {"target": "ck_vision_files_tests", "cases": 246, "result": "passed"}
+  ],
+  "stress_observations": {
+    "native_index_scan_rows": 100000,
+    "native_index_scan_bytes": 27888895,
+    "native_index_sort_rows": 100000,
+    "native_index_sort_elapsed_ms": 302246,
+    "native_index_lookup_rows": 100000,
+    "native_index_filter_rows": 100000
+  },
+  "qualification_boundary": {
+    "rejected_attempt": "The initial run used the VM host-mounted FUSE path for private index scratch and timed out before the gate; no sanitizer diagnostic was emitted.",
+    "correction": "Both CKTOOLS_TEST_TEMP_ROOT and CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT were moved to the VM-local guest filesystem. The source and build remained on the approved host temporary mount.",
+    "no_suppression": true
+  },
+  "diagnostics": "No ThreadSanitizer diagnostic was emitted."
+}

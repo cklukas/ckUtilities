@@ -1,5 +1,23 @@
 # Files implementation evidence
 
+## 2026-11-02 — WP-07 matching Linux TSan qualification
+
+The Linux ARM64 race gate now uses a ckVision v1.4.2 SDK built from the
+pinned commit `7ad5bd67553414e7dc0882069482864034cb31f9` with
+`CKVISION_SANITIZE=thread`, matching the Files product's ThreadSanitizer
+instrumentation. The corrected run passed **719/719** native-core cases,
+**193/193** native-platform cases, and **246/246** ckVision Files cases, with
+no TSan diagnostic. It included the bounded 100,000-record index scan and
+external-sort cases; the ARM64 external sort completed in 302.246 seconds
+within the declared 600-second envelope.
+
+The first attempt used the VM's host-mounted FUSE path for test scratch and
+timed out before the completion gate. That attempt was rejected as fixture
+placement, not counted as a test result, and not suppressed. Both test roots
+were moved to the VM-local guest filesystem; the same matching-instrumented
+executables then passed all 1,158 cases. Evidence: [Linux TSan qualification
+record](evidence/ck-files-linux-tsan-20261102.json).
+
 ## 2026-11-02 — CP-05 matched sanitizer UI qualification
 
 The sanitizer gate was rebuilt with a matching ckVision 1.4.0 SDK compiled
