@@ -45,12 +45,12 @@ struct Gate {
         // unchanged; only an instrumented test binary gets the qualification
         // budget, and a missing gate still fails deterministically.
 #if defined(__has_feature)
-#if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
         constexpr auto timeout = std::chrono::seconds(30);
 #else
         constexpr auto timeout = std::chrono::seconds(5);
 #endif
-#elif defined(__SANITIZE_ADDRESS__)
+#elif defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
         constexpr auto timeout = std::chrono::seconds(30);
 #else
         constexpr auto timeout = std::chrono::seconds(5);
