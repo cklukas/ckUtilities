@@ -121,10 +121,29 @@ struct Discovery {
                     for (const auto& parent : candidates) {
                         if (part.string().find_first_of("*?[") == std::string::npos) next.push_back(parent / part);
                         else {
+#if defined(_WIN32)
+                            const auto pattern_value = part.u8string();
+                            const std::string pattern(reinterpret_cast<const char *>(pattern_value.data()), pattern_value.size());
+                            const auto append_matches = [&](const std::vector<std::filesystem::path>& entries) {
+                                for (const auto& entry : entries) {
+                                    const auto name_value = entry.filename().u8string();
+                                    const std::string name(reinterpret_cast<const char *>(name_value.data()), name_value.size());
+                                    if ((pattern.starts_with('.') || !name.starts_with('.')) &&
+                                        wildcard(pattern, name) && next.size() < 512)
+                                        next.push_back(entry);
+                                }
+                            };
+                            // ck::io uses FindFirstFileW/FindNextFileW with an
+                            // extended path, keeping config discovery valid for
+                            // long and exact UTF-16 Windows names.
+                            append_matches(ck::io::list_directories(parent));
+                            append_matches(ck::io::list_regular_files(parent));
+#else
                             std::error_code error;
                             for (std::filesystem::directory_iterator it(parent, error), end; !error && it != end; it.increment(error))
                                 if ((part.string().starts_with('.') || !it->path().filename().string().starts_with('.')) &&
                                     wildcard(part.string(), it->path().filename().string()) && next.size() < 512) next.push_back(it->path());
+#endif
                         }
                     }
                     std::sort(next.begin(), next.end()); candidates = std::move(next);
