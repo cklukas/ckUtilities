@@ -45,6 +45,23 @@
     "result": "223/223 passed",
     "ctest_elapsed_seconds": 66.60
   },
+  "macos_full_ctest": {
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+    "build_target": "all",
+    "configuration": "Release/Ninja",
+    "test_command": "ctest --test-dir /Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build --output-on-failure",
+    "result": "224/224 passed",
+    "ctest_elapsed_seconds": 18.19
+  },
+  "linux_full_ctest": {
+    "host": "uconsole",
+    "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+    "build_target": "all",
+    "configuration": "RelWithDebInfo/Ninja",
+    "test_command": "ctest --test-dir /home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build --output-on-failure",
+    "result": "223/223 passed",
+    "ctest_elapsed_seconds": 15.17
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
