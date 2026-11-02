@@ -70,6 +70,19 @@ CK_TEST(path_windows_refuses_relative_devices_streams_pipes_and_malformed_roots)
         CK_CHECK(NativeAbsolutePath::from_windows(text).state() == ObservationState::Failed);
     const std::u16string text(u"V:\\a\0b",6); CK_CHECK(NativeAbsolutePath::from_windows(text).state() == ObservationState::Failed);
 }
+
+CK_TEST(path_windows_extended_api_spelling_is_length_safe_and_device_safe) {
+#ifdef _WIN32
+    CK_CHECK(windows_extended_path(L"V:\\deep\\file").value() == L"\\\\?\\V:\\deep\\file");
+    CK_CHECK(windows_extended_path(L"\\\\server\\share\\deep\\file").value() ==
+        L"\\\\?\\UNC\\server\\share\\deep\\file");
+    const auto long_path = windows_extended_path(L"V:\\" + std::wstring(400, L'a'));
+    CK_CHECK(long_path.value() && long_path->starts_with(L"\\\\?\\V:\\"));
+    CK_CHECK(!windows_extended_path(L"V:relative") && !windows_extended_path(L"\\\\.\\PhysicalDrive0") &&
+        !windows_extended_path(L"\\??\\C:\\device"));
+#endif
+}
+
 CK_TEST(path_windows_retains_every_unpaired_surrogate_and_display_never_becomes_the_address) {
     for (unsigned unit = 0xd800; unit <= 0xdfff; ++unit) {
         std::u16string text = u"V:\\"; text.push_back(static_cast<char16_t>(unit));

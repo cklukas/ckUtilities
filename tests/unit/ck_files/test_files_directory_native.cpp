@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_filesystem.hpp"
+#include "windows_name.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -33,10 +34,24 @@ namespace fs = std::filesystem;
 using Spelling = fs::path::string_type;
 
 void write_file(const fs::path& path) {
+#if defined(_WIN32)
+    const auto native = windows_extended_path(path.native());
+    if (!native) throw std::runtime_error("cannot encode Windows fixture path");
+    const HANDLE handle = CreateFileW(native->c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) throw std::runtime_error("cannot create directory fixture");
+    const char bytes[] = "fixture";
+    DWORD written = 0;
+    const bool complete = WriteFile(handle, bytes, static_cast<DWORD>(sizeof(bytes) - 1), &written, nullptr) != FALSE &&
+        written == sizeof(bytes) - 1 && FlushFileBuffers(handle) != FALSE;
+    CloseHandle(handle);
+    if (!complete) throw std::runtime_error("cannot write directory fixture");
+#else
     std::ofstream file(path, std::ios::binary);
     file << "fixture";
     file.close();
     if (!file) throw std::runtime_error("cannot create directory fixture");
+#endif
 }
 
 std::unique_ptr<DirectoryCursor> open_directory(const NativeFileSystem& filesystem, const fs::path& path,

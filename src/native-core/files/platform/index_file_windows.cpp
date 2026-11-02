@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_index_file.hpp"
+#include "../windows_name.hpp"
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -289,7 +290,9 @@ Observation<std::shared_ptr<IndexFileFactory>> open_native_index_workspace(const
     const auto last = path.native().back();
     if (last == L'\\' || last == L'/' || path.filename() == L"." || path.filename() == L"..")
         return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
-    Handle directory(CreateFileW(path.c_str(), FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+    const auto native_path = windows_extended_path(path.native());
+    if (!native_path) return rejected<Pointer>(AdapterError::InvalidPath, "index_file.root_address");
+    Handle directory(CreateFileW(native_path->c_str(), FILE_ADD_FILE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
                                  FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                  FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (directory.get() == INVALID_HANDLE_VALUE)

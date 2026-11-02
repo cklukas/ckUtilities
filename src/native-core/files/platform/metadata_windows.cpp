@@ -2039,7 +2039,9 @@ Observation<bool> WindowsOpenedEntry::publish_noreplace(const DirectoryCursor& d
 Observation<BasicMetadata> NativeFileSystem::inspect_basic(const std::filesystem::path& path) const {
     const auto address = NativeAbsolutePath::from_host(path);
     if (!address.value()) { const auto& e = *address.unavailable_detail(); return Observation<BasicMetadata>::unavailable(e.state, e.error); }
-    const std::unique_ptr<void, HandleCloser> handle(CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+    const auto native_path = windows_extended_path(path.native());
+    if (!native_path) return failure<BasicMetadata>(ERROR_INVALID_NAME, "CreateFileW.metadata.path");
+    const std::unique_ptr<void, HandleCloser> handle(CreateFileW(native_path->c_str(), FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL, nullptr));
     if (handle.get() == INVALID_HANDLE_VALUE) return failure<BasicMetadata>(GetLastError(), "CreateFileW.metadata");
@@ -2056,7 +2058,9 @@ Observation<std::unique_ptr<DirectoryCursor>> NativeFileSystem::open_directory(
         return Result::unavailable(ObservationState::Failed,
             {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidPath), "open_directory"});
     const DWORD link_flag = policy == DirectoryLinkPolicy::RejectFinalLink ? FILE_FLAG_OPEN_REPARSE_POINT : 0;
-    OwnedHandle handle(CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+    const auto native_path = windows_extended_path(path.native());
+    if (!native_path) return failure<std::unique_ptr<DirectoryCursor>>(ERROR_INVALID_NAME, "CreateFileW.directory.path");
+    OwnedHandle handle(CreateFileW(native_path->c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_NO_RECALL | link_flag, nullptr));
     if (handle.get() == INVALID_HANDLE_VALUE) return failure<std::unique_ptr<DirectoryCursor>>(GetLastError(), "CreateFileW.directory");

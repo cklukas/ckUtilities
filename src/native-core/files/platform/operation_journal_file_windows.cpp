@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "../operation_journal_file.hpp"
+#include "../windows_name.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -209,7 +210,9 @@ Observation<bool> prepare_native_operation_journal_root(const NativeAbsolutePath
     if (!user.value())
         return Result::unavailable(user.unavailable_detail()->state, user.unavailable_detail()->error);
     auto user_data = std::move(user).take_value();
-    Handle directory(CreateFileW(host.value()->c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL |
+    const auto native_path = windows_extended_path(host.value()->native());
+    if (!native_path) return rejected<bool>(AdapterError::InvalidPath, "journal_file.prepare_root.path");
+    Handle directory(CreateFileW(native_path->c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL |
             WRITE_DAC | WRITE_OWNER, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (directory.get() == INVALID_HANDLE_VALUE)
@@ -250,7 +253,9 @@ Observation<std::unique_ptr<OperationJournalFile>> open_native_operation_journal
         return Observation<Pointer>::unavailable(detail.state, detail.error);
     }
     auto user_data = std::move(user).take_value();
-    Handle directory(CreateFileW(root.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL,
+    const auto native_path = windows_extended_path(root.native());
+    if (!native_path) return rejected<Pointer>(AdapterError::InvalidPath, "journal_file.root_address");
+    Handle directory(CreateFileW(native_path->c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | READ_CONTROL,
         FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (directory.get() == INVALID_HANDLE_VALUE) return failure<Pointer>(GetLastError(), "journal_file.open_root");

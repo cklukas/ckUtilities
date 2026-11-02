@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <string>
 
 namespace ck::files {
 enum class Win32NameIssue : std::uint32_t {
@@ -19,6 +20,13 @@ struct Win32NameCheck {
     bool ordinary_component() const noexcept { return issues==0; }
 };
 Win32NameCheck check_win32_component(std::u16string_view units) noexcept;
+
+// Convert a validated absolute DOS or UNC path to the extended-length spelling
+// required by Windows path-based APIs. This is a boundary conversion only: it
+// does not canonicalize, resolve links, collapse dot components, or change
+// native name units. Device namespaces and relative paths are refused.
+std::optional<std::wstring> windows_extended_path(std::wstring_view path);
+
 namespace detail {
 // Shared with the Windows absolute-path inspection boundary. A literal counted
 // NT child name can remain inspectable even if Win32 would interpret/alter it.
