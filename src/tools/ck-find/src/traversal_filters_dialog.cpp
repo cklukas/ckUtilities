@@ -29,10 +29,10 @@ bool editTraversalFilters(TraversalFilesystemOptions &options)
         unsigned short warningMode = 0;
         char maxDepth[8]{};
         char minDepth[8]{};
-        char filesFrom[PATH_MAX]{};
+        char filesFrom[kPathBufferSize]{};
         char fsType[64]{};
         char linkCount[16]{};
-        char sameFile[PATH_MAX]{};
+        char sameFile[kPathBufferSize]{};
         char inode[32]{};
     } data{};
 

@@ -116,7 +116,7 @@ std::optional<OptionValue> fromJson(const OptionDefinition &definition, const nl
 std::filesystem::path detectConfigRoot()
 {
 #ifdef _WIN32
-    if (const char *appData = std::getenv("APPDATA"))
+    if (const wchar_t *appData = _wgetenv(L"APPDATA"))
     {
         std::filesystem::path path(appData);
         if (!path.empty())

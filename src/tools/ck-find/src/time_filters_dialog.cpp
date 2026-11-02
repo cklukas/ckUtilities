@@ -34,9 +34,9 @@ bool editTimeFilters(TimeFilterOptions &options)
         char ctime[16]{};
         char cmin[16]{};
         char used[16]{};
-        char newer[PATH_MAX]{};
-        char anewer[PATH_MAX]{};
-        char cnewer[PATH_MAX]{};
+        char newer[kPathBufferSize]{};
+        char anewer[kPathBufferSize]{};
+        char cnewer[kPathBufferSize]{};
         char newermt[64]{};
         char newerat[64]{};
         char newerct[64]{};

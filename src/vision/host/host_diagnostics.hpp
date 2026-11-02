@@ -17,12 +17,23 @@
 #pragma once
 
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <fcntl.h>
+#include <io.h>
+#include <windows.h>
+#include "cvision/term/windows_text.hpp"
+#endif
 
 #include "cvision/core/clock.hpp"
 #include "cvision/core/diagnostics.hpp"
@@ -54,7 +65,7 @@ public:
             }
         }
         if (const std::string_view capture = variable("CKVISION_OUTPUT_CAPTURE"); !capture.empty())
-            capture_.reset(std::fopen(std::string(capture).c_str(), "wb"));
+            capture_.reset(open_capture(capture));
         clock_ = &clock;
     }
 
@@ -89,6 +100,33 @@ private:
         (void)::_putenv_s(kOwnerMarker, "1");
 #else
         (void)::setenv(kOwnerMarker, "1", 1);
+#endif
+    }
+
+    static std::FILE *open_capture(std::string_view path) noexcept {
+#if defined(_WIN32)
+        const auto wide = ckv::term::windows_utf16(path);
+        if (!wide)
+            return nullptr;
+        const auto native = ckv::term::windows_absolute_extended_path(*wide);
+        if (!native)
+            return nullptr;
+        HANDLE handle = ::CreateFileW(native->c_str(), GENERIC_WRITE,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return nullptr;
+        const int descriptor = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
+        if (descriptor < 0) {
+            (void)::CloseHandle(handle);
+            return nullptr;
+        }
+        std::FILE *stream = ::_fdopen(descriptor, "wb");
+        if (!stream)
+            (void)::_close(descriptor);
+        return stream;
+#else
+        return std::fopen(std::string(path).c_str(), "wb");
 #endif
     }
 

@@ -15,9 +15,16 @@ production uses of `CreateFileA`, `FindFirstFileA`, `FindNextFileA`,
 `CreateProcessA`, or `GetModuleFileNameA`.
 
 The Windows-specific boundaries now use extended paths for native metadata,
-directory, journal, archive, disk-usage, volume-information, and launcher
-operations. The recycle-bin volume-path query uses a dynamically sized wide
-buffer. POSIX stream code remains behind non-Windows compilation branches.
+directory, journal, archive, disk-usage, volume-information, launcher, host
+capture, and keymap operations. The recycle-bin volume-path query uses a
+dynamically sized wide buffer. Windows search and disk-usage UI path buffers
+are sized for the extended Windows path contract rather than the platform's
+legacy `PATH_MAX` fallback.
+
+The remaining ordinary C++ streams in `ck-find`, configuration persistence,
+and a few utility-specific readers are tracked as the next migration slice;
+they are not treated as long-path-safe Windows boundaries. POSIX-only
+`/proc`/stream code remains behind non-Windows compilation branches.
 
 ## ckVision 1.4.2
 

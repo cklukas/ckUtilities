@@ -27,11 +27,11 @@ bool editActionOptions(ActionOptions &options)
         unsigned short appendFlags = 0;
         unsigned short execVariant = 0;
         char execCommand[512]{};
-        char fprintFile[PATH_MAX]{};
-        char fprint0File[PATH_MAX]{};
-        char flsFile[PATH_MAX]{};
+        char fprintFile[kPathBufferSize]{};
+        char fprint0File[kPathBufferSize]{};
+        char flsFile[kPathBufferSize]{};
         char printfFormat[256]{};
-        char fprintfFile[PATH_MAX]{};
+        char fprintfFile[kPathBufferSize]{};
         char fprintfFormat[256]{};
     } data{};
 

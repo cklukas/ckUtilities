@@ -1011,7 +1011,7 @@ void GuidedSearchDialog::updateActionControls()
 
 void GuidedSearchDialog::browseStartLocation()
 {
-    char location[PATH_MAX]{};
+    char location[kPathBufferSize]{};
     std::snprintf(location, sizeof(location), "%s", m_state.startLocation[0] ? m_state.startLocation.data() : ".");
 
     std::filesystem::path originalDir;

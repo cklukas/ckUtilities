@@ -5,6 +5,10 @@
 #include <system_error>
 #include <utility>
 
+#if defined(_WIN32)
+#include <cvision/term/windows_filesystem.hpp>
+#endif
+
 #include <nlohmann/json.hpp>
 
 #include "ck/options.hpp"
@@ -22,6 +26,12 @@ constexpr std::string_view kPersonalSchemeId = "personal";
 std::filesystem::path keymap_path()
 {
     return ck::config::OptionRegistry::configRoot() / "keymap.json";
+}
+
+std::string utf8_path(const std::filesystem::path &path)
+{
+    const auto value = path.u8string();
+    return std::string(reinterpret_cast<const char *>(value.data()), value.size());
 }
 
 bool read_overrides(const nlohmann::json &source, KeymapOverrides &overrides)
@@ -57,6 +67,12 @@ nlohmann::json write_overrides(const KeymapOverrides &overrides)
 bool read_document(nlohmann::json &document)
 {
     const std::filesystem::path path = keymap_path();
+#if defined(_WIN32)
+    ckv::term::WindowsFileSystem filesystem;
+    const auto input = filesystem.read_file(utf8_path(path));
+    if (!input)
+        return false;
+#else
     std::error_code error;
     if (!std::filesystem::exists(path, error))
         return !error;
@@ -65,9 +81,14 @@ bool read_document(nlohmann::json &document)
     std::ifstream input(path);
     if (!input)
         return false;
+#endif
     try
     {
+#if defined(_WIN32)
+        document = nlohmann::json::parse(input->contents);
+#else
         input >> document;
+#endif
         if (!document.is_object())
             return false;
         const int version = document.value("format_version", 0);
@@ -121,11 +142,17 @@ bool upgrade_document(nlohmann::json &document)
 bool write_document(const nlohmann::json &document)
 {
     const std::filesystem::path path = keymap_path();
+#if defined(_WIN32)
+    ckv::term::WindowsFileSystem filesystem;
+    const auto result = filesystem.write_file_atomic(utf8_path(path), document.dump(2) + '\n');
+    return result.status == ckv::FileWriteStatus::Ok;
+#else
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
     if (error)
         return false;
-    const std::filesystem::path temporary = path.string() + ".tmp";
+    std::filesystem::path temporary = path;
+    temporary += ".tmp";
     {
         std::ofstream output(temporary, std::ios::trunc);
         if (!output)
@@ -137,6 +164,7 @@ bool write_document(const nlohmann::json &document)
     }
     std::filesystem::rename(temporary, path, error);
     return !error;
+#endif
 }
 
 } // namespace

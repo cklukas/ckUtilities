@@ -71,6 +71,12 @@ using namespace ck::du;
 namespace config = ck::config;
 namespace commands = ck::commands::disk_usage;
 
+#if defined(_WIN32)
+static constexpr std::size_t kPathInputBufferSize = 32768;
+#else
+static constexpr std::size_t kPathInputBufferSize = PATH_MAX;
+#endif
+
 static constexpr std::string_view kToolId = "ck-du";
 
 static const ck::appinfo::ToolInfo &toolInfo()
@@ -3270,7 +3276,7 @@ void DiskUsageApp::promptOpenDirectory()
 {
     struct DialogData
     {
-        char path[PATH_MAX];
+        char path[kPathInputBufferSize];
     } data{};
 
     std::string current = std::filesystem::current_path().string();
@@ -4675,7 +4681,7 @@ void DiskUsageApp::loadOptionsFromFile()
         return;
     struct DialogData
     {
-        char path[PATH_MAX];
+        char path[kPathInputBufferSize];
     } data{};
 
     std::filesystem::path configPath = config::OptionRegistry::configRoot();
@@ -4710,7 +4716,7 @@ void DiskUsageApp::saveOptionsToFile()
         return;
     struct DialogData
     {
-        char path[PATH_MAX];
+        char path[kPathInputBufferSize];
     } data{};
 
     std::filesystem::path configPath = config::OptionRegistry::configRoot() / "options.json";

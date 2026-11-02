@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <limits.h>
 
 namespace ck::find
@@ -8,6 +9,12 @@ namespace ck::find
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
+#endif
+
+#if defined(_WIN32)
+inline constexpr std::size_t kPathBufferSize = 32768;
+#else
+inline constexpr std::size_t kPathBufferSize = PATH_MAX;
 #endif
 
 struct TextSearchOptions
@@ -102,9 +109,9 @@ struct TimeFilterOptions
     std::array<char, 16> amin{};
     std::array<char, 16> cmin{};
     std::array<char, 16> used{};
-    std::array<char, PATH_MAX> newer{};
-    std::array<char, PATH_MAX> anewer{};
-    std::array<char, PATH_MAX> cnewer{};
+    std::array<char, kPathBufferSize> newer{};
+    std::array<char, kPathBufferSize> anewer{};
+    std::array<char, kPathBufferSize> cnewer{};
     std::array<char, 64> newermt{};
     std::array<char, 64> newerat{};
     std::array<char, 64> newerct{};
@@ -199,10 +206,10 @@ struct TraversalFilesystemOptions
     bool inumEnabled = false;
     std::array<char, 8> maxDepth{};
     std::array<char, 8> minDepth{};
-    std::array<char, PATH_MAX> filesFrom{};
+    std::array<char, kPathBufferSize> filesFrom{};
     std::array<char, 64> fsType{};
     std::array<char, 16> linkCount{};
-    std::array<char, PATH_MAX> sameFile{};
+    std::array<char, kPathBufferSize> sameFile{};
     std::array<char, 32> inode{};
 };
 
@@ -234,18 +241,18 @@ struct ActionOptions
     bool fprintfEnabled = false;
     bool fprintfAppend = false;
     std::array<char, 512> execCommand{};
-    std::array<char, PATH_MAX> fprintFile{};
-    std::array<char, PATH_MAX> fprint0File{};
-    std::array<char, PATH_MAX> flsFile{};
+    std::array<char, kPathBufferSize> fprintFile{};
+    std::array<char, kPathBufferSize> fprint0File{};
+    std::array<char, kPathBufferSize> flsFile{};
     std::array<char, 256> printfFormat{};
-    std::array<char, PATH_MAX> fprintfFile{};
+    std::array<char, kPathBufferSize> fprintfFile{};
     std::array<char, 256> fprintfFormat{};
 };
 
 struct SearchSpecification
 {
     std::array<char, 128> specName{};
-    std::array<char, PATH_MAX> startLocation{};
+    std::array<char, kPathBufferSize> startLocation{};
     std::array<char, 256> searchText{};
     std::array<char, 256> includePatterns{};
     std::array<char, 256> excludePatterns{};

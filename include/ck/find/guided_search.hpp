@@ -44,7 +44,7 @@ enum class GuidedSizePreset : unsigned short
 struct GuidedSearchState
 {
     std::array<char, 128> specName{};
-    std::array<char, PATH_MAX> startLocation{};
+    std::array<char, kPathBufferSize> startLocation{};
     std::array<char, 256> searchText{};
     std::array<char, 256> includePatterns{};
     std::array<char, 256> excludePatterns{};

@@ -1890,7 +1890,7 @@ void addManualTimeExpressions(std::vector<std::string> &tests, const TimeFilterO
             tests.emplace_back(arrayToString(value));
         }
     };
-    auto addIfPath = [&](bool enabled, const std::string &flag, const std::array<char, PATH_MAX> &value) {
+    auto addIfPath = [&](bool enabled, const std::string &flag, const std::array<char, kPathBufferSize> &value) {
         if (enabled && value[0] != '\0')
         {
             tests.emplace_back(flag);
