@@ -937,21 +937,19 @@ int exportApplication(const CliOptions &opts)
 {
     config::OptionRegistry registry(opts.appId);
     std::filesystem::path source = registry.defaultOptionsPath();
-    std::error_code ec;
-    if (!std::filesystem::exists(source, ec))
+    if (!ck::io::is_regular_file(source))
     {
         std::cerr << "ck-config: no saved defaults for '" << opts.appId << "'" << std::endl;
         return 1;
     }
-    std::filesystem::create_directories(opts.file.parent_path(), ec);
-    if (ec)
+    if (!ck::io::create_directories(opts.file.parent_path()))
     {
-        std::cerr << "ck-config: failed to prepare export directory: " << ec.message() << std::endl;
+        std::cerr << "ck-config: failed to prepare export directory" << std::endl;
         return 1;
     }
-    if (!std::filesystem::copy_file(source, opts.file, std::filesystem::copy_options::overwrite_existing, ec))
+    if (!ck::io::copy_file(source, opts.file))
     {
-        std::cerr << "ck-config: failed to export defaults: " << ec.message() << std::endl;
+        std::cerr << "ck-config: failed to export defaults" << std::endl;
         return 1;
     }
     std::cout << "Exported defaults for '" << opts.appId << "' to " << opts.file << std::endl;
@@ -961,8 +959,7 @@ int exportApplication(const CliOptions &opts)
 int importApplication(const CliOptions &opts)
 {
     const ApplicationInfo *info = findKnownApplication(opts.appId);
-    std::error_code ec;
-    if (!std::filesystem::exists(opts.file, ec))
+    if (!ck::io::is_regular_file(opts.file))
     {
         std::cerr << "ck-config: import file not found: " << opts.file << std::endl;
         return 1;
@@ -985,15 +982,14 @@ int importApplication(const CliOptions &opts)
     else
     {
         std::filesystem::path dest = registry.defaultOptionsPath();
-        std::filesystem::create_directories(dest.parent_path(), ec);
-        if (ec)
+        if (!ck::io::create_directories(dest.parent_path()))
         {
-            std::cerr << "ck-config: failed to prepare configuration directory: " << ec.message() << std::endl;
+            std::cerr << "ck-config: failed to prepare configuration directory" << std::endl;
             return 1;
         }
-        if (!std::filesystem::copy_file(opts.file, dest, std::filesystem::copy_options::overwrite_existing, ec))
+        if (!ck::io::copy_file(opts.file, dest))
         {
-            std::cerr << "ck-config: failed to import defaults: " << ec.message() << std::endl;
+            std::cerr << "ck-config: failed to import defaults" << std::endl;
             return 1;
         }
     }
@@ -1981,8 +1977,7 @@ private:
         if (TProgram::application->executeDialog(dialog, name) == cmCancel)
             return;
         std::filesystem::path chosen = name;
-        std::error_code ec;
-        if (std::filesystem::exists(chosen, ec))
+        if (ck::io::is_regular_file(chosen))
         {
             std::string prompt = "Overwrite existing file?\n" + chosen.string();
             if (messageBox(prompt.c_str(), mfYesNoCancel | mfConfirmation) != cmYes)

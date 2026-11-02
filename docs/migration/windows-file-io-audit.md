@@ -21,15 +21,16 @@ dynamically sized wide buffer. Windows search and disk-usage UI path buffers
 are sized for the extended Windows path contract rather than the platform's
 legacy `PATH_MAX` fallback.
 
-The remaining Windows-compiled consumers now use `ck::io` (`ck_file_io`), a
-small shared boundary that uses `CreateFileW`, extended-length DOS/UNC names,
-native handles, bounded `ReadFile`/`WriteFile` loops, and `FlushFileBuffers` on
-Windows. This covers options/config persistence, saved search specifications,
-content search, JSON loading, SSH configuration discovery, chat transcripts
-and logs, and the Linux GPU snapshot helper (which is compiled into the
-cross-platform sysmon target but only used on Linux). POSIX-only `/proc`,
-`/sys`, and archive branches retain their platform-native stream code behind
-non-Windows preprocessor branches.
+The migrated Windows-compiled consumers use `ck::io` (`ck_file_io`), a small
+shared boundary that uses `CreateFileW`, extended-length DOS/UNC names, native
+handles, bounded `ReadFile`/`WriteFile` loops, and `FlushFileBuffers` on
+Windows. This covers options/config persistence, saved-search profile
+creation/listing/removal, launcher executable discovery, content search, JSON
+loading, SSH configuration discovery, chat transcripts and logs, and the
+Linux GPU snapshot helper (which is compiled into the cross-platform sysmon
+target but only used on Linux). POSIX-only `/proc`, `/sys`, and archive
+branches retain their platform-native stream code behind non-Windows
+preprocessor branches.
 
 The shared boundary has regression coverage for long paths, exact UTF-16 names,
 non-ASCII bytes, append/truncate behavior, bounded reads, recursive directory
@@ -51,6 +52,15 @@ combined with `NativeAbsolutePath`, and only then passed to extended wide
 file APIs. This covers long and non-ASCII archive names without allowing a
 locale-dependent `std::filesystem::path(std::string)` conversion to become a
 Windows I/O operation.
+
+The audit deliberately does not certify the legacy recursive engines in
+`src/tools/ck-find/src/search_backend.cpp` and
+`src/tools/ck-du/src/disk_usage_core.cpp`: their Windows traversal still uses
+`std::filesystem` iterators and is a separate migration item. They must not
+be extended with new long-path-sensitive behavior until they are moved to the
+native filesystem adapter. This limitation is recorded rather than hidden by
+the shared wrapper, which cannot make an iterator-based traversal handle-safe
+or preserve its metadata/reparse semantics by itself.
 
 ## ckVision 1.4.2
 

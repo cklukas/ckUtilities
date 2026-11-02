@@ -95,9 +95,8 @@ std::filesystem::path storageDirectory()
     std::filesystem::path base = ck::config::OptionRegistry::configRoot();
     base /= "ck-find";
     base /= "specs";
-    std::error_code ec;
-    if (!std::filesystem::exists(base, ec))
-        std::filesystem::create_directories(base, ec);
+    if (!ck::io::create_directories(base))
+        return {};
     return base;
 }
 
@@ -2320,17 +2319,8 @@ std::vector<SavedSpecification> listSavedSpecifications()
 {
     std::vector<SavedSpecification> specs;
     std::filesystem::path dir = storageDirectory();
-    std::error_code ec;
-    for (const auto &entry : std::filesystem::directory_iterator(dir, std::filesystem::directory_options::skip_permission_denied, ec))
+    for (const auto &path : ck::io::list_regular_files(dir))
     {
-        if (ec)
-        {
-            ec.clear();
-            continue;
-        }
-        if (!entry.is_regular_file())
-            continue;
-        auto path = entry.path();
         if (path.extension() != ".json")
             continue;
         auto optSpec = readSpecification(path);
@@ -2398,16 +2388,14 @@ bool removeSpecification(const std::string &nameOrSlug)
         return false;
     std::string slug = slugify(trimmed);
     std::filesystem::path path = specificationPathForSlug(slug);
-    std::error_code ec;
-    if (std::filesystem::remove(path, ec))
+    if (ck::io::remove_file(path))
         return true;
     auto specs = listSavedSpecifications();
     for (const auto &info : specs)
     {
         if (info.name == trimmed)
         {
-            std::filesystem::remove(info.path, ec);
-            return !ec;
+            return ck::io::remove_file(info.path);
         }
     }
     return false;

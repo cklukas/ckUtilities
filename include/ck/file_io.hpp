@@ -38,6 +38,11 @@ bool create_directories(const std::filesystem::path &path);
 // filesystem adapter.
 std::vector<std::filesystem::path> list_directories(const std::filesystem::path &path);
 
+// Lists immediate ordinary files without following the final entry. Reparse
+// points/symlinks are excluded on every platform so callers can safely use
+// the result for profile or cache discovery.
+std::vector<std::filesystem::path> list_regular_files(const std::filesystem::path &path);
+
 // Removes a file or directory tree. On Windows this is a wide-character,
 // extended-length traversal and does not recurse through reparse points.
 bool remove_tree(const std::filesystem::path &path);
@@ -48,6 +53,10 @@ bool remove_tree(const std::filesystem::path &path);
 bool remove_regular_file(const std::filesystem::path &path);
 
 bool is_regular_file(const std::filesystem::path &path);
+
+// Copies an ordinary file, replacing an existing ordinary destination. On
+// Windows this is a wide-character, extended-length operation.
+bool copy_file(const std::filesystem::path &source, const std::filesystem::path &destination);
 
 bool remove_file(const std::filesystem::path &path);
 

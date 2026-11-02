@@ -226,6 +226,29 @@ std::vector<std::filesystem::path> list_directories_windows(const std::filesyste
     return GetLastError() == ERROR_NO_MORE_FILES ? result : std::vector<std::filesystem::path>{};
 }
 
+std::vector<std::filesystem::path> list_regular_files_windows(const std::filesystem::path &path)
+{
+    const auto native = extended_windows_path(path);
+    if (!native)
+        return {};
+    const std::wstring pattern = *native + L"\\*";
+    WIN32_FIND_DATAW data{};
+    Handle enumeration(FindFirstFileW(pattern.c_str(), &data));
+    if (!enumeration)
+        return {};
+    std::vector<std::filesystem::path> result;
+    for (;;)
+    {
+        const std::wstring_view name(data.cFileName);
+        if (name != L"." && name != L".." && (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+            (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0)
+            result.emplace_back(path / std::wstring(name));
+        if (FindNextFileW(enumeration.get(), &data) == 0)
+            break;
+    }
+    return GetLastError() == ERROR_NO_MORE_FILES ? result : std::vector<std::filesystem::path>{};
+}
+
 bool remove_tree_windows(const std::filesystem::path &path)
 {
     const auto native = extended_windows_path(path);
@@ -277,6 +300,23 @@ bool is_regular_windows(const std::filesystem::path &path) noexcept
     const DWORD attributes = GetFileAttributesW(native->c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
            (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0;
+}
+
+bool copy_file_windows(const std::filesystem::path &source, const std::filesystem::path &destination)
+{
+    const auto native_source = extended_windows_path(source);
+    const auto native_destination = extended_windows_path(destination);
+    if (!native_source || !native_destination || !is_regular_windows(source))
+        return false;
+
+    const DWORD destination_attributes = GetFileAttributesW(native_destination->c_str());
+    if (destination_attributes != INVALID_FILE_ATTRIBUTES &&
+        (destination_attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        return false;
+    if (destination_attributes != INVALID_FILE_ATTRIBUTES &&
+        (destination_attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        return false;
+    return CopyFileW(native_source->c_str(), native_destination->c_str(), FALSE) != 0;
 }
 
 bool remove_windows(const std::filesystem::path &path)
@@ -366,6 +406,26 @@ std::vector<std::filesystem::path> list_directories(const std::filesystem::path 
 #endif
 }
 
+std::vector<std::filesystem::path> list_regular_files(const std::filesystem::path &path)
+{
+#if defined(_WIN32)
+    return list_regular_files_windows(path);
+#else
+    std::error_code error;
+    std::vector<std::filesystem::path> result;
+    for (const auto &entry : std::filesystem::directory_iterator(path, error))
+    {
+        if (error)
+            return {};
+        if (entry.is_regular_file(error))
+            result.push_back(entry.path());
+        if (error)
+            return {};
+    }
+    return error ? std::vector<std::filesystem::path>{} : result;
+#endif
+}
+
 bool remove_tree(const std::filesystem::path &path)
 {
 #if defined(_WIN32)
@@ -398,6 +458,17 @@ bool is_regular_file(const std::filesystem::path &path)
     std::error_code error;
     const auto status = std::filesystem::symlink_status(path, error);
     return !error && std::filesystem::is_regular_file(status);
+#endif
+}
+
+bool copy_file(const std::filesystem::path &source, const std::filesystem::path &destination)
+{
+#if defined(_WIN32)
+    return copy_file_windows(source, destination);
+#else
+    std::error_code error;
+    return std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, error) &&
+           !error;
 #endif
 }
 

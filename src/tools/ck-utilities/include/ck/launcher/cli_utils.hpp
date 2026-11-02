@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ck/app_info.hpp"
+#include "ck/file_io.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -57,8 +58,7 @@ inline std::optional<std::filesystem::path> locateProgramPath(const std::filesys
         programPath += ".exe";
 #endif
 
-    std::error_code existsEc;
-    if (!std::filesystem::exists(programPath, existsEc))
+    if (!ck::io::is_regular_file(programPath))
         return std::nullopt;
     return programPath;
 }
