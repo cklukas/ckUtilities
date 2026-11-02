@@ -50,6 +50,20 @@
       ]
     }
   },
+  "production_targets": {
+    "macos_arm64": {
+      "path": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/bin/ck-files",
+      "sha256": "d32bdae4870d3aa45786915293b20485de281bbbaaad7d217121c154f4a04f53"
+    },
+    "windows_x64": {
+      "path": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\bin\\ck-files.exe",
+      "sha256": "d34320a2c5e07718220dcfe9d36fb1e76c27e94098448aaa0a7165743ac7a748"
+    },
+    "linux_arm64": {
+      "path": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/bin/ck-files",
+      "sha256": "217ee561262f0fdcab719609636f798b16d3dffa766001defdc00237e2bffff6"
+    }
+  },
   "sanitizers": {
     "macos_arm64": {
       "configuration": "ASan+UBSan, abort-on-error, leak detection disabled",
