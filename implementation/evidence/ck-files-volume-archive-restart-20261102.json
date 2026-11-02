@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-02",
+  "package": "CP-03",
+  "scope": "volume-archive read-only recovery discovery after worker restart",
+  "source_commit": "76de5ad119c1e373693d8572548abec8781e2012",
+  "qualification": {
+    "boundary": "A durable archive journal is scanned by one worker, that worker is stopped and replaced, and the same journal is scanned again.",
+    "result": "Both scans retain the native journal identity, report the unfinished Planned state as reconciliation-required, and leave the journal intact.",
+    "not_claimed": "This does not expose cleanup, resume, retry, publication, source retirement, or automatic reconciliation."
+  },
+  "macos_arm64": {
+    "configuration": "Release/Ninja",
+    "compiler": "Apple clang 21.0.0 (clang-2100.4.1.1)",
+    "build_root": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build",
+    "executable": "/Volumes/S8T/tmp/ckutilities-cp02-trash-guard-20261102-01/build/src/vision/files/ck_vision_files_tests",
+    "executable_sha256": "5d0d6174aa810e5757646cad03aff92977a6831d6d20a3d429936f68ab20d55a",
+    "suite": "files_volume_archive_tests.cpp",
+    "result": "21/21 passed"
+  },
+  "windows_x64": {
+    "host": "workstation",
+    "configuration": "Release/Ninja /MT",
+    "compiler": "MSVC v143 19.44.35228 / toolset 14.44.35207",
+    "source_checkout": "V:\\dev\\ckutilities-cp02-trash-guard-20261102-01",
+    "source_commit": "267ac94621c366d50905bbeebe9cf8a9c21990ff",
+    "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+    "temporary_root": "V:\\tmp\\ckutilities-cp03-archive-restart-20261102-01",
+    "executable": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "executable_sha256": "9d57cc87899cb24bcc6cb806092778807e425163aad4a039e7982127010f4a61",
+    "suite": "files_volume_archive_tests.cpp",
+    "result": "21/21 passed"
+  },
+  "linux_arm64": {
+    "host": "uconsole",
+    "configuration": "RelWithDebInfo/Ninja",
+    "compiler": "GNU g++ 14.2.0",
+    "source_checkout": "/home/klukas/ckUtilities",
+    "source_commit": "12dca7969d4b17ceed66d5fc88621040c9cf19f1",
+    "build_root": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build",
+    "temporary_root": "/home/klukas/tmp/ckutilities-cp03-archive-restart-20261102-01",
+    "executable": "/home/klukas/tmp/ckutilities-cp02-trash-guard-linux-20261102-01/build/src/vision/files/ck_vision_files_tests",
+    "executable_sha256": "b8f221864cd46445ad1665e926bdcaa88f70986f5691c75851eec2f03034ba02",
+    "suite": "files_volume_archive_tests.cpp",
+    "result": "21/21 passed"
+  },
+  "status": "pass_cp03_archive_recovery_restart_read_only_boundary"
+}

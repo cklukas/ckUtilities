@@ -1,4 +1,17 @@
 # Files implementation evidence
+## 2026-11-02 — CP-03 volume-archive recovery restart boundary
+
+The volume-archive recovery scan now has an explicit worker-restart
+qualification. A durable unfinished archive journal was scanned by one
+worker, that worker was stopped and replaced, and the same journal was scanned
+again. Both observations retained the native journal identity, reported the
+unfinished Planned state as reconciliation-required, and left the journal
+intact. The focused archive suite passed **21/21** on macOS arm64, Windows
+x64/v143 and Linux ARM64. Evidence: [CP-03 archive recovery restart record](evidence/ck-files-volume-archive-restart-20261102.json).
+
+This remains read-only recovery evidence. Cleanup, resume, retry, publication,
+source retirement and automatic reconciliation are still not exposed.
+
 ## 2026-11-02 — CP-03 read-only operation recovery boundary
 
 The ordinary-operation recovery discovery and review boundary passed on the
