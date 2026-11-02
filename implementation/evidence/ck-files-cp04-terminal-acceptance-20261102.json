@@ -37,6 +37,14 @@
       "result": "passed: 1/1 contract test; every utility rendered and accepted Alt+X with exit code 0"
     }
   },
+  "windows_full_ctest": {
+    "build_root": "V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build",
+    "build_target": "all",
+    "configuration": "Release/Ninja /MT",
+    "test_command": "ctest --test-dir V:\\tmp\\ckutilities-cp02-trash-guard-20261102-01\\build -C Release --output-on-failure",
+    "result": "223/223 passed",
+    "ctest_elapsed_seconds": 66.60
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
