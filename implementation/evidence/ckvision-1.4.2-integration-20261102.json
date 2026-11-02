@@ -9,7 +9,7 @@
     "mac_installed_prefix": "/Volumes/S8T/tmp/ckvision-1.4.2-validation-20261102-01/install",
     "windows_source": "V:\\dev\\ckvision-1.4.2-qualification-20261102"
   },
-  "ckutilities_source": "84a0b36",
+  "ckutilities_source": "6f13bc2",
   "checks": [
     {
       "name": "ckVision macOS release qualification",
@@ -40,6 +40,18 @@
       "build": "/Volumes/S8T/tmp/ckutilities-ckvision-1.4.2-integration-20261102-01/build",
       "command": "ctest --output-on-failure --timeout 180",
       "result": "224/224 passed; 13.69 seconds; private index fixture on ownership-enabled /Volumes/PRO-BLADE/tmp"
+    },
+    {
+      "name": "ckUtilities modern Windows I/O hardening qualification",
+      "build": "V:\\tmp\\ckutilities-windows-io-audit-20261102\\build",
+      "command": "build-and-package.ps1 -CkVisionSource V:\\dev\\ckvision-1.4.2-qualification-20261102 -WorkRoot V:\\tmp\\ckutilities-windows-io-audit-20261102",
+      "result": "223/223 passed; ckVision package consumer 1/1; 10 packaged tools started; 29 SVG screenshots present; MSVC v143 19.44.35228; all project outputs and TEMP/TMP/TMPDIR on V:"
+    },
+    {
+      "name": "ckUtilities final macOS suite after Windows boundary hardening",
+      "build": "/Volumes/S8T/tmp/ckutilities-ckvision-1.4.2-integration-20261102-01/build",
+      "command": "TMPDIR=/Volumes/S8T/tmp/ckutilities-final-io-audit-20261102-01 ctest --output-on-failure -j 4",
+      "result": "224/224 passed; 10.32 seconds; 2026-11-02; actual TMPDIR directory created on S8T"
     }
   ],
   "notes": [
@@ -47,5 +59,8 @@
     "Windows qualification uses wide/native file I/O and extended-length paths at file boundaries; the 238-test run passed including widget screenshot, layer, ConPTY, and process suites.",
     "The ckUtilities build and general scratch data remained under S8T. The private index fixture is intentionally on PRO-BLADE because S8T has APFS ownership disabled and the contract requires ownership-enabled storage.",
     "The prior mixed-sanitizer SDK finding remains rejected as invalid evidence; no sanitizer finding was suppressed."
+    ,"The Windows volume archive staging, verification, digest, sparse sizing, publication and cleanup paths now use wide/native APIs with extended-length path conversion; POSIX keeps its native file-descriptor path."
+    ,"Windows volume-GUID extended-path validation now recognizes the complete GUID shape; the focused path test and full Windows suite pass."
+    ,"The production audit found no narrow ANSI Win32 filesystem/process calls in ckUtilities or ckVision. Ordinary C++ stream users remain in configuration, keymap, chat/search, and POSIX pseudo-filesystem readers; they are outside the hardened volume/archive boundary and remain explicit follow-up scope before declaring every production stream path modernized."
   ]
 }
