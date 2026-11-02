@@ -35,8 +35,13 @@ been accepted in a real desktop terminal window.
 The Windows ConPTY contract now adds a functional Files case: it creates two
 fixture files, clicks the second visible row through SGR mouse input, sends
 Insert, and asserts the live cell snapshot contains `Marked: 1`. This proves
-row selection and marking through the real Windows terminal path; equivalent
-macOS/Linux desktop-terminal mouse behavior remains separately unqualified.
+row selection and marking through the real Windows terminal path. The POSIX
+helper now runs the same functional case on macOS arm64 and Linux ARM64: both
+fresh builds rendered the two exclusive fixtures, accepted the second-row
+SGR click and Insert, reported `Marked: 1`, exited through Alt+X, restored the
+terminal profile, and removed the fixtures. These are real PTY paths; native
+desktop-terminal window behavior remains separately unqualified. Evidence:
+[CP-04 terminal acceptance record](evidence/ck-files-cp04-terminal-acceptance-20261102.json).
 
 ## 2026-11-02 — CP-03 published-object receipt and read-only verifier
 

@@ -105,11 +105,39 @@
     "assertion": "the live ConPTY cell snapshot contains the Files status line Marked: 1 before Alt+X",
     "result": "passed: functional row selection and marking through ConPTY input; 1/1 contract test"
   },
+  "posix_files_row_selection": {
+    "macos_arm64": {
+      "source_commit": "5f51698",
+      "host": "local Mac",
+      "helper": "/Volumes/S8T/tmp/ckutilities-posix-row-selection-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "b098ec8b291fb0caae5de9109fbae572205aadcfd398a2133c3ca9ebe22a8ed4",
+      "production_executable": "/Volumes/S8T/tmp/ckutilities-posix-row-selection-20261102-01/build/bin/ck-files",
+      "production_executable_sha256": "75e15e3a1a3b71e56b117f699c959a369c4c5676d329f477e0f4e98d5b79c98e",
+      "terminal_contract": "POSIX PTY, xterm-256color, resized to 100x30",
+      "fixture": "left directory contains exclusive a-mouse-target.txt and b-mouse-target.txt; right directory is empty",
+      "input": "SGR left click on the second visible file row, then Insert",
+      "assertion": "the rendered PTY transcript contains the Files status transition to Marked: 1 before Alt+X",
+      "result": "passed: functional row selection and marking through POSIX PTY input; terminal restored and fixtures removed"
+    },
+    "linux_arm64": {
+      "source_commit": "b9c75c77e",
+      "host": "uconsole",
+      "helper": "/home/klukas/tmp/ckutilities-posix-row-selection-20261102-01/build/src/vision/ck_vision_terminal_smoke",
+      "helper_sha256": "80de56d5b442450416ff78d6bcacdf7e554c8ae7e3ac1712ded0ef2193b6c662",
+      "production_executable": "/home/klukas/tmp/ckutilities-posix-row-selection-20261102-01/build/bin/ck-files",
+      "production_executable_sha256": "8e3d8cc433117c15092638b4ebee41cdedf484c85ae1cf549ddf1336a8da06f4",
+      "terminal_contract": "POSIX PTY, xterm-256color, resized to 100x30",
+      "fixture": "left directory contains exclusive a-mouse-target.txt and b-mouse-target.txt; right directory is empty",
+      "input": "SGR left click on the second visible file row, then Insert",
+      "assertion": "the rendered PTY transcript contains the Files status transition to Marked: 1 before Alt+X",
+      "result": "passed: functional row selection and marking through POSIX PTY input; terminal restored and fixtures removed"
+    }
+  },
   "safety": [
     "All temporary/configuration data was under the mandated task-specific temporary roots.",
     "The Windows contract used the V: development drive and V: TEMP/TMP/TMPDIR.",
     "No production app instance was left running.",
-    "The Windows row-selection case is functional ConPTY evidence; it does not prove equivalent macOS/Linux desktop-terminal mouse behavior."
+    "The row-selection cases are functional PTY/ConPTY evidence; they do not prove equivalent behavior in a native desktop terminal window."
   ],
   "status": "pass_terminal_contract; real_window_input_and_linux_tsan_gates_remain_open"
 }
