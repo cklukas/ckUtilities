@@ -1,7 +1,7 @@
 # Copyright (c) 2026 C. Klukas. All rights reserved.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The self-hosted (rpi4) lane publishes the documentation site. ckdocs is
+# The self-hosted lane publishes the documentation site. ckdocs is
 # compiled from the ck-git-hosting sister project at its pinned 0.8.1 commit,
 # the release .github/workflows/pages.yml installs, so the LAN and GitHub Pages
 # publish the same site. `--strict` fails the run on a broken link, a heading
@@ -24,7 +24,34 @@ jobs:
     steps:
       - name: site
         script: |
-          make -C ../ck-git-hosting BUILD_ROOT="$TMPDIR" BUILD_DIR="$TMPDIR/ckdocs" client
+          set -eu
+          case "$(uname -s)" in
+            Darwin)
+              # The native runner prepends Xcode's compiler directory. Direct
+              # clang++ needs an explicit SDK; the interactive /usr/bin shim
+              # can hide this requirement. Use only the admitted Xcode tools.
+              case "${TMPDIR:?runner must supply an explicit temporary directory}" in
+                /Volumes/S8T/tmp/*) volume=/Volumes/S8T ;;
+                /Volumes/PRO-BLADE/tmp/*) volume=/Volumes/PRO-BLADE ;;
+                *) echo 'Mac runner temporary directory is outside permitted volumes' >&2; exit 1 ;;
+              esac
+              /bin/df -P "$volume" | /usr/bin/awk -v expected="$volume" 'END { exit ($NF != expected) }'
+              actual_tmp=$(cd -P "$TMPDIR" && pwd -P)
+              case "$actual_tmp" in "$volume"/tmp/*) ;; *) echo 'Mac temporary path escapes its permitted volume' >&2; exit 1 ;; esac
+              CXX=$(/usr/bin/xcrun --sdk macosx --find clang++)
+              SDKROOT=$(/usr/bin/xcrun --sdk macosx --show-sdk-path)
+              test -x "$CXX"
+              test -d "$SDKROOT"
+              export CXX SDKROOT
+              ;;
+            *) CXX=${CXX:-c++}; export CXX ;;
+          esac
+          export CMAKE_BUILD_PARALLEL_LEVEL=1 MAKEFLAGS=-j1
+          printf 'CXX=%s\nSDKROOT=%s\n' "$CXX" "${SDKROOT-}"
+          "$CXX" --version
+          printf '#include <filesystem>\nint main(){std::filesystem::path p(".");return p.empty();}\n' > "$TMPDIR/ckdocs-filesystem.cpp"
+          "$CXX" -std=c++20 -fsyntax-only "$TMPDIR/ckdocs-filesystem.cpp"
+          make -j1 -C ../ck-git-hosting "CXX=$CXX" BUILD_ROOT="$TMPDIR" BUILD_DIR="$TMPDIR/ckdocs" client
           "$TMPDIR/ckdocs/bin/ckdocs" --version
           "$TMPDIR/ckdocs/bin/ckdocs" build --root "$PWD" --out "$PWD/public" --strict
 pages:
