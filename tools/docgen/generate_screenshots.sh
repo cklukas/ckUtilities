@@ -22,7 +22,7 @@ cmake -S "$project_root" -B "$build_dir" -G Ninja \
   -DCKTOOLS_CKVISION_PREFIX="$ckvision_prefix" \
   -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON \
   -DCKTOOLS_CKVISION_SOURCE_DIR="$ckvision_source"
-cmake --build "$build_dir" --parallel --target capture_ckutilities_screenshots \
+cmake --build "$build_dir" --parallel "${CKTOOLS_DOCS_JOBS:-1}" --target capture_ckutilities_screenshots \
   capture_todo_screenshots generate_sysmon_goldens capture_sysmon_screenshots
 mkdir -p "$output_dir"
 "$build_dir/tools/docgen/capture_ckutilities_screenshots" "$output_dir"

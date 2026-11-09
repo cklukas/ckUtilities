@@ -92,8 +92,15 @@ ckVision 1.4.2 source checkout:
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
 CKTOOLS_CKVISION_SOURCE_DIR=/path/to/ckvision \
+CKTOOLS_DOCS_BUILD_DIR=/path/to/task-workspace/docs-build \
+CKTOOLS_DOCS_JOBS=1 \
 tools/docgen/generate_screenshots.sh
 ```
+
+The capture build defaults to one job. Set `CKTOOLS_DOCS_JOBS` to the CPU
+allocation for that run. On macOS, place the task workspace and `TMPDIR` beneath
+`/Volumes/S8T/tmp` (or `/Volumes/PRO-BLADE/tmp`); on the Windows workstation use
+`V:\tmp` and set `TEMP`/`TMP` there.
 
 CI regenerates the screenshots and goldens and fails if any tracked file
 differs, so review a regenerated golden as carefully as the code that changed
