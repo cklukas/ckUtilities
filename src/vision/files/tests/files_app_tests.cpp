@@ -532,12 +532,13 @@ void expect_mac_copy_publication_refusal(Fixture& fixture, const ck::testing::Fi
                                          const ck::testing::FilesFixtureTree& target_before, bool marked_batch = false) {
     fixture.until([&] {
         return !fixture.app->operation_review_pending() && !fixture.app->pending(0) && !fixture.app->pending(1) &&
-               fixture.app->status(0).find("Copy needs reconciliation; no source retirement was attempted") != std::string::npos;
+               fixture.app->status(0).find("Copy needs reconciliation") != std::string::npos;
     });
     fixture.execution_service->request_stop();
     fixture.execution_service->join(); // Drain native writers/journals before independent inspection.
     CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
-    CK_CHECK(fixture.app->status(0).find("create_staging_file.fd_publication_unqualified") != std::string::npos);
+    CK_CHECK(fixture.app->status(0).find("verified file publication is unavailable on this platform") != std::string::npos);
+    CK_CHECK(fixture.app->status(0).find("create_staging_file.fd_publication_unqualified") == std::string::npos);
     CK_CHECK(fixture.app->status(0).find("Copy completed") == std::string::npos);
     auto target_after = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right");
     unsigned journals = 0;

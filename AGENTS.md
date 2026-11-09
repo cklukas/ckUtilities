@@ -1,5 +1,19 @@
 # ckUtilities agent instructions
 
+## Mandatory branch policy
+
+Continue all development and commits on `master` only. Do not create new
+development branches or continue work on `codex/...` branches.
+
+GitHub must contain only the `master` branch. Merge outstanding changes into
+`master` before removing other GitHub branches, and verify that each deleted
+branch tip is reachable from the published `master`. Do not discard changes
+or rewrite history to perform this cleanup. Branches on rpi4 may remain.
+
+Preserve immutable source snapshots and active qualification inputs. Existing
+frozen validation checkouts may retain their original commit, but new work and
+publication must use `master`.
+
 ## Windows workstation
 
 All Windows workstation development must use the fast development drive `V:`.

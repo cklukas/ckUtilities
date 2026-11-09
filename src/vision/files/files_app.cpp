@@ -3008,11 +3008,16 @@ struct FilesApp::State {
             if (reply.state == FilesOperationExecutionState::Cancelled)
                 detail = label + " cancelled";
             else if (reply.state == FilesOperationExecutionState::NeedsReconciliation)
-                detail = label + " needs reconciliation; no source retirement was attempted";
+                detail = label + " needs reconciliation";
             else
                 detail = label + " failed";
-            if (reply.error)
-                detail += ": " + reply.error->error.operation;
+            if (reply.error) {
+                if (reply.error->state == ck::files::ObservationState::Unsupported &&
+                    reply.error->error.operation == "create_staging_file.fd_publication_unqualified")
+                    detail += ": verified file publication is unavailable on this platform";
+                else
+                    detail += ": " + reply.error->error.operation;
+            }
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
                 detail += ": worker stopped";
             panes[active].error = std::move(detail);
