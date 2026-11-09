@@ -4,6 +4,7 @@
 #include "files_operation_recovery_cleanup.hpp"
 
 #include "native_filesystem.hpp"
+#include "ck/file_io.hpp"
 #include "operation_journal_file.hpp"
 #include "native_operation_recovery_evidence.hpp"
 #include "scratch_directory.hpp"
@@ -16,6 +17,7 @@
 #include <fstream>
 #include <mutex>
 #include <stdexcept>
+#include <thread>
 
 namespace {
 using namespace ck::files;
@@ -45,7 +47,7 @@ NativeOperationRecoveryEvidence evidence() {
 }
 
 CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_journals) {
-    const ck::testing::ScratchDirectory scratch("files-operation-recovery-discovery");
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-discovery", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto destination_path = scratch.path() / "destination";
     const auto journal_path = scratch.path() / "journals";
     std::filesystem::create_directory(destination_path);
@@ -100,7 +102,7 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
 }
 
 CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
-    const ck::testing::ScratchDirectory scratch("files-operation-recovery-service");
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = address(scratch.path());
     CK_CHECK(prepare_native_operation_journal_root(root).value());
     std::ofstream journal(scratch.path() / ".ck-copy-journal-repeated", std::ios::binary);
@@ -144,7 +146,7 @@ CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
 }
 
 CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_restart) {
-    const ck::testing::ScratchDirectory scratch("files-operation-recovery-restart");
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-restart", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = address(scratch.path());
     CK_CHECK(prepare_native_operation_journal_root(root).value());
 #if defined(_WIN32)
@@ -193,12 +195,12 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
                  second.value()->journals.front().report->inspection.report.requires_reconciliation);
 }
 
-CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_unsupported) {
-    const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup");
+CK_TEST(files_operation_recovery_cleanup_requires_live_ownership_and_preserves_evidence) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto destination_path = scratch.path() / "destination";
     const auto journal_path = scratch.path() / "journals";
-    std::filesystem::create_directory(destination_path);
-    std::filesystem::create_directory(journal_path);
+    CK_CHECK(ck::io::create_directories(destination_path));
+    CK_CHECK(ck::io::create_directories(journal_path));
     const auto destination_address = address(destination_path);
     const auto root = address(journal_path);
     CK_CHECK(prepare_native_operation_journal_root(root).value());
@@ -262,10 +264,14 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
         {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, *journal,
         {3, 0, OperationJournalState::Copied, *encoded.value()}).value());
+    CK_CHECK(journal_file->finish_io().value());
     journal_file.reset();
     staging.reset();
     destination.reset();
 
+    std::string journal_before;
+    const auto journal_file_path = journal_path / ".ck-copy-journal-recovery-cleanup";
+    CK_CHECK(ck::io::read_file(journal_file_path, journal_before));
     std::mutex wake_mutex;
     std::condition_variable wake_condition;
     FilesOperationRecoveryCleanupService service([&] { wake_condition.notify_all(); });
@@ -282,20 +288,22 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
     }
     CK_CHECK(reply.has_value());
     if (reply) {
-#if defined(_WIN32)
-        CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Complete);
-        CK_CHECK(!std::filesystem::exists(destination_path / ".ck-copy-staging-recovery"));
-#else
-        CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Unsupported);
-        CK_CHECK(std::filesystem::exists(destination_path / ".ck-copy-staging-recovery"));
-#endif
+        CK_CHECK(reply->state == FilesOperationRecoveryCleanupState::Failed);
+        CK_CHECK(reply->error && reply->error->state == ObservationState::Unknown);
+        CK_CHECK(reply->error && reply->error->error.domain == ErrorDomain::Adapter);
+        CK_CHECK(reply->error && reply->error->error.code == static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity));
+        CK_CHECK(reply->error && reply->error->error.operation ==
+                 "operation_recovery_cleanup.live_creator_ownership_required");
     }
+    std::string staging_bytes, journal_after;
+    CK_CHECK(ck::io::read_file(destination_path / ".ck-copy-staging-recovery", staging_bytes));
+    CK_CHECK(staging_bytes.empty());
+    CK_CHECK(ck::io::read_file(journal_file_path, journal_after));
+    CK_CHECK(journal_after == journal_before);
     service.request_stop();
     service.join();
-#if defined(_WIN32)
-    // A completed cleanup appends Cancelled before the worker result is
-    // published. Reopening that durable journal on a fresh worker must not
-    // reinterpret the removed staging object as eligible again.
+    // A second worker has no additional authority. Preserve the exact journal
+    // and retained object rather than appending a fabricated Cancelled record.
     FilesOperationRecoveryCleanupService restarted;
     CK_CHECK(restarted.request(root, journal_name, id) ==
              FilesOperationRecoveryCleanupSubmission::Accepted);
@@ -311,5 +319,7 @@ CK_TEST(files_operation_recovery_cleanup_revalidates_receipt_and_keeps_posix_uns
         CK_CHECK(restarted_reply->state == FilesOperationRecoveryCleanupState::Failed);
     restarted.request_stop();
     restarted.join();
-#endif
+    CK_CHECK(ck::io::read_file(journal_file_path, journal_after));
+    CK_CHECK(journal_after == journal_before);
+    CK_CHECK(ck::io::read_file(destination_path / ".ck-copy-staging-recovery", staging_bytes));
 }

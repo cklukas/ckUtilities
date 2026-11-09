@@ -70,66 +70,14 @@ struct FilesOperationRecoveryCleanupService::State final {
         busy = false;
         signal();
     }
-    FilesOperationRecoveryCleanupReply run_one(Request request) {
-        auto file = open_native_operation_journal_file(request.root, request.journal_name, false);
-        if (!file.value()) return make_error(*file.unavailable_detail());
-        auto loaded = load_operation_journal(**file.value());
-        if (!loaded.value()) return make_error(*loaded.unavailable_detail());
-        if (loaded.value()->journal->id() != request.journal_id ||
-            loaded.value()->journal->operation() != FileOperation::Copy ||
-            loaded.value()->tail.has_value()) {
-            auto detail = failure<bool>(AdapterError::PlanDecisionStale,
-                                        "operation_recovery_cleanup.journal_changed",
-                                        ObservationState::Changed);
-            return make_error(*detail.unavailable_detail());
-        }
-        auto inspection = inspect_native_operation_recovery_evidence(
-            **file.value(), {}, {}, {});
-        if (!inspection.value()) return make_error(*inspection.unavailable_detail());
-        if (inspection.value()->report.items.size() != 1 || inspection.value()->artifacts.size() != 1 ||
-            inspection.value()->report.items.front().action != OperationRecoveryAction::InspectUnpublishedStaging ||
-            (inspection.value()->report.items.front().state != OperationJournalState::Copied &&
-             inspection.value()->report.items.front().state != OperationJournalState::Verified)) {
-            auto detail = failure<bool>(AdapterError::PlanDecisionStale,
-                                        "operation_recovery_cleanup.item_not_eligible",
-                                        ObservationState::Unknown);
-            return make_error(*detail.unavailable_detail());
-        }
-        const auto &artifact = inspection.value()->artifacts.front();
-        if (!artifact.evidence || !artifact.evidence->staging_identity ||
-            !artifact.evidence->destination_address) {
-            auto detail = failure<bool>(AdapterError::UnqualifiedIdentity,
-                                        "operation_recovery_cleanup.receipt_missing",
-                                        ObservationState::Unknown);
-            return make_error(*detail.unavailable_detail());
-        }
-        NativeFileSystem filesystem;
-        auto destination = filesystem.open_native_directory(*artifact.evidence->destination_address);
-        if (!destination.value()) return make_error(*destination.unavailable_detail());
-        auto held_destination = std::shared_ptr<const DirectoryCursor>(std::move(destination).take_value());
-        const auto destination_identity = held_destination->identity();
-        if (!destination_identity.value() ||
-            !artifact.evidence->destination_identity.matches_live(*destination_identity.value())) {
-            auto detail = failure<bool>(AdapterError::PlanDecisionStale,
-                                        "operation_recovery_cleanup.destination_changed",
-                                        ObservationState::Changed);
-            return make_error(*detail.unavailable_detail());
-        }
-        NativeOperationRecoveryCleanupRequest cleanup{
-            artifact, std::move(held_destination), *destination_identity.value()};
-        auto discarded = cleanup_native_unpublished_staging(cleanup);
-        if (!discarded.value()) return make_error(*discarded.unavailable_detail());
-        if (!*discarded.value()) {
-            auto detail = failure<bool>(AdapterError::InvalidNativeResult,
-                                        "operation_recovery_cleanup.discard_result");
-            return make_error(*detail.unavailable_detail());
-        }
-        auto cancelled = append_operation_journal_file(
-            **file.value(), *loaded.value()->journal,
-            {static_cast<std::uint64_t>(loaded.value()->journal->records().size() + 1),
-             inspection.value()->report.items.front().item, OperationJournalState::Cancelled, {}});
-        if (!cancelled.value()) return make_error(*cancelled.unavailable_detail());
-        return {FilesOperationRecoveryCleanupState::Complete, std::nullopt};
+    FilesOperationRecoveryCleanupReply run_one(const Request &) {
+        // This service receives restart inspection facts only. Matching names,
+        // IDs and journal bytes cannot recreate the original creator's held
+        // staging owner. Refuse before reopening or changing any native object.
+        auto detail = failure<bool>(AdapterError::UnqualifiedIdentity,
+            "operation_recovery_cleanup.live_creator_ownership_required",
+            ObservationState::Unknown);
+        return make_error(*detail.unavailable_detail());
     }
     void run() {
         for (;;) {

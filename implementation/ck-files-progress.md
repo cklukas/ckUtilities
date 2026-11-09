@@ -8627,3 +8627,43 @@ ASan/UBSan ckVision SDK for a Release build; that SDK propagated sanitizer
 options into the consumer. Its build tree was discarded and the passing
 rehearsal above was rebuilt from the clean non-sanitized 1.4.0 SDK. No warning
 was disabled and no source workaround was applied.
+
+
+## 2026-11-09 — shared-backend consumer ownership and error fidelity
+
+The new consumer build found that restart cleanup still treated serialized IDs,
+names and matching bytes as deletion authority. Both operation and archive
+restart cleanup now refuse before native I/O with UnqualifiedIdentity. Their
+menu actions remain disabled with a live-owner reason. Read-only recovery
+inspection remains available. A pinned-original/byte-identical replacement
+regression requires the replacement and exact journal bytes to survive; no
+fabricated Cancelled record is appended. The archive writer's separate held
+creator continuity repair is active in ck-core-fs-lib and is not yet consumed
+by this frontend. No new native archive qualification is claimed here.
+
+A marked batch also exposed a production diagnostic bug: reading the final
+item's empty failure hid the first refused item. The execution service now
+returns the first present failure in its strictly ordered item results. The
+original-service control fails five assertions; the fix retains the exact
+Unsupported state, code and operation in the reply and UI status.
+
+Against the frozen normal backend `9f5eff4` and matching ckVision 1.4.2, focused
+qualification passed **259 frontend cases**, **20 native-content cases**, and
+the repaired unit suites (**4 / 33 / 4 cases**). All 123 linked original inputs
+remained unchanged; link maps show the old service object was not extracted
+when the fixed service object was linked. The nine fixture hunks were imported
+only after exact baseline and final hashes matched. Earlier strict-build and
+103/108 Files-suite failures remain retained.
+
+The fixtures now recognize RenameSource as valid, preserve explicit reserved-bit
+rejection, require the verified byte total, use ownership-enforcing private
+recovery roots, and check actual macOS publication refusal without changing
+other-platform positive branches. Mac negative cases prove unchanged source
+data/identity, no public destination, exact journal-bound retained evidence and
+no replay; they do not qualify positive copy publication. Same-filesystem move
+positives remain tested. Strict compiler checks were not relaxed.
+
+A complete current-backend (`94579be`) consumer rebuild and the full 108-entry
+Files suite are the next gate after the conditional CDE CPU loan returns. No
+live terminal-window acceptance has been counted. See
+[focused integration evidence](evidence/ck-core-fs-frontend-integration-20261109.json).

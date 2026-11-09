@@ -561,6 +561,14 @@ CK_TEST(held_child_explicit_access_is_preserved_by_qualified_refresh_without_dow
     std::size_t opens = 0;
     for (const auto& call : f.fs.calls()) if (call.operation == Op::OpenChild) { CK_CHECK(call.access == inventory_access); ++opens; }
     CK_CHECK(opens == 2);
+    auto rename_source = take(HeldChild::observe_with_access(source->parent(), name(),
+        EntryAccess::RenameSource | EntryAccess::ContentRead));
+    auto renamed_refresh = take(rename_source->refresh());
+    CK_CHECK(rename_source->access() == (EntryAccess::RenameSource | EntryAccess::ContentRead) &&
+             renamed_refresh->access() == rename_source->access() && renamed_refresh->continues(*rename_source));
+    for (const auto& call : f.fs.calls()) if (call.operation == Op::OpenChild && requests_rename_source(call.access))
+        CK_CHECK(call.access == (EntryAccess::RenameSource | EntryAccess::ContentRead));
+    renamed_refresh.reset(); rename_source.reset();
     f.fs.enqueue(Op::OpenChild, {denied(), {}, {}, false});
     CK_CHECK(!source->refresh().value() && source->access() == inventory_access);
     CK_CHECK(f.fs.live_entries() == 2); // both existing pins survive refusal
@@ -569,7 +577,7 @@ CK_TEST(held_child_bad_access_rejects_before_IO_and_native_open_or_metadata_erro
     Fixture f;
     auto parent = std::shared_ptr<const DirectoryCursor>(take(f.fs.open_directory(path())));
     const auto opens = f.calls(Op::OpenChild);
-    for (const auto access : {static_cast<EntryAccess>(128), static_cast<EntryAccess>(4)}) {
+    for (const auto access : {static_cast<EntryAccess>(256), static_cast<EntryAccess>(4), EntryAccess::MoveSource | EntryAccess::RenameSource}) {
         const auto reply = HeldChild::observe_with_access(parent, name(), access);
         CK_CHECK(!reply.value() && reply.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InvalidAccess));
     }

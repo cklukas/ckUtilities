@@ -12,6 +12,14 @@
 namespace ck::vision {
 namespace {
 
+std::optional<ck::files::UnavailableObservation> first_batch_failure(
+    const ck::files::OperationBatchResult &result) {
+    for (const auto &item : result.items)
+        if (item.failure)
+            return item.failure;
+    return std::nullopt;
+}
+
 ck::files::UnavailableObservation error(ck::files::AdapterError code, const char* operation,
                                         ck::files::ObservationState state = ck::files::ObservationState::Failed) {
     return {state, {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
@@ -326,7 +334,7 @@ struct FilesOperationExecutionService::State final {
             result.result = job->result();
             result.state = execution_state(job->state(), stop_token.stop_requested());
             if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
-                result.error = result.result.items.back().failure;
+                result.error = first_batch_failure(result.result);
             emit(std::move(result));
             return;
         }
@@ -378,7 +386,7 @@ struct FilesOperationExecutionService::State final {
                     result.result = job->result();
                     result.state = execution_state(job->state(), stop_token.stop_requested());
                     if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
-                        result.error = result.result.items.back().failure;
+                        result.error = first_batch_failure(result.result);
                     emit(std::move(result));
                     return;
                 }
@@ -486,7 +494,7 @@ struct FilesOperationExecutionService::State final {
         result.result = job->result();
         result.state = execution_state(job->state(), stop_token.stop_requested());
         if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
-            result.error = result.result.items.back().failure;
+            result.error = first_batch_failure(result.result);
         emit(std::move(result));
     }
 

@@ -389,13 +389,9 @@ class FilesVolumeArchiveRecoveryService final {
     std::unique_ptr<State> state_;
 };
 
-// A separate worker-only boundary for the one recovery mutation that can be
-// made unambiguous: discard an unpublished archive staging file after the
-// journal state, exact native destination/staging addresses, full-file digest,
-// held directory identity, and held child identity all revalidate. It never
-// touches Planned/Prepared artifacts, ambiguous publication, destination
-// files, or source volumes. The UI must submit the native journal name from a
-// prior scan; this service reloads and revalidates the journal before acting.
+// Restart/value-only cleanup requests are refused with UnqualifiedIdentity
+// before native I/O. A digest, native name or recovered ID cannot recreate
+// live ownership of the originally created archive staging object.
 class FilesVolumeArchiveRecoveryCleanupService final {
   public:
     explicit FilesVolumeArchiveRecoveryCleanupService(std::function<void()> wake = {});

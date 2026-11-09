@@ -12,10 +12,10 @@ using namespace ck::files;
 namespace {
 OperationMetadataRequest request(std::vector<std::string>& order) {
     return {
-        [&order](std::stop_token) { order.push_back("traversal"); return Observation<bool>::available(true); },
-        [&order](std::stop_token) { order.push_back("security"); return Observation<bool>::available(true); },
-        [&order](std::stop_token) { order.push_back("times"); return Observation<bool>::available(true); },
-        [&order](std::stop_token) { order.push_back("flush"); return Observation<bool>::available(true); },
+        .apply_traversal_metadata = [&order](std::stop_token) { order.push_back("traversal"); return Observation<bool>::available(true); },
+        .apply_security_metadata = [&order](std::stop_token) { order.push_back("security"); return Observation<bool>::available(true); },
+        .apply_final_times = [&order](std::stop_token) { order.push_back("times"); return Observation<bool>::available(true); },
+        .flush_destination = [&order](std::stop_token) { order.push_back("flush"); return Observation<bool>::available(true); },
     };
 }
 }

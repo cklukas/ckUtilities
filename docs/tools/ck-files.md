@@ -47,12 +47,10 @@ execute files or provide an embedded shell.
   the scan is complete and no reconciliation-required journal is present.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals. A separate
-  worker-only cleanup boundary now proves the exact native staging address,
-  post-flush whole-file digest, held destination identity, and held child
-  identity before discarding an unpublished staging file; it is exposed as
-  **Clean up archive staging** only on qualified Windows builds. macOS/Linux
-  refuse this mutation until their native adapter provides the same handle-bound
-  discard protocol. Resume/retry/publication remain unavailable. See the [volume archive
+  worker boundary refuses restart cleanup because the original archive
+  creator's live ownership is unavailable. **Clean up archive staging** stays
+  disabled with that reason; journal names and matching content cannot grant
+  deletion authority. Resume/retry/publication remain unavailable. See the [volume archive
   plan](../../implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
@@ -84,11 +82,10 @@ execute files or provide an embedded shell.
 - A separate **Inspect operation recovery** review scans ordinary copy, tree
   copy, move, and recursive-delete journals after startup. It is read-only:
   malformed, truncated, legacy, ambiguous, or untrusted records remain
-  visible as reconciliation items. **Clean up operation staging** is separately
-  confirmed and enabled only on qualified Windows builds when one complete
-  receipt-backed unpublished copy staging file can be identity-revalidated;
-  macOS/Linux report the unavailable adapter boundary instead of deleting by
-  pathname. No resume, retry, replacement, publication, or source retirement
+  visible as reconciliation items. **Clean up operation staging** is disabled
+  for recovered journals: cleanup requires the originating copy worker's live
+  ownership of the created staging object. Reopened journal IDs and names do
+  not provide that authority. No resume, retry, replacement, publication, or source retirement
   is offered without a later qualified worker boundary. Ordinary-copy journals
   also retain the independently verified whole-file SHA-256 receipt at the
   Copied and Verified boundaries; it is used for future reconciliation only,
@@ -134,10 +131,10 @@ execute files or provide an embedded shell.
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching
 journals. `Operations > Clean up archive staging` and `Operations > Clean up
-operation staging` are separately confirmed, worker-revalidated Windows-only
-actions for one fully evidenced unpublished staging file of the corresponding
-kind. The inspect actions never resume, delete, replace, retry, or retire a
-source; either cleanup action never touches a published destination or source.
+operation staging` remain disabled for restart inspection because live ownership
+of the originally created object is required. Their unavailable reasons appear
+in the command status. The inspect actions never resume, delete, replace, retry,
+or retire a source.
   New archive journals retain the exact destination address in native
   encoding for future identity-bound reconciliation; legacy journals without
   that evidence remain inspect-only.

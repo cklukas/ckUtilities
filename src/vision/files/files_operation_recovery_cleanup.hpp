@@ -19,11 +19,10 @@ struct FilesOperationRecoveryCleanupReply final {
     std::optional<ck::files::UnavailableObservation> error;
 };
 
-// Worker-owned recovery action for one regular-file copy staging object. The
-// service reopens and validates the journal, exact destination address,
-// destination identity and staging identity before invoking the native
-// handle-bound discard boundary. It never retries, publishes, or retires a
-// source, and it never falls back to pathname deletion.
+// Worker-owned refusal boundary for restart/value-only cleanup requests.
+// The journal and recovered IDs do not contain live staging-creator authority.
+// Such requests return UnqualifiedIdentity without native I/O or mutation.
+// In-process cleanup belongs to the originating copy job and its retained owner.
 class FilesOperationRecoveryCleanupService final {
   public:
     explicit FilesOperationRecoveryCleanupService(std::function<void()> wake = {});

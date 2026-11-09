@@ -1,5 +1,6 @@
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
+#include "ck/file_io.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
 
@@ -969,7 +970,7 @@ CK_TEST(volume_archive_recovery_reopens_the_same_durable_journal_after_worker_re
     CK_CHECK(std::filesystem::exists(scratch.path() / "journals" / ".ck-volume-archive-00000000000000000000000000000032"));
 }
 
-CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellation) {
+CK_TEST(volume_archive_recovery_cleanup_preserves_byte_identical_replacement_without_ownership) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-cleanup", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = journal_root(scratch.path());
     const auto destination = address(scratch.path());
@@ -991,10 +992,18 @@ CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellat
     const std::array<std::byte, 12> content{
         std::byte{'a'}, std::byte{'r'}, std::byte{'c'}, std::byte{'h'}, std::byte{'i'}, std::byte{'v'},
         std::byte{'e'}, std::byte{'-'}, std::byte{'s'}, std::byte{'t'}, std::byte{'a'}, std::byte{'g'}};
-    {
-        std::ofstream stream(staging_path, std::ios::binary);
-        stream.write(reinterpret_cast<const char *>(content.data()), static_cast<std::streamsize>(content.size()));
-    }
+    const std::string expected_bytes(reinterpret_cast<const char *>(content.data()), content.size());
+    CK_CHECK(ck::io::write_file(staging_path, expected_bytes));
+    NativeFileSystem filesystem;
+    auto parent = filesystem.open_native_directory(destination);
+    CK_CHECK(parent.value());
+    if (!parent.value()) return;
+    auto original = (*parent.value())->open_child(*staging_name, EntryAccess::ContentRead);
+    CK_CHECK(original.value());
+    if (!original.value()) return;
+    auto original_metadata = (*original.value())->inspect_basic();
+    CK_CHECK(original_metadata.value() && original_metadata.value()->identity.value());
+    if (!original_metadata.value() || !original_metadata.value()->identity.value()) return;
     const auto digest = digest_bytes(content);
     const auto name = archive_journal_name("29000000000000000000000000000000");
     CK_CHECK(name.has_value());
@@ -1014,7 +1023,23 @@ CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellat
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {1, 0, OperationJournalState::Planned, before_digest}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {2, 0, OperationJournalState::Prepared, before_digest}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {3, 0, OperationJournalState::Copied, after_digest}).value());
+    CK_CHECK(journal_file->finish_io().value());
     journal_file.reset();
+    // Keep the original object pinned so the byte-identical replacement cannot
+    // reuse its identity. Recovered bytes must not authorize deleting this link.
+    CK_CHECK(ck::io::remove_regular_file(staging_path));
+    CK_CHECK(ck::io::write_file(staging_path, expected_bytes));
+    auto replacement = (*parent.value())->open_child(*staging_name, EntryAccess::ContentRead);
+    CK_CHECK(replacement.value());
+    if (!replacement.value()) return;
+    auto replacement_metadata = (*replacement.value())->inspect_basic();
+    CK_CHECK(replacement_metadata.value() && replacement_metadata.value()->identity.value());
+    if (!replacement_metadata.value() || !replacement_metadata.value()->identity.value()) return;
+    CK_CHECK(compare_identity(*original_metadata.value()->identity.value(),
+                              *replacement_metadata.value()->identity.value()) == IdentityComparison::Different);
+    const auto journal_path = scratch.path() / "journals" / ".ck-volume-archive-29000000000000000000000000000000";
+    std::string journal_before;
+    CK_CHECK(ck::io::read_file(journal_path, journal_before));
 
     std::atomic_bool woke = false;
     FilesVolumeArchiveRecoveryCleanupService service([&woke] { woke.store(true); });
@@ -1027,15 +1052,17 @@ CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellat
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     CK_CHECK(woke.load());
-#if defined(_WIN32)
-    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Complete);
-    CK_CHECK(reply && reply->removed);
-    CK_CHECK(!std::filesystem::exists(staging_path));
-#else
-    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Failed);
-    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Unsupported);
-    CK_CHECK(std::filesystem::exists(staging_path));
-#endif
+    CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Failed && !reply->removed);
+    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Unknown);
+    CK_CHECK(reply && reply->error && reply->error->error.domain == ErrorDomain::Adapter &&
+             reply->error->error.code == static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity));
+    CK_CHECK(reply && reply->error && reply->error->error.operation ==
+             "volume_archive.cleanup_live_creator_ownership_required");
+    std::string observed_bytes, journal_after;
+    CK_CHECK(ck::io::read_file(staging_path, observed_bytes));
+    CK_CHECK(observed_bytes == expected_bytes);
+    CK_CHECK(ck::io::read_file(journal_path, journal_after));
+    CK_CHECK(journal_before == journal_after);
     service.request_stop();
     service.join();
 
@@ -1045,21 +1072,12 @@ CK_TEST(volume_archive_recovery_cleanup_revalidates_digest_and_records_cancellat
         auto loaded = load_operation_journal(**reopened.value());
         CK_CHECK(loaded.value());
         if (loaded.value()) {
-#if defined(_WIN32)
-            CK_CHECK(loaded.value()->journal->records().size() == 4);
-            CK_CHECK(loaded.value()->journal->records().back().state == OperationJournalState::Cancelled);
-#else
             CK_CHECK(loaded.value()->journal->records().size() == 3);
             CK_CHECK(loaded.value()->journal->records().back().state == OperationJournalState::Copied);
-#endif
             auto inspected = inspect_volume_archive_recovery(*loaded.value()->journal, loaded.value()->tail);
             CK_CHECK(inspected.value());
             if (inspected.value())
-#if defined(_WIN32)
-                CK_CHECK(!inspected.value()->operation.requires_reconciliation);
-#else
                 CK_CHECK(inspected.value()->operation.requires_reconciliation);
-#endif
         }
     }
 }
@@ -1078,10 +1096,8 @@ CK_TEST(volume_archive_recovery_cleanup_refuses_changed_staging_bytes) {
     const auto staging_path = scratch.path() / ".mismatch.ckarchive.cktmp-42";
     const std::array<std::byte, 3> actual{std::byte{'b'}, std::byte{'a'}, std::byte{'d'}};
     const std::array<std::byte, 3> expected{std::byte{'g'}, std::byte{'o'}, std::byte{'o'}};
-    {
-        std::ofstream stream(staging_path, std::ios::binary);
-        stream.write(reinterpret_cast<const char *>(actual.data()), static_cast<std::streamsize>(actual.size()));
-    }
+    CK_CHECK(ck::io::write_file(staging_path,
+        std::string_view(reinterpret_cast<const char *>(actual.data()), actual.size())));
     const auto name = archive_journal_name("2a000000000000000000000000000000");
     CK_CHECK(staging_address.value() && name.has_value());
     if (!staging_address.value() || !name)
@@ -1098,7 +1114,11 @@ CK_TEST(volume_archive_recovery_cleanup_refuses_changed_staging_bytes) {
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {1, 0, OperationJournalState::Planned, before_digest}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {2, 0, OperationJournalState::Prepared, before_digest}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, **journal.value(), {3, 0, OperationJournalState::Copied, after_digest}).value());
+    CK_CHECK(journal_file->finish_io().value());
     journal_file.reset();
+    const auto journal_path = scratch.path() / "journals" / ".ck-volume-archive-2a000000000000000000000000000000";
+    std::string journal_before;
+    CK_CHECK(ck::io::read_file(journal_path, journal_before));
     FilesVolumeArchiveRecoveryCleanupService service;
     CK_CHECK(service.request(root, *name, journal_id(transaction)) ==
              FilesVolumeArchiveRecoveryCleanupSubmission::Accepted);
@@ -1109,8 +1129,17 @@ CK_TEST(volume_archive_recovery_cleanup_refuses_changed_staging_bytes) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     CK_CHECK(reply && reply->state == FilesVolumeArchiveRecoveryCleanupState::Failed);
-    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Changed);
-    CK_CHECK(std::filesystem::exists(staging_path));
+    CK_CHECK(reply && reply->error && reply->error->state == ObservationState::Unknown);
+    CK_CHECK(reply && reply->error && reply->error->error.domain == ErrorDomain::Adapter);
+    CK_CHECK(reply && reply->error && reply->error->error.code == static_cast<std::int64_t>(AdapterError::UnqualifiedIdentity));
+    CK_CHECK(reply && reply->error && reply->error->error.operation ==
+             "volume_archive.cleanup_live_creator_ownership_required");
+    std::string journal_after;
+    CK_CHECK(ck::io::read_file(journal_path, journal_after));
+    CK_CHECK(journal_before == journal_after);
+    std::string retained_bytes;
+    CK_CHECK(ck::io::read_file(staging_path, retained_bytes));
+    CK_CHECK(retained_bytes == std::string(reinterpret_cast<const char *>(actual.data()), actual.size()));
     service.request_stop();
     service.join();
 }

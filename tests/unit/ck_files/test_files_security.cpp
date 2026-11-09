@@ -25,7 +25,11 @@ CK_TEST(security_access_requests_are_explicit_and_never_infer_audit_rights) {
     CK_CHECK(valid_entry_access(EntryAccess::MetadataAndLayout) && requests_layout(EntryAccess::MetadataAndLayout));
     CK_CHECK(valid_entry_access(EntryAccess::ContentRead) && requests_content_read(EntryAccess::ContentRead));
     CK_CHECK(valid_entry_access(EntryAccess::MoveSource) && requests_move_source(EntryAccess::MoveSource));
-    CK_CHECK(!valid_entry_access(static_cast<EntryAccess>(128)));
+    CK_CHECK(valid_entry_access(EntryAccess::RenameSource) && requests_rename_source(EntryAccess::RenameSource));
+    CK_CHECK(!requests_move_source(EntryAccess::RenameSource));
+    CK_CHECK(!valid_entry_access(EntryAccess::RenameSource | EntryAccess::MoveSource));
+    CK_CHECK(valid_entry_access(EntryAccess::RenameSource | EntryAccess::ContentRead));
+    CK_CHECK(!valid_entry_access(static_cast<EntryAccess>(256)));
     CK_CHECK(valid_entry_access(EntryAccess::MetadataAndInodeFlags) && requests_inode_flags(EntryAccess::MetadataAndInodeFlags));
     CK_CHECK(!requests_layout(EntryAccess::MetadataAndInodeFlags) && !requests_inode_flags(EntryAccess::MetadataAndLayout));
     CK_CHECK(!valid_security_part(static_cast<SecurityPart>(-1)));

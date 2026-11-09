@@ -5,6 +5,7 @@
 #include "native_filesystem.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
+#include "files_native_fixture_snapshot.hpp"
 #include <cvision/core/clock.hpp>
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/testing/cktest.hpp>
@@ -526,6 +527,90 @@ struct Fixture {
         return text;
     }
 };
+#if defined(__APPLE__)
+void expect_mac_copy_publication_refusal(Fixture& fixture, const ck::testing::FilesFixtureTree& source_before,
+                                         const ck::testing::FilesFixtureTree& target_before, bool marked_batch = false) {
+    fixture.until([&] {
+        return !fixture.app->operation_review_pending() && !fixture.app->pending(0) && !fixture.app->pending(1) &&
+               fixture.app->status(0).find("Copy needs reconciliation; no source retirement was attempted") != std::string::npos;
+    });
+    fixture.execution_service->request_stop();
+    fixture.execution_service->join(); // Drain native writers/journals before independent inspection.
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
+    CK_CHECK(fixture.app->status(0).find("create_staging_file.fd_publication_unqualified") != std::string::npos);
+    CK_CHECK(fixture.app->status(0).find("Copy completed") == std::string::npos);
+    auto target_after = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right");
+    unsigned journals = 0;
+    unsigned retained_directories = 0;
+    unsigned total_prepared = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fixture.scratch.path() / "operation-journals")) {
+        const auto filename = entry.path().filename().native();
+        if (!filename.starts_with(".ck-copy-journal-") && !filename.starts_with(".ck-tree-journal-")) continue;
+        ++journals;
+        const auto journal = ck::testing::read_files_fixture_journal(entry.path());
+        CK_CHECK(!journal->records().empty());
+        const bool tree_journal = filename.starts_with(".ck-tree-journal-");
+        std::vector<OperationJournalState> states;
+        for (const auto& record : journal->records()) {
+            states.push_back(record.state);
+            if (record.state == OperationJournalState::Prepared) {
+                ++total_prepared;
+                if (tree_journal) {
+                    const auto decoded = decode_native_operation_recovery_evidence(record.evidence);
+                    CK_CHECK(decoded.value() && decoded.value()->staging_identity);
+                    if (!decoded.value() || !decoded.value()->staging_identity)
+                        throw std::runtime_error("missing retained tree staging identity");
+                    const auto& receipt = *decoded.value();
+                    CK_CHECK(receipt.staging_name.posix_bytes() && receipt.destination_name.posix_bytes());
+                    const auto staging = *receipt.staging_name.posix_bytes();
+                    CK_CHECK(staging.starts_with(".ck-tree-staging-"));
+                    CK_CHECK(!std::filesystem::exists(fixture.scratch.path() / "right" / *receipt.destination_name.posix_bytes()));
+                    NativeFileSystem native;
+                    auto parent = native.open_directory(fixture.scratch.path() / "right");
+                    if (!parent.value()) throw std::runtime_error("cannot inspect retained tree parent");
+                    auto held = (*parent.value())->open_child(receipt.staging_name, EntryAccess::MetadataOnly);
+                    if (!held.value()) throw std::runtime_error("cannot inspect retained tree directory");
+                    auto metadata = (*held.value())->inspect_basic();
+                    CK_CHECK(metadata.value() && metadata.value()->identity.value() &&
+                             receipt.staging_identity->matches_live(*metadata.value()->identity.value()));
+                    ++retained_directories;
+                    for (auto retained = target_after.begin(); retained != target_after.end();) {
+                        if (retained->first == staging || retained->first.starts_with(staging + "/")) {
+                            CK_CHECK(S_ISDIR(retained->second.mode) && retained->second.bytes.empty());
+                            retained = target_after.erase(retained);
+                        } else ++retained;
+                    }
+                }
+            }
+        }
+        if (tree_journal)
+            CK_CHECK((states == std::vector<OperationJournalState>{OperationJournalState::Planned,
+                OperationJournalState::Prepared, OperationJournalState::NeedsReconciliation}));
+        else {
+            CK_CHECK(states.size() == 1 || states.size() == 2);
+            CK_CHECK(states.front() == OperationJournalState::Planned);
+            if (states.size() == 2) CK_CHECK(states.back() == OperationJournalState::Prepared);
+        }
+    }
+    CK_CHECK(journals == (marked_batch ? 2U : 1U) + retained_directories && retained_directories <= 1);
+    CK_CHECK(total_prepared == 1 + retained_directories);
+    if (retained_directories) {
+        // Creating this journal-identified private directory changes the parent
+        // times, not the identity/mode or any preexisting public child.
+        CK_CHECK(target_after.at(".").device == target_before.at(".").device &&
+                 target_after.at(".").inode == target_before.at(".").inode &&
+                 target_after.at(".").mode == target_before.at(".").mode);
+        target_after.at(".") = target_before.at(".");
+    }
+    CK_CHECK(target_after == target_before);
+    const auto retained_target = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right");
+    const auto journals_before = ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "operation-journals");
+    for (unsigned poll = 0; poll != 3; ++poll) fixture.application.step(fixture.clock.now_nanos());
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "operation-journals") == journals_before);
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "left") == source_before);
+    CK_CHECK(ck::testing::observe_files_fixture_tree(fixture.scratch.path() / "right") == retained_target);
+}
+#endif
 } // namespace
 CK_TEST(files_app_composes_independent_native_panes_in_every_suite_theme) {
     for (auto theme :
@@ -940,9 +1025,18 @@ CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     CK_CHECK(!f.app->operation_review_pending());
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
 }
-CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes) {
+#if defined(__APPLE__)
+CK_TEST(files_app_copy_acceptance_reports_unqualified_mac_publication_after_review)
+#else
+CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes)
+#endif
+{
     Fixture f;
     f.loaded();
+#if defined(__APPLE__)
+    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
+    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
+#endif
     CK_CHECK(f.command("ck.files.copy"));
     f.until([&] { return f.app->operation_review_pending(); });
     f.application.step(f.clock.now_nanos());
@@ -966,12 +1060,16 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
     // action order is Cancel, choose destination, continue, skip.
     combos.front()->set_selected_index(2);
     CK_CHECK(apply->activate_mnemonic("a"));
+#if defined(__APPLE__)
+    expect_mac_copy_publication_refusal(f, source_before, target_before);
+#else
     f.until([&] { return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
                         !f.app->pending(0) && !f.app->pending(1) &&
                         f.app->status(0).find("Copying") == std::string::npos &&
                         f.app->status(1).find("Copying") == std::string::npos; });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+#endif
 }
 CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes) {
     Fixture f;
@@ -1005,9 +1103,18 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
 }
-CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review) {
+#if defined(__APPLE__)
+CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)
+#else
+CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review)
+#endif
+{
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
+#if defined(__APPLE__)
+    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
+    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
+#endif
     for (std::size_t row = 0; row != f.app->model(0).row_count() &&
          f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
         CK_CHECK(f.key(ckv::Key::Down));
@@ -1037,6 +1144,9 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review) {
     CK_CHECK(apply != nullptr);
     combos.front()->set_selected_index(2); // Continue with listed losses.
     CK_CHECK(apply->activate_mnemonic("a"));
+#if defined(__APPLE__)
+    expect_mac_copy_publication_refusal(f, source_before, target_before);
+#else
     f.until([&] {
         return std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "inside.txt") &&
                std::filesystem::is_regular_file(f.scratch.path() / "right" / "left-item-0" / "nested" / "leaf.txt") &&
@@ -1046,10 +1156,20 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review) {
     });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+#endif
 }
-CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
+#if defined(__APPLE__)
+CK_TEST(files_app_marked_copy_acceptance_preserves_inputs_after_mac_reconciliation)
+#else
+CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch)
+#endif
+{
     Fixture f;
     f.loaded();
+#if defined(__APPLE__)
+    const auto source_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "left");
+    const auto target_before = ck::testing::observe_files_fixture_tree(f.scratch.path() / "right");
+#endif
     CK_CHECK(f.key(ckv::Key::Insert));
     f.loaded();
     CK_CHECK(f.key(ckv::Key::Down));
@@ -1079,6 +1199,9 @@ CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
     CK_CHECK(apply != nullptr);
     combos.front()->set_selected_index(2); // Continue with listed losses.
     CK_CHECK(apply->activate_mnemonic("a"));
+#if defined(__APPLE__)
+    expect_mac_copy_publication_refusal(f, source_before, target_before, true);
+#else
     f.until([&] {
         return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
                std::filesystem::exists(f.scratch.path() / "right" / "left-item-1") &&
@@ -1088,6 +1211,7 @@ CK_TEST(files_app_copy_acceptance_copies_the_acknowledged_marked_batch) {
     });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+#endif
 }
 CK_TEST(files_app_rename_uses_stamped_worker_target_on_all_platforms) {
     Fixture f;
@@ -1722,41 +1846,18 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }
-CK_TEST(files_app_archive_cleanup_command_is_platform_guarded_and_revalidated) {
+CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, true);
     f.loaded();
     f.until([&] {
-        const auto availability = f.app->availability("ck.files.cleanup_archive_recovery");
-        return availability.enabled || availability.reason.find("not qualified") != std::string::npos;
+        return f.app->availability("ck.files.cleanup_archive_recovery").reason.find(
+            "live archive ownership is required") != std::string::npos;
     });
-#if defined(_WIN32)
-    CK_CHECK(f.app->availability("ck.files.cleanup_archive_recovery").enabled);
-    CK_CHECK(f.command("ck.files.cleanup_archive_recovery"));
-    f.application.step(f.clock.now_nanos());
-    std::vector<ckv::widgets::Button *> buttons;
-    find_views(f.application.root(), buttons);
-    ckv::widgets::Button *cleanup = nullptr;
-    for (auto *button : buttons)
-        if (button->text() == "&Clean up staging")
-            cleanup = button;
-    CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
-    f.until([&] {
-        const auto availability = f.app->availability("ck.files.cleanup_archive_recovery");
-        if (availability.enabled ||
-            availability.reason.find("cleanup is still running") != std::string::npos ||
-            availability.reason.find("recovery scan is still running") != std::string::npos)
-            return false;
-        std::error_code error;
-        const bool staging_exists = std::filesystem::exists(
-            f.scratch.path() / "archive-destination" / ".fixture.ckarchive.cktmp-31", error);
-        return !error && !staging_exists;
-    });
-#else
     CK_CHECK(!f.app->availability("ck.files.cleanup_archive_recovery").enabled);
-    CK_CHECK(f.app->availability("ck.files.cleanup_archive_recovery").reason.find(
-                 "identity-bound discard is not qualified") != std::string::npos);
-#endif
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.cleanup_archive_recovery")));
+    CK_CHECK(!f.command("ck.files.cleanup_archive_recovery"));
 }
+
 CK_TEST(files_app_operation_recovery_without_service_reports_status_reason) {
     Fixture f;
     f.loaded();
@@ -1776,41 +1877,18 @@ CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Operation recovery review") == std::string::npos; });
 }
-CK_TEST(files_app_operation_cleanup_command_is_platform_guarded_and_revalidated) {
+CK_TEST(files_app_operation_cleanup_requires_live_creator_ownership) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, false, true);
     f.loaded();
     f.until([&] {
-        const auto availability = f.app->availability("ck.files.cleanup_operation_recovery");
-        return availability.enabled || availability.reason.find("not qualified") != std::string::npos;
+        return f.app->availability("ck.files.cleanup_operation_recovery").reason.find(
+            "live copy ownership is required") != std::string::npos;
     });
-#if defined(_WIN32)
-    CK_CHECK(f.app->availability("ck.files.cleanup_operation_recovery").enabled);
-    CK_CHECK(f.command("ck.files.cleanup_operation_recovery"));
-    f.application.step(f.clock.now_nanos());
-    std::vector<ckv::widgets::Button *> buttons;
-    find_views(f.application.root(), buttons);
-    ckv::widgets::Button *cleanup = nullptr;
-    for (auto *button : buttons)
-        if (button->text() == "&Clean up staging")
-            cleanup = button;
-    CK_CHECK(cleanup != nullptr && cleanup->activate_mnemonic("c"));
-    f.until([&] {
-        const auto availability = f.app->availability("ck.files.cleanup_operation_recovery");
-        if (availability.enabled ||
-            availability.reason.find("cleanup is still running") != std::string::npos ||
-            availability.reason.find("recovery scan is still running") != std::string::npos)
-            return false;
-        std::error_code error;
-        const bool staging_exists = std::filesystem::exists(
-            f.scratch.path() / "operation-destination" / ".ck-copy-staging-recovery", error);
-        return !error && !staging_exists;
-    });
-#else
     CK_CHECK(!f.app->availability("ck.files.cleanup_operation_recovery").enabled);
-    CK_CHECK(f.app->availability("ck.files.cleanup_operation_recovery").reason.find(
-                 "identity-bound discard is not qualified") != std::string::npos);
-#endif
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.cleanup_operation_recovery")));
+    CK_CHECK(!f.command("ck.files.cleanup_operation_recovery"));
 }
+
 CK_TEST(files_app_parent_keyboard_remapping_and_modal_scope_use_suite_command_guards) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();

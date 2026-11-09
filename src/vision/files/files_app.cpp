@@ -924,13 +924,7 @@ struct FilesApp::State {
                 return unavailable("Archive staging cleanup unavailable: recovery scan is still running");
             if (!volume_archive_recovery_scan)
                 return unavailable("Archive staging cleanup unavailable: recovery scan is not ready");
-#if !defined(_WIN32)
-            return unavailable("Archive staging cleanup unavailable: identity-bound discard is not qualified on this platform");
-#else
-            if (!archive_cleanup_item())
-                return unavailable("Archive staging cleanup unavailable: no single fully evidenced staging file is eligible");
-            return FilesCommandAvailability::available();
-#endif
+            return unavailable("Archive staging cleanup unavailable: live archive ownership is required");
         }
         if (command == "ck.files.cleanup_operation_recovery") {
             if (!operation_recovery_cleanup_service)
@@ -943,13 +937,7 @@ struct FilesApp::State {
                 return unavailable("Operation staging cleanup unavailable: recovery scan is still running");
             if (!operation_recovery_scan)
                 return unavailable("Operation staging cleanup unavailable: recovery scan is not ready");
-#if !defined(_WIN32)
-            return unavailable("Operation staging cleanup unavailable: identity-bound discard is not qualified on this platform");
-#else
-            if (!operation_cleanup_item())
-                return unavailable("Operation staging cleanup unavailable: no single receipt-backed unpublished copy is eligible");
-            return FilesCommandAvailability::available();
-#endif
+            return unavailable("Operation staging cleanup unavailable: live copy ownership is required");
         }
         if (command == "ck.files.parent") {
             if (panes[active].volume_view)
@@ -1324,58 +1312,8 @@ struct FilesApp::State {
         });
     }
     void show_archive_cleanup() {
-        if (!availability("ck.files.cleanup_archive_recovery").enabled || modal_pending())
-            return;
-#if !defined(_WIN32)
-        return;
-#else
-        const auto *item = archive_cleanup_item();
-        if (!item || !item->report || !item->native_name)
-            return;
-        const auto journal_name = *item->native_name;
-        const auto journal_id = item->report->journal_id;
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Clean up unpublished archive staging";
-        descriptor.fields = {
-            ckv::widgets::FieldDescriptor{
-                .label = "This removes one unpublished archive staging file only. The worker will reopen the journal, verify the exact destination identity, staging identity, complete staging digest, and eligible journal state before disposition.",
-                .kind = ckv::widgets::FieldKind::Note},
-            ckv::widgets::FieldDescriptor{
-                .label = "No published archive or source volume is touched. If any identity or journal check differs, cleanup fails and the staging file is retained for review.",
-                .kind = ckv::widgets::FieldKind::Note}};
-        descriptor.buttons = {{"&Clean up staging", ckv::widgets::ButtonRole::Accept, {}},
-                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
-        archive_cleanup_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
-        archive_cleanup_window = shell->desktop().active_window();
-        archive_cleanup_lifetime = archive_cleanup_window->lifetime_token();
-        archive_cleanup_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime), journal_name, journal_id](
-                const ckv::widgets::DialogResult &result) {
-                if (weak.expired())
-                    return;
-                archive_cleanup_window = nullptr;
-                if (!result.accepted) {
-                    archive_cleanup_dialog.reset();
-                    return;
-                }
-                archive_cleanup_dialog.reset();
-                if (!volume_archive_recovery_cleanup_service || !operation_journal_root ||
-                    !operation_journal_root->is_valid()) {
-                    volume_archive_recovery_cleanup_error =
-                        "Archive staging cleanup unavailable: journal root is not configured";
-                } else if (volume_archive_recovery_cleanup_service->request(
-                               *operation_journal_root, journal_name, journal_id) ==
-                           FilesVolumeArchiveRecoveryCleanupSubmission::Accepted) {
-                    volume_archive_recovery_cleanup_request = true;
-                    volume_archive_recovery_cleanup_error.clear();
-                } else {
-                    volume_archive_recovery_cleanup_error =
-                        "Archive staging cleanup could not be started";
-                }
-                labels();
-            });
-#endif
+        volume_archive_recovery_cleanup_error = availability("ck.files.cleanup_archive_recovery").reason;
+        labels();
     }
     void show_operation_recovery() {
         if (!availability("ck.files.inspect_operation_recovery").enabled ||
@@ -1424,58 +1362,9 @@ struct FilesApp::State {
         });
     }
     void show_operation_recovery_cleanup() {
-        if (!availability("ck.files.cleanup_operation_recovery").enabled || modal_pending())
-            return;
-#if !defined(_WIN32)
-        return;
-#else
-        const auto *item = operation_cleanup_item();
-        if (!item || !item->native_name || !item->report)
-            return;
-        const auto journal_name = *item->native_name;
-        const auto journal_id = item->report->journal_id;
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Clean up unpublished operation staging";
-        descriptor.fields = {
-            ckv::widgets::FieldDescriptor{
-                .label = "This removes one unpublished copy staging file only. The worker will reopen the journal and revalidate the exact destination address, destination identity, staging identity, complete receipt, and eligible journal state.",
-                .kind = ckv::widgets::FieldKind::Note},
-            ckv::widgets::FieldDescriptor{
-                .label = "No published destination or source is touched. If any check differs, cleanup fails and the staging file is retained for review.",
-                .kind = ckv::widgets::FieldKind::Note}};
-        descriptor.buttons = {{"&Clean up staging", ckv::widgets::ButtonRole::Accept, {}},
-                              {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
-        operation_recovery_cleanup_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
-        operation_recovery_cleanup_window = shell->desktop().active_window();
-        operation_recovery_cleanup_lifetime = operation_recovery_cleanup_window->lifetime_token();
-        operation_recovery_cleanup_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime), journal_name, journal_id](
-                const ckv::widgets::DialogResult &result) {
-                if (weak.expired())
-                    return;
-                operation_recovery_cleanup_window = nullptr;
-                if (!result.accepted) {
-                    operation_recovery_cleanup_dialog.reset();
-                    return;
-                }
-                operation_recovery_cleanup_dialog.reset();
-                if (!operation_recovery_cleanup_service || !operation_journal_root ||
-                    !operation_journal_root->is_valid()) {
-                    operation_recovery_cleanup_error =
-                        "Operation staging cleanup unavailable: journal root is not configured";
-                } else if (operation_recovery_cleanup_service->request(
-                               *operation_journal_root, journal_name, journal_id) ==
-                           FilesOperationRecoveryCleanupSubmission::Accepted) {
-                    operation_recovery_cleanup_request = true;
-                    operation_recovery_cleanup_error.clear();
-                } else {
-                    operation_recovery_cleanup_error =
-                        "Operation staging cleanup could not be started";
-                }
-                labels();
-            });
-#endif
+        // Recovered facts cannot authorize deletion of a staging object.
+        operation_recovery_cleanup_error = availability("ck.files.cleanup_operation_recovery").reason;
+        labels();
     }
     void save_settings() {
         if (!settings.save)

@@ -1,0 +1,88 @@
+{
+  "utc": "2026-11-09T22:46:58.105603+00:00",
+  "scope": "Ownership-first restartcleanup refusal and first actual batch failure; focused normal Mac proof againstfrozen9f5eff4 SDK. Current94579be fullrebuild pending, no positiveMacstrongcopypublication/noGUIwindowclaim.",
+  "original_full_Files_CTest": "103/108PASS, fivefailurespreserved; qualifierreceipt distinguishes nativeUnsupportedtestsfrompositiveexecution",
+  "patch_sha256": "47b0090590d675006af7c9924460ff360ca7a648b80db4a58139e85e15037f4f",
+  "receipt_sha256": "75744f097e4a9e637705148534e34197b700e6fede728c4d00dfd60e8e8edb7e",
+  "qualified_source_hashes": {
+    "ckUtilities/src/vision/files/files_operation_execution_service.cpp": {
+      "base_sha256": "462c2a1da6b3289e682ba026fda533c0ca5a5fe7d9a14be87c0eef9c9cbe46fc",
+      "final_sha256": "82b421dbb1c61b97e0a3def7ccc60f8933b859bac93addafd12fcbbb1b1df448",
+      "owner": "Main production fix, compiled override only"
+    },
+    "ckUtilities/src/vision/files/tests/files_app_tests.cpp": {
+      "base_sha256": "800a3db95d7b7c7d6dac5465414b34b0e0b861d44fb76f361b67a275fcae41e5",
+      "final_sha256": "388fdec64747b47879894def5fe11bd515b4823f77248b726f9de142c7f0b9e1",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/src/vision/files/tests/files_operation_execution_service_tests.cpp": {
+      "base_sha256": "7a8f4624367233fbfc08aec703d64658dadb8e47ff16fae4e6029c5b4eddbd94",
+      "final_sha256": "7ce6695fd86f0afa05e9296da49fe2aedffe871716590612e9421c6c60a01776",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/src/vision/files/tests/files_operation_recovery_tests.cpp": {
+      "base_sha256": "aeaa046eb9e8155777bc25dc2451be2ce1fd3180edbe221a53014dd90ebd3fb4",
+      "final_sha256": "bb0366ef581d8f9c3fb42dc51efd5fb6cacc7891d9efa4ae8d95e2c19cfd7d72",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/src/vision/files/tests/files_volume_archive_tests.cpp": {
+      "base_sha256": "3dd547162c87b5578937534c1b3d9d186e566506a7761a236e1e938ee7814b0f",
+      "final_sha256": "feadcdac2e2470267e987f138b36a65b53440989a898907bcd95296e05ada30c",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/tests/support/files_native_fixture_snapshot.hpp": {
+      "base_sha256": null,
+      "final_sha256": "935b7a2df91543a72c9a01ba29fbdafa5c24f5fdd602e2ba182b0800f97bd28a",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/tests/unit/ck_files/test_files_object_inventory.cpp": {
+      "base_sha256": "1c3e524571c8b45fd5ef0a36674723a0e606929a23dd9187cfd3ef7407329e8b",
+      "final_sha256": "23df8312498045d6a69b3e2a9a8f5fc973d3353a7b9815e2dbb7cf44f26eb3c0",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/tests/unit/ck_files/test_files_operation_content_native.cpp": {
+      "base_sha256": "bf219ab802a5b6bc41ccfc312c48c09ff49cf18a6d5fae6173bd80019d509c92",
+      "final_sha256": "c45a62e59793fed116c6a55f688aba2cb78abadd442493568316d562d64ef648",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/tests/unit/ck_files/test_files_operation_execution_job.cpp": {
+      "base_sha256": "d91a986edc0ed1bb76b20d98618c3442a85611f896a33b6daa347c588a5f8ebe",
+      "final_sha256": "bb94b5df8a124161a28132d262aae92f132560c9ec08f30381f2d622375a15ee",
+      "owner": "fixture repair"
+    },
+    "ckUtilities/tests/unit/ck_files/test_files_security.cpp": {
+      "base_sha256": "63515bd5e85c3d869529df3b3f327f2ed90c8fe4c751422976918c98fbe515dc",
+      "final_sha256": "de11af608ab2a9d92077f3185bb897e79209b312ad2d7b6a7004dfa01838c5d6",
+      "owner": "fixture repair"
+    }
+  },
+  "passes": {
+    "core_security": "4 cases",
+    "core_object_inventory": "33 cases",
+    "core_operation_execution": "4 cases",
+    "native_operation_content": "20 cases",
+    "frontend_recovery": "4 cases",
+    "frontend_volume_archive": "22 cases",
+    "frontend_execution_service": "2 cases including new real-native regression",
+    "frontend_app_targeted": "three Mac refusal cases and same-filesystem move positive",
+    "whole_frontend_executable": "259 cases PASS"
+  },
+  "counterfactual": {
+    "old_service_exit": 1,
+    "expected_failures": 5,
+    "log": "/Volumes/S8T/tmp/frontend-fixtures.5C0lXHsm/logs/old-service-control.runtime.log",
+    "native_objects": "same frozen backend/header cohort; map proves original archive service object extracted only in control"
+  },
+  "linked_input_count": 123,
+  "linked_inputs_unchanged": true,
+  "scope_limits": [
+    "Focused normal Apple arm64 proof against backend9f5eff4 and normal ckVision1.4.2 only; no current94579be whole-closure qualification",
+    "No Mac positive strong copy-publication capability claimed; typed refusal is the tested behavior",
+    "Other-platform positive branches preserved, not executed here",
+    "No sanitizer or full108 CTest integration claim; Main owns matching945 rebuild/all108",
+    "No app GUI launch; headless frontend tests only"
+  ],
+  "durable_evidence": "/Volumes/S8T/tmp/frontend-fixtures.5C0lXHsm",
+  "all_reviewed_fixture_base_and_final_hashes_verified": true,
+  "production": "MainserviceCPPexactfinal82b421dbb1c61b97e0a3def7ccc60f8933b859bac93addafd12fcbbb1b1df448"
+}
