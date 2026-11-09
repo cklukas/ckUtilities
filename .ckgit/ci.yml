@@ -6,9 +6,8 @@
 # the release .github/workflows/pages.yml installs, so the LAN and GitHub Pages
 # publish the same site. `--strict` fails the run on a broken link, a heading
 # fragment, or a page the navigation does not list, before `pages:` ever sees
-# "public". The checkout comes from `git archive` and has no .git, so ckdocs
-# walks the tree rather than listing tracked files — the same set, since the
-# archive holds only those.
+# "public". The runner provides a Git checkout; ckdocs indexes tracked files
+# with git ls-files. Keep Git configuration local to that job checkout.
 #
 # There is no build lane here: configuring ckUtilities downloads googletest
 # and llama.cpp, and this lane runs offline from pinned sister snapshots.
@@ -25,6 +24,9 @@ jobs:
       - name: site
         script: |
           set -eu
+          # Do not consult sandbox-external system or user Git configuration.
+          # Repository configuration and Git ownership checks remain enabled.
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
           case "$(uname -s)" in
             Darwin)
               # The native runner prepends Xcode's compiler directory. Direct
