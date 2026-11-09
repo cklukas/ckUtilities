@@ -1,0 +1,22 @@
+{
+  "source_commit": "5cfa45ab5ffbecb4a4653c6902a11cfa9f28c3d0",
+  "tool_version": "ckdocs 0.8.1+gad6dc1de73ce",
+  "tool_sha256": "aed73b67dea5831e112b4824911b117f30cf8e56d7d960ae911af6715c6bbb0f",
+  "baseline_exit": 1,
+  "fixed_exit": 0,
+  "strict_log_sha256": "91b60c3377603beb5e708d908e59e902447c3b3c0e6627793c5b2de4d23047de",
+  "seconds": 0.1543159590801224,
+  "source_unchanged": true,
+  "svg_unchanged": true,
+  "files": {
+    "ckdocs.yml": {
+      "before": "c36bf7786979217bc8fbbbbfafc6ebf8f01392a65676e6c733ad21c9a61c98c9",
+      "after": "4c12cd99c377c7f9bc0792f97b6de5294689c94e5aa55369837b6921cf57f072"
+    },
+    "docs/tools/ck-files.md": {
+      "before": "94ec2e6948543907c7d5844de86abcb2713fa631ad2aaba40609db5bc34b5281",
+      "after": "da6008fcb66cdabf23751f3161329f558e42f7135cc74d55627c1ea7f0199560"
+    }
+  },
+  "scope": "Strict documentation build only; all29 SVGs preserved; no application qualification."
+}

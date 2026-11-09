@@ -1,0 +1,252 @@
+{
+  "frontend_source": "5cfa45ab5ffbecb4a4653c6902a11cfa9f28c3d0 product bytes; frozen747baa8 plus recorded human-readable status delta",
+  "backend_source": "dc0af0a product bytes identical to0fb7a09; AGENTS-only delta",
+  "evidence": {
+    "intent.json": {
+      "sha256": "fae6272b05c84ce13ce2ff5054e92687d651a845a8c909fea928e747f450d3ee",
+      "record": {
+        "frontend": "747baa865683ce38672e0f0d51a889d8e0f33680",
+        "backend": "dc0af0a10bd4bf6ab1b5f97ad1cdcf7765040ac6",
+        "frontend_delta": "Human-readable exact nativepublicationrefusal status; no blanket source-retirementclaim, matchingUIassertions. FullC++sourcefreezeincludesqualifiedownershipguardsandfixturepatch.",
+        "dependencies_readonly": "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-mac-v1-9bjb9mg1/dependencies",
+        "SDK_normal": "1.4.2 7ad5bd",
+        "targets": "fourFiles product/testtargets+fourguidecapturers, then108FilesCTests+2x52assetcapture+documentationcontract",
+        "parallel": 1,
+        "baseline": "Fresh prior290stepcapture267.94s plus separateFiles4target273stepgraph; no exactunioncleanbaseline, auditfreshactualobjects+flags."
+      }
+    },
+    "result.json": {
+      "sha256": "a2eee99644a229d4b9e0f42283ac3cf71892873ef9ef2fc2a4cfc3de8654f059",
+      "record": {
+        "result": 0,
+        "tests": {
+          "name": "Darwin-c++",
+          "tests": "108",
+          "failures": "0",
+          "disabled": "0",
+          "skipped": "0",
+          "hostname": "mac-studio.lan",
+          "time": "14",
+          "timestamp": "2026-11-10T00:02:43"
+        },
+        "twice_captures_original_byte_identical": true,
+        "guide_SVGs": 29,
+        "all_source_dependency_SDK_hashes_unchanged": true,
+        "scope": "currentfrozenfrontend747baa8+humanhintdelta/backenddc0af0a normalMacFiles108integration+allguides; no positiveMacstrongcopypublication ornativeGUIwindowclaim"
+      }
+    },
+    "stages.json": {
+      "sha256": "b885350365008f558ac6773d28aba79c53ee2c1dd0190016a066ef69d7dec31f",
+      "record": [
+        {
+          "name": "configure",
+          "start": "2026-11-09T22:54:14.315706+00:00",
+          "end": "2026-11-09T22:54:21.470474+00:00",
+          "seconds": 7.154821999953128,
+          "result": 0,
+          "command": [
+            "cmake",
+            "-S",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities",
+            "-B",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DBUILD_TESTING=ON",
+            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+            "-DCKTOOLS_CKVISION_PREFIX=/Volumes/S8T/tmp/ckvision-1.4.2-validation-20261102-01/install",
+            "-DCKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT=/Volumes/PRO-BLADE/tmp/ckutilities-current-v2-ct3k0cha",
+            "-DCK_CORE_FS_NATIVE_TEST_ROOT=/Volumes/PRO-BLADE/tmp/ckutilities-current-v2-ct3k0cha",
+            "-DCK_LLAMA_CPP_SOURCE_DIR=/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-mac-v1-9bjb9mg1/dependencies/llama_cpp",
+            "-DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-mac-v1-9bjb9mg1/dependencies/googletest",
+            "-DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON",
+            "-DCKTOOLS_CKVISION_SOURCE_DIR=/Volumes/S8T/tmp/ckvision-asan-investigation-20261102/ckvision-source"
+          ]
+        },
+        {
+          "name": "build",
+          "start": "2026-11-09T22:54:21.472637+00:00",
+          "end": "2026-11-09T23:02:43.504587+00:00",
+          "seconds": 502.0326492500026,
+          "result": 0,
+          "command": [
+            "cmake",
+            "--build",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build",
+            "--parallel",
+            "1",
+            "--target",
+            "ckfiles_ckvision",
+            "ck_vision_files_tests",
+            "ck_files_core_tests",
+            "ck_files_native_tests",
+            "capture_ckutilities_screenshots",
+            "capture_todo_screenshots",
+            "generate_sysmon_goldens",
+            "capture_sysmon_screenshots",
+            "--verbose"
+          ]
+        },
+        {
+          "name": "tests",
+          "start": "2026-11-09T23:02:43.605052+00:00",
+          "end": "2026-11-09T23:02:58.280976+00:00",
+          "seconds": 14.67596666701138,
+          "result": 0,
+          "command": [
+            "ctest",
+            "--test-dir",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build",
+            "-L",
+            "files",
+            "--parallel",
+            "1",
+            "--no-tests=error",
+            "--output-on-failure",
+            "--output-junit",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/tests.xml"
+          ]
+        },
+        {
+          "name": "documentation-contract",
+          "start": "2026-11-09T23:02:58.281432+00:00",
+          "end": "2026-11-09T23:02:58.296819+00:00",
+          "seconds": 0.01540395908523351,
+          "result": 0,
+          "command": [
+            "cmake",
+            "-DCKTOOLS_SOURCE_ROOT:PATH=/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities",
+            "-P",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/cmake/VerifyToolDocumentation.cmake"
+          ]
+        },
+        {
+          "name": "capture-first-capture_ckutilities_screenshots",
+          "start": "2026-11-09T23:02:58.331414+00:00",
+          "end": "2026-11-09T23:02:58.731587+00:00",
+          "seconds": 0.40019845799542964,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_ckutilities_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots"
+          ]
+        },
+        {
+          "name": "capture-first-capture_todo_screenshots",
+          "start": "2026-11-09T23:02:58.732076+00:00",
+          "end": "2026-11-09T23:02:58.976438+00:00",
+          "seconds": 0.2443952920148149,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_todo_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/src/vision/todo/tests/golden"
+          ]
+        },
+        {
+          "name": "capture-first-generate_sysmon_goldens",
+          "start": "2026-11-09T23:02:58.976904+00:00",
+          "end": "2026-11-09T23:02:59.161052+00:00",
+          "seconds": 0.18416795798111707,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/generate_sysmon_goldens",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/src/vision/sysmon/tests/golden"
+          ]
+        },
+        {
+          "name": "capture-first-capture_sysmon_screenshots",
+          "start": "2026-11-09T23:02:59.161586+00:00",
+          "end": "2026-11-09T23:02:59.345325+00:00",
+          "seconds": 0.18375854205805808,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_sysmon_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots"
+          ]
+        },
+        {
+          "name": "capture-second-capture_ckutilities_screenshots",
+          "start": "2026-11-09T23:02:59.350461+00:00",
+          "end": "2026-11-09T23:02:59.525999+00:00",
+          "seconds": 0.17555916600394994,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_ckutilities_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots"
+          ]
+        },
+        {
+          "name": "capture-second-capture_todo_screenshots",
+          "start": "2026-11-09T23:02:59.526503+00:00",
+          "end": "2026-11-09T23:02:59.584994+00:00",
+          "seconds": 0.058518667006865144,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_todo_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/src/vision/todo/tests/golden"
+          ]
+        },
+        {
+          "name": "capture-second-generate_sysmon_goldens",
+          "start": "2026-11-09T23:02:59.585755+00:00",
+          "end": "2026-11-09T23:02:59.609937+00:00",
+          "seconds": 0.024200708023272455,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/generate_sysmon_goldens",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/src/vision/sysmon/tests/golden"
+          ]
+        },
+        {
+          "name": "capture-second-capture_sysmon_screenshots",
+          "start": "2026-11-09T23:02:59.610460+00:00",
+          "end": "2026-11-09T23:02:59.635815+00:00",
+          "seconds": 0.02537454105913639,
+          "result": 0,
+          "command": [
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/build/tools/docgen/capture_sysmon_screenshots",
+            "/Volumes/S8T/tmp/ck-core-fs-hardening.6j2hcco1/frontend-current-v2-_aap9wxe/source/ckUtilities/docs/generated/screenshots"
+          ]
+        }
+      ]
+    },
+    "compile-contract.json": {
+      "sha256": "cd05143534a31bca594a8109a8192f0ea428059a0e4838e091814f607d19e3bc",
+      "record": {
+        "configured_TUs": 516,
+        "all_commands_normal": true,
+        "SDK": "/Volumes/S8T/tmp/ckvision-1.4.2-validation-20261102-01/install",
+        "parallel": 1,
+        "scope": "fresh namedconsumer+guide targets, not all configured backend tests"
+      }
+    },
+    "tests.xml": {
+      "sha256": "590e370e2153abc1890a07772826cf3e867d3f7b8315618b246208fc06fb31d1",
+      "record": {
+        "name": "Darwin-c++",
+        "tests": "108",
+        "failures": "0",
+        "disabled": "0",
+        "skipped": "0",
+        "hostname": "mac-studio.lan",
+        "time": "14",
+        "timestamp": "2026-11-10T00:02:43"
+      }
+    }
+  },
+  "input_manifest_hashes": {
+    "sources.json": "1d17ac4dd4ae469f42610aa0fb3fcf92dcf1d088942a8fca33654caf32878022",
+    "sdk-inputs.json": "8987c913789df26ce322d4663cc4507e9f75610c0b272f01678096710b574bec",
+    "dependency-inputs.json": "cd59f18ff3059eba9ee0a7d1e93a25be9979012b5af904ce11aa03ce98550dee",
+    "outputs.json": "5216399e81bfbda6b80acfe2938732855e6125473df97fe5a197c8043c606877"
+  },
+  "limits": [
+    "Normal macOS Files integration only; not a sanitizer result.",
+    "Real deterministic HeadlessTerminal guide captures; not an observed native application window.",
+    "Strong held-object copy publication remains explicitly refused on macOS.",
+    "Archive held-creator writer repair and Windows installed-consumer runtime qualification remain open."
+  ]
+}

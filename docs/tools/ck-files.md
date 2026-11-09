@@ -51,7 +51,7 @@ execute files or provide an embedded shell.
   creator's live ownership is unavailable. **Clean up archive staging** stays
   disabled with that reason; journal names and matching content cannot grant
   deletion authority. Resume/retry/publication remain unavailable. See the [volume archive
-  plan](../../implementation/ck-files-volume-archive-plan.md).
+  plan](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
   and quick filename filtering.
@@ -170,7 +170,7 @@ reports completed effects. Recovery verifies identities and journals before
 offering inspect, cleanup, or revalidated retry; it never automatically
 deletes an artifact or source by pathname.
 
-See the [Files implementation plan](../../implementation/ck-files-plan.md),
-[contracts](../../implementation/ck-files-contracts.md), and
-[qualification evidence](../../implementation/ck-files-progress.md) for the
+See the [Files implementation plan](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-plan.md),
+[contracts](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-contracts.md), and
+[qualification evidence](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-progress.md) for the
 precise guarantees and remaining release gates.

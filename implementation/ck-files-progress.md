@@ -1,5 +1,21 @@
 # Files implementation evidence
 
+## 2026-11-10 — Current shared-backend macOS integration
+
+The frozen consumer source matching `5cfa45a` product bytes, backend `dc0af0a`
+(product bytes unchanged in `0fb7a09`), and normal ckVision 1.4.2 passed
+**108/108 Files CTest entries, zero skipped**. A fresh, serial 418-step build
+completed in 502.03 seconds; tests took 14.68 seconds. The documentation contract
+passed, and all four real ckVision guide capturers reproduced all 29 SVGs and
+52 generated assets byte-for-byte in two runs. Input, dependency, SDK and output
+fingerprints were retained.
+
+These checks cover the live-owner cleanup refusal, first batch failure reporting,
+and readable publication refusal. They do not qualify positive strong copy
+publication on macOS, the pending archive writer replacement, Windows runtime,
+or actual native-window interaction. HeadlessTerminal guide captures establish
+documentation rendering only. See the [current integration receipt](evidence/ck-files-current-integration-20261110.json).
+
 ## 2026-11-02 — Windows native traversal and long-path qualification
 
 Commit `1723fcd` completes the Windows native-I/O boundary for the remaining
