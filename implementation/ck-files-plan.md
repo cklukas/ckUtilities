@@ -436,7 +436,11 @@ authority and does not close the application or release requirements below.
   Browser→Core dependency chain. This is fixture/compiler-boundary evidence,
   not a new whole-application pass. See
   `evidence/ck-files-macos-allocation-fixture-20261110.json`. Its Windows follow-up
-  remains open. Startup reads remain an open bounded-I/O SDK integration gap.
+  remains open. Candidate `aa2b1f1` uses the bounded ckVision startup reader.
+  Its macOS ARM64 tests and private PTY runs pass for oversized-settings
+  preservation and location completion. See
+  [candidate evidence](evidence/ck-files-integrated-1.5-candidate-20261110.json).
+  Exact integrated sanitizer, Windows runtime, and desktop acceptance remain open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
 

@@ -1,0 +1,54 @@
+{
+  "macos_arm64_normal": {
+    "frontend": "aa2b1f1d87be1d07615037557cb9318fe9b37ad4",
+    "backend": "e0815494948604a931733503d6e0c50ab7811e9f",
+    "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f",
+    "passed": {
+      "files": 110,
+      "ckvision": 243,
+      "installed_ckvision_consumer": 1
+    },
+    "failed": 0,
+    "skipped": 0,
+    "executed_binary_sha256": "37f0a4c5cacab2140f2bf69b0076994dd37be2d381e172283b1758de2c7326f9",
+    "bounded_startup_pty": {
+      "exit": 0,
+      "settings_bytes_before_and_after": 2097191,
+      "settings_sha256_before_and_after": "5162c12b85d4effa4b59999407aafc02b7b3ef7171add22d5e96f0bd1b165cc7",
+      "terminal_restored_before_warning": true
+    },
+    "location_pty": {
+      "exit": 0,
+      "terminal_modes_restored": true,
+      "termios_restored": true,
+      "observations": [
+        "Ctrl+L opened the location editor.",
+        "Right accepted the folder proposal.",
+        "Enter opened the folder and showed its fixture file."
+      ],
+      "receipt_sha256": "5540c70898b336a6aeda9468bfa2fcc2ef96c1e9dfa6d5f756820f1083a42769"
+    },
+    "receipt_sha256": "457e8cc9ee54875e447fba0ef7cd2265ab1d8be100aebc4840311d18037c6f50"
+  },
+  "linux_arm64_tsan_preceding_candidate": {
+    "frontend": "1f1c91dcb1a26c0e112ab1819238d7620f705303",
+    "backend": "fc56de16433cf7066c344f8c052debc7e6197535",
+    "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f",
+    "compiler": "GCC 14",
+    "passed_files_tests": 149,
+    "failed": 0,
+    "skipped": 0,
+    "instrumented_compiler_invocations": 301,
+    "receipt_sha256": "fa9e7a6c4a9f7727bb0a0eb0e37f9a903f0ac284f11a5c3111f7a25ac3c982d9"
+  },
+  "windows_x64_focused_backend": {
+    "backend": "e0815494948604a931733503d6e0c50ab7811e9f",
+    "passed": {
+      "NTFS": 7,
+      "ReFS": 7
+    },
+    "failed": 0,
+    "skipped": 0,
+    "receipt_sha256": "43638391e5c22c474382e92cbae1c8e31552b58b4dfc1dc839e6d40df1719358"
+  }
+}

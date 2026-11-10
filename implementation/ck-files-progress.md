@@ -1,5 +1,26 @@
 # Files implementation evidence
 
+## 2026-11-10 — Bounded settings and completion in the integrated candidate
+
+The macOS ARM64 candidate `aa2b1f1` passed 110 Files CTests with backend
+`e081549` and ckVision `0d81e2e`. The matching SDK passed all 243 CTests and
+its independent installed consumer. A private PTY run preserved the oversized
+settings file byte for byte and displayed the final save warning after
+restoring the terminal. A second run opened the location editor with Ctrl+L,
+accepted the folder proposal with Right, and navigated into it with Enter.
+Both runs used the same verified executable and exited cleanly.
+
+On Linux ARM64, the preceding candidate `1f1c91d` with backend `fc56de1`
+and the same ckVision revision passed all 149 Files CTests under GCC 14
+ThreadSanitizer. The build log contains 301 instrumented compiler invocations.
+On Windows x64, backend `e081549` passed seven focused reviewed-tree tests on
+NTFS and seven on ReFS with the same binaries. See the
+[source-bound evidence](evidence/ck-files-integrated-1.5-candidate-20261110.json).
+
+The remaining gates include exact integrated Linux and macOS sanitizer
+qualification, full Windows application and backend qualification, and
+desktop-window acceptance.
+
 ## 2026-11-10 — Linux qualification and macOS PTY for 9635373
 
 The hosted Linux x86-64 job for `9635373` passed 463 development tests,
