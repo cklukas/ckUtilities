@@ -1,5 +1,6 @@
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
+#include "prepared_journal_root.hpp"
 #include "ck/file_io.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
@@ -84,12 +85,6 @@ std::vector<std::byte> journal_evidence(std::uint64_t transaction, std::string_v
     return result;
 }
 
-auto open_journal() {
-    return [](const NativeAbsolutePath &root, const NativeName &name, bool create_new) {
-        return open_native_operation_journal_file(root, name, create_new);
-    };
-}
-
 std::optional<NativeName> archive_journal_name(std::string_view suffix) {
     const std::string value = ".ck-volume-archive-" + std::string(suffix);
 #if defined(_WIN32)
@@ -164,6 +159,122 @@ void refresh_journal_frame_checksum(std::vector<std::byte> &bytes, std::size_t o
 
 std::size_t journal_frame_size(std::span<const std::byte> bytes, std::size_t offset) {
     return 9 + static_cast<std::size_t>(little_u32(bytes.subspan(offset + 5, 4))) + sizeof(std::uint32_t);
+}
+
+// Genuine worker-owned writer fixture. Each attempt has a distinct private
+// Root/journal, so a second publication tests destination no-replace rather
+// than accidentally colliding with its earlier journal name.
+NativeName native_component(const std::string &text) {
+#if defined(_WIN32)
+    return *NativeName::from_windows(std::u16string(text.begin(), text.end()));
+#else
+    return *NativeName::from_posix(text);
+#endif
+}
+
+template<class T> T fixture_value(Observation<T> value) {
+    if (!value.value())
+        throw std::runtime_error(value.unavailable_detail()->error.operation);
+    return std::move(value).take_value();
+}
+
+FilesVolumeArchiveWriteRequest write_request(FilesVolumeArchiveDocument value,
+    const std::filesystem::path &directory, std::string name, std::uint64_t transaction) {
+    return {.document=std::move(value), .destination_directory=directory,
+        .archive_name=std::move(name), .transaction_id=transaction,
+        .append_journal={}, .append_journal_evidence={}, .destination_owner={},
+        .prepared_journal_root={}, .native_journal_name={}, .native_journal_id={}, .journal_limits={}};
+}
+
+Observation<FilesVolumeArchiveWriteResult> write_with_native_owners(
+    const FilesVolumeArchiveWriteRequest &input, std::filesystem::path *journal_path=nullptr,
+    std::stop_token stop={}) {
+    static std::atomic<std::uint64_t> sequence{1000};
+    const auto serial=sequence.fetch_add(1);
+    NativeFileSystem filesystem;
+    auto destination=std::shared_ptr<const DirectoryCursor>(fixture_value(
+        filesystem.open_native_directory(address(input.destination_directory))));
+    const auto component=native_component("writer-root-"+std::to_string(serial));
+    PreparedJournalRootRequest preparation{.parent=destination, .child=component,
+        .disposition=JournalRootDisposition::ProvisionChild, .navigation_hint={}};
+    JournalRootPreparationProgress progress;
+    auto root=fixture_value(prepare_native_journal_root(std::move(preparation),progress));
+    const auto basename=native_component("fixture-journal");
+    if (journal_path) {
+        const auto root_address=fixture_value(address(input.destination_directory).child_address(component));
+        *journal_path=fixture_value(fixture_value(root_address.child_address(basename)).host_path());
+    }
+    auto result=[&] {
+        auto bound=input;
+        bound.destination_owner=destination;bound.prepared_journal_root=root;
+        bound.native_journal_name=basename;bound.native_journal_id=journal_id(serial);
+        return write_volume_archive(bound,stop);
+    }();
+    destination.reset();
+    const auto closed=root->finish_io();
+    if (result.value() && result.value()->publication==FilesVolumeArchivePublication::Durable && !closed.value())
+        throw std::runtime_error("native archive fixture Root did not finish");
+    return result;
+}
+
+#if defined(__APPLE__)
+void check_macos_publication_unavailable(const Observation<FilesVolumeArchiveWriteResult> &result,
+    const std::filesystem::path &output) {
+    CK_CHECK(!result.value());
+    CK_CHECK(result.state()==ObservationState::Unsupported);
+    CK_CHECK(result.unavailable_detail() && result.unavailable_detail()->error.operation==
+        "create_staging_file.fd_publication_unqualified");
+    std::string content;
+    CK_CHECK(!ck::io::read_file(output,content));
+}
+
+#endif
+
+// Pure test-data encoder, not native publication or an ownership receipt. It
+// keeps the format/parser/corruption checks runnable on providers where native
+// publication is deliberately unavailable (including Darwin).
+std::vector<std::byte> encode_format_fixture(const FilesVolumeArchiveDocument &value) {
+    std::vector<std::byte> manifest;
+    append_string(manifest,value.source.identity);append_string(manifest,value.source.name);
+    append_string(manifest,value.source.mount_point);append_string(manifest,value.source.filesystem);
+    append_le<std::uint8_t>(manifest,static_cast<std::uint8_t>(value.consistency));
+    append_le<std::uint8_t>(manifest,static_cast<std::uint8_t>(value.path_encoding));
+    for(unsigned i=0;i<6;++i)append_le<std::uint8_t>(manifest,0);
+    std::uint64_t size=0;
+    for(const auto &entry:value.entries) {
+        append_le<std::uint8_t>(manifest,static_cast<std::uint8_t>(entry.kind));
+        for(unsigned i=0;i<7;++i)append_le<std::uint8_t>(manifest,0);
+        append_le<std::uint64_t>(manifest,entry.logical_size);append_le<std::uint64_t>(manifest,entry.hard_link_group);
+        append_string(manifest,entry.path);append_string(manifest,entry.link_target);
+        append_le<std::uint64_t>(manifest,entry.extents.size());
+        for(const auto &extent:entry.extents) {
+            append_le<std::uint64_t>(manifest,extent.offset);
+            append_le<std::uint64_t>(manifest,size+extent.offset);
+            append_le<std::uint64_t>(manifest,extent.bytes.size());
+        }
+        size+=entry.logical_size;
+    }
+    append_le<std::uint64_t>(manifest,value.losses.size());
+    for(const auto &loss:value.losses) {
+        append_le<std::uint64_t>(manifest,loss.entry_index);
+        append_le<std::uint8_t>(manifest,static_cast<std::uint8_t>(loss.kind));
+        append_le<std::uint8_t>(manifest,loss.hard_failure?1U:0U);
+        for(unsigned i=0;i<6;++i)append_le<std::uint8_t>(manifest,0);
+        append_string(manifest,loss.path);append_string(manifest,loss.diagnostic);
+    }
+    std::vector<std::byte> out;
+    for(char c:std::string_view("CKARV01\0",8))out.push_back(std::byte{static_cast<unsigned char>(c)});
+    append_le<std::uint32_t>(out,2);append_le<std::uint32_t>(out,0);
+    append_le<std::uint64_t>(out,manifest.size());append_le<std::uint64_t>(out,56+manifest.size());
+    append_le<std::uint64_t>(out,size);append_le<std::uint64_t>(out,value.entries.size());append_le<std::uint64_t>(out,0);
+    out.insert(out.end(),manifest.begin(),manifest.end());const auto begin=out.size();out.resize(begin+size);
+    std::uint64_t at=0;
+    for(const auto &entry:value.entries) {
+        for(const auto &extent:entry.extents)
+            std::copy(extent.bytes.begin(),extent.bytes.end(),out.begin()+static_cast<std::ptrdiff_t>(begin+at+extent.offset));
+        at+=entry.logical_size;
+    }
+    return out;
 }
 
 template <class T>
@@ -332,24 +443,25 @@ CK_TEST(volume_enumerator_reports_native_archive_capability) {
 
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "fixture.ckarchive", 7, {}, {}};
-    const auto written = write_volume_archive(request);
+    auto request=write_request(document(),scratch.path(),"fixture.ckarchive",7);
+    const auto written = write_with_native_owners(request);
+    auto bytes=encode_format_fixture(request.document);
+#if defined(__APPLE__)
+    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
+#else
     CK_CHECK(written.value());
     CK_CHECK(written.value()->entry_count == 3);
     CK_CHECK(written.value()->data_bytes == 4);
     CK_CHECK(written.value()->publication == FilesVolumeArchivePublication::Durable);
-    CK_CHECK(written.value()->digests_verified);
-    CK_CHECK(std::filesystem::file_size(written.value()->published_path) == written.value()->logical_size);
+    CK_CHECK(written.value()->digests_verified && written.value()->publication_confirmed);
+    std::string content;
+    CK_CHECK(ck::io::read_file(written.value()->published_path,content));
+    const auto native_bytes=std::as_bytes(std::span<const char>(content.data(),content.size()));
+    CK_CHECK(std::equal(bytes.begin(),bytes.end(),native_bytes.begin(),native_bytes.end()));
+#endif
+    const auto all=std::span<const std::byte>(bytes);
 
-    std::ifstream archive(written.value()->published_path, std::ios::binary);
-    archive.seekg(56 + 1, std::ios::beg); // Header plus the first manifest byte.
-    CK_CHECK(archive.good());
-    std::vector<char> all(static_cast<std::size_t>(std::filesystem::file_size(written.value()->published_path)));
-    archive.seekg(0);
-    archive.read(all.data(), static_cast<std::streamsize>(all.size()));
-    CK_CHECK(archive.good() || archive.eof());
-
-    const auto parsed = parse_archive_fixture(std::as_bytes(std::span<const char>(all.data(), all.size())));
+    const auto parsed = parse_archive_fixture(all);
     CK_CHECK(parsed.has_value());
     if (parsed) {
         CK_CHECK(parsed->data_size == 16);
@@ -372,19 +484,24 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
             CK_CHECK(parsed->entries[2].extents.empty());
         }
         const auto data_begin = static_cast<std::size_t>(parsed->data_offset);
-        CK_CHECK(static_cast<unsigned char>(all[data_begin + 0]) == 'a');
-        CK_CHECK(static_cast<unsigned char>(all[data_begin + 1]) == 'b');
-        CK_CHECK(static_cast<unsigned char>(all[data_begin + 2]) == 'c');
+        CK_CHECK(std::to_integer<unsigned char>(all[data_begin + 0]) == 'a');
+        CK_CHECK(std::to_integer<unsigned char>(all[data_begin + 1]) == 'b');
+        CK_CHECK(std::to_integer<unsigned char>(all[data_begin + 2]) == 'c');
         for (std::size_t index = 3; index != 8; ++index)
-            CK_CHECK(static_cast<unsigned char>(all[data_begin + index]) == 0);
-        CK_CHECK(static_cast<unsigned char>(all[data_begin + 8]) == 'z');
+            CK_CHECK(std::to_integer<unsigned char>(all[data_begin + index]) == 0);
+        CK_CHECK(std::to_integer<unsigned char>(all[data_begin + 8]) == 'z');
         for (std::size_t index = 9; index != 16; ++index)
-            CK_CHECK(static_cast<unsigned char>(all[data_begin + index]) == 0);
+            CK_CHECK(std::to_integer<unsigned char>(all[data_begin + index]) == 0);
     }
 
-    const auto second = write_volume_archive(request);
+#if !defined(__APPLE__)
+    const auto second = write_with_native_owners(request);
     CK_CHECK(!second.value());
     CK_CHECK(second.state() == ObservationState::Changed);
+    std::string unchanged;
+    CK_CHECK(ck::io::read_file(scratch.path()/request.archive_name,unchanged));
+    CK_CHECK(digest_bytes(std::as_bytes(std::span<const char>(unchanged)))==digest_bytes(bytes));
+#endif
 }
 
 CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
@@ -395,26 +512,27 @@ CK_TEST(volume_archive_writer_qualifies_material_sparse_allocation) {
     sparse_document.entries[1].extents = {
         {0, {std::byte{'a'}, std::byte{'b'}, std::byte{'c'}}},
         {logical_bytes - 1, {std::byte{'z'}}}};
-    FilesVolumeArchiveWriteRequest request{std::move(sparse_document), scratch.path(), "material.ckarchive", 8,
-                                           {}, {}};
-    const auto written = write_volume_archive(request);
-    if (written.value()) {
-        CK_CHECK(written.value()->data_bytes == 4);
-        CK_CHECK(written.value()->logical_size > logical_bytes);
-        CK_CHECK(std::filesystem::file_size(written.value()->published_path) == written.value()->logical_size);
-    } else {
-        CK_CHECK(written.state() == ObservationState::Unsupported);
-        if (written.unavailable_detail())
-            CK_CHECK(written.unavailable_detail()->error.operation == "volume_archive.sparse_allocation");
-        CK_CHECK(!std::filesystem::exists(scratch.path() / "material.ckarchive"));
-    }
+    auto request=write_request(std::move(sparse_document),scratch.path(),"material.ckarchive",8);
+    const auto written = write_with_native_owners(request);
+#if defined(__APPLE__)
+    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
+#else
+    CK_CHECK(written.value());
+    CK_CHECK(written.value()->data_bytes == 4);
+    CK_CHECK(written.value()->logical_size > logical_bytes);
+    CK_CHECK(written.value()->digests_verified && written.value()->publication_confirmed);
+#endif
 }
 
 CK_TEST(volume_archive_writer_preserves_utf8_archive_name) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-unicode", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchiveWriteRequest request{document(), scratch.path(), "gr\xC3\xB6\xC3\x9F" "e.ckarchive", 19, {}, {}};
-    const auto written = write_volume_archive(request);
+    auto request=write_request(document(),scratch.path(),"gr\xC3\xB6\xC3\x9F" "e.ckarchive",19);
+    const auto written = write_with_native_owners(request);
+#if defined(__APPLE__)
+    check_macos_publication_unavailable(written,scratch.path()/request.archive_name);
+#else
     CK_CHECK(written.value());
+#endif
 #if defined(_WIN32)
     const auto directory = address(scratch.path());
     const auto name = NativeName::from_windows(u"gr\u00F6\u00DFe.ckarchive");
@@ -427,59 +545,98 @@ CK_TEST(volume_archive_writer_preserves_utf8_archive_name) {
 #endif
 }
 
+CK_TEST(volume_archive_writer_refuses_legacy_callbacks_without_native_authority) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-legacy-callback", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto request=write_request(document(),scratch.path(),"legacy.ckarchive",99);
+    unsigned callbacks=0;
+    request.append_journal=[&](OperationJournalState) {++callbacks;return Observation<bool>::available(true);};
+    request.append_journal_evidence=[&](OperationJournalState,std::span<const std::byte>) {
+        ++callbacks;return Observation<bool>::available(true);};
+    const auto result=write_volume_archive(request);
+    CK_CHECK(!result.value());
+    CK_CHECK(result.state()==ObservationState::Unsupported);
+    CK_CHECK(result.unavailable_detail()->error.operation=="volume_archive.native_owner_and_journal_required");
+    CK_CHECK(callbacks==0);
+    std::string content;
+    CK_CHECK(!ck::io::read_file(scratch.path()/request.archive_name,content));
+    // Genuine owners do not promote the callbacks to publication authority.
+    const auto bound=write_with_native_owners(request);
+    CK_CHECK(!bound.value() && bound.state()==ObservationState::Unsupported);
+    CK_CHECK(callbacks==0);
+}
+
 CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_completion) {
-    const std::array<OperationJournalState, 4> boundaries{
-        OperationJournalState::Copied,
-        OperationJournalState::Verified,
-        OperationJournalState::CommitIntended,
-        OperationJournalState::DestinationCommitted};
+    const std::array<OperationJournalState,4> last_durable{
+        OperationJournalState::Prepared,OperationJournalState::Copied,
+        OperationJournalState::Verified,OperationJournalState::CommitIntended};
     ck::testing::ScratchDirectory scratch("files-volume-archive-journal-faults", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    for (std::size_t index = 0; index != boundaries.size(); ++index) {
-        const auto destination = scratch.path() / std::to_string(index);
+    for(std::size_t index=0;index<last_durable.size();++index) {
+        const auto destination=scratch.path()/std::to_string(index);
         std::filesystem::create_directories(destination);
-        const auto failed_state = boundaries[index];
-        std::vector<OperationJournalState> observed;
-        FilesVolumeArchiveWriteRequest request{
-            document(), destination, "fault.ckarchive", static_cast<std::uint64_t>(100 + index),
-            [&observed, failed_state](OperationJournalState state) {
-                observed.push_back(state);
-                if (state == failed_state)
-                    return Observation<bool>::unavailable(
-                        ObservationState::Failed,
-                        {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
-                         "test.journal_fault"});
-                return Observation<bool>::available(true);
-            },
-            {}};
-        const auto result = write_volume_archive(request);
-        CK_CHECK(std::find(observed.begin(), observed.end(), failed_state) != observed.end());
-        const auto published = destination / "fault.ckarchive";
-        if (failed_state == OperationJournalState::DestinationCommitted) {
+        auto request=write_request(document(),destination,"fault.ckarchive",100+index);
+        request.journal_limits.max_records=2+index;
+        std::filesystem::path journal;
+        const auto result=write_with_native_owners(request,&journal);
+#if defined(__APPLE__)
+        check_macos_publication_unavailable(result,destination/request.archive_name);
+#else
+        std::string published;
+        if(index==3) {
             CK_CHECK(result.value());
-            CK_CHECK(result.value() && result.value()->publication ==
-                     FilesVolumeArchivePublication::PublishedDurabilityUnknown);
-            CK_CHECK(std::filesystem::exists(published));
+            CK_CHECK(result.value()->publication==FilesVolumeArchivePublication::PublishedDurabilityUnknown);
+            CK_CHECK(result.value()->publication_confirmed);
+            CK_CHECK(ck::io::read_file(destination/request.archive_name,published));
         } else {
             CK_CHECK(!result.value());
-            CK_CHECK(!std::filesystem::exists(published));
-            CK_CHECK(!std::filesystem::exists(destination / (".fault.ckarchive.cktmp-" +
-                                               std::to_string(100 + index))));
+            CK_CHECK(!ck::io::read_file(destination/request.archive_name,published));
         }
+        std::string bytes;
+        CK_CHECK(ck::io::read_file(journal,bytes));
+        const auto decoded=decode_operation_journal(std::as_bytes(std::span<const char>(bytes)));
+        CK_CHECK(decoded.value());
+        CK_CHECK(decoded.value()->journal->records().size()==2+index);
+        CK_CHECK(decoded.value()->journal->records().back().state==last_durable[index]);
+        CK_CHECK(decoded.value()->journal->records().back().state!=OperationJournalState::Complete);
+#endif
     }
+}
+
+CK_TEST(volume_archive_format_fixture_roundtrip_and_corruption) {
+    const auto bytes=encode_format_fixture(document());
+    const auto parsed=parse_archive_fixture(bytes);
+    CK_CHECK(parsed && parsed->entries.size()==3 && parsed->data_size==16);
+    for(const auto offset:std::array<std::size_t,3>{8,12,48}) {
+        auto corrupt=bytes;corrupt[offset]=std::byte{0xff};
+        CK_CHECK(!parse_archive_fixture(corrupt));
+    }
+    auto truncated=bytes;truncated.pop_back();
+    CK_CHECK(!parse_archive_fixture(truncated));
+    auto changed=bytes;changed.back()^=std::byte{1};
+    CK_CHECK(digest_bytes(changed)!=digest_bytes(bytes));
+}
+
+CK_TEST(volume_archive_writer_stopped_before_effects) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-stopped", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto request=write_request(document(),scratch.path(),"stop.ckarchive",98);
+    std::stop_source stop;stop.request_stop();
+    const auto result=write_with_native_owners(request,nullptr,stop.get_token());
+    CK_CHECK(!result.value());
+    CK_CHECK(result.unavailable_detail()->error.code==static_cast<std::int64_t>(AdapterError::InterruptedRead));
+    std::string content;
+    CK_CHECK(!ck::io::read_file(scratch.path()/request.archive_name,content));
 }
 
 CK_TEST(volume_archive_writer_refuses_unknown_capability_and_unsafe_entry_paths) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-refusal", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchiveWriteRequest unknown{document(FilesVolumeArchiveSupport::Unknown), scratch.path(),
-                                           "unknown.ckarchive", 1, {}, {}};
-    const auto refused = write_volume_archive(unknown);
+    auto unknown=write_request(document(FilesVolumeArchiveSupport::Unknown),scratch.path(),"unknown.ckarchive",1);
+    const auto refused = write_with_native_owners(unknown);
     CK_CHECK(!refused.value());
     CK_CHECK(refused.state() == ObservationState::Unknown);
 
     auto unsafe_document = document();
     unsafe_document.entries[1].path = "../escape";
-    FilesVolumeArchiveWriteRequest unsafe{std::move(unsafe_document), scratch.path(), "unsafe.ckarchive", 2, {}, {}};
-    const auto unsafe_result = write_volume_archive(unsafe);
+    auto unsafe=write_request(std::move(unsafe_document),scratch.path(),"unsafe.ckarchive",2);
+    const auto unsafe_result = write_with_native_owners(unsafe);
     CK_CHECK(!unsafe_result.value());
     CK_CHECK(unsafe_result.state() == ObservationState::Unsupported);
 }
@@ -523,8 +680,8 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     CK_CHECK(approved.value()->continued_with_listed_losses);
 
     auto unreviewed = model->document();
-    FilesVolumeArchiveWriteRequest write_request{unreviewed, scratch.path(), "loss.ckarchive", 17, {}, {}};
-    const auto write_result = write_volume_archive(write_request);
+    auto unreviewed_request=write_request(unreviewed,scratch.path(),"loss.ckarchive",17);
+    const auto write_result = write_with_native_owners(unreviewed_request);
     CK_CHECK(!write_result.value());
     CK_CHECK(write_result.state() == ObservationState::Unknown);
 }
@@ -567,10 +724,12 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     FilesVolumeArchiveService service;
     const auto destination = address(scratch.path());
-    FilesVolumeArchiveRequest request{source(), destination, "worker.ckarchive",
-                                      FilesVolumeArchiveConsistency::Live, 11,
-                                      [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); },
-                                      journal_root(scratch.path()), journal_id(11), {}, open_journal()};
+    FilesVolumeArchiveRequest request{.source=source(), .destination_directory=destination,
+        .archive_name="worker.ckarchive", .consistency=FilesVolumeArchiveConsistency::Live,
+        .transaction_id=11,
+        .build_document=[](std::stop_token) {return Observation<FilesVolumeArchiveDocument>::available(document());},
+        .journal_root=journal_root(scratch.path()), .journal_id=journal_id(11), .journal_limits={},
+        .open_journal={}, .prepared_journal_root={}};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> reply;
@@ -580,8 +739,16 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     CK_CHECK(reply.has_value());
+#if defined(__APPLE__)
+    CK_CHECK(reply->state==FilesVolumeArchiveState::Failed);
+    CK_CHECK(reply->error && reply->error->state==ObservationState::Unsupported);
+    CK_CHECK(reply->error->error.operation=="create_staging_file.fd_publication_unqualified");
+    std::string absent;
+    CK_CHECK(!ck::io::read_file(scratch.path()/"worker.ckarchive",absent));
+#else
     CK_CHECK(reply->state == FilesVolumeArchiveState::Complete);
-    CK_CHECK(reply->result && std::filesystem::exists(reply->result->published_path));
+    CK_CHECK(reply->result && reply->result->publication_confirmed);
+#endif
     std::size_t journal_files = 0;
     for (const auto &entry : std::filesystem::directory_iterator(scratch.path() / "journals")) {
         if (entry.is_regular_file() && entry.path().filename().string().starts_with(".ck-volume-archive-")) {
@@ -600,6 +767,9 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                     CK_CHECK(decoded.value());
                     if (decoded.value()) {
                         const auto &records = decoded.value()->journal->records();
+#if defined(__APPLE__)
+                        CK_CHECK(records.size()==1 && records.back().state==OperationJournalState::Planned);
+#else
                         CK_CHECK(records.size() == 7);
                         if (records.size() == 7) {
                             CK_CHECK(records.front().state == OperationJournalState::Planned);
@@ -619,31 +789,25 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                                 expected_destination.push_back(static_cast<char>(unit >> 8));
                             }
                             CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::WindowsUtf16);
-                            const auto staging_name = NativeName::from_windows(u".worker.ckarchive.cktmp-11");
 #else
                             const auto expected_destination = *destination.posix_bytes();
                             CK_CHECK(recovery.value()->evidence.destination_encoding == NameEncoding::PosixBytes);
-                            const auto staging_name = NativeName::from_posix(".worker.ckarchive.cktmp-11");
 #endif
                             CK_CHECK(recovery.value()->evidence.destination_native_path == expected_destination);
-                            const auto expected_staging_address = destination.child_address(*staging_name);
-                            CK_CHECK(expected_staging_address.value());
-                            if (expected_staging_address.value()) {
-                                CK_CHECK(recovery.value()->evidence.staging_encoding ==
-                                         expected_staging_address.value()->encoding());
-#if defined(_WIN32)
-                                std::string expected_staging;
-                                for (const auto unit : *expected_staging_address.value()->windows_units()) {
-                                    expected_staging.push_back(static_cast<char>(unit & 0xff));
-                                    expected_staging.push_back(static_cast<char>(unit >> 8));
-                                }
+#if defined(__linux__)
+                            CK_CHECK(recovery.value()->evidence.staging_namespace==StagingNamespace::Anonymous);
+                            CK_CHECK(!recovery.value()->evidence.staging_component);
 #else
-                                const auto expected_staging = *expected_staging_address.value()->posix_bytes();
+                            CK_CHECK(recovery.value()->evidence.staging_namespace==StagingNamespace::Named);
+                            CK_CHECK(recovery.value()->evidence.staging_component.has_value());
 #endif
-                                CK_CHECK(recovery.value()->evidence.staging_native_path == expected_staging);
-                            }
+                            CK_CHECK(recovery.value()->evidence.staging_native_path.empty());
                             CK_CHECK(recovery.value()->evidence.staging_digest.has_value());
+                            std::string archive;
+                            CK_CHECK(ck::io::read_file(scratch.path()/"worker.ckarchive",archive));
+                            CK_CHECK(recovery.value()->evidence.staging_digest==digest_bytes(std::as_bytes(std::span<const char>(archive))));
                         }
+#endif
                     }
                 }
             }
@@ -1149,10 +1313,12 @@ CK_TEST(volume_archive_service_does_not_accept_capability_upgrade_from_builder) 
     FilesVolumeArchiveService service;
     auto request_source = source(FilesVolumeArchiveSupport::Unknown);
     FilesVolumeArchiveRequest request{
-        request_source, address(scratch.path()), "revalidation.ckarchive", FilesVolumeArchiveConsistency::Live, 13,
-        [](std::stop_token) {
+        .source=request_source, .destination_directory=address(scratch.path()), .archive_name="revalidation.ckarchive",
+        .consistency=FilesVolumeArchiveConsistency::Live, .transaction_id=13,
+        .build_document=[](std::stop_token) {
             return Observation<FilesVolumeArchiveDocument>::available(document(FilesVolumeArchiveSupport::LiveReadable));
-        }, journal_root(scratch.path()), journal_id(13), {}, open_journal()};
+        }, .journal_root=journal_root(scratch.path()), .journal_id=journal_id(13), .journal_limits={},
+        .open_journal={}, .prepared_journal_root={}};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> reply;
@@ -1174,9 +1340,9 @@ CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
     std::condition_variable changed;
     bool entered = false;
     FilesVolumeArchiveService service;
-    FilesVolumeArchiveRequest request{source(), address(scratch.path()), "cancel.ckarchive",
-                                      FilesVolumeArchiveConsistency::Live, 12,
-                                      [&mutex, &changed, &entered](std::stop_token token) {
+    FilesVolumeArchiveRequest request{.source=source(), .destination_directory=address(scratch.path()),
+                                      .archive_name="cancel.ckarchive", .consistency=FilesVolumeArchiveConsistency::Live,
+                                      .transaction_id=12, .build_document=[&mutex, &changed, &entered](std::stop_token token) {
                                           {
                                               std::lock_guard lock(mutex);
                                               entered = true;
@@ -1188,7 +1354,8 @@ CK_TEST(volume_archive_service_cancels_queued_request_before_native_build) {
                                               ObservationState::Unknown,
                                               {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InterruptedRead),
                                                "volume_archive.cancelled"});
-                                      }, journal_root(scratch.path()), journal_id(12), {}, open_journal()};
+                                      }, .journal_root=journal_root(scratch.path()), .journal_id=journal_id(12), .journal_limits={},
+                                      .open_journal={}, .prepared_journal_root={}};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchiveSubmission::Accepted);
     {

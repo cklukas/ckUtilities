@@ -1,0 +1,86 @@
+{
+  "base": {
+    "backend_patch_sha256": "5e9ef25b5f0ad3305a060b98881127da9e6aff4bb22d9cffcdf8a23835a42f77",
+    "frontend_patch_sha256": "ba3567f7eb6aa25bed23328711ec385c8fddd51b31dc8ce8b3661e6d2eb908a3",
+    "manifest_sha256": "f22c8e56eabbb5a1eec05d003f2e4bc79086ef0863ce4c7a3b795ca35948f1b2",
+    "producer_sha256": "3cc58253d36580ca815d08708e1a33faddf552025dffdff40ffa8cbeb7d96942",
+    "adapter_pass": 15,
+    "core_staging_pass": 21,
+    "active_own_pids": [],
+    "cpu_slots": 0,
+    "note": "Normal Linux focused only. UI hunk source-only; Windows/sanitizers/full frontend suite remain unqualified."
+  },
+  "amendment": {
+    "manifest_sha256": "5c573e0413083060d4c0a85dd3aa4f0fced770e9f3888e087c175a152e27f55b",
+    "backend_patch_sha256": "eb261dbd43fec154db477b5aa237e6c12d82514e1cc9c2bf79c10faf9ec2a7ac",
+    "frontend_patch_sha256": "93da75f138114e913f2caaf687f1cb7b08daacc3964f488866c0e6d8f7c91637",
+    "producer_sha256": "1329b85b454923558d6f0aff00c2035b3f9a9efcf37948dff6c89fea4341ff0d",
+    "candidate_controls_pass": 24,
+    "baseline_controls": 24,
+    "existing_regressions_pass": 36,
+    "active_pids": [],
+    "cpu_allocation": 0
+  },
+  "manifest_sha256": "f22c8e56eabbb5a1eec05d003f2e4bc79086ef0863ce4c7a3b795ca35948f1b2",
+  "amendment_manifest_sha256": "5c573e0413083060d4c0a85dd3aa4f0fced770e9f3888e087c175a152e27f55b",
+  "main_rehearsal_sha256": "343617a6035b0dc41f55cde55b932e0fa65c06ed09be1053e5e46372b3352489",
+  "state": "Development checkpoint: held-creator archive integration with scoped Mac normal/TSan, Linux normal backend, and Windows local native archive qualification. Remaining gates are explicit; not a release or complete product acceptance.",
+  "main_delta": "Preserved all current backend bytes by commutative patch rehearsal; added copyright/SPDX to three fixtures; registered15adapter+24amendmentcases with exact40s/30s watchdogs; production test macro remains unset.",
+  "updated_utc": "2026-11-10T01:39:49.405314+00:00",
+  "current_integration_qualification": {
+    "normal_macos": {
+      "result_sha256": "f6dc91d0b3b91ece5c4902f90bfea43e6e0c6f176f4063c611040a5a42a2bb5f",
+      "ctest_pass": 108,
+      "skipped": 0,
+      "guide_SVGs": 29,
+      "all_guide_assets_goldens": 52,
+      "twice_byte_identical": true
+    },
+    "tsan_macos": {
+      "result_sha256": "44f14f1ed392413854d8ba9f672faa499094833f1aebeb9c48e932877883b57f",
+      "prelaunch_sha256": "1abde12a8cd1b519bd886b9da818a4730c2038f087d6c34cd210e646d89317cb",
+      "ctest_pass": 108,
+      "skipped": 0,
+      "fresh_TUs": 278,
+      "SDK_prefix": "/Volumes/S8T/tmp/ckvision-142-tsan-stock.YJsvVaBI/sdk",
+      "SDK_archive_sha256": "30fc23409ca8ffcadd7a4b9eef286e21c4b1fba01436290cdf62ab849a2e2b7e",
+      "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+      "race_warnings": false,
+      "runtime_check_failures": false
+    },
+    "native_archive_windows": {
+      "receipt_sha256": "b81fc58c576e2199130c6ba864f4919849f100f51606adf20c36ec835972d088",
+      "groups_pass": 6,
+      "test_cases_pass": 90,
+      "warmups_pass": 6,
+      "providers": [
+        "NTFS",
+        "ReFS"
+      ],
+      "variants": [
+        "ordinary",
+        "long",
+        "raw UTF-16"
+      ],
+      "UNC": "reachable provider-prerequisite refusal, zero directory creation; no positive UNC claim",
+      "scope": "normal native archive installed consumer only, not full Windows matrix",
+      "portable_CTest_registration": "Imported shared source/installed-SDK registration; NTFS/ReFS ordinary/long/raw triples pass and actual Root configure registers all3; final receipt recorded separately"
+    },
+    "linux_current_frontend": {
+      "native_adapter_amendment_CTests_pass": 39,
+      "full_frontend_CTest": "39/40: application runner aborts at recursive directory-copy wait; preserved, unresolved",
+      "backend_195_default_gate": "PASS195/195zero skipsnormal;617.444sbuild156.662stests; diagnostics excluded",
+      "ASan_UBSan_full_backend": "fresh run assigned, pending"
+    },
+    "native_GUI": "not accepted: Terminal CUA access rejected; no launch or visual fix claim"
+  },
+  "remaining_gates": [
+    "Linux original full application five-second recursive-copy timeout remains unresolved despite later unchanged-binary passes; diagnostic-only work excluded from qualification",
+    "Matching current Linux ASan/UBSan backend run in progress",
+    "Windows full normal/sanitizer matrix and remaining unsafe legacy-fixture migrations",
+    "Resource-budget/hierarchy combined integration and POSIX counterpart",
+    "Darwin strong native staging/publication remains Unsupported; no positive archive claim",
+    "Native-window mouse and restricted-key acceptance remains open",
+    "No release, SDK adoption, CDE pin change or Apply enablement"
+  ]
+}

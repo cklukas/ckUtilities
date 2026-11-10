@@ -6,6 +6,9 @@
 #include "native_path.hpp"
 #include "operation_recovery.hpp"
 #include "operation_journal_file.hpp"
+#include "prepared_journal_root.hpp"
+#include "staging_namespace.hpp"
+#include "native_archive_write_job.hpp"
 #include "observation.hpp"
 
 #include <cstddef>
@@ -230,14 +233,22 @@ struct FilesVolumeArchiveWriteRequest final {
     std::filesystem::path destination_directory;
     std::string archive_name;
     std::uint64_t transaction_id = 1;
-    // Optional for the standalone format writer; the Files archive service
-    // supplies this worker-owned durable transition callback.
+    // Legacy callbacks are retained for source compatibility but refused by
+    // the native writer; they cannot authorize durable publication.
     std::function<ck::files::Observation<bool>(ck::files::OperationJournalState)> append_journal;
     // Optional evidence-aware variant. The extra bytes are opaque to the
     // writer and are used by the archive service to publish verified staging
     // evidence at the same durable journal boundary as the state.
     std::function<ck::files::Observation<bool>(ck::files::OperationJournalState,
                                                 std::span<const std::byte>)> append_journal_evidence;
+    // Worker-only capabilities. The address above is navigation/evidence only.
+    // Retain Root independently until the writer returns; finish the Root only
+    // after dropping all write-request/job consumers. No pathname fallback.
+    std::shared_ptr<const ck::files::DirectoryCursor> destination_owner;
+    ck::files::PreparedJournalRoot::Pointer prepared_journal_root;
+    std::optional<ck::files::NativeName> native_journal_name;
+    ck::files::OperationJournalId native_journal_id{};
+    ck::files::OperationJournalLimits journal_limits{};
 };
 
 enum class FilesVolumeArchivePublication {
@@ -252,7 +263,10 @@ struct FilesVolumeArchiveWriteResult final {
     std::size_t entry_count = 0;
     FilesVolumeArchivePublication publication = FilesVolumeArchivePublication::Durable;
     std::string diagnostic;
+    // Hash/format verification concerns the ORIGINAL held creator image. With
+    // indeterminate publication it never verifies some reopened destination.
     bool digests_verified = false;
+    bool publication_confirmed = false;
 };
 
 // The archive journal's evidence is intentionally bounded identity and
@@ -271,6 +285,10 @@ struct FilesVolumeArchiveJournalEvidence final {
     std::optional<ck::files::NameEncoding> staging_encoding;
     std::string staging_native_path;
     std::optional<std::array<std::byte, 32>> staging_digest;
+    // Native writer evidence, never restart cleanup/publication authority.
+    ck::files::StagingNamespace staging_namespace=ck::files::StagingNamespace::Unknown;
+    std::optional<ck::files::NativeName> staging_component;
+    std::optional<std::uint64_t> archive_logical_size;
     friend bool operator==(const FilesVolumeArchiveJournalEvidence &,
                            const FilesVolumeArchiveJournalEvidence &) = default;
 };
@@ -433,6 +451,9 @@ struct FilesVolumeArchiveRequest final {
     ck::files::OperationJournalLimits journal_limits{};
     std::function<ck::files::Observation<std::unique_ptr<ck::files::OperationJournalFile>>(
         const ck::files::NativeAbsolutePath &, const ck::files::NativeName &, bool)> open_journal;
+    // Preferred retained Root. Legacy journal_root is initial worker adoption
+    // only; open_journal callbacks are not used by the native archive writer.
+    ck::files::PreparedJournalRoot::Pointer prepared_journal_root;
 };
 
 enum class FilesVolumeArchiveSubmission {
@@ -472,6 +493,8 @@ struct FilesVolumeArchiveReply final {
     FilesVolumeArchiveState state = FilesVolumeArchiveState::Failed;
     std::optional<FilesVolumeArchiveWriteResult> result;
     std::optional<ck::files::UnavailableObservation> error;
+    // Allocation-free native diagnostic retained even when formatting fails.
+    std::optional<ck::files::NativeArchiveFailure> failure_pod;
 };
 
 class FilesVolumeArchiveService final {

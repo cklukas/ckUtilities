@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
+#include "native_archive_write_job.hpp"
+#include "private_journal_scope.hpp"
+#include "platform/prepared_journal_root_bridge.hpp"
 #include "sha256.hpp"
 #include "unicode_scalar.hpp"
 #if defined(_WIN32)
@@ -15,9 +18,6 @@
 #include <condition_variable>
 #include <cstring>
 #include <cerrno>
-#if !defined(_WIN32)
-#include <fstream>
-#endif
 #include <limits>
 #include <mutex>
 #include <set>
@@ -39,6 +39,16 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
+
+
+#if defined(CK_FS_ARCHIVE_READBACK_FAILURE_TEST)
+namespace ck::vision::detail {
+// Failure-only worker seam immediately before the final authoritative read.
+// Neither hook is called by a native close/finalizer/destructor.
+void archive_before_final_root_read(ck::files::PreparedJournalRoot&) noexcept;
+void archive_final_root_read_observed(bool found,bool pending) noexcept;
+}
 #endif
 
 namespace ck::vision {
@@ -110,6 +120,7 @@ void append_native_path_evidence(std::vector<std::byte> &out, const ck::files::N
 }
 
 bool safe_archive_name(std::string_view name);
+std::optional<ck::files::NativeName> windows_name_from_utf8(std::string_view text);
 
 constexpr std::string_view archive_journal_prefix = ".ck-volume-archive-";
 
@@ -189,7 +200,7 @@ bool read_native_absolute_path(std::span<const std::byte> bytes, std::size_t &of
     return decode_native_absolute_path(*encoding, path).value();
 }
 
-Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(
+Observation<FilesVolumeArchiveJournalEvidence> decode_legacy_archive_journal_evidence(
     std::span<const std::byte> bytes) {
     FilesVolumeArchiveJournalEvidence result;
     std::size_t offset = 0;
@@ -229,6 +240,47 @@ Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(
                 ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence_tail"));
     }
     return Observation<FilesVolumeArchiveJournalEvidence>::available(std::move(result));
+}
+
+// Native ARW2 envelope. Component values remain evidence only: this decoder
+// performs no lookup, reopen, discard or publication, including for Named.
+Observation<FilesVolumeArchiveJournalEvidence> decode_archive_journal_evidence(std::span<const std::byte> bytes) {
+    using R=Observation<FilesVolumeArchiveJournalEvidence>;
+    if(bytes.size()<4||bytes[0]!=std::byte{'A'}||bytes[1]!=std::byte{'R'}||bytes[2]!=std::byte{'W'})
+        return decode_legacy_archive_journal_evidence(bytes);
+    const auto bad=[](){return R::unavailable(ObservationState::Unknown,error(AdapterError::PlanInvalid,"volume_archive.native_evidence"));};
+    if(bytes[3]!=std::byte{2})return bad();
+    std::size_t offset=4;
+    auto component=[&]()->std::optional<ck::files::NativeName>{
+        std::uint8_t encoding=0;std::uint64_t count=0;
+        if(!read_le(bytes,offset,encoding)||encoding>1||!read_le(bytes,offset,count)||!count||count>bytes.size()-offset)return {};
+        auto data=bytes.subspan(offset,static_cast<std::size_t>(count));offset+=static_cast<std::size_t>(count);
+        if(!encoding)return ck::files::NativeName::from_posix(std::string(reinterpret_cast<const char*>(data.data()),data.size()));
+        if(count%2)return {};
+        std::u16string units;units.reserve(data.size()/2);
+        for(std::size_t i=0;i<data.size();i+=2)units.push_back(static_cast<char16_t>(std::to_integer<unsigned char>(data[i])|(std::to_integer<unsigned char>(data[i+1])<<8)));
+        return ck::files::NativeName::from_windows(std::move(units));
+    };
+    const auto destination=component();std::uint8_t ns=0,has_name=0,verified=0;std::uint64_t size=0,application_size=0;
+    if(!destination||!read_le(bytes,offset,ns)||ns>static_cast<std::uint8_t>(ck::files::StagingNamespace::Anonymous)||!read_le(bytes,offset,has_name)||has_name>1)return bad();
+    std::optional<ck::files::NativeName> staging;if(has_name){staging=component();if(!staging)return bad();}
+    const auto space=static_cast<ck::files::StagingNamespace>(ns);
+    if((space==ck::files::StagingNamespace::Anonymous&&staging)||(space==ck::files::StagingNamespace::Named&&!staging)||
+        (space==ck::files::StagingNamespace::Unknown&&staging)||!read_le(bytes,offset,size)||!read_le(bytes,offset,verified)||verified>1||bytes.size()-offset<32)return bad();
+    std::array<std::byte,32> digest{};std::copy_n(bytes.begin()+static_cast<std::ptrdiff_t>(offset),32,digest.begin());offset+=32;
+    if(!read_le(bytes,offset,application_size)||application_size>1024*1024||application_size!=bytes.size()-offset)return bad();
+    auto application=decode_legacy_archive_journal_evidence(bytes.subspan(offset));if(!application.value())return application;
+    auto result=std::move(application).take_value();
+    if(!result.staging_native_path.empty()||result.staging_encoding||result.staging_digest)return bad();
+    // Bind the application label to exact native output spelling; escaped UI
+    // text is never parsed as a component or used for I/O.
+    std::optional<ck::files::NativeName> expected;
+    if(destination->encoding()==ck::files::NameEncoding::PosixBytes)expected=ck::files::NativeName::from_posix(result.archive_name);
+    else expected=windows_name_from_utf8(result.archive_name);
+    if(!expected||*expected!=*destination)return bad();
+    result.staging_namespace=space;result.staging_component=std::move(staging);result.archive_logical_size=size;
+    if(verified)result.staging_digest=digest;
+    return R::available(std::move(result));
 }
 
 bool checked_add(std::uint64_t left, std::uint64_t right, std::uint64_t &result) {
@@ -515,358 +567,14 @@ WindowsArchivePathStatus archive_path_status(const std::filesystem::path &path) 
             .reparse_point = (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0};
 }
 
-bool remove_archive_file(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
-    const auto native_path = archive_windows_path(path);
-    if (!native_path) {
-        failure_detail = error(AdapterError::InvalidPath, "volume_archive.remove_path");
-        return false;
-    }
-    if (DeleteFileW(native_path->c_str()) != 0)
-        return true;
-    const auto code = GetLastError();
-    if (code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND)
-        return true;
-    failure_detail = filesystem_error("volume_archive.remove_path", code);
-    return false;
-}
-
-class WindowsArchiveFile final {
-public:
-    WindowsArchiveFile() = default;
-    WindowsArchiveFile(const WindowsArchiveFile &) = delete;
-    WindowsArchiveFile &operator=(const WindowsArchiveFile &) = delete;
-    WindowsArchiveFile(WindowsArchiveFile &&other) noexcept : handle_(other.handle_) {
-        other.handle_ = INVALID_HANDLE_VALUE;
-    }
-    WindowsArchiveFile &operator=(WindowsArchiveFile &&other) noexcept {
-        if (this != &other) {
-            if (handle_ != INVALID_HANDLE_VALUE)
-                CloseHandle(handle_);
-            handle_ = other.handle_;
-            other.handle_ = INVALID_HANDLE_VALUE;
-        }
-        return *this;
-    }
-    ~WindowsArchiveFile() {
-        if (handle_ != INVALID_HANDLE_VALUE)
-            CloseHandle(handle_);
-    }
-
-    static std::optional<WindowsArchiveFile> open(const std::filesystem::path &path,
-                                                  DWORD access, DWORD share_mode,
-                                                  UnavailableObservation &failure_detail) {
-        const auto native_path = archive_windows_path(path);
-        if (!native_path) {
-            failure_detail = error(AdapterError::InvalidPath, "volume_archive.open_path");
-            return std::nullopt;
-        }
-        const HANDLE handle = CreateFileW(native_path->c_str(), access, share_mode, nullptr, OPEN_EXISTING,
-                                          FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (handle == INVALID_HANDLE_VALUE) {
-            failure_detail = filesystem_error("volume_archive.open_path", GetLastError());
-            return std::nullopt;
-        }
-        WindowsArchiveFile result;
-        result.handle_ = handle;
-        return result;
-    }
-
-    bool write_at(std::uint64_t offset, std::span<const std::byte> bytes,
-                  UnavailableObservation &failure_detail) {
-        if (!seek(offset, failure_detail, "volume_archive.seek_write"))
-            return false;
-        std::size_t written = 0;
-        while (written < bytes.size()) {
-            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - written, UINT32_MAX));
-            DWORD count = 0;
-            if (!WriteFile(handle_, bytes.data() + written, request, &count, nullptr) || count == 0) {
-                failure_detail = filesystem_error("volume_archive.write", GetLastError());
-                return false;
-            }
-            written += count;
-        }
-        return true;
-    }
-
-    bool read_at(std::uint64_t offset, std::span<std::byte> bytes,
-                 UnavailableObservation &failure_detail) {
-        if (!seek(offset, failure_detail, "volume_archive.seek_read"))
-            return false;
-        std::size_t read = 0;
-        while (read < bytes.size()) {
-            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - read, UINT32_MAX));
-            DWORD count = 0;
-            if (!ReadFile(handle_, bytes.data() + read, request, &count, nullptr)) {
-                failure_detail = filesystem_error("volume_archive.read", GetLastError());
-                return false;
-            }
-            if (count == 0) {
-                failure_detail = filesystem_error("volume_archive.read", ERROR_HANDLE_EOF);
-                return false;
-            }
-            read += count;
-        }
-        return true;
-    }
-
-    bool set_size(std::uint64_t size, UnavailableObservation &failure_detail) {
-        if (!seek(size, failure_detail, "volume_archive.seek_resize"))
-            return false;
-        if (SetEndOfFile(handle_) == 0) {
-            failure_detail = filesystem_error("volume_archive.resize", GetLastError());
-            return false;
-        }
-        return true;
-    }
-
-    bool flush(UnavailableObservation &failure_detail) {
-        if (FlushFileBuffers(handle_) != 0)
-            return true;
-        failure_detail = filesystem_error("volume_archive.flush_stream", GetLastError());
-        return false;
-    }
-
-private:
-    bool seek(std::uint64_t offset, UnavailableObservation &failure_detail, const char *operation) {
-        if (offset > static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max())) {
-            failure_detail = error(AdapterError::InventoryLimit, operation);
-            return false;
-        }
-        LARGE_INTEGER distance{};
-        distance.QuadPart = static_cast<LONGLONG>(offset);
-        if (SetFilePointerEx(handle_, distance, nullptr, FILE_BEGIN) != 0)
-            return true;
-        failure_detail = filesystem_error(operation, GetLastError());
-        return false;
-    }
-
-    HANDLE handle_ = INVALID_HANDLE_VALUE;
-};
 #endif
-
-bool create_exclusive(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
-#if defined(_WIN32)
-    const auto native_path = archive_windows_path(path);
-    if (!native_path) {
-        failure_detail = error(AdapterError::InvalidPath, "volume_archive.create_temp");
-        return false;
-    }
-    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        failure_detail = filesystem_error("volume_archive.create_temp", static_cast<int>(GetLastError()));
-        return false;
-    }
-    CloseHandle(handle);
-    return true;
-#else
-    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
-    if (fd < 0) {
-        failure_detail = filesystem_error("volume_archive.create_temp", errno);
-        return false;
-    }
-    ::close(fd);
-    return true;
-#endif
-}
-
-bool enable_sparse(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
-#if defined(_WIN32)
-    const auto native_path = archive_windows_path(path);
-    if (!native_path) {
-        failure_detail = error(AdapterError::InvalidPath, "volume_archive.open_sparse");
-        return false;
-    }
-    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                                      FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        failure_detail = filesystem_error("volume_archive.open_sparse", static_cast<int>(GetLastError()));
-        return false;
-    }
-    DWORD returned = 0;
-    const bool success = DeviceIoControl(handle, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &returned, nullptr) != 0;
-    if (!success)
-        failure_detail = filesystem_error("volume_archive.set_sparse", static_cast<int>(GetLastError()));
-    CloseHandle(handle);
-    return success;
-#else
-    (void)path;
-    (void)failure_detail;
-    return true;
-#endif
-}
-
-Observation<std::uint64_t> allocated_file_bytes(const std::filesystem::path &path) {
-#if defined(_WIN32)
-    const auto native_path = archive_windows_path(path);
-    if (!native_path)
-        return Observation<std::uint64_t>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.allocated_size").error);
-    DWORD high = 0;
-    SetLastError(ERROR_SUCCESS);
-    const DWORD low = GetCompressedFileSizeW(native_path->c_str(), &high);
-    if (low == INVALID_FILE_SIZE && GetLastError() != ERROR_SUCCESS)
-        return Observation<std::uint64_t>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.allocated_size", GetLastError()).error);
-    return Observation<std::uint64_t>::available((static_cast<std::uint64_t>(high) << 32U) | low);
-#else
-    struct stat native {};
-    if (::stat(path.c_str(), &native) != 0)
-        return Observation<std::uint64_t>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.allocated_size", errno).error);
-    if (native.st_blocks < 0 || static_cast<std::uintmax_t>(native.st_blocks) >
-                                  std::numeric_limits<std::uint64_t>::max() / 512U)
-        return Observation<std::uint64_t>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidNativeResult, "volume_archive.allocated_size"));
-    return Observation<std::uint64_t>::available(static_cast<std::uint64_t>(native.st_blocks) * 512U);
-#endif
-}
-
-bool durable_flush(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
-#if defined(_WIN32)
-    const auto native_path = archive_windows_path(path);
-    if (!native_path) {
-        failure_detail = error(AdapterError::InvalidPath, "volume_archive.flush_file");
-        return false;
-    }
-    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-                                      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) {
-        failure_detail = filesystem_error("volume_archive.flush_file", static_cast<int>(GetLastError()));
-        return false;
-    }
-    const bool success = FlushFileBuffers(handle) != 0;
-    if (!success)
-        failure_detail = filesystem_error("volume_archive.flush_file", static_cast<int>(GetLastError()));
-    CloseHandle(handle);
-    return success;
-#else
-    const int fd = ::open(path.c_str(), O_RDONLY);
-    if (fd < 0) {
-        failure_detail = filesystem_error("volume_archive.open_flush", errno);
-        return false;
-    }
-    const bool success = ::fsync(fd) == 0;
-    if (!success)
-        failure_detail = filesystem_error("volume_archive.flush_file", errno);
-    ::close(fd);
-    return success;
-#endif
-}
-
-Observation<std::array<std::byte, 32>> digest_file(const std::filesystem::path &path) {
-#if defined(_WIN32)
-    const auto native_path = ck::files::windows_extended_path(path.wstring());
-    if (!native_path)
-        return Observation<std::array<std::byte, 32>>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.open_digest").error);
-    const HANDLE handle = CreateFileW(native_path->c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (handle == INVALID_HANDLE_VALUE)
-        return Observation<std::array<std::byte, 32>>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.open_digest", GetLastError()).error);
-    std::array<char, 64 * 1024> buffer{};
-    ck::files::Sha256 digest;
-    for (;;) {
-        DWORD count = 0;
-        if (!ReadFile(handle, buffer.data(), static_cast<DWORD>(buffer.size()), &count, nullptr)) {
-            const auto code = GetLastError();
-            CloseHandle(handle);
-            return Observation<std::array<std::byte, 32>>::unavailable(
-                ObservationState::Failed, filesystem_error("volume_archive.read_digest", code).error);
-        }
-        if (count == 0)
-            break;
-        digest.update(std::as_bytes(std::span<const char>(buffer.data(), count)));
-    }
-    CloseHandle(handle);
-    return Observation<std::array<std::byte, 32>>::available(digest.digest());
-#else
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream)
-        return Observation<std::array<std::byte, 32>>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.open_digest", errno).error);
-    std::array<char, 64 * 1024> buffer{};
-    ck::files::Sha256 digest;
-    while (stream) {
-        stream.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-        const auto count = stream.gcount();
-        if (count > 0)
-            digest.update(std::as_bytes(std::span<const char>(buffer.data(), static_cast<std::size_t>(count))));
-        if (stream.bad())
-            return Observation<std::array<std::byte, 32>>::unavailable(
-                ObservationState::Failed, filesystem_error("volume_archive.read_digest", errno).error);
-    }
-    return Observation<std::array<std::byte, 32>>::available(digest.digest());
-#endif
-}
-
-bool durable_directory(const std::filesystem::path &path, UnavailableObservation &failure_detail) {
-#if defined(_WIN32)
-    (void)path;
-    (void)failure_detail;
-    return true;
-#else
-#ifdef O_DIRECTORY
-    const int fd = ::open(path.c_str(), O_RDONLY | O_DIRECTORY);
-#else
-    const int fd = ::open(path.c_str(), O_RDONLY);
-#endif
-    if (fd < 0) {
-        failure_detail = filesystem_error("volume_archive.open_directory", errno);
-        return false;
-    }
-    const bool success = ::fsync(fd) == 0;
-    if (!success)
-        failure_detail = filesystem_error("volume_archive.flush_directory", errno);
-    ::close(fd);
-    return success;
-#endif
-}
-
-bool publish_without_replace(const std::filesystem::path &temporary, const std::filesystem::path &published,
-                             UnavailableObservation &failure_detail, bool &published_result) {
-    published_result = false;
-#if defined(_WIN32)
-    const auto temporary_path = archive_windows_path(temporary);
-    const auto published_path = archive_windows_path(published);
-    if (!temporary_path || !published_path) {
-        failure_detail = error(AdapterError::InvalidPath, "volume_archive.publish");
-        return false;
-    }
-    if (CreateHardLinkW(published_path->c_str(), temporary_path->c_str(), nullptr) == 0) {
-        failure_detail = filesystem_error("volume_archive.publish", GetLastError());
-        return false;
-    }
-    published_result = true;
-    if (DeleteFileW(temporary_path->c_str()) == 0) {
-        failure_detail = filesystem_error("volume_archive.remove_temp", GetLastError());
-        return false;
-    }
-    return true;
-#else
-    std::error_code ec;
-    std::filesystem::create_hard_link(temporary, published, ec);
-    if (ec) {
-        failure_detail = filesystem_error("volume_archive.publish", ec.value());
-        return false;
-    }
-    published_result = true;
-    std::filesystem::remove(temporary, ec);
-    if (ec) {
-        failure_detail = filesystem_error("volume_archive.remove_temp", ec.value());
-        return false;
-    }
-    return true;
-#endif
-}
 
 bool valid_request(const FilesVolumeArchiveWriteRequest &request) {
     return request.destination_directory.is_absolute() && safe_archive_name(request.archive_name) &&
            request.transaction_id != 0;
 }
 
-std::optional<ck::files::NativeName> archive_journal_name(const ck::files::NativeAbsolutePath &root,
+std::optional<ck::files::NativeName> archive_journal_name(ck::files::NameEncoding encoding,
                                                           const ck::files::OperationJournalId &id) {
     constexpr char hex[] = "0123456789abcdef";
     std::string text = ".ck-volume-archive-";
@@ -875,9 +583,9 @@ std::optional<ck::files::NativeName> archive_journal_name(const ck::files::Nativ
         text.push_back(hex[value >> 4U]);
         text.push_back(hex[value & 0x0FU]);
     }
-    if (root.encoding() == ck::files::NameEncoding::PosixBytes)
+    if (encoding == ck::files::NameEncoding::PosixBytes)
         return ck::files::NativeName::from_posix(std::move(text));
-    if (root.encoding() == ck::files::NameEncoding::WindowsUtf16) {
+    if (encoding == ck::files::NameEncoding::WindowsUtf16) {
         std::u16string units;
         units.reserve(text.size());
         for (const auto character : text)
@@ -899,29 +607,6 @@ std::optional<ck::files::NativeName> archive_staging_name(const ck::files::Nativ
     return std::nullopt;
 }
 
-struct ArchiveJournalBinding final {
-    ck::files::OperationJournal::Pointer journal;
-    std::shared_ptr<ck::files::OperationJournalFile> file;
-    std::vector<std::byte> evidence;
-    std::optional<std::size_t> staging_flags_offset;
-
-    ck::files::Observation<bool> append(ck::files::OperationJournalState state) {
-        const auto sequence = static_cast<std::uint64_t>(journal->records().size()) + 1;
-        return ck::files::append_operation_journal_file(
-            *file, *journal, {sequence, 0, state, evidence});
-    }
-
-    ck::files::Observation<bool> append_staging_digest(
-        ck::files::OperationJournalState state, std::span<const std::byte> digest) {
-        if (digest.size() != 32 || !staging_flags_offset || *staging_flags_offset >= evidence.size() ||
-            std::to_integer<std::uint8_t>(evidence[*staging_flags_offset]) != kStagingPathEvidence)
-            return ck::files::Observation<bool>::unavailable(
-                ObservationState::Failed, error(AdapterError::PlanInvalid, "volume_archive.staging_evidence"));
-        evidence[*staging_flags_offset] = std::byte{kStagingPathEvidence | kStagingDigestEvidence};
-        evidence.insert(evidence.end(), digest.begin(), digest.end());
-        return append(state);
-    }
-};
 
 } // namespace
 
@@ -954,6 +639,9 @@ Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
                 evidence->destination_native_path != current.destination_native_path ||
                 evidence->staging_encoding != current.staging_encoding ||
                 evidence->staging_native_path != current.staging_native_path ||
+                (evidence->staging_namespace!=ck::files::StagingNamespace::Unknown&&evidence->staging_namespace!=current.staging_namespace) ||
+                (evidence->staging_component&&evidence->staging_component!=current.staging_component) ||
+                (evidence->archive_logical_size&&evidence->archive_logical_size!=current.archive_logical_size) ||
                 (evidence->staging_digest && !current.staging_digest) ||
                 (evidence->staging_digest && current.staging_digest &&
                  *evidence->staging_digest != *current.staging_digest);
@@ -1367,375 +1055,65 @@ bool FilesVolumeArchiveRecoveryCleanupService::working() const {
 
 Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
                                                                 std::stop_token stop_token) {
-    if (!valid_request(request))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::PlanInvalid, "volume_archive.request"));
-    if (!request.document.losses.empty() && !request.document.losses_reviewed)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unknown, error(AdapterError::ProviderReviewRequired, "volume_archive.loss_consent"));
-    if (std::any_of(request.document.losses.begin(), request.document.losses.end(),
-                    [](const auto &loss) { return loss.hard_failure; }))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::ProviderReviewRequired, "volume_archive.hard_loss"));
-    std::error_code ec;
-#if defined(_WIN32)
-    const auto native_destination_status = archive_path_status(request.destination_directory);
-    if (native_destination_status.error != ERROR_SUCCESS)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Denied,
-            filesystem_error("volume_archive.destination_status", native_destination_status.error).error);
-    if (!native_destination_status.exists || !native_destination_status.directory || native_destination_status.reparse_point)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.destination"));
-#else
-    const auto destination_status = std::filesystem::symlink_status(request.destination_directory, ec);
-    if (ec)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.destination_status", ec.value()).error);
-    if (!std::filesystem::is_directory(destination_status) || std::filesystem::is_symlink(destination_status))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.destination"));
-#endif
-
-    std::uint64_t data_size = 0, data_bytes = 0;
-    auto encoded_observation = validate_and_encode(request.document, data_size, data_bytes, stop_token);
-    if (!encoded_observation.value())
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            encoded_observation.unavailable_detail()->state, encoded_observation.unavailable_detail()->error);
-    auto encoded = std::move(encoded_observation).take_value();
-    if (stop_token.stop_requested())
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
-
-    std::vector<std::byte> manifest;
-    append_manifest(manifest, request.document, encoded);
-    std::uint64_t data_offset = 0;
-    if (!checked_add(kHeaderSize, manifest.size(), data_offset))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.manifest_size"));
-    std::uint64_t logical_size = 0;
-    if (!checked_add(data_offset, data_size, logical_size))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.file_size"));
-
-    std::filesystem::path published;
-    std::filesystem::path temp;
-#if defined(_WIN32)
-    auto native_destination = ck::files::NativeAbsolutePath::from_host(request.destination_directory);
-    if (!native_destination.value())
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_destination"));
-    const auto published_name = windows_name_from_utf8(request.archive_name);
-    const auto staging_name = archive_staging_name(*native_destination.value(), request.archive_name,
-                                                    request.transaction_id);
-    if (!published_name || !staging_name)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_name"));
-    const auto published_address = native_destination.value()->child_address(*published_name);
-    const auto temp_address = native_destination.value()->child_address(*staging_name);
-    if (!published_address.value() || !temp_address.value())
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_path"));
-    auto published_host = published_address.value()->host_path();
-    auto temp_host = temp_address.value()->host_path();
-    if (!published_host.value() || !temp_host.value())
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.request_host_path"));
-    published = std::move(published_host).take_value();
-    temp = std::move(temp_host).take_value();
-#else
-    published = request.destination_directory / request.archive_name;
-    temp = request.destination_directory /
-           ("." + request.archive_name + ".cktmp-" + std::to_string(request.transaction_id));
-#endif
-    UnavailableObservation failure_detail;
-    const auto remove_temp = [&] {
-#if defined(_WIN32)
-        UnavailableObservation ignored;
-        (void)remove_archive_file(temp, ignored);
-#else
-        std::error_code remove_error;
-        (void)std::filesystem::remove(temp, remove_error);
-#endif
-    };
-#if defined(_WIN32)
-    const auto published_status = archive_path_status(published);
-    if (published_status.error != ERROR_SUCCESS)
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Denied,
-            filesystem_error("volume_archive.destination_conflict", published_status.error).error);
-    if (published_status.exists)
-#else
-    if (std::filesystem::exists(published, ec) || ec)
-#endif
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Changed, error(AdapterError::PlanDecisionStale, "volume_archive.destination_conflict"));
-    if (!create_exclusive(temp, failure_detail))
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    if (!enable_sparse(temp, failure_detail)) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-#if defined(_WIN32)
-    auto stream = WindowsArchiveFile::open(temp, GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, failure_detail);
-    if (!stream) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-#else
-    std::fstream stream(temp, std::ios::binary | std::ios::in | std::ios::out);
-    if (!stream) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.open_temp"));
-    }
-#endif
-
+    using R=Observation<FilesVolumeArchiveWriteResult>;
+    if(!valid_request(request))return R::unavailable(ObservationState::Unsupported,error(AdapterError::PlanInvalid,"volume_archive.request"));
+    if(!request.destination_owner||!request.prepared_journal_root||!request.native_journal_name||request.append_journal||request.append_journal_evidence)
+        return R::unavailable(ObservationState::Unsupported,error(AdapterError::UnqualifiedIdentity,"volume_archive.native_owner_and_journal_required"));
+    if(!request.document.losses.empty()&&!request.document.losses_reviewed)
+        return R::unavailable(ObservationState::Unknown,error(AdapterError::ProviderReviewRequired,"volume_archive.loss_consent"));
+    if(std::any_of(request.document.losses.begin(),request.document.losses.end(),[](const auto& l){return l.hard_failure;}))
+        return R::unavailable(ObservationState::Unsupported,error(AdapterError::ProviderReviewRequired,"volume_archive.hard_loss"));
+    std::uint64_t data_size=0,data_bytes=0;
+    auto enc=validate_and_encode(request.document,data_size,data_bytes,stop_token);
+    if(!enc.value())return R::unavailable(enc.state(),enc.unavailable_detail()->error);
+    auto encoded=std::move(enc).take_value();std::vector<std::byte> manifest;append_manifest(manifest,request.document,encoded);
+    std::uint64_t data_offset=0,logical_size=0;
+    if(!checked_add(kHeaderSize,manifest.size(),data_offset)||!checked_add(data_offset,data_size,logical_size))
+        return R::unavailable(ObservationState::Unknown,error(AdapterError::InventoryLimit,"volume_archive.logical_size"));
+    const auto address=ck::files::NativeAbsolutePath::from_host(request.destination_directory);
+    if(!address.value())return R::unavailable(address.state(),address.unavailable_detail()->error);
+    const auto final=address.value()->encoding()==ck::files::NameEncoding::PosixBytes?
+        ck::files::NativeName::from_posix(request.archive_name):windows_name_from_utf8(request.archive_name);
+    const auto hint=archive_staging_name(*address.value(),request.archive_name,request.transaction_id);
+    if(!final||!hint)return R::unavailable(ObservationState::Unsupported,error(AdapterError::UnrepresentableName,"volume_archive.exact_names"));
+    // Presentation result only. Every effect below addresses the retained native
+    // destination; this address is never reopened, resized, hashed or removed.
+    auto output_address=address.value()->child_address(*final);
+    if(!output_address.value())return R::unavailable(output_address.state(),output_address.unavailable_detail()->error);
+    auto output=output_address.value()->host_path();if(!output.value())return R::unavailable(output.state(),output.unavailable_detail()->error);
+    ck::files::NativeArchiveWriteRequest native{
+        .destination=request.destination_owner, .journal_root=request.prepared_journal_root,
+        .destination_name=*final, .staging_hint=*hint, .journal_name=*request.native_journal_name,
+        .journal_id=request.native_journal_id, .extents={}, .application_evidence={}};
+    native.logical_size=logical_size;native.journal_limits=request.journal_limits;
+    // Native layout must demonstrate a hole for a material sparse archive.
+    native.minimum_unallocated_bytes=has_material_sparse_hole(encoded)?1:0;
+    append_le<std::uint64_t>(native.application_evidence,request.transaction_id);
+    append_string(native.application_evidence,request.document.source.identity);
+    append_string(native.application_evidence,request.document.source.mount_point);
+    append_string(native.application_evidence,request.archive_name);
+    append_native_path_evidence(native.application_evidence,*address.value());
     std::vector<std::byte> header;
-    append_header(header, request.document.consistency == FilesVolumeArchiveConsistency::Snapshot ? 1U : 0U,
-                  manifest.size(), data_offset, data_size, encoded.size());
-#if defined(_WIN32)
-    if (!stream->write_at(0, std::span<const std::byte>(header), failure_detail) ||
-        !stream->write_at(header.size(), std::span<const std::byte>(manifest), failure_detail)) {
-        stream.reset();
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-#else
-    stream.write(reinterpret_cast<const char *>(header.data()), static_cast<std::streamsize>(header.size()));
-    stream.write(reinterpret_cast<const char *>(manifest.data()), static_cast<std::streamsize>(manifest.size()));
-    if (!stream) {
-        stream.close();
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.write_manifest"));
-    }
-#endif
-    for (const auto &entry : encoded) {
-        if (stop_token.stop_requested()) {
-#if defined(_WIN32)
-            stream.reset();
-#else
-            stream.close();
-#endif
-            remove_temp();
-            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
-        }
-        for (const auto &extent : entry.extents) {
-#if defined(_WIN32)
-            if (!stream->write_at(data_offset + extent.archive_offset, std::span<const std::byte>(*extent.bytes),
-                                  failure_detail)) {
-                stream.reset();
-                remove_temp();
-                return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state,
-                                                                                failure_detail.error);
-            }
-#else
-            stream.seekp(static_cast<std::streamoff>(data_offset + extent.archive_offset));
-            stream.write(reinterpret_cast<const char *>(extent.bytes->data()),
-                         static_cast<std::streamsize>(extent.bytes->size()));
-            if (!stream) {
-                stream.close();
-                remove_temp();
-                return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                    ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.write_extent"));
-            }
-#endif
-        }
-    }
-#if defined(_WIN32)
-    if (!stream->flush(failure_detail)) {
-        stream.reset();
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-    stream.reset();
-#else
-    stream.flush();
-    stream.close();
-    if (!stream) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidPath, "volume_archive.flush_stream"));
-    }
-#endif
-#if defined(_WIN32)
-    auto resize_stream = WindowsArchiveFile::open(temp, GENERIC_READ | GENERIC_WRITE,
-                                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                   failure_detail);
-    if (!resize_stream || !resize_stream->set_size(logical_size, failure_detail) ||
-        !resize_stream->flush(failure_detail)) {
-        resize_stream.reset();
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-    resize_stream.reset();
-#else
-    std::filesystem::resize_file(temp, logical_size, ec);
-    if (ec) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Failed, filesystem_error("volume_archive.resize", ec.value()).error);
-    }
-#endif
-    if (!durable_flush(temp, failure_detail)) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-    const auto allocated = allocated_file_bytes(temp);
-    if (!allocated.value()) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            allocated.state(), allocated.unavailable_detail()->error);
-    }
-    if (has_material_sparse_hole(encoded) && *allocated.value() >= logical_size) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Unsupported,
-            error(AdapterError::ProviderReviewRequired, "volume_archive.sparse_allocation"));
-    }
-    auto staging_digest = digest_file(temp);
-    if (!staging_digest.value()) {
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            staging_digest.state(), staging_digest.unavailable_detail()->error);
-    }
-    if (request.append_journal_evidence) {
-        auto journal = request.append_journal_evidence(
-            ck::files::OperationJournalState::Copied,
-            std::span<const std::byte>(staging_digest.value()->data(), staging_digest.value()->size()));
-        if (!journal.value()) {
-            remove_temp();
-            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
-        }
-    } else if (request.append_journal) {
-        auto journal = request.append_journal(ck::files::OperationJournalState::Copied);
-        if (!journal.value()) {
-            remove_temp();
-            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
-        }
-    }
-
-    std::vector<char> header_check(header.size());
-#if defined(_WIN32)
-    auto verify = WindowsArchiveFile::open(temp, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                           failure_detail);
-    const auto header_verified = verify &&
-        verify->read_at(0, std::as_writable_bytes(std::span<char>(header_check)), failure_detail) &&
-        std::memcmp(header_check.data(), header.data(), header.size()) == 0;
-#else
-    std::ifstream verify(temp, std::ios::binary);
-    verify.read(header_check.data(), static_cast<std::streamsize>(header_check.size()));
-    const auto header_verified = verify && std::memcmp(header_check.data(), header.data(), header.size()) == 0;
-#endif
-    if (!header_verified) {
-#if defined(_WIN32)
-        verify.reset();
-#else
-        verify.close();
-#endif
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-            ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.verify_header"));
-    }
-    std::vector<char> bytes_check;
-    for (const auto &entry : encoded)
-        for (const auto &extent : entry.extents) {
-            bytes_check.resize(extent.bytes->size());
-#if defined(_WIN32)
-            const auto read_ok = verify->read_at(data_offset + extent.archive_offset,
-                                                 std::as_writable_bytes(std::span<char>(bytes_check)), failure_detail);
-#else
-            verify.seekg(static_cast<std::streamoff>(data_offset + extent.archive_offset));
-            verify.read(bytes_check.data(), static_cast<std::streamsize>(bytes_check.size()));
-            const auto read_ok = static_cast<bool>(verify);
-#endif
-            ck::files::Sha256 expected_digest;
-            expected_digest.update(std::span<const std::byte>(*extent.bytes));
-            ck::files::Sha256 actual_digest;
-            actual_digest.update(std::as_bytes(std::span<const char>(bytes_check)));
-            if (!read_ok || expected_digest.digest() != actual_digest.digest()) {
-#if defined(_WIN32)
-                verify.reset();
-#else
-                verify.close();
-#endif
-                remove_temp();
-                return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                    ObservationState::Changed, error(AdapterError::MetadataChanged, "volume_archive.verify_extent"));
-            }
-        }
-#if defined(_WIN32)
-    verify.reset();
-#else
-    verify.close();
-#endif
-    if (request.append_journal) {
-        auto journal = request.append_journal(ck::files::OperationJournalState::Verified);
-        if (!journal.value()) {
-            remove_temp();
-            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
-        }
-    }
-    if (request.append_journal) {
-        auto journal = request.append_journal(ck::files::OperationJournalState::CommitIntended);
-        if (!journal.value()) {
-            remove_temp();
-            return Observation<FilesVolumeArchiveWriteResult>::unavailable(
-                journal.unavailable_detail()->state, journal.unavailable_detail()->error);
-        }
-    }
-    bool published_result = false;
-    if (!publish_without_replace(temp, published, failure_detail, published_result)) {
-        if (published_result) {
-            if (request.append_journal)
-                (void)request.append_journal(ck::files::OperationJournalState::DestinationCommitted);
-            const auto diagnostic = failure_detail.error.operation;
-            if (!durable_directory(request.destination_directory, failure_detail)) {
-                if (request.append_journal)
-                    (void)request.append_journal(ck::files::OperationJournalState::NeedsReconciliation);
-                return Observation<FilesVolumeArchiveWriteResult>::available(
-                    {published, logical_size, data_bytes, encoded.size(),
-                     FilesVolumeArchivePublication::PublishedDurabilityUnknown,
-                     failure_detail.error.operation, true});
-            }
-            return Observation<FilesVolumeArchiveWriteResult>::available(
-                {published, logical_size, data_bytes, encoded.size(),
-                 FilesVolumeArchivePublication::PublishedDurabilityUnknown, diagnostic, true});
-        }
-        remove_temp();
-        return Observation<FilesVolumeArchiveWriteResult>::unavailable(failure_detail.state, failure_detail.error);
-    }
-    if (request.append_journal) {
-        auto journal = request.append_journal(ck::files::OperationJournalState::DestinationCommitted);
-        if (!journal.value())
-            return Observation<FilesVolumeArchiveWriteResult>::available(
-                {published, logical_size, data_bytes, encoded.size(),
-                 FilesVolumeArchivePublication::PublishedDurabilityUnknown,
-                 journal.unavailable_detail()->error.operation, true});
-    }
-    if (!durable_directory(request.destination_directory, failure_detail)) {
-        if (request.append_journal)
-            (void)request.append_journal(ck::files::OperationJournalState::NeedsReconciliation);
-        return Observation<FilesVolumeArchiveWriteResult>::available(
-            {published, logical_size, data_bytes, encoded.size(),
-             FilesVolumeArchivePublication::PublishedDurabilityUnknown, failure_detail.error.operation, true});
-    }
-    if (request.append_journal) {
-        auto journal = request.append_journal(ck::files::OperationJournalState::Complete);
-        if (!journal.value())
-            return Observation<FilesVolumeArchiveWriteResult>::available(
-                {published, logical_size, data_bytes, encoded.size(),
-                 FilesVolumeArchivePublication::PublishedDurabilityUnknown,
-                 journal.unavailable_detail()->error.operation, true});
-    }
-    return Observation<FilesVolumeArchiveWriteResult>::available(
-        {published, logical_size, data_bytes, encoded.size(), FilesVolumeArchivePublication::Durable, {}, true});
+    append_header(header,request.document.consistency==FilesVolumeArchiveConsistency::Snapshot?1U:0U,
+        manifest.size(),data_offset,data_size,encoded.size());
+    native.extents.push_back({0,std::move(header)});
+    if(!manifest.empty())native.extents.push_back({kHeaderSize,std::move(manifest)});
+    for(const auto& entry:encoded)for(const auto& extent:entry.extents)
+        native.extents.push_back({data_offset+extent.archive_offset,*extent.bytes});
+    auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native));
+    if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
+    auto job=std::move(began).take_value();ck::files::NativeArchiveProgress progress;
+    do {progress=job->advance(stop_token);if(progress.phase==ck::files::NativeArchivePhase::Drain&&!progress.drained)std::this_thread::sleep_for(std::chrono::milliseconds(1));}while(progress.phase!=ck::files::NativeArchivePhase::Complete&&
+        progress.phase!=ck::files::NativeArchivePhase::Cancelled&&progress.phase!=ck::files::NativeArchivePhase::NeedsReconciliation);
+    // No native consumer survives error/result formatting, even under OOM.
+    job.reset();
+    if(progress.phase==ck::files::NativeArchivePhase::Complete)
+        return R::available({*output.value(),logical_size,data_bytes,encoded.size(),FilesVolumeArchivePublication::Durable,{},progress.image_verified,true});
+    if(progress.published||progress.publication_uncertain)
+        return R::available({*output.value(),logical_size,data_bytes,encoded.size(),FilesVolumeArchivePublication::PublishedDurabilityUnknown,
+            progress.failure?progress.failure->operation.data():"volume_archive.publication_unknown",progress.image_verified,progress.published});
+    if(progress.failure)return R::unavailable(progress.failure->state,{progress.failure->domain,progress.failure->code,progress.failure->operation.data()});
+    return R::unavailable(ObservationState::Unknown,error(AdapterError::InterruptedRead,"volume_archive.cancelled"));
 }
 
 namespace {
@@ -2132,131 +1510,111 @@ struct FilesVolumeArchiveService::State final {
     static bool valid(const FilesVolumeArchiveRequest &value) {
         return value.source.identity.size() != 0 && value.source.mount_point.size() != 0 &&
                value.destination_directory.is_valid() && safe_archive_name(value.archive_name) &&
-               value.transaction_id != 0 && static_cast<bool>(value.build_document) && value.journal_root &&
-               value.journal_root->is_valid() && static_cast<bool>(value.open_journal);
+               value.transaction_id != 0 && static_cast<bool>(value.build_document) && (value.prepared_journal_root || (value.journal_root && value.journal_root->is_valid()));
     }
     void run_one(FilesVolumeArchiveTicket ticket, FilesVolumeArchiveRequest value, std::stop_token token) {
-        FilesVolumeArchiveReply result;
-        result.request = ticket;
-        std::shared_ptr<ArchiveJournalBinding> journal;
-        auto fail = [&](UnavailableObservation detail) {
-            if (journal && !journal->journal->records().empty()) {
-                const auto current = journal->journal->state(0);
-                if (current && !ck::files::operation_journal_terminal(*current)) {
-                    const auto terminal = journal->append(
-                        token.stop_requested() ? ck::files::OperationJournalState::Cancelled
-                                               : ck::files::OperationJournalState::Failed);
-                    if (!terminal.value())
-                        detail = *terminal.unavailable_detail();
-                }
+        FilesVolumeArchiveReply result;result.request=ticket;
+        ck::files::PreparedJournalRoot::Pointer root;bool owns_root=false,root_attempted=false;
+        struct RootCloseObserver final:ck::files::MetadataCaptureFailureLatch {
+            const ck::files::PreparedJournalRoot::Pointer& owner;
+            explicit RootCloseObserver(const ck::files::PreparedJournalRoot::Pointer& p):owner(p){}
+            void record_first(ck::files::MetadataCaptureCleanupError error)const noexcept override {
+                if(owner)ck::files::detail::record_prepared_journal_consumer_failure(*owner,error.state,error.domain,error.code,error.operation);
             }
-            result.state = token.stop_requested() ? FilesVolumeArchiveState::Cancelled : FilesVolumeArchiveState::Failed;
-            result.error = std::move(detail);
-            emit(std::move(result));
+        } observer(root);
+        ck::files::detail::MetadataCaptureCleanupScope cleanup_scope(&observer);
+        std::optional<ck::files::NativeArchiveFailure> root_finish_failure;
+        auto save_root_failure=[&](ObservationState state,ErrorDomain domain,std::int64_t code,std::string_view operation)noexcept{
+            if(root_finish_failure)return;
+            ck::files::NativeArchiveFailure error;error.state=state;error.domain=domain;error.code=code;
+            std::copy_n(operation.data(),std::min(operation.size(),error.operation.size()-1),error.operation.begin());root_finish_failure=error;
+        };
+        auto close_root=[&]() {
+            if(owns_root&&root&&!root_attempted){root_attempted=true;auto closed_root=root->finish_io();
+                if(const auto* error=closed_root.unavailable_detail())save_root_failure(error->state,error->error.domain,error->error.code,error->error.operation);
+                else if(!*closed_root.value())save_root_failure(ObservationState::Unknown,ErrorDomain::Adapter,static_cast<std::int64_t>(AdapterError::InvalidNativeResult),"volume_archive.root_finish_false");}
+        };
+        auto close_noexcept=[&]()noexcept{try{close_root();}catch(...){save_root_failure(ObservationState::Unknown,ErrorDomain::Adapter,
+            static_cast<std::int64_t>(AdapterError::InvalidNativeResult),"volume_archive.root_finish_exception");}};
+        auto read_root=[&]()noexcept->std::optional<ck::files::NativeArchiveFailure>{
+            if(!root)return root_finish_failure;
+            ck::files::detail::PreparedJournalConsumerFailure first;
+            // Ordinary worker, after ALL writer/native consumers have drained.
+#if defined(CK_FS_ARCHIVE_READBACK_FAILURE_TEST)
+            detail::archive_before_final_root_read(*root);
+#endif
+            for(;;){
+                const bool found=ck::files::detail::read_prepared_journal_consumer_failure(*root,first);
+#if defined(CK_FS_ARCHIVE_READBACK_FAILURE_TEST)
+                detail::archive_final_root_read_observed(found,found&&first.pending);
+#endif
+                if(!found)return root_finish_failure;
+                if(first.pending){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
+                ck::files::NativeArchiveFailure out;out.state=first.state;out.domain=first.domain;out.code=first.code;out.operation=first.operation;return out;
+            }
+        };
+        auto cache_error=[&](UnavailableObservation detail) {
+            close_noexcept();result.failure_pod=read_root();
+            if(result.failure_pod){const auto& f=*result.failure_pod;
+                try{result.error=UnavailableObservation{f.state,{f.domain,f.code,f.operation.data()}};}catch(...){result.error.reset();}
+            }else result.error=std::move(detail);
+            const bool clean_cancelled=!result.failure_pod&&result.error&&token.stop_requested()&&
+                result.error->error.domain==ErrorDomain::Adapter&&result.error->error.code==static_cast<std::int64_t>(AdapterError::InterruptedRead);
+            result.state=clean_cancelled?FilesVolumeArchiveState::Cancelled:FilesVolumeArchiveState::Failed;emit(std::move(result));
         };
         try {
-            auto journal_id = value.journal_id;
-            const auto destination_native_path = native_path_bytes(value.destination_directory);
-            if (!destination_native_path) {
-                fail(error(AdapterError::UnrepresentableName, "volume_archive.destination_evidence",
-                            ObservationState::Unsupported));
-                return;
-            }
-            const auto staging_name = archive_staging_name(value.destination_directory, value.archive_name,
-                                                            value.transaction_id);
-            if (!staging_name) {
-                fail(error(AdapterError::UnrepresentableName, "volume_archive.staging_name",
-                            ObservationState::Unsupported));
-                return;
-            }
-            const auto staging_address = value.destination_directory.child_address(*staging_name);
-            if (!staging_address.value() || !native_path_bytes(*staging_address.value())) {
-                fail(staging_address.unavailable_detail()
-                         ? *staging_address.unavailable_detail()
-                         : error(AdapterError::UnrepresentableName, "volume_archive.staging_address",
-                                 ObservationState::Unsupported));
-                return;
-            }
-            auto journal_name = archive_journal_name(*value.journal_root, journal_id);
-            if (!journal_name) {
-                fail(error(AdapterError::UnrepresentableName, "volume_archive.journal_name",
-                            ObservationState::Unsupported));
-                return;
-            }
-            auto opened_journal = value.open_journal(*value.journal_root, *journal_name, true);
-            if (!opened_journal.value()) {
-                fail(*opened_journal.unavailable_detail());
-                return;
-            }
-            auto created_journal = ck::files::OperationJournal::create(
-                ck::files::FileOperation::Copy, journal_id, value.journal_limits);
-            if (!created_journal.value()) {
-                fail(*created_journal.unavailable_detail());
-                return;
-            }
-            std::vector<std::byte> evidence;
-            append_le<std::uint64_t>(evidence, value.transaction_id);
-            append_string(evidence, value.source.identity);
-            append_string(evidence, value.source.mount_point);
-            append_string(evidence, value.archive_name);
-            append_native_path_evidence(evidence, value.destination_directory);
-            const auto staging_flags_offset = evidence.size();
-            append_le<std::uint8_t>(evidence, kStagingPathEvidence);
-            append_native_path_evidence(evidence, *staging_address.value());
-            journal = std::make_shared<ArchiveJournalBinding>(
-                std::move(created_journal).take_value(),
-                std::shared_ptr<ck::files::OperationJournalFile>(std::move(opened_journal).take_value()),
-                std::move(evidence), staging_flags_offset);
-            auto planned = journal->append(ck::files::OperationJournalState::Planned);
-            if (!planned.value()) {
-                fail(*planned.unavailable_detail());
-                return;
-            }
-            auto document = value.build_document(token);
-            if (!document.value()) {
-                fail(*document.unavailable_detail());
-                return;
-            }
-            auto complete = std::move(document).take_value();
-            complete.consistency = value.consistency;
-            if (complete.source.identity != value.source.identity ||
-                complete.source.mount_point != value.source.mount_point ||
-                complete.source.filesystem != value.source.filesystem ||
-                complete.source.native_mount_units != value.source.native_mount_units ||
-                complete.source.archive.support != value.source.archive.support ||
-                complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
-                fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.identity_revalidation",
-                            ObservationState::Changed));
-                return;
-            }
-            auto prepared = journal->append(ck::files::OperationJournalState::Prepared);
-            if (!prepared.value()) {
-                fail(*prepared.unavailable_detail());
-                return;
-            }
-            auto destination = value.destination_directory.host_path();
-            if (!destination.value()) {
-                fail(*destination.unavailable_detail());
-                return;
-            }
-            FilesVolumeArchiveWriteRequest write_request{
-                std::move(complete), *destination.value(), std::move(value.archive_name), value.transaction_id,
-                [journal](ck::files::OperationJournalState state) { return journal->append(state); },
-                [journal](ck::files::OperationJournalState state, std::span<const std::byte> digest) {
-                    return journal->append_staging_digest(state, digest);
-                }};
-            auto written = write_volume_archive(write_request, token);
-            if (!written.value()) {
-                fail(*written.unavailable_detail());
-                return;
-            }
-            result.result = std::move(written).take_value();
-            result.state = result.result->publication == FilesVolumeArchivePublication::Durable
-                               ? FilesVolumeArchiveState::Complete
-                               : FilesVolumeArchiveState::Indeterminate;
+            if(value.prepared_journal_root)root=value.prepared_journal_root;
+            else {auto acquired=ck::files::acquire_native_journal_root(*value.journal_root);
+                if(!acquired.value()){cache_error(*acquired.unavailable_detail());return;}root=std::move(acquired).take_value();owns_root=true;}
+            auto journal_name=archive_journal_name(root->encoding(),value.journal_id);
+            if(!journal_name){cache_error(error(AdapterError::UnrepresentableName,"volume_archive.journal_name",ObservationState::Unsupported));return;}
+            ck::files::NativeFileSystem filesystem;
+            auto opened=filesystem.open_native_directory(value.destination_directory);
+            if(!opened.value()){cache_error(*opened.unavailable_detail());return;}
+            auto destination=std::shared_ptr<const ck::files::DirectoryCursor>(std::move(opened).take_value());
+            // Admit private scope before source acquisition or any archive effect.
+            auto guard=ck::files::JournalScopeGuard::create_for_namespace_child(root,destination,token);
+            if(!guard.value()){destination.reset();cache_error(*guard.unavailable_detail());return;}
+            auto scope=std::move(guard).take_value();
+            auto document=value.build_document(token);
+            if(!document.value()){scope.reset();destination.reset();cache_error(*document.unavailable_detail());return;}
+            auto complete=std::move(document).take_value();complete.consistency=value.consistency;
+            if(complete.source.identity!=value.source.identity||complete.source.mount_point!=value.source.mount_point||
+                complete.source.filesystem!=value.source.filesystem||complete.source.native_mount_units!=value.source.native_mount_units||
+                complete.source.archive.support!=value.source.archive.support||complete.source.archive.snapshot_available!=value.source.archive.snapshot_available){
+                scope.reset();destination.reset();cache_error(error(AdapterError::UnqualifiedIdentity,"volume_archive.identity_revalidation",ObservationState::Changed));return;}
+            auto host=value.destination_directory.host_path();
+            if(!host.value()){scope.reset();destination.reset();cache_error(*host.unavailable_detail());return;}
+            // The lambda destroys request/capability copies before legacy Root
+            // finish; no Root lifecycle call is made by the writer consumer.
+            auto invoke=[&](){
+                FilesVolumeArchiveWriteRequest request{
+                    .document=std::move(complete), .destination_directory=*host.value(),
+                    .archive_name=value.archive_name, .transaction_id=value.transaction_id,
+                    .append_journal={}, .append_journal_evidence={}, .destination_owner=destination,
+                    .prepared_journal_root=root, .native_journal_name=*journal_name,
+                    .native_journal_id=value.journal_id, .journal_limits=value.journal_limits};
+                return write_volume_archive(request,token);
+            };
+            auto written=invoke();scope.reset();destination.reset();
+            if(!written.value()){cache_error(*written.unavailable_detail());return;}
+            result.result=std::move(written).take_value();
+            close_noexcept();result.failure_pod=read_root();
+            if(result.failure_pod)result.result->publication=FilesVolumeArchivePublication::PublishedDurabilityUnknown;
+            result.state=result.result->publication==FilesVolumeArchivePublication::Durable?FilesVolumeArchiveState::Complete:FilesVolumeArchiveState::Indeterminate;
             emit(std::move(result));
-        } catch (...) {
-            fail(error(AdapterError::PlanInvalid, "volume_archive.worker_fault"));
+        }catch(...){
+            // Every writer local unwound and drained BEFORE this handler. Keep
+            // native first-error POD even if diagnostic allocation stays denied.
+            close_noexcept();result.failure_pod=read_root();
+            if(!result.failure_pod){ck::files::NativeArchiveFailure fallback;fallback.state=ObservationState::Failed;fallback.domain=ErrorDomain::Adapter;
+                fallback.code=static_cast<std::int64_t>(AdapterError::InvalidNativeResult);constexpr char op[]="volume_archive.worker_fault";
+                std::copy_n(op,sizeof(op),fallback.operation.begin());result.failure_pod=fallback;}
+            const auto& f=*result.failure_pod;
+            try{result.error=UnavailableObservation{f.state,{f.domain,f.code,f.operation.data()}};}catch(...){result.error.reset();}
+            if(result.result){result.result->publication=FilesVolumeArchivePublication::PublishedDurabilityUnknown;result.state=FilesVolumeArchiveState::Indeterminate;}
+            else result.state=FilesVolumeArchiveState::WorkerFault;
+            emit(std::move(result));
         }
     }
     void run() {

@@ -2899,14 +2899,11 @@ struct FilesApp::State {
                 for (unsigned byte = 0; byte != sizeof(serial); ++byte)
                     journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
                 FilesVolumeArchiveRequest request{
-                    volume_archive_source, review->destination_directory(), review->archive_name(),
-                    review->document().consistency, serial, std::move(build_document),
-                    std::optional<ck::files::NativeAbsolutePath>{*operation_journal_root},
-                    journal_id, {},
-                    [](const ck::files::NativeAbsolutePath &root, const ck::files::NativeName &basename,
-                       bool create_new) {
-                        return ck::files::open_native_operation_journal_file(root, basename, create_new);
-                    }};
+                    .source=volume_archive_source, .destination_directory=review->destination_directory(),
+                    .archive_name=review->archive_name(), .consistency=review->document().consistency,
+                    .transaction_id=serial, .build_document=std::move(build_document),
+                    .journal_root=std::optional<ck::files::NativeAbsolutePath>{*operation_journal_root},
+                    .journal_id=journal_id, .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
                 const auto submitted = volume_archive_service->request(std::move(request));
                 if (submitted.state != FilesVolumeArchiveSubmission::Accepted) {
                     panes[source_pane].error = "Volume archive worker rejected the approved review";
@@ -2929,15 +2926,19 @@ struct FilesApp::State {
             const auto &result = reply.result;
             std::string message = reply.state == FilesVolumeArchiveState::Complete
                                       ? "Volume archive created"
-                                      : "Volume archive published; durability is indeterminate";
+                                      : (result&&result->publication_confirmed?"Volume archive published; durability is indeterminate":"Volume archive publication is indeterminate");
             if (result)
                 message += ": " + result->published_path.string();
+            if (reply.failure_pod)
+                message += ": " + std::string(reply.failure_pod->operation.data());
             panes[destination_pane].error = std::move(message);
         } else {
             panes[active].error = reply.state == FilesVolumeArchiveState::Cancelled
                                       ? "Volume archive cancelled"
                                       : "Volume archive failed";
-            if (reply.error)
+            if (reply.failure_pod)
+                panes[active].error += ": " + std::string(reply.failure_pod->operation.data());
+            else if (reply.error)
                 panes[active].error += ": " + reply.error->error.operation;
         }
         volume_archive_destination.reset();
