@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
+#include "files_settings_service.hpp"
 #include "files_location_dialog.hpp"
 #include "files_volume_source.hpp"
 #include "ck/vision/keymap.hpp"
@@ -286,6 +287,8 @@ struct FilesApp::State {
     FilesOperationRecoveryCleanupService *operation_recovery_cleanup_service = nullptr;
     std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root;
     FilesSettingsBinding settings;
+    std::uint64_t settings_revision = 0;
+    bool settings_waiting = false, settings_feedback_current = false;
     FilesAppWake &wake;
     std::function<void()> host_quit;
     std::array<Pane, 2> panes;
@@ -656,6 +659,8 @@ struct FilesApp::State {
     }
     ~State() { cleanup(); }
     void cleanup() noexcept {
+        if (settings.worker)
+            settings.worker->request_close();
         closing = true;
         lifetime.reset();
         if (bound) {
@@ -1366,18 +1371,51 @@ struct FilesApp::State {
         operation_recovery_cleanup_error = availability("ck.files.cleanup_operation_recovery").reason;
         labels();
     }
-    void save_settings() {
-        if (!settings.save)
-            return;
-        FilesPersistentSettings value;
+    FilesSettingsSnapshotView settings_snapshot() const noexcept {
+        FilesSettingsSnapshotView value;
         for (std::size_t i = 0; i < panes.size(); ++i) {
-            value.views[i] = panes[i].view;
-            value.bookmarks[i].reserve(panes[i].bookmarks.size());
-            for (const auto &bookmark : panes[i].bookmarks)
-                value.bookmarks[i].push_back(*bookmark);
+            value.views[i] = &panes[i].view;
+            value.bookmarks[i] = panes[i].bookmarks;
         }
-        settings.diagnostic = settings.save(value);
-        labels();
+        return value;
+    }
+    void poll_settings() {
+        if (!settings.worker)
+            return;
+        auto reply = settings.worker->take();
+        if (!reply && settings_waiting)
+            reply = settings.worker->latest_result(); // Retry UI formatting after allocation failure.
+        if (reply && reply->revision == settings_revision) {
+            if (!settings_feedback_current) {
+                settings_waiting = false;
+                return; // A later rejected UI intent owns the diagnostic.
+            }
+            auto diagnostic = reply->message().empty()
+                ? std::string(files_settings_write_message(reply->state)) : std::string(reply->message());
+            if (reply->diagnostic_truncated)
+                diagnostic += " [additional diagnostic text omitted]";
+            settings.diagnostic.swap(diagnostic);
+            settings_waiting = settings_feedback_current = false;
+            labels();
+        }
+    }
+    void save_settings() {
+        if (settings.worker) {
+            const auto submitted = settings.worker->submit(settings_snapshot());
+            if (submitted.state == FilesSettingsAdmission::Accepted) {
+                settings_revision = submitted.revision;
+                settings_waiting = settings_feedback_current = true;
+                settings.diagnostic = "Saving settings";
+            } else {
+                settings_feedback_current = false;
+                settings.diagnostic = files_settings_admission_message(submitted.state);
+            }
+            watch(); // Covers a failed wake even if save already completed.
+            labels();
+            return;
+        }
+        // Deliberately disabled for headless/injected controllers. Production
+        // supplies a worker. No callback fallback and no claim of persistence.
     }
     void labels() {
         if (!window)
@@ -1531,6 +1569,13 @@ struct FilesApp::State {
         if (std::any_of(panes[i].bookmarks.begin(), panes[i].bookmarks.end(),
                         [&](const auto &bookmark) { return *bookmark == *panes[i].active; }))
             return false;
+        const auto bounds = validate_files_settings_snapshot(settings_snapshot(), i, panes[i].active.get());
+        if (bounds != FilesSettingsAdmission::Accepted) {
+            settings_feedback_current = false;
+            settings.diagnostic = files_settings_admission_message(bounds);
+            labels();
+            return false; // No partial bookmark insertion or silent truncation.
+        }
         panes[i].bookmarks.push_back(panes[i].active);
         save_settings();
         labels();
@@ -2594,7 +2639,7 @@ struct FilesApp::State {
         labels();
     }
     void watch() {
-        const bool pending = operation_planning_request.has_value() || volume_request ||
+        const bool pending = settings_waiting || operation_planning_request.has_value() || volume_request ||
             volume_archive_planning_request.has_value() || volume_archive_execution_request.has_value() ||
             std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
         if (pending && !watchdog)
@@ -3031,6 +3076,7 @@ struct FilesApp::State {
             return;
         pumping = true;
         try {
+            poll_settings();
             if (planning_service) {
                 if (auto reply = planning_service->take())
                     consume_planning(std::move(*reply));
@@ -3247,6 +3293,8 @@ struct FilesApp::State {
     void finish_exit() {
         if (closing)
             return;
+        if (settings.worker)
+            settings.worker->request_close(); // Seal + drain latest accepted snapshot; never join in dispatch.
         closing = true;
         if (bound) {
             wake.unbind();

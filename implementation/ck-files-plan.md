@@ -1,9 +1,12 @@
 # Files (`ck-files`) — implementation work packages
 
 Status: implementation active; WP-00 and WP-01 checkpoints are complete.
-WP-02 remains open. The 2026-11-10 source review found synchronous settings
-writes in UI callbacks; worker-owned persistence and shutdown draining must be
-implemented and qualified before the responsiveness requirement is satisfied.
+WP-02 remains open. Worker-owned settings persistence now replaces the
+synchronous UI writes found on 2026-11-10. Current Mac normal and matching
+ThreadSanitizer Files suites pass, including blocked-save responsiveness,
+revision conflicts and shutdown draining; a real PTY check confirms that a
+final save warning follows terminal restoration. Linux/Windows qualification
+of this change and native-window acceptance remain open.
 The held-creator archive integration also needs its full application and
 cross-platform qualification. Earlier POSIX-PTY and Windows-ConPTY results
 remain evidence for their recorded source cohorts; they do not qualify these
@@ -407,15 +410,17 @@ authority and does not close the application or release requirements below.
 - [x] Test pending scans, stale replies, blocked storage, rapid navigation,
   resize, narrow layout, all suite themes, mouse and keyboard operation.
 
-- [ ] Move settings persistence out of UI callbacks into a bounded, joined
+- [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
-  during shutdown. The current `main.cpp` binding calls `settings.save()`
-  directly from `FilesApp::save_settings()`.
+  during shutdown. UI admission is memory-only; the production binding has no
+  synchronous save callback. Current Mac normal/TSan and real-PTY evidence is
+  recorded in `evidence/ck-files-settings-worker-integration-20261110.json`.
+- [ ] Qualify the settings worker on Linux and Windows against matching SDKs.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
 
 The implemented view and navigation features have application-suite coverage;
-WP-02 remains open until the responsiveness defect and its acceptance gates
+WP-02 remains open until the cross-platform and interactive acceptance gates
 are resolved.
 
 Acceptance: real view graph works headlessly and interactively; no synchronous

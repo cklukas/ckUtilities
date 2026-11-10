@@ -12,11 +12,13 @@
 #include "native_host.hpp"
 #include "operation_journal_file.hpp"
 #include "files_settings.hpp"
+#include "files_settings_service.hpp"
 
 #include <cvision/ui/application.hpp>
 
 #include <cstdio>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -99,59 +101,73 @@ int run(const std::vector<std::string> &args) {
         !operation_journal_root)
         return 2;
 
-    ck::host::NativeFileSystem settings_files;
-    ck::vision::FilesSettingsStore settings(settings_files, config_root_text + "/files/settings");
-    auto loaded_settings = settings.load();
+    std::optional<ck::vision::FilesSettingsReply> final_settings_reply;
+    {
+        ck::host::NativeFileSystem settings_files;
+        ck::vision::FilesSettingsStore settings(settings_files, config_root_text + "/files/settings");
+        auto loaded_settings = settings.load();
 
-    ck::host::NativeClock clock;
-    ck::host::NativeTerminal terminal(clock);
-    ckv::ui::Application application(terminal, clock);
-    ck::vision::DefaultKeymapPersistence keymap_persistence;
-    ck::vision::KeymapController keymap("ck-files", application.commands(), keymap_persistence);
-    ck::vision::FilesAppWake wake(application);
-    std::array<std::unique_ptr<ck::vision::FilesPaneService>, 2> services;
-    std::array<std::unique_ptr<ck::vision::FilesCompletionService>, 2> completion_services;
-    auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
-    auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
-    auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback());
-    auto volume_archive_planning_service =
-        std::make_unique<ck::vision::FilesVolumeArchivePlanningService>(wake.callback());
-    auto volume_archive_service = std::make_unique<ck::vision::FilesVolumeArchiveService>(wake.callback());
-    auto volume_archive_recovery_service =
-        std::make_unique<ck::vision::FilesVolumeArchiveRecoveryService>(wake.callback());
-    auto volume_archive_recovery_cleanup_service =
-        std::make_unique<ck::vision::FilesVolumeArchiveRecoveryCleanupService>(wake.callback());
-    auto operation_recovery_service =
-        std::make_unique<ck::vision::FilesOperationRecoveryService>(wake.callback());
-    auto operation_recovery_cleanup_service =
-        std::make_unique<ck::vision::FilesOperationRecoveryCleanupService>(wake.callback());
-    services[0] = std::make_unique<ck::vision::FilesPaneService>(
-        ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
-    services[1] = std::make_unique<ck::vision::FilesPaneService>(
-        ck::vision::native_files_pane_backend(*right_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
-    completion_services[0] = std::make_unique<ck::vision::FilesCompletionService>(
-        ck::vision::native_files_pane_backend(*left_completion_cache),
-        ck::vision::FilesCompletionServiceLimits{}, wake.callback());
-    completion_services[1] = std::make_unique<ck::vision::FilesCompletionService>(
-        ck::vision::native_files_pane_backend(*right_completion_cache),
-        ck::vision::FilesCompletionServiceLimits{}, wake.callback());
-    ck::vision::FilesApp app(
-        application,
-        {services[0].get(), services[1].get()},
-        wake,
-        {*left, *right},
-        [&application] { application.request_quit(); },
-        ck::vision::ThemeScheme::Classic,
-        {completion_services[0].get(), completion_services[1].get()}, planning_service.get(), execution_service.get(),
-        std::make_shared<const NativeAbsolutePath>(*operation_journal_root),
-        {std::move(loaded_settings.value), [&settings](const ck::vision::FilesPersistentSettings &value) {
-             return settings.save(value);
-         }, std::move(loaded_settings.diagnostic)}, volume_service.get(), volume_archive_planning_service.get(),
-        volume_archive_service.get(), volume_archive_recovery_service.get(),
-        volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get(),
-        operation_recovery_cleanup_service.get());
-    keymap.load();
-    application.run();
+        ck::host::NativeClock clock;
+        ck::host::NativeTerminal terminal(clock);
+        ckv::ui::Application application(terminal, clock);
+        ck::vision::DefaultKeymapPersistence keymap_persistence;
+        ck::vision::KeymapController keymap("ck-files", application.commands(), keymap_persistence);
+        ck::vision::FilesAppWake wake(application);
+        // Settings FS/store were declared before the Application. This joined worker
+        // is declared after wake, so every native save and wake drains before either
+        // its borrowed store or the wake/Application can be destroyed.
+        ck::vision::FilesSettingsService settings_service(settings, wake.callback());
+        std::array<std::unique_ptr<ck::vision::FilesPaneService>, 2> services;
+        std::array<std::unique_ptr<ck::vision::FilesCompletionService>, 2> completion_services;
+        auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
+        auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
+        auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback());
+        auto volume_archive_planning_service =
+            std::make_unique<ck::vision::FilesVolumeArchivePlanningService>(wake.callback());
+        auto volume_archive_service = std::make_unique<ck::vision::FilesVolumeArchiveService>(wake.callback());
+        auto volume_archive_recovery_service =
+            std::make_unique<ck::vision::FilesVolumeArchiveRecoveryService>(wake.callback());
+        auto volume_archive_recovery_cleanup_service =
+            std::make_unique<ck::vision::FilesVolumeArchiveRecoveryCleanupService>(wake.callback());
+        auto operation_recovery_service =
+            std::make_unique<ck::vision::FilesOperationRecoveryService>(wake.callback());
+        auto operation_recovery_cleanup_service =
+            std::make_unique<ck::vision::FilesOperationRecoveryCleanupService>(wake.callback());
+        services[0] = std::make_unique<ck::vision::FilesPaneService>(
+            ck::vision::native_files_pane_backend(*left_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+        services[1] = std::make_unique<ck::vision::FilesPaneService>(
+            ck::vision::native_files_pane_backend(*right_cache), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+        completion_services[0] = std::make_unique<ck::vision::FilesCompletionService>(
+            ck::vision::native_files_pane_backend(*left_completion_cache),
+            ck::vision::FilesCompletionServiceLimits{}, wake.callback());
+        completion_services[1] = std::make_unique<ck::vision::FilesCompletionService>(
+            ck::vision::native_files_pane_backend(*right_completion_cache),
+            ck::vision::FilesCompletionServiceLimits{}, wake.callback());
+        ck::vision::FilesApp app(
+            application,
+            {services[0].get(), services[1].get()},
+            wake,
+            {*left, *right},
+            [&application] { application.request_quit(); },
+            ck::vision::ThemeScheme::Classic,
+            {completion_services[0].get(), completion_services[1].get()}, planning_service.get(), execution_service.get(),
+            std::make_shared<const NativeAbsolutePath>(*operation_journal_root),
+            {std::move(loaded_settings.value), std::move(loaded_settings.diagnostic), &settings_service}, volume_service.get(), volume_archive_planning_service.get(),
+            volume_archive_service.get(), volume_archive_recovery_service.get(),
+            volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get(),
+            operation_recovery_cleanup_service.get());
+        keymap.load();
+        application.run();
+        settings_service.request_close();
+        settings_service.join(); // Ordinary owner drain AFTER event dispatch has ended.
+        final_settings_reply = settings_service.latest_result();
+    } // All workers/app/wake/Application gone; NativeTerminal restored its screen.
+    if (auto reply = final_settings_reply; reply && reply->state != ck::vision::FilesSettingsWriteState::Saved) {
+        const auto message = reply->message().empty()
+            ? ck::vision::files_settings_write_message(reply->state) : reply->message();
+        std::fprintf(stderr, "ck-files: %.*s%s\n", static_cast<int>(message.size()), message.data(),
+            reply->diagnostic_truncated ? " [additional diagnostic text omitted]" : "");
+    }
     return 0;
 }
 

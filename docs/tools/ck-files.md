@@ -104,8 +104,10 @@ execute files or provide an embedded shell.
 - Shared suite help, themes, configurable shortcuts, visible menu alternatives,
   durable display settings and exact native bookmarks, and CLI
   help/version behavior. Settings are versioned, bounded, private and written
-  atomically; invalid settings and failed or conflicting writes are reported,
-  and failed writes never replace the last known file.
+  atomically in the background. Rapid changes save the latest complete state;
+  quitting drains accepted changes before exit. Invalid settings and failed or
+  conflicting writes are reported. An uncertain save is not reported as saved
+  or blindly retried; any final save error prints after the Files screen closes.
 
 ## Default commands
 

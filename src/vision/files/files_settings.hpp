@@ -6,11 +6,14 @@
 #include "pane_model.hpp"
 #include "cvision/core/filesystem.hpp"
 #include <array>
-#include <functional>
+#include <optional>
+#include <string_view>
 #include <string>
 #include <vector>
 
 namespace ck::vision {
+
+class FilesSettingsService;
 
 struct FilesPersistentSettings {
     std::array<ck::files::PaneView, 2> views{};
@@ -41,8 +44,10 @@ class FilesSettingsStore final {
 
 struct FilesSettingsBinding {
     FilesPersistentSettings value;
-    std::function<std::string(const FilesPersistentSettings &)> save;
     std::string diagnostic;
+    // Null deliberately disables persistence for headless/injected controllers.
+    // Production supplies a borrowed worker; owner joins outside dispatch.
+    FilesSettingsService *worker = nullptr;
 };
 
 } // namespace ck::vision

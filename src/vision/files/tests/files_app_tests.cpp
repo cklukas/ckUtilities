@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
+#include "files_settings_service.hpp"
 #include "files_location_text.hpp"
 #include "native_filesystem.hpp"
 #include "sha256.hpp"
@@ -2260,21 +2261,25 @@ CK_TEST(files_app_history_and_bookmarks_change_only_after_worker_acknowledgment)
     CK_CHECK(f.app->remove_bookmark(0) && f.app->bookmark_count(0) == 0);
 }
 CK_TEST(files_app_persists_acknowledged_view_and_bookmark_changes) {
-    const auto saved = std::make_shared<FilesPersistentSettings>();
+    ckv::MemoryFileSystem files;
+    FilesSettingsStore store(files, "/user/ck-files.settings");
+    auto loaded = store.load();
+    FilesSettingsService settings_worker(store);
     FilesSettingsBinding binding{
-        {}, [saved](const FilesPersistentSettings &value) {
-            *saved = value;
-            return std::string{};
-        }, {}};
+        std::move(loaded.value), std::move(loaded.diagnostic), &settings_worker};
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, std::move(binding));
     f.loaded();
     CK_CHECK(f.app->add_bookmark(0));
-    CK_CHECK(saved->bookmarks[0].size() == 1 && saved->bookmarks[0][0] == *f.app->location(0));
+    f.until([&] { return settings_worker.progress().saved_revision == 1; });
+    auto saved = parse_files_settings(files.read_file("/user/ck-files.settings")->contents);
+    CK_CHECK(saved && saved->bookmarks[0].size() == 1 && saved->bookmarks[0][0] == *f.app->location(0));
     auto view = f.app->view(0);
     view.show_hidden = true;
     CK_CHECK(f.app->change_view(0, view));
     f.loaded();
-    CK_CHECK(saved->views[0].show_hidden);
+    f.until([&] { return settings_worker.progress().saved_revision == 2; });
+    saved = parse_files_settings(files.read_file("/user/ck-files.settings")->contents);
+    CK_CHECK(saved && saved->views[0].show_hidden);
 }
 CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     Fixture f;

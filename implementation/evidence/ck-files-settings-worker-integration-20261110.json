@@ -1,0 +1,75 @@
+{
+  "utc": "2026-11-10T01:41:41.884568+00:00",
+  "state": "Development checkpoint: bounded worker-owned settings persistence, Macnormal108/108 and matchedTSan108/108 including10newcases, realPTYwarningorderingPASS. Linux/Windows settings and native-window gates remain open.",
+  "packet": "/Volumes/S8T/tmp/files-settings-service.UHehgiNX/packet-v2",
+  "manifest_sha256": "c3e41da3c2c71153a79853285be45f58ea67d6dad4b3b0a9adfcbcad7312190b",
+  "API": "No synchronous save callback/fallback; bounded coalesced worker persistence with serial CAS and retained revision-tagged completion",
+  "shutdown": "Join after event dispatch; terminal and every app/worker owner destroy before final cached diagnostic prints",
+  "Main_changes": "Added production/test CMake sources and ported existing persistence test to real settings worker; no existing tests removed",
+  "existing_test_before_sha256": "0de2fdd596f19198e2cda01f26208131ec783c7e1e674c8497ef663171417bf9",
+  "existing_test_after_sha256": "a70118e8ef38978335b65f55563b0cbd3c04bdf88a6fa852f5d379d1581f6e2d",
+  "remaining": [
+    "Linux/Windows currentsettingsconsumerqualification againstmatchingSDKs",
+    "nativewindowmouse/restrictedkeyacceptance",
+    "existingdirectStore.load/read-size andnonserviceStore.save/preflightbounds outside thiswrite-set"
+  ],
+  "followup": {
+    "patch_sha256": "9cb04ab7071ba7d5ea2d92f18690b4942ff8eaa2187f79a00bf2e5e8b2144e9e",
+    "scope": "No service API/body or main terminal scope change. Deliberate null-worker persistence-disabled behavior, explicit optional header includes, fixture UI completion wait + explicit simulated LinuxStatx profile + extra no-worker test. Source-level fake profile only; no native provider qualification.",
+    "note": "Applied live only; activeV20frozenbuildkeepsoriginalv2inputs untilterminal. Fulltestprofilecorrection and explicitoptionalnullbinding semantics, no productionhostpersistencefallback."
+  },
+  "new_service_cases": 10,
+  "normal_macos": {
+    "state": "PASS108/1080skipsincluding10newservicecasesandRightaccept",
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-settings-normal-20261110/result.json",
+    "fresh_build_seconds": 488.928,
+    "dependency_followup_seconds": [
+      26.061,
+      4.136
+    ],
+    "test_seconds": 11.763,
+    "guide_captures_twice_byte_identical": true,
+    "guideSVGs": 29,
+    "allguideassetsandgoldens": 52,
+    "failed_fixture_runs_preserved": [
+      "initialunknownsimulationstorageprofile",
+      "exactsizeparityconstruction"
+    ]
+  },
+  "focused_tsan": {
+    "state": "10/10PASS",
+    "full_current_Files_TSan": "PASS108/108zero skips/findings;280builtinstrumentedTUs"
+  },
+  "full_tsan_macos": {
+    "status": "PASS",
+    "ctest": {
+      "pass": 108,
+      "fail": 0,
+      "skip": 0,
+      "seconds": 101.56374045903794,
+      "UI_runner_internal_cases": 272,
+      "settings_cases_in_UI_runner": 10,
+      "warnings": 0
+    },
+    "built_TUs": 280,
+    "freeze_manifest_sha256": "7f9f3cc18471795831ed84e93bac304cde3b46387438338aa71bfcc741d4c952",
+    "final_receipt_sha256": "84c667f047ca082c6d213204aaa3ea40b5668c6be4c5fd144b8547e97654382d",
+    "compiler_sha256": "a3f510aa37c9a3082649435e39e3f7c808b6696bb62f077b141c271b5aa783a2",
+    "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+    "SDK_archive_sha256": "30fc23409ca8ffcadd7a4b9eef286e21c4b1fba01436290cdf62ab849a2e2b7e",
+    "evidence": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-settings-tsan-20261110"
+  },
+  "real_PTY": {
+    "status": "PASSPOSIXnativeproductfinaldiagnosticafterterminalrestore",
+    "record_sha256": "8dbc89d35c8297e7098b99e0bf1212f26169344398b8503dd1ab13b83c9892b4",
+    "raw_sha256": "2de4c588f59a2c28a3156e7425c3aaa728d6903592fc6cbf596ebf93669a55dc",
+    "terminal_restore_offset": 18409,
+    "final_warning_offset": 18417,
+    "scope": "instrumentedMacproductionbinary; notWindows/nativewindowmouseacceptance"
+  },
+  "documentation": {
+    "strict": "PASS pinnedckdocs0.8.1;27pages54assets",
+    "evidence": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-settings-docs-20261110/receipt.json",
+    "guide": "docs/tools/ck-files.md backgroundsave/lateststate/uncertainoutcome/finalerrorvisibility"
+  }
+}
