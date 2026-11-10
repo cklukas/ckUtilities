@@ -1,0 +1,64 @@
+{
+  "utc": "2026-11-10T10:48:44.139278+00:00",
+  "scope": "Focused actual native recovery controller and cleanup, genuine native fixtures, bounded scan, all-exit completion, persistent worker OOM; NOT full application, Windows, native window, or integrated SDK release qualification",
+  "status": "PASS_FOCUSED_MAC_ONLY_NOT_INTEGRATED",
+  "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-native-recovery-mac-20261110/receipt.json",
+  "receipt_sha256": "abb35026900cbc12d94ec5330b07e650a37d34fbbf7f4c030e1e0b3d012f259e",
+  "durable_packet_files_verified": 55,
+  "candidate_controller_sha256": "50c462549cafc1b0fdd8cbfe8aba30065be3fd3aa0fb63de516f184b7d9ec7ad",
+  "candidate_limits_header_sha256": "65cc7d18e16ebb32433dd271187907691b2567bfd83cc879598c46dfca30a734",
+  "backend_draft_base": "a0301c1133d09e08d90eaee975e773c5d27857d7",
+  "backend_draft_patch_sha256": "b7ff50eb74eccdc5c9f3620c1dc6544d07d12f6489a58d7cd48da1c6fe4b4547",
+  "modes": {
+    "normal": {
+      "ctest_entries": 2,
+      "controller_helper_cases": 12,
+      "worker_oom_standalone": true,
+      "negative_old_worker_exit": 86,
+      "sdk_file_hashes_reverified": 171,
+      "sdk_record_sha256": "179023a050476a072e2e56c5ecf1f10d9ccf9e040fcf17f8eeda445e1081b6c6",
+      "final_ninja_elapsed_seconds": 18.749,
+      "timing_method": "Final 13 Ninja log entries: relative maximum end minus minimum start; original initial configure/build timings retained separately; not a newly invented baseline",
+      "runtime_loaded": [],
+      "test_xml_sha256": "1d45b2a1993374d8a49e6dbbb5b6a5bc2bc2a903f00347cb78996e4c152b2637",
+      "test_log_sha256": "0d9a2c13f409ef814c588205da517bb3e6856c54474da875568376ee635dc03e"
+    },
+    "tsan": {
+      "ctest_entries": 2,
+      "controller_helper_cases": 12,
+      "worker_oom_standalone": true,
+      "negative_old_worker_exit": 86,
+      "sdk_file_hashes_reverified": 171,
+      "sdk_record_sha256": "aa389911f453e7d4b8acd2ee3f1a198fd912bcf2c7b1e635df514afa6d331860",
+      "final_ninja_elapsed_seconds": 12.079,
+      "timing_method": "Final 13 Ninja log entries: relative maximum end minus minimum start; original initial configure/build timings retained separately; not a newly invented baseline",
+      "runtime_loaded": [
+        [
+          "94BF5B69-363F-33CA-98A3-31058E5B431D",
+          "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib"
+        ],
+        [
+          "94BF5B69-363F-33CA-98A3-31058E5B431D",
+          "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib"
+        ]
+      ],
+      "test_xml_sha256": "030b462381bdd03b147e884664ed331f749708c483d6d3c2ded2de370a4b9599",
+      "test_log_sha256": "ee367c02992cf3b79d6cf41d45a252d953e621638f1382b91af9b7055b4413f9"
+    }
+  },
+  "covered": [
+    "Held native journal directory/file discovery through genuine SDK",
+    "Explicit whole-batch scan limit and invalid-limit rejection",
+    "Per-file and root finalization for observations and exceptions; completion errors take precedence",
+    "Persistent allocation failure returns reusable worker-fault replies instead of allocating in the exception handler",
+    "Old production worker negative control reproducibly terminates with exit86 in both modes"
+  ],
+  "not_proven": [
+    "Windows normal/ASan NTFS/ReFS held discovery and 414-unit path acceptance",
+    "UNC and hostile raw UTF-16 namespace qualification",
+    "Combined backend reader and creator-disposal SDK integration",
+    "Whole current application and native-window interactive acceptance",
+    "WP-02 completion"
+  ],
+  "live_source_changed": false
+}
