@@ -1,0 +1,122 @@
+{
+  "utc": "2026-11-10T20:39:45.950696+00:00",
+  "patch_sha256": "59c97ea896df037e125edd6681002045aa7f43309b537ba026a62523e50d3eb5",
+  "source_cpp_sha256": "5af0a602f2d1aae9d2c54bc4a367bc37569e18e63a581332ebca3de7dcf4eb22",
+  "test_cpp_sha256": "8e3de4b0b0c057b1eaf3e36c8869ecf9a5c3c58a26d075b23d8b3f96095cbc55",
+  "tests": {
+    "normal": {
+      "cases": 285,
+      "seconds": "11.4743",
+      "log_sha256": "c220230dec8589c5fb53eff67ff9c3d893c4ce6a4af01385132321dafa2ceb61",
+      "xml_sha256": "28d7da33c574409b35e46a6757f95b3cb0743f973b1db10b5fedce3c4151a611"
+    },
+    "tsan": {
+      "cases": 285,
+      "seconds": "16.6847",
+      "log_sha256": "09d38e48a62a7de9fdb5f350eb266d21a2328ac20d0eb3ab7964d641fcb70a3d",
+      "xml_sha256": "23fc89f1d9514539d04e55382eb59fb2d7ba84b3e96eb8abb18723f6eb968ed5"
+    }
+  },
+  "runtime": {
+    "before_executable_sha256": "cf112ad1e9af2c74132b720f41892148f7958fafd1d511f854ffe225f5fc7a00",
+    "exe": "/Volumes/S8T/tmp/files-settings-qualification.1NxdrPRy/build-assertions/src/vision/files/ck_vision_files_tests",
+    "load_name": "@rpath/libclang_rt.tsan_osx_dynamic.dylib",
+    "rpaths": [
+      "@executable_path",
+      "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/resource/lib/darwin"
+    ],
+    "no_executable_local_shadow": true,
+    "runtime_candidate": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/resource/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+    "canonical_runtime": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+    "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+    "runtime_uuid": "94BF5B69-363F-33CA-98A3-31058E5B431D",
+    "SDK_source_unchanged": true,
+    "SDKs_unchanged": true,
+    "no_DYLD_substitution": true,
+    "actual_loaded_modules": [
+      {
+        "pid": 30627,
+        "uuid": "94BF5B69-363F-33CA-98A3-31058E5B431D",
+        "path": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+        "canonical_path": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+        "sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+        "process_record": "30627 30625 Tue Nov 10 21:34:27 2026     /Volumes/S8T/tmp/files-settings-qualification.1NxdrPRy/build-assertions/src/vision/files/ck_vision_files_tests"
+      }
+    ],
+    "loader_informational_lines_retained": [
+      "dyld[30627]: has interposing tuples so cannot be delayed: libclang_rt.tsan_osx_dynamic.dylib"
+    ],
+    "classification": "Actual UUID/path/hash module records only; loader scheduling commentary is retained separately and is not a module record.",
+    "test_exit": 0,
+    "tsan_findings": 0,
+    "postprocessing_only": true,
+    "test_rerun": false,
+    "compiled": false,
+    "after_executable_sha256": "cf112ad1e9af2c74132b720f41892148f7958fafd1d511f854ffe225f5fc7a00"
+  },
+  "scope": "285-case Files application aggregate normal+matchingTSan; not all frontend CTests, Windows, current native window or newbackend8a adoption",
+  "initial_failure": "First error fixture retained selection; new distinct edit starts genuine query; all deadlines unchanged. Original normal failed log preserved.",
+  "verifier_failure": "Absolute LC_LOAD expectation rejected legitimate@rpath beforeTSan execution; exactLC_RPATH+actualPID30627loadedUUID/path/hash verified; no testreplay or runtimefallback.",
+  "frontend_base": "af1d8f17cf921528a6713be461e491dab598c4b4",
+  "backend_pin": "fc56de16433cf7066c344f8c052debc7e6197535",
+  "ckVision_pin": "7ad5bd67553414e7dc0882069482864034cb31f9",
+  "guards": {
+    "base_revision": "af1d8f17cf921528a6713be461e491dab598c4b4",
+    "files": [
+      {
+        "path": "src/vision/files/files_location_dialog.cpp",
+        "before_sha256": "1b192e5b10167b2959ccdba5eeb0a0cbc393190428ad61009b511334c4297e8b",
+        "after_sha256": "5af0a602f2d1aae9d2c54bc4a367bc37569e18e63a581332ebca3de7dcf4eb22"
+      },
+      {
+        "path": "src/vision/files/tests/files_app_tests.cpp",
+        "before_sha256": "a70118e8ef38978335b65f55563b0cbd3c04bdf88a6fa852f5d379d1581f6e2d",
+        "after_sha256": "8e3de4b0b0c057b1eaf3e36c8869ecf9a5c3c58a26d075b23d8b3f96095cbc55"
+      }
+    ],
+    "patch_sha256": "59c97ea896df037e125edd6681002045aa7f43309b537ba026a62523e50d3eb5"
+  },
+  "durable_evidence": {
+    "packet": "ckutilities-completion-feedback-mac-20261110",
+    "files_independently_verified": 55,
+    "manifest_sha256": "e49da77e87d86c67909e66990705f196c5aa25ad954377203ed70d0da41fef8b",
+    "receipt_sha256": "ad76bc3068005f6895438012d8ba675af9f1c2fabb5efb2ea78009db5466e74c"
+  },
+  "affected_closure": {
+    "normal": {
+      "unique_rebuilt_TUs": 65,
+      "required_rebuilt_due_changed_source_or_header": 56,
+      "missing_required_rebuilds": []
+    },
+    "tsan": {
+      "unique_rebuilt_TUs": 65,
+      "required_rebuilt_due_changed_source_or_header": 56,
+      "missing_required_rebuilds": []
+    }
+  },
+  "preserved_failures": [
+    {
+      "kind": "actual new fixture failure",
+      "record": "/Volumes/S8T/tmp/ckutilities-completion-qualification-6a733q9r",
+      "build_exit": 0,
+      "ctest_exit": 8,
+      "aggregate_seconds": 8.54,
+      "source": "failure/failed-files_app_tests.cpp",
+      "reason": "Malformed-error test opened a selected seed field and waited for a current completion without editing. v2 observations show selected=1/default hint; explicit distinct-prefix edit selected=0 reaches actual workspace error path. Initial original run had no call counter logging, so its exact call count is not claimed.",
+      "fix": "Only test fixture distinct edit and bounded observations; unchanged product cpp, same calls>0/raw-data assertions, same5s/60s deadlines."
+    },
+    {
+      "kind": "verifier prelaunch oracle failure",
+      "record": "/Volumes/S8T/tmp/ckutilities-completion-qualification-v2-862yvbkf",
+      "build_exit": 0,
+      "tsan_test_started": false,
+      "reason": "Verifier erroneously required absolute protected runtime path in LC_LOAD_DYLIB; correct @rpath name + exact LC_RPATH/canonical runtime proof used without rebuild."
+    },
+    {
+      "kind": "post-run parser failure",
+      "record": "/Volumes/S8T/tmp/ckutilities-completion-tsan-runtime-7exaljod",
+      "test_exit": 0,
+      "reason": "Initial parser included dyld scheduling commentary among UUID/module records. Corrected read-only parser validated actual UUID/path/hash/PID from same preserved log; no test rerun. Informational line retained."
+    }
+  ]
+}

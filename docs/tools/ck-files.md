@@ -143,7 +143,10 @@ or retire a source.
 
 All actions also have visible menu or dialog commands, and shortcut bindings
 can be reviewed through the suite configuration UI. Completion retains
-ckVision's Right-to-accept behavior.
+ckVision's Right-to-accept behavior. If folder completion fails, the location
+dialog shows a short reason, including access denial or a completion limit.
+The entered address and both panes stay unchanged. Editing the address clears
+the previous warning; a successful proposal can still be accepted with Right.
 
 ## Platform qualification and safety boundary
 

@@ -6,6 +6,7 @@
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/label.hpp>
 #include <stdexcept>
+#include <string_view>
 namespace ck::vision {
 namespace {
 std::string location_error(const ck::files::UnavailableObservation &error) {
@@ -17,16 +18,35 @@ std::string location_error(const ck::files::UnavailableObservation &error) {
     return "Enter a valid absolute path or a complete exact-name location. Nothing has been changed.";
 }
 
+// Never copy a native diagnostic/path into the dialog. These fixed hints also
+// cover malformed or oversized observations without interpreting their text.
+std::string_view completion_failure_hint(const FilesCompletionReply &reply) noexcept {
+    if (reply.state == FilesCompletionReplyState::LimitExceeded)
+        return "Completion limit reached; narrow the location.";
+    if (reply.state == FilesCompletionReplyState::WorkerFault)
+        return "Folder completion unavailable; enter a full location.";
+    if (reply.state == FilesCompletionReplyState::Cancelled)
+        return "Folder completion cancelled; edit to retry.";
+    if (reply.state == FilesCompletionReplyState::Stale)
+        return "Folder completion changed; edit to retry.";
+    if (reply.error && reply.error->state == ck::files::ObservationState::Denied)
+        return "Folder completion denied; edit to retry.";
+    return "Folder completion unavailable; edit to retry.";
+}
+
 class FilesLocationCompletionProvider final : public ckv::widgets::CompletionProvider {
   public:
     FilesLocationCompletionProvider(FilesCompletionService &service, ck::files::NameEncoding encoding,
-                                    FilesLocationTextSyntax syntax, FilesLocationTextLimits limits)
-        : service_(service), encoding_(encoding), syntax_(syntax), limits_(limits) {}
+                                    FilesLocationTextSyntax syntax, FilesLocationTextLimits limits,
+                                    std::function<void()> feedback_changed)
+        : service_(service), encoding_(encoding), syntax_(syntax), limits_(limits),
+          feedback_changed_(std::move(feedback_changed)) {}
 
     void request(const ckv::widgets::CompletionRequest &request) override {
         query_ = request;
         ticket_ = {};
         snapshot_ = {request.revision, ckv::widgets::CompletionState::Pending, {}};
+        set_hint({});
         if (!request.revision || request.has_selection || request.cursor != ckv::text::split_graphemes(request.text).size()) {
             snapshot_.state = ckv::widgets::CompletionState::Ready;
             return;
@@ -34,11 +54,15 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
         auto parsed = parse_files_location_completion(request.text, syntax_, encoding_, limits_);
         if (!parsed.value()) {
             snapshot_.state = ckv::widgets::CompletionState::Failed;
+            set_hint("Completion needs a valid location.");
             return;
         }
         const auto submitted = service_.request(std::move(parsed).take_value(), request.revision, true);
         if (submitted.state != FilesCompletionSubmission::Accepted) {
             snapshot_.state = ckv::widgets::CompletionState::Failed;
+            set_hint(submitted.state == FilesCompletionSubmission::LimitExceeded
+                         ? "Completion limit reached; narrow the location."
+                         : "Folder completion unavailable; enter a full location.");
             return;
         }
         ticket_ = submitted.ticket;
@@ -51,8 +75,11 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
             return;
         ticket_ = {};
         snapshot_ = {query_.revision, ckv::widgets::CompletionState::Failed, {}};
-        if (reply.state != FilesCompletionReplyState::Ready || !reply.page)
+        if (reply.state != FilesCompletionReplyState::Ready || !reply.page) {
+            set_hint(completion_failure_hint(reply));
             return;
+        }
+        set_hint({});
         const auto graphemes = ckv::text::split_graphemes(query_.text);
         snapshot_.candidates.reserve(reply.page->entries.size());
         for (const auto &entry : reply.page->entries) {
@@ -64,6 +91,8 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
                                                                         : ckv::widgets::CompletionState::Ready;
     }
 
+    std::string_view hint() const noexcept { return hint_; }
+
     void cancel() {
         if (ticket_.valid())
             service_.cancel(ticket_);
@@ -71,6 +100,13 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
     }
 
   private:
+    void set_hint(std::string_view hint) {
+        if (hint_ == hint)
+            return;
+        hint_ = hint; // Only static literals/empty views are admitted here.
+        if (feedback_changed_)
+            feedback_changed_(); // UI-only label update; never calls the field.
+    }
     FilesCompletionService &service_;
     ck::files::NameEncoding encoding_;
     FilesLocationTextSyntax syntax_;
@@ -78,6 +114,8 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
     ckv::widgets::CompletionRequest query_;
     FilesCompletionTicket ticket_;
     ckv::widgets::CompletionSnapshot snapshot_;
+    std::string_view hint_;
+    std::function<void()> feedback_changed_;
 };
 } // namespace
 struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
@@ -102,12 +140,18 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
         if (!completion_service || !field)
             return;
         completion_provider = std::make_shared<FilesLocationCompletionProvider>(
-            *completion_service, draft.encoding(), draft.syntax(), draft.limits());
+            *completion_service, draft.encoding(), draft.syntax(), draft.limits(), [weak = weak_from_this()] {
+                if (auto self = weak.lock(); self && !self->finished)
+                    self->mode_labels();
+            });
         field->set_completion_provider(completion_provider);
     }
     void mode_labels() {
-        if (feedback)
-            feedback->set_text(exact() ? "Exact names: anchor, then children" : "Path: a new absolute location");
+        if (feedback) {
+            const auto hint = completion_provider ? completion_provider->hint() : std::string_view{};
+            feedback->set_text(!hint.empty() ? std::string(hint)
+                                           : exact() ? "Exact names: anchor, then children" : "Path: a new absolute location");
+        }
         if (switch_button)
             switch_button->set_text(exact() ? "Use &path" : "Use &exact names");
     }

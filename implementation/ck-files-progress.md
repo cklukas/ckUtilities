@@ -1,5 +1,27 @@
 # Files implementation evidence
 
+## 2026-11-10 — Current-request location completion feedback
+
+The location dialog now displays bounded, fixed completion errors for the
+current request. Native error text is never copied into the label. Both ticket
+and text revision must match before any worker reply can change the hint.
+Editing the address or receiving a successful result clears the warning;
+typed text, both completed pane locations and plain Right acceptance are
+preserved. Detached dialogs ignore late replies.
+
+The full Files application aggregate passed **285 cases in normal mode and
+285 under matching TSan**, with no findings. The actual TSan module's PID,
+UUID, path and content hash were verified. Tests cover a genuine missing-folder
+failure followed by edit/Right/Enter success, stale ticket and revision replies,
+and malformed/oversized worker diagnostics. The first error-fixture failure and
+runtime-verifier failure remain recorded; the corrected fixture issues a real
+query after initial text selection, and all original deadlines remain unchanged.
+See [scoped evidence](evidence/ck-files-completion-feedback-20261110.json).
+
+This qualifies the recorded Mac application aggregate against backend `fc56de1`
+and stock ckVision `7ad5bd67`. It does not adopt the new backend checkpoint or
+qualify Windows, the complete frontend matrix, or the actual native window.
+
 ## 2026-11-10 — Current Linux packages independently verified
 
 Frontend `2c529622`, backend `fc56de1`, and stock ckVision `7ad5bd67`

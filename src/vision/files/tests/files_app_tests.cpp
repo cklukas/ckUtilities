@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_app.hpp"
+#include "files_location_dialog.hpp"
 #include "files_settings_service.hpp"
 #include "files_location_text.hpp"
 #include "native_filesystem.hpp"
@@ -11,9 +12,11 @@
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/testing/cktest.hpp>
 #include <cvision/widgets/dialog.hpp>
+#include <cvision/widgets/label.hpp>
 #include <chrono>
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <fstream>
 #include <mutex>
 #include <thread>
@@ -196,7 +199,8 @@ struct Fixture {
                      bool missing_initial = false, bool rejected_initial = false, FilesSettingsBinding settings = {},
                      bool qualified_volume = false, bool recovery_journal = false,
                      bool operation_recovery_journal = false, bool eligible_archive_recovery = false,
-                     bool eligible_operation_recovery = false)
+                     bool eligible_operation_recovery = false,
+                     std::function<Observation<std::shared_ptr<IndexFileFactory>>()> completion_workspace = {})
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -271,8 +275,11 @@ struct Fixture {
             std::filesystem::permissions(completion_cache, std::filesystem::perms::owner_all,
                                          std::filesystem::perm_options::replace);
 #endif
+            auto completion_backend = native_files_pane_backend(address(completion_cache));
+            if (i == 0 && completion_workspace)
+                completion_backend.workspace = completion_workspace;
             completion_services[i] =
-                std::make_unique<FilesCompletionService>(native_files_pane_backend(address(completion_cache)),
+                std::make_unique<FilesCompletionService>(std::move(completion_backend),
                                                          FilesCompletionServiceLimits{}, wake.callback());
         }
         const auto operation_root = scratch.path() / "operation-journals";
@@ -2040,6 +2047,166 @@ CK_TEST(files_app_location_editor_uses_worker_completion_and_right_accepts_the_e
     f.until([&] { return !f.app->location_editor_pending(); });
     CK_CHECK(f.app->location(0)->components().empty());
 }
+namespace {
+// Observe the actual existing form label, not a private provider status getter.
+bool has_location_feedback(ckv::ui::Application &application, std::string_view text) {
+    std::vector<ckv::widgets::Label *> labels;
+    find_views(application.root(), labels);
+    for (const auto *label : labels)
+        if (label->text() == text)
+            return true;
+    return false;
+}
+} // namespace
+
+CK_TEST(files_app_location_completion_native_failure_edit_success_preserves_route_and_right_acceptance) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    const auto original = f.app->location(0), other = f.app->location(1);
+    CK_CHECK(f.location_key());
+    auto *field = f.editor_input();
+    const auto missing = f.path_text(f.scratch.path() / "missing-completion-parent") + "/item-";
+    field->set_text(missing); // Real native directory-open failure on the worker.
+    f.until([&] { return has_location_feedback(f.application, "Folder completion unavailable; edit to retry."); });
+    CK_CHECK(field->text() == missing && !field->completion_candidate());
+    CK_CHECK(f.app->location(0) == original && f.app->location(1) == other);
+
+    const auto prefix = f.path_text(f.scratch.path() / "left") + "/left-item-";
+    field->set_text(prefix);
+    CK_CHECK(has_location_feedback(f.application, "Path: a new absolute location"));
+    CK_CHECK(field->text() == prefix && f.app->location(0) == original);
+    f.until([&] { return field->has_completion_preview(); });
+    CK_CHECK(has_location_feedback(f.application, "Path: a new absolute location"));
+    CK_CHECK(field->completion_candidate() && field->completion_candidate()->text == prefix + "0/");
+    CK_CHECK(f.key(ckv::Key::Right) && field->text() == prefix + "0/");
+    CK_CHECK(f.app->location(0) == original && f.app->location(1) == other);
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    f.loaded();
+    CK_CHECK(f.app->location(0) != original && f.app->model(0).row_count() == 2);
+    CK_CHECK(f.app->location(1) == other);
+}
+
+CK_TEST(files_location_controller_rejects_replayed_worker_failure_by_ticket_and_revision) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    const auto original = f.app->location(0), other = f.app->location(1);
+    // Use the public controller delivery boundary with actual native worker
+    // replies. Delayed delivery is deterministic; no fabricated private ticket.
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34});
+    ckv::ui::Application application(terminal, clock);
+    SuiteShell shell(application, {.application_name = "Files"});
+    FilesCompletionService service(native_files_pane_backend(address(f.scratch.path() / "completion-cache-left")));
+    auto draft = FilesLocationDraft::start(*original);
+    if (!draft.value())
+        throw std::runtime_error("completion dialog draft unavailable");
+    FilesLocationDialog dialog(application, shell.desktop(), shell.roles(), std::move(draft).take_value(),
+                               &service, [](std::optional<FilesPaneLocation>) {});
+    auto *field = dialog.input();
+    if (!field)
+        throw std::runtime_error("completion dialog input unavailable");
+    const auto next_reply = [&]() {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        do {
+            if (auto reply = service.take())
+                return std::move(*reply);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (std::chrono::steady_clock::now() < end);
+        throw std::runtime_error("completion worker reply timed out");
+    };
+    // Finish the seed request before changing the query so it cannot race the
+    // specific native failure whose real ticket/revision is retained below.
+    dialog.publish_completion(next_reply());
+    const auto missing = f.path_text(f.scratch.path() / "missing-replay-parent") + "/item-";
+    field->set_text(missing);
+    const auto failed = next_reply();
+    CK_CHECK(failed.state == FilesCompletionReplyState::Failed && failed.error);
+    dialog.publish_completion(failed);
+    CK_CHECK(has_location_feedback(application, "Folder completion unavailable; edit to retry."));
+    const auto prefix = f.path_text(f.scratch.path() / "left") + "/left-item-";
+    field->set_text(prefix);
+    CK_CHECK(has_location_feedback(application, "Path: a new absolute location"));
+    dialog.publish_completion(failed); // Old reply arriving during the new request.
+    CK_CHECK(has_location_feedback(application, "Path: a new absolute location"));
+    const auto ready = next_reply();
+    CK_CHECK(ready.state == FilesCompletionReplyState::Ready && ready.page);
+    CK_CHECK(ready.request != failed.request && ready.revision != failed.revision);
+    // Corrupt one envelope field at a time, using only genuinely issued
+    // tickets/revisions, to prove both controller guards independently.
+    auto wrong_ticket = failed;
+    wrong_ticket.revision = ready.revision;
+    dialog.publish_completion(std::move(wrong_ticket));
+    auto wrong_revision = failed;
+    wrong_revision.request = ready.request;
+    dialog.publish_completion(std::move(wrong_revision));
+    CK_CHECK(has_location_feedback(application, "Path: a new absolute location"));
+    CK_CHECK(field->text() == prefix && !field->has_completion_preview());
+    dialog.publish_completion(ready);
+    CK_CHECK(field->completion_candidate() && field->completion_candidate()->text == prefix + "0/");
+    CK_CHECK(application.dispatch(ckv::KeyEvent{{ckv::Key::Right, ckv::Modifier::None, {}}}));
+    CK_CHECK(field->text() == prefix + "0/");
+    dialog.publish_completion(failed); // Cannot replace a later successful result.
+    CK_CHECK(has_location_feedback(application, "Path: a new absolute location"));
+    CK_CHECK(f.app->location(0) == original && f.app->location(1) == other);
+    dialog.close();
+    application.step(clock.now_nanos());
+    dialog.publish_completion(failed); // Detached controller must remain inert.
+    service.request_stop();
+    service.join();
+}
+
+CK_TEST(files_app_location_completion_uses_fixed_hints_for_malformed_and_oversized_worker_errors) {
+    for (const bool oversized : {false, true}) {
+        auto calls = std::make_shared<std::atomic<unsigned>>(0);
+        std::string diagnostic = "private-native-path/";
+        diagnostic += '\x1b';
+        diagnostic += "[31m";
+        diagnostic += '\0';
+        diagnostic += std::string(oversized ? 128 * 1024 : 1024, 'x');
+        Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {},
+                  false, false, false, false, false,
+                  [calls, diagnostic]() -> Observation<std::shared_ptr<IndexFileFactory>> {
+                      calls->fetch_add(1);
+                      return Observation<std::shared_ptr<IndexFileFactory>>::unavailable(
+                          ObservationState::Denied, {ErrorDomain::Adapter, 0x7fffffff, diagnostic});
+                  });
+        f.loaded();
+        const auto original = f.app->location(0), other = f.app->location(1);
+        CK_CHECK(f.location_key());
+        auto *field = f.editor_input();
+        // Opening the form selects its seed: completion deliberately does not
+        // query selected text. Record that state, then make a distinct edit so
+        // this test exercises an actual current worker request.
+        std::fprintf(stderr, "COMPLETION_ERROR_FIXTURE oversized=%d initial_selected=%d initial_calls=%u "
+                             "initial_default_hint=%d initial_denied_hint=%d initial_limit_hint=%d\n",
+                     static_cast<int>(oversized), static_cast<int>(field->has_selection()), calls->load(),
+                     static_cast<int>(has_location_feedback(f.application, "Path: a new absolute location")),
+                     static_cast<int>(has_location_feedback(f.application, "Folder completion denied; edit to retry.")),
+                     static_cast<int>(has_location_feedback(f.application, "Completion limit reached; narrow the location.")));
+        const auto typed = f.path_text(f.scratch.path() / "left") + "/left-item-";
+        field->set_text(typed);
+        CK_CHECK(!field->has_selection() && field->text() == typed);
+        const std::string_view expected = oversized ? "Completion limit reached; narrow the location."
+                                                   : "Folder completion denied; edit to retry.";
+        f.until([&] { return has_location_feedback(f.application, expected); });
+        std::fprintf(stderr, "COMPLETION_ERROR_FIXTURE oversized=%d current_selected=%d calls=%u hint=%.*s\n",
+                     static_cast<int>(oversized), static_cast<int>(field->has_selection()), calls->load(),
+                     static_cast<int>(expected.size()), expected.data());
+        CK_CHECK(calls->load() != 0 && field->text() == typed && !field->completion_candidate());
+        CK_CHECK(f.app->location(0) == original && f.app->location(1) == other);
+        std::vector<ckv::widgets::Label *> labels;
+        find_views(f.application.root(), labels);
+        for (const auto *label : labels) {
+            CK_CHECK(label->text().find("private-native-path") == std::string::npos);
+            CK_CHECK(label->text().find('\x1b') == std::string::npos);
+            CK_CHECK(label->text().find('\0') == std::string::npos);
+        }
+        CK_CHECK(f.key(ckv::Key::Escape));
+        f.until([&] { return !f.app->location_editor_pending(); });
+    }
+}
+
 CK_TEST(files_app_location_editor_unchanged_accept_and_format_switches_preserve_exact_route_marks_and_range) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
