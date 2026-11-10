@@ -12,6 +12,7 @@
 
 #include "cvision/term/windows_clock.hpp"
 #include "cvision/term/windows_terminal_subsession.hpp"
+#include "cvision/term/windows_text.hpp"
 #include "cvision/term/windows_wait_set.hpp"
 #include "cvision/testing/cktest.hpp"
 #include "scratch_directory.hpp"
@@ -53,13 +54,15 @@ std::optional<std::string> tool_image(std::string_view tool)
     if (copied != needed - 1)
         return std::nullopt;
     directory.resize(copied);
-    const std::filesystem::path bin(directory);
-    if (!directory.starts_with(L"\\\\?\\") || !bin.is_absolute())
+    if (!directory.starts_with(L"\\\\?\\"))
         return std::nullopt;
 
-    // Preserve the extended prefix and separators for ckVision's wide launch.
-    const auto image = (bin / executable).u8string();
-    return std::string(image.begin(), image.end());
+    // Apply the same address and encoding checks as ckVision's wide launch.
+    const auto image = (std::filesystem::path(directory) / executable).native();
+    const auto native = ckv::term::windows_extended_path(image);
+    if (!native || *native != image)
+        return std::nullopt;
+    return ckv::term::windows_utf8(*native);
 }
 
 } // namespace
