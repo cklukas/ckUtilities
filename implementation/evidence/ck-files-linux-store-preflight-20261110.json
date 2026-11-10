@@ -1,0 +1,55 @@
+{
+  "utc": "2026-11-10T06:54:57.195745+00:00",
+  "scope": "frontend6eb +approved fixture repairs+four-file2af62e2 Store product/test delta+separate allocator-boundary fixture-only correction; backend5899+stockVision7ad unchanged",
+  "summary": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-linux-store148-20261110/final-store148-summary-v1.json",
+  "summary_sha256": "052c60e18cbb084196cef43f6528c71bc31a5d984c80802db5ab21787cb283f7",
+  "full_receipt_sha256": "37bef34080f58b78c70756e0ce2751a4c75f7b92b5ca56f4e1076be6c3af330c",
+  "registered_and_executed_ctests_per_lane": 148,
+  "lanes": [
+    "GNU14 normal",
+    "matching Clang19 ASan/UBSan"
+  ],
+  "failures": 0,
+  "skips": 0,
+  "UI_cases": 273,
+  "settings_worker_cases": 10,
+  "matching_consumers_per_lane": 2,
+  "C_consumer_scope": "unchanged pinned main.c actual C11 guard, matching CXX final driver; not a pure-C-link regression fix",
+  "old_writer_controls": {
+    "normal": {
+      "exit": 1,
+      "executable_sha256": "d0549bae916a90fd9b57f03eb1603de18168a925676ccedb6294f42ee9de8092",
+      "production_source_sha256": "a25c1fd75cc0137c610269cafe6e9189e147949f01c026647e555bb0d1465066",
+      "diagnostic": "settings preflight failed: control=1 threw=1 large_allocations=1"
+    },
+    "asan-ubsan": {
+      "exit": 1,
+      "executable_sha256": "fb691299be4792447f32ea28c36e1f83ac4a215629a0ceca2bec2bfe9dadef11",
+      "production_source_sha256": "a25c1fd75cc0137c610269cafe6e9189e147949f01c026647e555bb0d1465066",
+      "diagnostic": "settings preflight failed: control=1 threw=1 large_allocations=1"
+    }
+  },
+  "fixture_TU_boundary": {
+    "patch_sha256": "fafa7c58c917dbcadcd09668f823859a4be05804d929e616ea3ee1136c7fe4d3",
+    "reason": "GCC14 O3 diagnosed matching malloc/free replacement as mismatched-new-delete after inlining; separate allocator TU preserves every body/cap/check and all compiler flags",
+    "Linux_qualified": true,
+    "Mac_Windows_followup": "Required for this test-only TU reorganization; earlier recorded product qualification remains separate"
+  },
+  "current_source_identity": {
+    "frontend_source_and_config_files": 502,
+    "frontend_differences": [],
+    "backend_compiled_source_files": 140,
+    "backend_headers": 161,
+    "backend_differences": []
+  },
+  "deadlines_unchanged": true,
+  "exclusions_or_suppressions_added": false,
+  "remaining": [
+    "Windows full Files failures and fixture/creator-disposal contracts",
+    "New fixture TU Mac/Windows follow-up",
+    "Original intermittent copy timeout root cause",
+    "GCC14 O1 SDK warning",
+    "Bounded startup SDK release/adoption and native-window interactive acceptance"
+  ],
+  "whole_master_or_platform_matrix_complete": false
+}

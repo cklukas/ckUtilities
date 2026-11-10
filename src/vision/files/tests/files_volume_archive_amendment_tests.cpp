@@ -95,7 +95,9 @@ int main(int argc,char** argv){assert(argc==4&&getuid()!=0);const std::string ba
   NativeFileSystem fs;auto destination=std::shared_ptr<const DirectoryCursor>(take(fs.open_native_directory(path(base+"/dest"))));
   const bool pending=mode.find("pending")!=std::string::npos;std::unique_ptr<OperationJournalFile> publisher;
   if(pending){producer_role=true;publisher=take(c.root->open_journal(name("publisher"),true));take(publisher->write_at(0,bytes("p")));producer_role=false;}
-  c.baseline=descriptors();NativeArchiveWriteRequest request{destination,c.root,name("archive"),name("hint"),name("journal"),id()};request.logical_size=1024*1024;request.extents={{0,bytes("data")},{1024*1024-4,bytes("tail")}};auto job=take(NativeArchiveWriteJob::begin(std::move(request)));c.armed=true;
+  c.baseline=descriptors();NativeArchiveWriteRequest request{.destination=destination,.journal_root=c.root,
+   .destination_name=name("archive"),.staging_hint=name("hint"),.journal_name=name("journal"),.journal_id=id(),
+   .extents={},.application_evidence={},.journal_limits={},.codec_limits={}};request.logical_size=1024*1024;request.extents={{0,bytes("data")},{1024*1024-4,bytes("tail")}};auto job=take(NativeArchiveWriteJob::begin(std::move(request)));c.armed=true;
   auto phase=mode.find("complete-journal")!=std::string::npos?NativeArchivePhase::CompleteJournal:mode.find("close-file")!=std::string::npos?NativeArchivePhase::CloseFile:NativeArchivePhase::Committed;
   for(unsigned i=0;i<1000&&job->progress().phase!=phase;++i){auto p=job->advance();assert(p.phase!=NativeArchivePhase::NeedsReconciliation);}assert(job->progress().phase==phase&&job->progress().published);
   bool fault=mode.find("fault")!=std::string::npos||c.oom||pending;c.fault_stage=fault&&phase!=NativeArchivePhase::CompleteJournal;c.fault_journal=fault&&phase==NativeArchivePhase::CompleteJournal;

@@ -5,11 +5,13 @@ WP-02 remains open. Worker-owned settings persistence now replaces the
 synchronous UI writes found on 2026-11-10. Current Mac normal and matching
 ThreadSanitizer Files suites pass, including blocked-save responsiveness,
 revision conflicts and shutdown draining; a real PTY check confirms that a
-final save warning follows terminal restoration. Current Linux normal validation
-also passes a selected 40-entry application/archive subset, including 271
-application cases and both package consumers; the full Files label is still
-being qualified. A current Mac native PTY confirms Right-to-accept and mouse routing
-in both panels. Linux sanitizer, Windows and native-window acceptance remain open.
+final save warning follows terminal restoration. Linux normal and matching
+Clang19 ASan/UBSan now each pass all 148 registered Files CTests with zero skips,
+273 UI cases and both package consumers, including direct Store preflight and
+its old-writer failure controls. The tested runtime-source projection matches
+the integrated source bytes; this does not qualify the whole platform matrix.
+A current Mac native PTY confirms Right-to-accept and mouse routing in both
+panels. Windows and native-window acceptance remain open.
 The held-creator archive integration also needs its full application and
 cross-platform qualification. Earlier POSIX-PTY and Windows-ConPTY results
 remain evidence for their recorded source cohorts; they do not qualify these
@@ -419,17 +421,19 @@ authority and does not close the application or release requirements below.
   synchronous save callback. Current Mac normal/TSan and real-PTY evidence is
   recorded in `evidence/ck-files-settings-worker-integration-20261110.json`.
 - [ ] Qualify the settings worker on Linux and Windows against matching SDKs.
-  Linux normal and matching Clang19 ASan/UBSan each pass all 147 registered
-  Files CTests with zero skips on the settings-worker cohort plus approved native
-  fixture corrections, and both package consumers pass in each lane. Windows
-  gates remain open; the later Store save-preflight delta is not included. See `evidence/ck-files-linux-full-label-20261110.json`.
+  Linux normal and matching Clang19 ASan/UBSan each pass all 148 registered
+  Files CTests with zero skips, including direct Store save preflight, and both
+  package consumers pass in each lane. Windows gates remain open. See
+  `evidence/ck-files-linux-store-preflight-20261110.json`; the earlier 147-test
+  baseline remains separately recorded.
   Current Mac PTY completion and
   both-panel mouse routing pass. See
   `evidence/ck-files-terminal-linux-normal-20261110.json`.
   Direct Store save preflight also passes current Mac normal/TSan 109/109,
   including an allocation-fault regression that fails against the old writer.
   See `evidence/ck-files-settings-save-preflight-20261110.json`; this later
-  delta still needs Linux/Windows qualification. Startup reads remain an open
+  delta is now qualified on Linux; Windows remains open. The test-only allocator
+  TU split still needs its Mac/Windows follow-up. Startup reads remain an open
   bounded-I/O SDK integration gap.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.

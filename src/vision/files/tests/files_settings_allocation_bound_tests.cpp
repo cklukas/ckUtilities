@@ -5,19 +5,8 @@
 #include <cstdlib>
 #include <new>
 
-namespace {
-bool reject_large_allocation = false;
-unsigned rejected = 0;
-constexpr std::size_t cap = 1024 * 1024;
-}
-// Isolated executable: this fault boundary cannot affect another test/worker.
-void *operator new(std::size_t size) {
-    if (reject_large_allocation && size > cap) { ++rejected; throw std::bad_alloc(); }
-    if (auto *value = std::malloc(size ? size : 1)) return value;
-    throw std::bad_alloc();
-}
-void operator delete(void *value) noexcept { std::free(value); }
-void operator delete(void *value, std::size_t) noexcept { std::free(value); }
+#include "files_settings_allocation_bound_fixture.hpp"
+using namespace settings_bound_fixture;
 
 int main() {
     using namespace ck::vision;

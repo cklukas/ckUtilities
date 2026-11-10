@@ -29,7 +29,9 @@ if(BUILD_TESTING)
   cktools_strict(ck_vision_files_tests)
   add_test(NAME ck_vision_files_tests COMMAND ck_vision_files_tests)
   set_tests_properties(ck_vision_files_tests PROPERTIES LABELS "files;ckvision-migration" TIMEOUT 60)
-  add_executable(ck_vision_files_settings_allocation_bound_tests tests/files_settings_allocation_bound_tests.cpp)
+  add_executable(ck_vision_files_settings_allocation_bound_tests
+    tests/files_settings_allocation_bound_tests.cpp
+    tests/files_settings_allocation_bound_allocator.cpp)
   target_link_libraries(ck_vision_files_settings_allocation_bound_tests PRIVATE ck_vision_files)
   cktools_strict(ck_vision_files_settings_allocation_bound_tests)
   add_test(NAME ck_vision_files_settings_allocation_bound_tests COMMAND ck_vision_files_settings_allocation_bound_tests)
