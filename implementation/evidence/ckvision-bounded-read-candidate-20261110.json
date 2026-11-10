@@ -1,0 +1,24 @@
+{
+  "state": "Unreleased SDK candidate: Mac normal full enabled SDK tests188/188, independent installed consumer PASS; other platforms/sanitizers and additional growth/failure controls OPEN",
+  "candidate_commit": "c5197034861a62ca6ae7f2f67891e91ac14be971",
+  "source_sha256": "b5eb2ec7471aabe5fcb2fb51a46a352c622caebe413d776fb080837502baa034",
+  "SDK_version_policy": "Private validation source retains1.4.2 metadata. Not stock1.4.2 and not publishable as1.4.2. New additive symbols require a new qualified release before application adoption.",
+  "scope": "Isolated candidate only; no SDK release, current Files ABI/pin change or bounded-startup-read completion.",
+  "macOS_normal": {
+    "tests": 188,
+    "fail": 0,
+    "skip": 0,
+    "fresh_compiled_TUs": 299,
+    "fresh_build_seconds": 241.8511878340505,
+    "full_test_seconds": 80.89879837504122,
+    "installed_consumer": "PASS Memory/native bounds + same-result conditional revision"
+  },
+  "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckvision-bounded-read-macos-normal-20261110/receipt.json",
+  "receipt_sha256": "788d68d665d09d5e6f54550832c10ec6b598da681e9812437649c5e171ed96fd",
+  "remaining": [
+    "Native Linux/Windows normal qualification, including long Unicode/UNC policies",
+    "Fresh matching sanitizer SDK and consumers",
+    "Deterministic growth/replacement and failure/OOM drain controls",
+    "Version/release qualification and product bounded-reader integration"
+  ]
+}

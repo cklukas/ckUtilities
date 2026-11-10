@@ -9,7 +9,6 @@
       "ck-core-fs-lib": "5899b9f977d855a08c7129adedf8d6ab983700f9",
       "ckvision-source": "7ad5bd67553414e7dc0882069482864034cb31f9"
     },
-    "registered_ctests": 40,
     "files_inner_cases": 271,
     "settings_inner_cases": 10,
     "archive_native_ctests": 15,
@@ -32,7 +31,9 @@
       ]
     },
     "prior_copy_timeout": "Preserved separately; later pass does not establish the original failure cause.",
-    "GCC14_O1": "Unresolved SDK finding; Release pass does not qualify O1."
+    "GCC14_O1": "Unresolved SDK finding; Release pass does not qualify O1.",
+    "selected_ctests": 40,
+    "selection": "Exact regex selected application runner and39archive tests. This is not the entire registered Files label: standalone core/native entries were omitted. Full label qualification remains open and is now building."
   },
   "macos_PTY": {
     "record": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-right-accept-mouse-pty-20261110/run2/record.json",

@@ -6,8 +6,9 @@ synchronous UI writes found on 2026-11-10. Current Mac normal and matching
 ThreadSanitizer Files suites pass, including blocked-save responsiveness,
 revision conflicts and shutdown draining; a real PTY check confirms that a
 final save warning follows terminal restoration. Current Linux normal validation
-also passes all 40 CTest entries, including 271 Files cases and both package
-consumers. A current Mac native PTY confirms Right-to-accept and mouse routing
+also passes a selected 40-entry application/archive subset, including 271
+application cases and both package consumers; the full Files label is still
+being qualified. A current Mac native PTY confirms Right-to-accept and mouse routing
 in both panels. Linux sanitizer, Windows and native-window acceptance remain open.
 The held-creator archive integration also needs its full application and
 cross-platform qualification. Earlier POSIX-PTY and Windows-ConPTY results
@@ -418,7 +419,8 @@ authority and does not close the application or release requirements below.
   synchronous save callback. Current Mac normal/TSan and real-PTY evidence is
   recorded in `evidence/ck-files-settings-worker-integration-20261110.json`.
 - [ ] Qualify the settings worker on Linux and Windows against matching SDKs.
-  Current Linux normal: 40/40 CTests, 271 Files cases, both package consumers;
+  Current Linux normal: 40/40 selected application/archive CTests, 271 application
+  cases and both package consumers; the full Files label is not yet qualified;
   sanitizer and Windows gates remain open. Current Mac PTY completion and
   both-panel mouse routing pass. See
   `evidence/ck-files-terminal-linux-normal-20261110.json`.

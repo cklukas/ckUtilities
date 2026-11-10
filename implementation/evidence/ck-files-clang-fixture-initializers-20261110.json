@@ -1,0 +1,20 @@
+{
+  "state": "Reviewed explicit aggregate-default initialization; native Linux runtime qualification remains pending",
+  "cause": "Clang19 -Werror,-Wmissing-field-initializers rejects three omitted archive fixture members; original failure preserved.",
+  "patch_sha256": "9598af3f19f4cec0924683af8b9e8e36bc851c7b0017039bb39da711b0622e9d",
+  "guards": [
+    {
+      "path": "src/vision/files/tests/files_volume_archive_native_tests.cpp",
+      "base_sha256": "7cec8c878efc872a3b6568230ac1df18233e34403e2063d01c5944de780c1605",
+      "final_sha256": "88d4a828796bc2b52f5753bcc4e34f95cf1ea1ca1d23d01a2a3d35f6d521b972"
+    },
+    {
+      "path": "src/vision/files/tests/files_volume_archive_amendment_tests.cpp",
+      "base_sha256": "39836054bbda628c5f32e658f7ac44c62f8635341aec927185ed8153e6c13a8f",
+      "final_sha256": "235d40dd62d2f63256c680026a93385e38c706e4d34df7bdf1b856aea416fe04"
+    }
+  ],
+  "scope": "Only two Linux fixture CPPs. Explicit transaction1 and default-empty callbacks/owners/limits match prior omitted defaults. No production headers/body, warning flags, scenarios, assertions or deadlines changed.",
+  "original_failure_evidence": "/Volumes/S8T/tmp/ckfiles-linux-settings-qual.PCkkuT1P/clang19-baseline-failure/asan-ubsan-build.log",
+  "Linux_normal_subset_scope_correction": "The prior40-entry run used an explicit regex. It is not the full Files label; complete standalone native/core coverage is now required before current Linux qualification."
+}

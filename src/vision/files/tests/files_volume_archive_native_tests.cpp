@@ -76,20 +76,20 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  // Caller durably provisions the private Root namespace before acquisition.
  int parent=open(base_path.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);assert(parent>=0&&fsync(parent)==0&&close(parent)==0);
  NativeFileSystem fs;auto dest=std::shared_ptr<const DirectoryCursor>(take(fs.open_native_directory(address(base_path+"/dest"))));auto root=take(acquire_native_journal_root(address(base_path+"/private")));
- if(is("no-owner")){FilesVolumeArchiveWriteRequest request{document(),base_path+"/nonexistent","image.ckarchive"};unsigned callbacks=0;request.append_journal=[&](auto){++callbacks;return Observation<bool>::available(true);};auto result=write_volume_archive(request);assert(!result.value()&&result.state()==ObservationState::Unsupported&&callbacks==0);dest.reset();take(root->finish_io());return 0;}
+ if(is("no-owner")){FilesVolumeArchiveWriteRequest request{document(),base_path+"/nonexistent","image.ckarchive",1,{},{},{},{},{},{},{}};unsigned callbacks=0;request.append_journal=[&](auto){++callbacks;return Observation<bool>::available(true);};auto result=write_volume_archive(request);assert(!result.value()&&result.state()==ObservationState::Unsupported&&callbacks==0);dest.reset();take(root->finish_io());return 0;}
  if(is("occupied")){int fd=open((base_path+"/dest/image.ckarchive").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  if(is("hint-replaced")){int fd=open((base_path+"/dest/.image.ckarchive.cktmp-1").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  std::stop_source stop;cancel_source=&stop;armed=true;
  const bool service_mode=is("service")||is("service-legacy-root")||is("service-oom");
  if(service_mode){if(is("service-oom"))mode="upstream-oom-close";
-  FilesVolumeArchiveService worker;FilesVolumeArchiveRequest request{source(),address(base_path+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},address(base_path+"/private"),id(),{},[](const auto&,const auto&,bool)->Observation<std::unique_ptr<OperationJournalFile>>{std::abort();}};
+  FilesVolumeArchiveService worker;FilesVolumeArchiveRequest request{source(),address(base_path+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},address(base_path+"/private"),id(),{},[](const auto&,const auto&,bool)->Observation<std::unique_ptr<OperationJournalFile>>{std::abort();},{}};
   if(!is("service-legacy-root"))request.prepared_journal_root=root;
   auto submitted=worker.request(std::move(request));assert(submitted.state==FilesVolumeArchiveSubmission::Accepted);
   std::optional<FilesVolumeArchiveReply> reply;for(unsigned i=0;i<30000&&!reply;++i){reply=worker.take();if(!reply)std::this_thread::sleep_for(std::chrono::milliseconds(1));}assert(reply);worker.request_stop();worker.join();
   if(is("upstream-oom-close")){assert(reply->state==FilesVolumeArchiveState::WorkerFault&&reply->failure_pod&&reply->failure_pod->domain==ErrorDomain::Posix&&reply->failure_pod->code==EIO&&close_fault);}
   else {assert(reply->state==FilesVolumeArchiveState::Complete&&reply->result&&reply->result->publication_confirmed);}
  }else{
-  FilesVolumeArchiveWriteRequest request{document(),base_path+"/dest","image.ckarchive"};request.destination_owner=dest;request.prepared_journal_root=root;request.native_journal_name=name(journal().c_str());request.native_journal_id=id();
+  FilesVolumeArchiveWriteRequest request{document(),base_path+"/dest","image.ckarchive",1,{},{},{},{},{},{},{}};request.destination_owner=dest;request.prepared_journal_root=root;request.native_journal_name=name(journal().c_str());request.native_journal_id=id();
   try{auto result=write_volume_archive(request,stop.get_token());
    if(is("occupied"))assert(!result.value()&&result.state()==ObservationState::Changed);
    else if(is("cancel-in-write"))assert(!result.value()&&result.unavailable_detail()->error.code==static_cast<std::int64_t>(AdapterError::InterruptedRead));

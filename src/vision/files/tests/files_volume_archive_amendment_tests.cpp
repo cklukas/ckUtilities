@@ -78,7 +78,7 @@ int main(int argc,char** argv){assert(argc==4&&getuid()!=0);const std::string ba
   c.cache_case=true;producer_role=true;auto publisher=take(c.root->open_journal(name("publisher"),true));take(publisher->write_at(0,bytes("publisher")));producer_role=false;
   c.baseline=descriptors();c.armed=true;ck::files::detail::journal_root_test_publication_pause.store(publication_pause);
   FilesVolumeArchiveService service([&]{c.reply_ready.store(true,std::memory_order_release);});
-  FilesVolumeArchiveRequest request{source(),path(base+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},path(base+"/private"),id(),{}, {}};request.prepared_journal_root=c.root;
+  FilesVolumeArchiveRequest request{source(),path(base+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},path(base+"/private"),id(),{}, {},{}};request.prepared_journal_root=c.root;
   auto accepted=service.request(std::move(request));assert(accepted.state==FilesVolumeArchiveSubmission::Accepted);wait(c.at_final,"final read boundary");
   std::thread producer([&]{producer_role=true;c.producer_fault=true;auto result=publisher->finish_io();assert(!result.value()&&result.unavailable_detail()->error.domain==ErrorDomain::Posix&&result.unavailable_detail()->error.code==ENOSPC);publisher.reset();c.published.store(true,std::memory_order_release);});
   wait(c.observed_pending,"authoritative read saw pending");
