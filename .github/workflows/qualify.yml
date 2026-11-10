@@ -21,7 +21,7 @@ env:
   CPACK_ARCHIVE_THREADS: '1'
   PYTHONDONTWRITEBYTECODE: '1'
   CKTOOLS_CI_CKVISION_REVISION: 7ad5bd67553414e7dc0882069482864034cb31f9
-  CKTOOLS_CI_BACKEND_REVISION: f82e648d30d2408790a674643394b33a83afdb98
+  CKTOOLS_CI_BACKEND_REVISION: a0301c1133d09e08d90eaee975e773c5d27857d7
   CKTOOLS_CI_FRONTEND_REVISION: ${{ inputs.frontend_sha }}
   CKTOOLS_CI_RELEASE_TAG: ${{ inputs.release_tag }}
 jobs:
@@ -201,7 +201,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: cklukas/ck-core-fs-lib
-          ref: f82e648d30d2408790a674643394b33a83afdb98
+          ref: a0301c1133d09e08d90eaee975e773c5d27857d7
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
           persist-credentials: false
       - name: Install required hosted Linux development dependency
@@ -281,6 +281,18 @@ jobs:
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeCache.txt
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeCache.txt
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeCache.txt
