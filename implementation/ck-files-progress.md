@@ -1,5 +1,21 @@
 # Files implementation evidence
 
+## 2026-11-10 — Linux qualification and macOS PTY for 9635373
+
+The hosted Linux x86-64 job for `9635373` passed 463 development tests,
+463 release tests, and two installed SDK consumers. The three package
+archives were checked against the authenticated job artifact. Linux ARM64
+passed 149 Files tests and both installed consumers with matching Clang 19
+ASan and UBSan instrumentation. Both Linux runs recorded zero failures or
+skips. See the [hosted job](https://github.com/cklukas/ckUtilities/actions/runs/42897754013/job/130116737273)
+and [source-bound evidence](evidence/ck-files-9635373-linux-and-pty-20261110.json).
+
+The verified macOS executable displayed the completion failure hint and
+cleared it on edit. Right accepted the next folder suggestion, Enter opened
+the folder, and both panes kept their mouse-selected marks through a resize.
+The PTY exited cleanly and restored its terminal modes. Desktop-window
+acceptance remains open.
+
 ## 2026-11-10 — Current-request location completion feedback
 
 The location dialog now displays bounded, fixed completion errors for the

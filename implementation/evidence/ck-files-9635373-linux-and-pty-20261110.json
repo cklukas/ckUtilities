@@ -1,0 +1,57 @@
+{
+  "source": {
+    "frontend": "9635373ad60f97ffb1ed55f822de2e6e264d5693",
+    "backend": "fc56de16433cf7066c344f8c052debc7e6197535",
+    "ckvision": "7ad5bd67553414e7dc0882069482864034cb31f9"
+  },
+  "hosted_linux_x86_64": {
+    "job": "https://github.com/cklukas/ckUtilities/actions/runs/42897754013/job/130116737273",
+    "started_at": "2026-11-10T20:44:09Z",
+    "completed_at": "2026-11-10T21:25:33Z",
+    "passed": {
+      "development": 463,
+      "release": 463,
+      "installed_sdk_consumers": 2
+    },
+    "failed": 0,
+    "skipped": 0,
+    "verified_source_files": 6516,
+    "packages": {
+      "ck-utilities-0.2.0-linux.tar.gz": "44929e490eadf009f5306a33512758bb0a5bddde511b4a30387ed8129841c83b",
+      "ck-utilities_0.2.0_amd64.deb": "9309b3d19ede0c55d7c351e3bf64a588d543709b90f5cc7e9b4eea230965b369",
+      "ck-utilities-0.2.0-1.x86_64.rpm": "ef32e32bab138264df7d72a97b206fa9472858a58e107a038b40487e3f7c35ae"
+    },
+    "receipt_sha256": "bade2918557db0f2906d5de8a4b9258990f20eadf7b4716325ee52d2a8fcd114"
+  },
+  "linux_arm64_asan_ubsan": {
+    "compiler": "Clang 19",
+    "passed": {
+      "files": 149,
+      "installed_ckvision_consumer": 1,
+      "installed_backend_c11_consumer": 1
+    },
+    "failed": 0,
+    "skipped": 0,
+    "instrumented_compile_rows": 301,
+    "compile_cache_hits": 0,
+    "receipt_sha256": "91ee5d54e0ceca9223e221465c656f700d2258e448d83d565565d3ce96060baf"
+  },
+  "macos_arm64_pty": {
+    "executed_binary_sha256": "816d3806595aa56293c483226637d08e88e045163afcc4fcc973aafa462caaf5",
+    "exit": 0,
+    "terminal_modes_restored": true,
+    "observations": [
+      "The dialog displayed a hint for the current failed completion.",
+      "Editing cleared the hint and Right accepted the next folder suggestion.",
+      "Enter navigated to the selected folder and exposed its fixture file.",
+      "Mouse input focused and marked entries in both panes.",
+      "Resizing from 140×40 to 120×32 preserved both marks."
+    ],
+    "receipt_sha256": "cd06cb8446a3496447767dfbcc712e4155a91d1374bbac546efebd70bd175447"
+  },
+  "open": [
+    "Current-source Windows qualification",
+    "Desktop-window interactive acceptance",
+    "Versioned bounded settings reader integration"
+  ]
+}
