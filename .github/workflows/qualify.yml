@@ -20,7 +20,7 @@ env:
   CPACK_THREADS: '1'
   CPACK_ARCHIVE_THREADS: '1'
   PYTHONDONTWRITEBYTECODE: '1'
-  CKTOOLS_CI_CKVISION_REVISION: 7ad5bd67553414e7dc0882069482864034cb31f9
+  CKTOOLS_CI_CKVISION_REVISION: 99ef5743e388db5c6a1169fae41b4261418c1120
   CKTOOLS_CI_BACKEND_REVISION: fc56de16433cf7066c344f8c052debc7e6197535
   CKTOOLS_CI_FRONTEND_REVISION: ${{ inputs.frontend_sha }}
   CKTOOLS_CI_RELEASE_TAG: ${{ inputs.release_tag }}
@@ -190,11 +190,11 @@ jobs:
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Checkout stock ckVision 1.4.2
+      - name: Checkout exact ckVision revision
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: 7ad5bd67553414e7dc0882069482864034cb31f9
+          ref: ${{ env.CKTOOLS_CI_CKVISION_REVISION }}
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ckvision
           persist-credentials: false
       - name: Checkout exact published backend

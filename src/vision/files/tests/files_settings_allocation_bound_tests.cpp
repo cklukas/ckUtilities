@@ -34,6 +34,27 @@ int main() {
         return 1;
     }
     if (!store.save({}).empty()) return 1; // Rejection must not poison the CAS revision.
+    // Build the oversized existing input before imposing the allocation cap.
+    files.add_file("/settings/oversized", std::string(2 * cap, 'x'));
+    const auto oversized_before = files.fingerprint("/settings/oversized");
+    FilesSettingsStore startup(files, "/settings/oversized");
+    rejected = 0;
+    reject_large_allocation = true;
+    bool startup_threw = false;
+    bool refused_load = false;
+    bool refused_save = false;
+    try {
+        refused_load = !startup.load().diagnostic.empty();
+        refused_save = !startup.save({}).empty();
+    } catch (...) { startup_threw = true; }
+    reject_large_allocation = false;
+    if (startup_threw || rejected || !refused_load || !refused_save ||
+        files.fingerprint("/settings/oversized") != oversized_before) {
+        std::fprintf(stderr, "startup settings bound failed: threw=%d large_allocations=%u load_refused=%d save_refused=%d\n",
+                     startup_threw, rejected, refused_load, refused_save);
+        return 1;
+    }
+    std::puts("PASS startup read refuses oversized input before over-cap allocation and preserves original revision");
     std::puts("PASS direct settings save rejects before any over-cap allocation; old bytes/revision preserved");
     return 0;
 }

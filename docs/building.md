@@ -56,8 +56,8 @@ archive on macOS:
 cmake --build build/pkg --target package
 ```
 
-GitHub Actions checks out and builds the immutable ckVision 1.4.2 revision
-`7ad5bd67553414e7dc0882069482864034cb31f9` on each Linux and macOS runner,
+GitHub Actions checks out and builds the immutable ckVision 1.5.0 revision
+`99ef5743e388db5c6a1169fae41b4261418c1120` on each Linux and macOS runner,
 then configures ckUtilities exclusively against that installed SDK. No
 repository variables or prebuilt framework archive are required.
 
@@ -87,7 +87,7 @@ display. ck-todo's and ck-sysmon's golden frames, which their test suites
 compare against, are written by the same run.
 
 To regenerate them, point the script at the installed SDK and the matching
-ckVision 1.4.2 source checkout:
+ckVision 1.5.0 source checkout:
 
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \

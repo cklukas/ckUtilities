@@ -132,3 +132,56 @@ CK_TEST(files_settings_direct_store_rejects_invalid_filter_order_and_bookmark_co
     CK_CHECK(before && after && after->contents == before->contents && after->fingerprint == before->fingerprint);
     CK_CHECK(store.save({}).empty());
 }
+
+CK_TEST(files_settings_oversized_startup_file_is_never_adopted_for_overwrite) {
+    ckv::MemoryFileSystem files;
+    files.add_file("/settings", std::string(1024 * 1024 + 1, 'x'));
+    const auto before = files.fingerprint("/settings");
+    FilesSettingsStore store(files, "/settings");
+    CK_CHECK(!store.load().diagnostic.empty());
+    CK_CHECK(!store.save({}).empty());
+    CK_CHECK(files.fingerprint("/settings") == before);
+}
+
+namespace {
+class SettingsReadProbe final : public ckv::FileSystem {
+  public:
+    ckv::MemoryFileSystem files;
+    mutable unsigned unbounded_reads = 0;
+    unsigned writes = 0;
+    std::vector<ckv::FileEntry> list_directory(std::string_view p) const override { return files.list_directory(p); }
+    bool exists(std::string_view p) const noexcept override { return files.exists(p); }
+    bool is_directory(std::string_view p) const noexcept override { return files.is_directory(p); }
+    bool create_directories(std::string_view p) override { return files.create_directories(p); }
+    std::optional<ckv::FileReadResult> read_file(std::string_view) const override { ++unbounded_reads; throw std::runtime_error("unbounded read was called"); }
+    ckv::FileWriteResult write_file_atomic(std::string_view p, std::string_view bytes, ckv::FileWriteExpectation e) override {
+        ++writes; return files.write_file_atomic(p, bytes, std::move(e));
+    }
+};
+}
+CK_TEST(files_settings_injected_reader_is_explicit_bounded_and_preserves_CAS) {
+    SettingsReadProbe probe;
+    probe.files.add_file("/settings", files_settings_text({}));
+    FilesSettingsStore store(probe, "/settings");
+    CK_CHECK(!store.load().diagnostic.empty());
+    CK_CHECK(!store.save({}).empty() && probe.writes == 0 && probe.unbounded_reads == 0);
+    unsigned calls = 0;
+    CK_CHECK(store.load([&](std::string_view path, std::size_t cap) {
+        ++calls; CK_CHECK(cap == 1024 * 1024); return probe.files.read_file_bounded(path, cap);
+    }).diagnostic.empty());
+    CK_CHECK(calls == 1 && probe.unbounded_reads == 0);
+    CK_CHECK(store.save({}).empty());
+    probe.files.add_file("/settings", "external actor");
+    CK_CHECK(!store.save({}).empty());
+    CK_CHECK(probe.files.read_file("/settings")->contents == "external actor");
+}
+CK_TEST(files_settings_broken_bounded_reader_does_not_grant_save_authority) {
+    SettingsReadProbe probe;
+    probe.files.add_file("/settings", "foreign");
+    FilesSettingsStore store(probe, "/settings");
+    CK_CHECK(!store.load([&](std::string_view, std::size_t cap) {
+        return std::optional<ckv::FileReadResult>{ckv::FileReadResult{std::string(cap + 1, 'x'), {"untrusted"}}};
+    }).diagnostic.empty());
+    CK_CHECK(!store.save({}).empty() && probe.writes == 0 && probe.unbounded_reads == 0);
+    CK_CHECK(probe.files.read_file("/settings")->contents == "foreign");
+}

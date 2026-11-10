@@ -58,6 +58,11 @@ class SettingsFS final:public ckv::FileSystem {
     bool is_directory(std::string_view path)const noexcept override {record();std::lock_guard lock(mutex_);return files_.is_directory(path);}
     bool create_directories(std::string_view path)override {record();std::lock_guard lock(mutex_);return files_.create_directories(path);}
     std::optional<ckv::FileReadResult> read_file(std::string_view path)const override {record();std::lock_guard lock(mutex_);return files_.read_file(path);}
+    FilesSettingsStore::BoundedRead bounded_reader() {
+        return [this](std::string_view path, std::size_t cap) {
+            record();std::lock_guard lock(mutex_);return files_.read_file_bounded(path,cap);
+        };
+    }
     ckv::FileWriteResult write_file_atomic(std::string_view path,std::string_view bytes,ckv::FileWriteExpectation expected)override {
         record();if(active.fetch_add(1)!=0)++overlap;
         struct Done {std::atomic<unsigned>&active;~Done(){--active;}} done{active};
@@ -124,7 +129,7 @@ struct AppFixture {
     std::array<std::unique_ptr<FilesPaneService>,2> panes;
     std::unique_ptr<FilesApp> app;
     unsigned quits=0;
-    explicit AppFixture(FilesPersistentSettings initial={},bool persist=true){files.foreign_write(files_settings_text(initial));auto loaded=store.load();files.enforce=true;settings=std::make_unique<FilesSettingsService>(store,wake.callback());
+    explicit AppFixture(FilesPersistentSettings initial={},bool persist=true){files.foreign_write(files_settings_text(initial));auto loaded=store.load(files.bounded_reader());files.enforce=true;settings=std::make_unique<FilesSettingsService>(store,wake.callback());
         for(auto &pane:panes){FilesPaneBackend backend;backend.storage_model=StorageModel::LinuxStatx;backend.filesystem=[]{return std::make_unique<PaneFS>();};backend.workspace=[]{return Observation<std::shared_ptr<IndexFileFactory>>::available(std::make_shared<MemoryWorkspace>());};pane=std::make_unique<FilesPaneService>(std::move(backend),FilesPaneServiceLimits{},wake.callback());}
         app=std::make_unique<FilesApp>(application,std::array<FilesPaneService*,2>{panes[0].get(),panes[1].get()},wake,std::array<NativeAbsolutePath,2>{pane_address(0),pane_address(1)},[this]{++quits;},ThemeScheme::Classic,std::array<FilesCompletionService*,2>{},nullptr,nullptr,std::shared_ptr<const NativeAbsolutePath>{},FilesSettingsBinding{std::move(loaded.value),std::move(loaded.diagnostic),persist?settings.get():nullptr});
         loaded_panes();}
@@ -152,7 +157,7 @@ CK_TEST(files_settings_service_blocked_save_keeps_real_app_bookmarks_refresh_and
     f.files.print_threads();
 }
 CK_TEST(files_settings_service_coalesces_serial_CAS_and_drains_latest_accepted_snapshot) {
-    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");CK_CHECK(store.load().diagnostic.empty());fs.enforce=true;fs.block=true;
+    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");CK_CHECK(store.load(fs.bounded_reader()).diagnostic.empty());fs.enforce=true;fs.block=true;
     FilesSettingsService worker(store);Unblock release{fs};
     const auto first=worker.submit(snapshot(1));CK_CHECK(first.state==FilesSettingsAdmission::Accepted);fs.gate.wait();
     const auto skipped=worker.submit(snapshot(2));const auto last=worker.submit(snapshot(3));
@@ -167,7 +172,7 @@ CK_TEST(files_settings_service_coalesces_serial_CAS_and_drains_latest_accepted_s
     CK_CHECK(fs.observed()->contents==files_settings_text(snapshot(3)) && fs.ui_io==0 && fs.overlap==0);fs.print_threads();
 }
 CK_TEST(files_settings_service_preserves_external_conflict_and_retained_error_after_UI_take) {
-    SettingsFS fs;fs.foreign_write(files_settings_text(snapshot(0)));FilesSettingsStore store(fs,"/settings/value");CK_CHECK(store.load().diagnostic.empty());fs.enforce=true;fs.block=true;
+    SettingsFS fs;fs.foreign_write(files_settings_text(snapshot(0)));FilesSettingsStore store(fs,"/settings/value");CK_CHECK(store.load(fs.bounded_reader()).diagnostic.empty());fs.enforce=true;fs.block=true;
     FilesSettingsService worker(store);Unblock release{fs};const auto accepted=worker.submit(snapshot(1));fs.gate.wait();
     const auto foreign=files_settings_text(snapshot(9));fs.foreign_write(foreign);fs.gate.release();await([&]{return worker.progress().finished_revision==accepted.revision;});
     const auto reply=worker.take();CK_CHECK(reply && reply->revision==accepted.revision && reply->state==FilesSettingsWriteState::StoreError && reply->message().find("changed in another process")!=std::string_view::npos);
@@ -176,7 +181,7 @@ CK_TEST(files_settings_service_preserves_external_conflict_and_retained_error_af
     CK_CHECK(worker.progress().saved_revision==0 && fs.observed()->contents==foreign && fs.writes==1 && fs.ui_io==0);
 }
 CK_TEST(files_settings_service_publication_then_exception_is_unknown_and_never_blindly_replayed) {
-    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load();fs.enforce=true;fs.throw_after_publish=true;
+    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load(fs.bounded_reader());fs.enforce=true;fs.throw_after_publish=true;
     FilesSettingsService worker(store);const auto first=worker.submit(snapshot(1));await([&]{return worker.progress().finished_revision==first.revision;});
     const auto unknown=worker.take();CK_CHECK(unknown && unknown->revision==first.revision && unknown->state==FilesSettingsWriteState::NoMemory && unknown->outcome_unknown);
     CK_CHECK(fs.observed()->contents==files_settings_text(snapshot(1)) && fs.writes==1 && worker.progress().saved_revision==0);
@@ -185,7 +190,7 @@ CK_TEST(files_settings_service_publication_then_exception_is_unknown_and_never_b
     CK_CHECK(fs.observed()->contents==files_settings_text(snapshot(1)) && fs.writes==2 && fs.ui_io==0);
 }
 CK_TEST(files_settings_service_failed_wake_keeps_completion_available_for_nonblocking_UI_poll) {
-    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load();fs.enforce=true;
+    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load(fs.bounded_reader());fs.enforce=true;
     FilesSettingsService worker(store,[]{throw std::bad_alloc();});const auto accepted=worker.submit(snapshot(1));worker.request_close();worker.join();
     const auto reply=worker.take();CK_CHECK(reply && reply->revision==accepted.revision && reply->state==FilesSettingsWriteState::Saved);
     CK_CHECK(worker.progress().wake_failed && worker.drained() && worker.latest_result()->revision==accepted.revision && fs.ui_io==0);
@@ -200,7 +205,7 @@ CK_TEST(files_settings_service_checks_real_codec_exact_1MiB_boundary_before_queu
     const auto before=files_settings_text(value).size();const auto extra=(FilesSettingsBounds::bytes-before)/2;
     value.bookmarks[0].back()=location("/"+std::string(extra,'y'));
     const auto exact=files_settings_text(value);CK_CHECK(exact.size()==FilesSettingsBounds::bytes && parse_files_settings(exact).has_value());
-    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load();fs.enforce=true;FilesSettingsService worker(store);
+    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load(fs.bounded_reader());fs.enforce=true;FilesSettingsService worker(store);
     const auto accepted=worker.submit(value);CK_CHECK(accepted.state==FilesSettingsAdmission::Accepted);
     auto overflow=value;overflow.bookmarks[0].back()=take(location("/"+std::string(extra-1,'y')).descend(*NativeName::from_posix("z"),{},FilesPaneLocation::hard_components));
     const auto too_large=files_settings_text(overflow);CK_CHECK(too_large.size()==FilesSettingsBounds::bytes+1 && !parse_files_settings(too_large));
@@ -208,7 +213,7 @@ CK_TEST(files_settings_service_checks_real_codec_exact_1MiB_boundary_before_queu
     worker.request_close();worker.join();CK_CHECK(fs.writes==1 && fs.observed()->contents==exact && fs.ui_io==0);
 }
 CK_TEST(files_settings_service_rejects_null_bookmarks_and_limits_without_truncating_previous_work) {
-    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load();fs.block=true;FilesSettingsService worker(store);Unblock release{fs};const auto accepted=worker.submit(snapshot(1));fs.gate.wait();
+    SettingsFS fs;FilesSettingsStore store(fs,"/settings/value");store.load(fs.bounded_reader());fs.block=true;FilesSettingsService worker(store);Unblock release{fs};const auto accepted=worker.submit(snapshot(1));fs.gate.wait();
     ck::files::PaneView view;std::array<std::shared_ptr<const FilesPaneLocation>,1> nulls{};
     FilesSettingsSnapshotView invalid;invalid.views={&view,&view};invalid.bookmarks[0]=nulls;
     CK_CHECK(worker.submit(invalid).state==FilesSettingsAdmission::Invalid);
