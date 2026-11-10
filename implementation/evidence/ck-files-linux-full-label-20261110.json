@@ -1,6 +1,6 @@
 {
   "utc": "2026-11-10T06:04:12.681656+00:00",
-  "scope": "Full Linux Files label on 6eb8b3f plus approved fixture-only overlays; excludes later 2af62e2 Store save-preflight delta.",
+  "scope": "Full Linux Files label normal and matching Clang19 ASan/UBSan on6eb8b3f plus approved fixture-only overlays; later2af62e2 Store preflight excluded.",
   "source_pins": {
     "ckUtilities": "6eb8b3fb9a4b722aca720a3aace2f72c39329e99",
     "ck-core-fs-lib": "5899b9f977d855a08c7129adedf8d6ab983700f9",
@@ -25,10 +25,27 @@
   ],
   "C_consumer_scope": "Unchanged main.c compiled as C11 with C11-only guard; matching CXX final driver supplies full CXX UBSan/vptr runtime. Does not fix/qualify original pure-C linker configuration.",
   "remaining": [
-    "Matching Linux ASan/UBSan full Files label",
     "Later Store preflight delta on Linux",
     "Windows normal and matching ASan failures",
     "Original intermittent copy timeout cause",
     "Native window interactive acceptance"
-  ]
+  ],
+  "asan_ubsan": {
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-linux-full-files-asan-ubsan-20261110/approved-full-terminal-record.json",
+    "receipt_sha256": "f23f16e6fa2d7ea4067076323e3314c217bf0c7d25d143884a16493de58c688e",
+    "ctests": 147,
+    "failures": 0,
+    "skips": 0,
+    "instrumented_translation_units": 295,
+    "sdk_archive_sha256": "e3bd74d0d0d7ed88218183df4a9cc1ac9296b9dab227680661b4a6e6bbbbbec7",
+    "build_seconds": 948.9105913522653,
+    "test_seconds": 67.05107909534127,
+    "matching_consumers": 2,
+    "sanitizer_options": {
+      "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+      "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+    },
+    "native_content_cases": 21,
+    "new_current_store_delta_included": false
+  }
 }
