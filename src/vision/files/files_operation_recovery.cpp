@@ -1,18 +1,18 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_recovery.hpp"
+#include "directory_cursor.hpp"
+#include "files_recovery_finalization.hpp"
 
 #include <algorithm>
 #include <condition_variable>
 #include <cstdint>
-#include <filesystem>
 #include <mutex>
 #include <string_view>
 #include <thread>
 
 namespace ck::vision {
 namespace {
-namespace fs = std::filesystem;
 
 template <class T>
 ck::files::Observation<T> error(ck::files::AdapterError code, const char *operation,
@@ -21,28 +21,26 @@ ck::files::Observation<T> error(ck::files::AdapterError code, const char *operat
         {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
 }
 
-bool is_operation_journal_name(std::string_view value) {
-    return value.starts_with(".ck-copy-journal-") || value.starts_with(".ck-tree-journal-") ||
-           value.starts_with(".ck-move-journal-") || value.starts_with(".ck-delete-tree-journal-");
-}
-
-std::optional<ck::files::NativeName> native_name(const fs::path &path) {
-#if defined(_WIN32)
-    const auto units = path.filename().native();
-    std::u16string value;
-    value.reserve(units.size());
-    for (const auto unit : units)
-        value.push_back(static_cast<char16_t>(unit));
-    return ck::files::NativeName::from_windows(std::move(value));
-#else
-    return ck::files::NativeName::from_posix(path.filename().native());
-#endif
+bool is_operation_journal_name(const ck::files::NativeName &name) {
+    constexpr std::string_view prefixes[]{".ck-copy-journal-", ".ck-tree-journal-",
+                                          ".ck-move-journal-", ".ck-delete-tree-journal-"};
+    for (const auto prefix : prefixes) {
+        if (const auto *bytes = name.posix_bytes(); bytes && bytes->starts_with(prefix))
+            return true;
+        if (const auto *units = name.windows_units(); units && units->size() >= prefix.size() &&
+            std::equal(prefix.begin(), prefix.end(), units->begin(), [](char byte, char16_t unit) {
+                return static_cast<unsigned char>(byte) == unit;
+            }))
+            return true;
+    }
+    return false;
 }
 
 bool valid_limits(const FilesOperationRecoveryLimits &limits) {
     return limits.max_journals != 0 && limits.max_journals <= 16 * 1024 &&
            limits.journal.max_items != 0 && limits.journal.max_records != 0 &&
-           limits.codec.max_bytes != 0 && limits.evidence.max_bytes != 0;
+           limits.codec.max_bytes != 0 && limits.evidence.max_bytes != 0 &&
+           limits.max_scan_batches != 0 && limits.max_scan_batches <= 4096;
 }
 
 } // namespace
@@ -52,88 +50,69 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
     if (!private_root.is_valid() || !valid_limits(limits))
         return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InvalidLimit,
                                                  "operation_recovery.scan_limits");
-    auto host = private_root.host_path();
-    if (!host.value())
+    // Acquire this exact native directory once. Every journal read is relative
+    // to its retained handle; presentation text and navigation paths never
+    // become reopening authority.
+    auto opened = ck::files::open_native_operation_journal_directory(private_root);
+    if (!opened.value())
         return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
-            host.state(), host.unavailable_detail()->error);
+            opened.state(), opened.unavailable_detail()->error);
+    auto cursor = std::move(opened).take_value();
+    return detail::finish_recovery_observation<FilesOperationRecoveryScan>(
+        [&]() -> ck::files::Observation<FilesOperationRecoveryScan> {
+            FilesOperationRecoveryScan result;
+            auto remaining_batches = limits.max_scan_batches;
+            for (;;) {
+                if (!remaining_batches)
+                    return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InventoryLimit,
+                        "operation_recovery.scan_batches", ck::files::ObservationState::Unknown);
+                // read() limits returned names but always caps native steps at
+                // max_batch_size, including skipped records. Charge a whole batch.
+                auto batch = cursor->read(std::min(limits.max_journals, ck::files::DirectoryCursor::max_batch_size));
+                --remaining_batches;
+                if (batch.error)
+                    return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
+                        batch.error->state, batch.error->error);
+                for (const auto &name : batch.names) {
+                    if (!is_operation_journal_name(name))
+                        continue;
+                    if (result.journals.size() >= limits.max_journals)
+                        return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InventoryLimit,
+                            "operation_recovery.count", ck::files::ObservationState::Unknown);
 
-    std::error_code ec;
-    const auto root_status = fs::symlink_status(*host.value(), ec);
-    if (ec)
-        return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
-            ck::files::ObservationState::Denied,
-            {ck::files::ErrorDomain::Posix, ec.value(), "operation_recovery.root_status"});
-    if (!fs::is_directory(root_status) || fs::is_symlink(root_status))
-        return error<FilesOperationRecoveryScan>(ck::files::AdapterError::NotDirectory,
-                                                 "operation_recovery.root");
-
-    FilesOperationRecoveryScan result;
-    fs::directory_iterator iterator(*host.value(), ec);
-    if (ec)
-        return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
-            ck::files::ObservationState::Denied,
-            {ck::files::ErrorDomain::Posix, ec.value(), "operation_recovery.enumerate"});
-    const fs::directory_iterator end;
-    for (; iterator != end; iterator.increment(ec)) {
-        if (ec)
-            return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
-                ck::files::ObservationState::Denied,
-                {ck::files::ErrorDomain::Posix, ec.value(), "operation_recovery.enumerate"});
-        const auto entry = *iterator;
-        const auto basename = entry.path().filename().string();
-        if (!is_operation_journal_name(basename))
-            continue;
-        if (result.journals.size() >= limits.max_journals)
-            return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InventoryLimit,
-                                                     "operation_recovery.count",
-                                                     ck::files::ObservationState::Unknown);
-
-        FilesOperationRecoveryItem item;
-        item.display_name = basename;
-        item.native_name = native_name(entry.path());
-        const auto status = entry.symlink_status(ec);
-        if (ec) {
-            item.error = {ck::files::ObservationState::Denied,
-                          {ck::files::ErrorDomain::Posix, ec.value(), "operation_recovery.entry_status"}};
-            result.requires_reconciliation = true;
-            result.journals.push_back(std::move(item));
-            ec.clear();
-            continue;
-        }
-        if (!item.native_name || fs::is_symlink(status) || !fs::is_regular_file(status)) {
-            item.error = {ck::files::ObservationState::Unsupported,
-                          {ck::files::ErrorDomain::Adapter,
-                           static_cast<std::int64_t>(ck::files::AdapterError::UnsupportedQuery),
-                           "operation_recovery.entry_kind"}};
-            result.requires_reconciliation = true;
-            result.journals.push_back(std::move(item));
-            continue;
-        }
-
-        auto file = ck::files::open_native_operation_journal_file(private_root, *item.native_name, false);
-        if (!file.value()) {
-            item.error = *file.unavailable_detail();
-            result.requires_reconciliation = true;
-        } else {
-            auto inspection = ck::files::inspect_native_operation_recovery_evidence(
-                **file.value(), limits.journal, limits.codec, limits.evidence);
-            if (!inspection.value()) {
-                item.error = *inspection.unavailable_detail();
-                result.requires_reconciliation = true;
-            } else {
-                result.requires_reconciliation = result.requires_reconciliation ||
-                    inspection.value()->report.requires_reconciliation;
-                item.report = FilesOperationRecoveryReport{
-                    inspection.value()->journal_id, std::move(inspection).take_value()};
+                    FilesOperationRecoveryItem item;
+                    item.native_name = name;
+                    item.display_name = name.display_name();
+                    auto file = ck::files::open_held_operation_journal_file(*cursor, name);
+                    if (!file.value()) {
+                        item.error = *file.unavailable_detail();
+                        result.requires_reconciliation = true;
+                    } else {
+                        auto inspection = detail::finish_recovery_observation<ck::files::NativeOperationRecoveryInspection>(
+                            [&] { return ck::files::inspect_native_operation_recovery_evidence(
+                                **file.value(), limits.journal, limits.codec, limits.evidence); },
+                            [&] { return (*file.value())->finish_io(); }, "operation_recovery.finish_io");
+                        if (!inspection.value()) {
+                            item.error = *inspection.unavailable_detail();
+                            result.requires_reconciliation = true;
+                        } else {
+                            result.requires_reconciliation = result.requires_reconciliation ||
+                                inspection.value()->report.requires_reconciliation;
+                            item.report = FilesOperationRecoveryReport{
+                                inspection.value()->journal_id, std::move(inspection).take_value()};
+                        }
+                    }
+                    result.journals.push_back(std::move(item));
+                }
+                if (batch.state == ck::files::DirectoryReadState::End)
+                    break;
+                if (batch.state != ck::files::DirectoryReadState::More)
+                    return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InterruptedRead,
+                        "operation_recovery.enumerate", ck::files::ObservationState::Unknown);
             }
-        }
-        result.journals.push_back(std::move(item));
-    }
-    if (ec)
-        return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
-            ck::files::ObservationState::Denied,
-            {ck::files::ErrorDomain::Posix, ec.value(), "operation_recovery.enumerate"});
-    return ck::files::Observation<FilesOperationRecoveryScan>::available(std::move(result));
+            return ck::files::Observation<FilesOperationRecoveryScan>::available(std::move(result));
+        }, [&] { return ck::files::finish_operation_journal_directory(*cursor); },
+        "operation_recovery.directory_finish_io");
 }
 
 struct FilesOperationRecoveryService::State final {
@@ -185,10 +164,9 @@ struct FilesOperationRecoveryService::State final {
         } catch (...) {
             FilesOperationRecoveryReply result;
             result.state = FilesOperationRecoveryState::WorkerFault;
-            result.error = {ck::files::ObservationState::Failed,
-                             {ck::files::ErrorDomain::Adapter,
-                              static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
-                              "operation_recovery.worker_fault"}};
+            // Keep the fallback allocation-free: formatting a NativeError
+            // here can throw again under persistent worker allocation failure.
+            // WorkerFault with no error already has an explicit UI diagnostic.
             emit(std::move(result));
         }
     }

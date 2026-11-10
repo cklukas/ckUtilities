@@ -18,6 +18,10 @@ struct FilesOperationRecoveryLimits final {
     ck::files::OperationJournalLimits journal{};
     ck::files::OperationJournalCodecLimits codec{};
     ck::files::NativeOperationRecoveryEvidenceLimits evidence{};
+    // Each read performs at most DirectoryCursor::max_batch_size native steps,
+    // including skipped entries. Bound batches even when no journal matches.
+    // End is live enumeration completion, never a frozen directory snapshot.
+    std::size_t max_scan_batches = 16;
 };
 
 struct FilesOperationRecoveryReport final {

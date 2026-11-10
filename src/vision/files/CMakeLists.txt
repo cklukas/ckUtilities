@@ -23,7 +23,7 @@ if(BUILD_TESTING)
     message(FATAL_ERROR "CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT must be absolute")
   endif()
   file(MAKE_DIRECTORY "${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}")
-  add_executable(ck_vision_files_tests tests/files_completion_service_tests.cpp tests/files_completion_index_tests.cpp tests/files_location_text_tests.cpp tests/files_location_draft_tests.cpp tests/files_settings_tests.cpp tests/files_settings_service_tests.cpp tests/files_operation_review_dialog_tests.cpp tests/files_operation_planning_service_tests.cpp tests/files_operation_execution_service_tests.cpp tests/files_operation_recovery_tests.cpp tests/files_volume_archive_tests.cpp tests/files_volume_source_tests.cpp tests/files_pane_grid_tests.cpp tests/files_pane_service_tests.cpp tests/files_app_tests.cpp)
+  add_executable(ck_vision_files_tests tests/files_completion_service_tests.cpp tests/files_completion_index_tests.cpp tests/files_location_text_tests.cpp tests/files_location_draft_tests.cpp tests/files_settings_tests.cpp tests/files_settings_service_tests.cpp tests/files_operation_review_dialog_tests.cpp tests/files_operation_planning_service_tests.cpp tests/files_operation_execution_service_tests.cpp tests/files_operation_recovery_tests.cpp tests/files_operation_recovery_limit_tests.cpp tests/files_recovery_finalization_tests.cpp tests/files_volume_archive_tests.cpp tests/files_volume_source_tests.cpp tests/files_pane_grid_tests.cpp tests/files_pane_service_tests.cpp tests/files_app_tests.cpp)
   target_link_libraries(ck_vision_files_tests PRIVATE ck_vision_files ck_vision_shell ck_files_platform ck_vision_cktest_main)
   target_compile_definitions(ck_vision_files_tests PRIVATE CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}")
   cktools_strict(ck_vision_files_tests)
@@ -36,6 +36,16 @@ if(BUILD_TESTING)
   cktools_strict(ck_vision_files_settings_allocation_bound_tests)
   add_test(NAME ck_vision_files_settings_allocation_bound_tests COMMAND ck_vision_files_settings_allocation_bound_tests)
   set_tests_properties(ck_vision_files_settings_allocation_bound_tests PROPERTIES LABELS "files;settings;allocation" TIMEOUT 15)
+  add_executable(ck_vision_files_operation_recovery_oom_tests
+    tests/files_recovery_worker_oom_tests.cpp tests/files_recovery_worker_oom_allocator.cpp)
+  target_link_libraries(ck_vision_files_operation_recovery_oom_tests PRIVATE ck_vision_files)
+  target_include_directories(ck_vision_files_operation_recovery_oom_tests PRIVATE ${PROJECT_SOURCE_DIR}/tests/support)
+  target_compile_definitions(ck_vision_files_operation_recovery_oom_tests PRIVATE
+    CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}"
+    CKTOOLS_TEST_TEMP_ROOT="${CKTOOLS_TEST_TEMP_ROOT}")
+  cktools_strict(ck_vision_files_operation_recovery_oom_tests)
+  add_test(NAME ck_vision_files_operation_recovery_oom_tests COMMAND ck_vision_files_operation_recovery_oom_tests)
+  set_tests_properties(ck_vision_files_operation_recovery_oom_tests PROPERTIES LABELS "files;recovery;allocation" TIMEOUT 15)
 endif()
 
 # Native ownership/finalization contracts use genuine Linux staging providers.

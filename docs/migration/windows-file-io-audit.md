@@ -7,20 +7,36 @@ boundaries must use wide Win32/native-handle APIs with validated extended
 length paths, or handle-relative native APIs. Narrow Win32 calls and legacy
 `MAX_PATH` assumptions are not acceptable for product I/O.
 
-## Open recovery finding — 2026-11-10
+## Recovery discovery correction — 2026-11-10
 
-The ordinary operation-recovery scanner still uses `std::filesystem` for root
-status, enumeration and basename conversion on Windows. This path is not
-compliant with the policy above. A native regression creates, writes, flushes,
-closes and reads back a journal below an unchanged 414-unit UTF-16 root, then
-fails discovery at `operation_recovery.root_status` with Denied/code 3. The
-existing scanner also incorrectly labels this Windows error as POSIX.
+The former scanner used `std::filesystem` for Windows root status, enumeration
+and basename conversion. Its regression created, wrote, flushed, closed and
+read back a journal below an unchanged 414-unit UTF-16 root, then failed at
+`operation_recovery.root_status` with Denied/code 3, incorrectly labeled POSIX.
+That failure remains preserved in the qualification records.
 
-The correction is in progress: acquire one native directory, preserve exact
-native basenames, and inspect journals through a read-only capability relative
-to that retained directory. Neither a shortened fixture path nor a pathname
-reopen is an acceptable fix. This remains an open qualification gate; the
-historical audit below does not establish coverage for this newer scanner.
+The scanner now acquires one native directory and reads journals relative to
+that retained handle. Native basenames preserve exact UTF-16, including an
+unpaired-surrogate suffix; neither display text nor the former root pathname
+is reopening authority. The file adapter denies writes and flushes. Explicit
+file and directory completion runs on failure and exception paths, and scan
+batches have a separate enforced limit. The worker's allocation-failure reply
+also avoids constructing another allocating diagnostic.
+
+Focused real-controller tests pass on Windows NTFS/ReFS normal and ASan,
+Mac normal and matching TSan, and Linux ext4 normal and matching ASan/UBSan.
+The Windows 414-unit root and raw-name cases pass unchanged. The old worker
+reproducibly terminates under persistent allocation failure; the corrected
+worker returns two reusable fault replies and joins without changing the
+sentinel file. See the durable qualification packets
+`windows-native-recovery-20261110`,
+`ckutilities-native-recovery-mac-common-v3-20261110`, and
+`ckutilities-native-recovery-linux-20261110` in `ck-core-fs-qualification`.
+
+This is focused discovery/worker qualification. The complete current Files
+application matrix, UNC/provider coverage, injected Windows OS-close failures,
+and native-window interactive acceptance remain open. The historical audit
+below does not close those gates.
 
 ## ckUtilities
 

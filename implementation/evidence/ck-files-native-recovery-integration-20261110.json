@@ -1,0 +1,35 @@
+{
+  "date": "2026-11-10",
+  "scope": "Qualified focused actual native recovery/controller and final common worker-OOM fixture, not whole Files or native-window acceptance",
+  "backend_pin": "fc56de16433cf7066c344f8c052debc7e6197535",
+  "backend_archive_sha256": "c2d84a67edb7b5c0bd80d0b3771c066eeecf827d7ed886936192643552db7645",
+  "archive_git_entries_verified": 512,
+  "archive_byte_kinds_executable_bits_and_link_targets_match": true,
+  "archive_permission_note": "Git stores regular/executable kind, not arbitrary POSIX permissions. GitHub tar adds only group-write (020); no other permission delta/special bit accepted. Exact permission equality first check rejected0664vs0644; not claimed equivalent copied-filesystem metadata.",
+  "controller_sha256": "50c462549cafc1b0fdd8cbfe8aba30065be3fd3aa0fb63de516f184b7d9ec7ad",
+  "modes": {
+    "macOS": {
+      "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-native-recovery-mac-common-v3-20261110/receipt.json",
+      "sha256": "8018751ad45bbed27a1a1dba5f502e482b7abd70cb5be0e379b6221ef5f5c826",
+      "scope": "Normal and matching TSan:12controller cases+OOMpositive+oldnegative86/rejected3/verified3 per mode"
+    },
+    "Linux": {
+      "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-native-recovery-linux-20261110/receipt.json",
+      "sha256": "5124f1ea25b3f6e7500fd978851bad2679431042f9a5c18ebdbd66781a2e4876",
+      "scope": "Normal and matching ASan/UBSan:12controller cases+OOMpositive+oldnegative86/rejected3/verified3 per mode"
+    },
+    "Windows": {
+      "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/windows-native-recovery-20261110/record.json",
+      "sha256": "57d6bb68114f15ec2d29ab2da635418fc945e7adf1fc9c999d309a66100edd19",
+      "scope": "ActualNTFS/ReFS normal5/5 andASan4/4,56individualcontrollercaseexecutions+4OOMpositive; normalReFSoldnegative86/rejected3/verified3"
+    }
+  },
+  "remaining": [
+    "Full current frontend package/test platform matrix",
+    "Native-window acceptance",
+    "UNC/provider qualification",
+    "Windows reader injected native-close faults",
+    "Bounded startup SDK integration and remaining WP-02 gates"
+  ],
+  "WP02_complete": false
+}

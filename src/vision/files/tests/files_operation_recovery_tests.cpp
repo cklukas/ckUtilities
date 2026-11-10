@@ -13,10 +13,13 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <mutex>
+#include <span>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
 
 namespace {
@@ -36,6 +39,37 @@ OperationJournalId journal_id() {
     return id;
 }
 
+// Deliberately malformed contents still use a real private native journal.
+// Keep the same owner through every write, flush and fallible native close.
+bool write_fixture_journal_bytes(const NativeAbsolutePath &root, const NativeName &name,
+                                 std::string_view text) {
+    auto opened = open_native_operation_journal_file(root, name, true);
+    CK_CHECK(opened.value());
+    if (!opened.value()) return false;
+    auto file = std::move(opened).take_value();
+    const auto bytes = std::as_bytes(std::span(text.data(), text.size()));
+    std::size_t offset = 0;
+    while (offset < bytes.size()) {
+        const auto written = file->write_at(offset, bytes.subspan(offset));
+        const bool progress = written.value() && *written.value() != 0 &&
+                              *written.value() <= bytes.size() - offset;
+        CK_CHECK(progress);
+        if (!progress) break;
+        offset += *written.value();
+    }
+    // Drain the actual owner even if an earlier write failed. Neither success
+    // nor a retained C++ object substitutes for checked native completion.
+    const auto size = file->size();
+    CK_CHECK(size.value() && *size.value() == bytes.size());
+    const auto flushed = file->flush();
+    CK_CHECK(flushed.value() && *flushed.value());
+    const auto finished = file->finish_io();
+    CK_CHECK(finished.value() && *finished.value());
+    return offset == bytes.size() && size.value() && *size.value() == bytes.size() &&
+           flushed.value() && *flushed.value() &&
+           finished.value() && *finished.value();
+}
+
 NativeOperationRecoveryEvidence evidence() {
     AdapterScope scope;
     const auto identity = *NativeDurableIdentity::from_live(
@@ -50,8 +84,8 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
     const ck::testing::ScratchDirectory scratch("files-operation-recovery-discovery", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto destination_path = scratch.path() / "destination";
     const auto journal_path = scratch.path() / "journals";
-    std::filesystem::create_directory(destination_path);
-    std::filesystem::create_directory(journal_path);
+    CK_CHECK(ck::io::create_directories(destination_path));
+    CK_CHECK(ck::io::create_directories(journal_path));
     const auto destination_address = address(destination_path);
     const auto root = address(journal_path);
     CK_CHECK(prepare_native_operation_journal_root(root).value());
@@ -77,9 +111,40 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
     CK_CHECK(append_operation_journal_file(**file.value(), *journal,
                                           {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
 
-    std::ofstream malformed(journal_path / ".ck-move-journal-0002", std::ios::binary);
-    malformed << "torn";
-    std::filesystem::create_directory(journal_path / ".ck-delete-tree-journal-0003");
+#if defined(_WIN32)
+    // The live private writer deliberately excludes another journal open.
+    // Preserve this refusal instead of treating an in-flight journal as a
+    // completed recovery report or weakening its sharing contract.
+    const auto live_scan = discover_operation_recovery(root);
+    CK_CHECK(live_scan.value() && live_scan.value()->journals.size() == 1 &&
+             live_scan.value()->requires_reconciliation);
+    if (live_scan.value() && live_scan.value()->journals.size() == 1) {
+        const auto &live = live_scan.value()->journals.front();
+        CK_CHECK(live.native_name && *live.native_name == name);
+        CK_CHECK(!live.report && live.error.has_value());
+        if (live.error) {
+            CK_CHECK(live.error->state == ObservationState::Denied);
+            CK_CHECK(live.error->error.domain == ErrorDomain::NtStatus);
+            CK_CHECK(static_cast<std::uint32_t>(live.error->error.code) == 0xc0000043U);
+            CK_CHECK(live.error->error.operation == "journal_reader.NtCreateFile");
+        }
+    }
+#endif
+    const auto finished = (**file.value()).finish_io();
+    CK_CHECK(finished.value() && *finished.value());
+    if (!finished.value() || !*finished.value()) return;
+
+#if defined(_WIN32)
+    const auto malformed_name = *NativeName::from_windows(u".ck-move-journal-0002");
+#else
+    const auto malformed_name = *NativeName::from_posix(".ck-move-journal-0002");
+#endif
+    if (!write_fixture_journal_bytes(root, malformed_name, "torn")) return;
+    CK_CHECK(ck::io::create_directories(journal_path / ".ck-delete-tree-journal-0003"));
+    std::string malformed_before, journal_before;
+    CK_CHECK(ck::io::read_file(journal_path / ".ck-move-journal-0002", malformed_before, 5));
+    CK_CHECK(malformed_before == "torn");
+    CK_CHECK(ck::io::read_file(journal_path / ".ck-copy-journal-0001", journal_before, 64 * 1024));
 
     const auto scan = discover_operation_recovery(root);
     CK_CHECK(scan.value() && scan.value()->journals.size() == 3 &&
@@ -99,15 +164,28 @@ CK_TEST(files_operation_recovery_discovery_retains_unfinished_and_malformed_jour
                                              [](const auto &item) { return item.display_name == ".ck-delete-tree-journal-0003"; });
     CK_CHECK(malformed_item != scan.value()->journals.end() && malformed_item->error.has_value());
     CK_CHECK(directory_item != scan.value()->journals.end() && directory_item->error.has_value());
+    // Discovery is read-only evidence, never replay or cleanup authority.
+    std::string malformed_after, journal_after;
+    CK_CHECK(ck::io::read_file(journal_path / ".ck-move-journal-0002", malformed_after, 5));
+    CK_CHECK(malformed_after == malformed_before);
+    CK_CHECK(ck::io::read_file(journal_path / ".ck-copy-journal-0001", journal_after, 64 * 1024));
+    CK_CHECK(journal_after == journal_before);
 }
 
 CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
     const ck::testing::ScratchDirectory scratch("files-operation-recovery-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = address(scratch.path());
     CK_CHECK(prepare_native_operation_journal_root(root).value());
-    std::ofstream journal(scratch.path() / ".ck-copy-journal-repeated", std::ios::binary);
-    journal << "malformed but retained for review";
-    CK_CHECK(static_cast<bool>(journal));
+#if defined(_WIN32)
+    const auto name = *NativeName::from_windows(u".ck-copy-journal-repeated");
+#else
+    const auto name = *NativeName::from_posix(".ck-copy-journal-repeated");
+#endif
+    constexpr std::string_view torn = "malformed but retained for review";
+    if (!write_fixture_journal_bytes(root, name, torn)) return;
+    std::string before;
+    CK_CHECK(ck::io::read_file(scratch.path() / ".ck-copy-journal-repeated", before, torn.size() + 1));
+    CK_CHECK(before == torn);
 
     std::mutex wake_mutex;
     std::condition_variable wake_condition;
@@ -138,7 +216,10 @@ CK_TEST(files_operation_recovery_service_supports_repeated_read_only_scans) {
     CK_CHECK(second && second->state == FilesOperationRecoveryState::Ready && second->scan);
     if (second && second->scan)
         CK_CHECK(second->scan->journals.size() == 1 && second->scan->journals[0].error.has_value());
-    CK_CHECK(std::filesystem::exists(scratch.path() / ".ck-copy-journal-repeated"));
+    CK_CHECK(ck::io::is_regular_file(scratch.path() / ".ck-copy-journal-repeated"));
+    std::string after;
+    CK_CHECK(ck::io::read_file(scratch.path() / ".ck-copy-journal-repeated", after, torn.size() + 1));
+    CK_CHECK(after == before);
 
     service.request_stop();
     service.join();
@@ -166,6 +247,9 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
     auto file = std::move(file_result).take_value();
     CK_CHECK(append_operation_journal_file(*file, **journal.value(),
                                            {1, 0, OperationJournalState::Planned, {}}).value());
+    const auto finished = file->finish_io();
+    CK_CHECK(finished.value() && *finished.value());
+    if (!finished.value() || !*finished.value()) return;
     file.reset(); // The next discovery is a fresh worker/process boundary.
 
     const auto first = discover_operation_recovery(root);
@@ -185,6 +269,9 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
     const auto loaded = load_operation_journal(*reopened);
     CK_CHECK(loaded.value() && loaded.value()->journal->id() == id &&
              loaded.value()->journal->records().size() == 1 && !loaded.value()->tail.has_value());
+    const auto reopened_finished = reopened->finish_io();
+    CK_CHECK(reopened_finished.value() && *reopened_finished.value());
+    if (!reopened_finished.value() || !*reopened_finished.value()) return;
     reopened.reset();
 
     const auto second = discover_operation_recovery(root);
@@ -264,7 +351,9 @@ CK_TEST(files_operation_recovery_cleanup_requires_live_ownership_and_preserves_e
         {2, 0, OperationJournalState::Prepared, *encoded.value()}).value());
     CK_CHECK(append_operation_journal_file(*journal_file, *journal,
         {3, 0, OperationJournalState::Copied, *encoded.value()}).value());
-    CK_CHECK(journal_file->finish_io().value());
+    const auto journal_finished = journal_file->finish_io();
+    CK_CHECK(journal_finished.value() && *journal_finished.value());
+    if (!journal_finished.value() || !*journal_finished.value()) return;
     journal_file.reset();
     staging.reset();
     destination.reset();
@@ -323,3 +412,89 @@ CK_TEST(files_operation_recovery_cleanup_requires_live_ownership_and_preserves_e
     CK_CHECK(journal_after == journal_before);
     CK_CHECK(ck::io::read_file(destination_path / ".ck-copy-staging-recovery", staging_bytes));
 }
+
+#if defined(_WIN32)
+CK_TEST(files_operation_recovery_native_journal_preserves_long_raw_utf16_root) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-native-root",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto journal_path = scratch.path();
+    const std::wstring component = L"native-\u03bb-" + std::wstring(48, L'x');
+    for (unsigned index = 0; index != 5; ++index)
+        journal_path /= component + std::to_wstring(index);
+    std::wstring raw = L"raw-";
+    raw.push_back(static_cast<wchar_t>(0xd800));
+    journal_path /= raw;
+    CK_CHECK(journal_path.native().size() > 260);
+    CK_CHECK(ck::io::create_directories(journal_path));
+    const auto root = address(journal_path);
+    const auto prepared = prepare_native_operation_journal_root(root);
+    CK_CHECK(prepared.value() && *prepared.value());
+    if (!prepared.value() || !*prepared.value()) return;
+    const auto name = *NativeName::from_windows(u".ck-copy-journal-native-root");
+    constexpr std::string_view torn = "torn-native-root";
+    if (!write_fixture_journal_bytes(root, name, torn)) return;
+    std::string before;
+    CK_CHECK(ck::io::read_file(journal_path / L".ck-copy-journal-native-root", before, torn.size() + 1));
+    CK_CHECK(before == torn);
+    const auto scan = discover_operation_recovery(root);
+    CK_CHECK(scan.value() && scan.value()->journals.size() == 1 &&
+             scan.value()->requires_reconciliation);
+    if (scan.value() && scan.value()->journals.size() == 1) {
+        const auto &item = scan.value()->journals.front();
+        CK_CHECK(item.native_name && *item.native_name == name);
+        CK_CHECK(!item.report && item.error.has_value());
+    }
+    std::string after;
+    CK_CHECK(ck::io::read_file(journal_path / L".ck-copy-journal-native-root", after, torn.size() + 1));
+    CK_CHECK(after == before);
+}
+#endif
+
+
+#if defined(_WIN32)
+CK_TEST(files_operation_recovery_preserves_raw_utf16_journal_suffix_as_error_item) {
+    const ck::testing::ScratchDirectory scratch("files-operation-recovery-native-name",
+                                                CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = address(scratch.path());
+    const auto prepared = prepare_native_operation_journal_root(root);
+    CK_CHECK(prepared.value() && *prepared.value());
+    if (!prepared.value() || !*prepared.value()) return;
+
+    // The recognized prefix is ASCII; the suffix is exact native UTF-16 data.
+    // Display text is never parsed back into a filename or mutation authority.
+    std::u16string units = u".ck-copy-journal-native-";
+    units.push_back(static_cast<char16_t>(0xd800));
+    const auto name = NativeName::from_windows(units);
+    CK_CHECK(name.has_value());
+    if (!name) return;
+    constexpr std::string_view torn = "torn-raw-journal-suffix";
+    if (!write_fixture_journal_bytes(root, *name, torn)) return;
+
+    std::wstring host_name;
+    host_name.reserve(units.size());
+    for (const auto unit : units) host_name.push_back(static_cast<wchar_t>(unit));
+    const auto journal_path = scratch.path() / host_name;
+    std::string before;
+    CK_CHECK(ck::io::is_regular_file(journal_path));
+    CK_CHECK(ck::io::read_file(journal_path, before, torn.size() + 1));
+    CK_CHECK(before == torn);
+
+    const auto scan = discover_operation_recovery(root);
+    CK_CHECK(scan.value() && scan.value()->journals.size() == 1 &&
+             scan.value()->requires_reconciliation);
+    if (scan.value() && scan.value()->journals.size() == 1) {
+        const auto &item = scan.value()->journals.front();
+        CK_CHECK(item.native_name && *item.native_name == *name);
+        CK_CHECK(item.native_name && item.native_name->windows_units() &&
+                 *item.native_name->windows_units() == units);
+        CK_CHECK(!item.report && item.error.has_value());
+    }
+    // Read-only inspection must retain the precise malformed artifact.
+    // Existing live-writer denial and no-creator-ownership cleanup cases above
+    // remain independent security assertions; no replay/discard is attempted.
+    std::string after;
+    CK_CHECK(ck::io::is_regular_file(journal_path));
+    CK_CHECK(ck::io::read_file(journal_path, after, torn.size() + 1));
+    CK_CHECK(after == before);
+}
+#endif
