@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Checks the DEB and RPM payload layout: every tool at /usr/bin, the
-# documentation under /usr/share, and nothing else - no development files
-# and no folder wrapped around the installation paths.
+# documentation under /usr/share, and no development files or wrapper folder.
+# RPM's standard build-ID directories/links are checked separately against
+# actual file modes and package-owned executable targets before filtering.
 cmake_minimum_required(VERSION 3.25)
 
 if(NOT DEFINED CKTOOLS_PACKAGE_DIR)
@@ -13,6 +14,9 @@ endif()
 set(_tools ck-utilities ck-json-view ck-find ck-du ck-files ck-edit ck-chat ck-todo ck-sysmon ck-config)
 
 function(_cktools_check_layout kind listing)
+  if("${listing}" MATCHES ";")
+    message(FATAL_ERROR "${kind} package contains an unrepresentable payload name")
+  endif()
   string(REPLACE "\n" ";" _paths "${listing}")
   foreach(_tool IN LISTS _tools)
     if(NOT "/usr/bin/${_tool}" IN_LIST _paths)
@@ -23,7 +27,15 @@ function(_cktools_check_layout kind listing)
     if(_path STREQUAL "" OR _path STREQUAL "/")
       continue()
     endif()
-    if(NOT _path MATCHES "^/usr(/bin|/share)?(/.*)?$" OR _path MATCHES "^/usr/(include|lib)(/|$)")
+    if(_path MATCHES "//" OR _path MATCHES "(^|/)[.][.]?(/|$)")
+      message(FATAL_ERROR "${kind} package has a non-canonical path: ${_path}")
+    endif()
+    if(_path STREQUAL "/usr" OR _path STREQUAL "/usr/bin" OR
+       _path STREQUAL "/usr/share" OR _path MATCHES "^/usr/share/")
+      continue()
+    endif()
+    string(REGEX REPLACE "^/usr/bin/" "" _tool_name "${_path}")
+    if(NOT _path MATCHES "^/usr/bin/[^/]+$" OR NOT _tool_name IN_LIST _tools)
       message(FATAL_ERROR "${kind} package installs outside /usr/bin and /usr/share: ${_path}")
     endif()
   endforeach()
@@ -47,10 +59,13 @@ foreach(_deb IN LISTS _debs)
   _cktools_check_layout("DEB" "${_listing}")
 endforeach()
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 foreach(_rpm IN LISTS _rpms)
-  execute_process(COMMAND rpm -qlp "${_rpm}" OUTPUT_VARIABLE _listing RESULT_VARIABLE _result ERROR_QUIET)
+  execute_process(COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_LIST_DIR}/VerifyRpmBuildIds.py" "${_rpm}" ${_tools}
+    OUTPUT_VARIABLE _listing RESULT_VARIABLE _result ERROR_VARIABLE _error)
   if(NOT _result EQUAL 0)
-    message(FATAL_ERROR "Could not list ${_rpm}")
+    message(FATAL_ERROR "Could not validate RPM layout ${_rpm}: ${_error}")
   endif()
   _cktools_check_layout("RPM" "${_listing}")
 endforeach()
