@@ -1,0 +1,49 @@
+{
+  "utc": "2026-11-10T08:30:55.327266+00:00",
+  "scope": "Isolated allocation-fixture TU/compiler boundary only. No whole-app, native-window, full backend CTest, or other platform qualification.",
+  "backend_commit": "f82e648d30d2408790a674643394b33a83afdb98",
+  "frontend_commit": "15558a9eb32b6d94e653b08d4d7a000069b17533",
+  "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-macos-allocation-fixture-20261110/terminal-receipt.json",
+  "receipt_sha256": "c367723628796ddcb53115c8767d8221ffe8bd77cd725aac654fc05feb72f292",
+  "full_record_sha256": "f953bc91ee702ff53588ae7443341a40c6e106796e120155b43902598618b975",
+  "durable_packet_files_verified": 44,
+  "fixture_input_hashes_match_current_source": true,
+  "actual_consumer_TUs": [
+    "files_settings.cpp",
+    "files_settings_allocation_bound_tests.cpp",
+    "files_settings_allocation_bound_allocator.cpp",
+    "files_location.cpp"
+  ],
+  "declared_consumer_targets": [
+    "ckvision::cvision",
+    "ck::ck_core_fs_browser"
+  ],
+  "SDK_translation_units_per_mode": 138,
+  "normal": {
+    "current_writer_exit": 0,
+    "old_writer_exit": 1
+  },
+  "tsan": {
+    "current_writer_exit": 0,
+    "old_writer_exit": 1,
+    "compiler_sha256": "a3f510aa37c9a3082649435e39e3f7c808b6696bb62f077b141c271b5aa783a2",
+    "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+    "runtime_uuid": "94BF5B69-363F-33CA-98A3-31058E5B431D",
+    "actual_dyld_runtime": [
+      {
+        "uuid": "94BF5B69-363F-33CA-98A3-31058E5B431D",
+        "raw_path": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+        "canonical_path": "/Volumes/S8T/tmp/ck-tsan-permanent-runtime-v3/build/lib/darwin/libclang_rt.tsan_osx_dynamic.dylib",
+        "sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2"
+      }
+    ]
+  },
+  "existing_parent_builds_and_SDKs_unchanged": true,
+  "remaining": [
+    "Windows allocator fixture follow-up",
+    "Whole-current-application platform matrix",
+    "Bounded startup SDK integration",
+    "Actual native-window interactive acceptance"
+  ],
+  "whole_platform_or_WP02_complete": false
+}

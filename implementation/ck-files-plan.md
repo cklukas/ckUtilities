@@ -433,8 +433,12 @@ authority and does not close the application or release requirements below.
   including an allocation-fault regression that fails against the old writer.
   See `evidence/ck-files-settings-save-preflight-20261110.json`; this later
   delta is now qualified on Linux; Windows remains open. The test-only allocator
-  TU split still needs its Mac/Windows follow-up. Startup reads remain an open
-  bounded-I/O SDK integration gap.
+  TU split now passes isolated current-writer/old-writer controls on Mac normal
+  and matching TSan with a complete matching backend SDK and the declared
+  Browser→Core dependency chain. This is fixture/compiler-boundary evidence,
+  not a new whole-application pass. See
+  `evidence/ck-files-macos-allocation-fixture-20261110.json`. Its Windows follow-up
+  remains open. Startup reads remain an open bounded-I/O SDK integration gap.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
 
