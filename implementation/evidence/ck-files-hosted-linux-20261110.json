@@ -1,0 +1,163 @@
+{
+  "utc": "2026-11-10T13:24:00.752111+00:00",
+  "scope": "Actual hosted Linux full current frontend tests, matching stockSDK installed consumer, and package pipeline. Not Windows/Mac/native-window acceptance.",
+  "frontend": "3eec6f2bf4b816fe18fcabf7cc07e467cc1afc2e",
+  "backend": "fc56de16433cf7066c344f8c052debc7e6197535",
+  "ckVision": "7ad5bd67553414e7dc0882069482864034cb31f9",
+  "run": 42815528458,
+  "job": 129827575528,
+  "job_started": "2026-11-10T12:24:56Z",
+  "job_completed": "2026-11-10T13:20:47Z",
+  "job_elapsed_seconds": 3351,
+  "comparable_prior_a25_job_elapsed_seconds": 3845,
+  "development_tests": 463,
+  "package_tests": 463,
+  "installed_consumers": 2,
+  "failures": 0,
+  "artifact": {
+    "id": 13767783604,
+    "sha256": "98c53485f79dbd62d9ff0ee3855784d2da20e0dcf5ed87ef0c92d0620a8a7313",
+    "bytes": 52238454,
+    "independent_package_payload_inspection": "PASS exact published verifier on actual authenticated uploaded RPM+DEB, native rpm/dpkg metadata on uconsole; no install or x86 execution",
+    "rpm_sha256": "e0c4dc08202b4525d84ea1335efb662d869d76ddeac21bb348ffa7eeb0e8cf9a",
+    "deb_sha256": "d1f6630a5436429a6b35e7a2693ff7252a79c77c4cf9004ed4e3646473c217bb",
+    "typed_build_id_links": [
+      {
+        "path": "/usr/lib/.build-id/0c/ca1b14a4e1beb6c982421b80db84fe153f7ef0",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-files",
+        "resolved_target": "/usr/bin/ck-files"
+      },
+      {
+        "path": "/usr/lib/.build-id/12/96ee24201f076511249f515b9650e3f554d9ab",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-json-view",
+        "resolved_target": "/usr/bin/ck-json-view"
+      },
+      {
+        "path": "/usr/lib/.build-id/13/321409abc1d5b4a6a8a58afd37d479745858fd",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-edit",
+        "resolved_target": "/usr/bin/ck-edit"
+      },
+      {
+        "path": "/usr/lib/.build-id/40/ddac2469da75d1ca31b47f58299c361c78c0ca",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-sysmon",
+        "resolved_target": "/usr/bin/ck-sysmon"
+      },
+      {
+        "path": "/usr/lib/.build-id/82/f7b7640ddcda5c9ee7246e1e89b4172f372014",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-config",
+        "resolved_target": "/usr/bin/ck-config"
+      },
+      {
+        "path": "/usr/lib/.build-id/92/8c3184bcf7f56e0a4c0ad348f304477a1c493a",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-todo",
+        "resolved_target": "/usr/bin/ck-todo"
+      },
+      {
+        "path": "/usr/lib/.build-id/b4/9eef0895faf345cfbb069781051fe13786d4d5",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-chat",
+        "resolved_target": "/usr/bin/ck-chat"
+      },
+      {
+        "path": "/usr/lib/.build-id/bf/98da800bd85c01909692b2763b58632d3c53d2",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-utilities",
+        "resolved_target": "/usr/bin/ck-utilities"
+      },
+      {
+        "path": "/usr/lib/.build-id/f0/4e99fdbb9be469c29ed24ed8d20d8bc32668c3",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-find",
+        "resolved_target": "/usr/bin/ck-find"
+      },
+      {
+        "path": "/usr/lib/.build-id/f4/fedcca6aee739e69cce7616b9df07d0a689400",
+        "mode": "0o120777",
+        "target": "../../../../usr/bin/ck-du",
+        "resolved_target": "/usr/bin/ck-du"
+      }
+    ],
+    "published_verifier_sha256": {
+      "VerifyLinuxPackages.cmake": "2a33640fbf47300e0aeb3420f3a7ae550892da06fd8caa4640b9cf2df71908ef",
+      "VerifyRpmBuildIds.py": "4eca0cfd3989bbbcb4092a58d3748393e183bd88612c7fb21b34317076d8aebd"
+    }
+  },
+  "comparable_prior_a25_job": {
+    "id": 129791605939,
+    "started_at": "2026-11-10T11:08:13Z",
+    "completed_at": "2026-11-10T12:12:18Z",
+    "conclusion": "success"
+  },
+  "backend_matrix": {
+    "utc": "2026-11-10T13:15:18.993682+00:00",
+    "commit": "fc56de16433cf7066c344f8c052debc7e6197535",
+    "workflow_run": 42814262584,
+    "source_fingerprint": "f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1",
+    "source_files_verified_from_committed_tree": 469,
+    "scope": "Actual hosted Ubuntu24.04 backend complete CTests and installed consumers; new permanent UNIX held-reader regression executed in all four modes. Not frontend, Windows or native-window acceptance.",
+    "windows": {
+      "job": 129823191270,
+      "status": "blocked before compiler/test",
+      "findings": 32,
+      "unsafe_fixture_files": 13
+    },
+    "remaining": [
+      "Windows compiled-close migration and full qualification",
+      "Current frontend full matrix",
+      "ckVision bounded completion dependency and native UI acceptance"
+    ],
+    "modes": {
+      "normal-on": {
+        "job": 129823191154,
+        "backend_tests": 197,
+        "installed_consumers": 5,
+        "compiled_translation_units": 220,
+        "matching_instrumentation_verified": true,
+        "start": "2026-11-10T12:16:05.2391222Z -- qualification start=2026-11-10T12:16:05Z source=/home/runner/work/ck-core-fs-lib/ck-core-fs-lib source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-ON config=RelWithDebInfo browser=ON sanitizer=none parallel=1",
+        "finish": "2026-11-10T12:31:05.3818180Z -- qualification PASS start=2026-11-10T12:16:05Z end=2026-11-10T12:31:05Z elapsed_seconds=900 source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-ON config=RelWithDebInfo",
+        "elapsed_seconds": 900
+      },
+      "normal-off": {
+        "job": 129823190713,
+        "backend_tests": 197,
+        "installed_consumers": 5,
+        "compiled_translation_units": 205,
+        "matching_instrumentation_verified": true,
+        "start": "2026-11-10T12:31:29.0419461Z -- qualification start=2026-11-10T12:31:29Z source=/home/runner/work/ck-core-fs-lib/ck-core-fs-lib source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-OFF config=RelWithDebInfo browser=OFF sanitizer=none parallel=1",
+        "finish": "2026-11-10T12:42:34.9287176Z -- qualification PASS start=2026-11-10T12:31:29Z end=2026-11-10T12:42:34Z elapsed_seconds=665 source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-OFF config=RelWithDebInfo",
+        "elapsed_seconds": 665
+      },
+      "asan": {
+        "job": 129836138700,
+        "backend_tests": 197,
+        "installed_consumers": 5,
+        "compiled_translation_units": 220,
+        "matching_instrumentation_verified": true,
+        "start": "2026-11-10T12:42:45.5971729Z -- qualification start=2026-11-10T12:42:45Z source=/home/runner/work/ck-core-fs-lib/ck-core-fs-lib source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-address-undefined config=RelWithDebInfo browser=ON sanitizer=address-undefined parallel=1",
+        "finish": "2026-11-10T12:53:08.5231412Z -- qualification PASS start=2026-11-10T12:42:45Z end=2026-11-10T12:53:08Z elapsed_seconds=623 source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-address-undefined config=RelWithDebInfo",
+        "elapsed_seconds": 623
+      },
+      "tsan": {
+        "job": 129836138570,
+        "backend_tests": 198,
+        "installed_consumers": 5,
+        "compiled_translation_units": 221,
+        "matching_instrumentation_verified": true,
+        "start": "2026-11-10T12:53:18.7530731Z -- qualification start=2026-11-10T12:53:18Z source=/home/runner/work/ck-core-fs-lib/ck-core-fs-lib source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-thread config=RelWithDebInfo browser=ON sanitizer=thread parallel=1",
+        "finish": "2026-11-10T13:08:36.5263978Z -- qualification PASS start=2026-11-10T12:53:18Z end=2026-11-10T13:08:36Z elapsed_seconds=918 source_sha256=f5f0874f66a75e81f9383327111f4a6fb467c3e7300197c66f68bd5c8faac8d1 output=/home/runner/work/_temp/ck-core-fs-42814262584-1-thread config=RelWithDebInfo",
+        "elapsed_seconds": 918
+      }
+    }
+  },
+  "evidence_receipt_sha256": {
+    "frontend": "0ddea8fa9e6c32a25028ec01fdaa0dfe3ac2ee299a17333088c0359abc8dd51c",
+    "backend": "489d2f1dbc2f24f4b3cb3c17fd17b59bf03b4455953e8676580e6eaf1f5cc071"
+  },
+  "qualification_boundary": "Exact recorded published Linux source cohorts only. Pending Windows fixture and ckVision SDK amendments are excluded; macOS runner admission and actual native-window acceptance remain open."
+}

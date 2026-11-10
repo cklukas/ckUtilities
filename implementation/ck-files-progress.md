@@ -1,5 +1,29 @@
 # Files implementation evidence
 
+## 2026-11-10 — Published Linux frontend and backend qualification
+
+The hosted Linux job for frontend `3eec6f2`, backend `fc56de1`, and the pinned
+ckVision 1.4.2 passed **463 development CTests, 463 package CTests, and both
+installed SDK consumer checks**, with no failures or skips. The job ran from
+12:24:56 to 13:20:47 UTC (3,351 seconds). The downloaded DEB/RPM packages also
+passed the exact published package verifiers; all ten RPM build-ID links
+resolve to package-owned executable files. See the
+[executed Linux job](https://github.com/cklukas/ckUtilities/actions/runs/42815528458/job/129827575528)
+and [source-bound receipt](evidence/ck-files-hosted-linux-20261110.json).
+
+The backend's separate hosted Linux matrix passed 197 CTests and five
+installed-consumer checks in each normal browser-on, normal browser-off, and
+ASan/UBSan configuration; TSan passed 198 CTests and five consumer checks.
+All four configurations executed the permanent held-journal-reader regression.
+The recorded source fingerprint matches all 469 committed inputs. See the
+[backend run](https://github.com/cklukas/ck-core-fs-lib/actions/runs/42814262584).
+
+These results qualify those exact published Linux sources. The backend's
+Windows precompile gate still reports 32 unsafe fixture findings across 13
+files. Windows fixture repairs, the candidate bounded-read ckVision SDK,
+macOS runner admission, and actual native-window interaction remain separate
+open gates; none is counted as a pass by these Linux results.
+
 ## 2026-11-10 — Current shared-backend macOS integration
 
 The frozen consumer source matching `5cfa45a` product bytes, backend `dc0af0a`
