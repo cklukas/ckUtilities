@@ -419,9 +419,11 @@ authority and does not close the application or release requirements below.
   synchronous save callback. Current Mac normal/TSan and real-PTY evidence is
   recorded in `evidence/ck-files-settings-worker-integration-20261110.json`.
 - [ ] Qualify the settings worker on Linux and Windows against matching SDKs.
-  Current Linux normal: 40/40 selected application/archive CTests, 271 application
-  cases and both package consumers; the full Files label is not yet qualified;
-  sanitizer and Windows gates remain open. Current Mac PTY completion and
+  Linux normal now passes all 147 registered Files CTests with zero skips on
+  the settings-worker cohort plus approved native fixture corrections. Matching
+  sanitizer and Windows gates remain open; the later Store save-preflight delta
+  is not included. See `evidence/ck-files-linux-full-label-20261110.json`.
+  Current Mac PTY completion and
   both-panel mouse routing pass. See
   `evidence/ck-files-terminal-linux-normal-20261110.json`.
   Direct Store save preflight also passes current Mac normal/TSan 109/109,

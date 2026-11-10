@@ -11,16 +11,20 @@
 #include "files_native_fixture_snapshot.hpp"
 #include "stream_copy_job.hpp"
 #include "operation_journal_file.hpp"
+#include "staging_file.hpp"
 
 #include <cvision/testing/cktest.hpp>
 
 #include <array>
 #include <chrono>
+#include <cerrno>
 #include <fstream>
 #include <filesystem>
 #include <iterator>
 #include <stdexcept>
 #include <span>
+#include <set>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -752,11 +756,28 @@ CK_TEST(native_operation_copy_batch_factory_consumes_held_sources_and_requires_l
     refused.destination_names = {name("first-copy.bin")};
     refused.journal_root = journal_root;
     refused.journal_id.bytes[0] = std::byte{0x70};
+#if defined(__linux__)
+    unsigned refused_journal_calls = 0;
+    refused.open_journal = [&](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        ++refused_journal_calls;
+        return open_native_operation_journal_file(root, basename, create_new);
+    };
+#else
     refused.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
         return open_native_operation_journal_file(root, basename, create_new);
     };
+#endif
     auto refused_created = create_native_operation_copy_batch(std::move(refused));
-#if defined(__APPLE__)
+#if defined(__linux__)
+    // CompleteMetadataV1 is the default; this ordinary unprivileged fixture
+    // must refuse in source preflight before creating a journal or a job.
+    CK_CHECK(!refused_created.value() && refused_created.state() == ObservationState::Unsupported);
+    CK_CHECK(refused_created.unavailable_detail() &&
+             refused_created.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
+             refused_created.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::ProviderReviewRequired) &&
+             refused_created.unavailable_detail()->error.operation == "metadata_replay.complete_requires_initial_sys_admin");
+    CK_CHECK(refused_journal_calls == 0 && fs::is_empty(destination_directory_path));
+#elif defined(__APPLE__)
     CK_CHECK(!refused_created.value() && refused_created.state() == ObservationState::Unsupported);
     CK_CHECK(refused_created.unavailable_detail() && refused_created.unavailable_detail()->error.domain == ErrorDomain::Adapter);
     CK_CHECK(refused_created.unavailable_detail() && refused_created.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::ProviderReviewRequired));
@@ -1059,6 +1080,104 @@ CK_TEST(native_operation_staging_publication_is_atomic_no_replace_and_identity_c
     }
     CK_CHECK(ck::testing::observe_files_fixture_tree(scratch.path()) == before);
     CK_CHECK(!fs::exists(scratch.path() / "published.bin"));
+#elif defined(__linux__)
+    // A named source is not a publication capability on POSIX. Retain the
+    // replacement negative, with the precise refusal and unchanged namespace.
+    fs::rename(scratch.path() / "staging.bin", scratch.path() / "staging.retired");
+    {
+        std::ofstream replacement(scratch.path() / "staging.bin", std::ios::binary);
+        replacement << "named replacement";
+    }
+    const auto observed_names = [&] {
+        std::set<std::string> result;
+        for (const auto& entry : fs::directory_iterator(scratch.path()))
+            result.insert(entry.path().filename().native());
+        return result;
+    };
+    const auto named_before = observed_names();
+    for (unsigned poll = 0; poll != 3; ++poll) {
+        const auto refused = staging->publish_noreplace(*directory, name("named.published"));
+        CK_CHECK(!refused.value() && refused.state() == ObservationState::Unsupported);
+        CK_CHECK(refused.unavailable_detail() && refused.unavailable_detail()->error.domain == ErrorDomain::Adapter &&
+                 refused.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::UnsupportedQuery) &&
+                 refused.unavailable_detail()->error.operation == "publish_noreplace.named_source_unqualified");
+    }
+    CK_CHECK(observed_names() == named_before);
+
+    // The genuine native factory holds the anonymous creator FD and parent.
+    // Its recovery hint is descriptive and must not become a source address.
+    auto created = take(directory->create_staging_file(name("anonymous.hint")));
+    CK_CHECK(created.staging_namespace == StagingNamespace::Anonymous && !created.name && created.entry);
+    if (!created.entry) return;
+    auto anonymous = std::move(created.entry);
+    const auto original = take(anonymous->inspect_basic());
+    CK_CHECK(original.identity.value() && original.link_count.value() && *original.link_count.value() == 0);
+    CK_CHECK(!fs::exists(scratch.path() / "anonymous.hint"));
+    CK_CHECK(take(anonymous->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(anonymous->flush_content()));
+    {
+        std::ofstream hint(scratch.path() / "anonymous.hint", std::ios::binary);
+        hint << "first hint";
+    }
+    fs::rename(scratch.path() / "anonymous.hint", scratch.path() / "anonymous.hint.retired");
+    {
+        std::ofstream hint(scratch.path() / "anonymous.hint", std::ios::binary);
+        hint << "replacement hint";
+    }
+    std::vector<std::pair<const char*, BasicMetadata>> aliases_before;
+    for (const char* alias : {"anonymous.hint", "anonymous.hint.retired", "staging.bin", "staging.retired"}) {
+        const auto held = take(directory->open_child(name(alias), EntryAccess::ContentRead));
+        aliases_before.emplace_back(alias, take(held->inspect_basic()));
+    }
+    auto expected_names = observed_names();
+    expected_names.insert("published.bin");
+    CK_CHECK(take(anonymous->publish_noreplace(*directory, name("published.bin"))));
+    CK_CHECK(observed_names() == expected_names);
+    for (const auto& [alias, before] : aliases_before) {
+        const auto held = take(directory->open_child(name(alias), EntryAccess::ContentRead));
+        const auto after = take(held->inspect_basic());
+        CK_CHECK(before.identity.value() && after.identity.value() &&
+                 compare_identity(*before.identity.value(), *after.identity.value()) == IdentityComparison::Same);
+    }
+    const auto published = take(directory->open_child(name("published.bin"), EntryAccess::ContentRead));
+    const auto published_metadata = take(published->inspect_basic());
+    CK_CHECK(original.identity.value() && published_metadata.identity.value() &&
+             compare_identity(*original.identity.value(), *published_metadata.identity.value()) == IdentityComparison::Same);
+    const auto read = take(published->read_content({16}, 0));
+    CK_CHECK(read.complete && read.bytes == std::vector<std::byte>(bytes.begin(), bytes.end()));
+    // Check every pre-existing hint/replacement entry separately: publishing
+    // may only add published.bin, never consume or rewrite a hint alias.
+    for (const auto& pair : {std::pair{"anonymous.hint", "replacement hint"},
+                             std::pair{"anonymous.hint.retired", "first hint"},
+                             std::pair{"staging.bin", "named replacement"}}) {
+        std::ifstream input(scratch.path() / pair.first, std::ios::binary);
+        const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        CK_CHECK(content == pair.second);
+    }
+    const auto retired = take(directory->open_child(name("staging.retired"), EntryAccess::ContentRead));
+    CK_CHECK(take(retired->read_content({16}, 0)).bytes == std::vector<std::byte>(bytes.begin(), bytes.end()));
+
+    auto collision_creator = take(directory->create_staging_file(name("second.hint")));
+    CK_CHECK(collision_creator.staging_namespace == StagingNamespace::Anonymous && !collision_creator.name && collision_creator.entry);
+    if (!collision_creator.entry) return;
+    auto second = std::move(collision_creator.entry);
+    CK_CHECK(take(second->write_content(0, bytes)) == bytes.size());
+    CK_CHECK(take(second->flush_content()));
+    const auto collision_before = take(second->inspect_basic());
+    const auto occupied = second->publish_noreplace(*directory, name("published.bin"));
+    CK_CHECK(!occupied.value() && occupied.state() == ObservationState::Changed && occupied.unavailable_detail() &&
+             occupied.unavailable_detail()->error.domain == ErrorDomain::Posix && occupied.unavailable_detail()->error.code == EEXIST);
+    const auto collision_after = take(second->inspect_basic());
+    CK_CHECK(collision_before.identity.value() && collision_after.identity.value() &&
+             compare_identity(*collision_before.identity.value(), *collision_after.identity.value()) == IdentityComparison::Same &&
+             collision_after.link_count.value() && *collision_after.link_count.value() == 0);
+    CK_CHECK(take(second->read_content({16}, 0)).bytes == std::vector<std::byte>(bytes.begin(), bytes.end()));
+    const auto collision_lookup = take(directory->open_child(name("published.bin"), EntryAccess::ContentRead));
+    const auto collision_published = take(collision_lookup->inspect_basic());
+    CK_CHECK(original.identity.value() && collision_published.identity.value() &&
+             compare_identity(*original.identity.value(), *collision_published.identity.value()) == IdentityComparison::Same);
+    CK_CHECK(take(collision_lookup->read_content({16}, 0)).bytes == std::vector<std::byte>(bytes.begin(), bytes.end()));
+    CK_CHECK(observed_names() == expected_names);
 #else
     CK_CHECK(take(staging->publish_noreplace(*directory, name("published.bin"))));
     CK_CHECK(!fs::exists(scratch.path() / "staging.bin") && fs::exists(scratch.path() / "published.bin"));

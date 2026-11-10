@@ -1,0 +1,34 @@
+{
+  "utc": "2026-11-10T06:04:12.681656+00:00",
+  "scope": "Full Linux Files label on 6eb8b3f plus approved fixture-only overlays; excludes later 2af62e2 Store save-preflight delta.",
+  "source_pins": {
+    "ckUtilities": "6eb8b3fb9a4b722aca720a3aace2f72c39329e99",
+    "ck-core-fs-lib": "5899b9f977d855a08c7129adedf8d6ab983700f9",
+    "ckvision-source": "7ad5bd67553414e7dc0882069482864034cb31f9"
+  },
+  "overlay": "6eb8b3f +three approved fixture files; backend5899b9f/stockVision7ad; Store2af NOT applied",
+  "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-linux-full-files-normal-20261110/approved-normal-full147-receipt-v1.json",
+  "receipt_sha256": "7f17ad05b8aac6a3deb99bad37b065dbb99e24e63d049b7578d166694ae646c4",
+  "inventory_sha256": "cf2e44cd3a0d8193963f015a4ed1dfc0954b26da3b0cbc4ca4707e7d6e774a19",
+  "junit_sha256": "f97d7e703ebc60f2ecc74c542f6318078a4d5f6f0dbf776c4553c547fcbe8e6b",
+  "registered_and_executed_ctests": 147,
+  "failures": 0,
+  "skips": 0,
+  "build_seconds": 19.011707899160683,
+  "test_seconds": 16.51313580479473,
+  "fixture_patch_sha256": "9e79c5f4335964ca5374b41ec4c950f47832a6fad8f898a3d8f09333e9498a5c",
+  "native_fixture_sha256": "b83e926e7b8465b45be8abc404ed2b97164f801e279ee11c12ac9514efbff376",
+  "preserved_contracts": [
+    "Original default CompleteMetadataV1 plus explicit allow-loss positive request unchanged",
+    "Negative capture preflight must refuse with exact error, zero journal calls and empty destination",
+    "Anonymous creator publication proves held identity, unchanged aliases, bytes and EEXIST without replacement"
+  ],
+  "C_consumer_scope": "Unchanged main.c compiled as C11 with C11-only guard; matching CXX final driver supplies full CXX UBSan/vptr runtime. Does not fix/qualify original pure-C linker configuration.",
+  "remaining": [
+    "Matching Linux ASan/UBSan full Files label",
+    "Later Store preflight delta on Linux",
+    "Windows normal and matching ASan failures",
+    "Original intermittent copy timeout cause",
+    "Native window interactive acceptance"
+  ]
+}
