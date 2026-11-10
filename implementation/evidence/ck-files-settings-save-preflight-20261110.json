@@ -1,0 +1,78 @@
+{
+  "utc": "2026-11-10T03:41:26.652111+00:00",
+  "state": "Mac normal and matched TSan PASS; Windows/Linux delta not yet qualified",
+  "change": "Direct FilesSettingsStore::save validates native routes, options and exact encoded size before serialization. Rejection preserves old bytes and CAS revision. No SDK/worker API or body changes.",
+  "source_sha256": {
+    "src/vision/files/files_settings.cpp": "4ce53ac7e982c0b02f030a815a5bbf2d9940c31054e7fca292a270b67c197625",
+    "src/vision/files/tests/files_settings_tests.cpp": "1ba732f2cf40f3a1348acc971ff979acb863372e875c9d14956b42e004c6487f",
+    "src/vision/files/tests/files_settings_allocation_bound_tests.cpp": "00e4c12cbf41734e62863b05c4e5ea4da66dee6ffb19e9f7d06ff55ea41228e3",
+    "src/vision/files/CMakeLists.txt": "ea797f027813b0bad4113d42b75ed56854a30ebe892dc004814a329df756936d"
+  },
+  "before_fix_allocation_control": {
+    "expected_exit": 1,
+    "actual_exit": 1,
+    "over_cap_allocation_attempts": 1,
+    "same_test_passes_after_fix": true
+  },
+  "qualification": {
+    "normal": {
+      "pass": 109,
+      "fail": 0,
+      "skip": 0,
+      "files_runner_cases": 274,
+      "build_seconds": 7.2563013340113685,
+      "test_seconds": 11.790065917070024,
+      "actual_compiled_TUs": 3,
+      "result_sha256": "9255c96c1c95fa4a3e9b7de5c5eaa5e361e20fbf314deb31ba362dc2b4acf1c1",
+      "LastTest_sha256": "86d85b5daaa558bf74b10ce557dc74c8a325f5a4be5908401877a5056a743050",
+      "xml_sha256": "4e1593d35cad2f94a3e079d3e229af37c9dbaa874c30e5683325bbdcb044283c",
+      "outputs": {
+        "bin/ck-files": {
+          "sha256": "79492a233492404b3650ad8cbaa3fec024af05f61cdc19cfb0ee3a94f06a376f",
+          "mtime_ns": 1794281809495427166
+        },
+        "src/vision/files/ck_vision_files_tests": {
+          "sha256": "5e10ed6b643a51477d8a1762f7e45961e8f830b9f866dc469f9d13dce3ddb40a",
+          "mtime_ns": 1794281810703730010
+        },
+        "src/vision/files/ck_vision_files_settings_allocation_bound_tests": {
+          "sha256": "d3ef7f54cbeccbc30c956555af724472ec239d11d819070a4da3ecb5761b498f",
+          "mtime_ns": 1794281811529311651
+        }
+      }
+    },
+    "tsan": {
+      "pass": 109,
+      "fail": 0,
+      "skip": 0,
+      "files_runner_cases": 274,
+      "build_seconds": 7.335273290984333,
+      "test_seconds": 100.93928416597191,
+      "actual_compiled_TUs": 3,
+      "result_sha256": "da8c01c9ba616cff91bf20f9b0120b26439074c13490d73406dbee233fef24aa",
+      "LastTest_sha256": "468de4e38c78e691c3bcd447d72e9036afe46b7236711064c0ae5612d80f525a",
+      "xml_sha256": "4764f6296febc9452d47155605422c9e03ed03e25eaa0bc04dbb6f3e3a7e53f1",
+      "outputs": {
+        "bin/ck-files": {
+          "sha256": "1bf8fc8d8922d97f6e428caa3b6bc126ed42f225d97710f0cd7a8483ba817dfe",
+          "mtime_ns": 1794281906235605499
+        },
+        "src/vision/files/ck_vision_files_tests": {
+          "sha256": "75cd97ebb676d14fff064f3dd8a9c0808ee0f0edbad3f0cba8b2929123b450d6",
+          "mtime_ns": 1794281907302849788
+        },
+        "src/vision/files/ck_vision_files_settings_allocation_bound_tests": {
+          "sha256": "9a8eb777eafe52871b349fe27a671914a1d407249df882707d469e7ed35305d4",
+          "mtime_ns": 1794281908058512375
+        }
+      }
+    }
+  },
+  "durable_evidence": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-settings-save-preflight-20261110",
+  "invalid_test_invocation": "First positive normal invocation accidentally omitted original Files label and tried 292 registered tests including unbuilt backend executables. Logs/XML preserved under normal/invalid-unbuilt-backend-invocation. Not backend qualification. Corrected invocation uses original files label with new test included, no exclusions.",
+  "remaining": [
+    "Linux/Windows current delta validation",
+    "Bounded same-owner startup read API in ckVision and consumer; draft not implemented/released",
+    "Current native-window acceptance"
+  ]
+}

@@ -86,3 +86,49 @@ CK_TEST(files_settings_store_restores_and_rejects_stale_atomic_writes) {
     CK_CHECK(!stale.save({}).empty());
     CK_CHECK(parse_files_settings(files.read_file("/user/ck-files.settings")->contents)->views[1].show_hidden == false);
 }
+
+CK_TEST(files_settings_direct_store_accepts_exact_wire_cap_and_preserves_file_after_one_byte_overflow) {
+    constexpr std::size_t cap = 1024 * 1024;
+    const auto root = [](std::string text) {
+        return FilesPaneLocation(take(NativeAbsolutePath::from_posix(text)));
+    };
+    FilesPersistentSettings value;
+    for (unsigned i = 0; i < 15; ++i) value.bookmarks[0].push_back(root("/" + std::string(32767, 'x')));
+    value.bookmarks[0].push_back(root("/"));
+    value.bookmarks[0][0] = take(value.bookmarks[0][0].descend(*NativeName::from_posix("x"), {},
+                                                            FilesPaneLocation::hard_components));
+    const auto extra = (cap - files_settings_text(value).size()) / 2;
+    value.bookmarks[0].back() = root("/" + std::string(extra, 'y'));
+    const auto exact = files_settings_text(value);
+    CK_CHECK(exact.size() == cap && parse_files_settings(exact).has_value());
+    ckv::MemoryFileSystem files;
+    FilesSettingsStore store(files, "/settings/value");
+    CK_CHECK(store.load().diagnostic.empty() && store.save(value).empty());
+    const auto before = files.read_file("/settings/value");
+    CK_CHECK(before && before->contents == exact);
+    value.bookmarks[0].back() = take(root("/" + std::string(extra - 1, 'y')).descend(
+        *NativeName::from_posix("z"), {}, FilesPaneLocation::hard_components));
+    CK_CHECK(files_settings_text(value).size() == cap + 1 && !store.save(value).empty());
+    const auto after = files.read_file("/settings/value");
+    CK_CHECK(before && after && after->contents == before->contents && after->fingerprint == before->fingerprint);
+    CK_CHECK(store.save({}).empty());
+}
+
+CK_TEST(files_settings_direct_store_rejects_invalid_filter_order_and_bookmark_count_without_poisoning_revision) {
+    ckv::MemoryFileSystem files;
+    FilesSettingsStore store(files, "/settings/value");
+    CK_CHECK(store.load().diagnostic.empty() && store.save({}).empty());
+    const auto before = files.read_file("/settings/value");
+    FilesPersistentSettings invalid;
+    invalid.views[0].display_substring.assign(4097, 'x');
+    CK_CHECK(!store.save(invalid).empty());
+    invalid = {};
+    invalid.views[1].sort = static_cast<PaneSortKey>(255);
+    CK_CHECK(!store.save(invalid).empty());
+    invalid = {};
+    for (unsigned i = 0; i < 257; ++i) invalid.bookmarks[0].push_back(route("/root", "child"));
+    CK_CHECK(!store.save(invalid).empty());
+    const auto after = files.read_file("/settings/value");
+    CK_CHECK(before && after && after->contents == before->contents && after->fingerprint == before->fingerprint);
+    CK_CHECK(store.save({}).empty());
+}

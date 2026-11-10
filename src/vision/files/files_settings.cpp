@@ -15,6 +15,51 @@ constexpr std::size_t kMaxSettingsBytes = 1024 * 1024;
 constexpr std::size_t kMaxBookmarksPerPane = 256;
 constexpr std::size_t kMaxBookmarkUnits = 256 * 1024;
 
+// Bounds and validates the actual wire representation without constructing it.
+// This protects direct Store callers as well as the already-bounded worker.
+bool settings_fit_wire(const FilesPersistentSettings &settings) noexcept {
+    std::size_t remaining = kMaxSettingsBytes;
+    const auto take = [&](std::size_t n) {
+        if (n > remaining) return false;
+        remaining -= n;
+        return true;
+    };
+    const auto encoded = [&](std::size_t n, std::size_t width) {
+        if (n > kMaxBookmarkUnits || n > remaining / width) return false;
+        remaining -= n * width;
+        return true;
+    };
+    if (!take(std::string_view("CKFILES_SETTINGS 1\nEND\n").size())) return false;
+    for (std::size_t pane = 0; pane < settings.views.size(); ++pane) {
+        const auto &view = settings.views[pane];
+        if (view.display_substring.size() > 4096 ||
+            !ck::files::valid_pane_order({view.sort, view.descending, view.folders_first}) ||
+            !ckv::utf8::is_valid(view.display_substring) ||
+            !take(std::string_view("VIEW 0 0 0 0 0 0 \n").size()) ||
+            !encoded(view.display_substring.size(), 2) ||
+            settings.bookmarks[pane].size() > kMaxBookmarksPerPane)
+            return false;
+        for (const auto &bookmark : settings.bookmarks[pane]) {
+            const auto &root = bookmark.root_address();
+            if (!root.is_valid() || bookmark.native_bytes() > ck::files::NativePathLimits{}.max_native_bytes ||
+                bookmark.components().size() > FilesPaneLocation::hard_components ||
+                !take(std::string_view("BOOKMARK 0 P \n").size()))
+                return false;
+            const auto *bytes = root.posix_bytes();
+            const auto *units = root.windows_units();
+            if ((!bytes && !units) || !encoded(bytes ? bytes->size() : units->size(), bytes ? 2U : 4U))
+                return false;
+            for (const auto &component : bookmark.components()) {
+                if (!component.is_valid() || component.encoding() != root.encoding() || !take(1)) return false;
+                if (!encoded(bytes ? component.posix_bytes()->size() : component.windows_units()->size(),
+                             bytes ? 2U : 4U))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 char hex_digit(unsigned value) { return "0123456789abcdef"[value & 15U]; }
 
 std::string encode_bytes(std::string_view value) {
@@ -244,6 +289,7 @@ FilesSettingsLoad FilesSettingsStore::load() {
 
 std::string FilesSettingsStore::save(const FilesPersistentSettings &settings) {
     if (!writable_) return "Files settings cannot be saved: " + path_;
+    if (!settings_fit_wire(settings)) return "Files settings cannot be saved: invalid or oversized option data";
     const auto text = files_settings_text(settings);
     if (!parse_files_settings(text)) return "Files settings cannot be saved: invalid option data";
     if (!files_.create_directories(files_.parent(path_))) return "Cannot create Files settings directory: " + path_;

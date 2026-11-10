@@ -422,6 +422,11 @@ authority and does not close the application or release requirements below.
   sanitizer and Windows gates remain open. Current Mac PTY completion and
   both-panel mouse routing pass. See
   `evidence/ck-files-terminal-linux-normal-20261110.json`.
+  Direct Store save preflight also passes current Mac normal/TSan 109/109,
+  including an allocation-fault regression that fails against the old writer.
+  See `evidence/ck-files-settings-save-preflight-20261110.json`; this later
+  delta still needs Linux/Windows qualification. Startup reads remain an open
+  bounded-I/O SDK integration gap.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
 
