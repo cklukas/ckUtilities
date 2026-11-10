@@ -1,0 +1,41 @@
+{
+  "state": "Private integration candidate: Macnormal109/109, old-store allocation counterexample, fixed allocation regression, genuine nativePTY oversized-file preservation PASS. No live SDK pin/release/product adoption.",
+  "candidate_commit": "d5a388ac99534c975bf11df2515412fcd1c51914",
+  "SDK_candidate": "c5197034861a62ca6ae7f2f67891e91ac14be971",
+  "code_and_doc_sha256": {
+    "src/vision/files/files_settings.hpp": "b5b6352a86094a6b6978700ac989bc27e31b8b9be201aa15e3d165223eff642b",
+    "src/vision/files/files_settings.cpp": "719b5470edd866dc8ed313952affa91bccf32b9d07a814950cf450549e091281",
+    "src/vision/files/tests/files_settings_service_tests.cpp": "8ef898184bfb75b6f5ce3ac98e913f53fd54d799da0094dbc58a817339afa886",
+    "src/vision/files/tests/files_settings_tests.cpp": "751a574b377a8db83a7aafac821a49327a21fbffa29a271037734b70e61bf551",
+    "src/vision/files/tests/files_settings_allocation_bound_tests.cpp": "10fce297339d74532564c3d67589618129784c656e978599ef136d6a2752fa7e",
+    "docs/tools/ck-files.md": "662ed3ceb303fbaf26f80b0a2dcac825a5b076ae1a7b14c1f9e14b8bdc685586"
+  },
+  "normal_build_steps": 296,
+  "normal_build_seconds": 328.4038781670388,
+  "initial_test_seconds": 13.220827125012875,
+  "controlled_allocation_test_seconds": 11.751332832966,
+  "UI_runner_cases": 277,
+  "tests": 109,
+  "fail": 0,
+  "skip": 0,
+  "baseline_counterexample": "Old2af Store tries over-cap allocation during oversized startup load and throws; baseline source/target restored and prior regression passes.",
+  "realPTY": {
+    "record_sha256": "5376d8f35c1a9ebc58a162160c645fcd8c5ad50251db6eb9ef15b2877e1eafd3",
+    "raw_sha256": "160375a2a3884929944c964c6fa2cbd7890c5a2b780817f7c25b5cf7dbbd9292",
+    "bytes_preserved": 2097191,
+    "settings_sha256": "5162c12b85d4effa4b59999407aafc02b7b3ef7171add22d5e96f0bd1b165cc7",
+    "terminal_restore_offset": 18426,
+    "final_warning_offset": 18434,
+    "exit": 0,
+    "native_window_acceptance": false
+  },
+  "remaining": [
+    "Fresh matched frontend TSan integration",
+    "SDK Linux/Windows +growth/failure controls and release",
+    "Current Windows/Linux frontend integration",
+    "Native-window acceptance"
+  ],
+  "receipt_sha256": "d32e7de8fe883b29aedafd462a64c7bb4f530146c13148a05833b37f2b6aff43",
+  "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-bounded-startup-normal-20261110/receipt.json",
+  "status_note": "Normal-only private integration candidate. Fresh matching frontend TSan now running; no current SDK pin/live code adoption."
+}
