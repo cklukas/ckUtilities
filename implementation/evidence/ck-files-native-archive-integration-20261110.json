@@ -26,7 +26,7 @@
   "main_rehearsal_sha256": "343617a6035b0dc41f55cde55b932e0fa65c06ed09be1053e5e46372b3352489",
   "state": "Development checkpoint: held-creator archive integration with scoped Mac normal/TSan, Linux normal backend, and Windows local native archive qualification. Remaining gates are explicit; not a release or complete product acceptance.",
   "main_delta": "Preserved all current backend bytes by commutative patch rehearsal; added copyright/SPDX to three fixtures; registered15adapter+24amendmentcases with exact40s/30s watchdogs; production test macro remains unset.",
-  "updated_utc": "2026-11-10T01:39:49.405314+00:00",
+  "updated_utc": "2026-11-10T03:15:22.494085+00:00",
   "current_integration_qualification": {
     "normal_macos": {
       "result_sha256": "f6dc91d0b3b91ece5c4902f90bfea43e6e0c6f176f4063c611040a5a42a2bb5f",
@@ -70,17 +70,27 @@
       "native_adapter_amendment_CTests_pass": 39,
       "full_frontend_CTest": "39/40: application runner aborts at recursive directory-copy wait; preserved, unresolved",
       "backend_195_default_gate": "PASS195/195zero skipsnormal;617.444sbuild156.662stests; diagnostics excluded",
-      "ASan_UBSan_full_backend": "fresh run assigned, pending"
+      "ASan_UBSan_full_backend": "PASS195/195zero skips incl20archive cases;214freshTUs,1279.259sbuild295.908stest; backendonly, notfrontendsettingsqualification"
     },
     "native_GUI": "not accepted: Terminal CUA access rejected; no launch or visual fix claim"
   },
   "remaining_gates": [
     "Linux original full application five-second recursive-copy timeout remains unresolved despite later unchanged-binary passes; diagnostic-only work excluded from qualification",
-    "Matching current Linux ASan/UBSan backend run in progress",
     "Windows full normal/sanitizer matrix and remaining unsafe legacy-fixture migrations",
     "Resource-budget/hierarchy combined integration and POSIX counterpart",
     "Darwin strong native staging/publication remains Unsupported; no positive archive claim",
     "Native-window mouse and restricted-key acceptance remains open",
     "No release, SDK adoption, CDE pin change or Apply enablement"
-  ]
+  ],
+  "linux_backend_ASan_UBSan": {
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/linux-native-archive-asan-ubsan-20261110-wwZj1xku/final-receipt.json",
+    "receipt_sha256": "b870eb36d3130f2cc9526b2cd94b4fb45cc96e0504f04ddfa3a85dda0dc4f603",
+    "ctest_pass": 195,
+    "skipped": 0,
+    "fresh_TUs": 214,
+    "archive_cases": 20,
+    "test_instrumentation": "allTUsaddress+undefined/noNDEBUG/noexclusions",
+    "scope": "Linuxapplicablebackendcodefromsealedarchivecohort; laterdocs/evidence andWindows-onlytestregistration changes separate; no newfrontend/installedconsumer claim",
+    "ENOSPC_attempt": "rejectedpreserved; rebuiltwithoutoutputreuse aftercapacityadmission"
+  }
 }
