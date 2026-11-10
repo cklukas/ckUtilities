@@ -71,7 +71,10 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
     tests/files_volume_archive_amendment_tests.cpp tests/archive_fault_allocator.cpp)
   target_include_directories(ck_vision_archive_amendment_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(ck_vision_archive_amendment_tests PRIVATE ck_core_fs_native)
-  target_compile_definitions(ck_vision_archive_amendment_tests PRIVATE CK_FS_ARCHIVE_READBACK_FAILURE_TEST=1)
+  # The fixture uses the backend's private journal seam in its BUILD_TESTING profile.
+  target_compile_definitions(ck_vision_archive_amendment_tests PRIVATE
+    CK_FS_ARCHIVE_READBACK_FAILURE_TEST=1
+    CK_FS_INTERNAL_TEST_HOOKS=1)
   cktools_strict(ck_vision_archive_amendment_tests)
   target_compile_options(ck_vision_archive_amendment_tests PRIVATE -UNDEBUG)
   target_link_options(ck_vision_archive_amendment_tests PRIVATE
