@@ -1,5 +1,5 @@
 {
-  "state": "Unreleased SDK candidate: Mac normal full enabled SDK tests188/188, independent installed consumer PASS; other platforms/sanitizers and additional growth/failure controls OPEN",
+  "state": "Private unreleased SDK candidate Macnormal188/188 and matched TSan240/240 +installed consumers PASS; no current product adoption",
   "candidate_commit": "c5197034861a62ca6ae7f2f67891e91ac14be971",
   "source_sha256": "b5eb2ec7471aabe5fcb2fb51a46a352c622caebe413d776fb080837502baa034",
   "SDK_version_policy": "Private validation source retains1.4.2 metadata. Not stock1.4.2 and not publishable as1.4.2. New additive symbols require a new qualified release before application adoption.",
@@ -20,5 +20,17 @@
     "Fresh matching sanitizer SDK and consumers",
     "Deterministic growth/replacement and failure/OOM drain controls",
     "Version/release qualification and product bounded-reader integration"
-  ]
+  ],
+  "macOS_TSan": {
+    "tests": 240,
+    "fail": 0,
+    "skip": 0,
+    "compile_TUs": 450,
+    "build_steps": 557,
+    "build_seconds": 348.6950218749698,
+    "ctest_seconds": 329.9331694589928,
+    "installed_consumer": "PASS, exact protected runtime mapped and hashed",
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckvision-bounded-read-macos-tsan-20261110/receipt.json",
+    "receipt_sha256": "554b5d419f02c0d2b3a4911aa1a148bfa8de4b3095cfc0133d1a0f0745155bb0"
+  }
 }
