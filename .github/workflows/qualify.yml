@@ -21,7 +21,7 @@ env:
   CPACK_ARCHIVE_THREADS: '1'
   PYTHONDONTWRITEBYTECODE: '1'
   CKTOOLS_CI_CKVISION_REVISION: 0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f
-  CKTOOLS_CI_BACKEND_REVISION: fc56de16433cf7066c344f8c052debc7e6197535
+  CKTOOLS_CI_BACKEND_REVISION: e0815494948604a931733503d6e0c50ab7811e9f
   CKTOOLS_CI_FRONTEND_REVISION: ${{ inputs.frontend_sha }}
   CKTOOLS_CI_RELEASE_TAG: ${{ inputs.release_tag }}
 jobs:
@@ -201,7 +201,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: cklukas/ck-core-fs-lib
-          ref: fc56de16433cf7066c344f8c052debc7e6197535
+          ref: ${{ env.CKTOOLS_CI_BACKEND_REVISION }}
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
           persist-credentials: false
       - name: Install required hosted Linux development dependency
