@@ -1,19 +1,21 @@
 # Files (`ck-files`) — implementation work packages
 
-Status: implementation active; WP-00 and WP-01 complete. WP-02 feature
-implementation and current-source normal qualification are complete on
-macOS, Linux and Windows. The current production target now passes the
-available real POSIX-PTY and Windows-ConPTY terminal contract on all three
-platforms. Final WP-02 acceptance remains open for real-window mouse and
-restricted-key acceptance plus sanitizer/runtime gates documented in the
-[implementation evidence](ck-files-progress.md). The production `ck-files`
-executable is integrated and has passed the available real-terminal checks on
-macOS and Linux. Windows v143 qualification is now available on the
-mandatory `V:` workstation development drive.
-Date: 2026-10-23. Repository reviewed: `81aaf009db23ca8558211722107bd2122351e565`.
+Status: implementation active; WP-00 and WP-01 checkpoints are complete.
+WP-02 remains open. The 2026-11-10 source review found synchronous settings
+writes in UI callbacks; worker-owned persistence and shutdown draining must be
+implemented and qualified before the responsiveness requirement is satisfied.
+The held-creator archive integration also needs its full application and
+cross-platform qualification. Earlier POSIX-PTY and Windows-ConPTY results
+remain evidence for their recorded source cohorts; they do not qualify these
+new changes. Real-window mouse and restricted-key acceptance, and the remaining
+sanitizer/runtime gates, are documented in the
+[implementation evidence](ck-files-progress.md). Windows v143 qualification
+uses the mandatory `V:` workstation development drive.
+Updated: 2026-11-10. Original baseline review:
+`81aaf009db23ca8558211722107bd2122351e565` (2026-10-23).
 
-Execution: WP-00 and WP-01 complete; WP-02 feature implementation is complete
-with final acceptance gates pending. See [implementation evidence](ck-files-progress.md),
+Execution: continue WP-02 implementation and its acceptance gates before
+claiming completion. See [implementation evidence](ck-files-progress.md),
 [behavioral and adapter contracts](ck-files-contracts.md)
 and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
 
@@ -405,9 +407,16 @@ authority and does not close the application or release requirements below.
 - [x] Test pending scans, stale replies, blocked storage, rapid navigation,
   resize, narrow layout, all suite themes, mouse and keyboard operation.
 
-Implementation is complete and covered by the current Files application suite;
-release acceptance remains open until the cross-platform interactive and
-filesystem qualification gates below are complete.
+- [ ] Move settings persistence out of UI callbacks into a bounded, joined
+  worker; preserve revision conflicts and errors, and drain accepted writes
+  during shutdown. The current `main.cpp` binding calls `settings.save()`
+  directly from `FilesApp::save_settings()`.
+- [ ] Complete current-source archive integration, sanitizer and real-window
+  acceptance. Earlier passing cohorts do not close gates after source changes.
+
+The implemented view and navigation features have application-suite coverage;
+WP-02 remains open until the responsiveness defect and its acceptance gates
+are resolved.
 
 Acceptance: real view graph works headlessly and interactively; no synchronous
 disk access in paint/provider/command callbacks; stable selections survive

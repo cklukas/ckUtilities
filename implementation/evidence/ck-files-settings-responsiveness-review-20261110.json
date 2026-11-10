@@ -1,0 +1,40 @@
+{
+  "review_utc": "2026-11-10T01:00:55.096761+00:00",
+  "status": "OPEN: implementation and qualification required",
+  "requirement": "WP-02: no synchronous disk access in paint/provider/command callbacks",
+  "observed_call_chain": [
+    "FilesApp::save_settings -> settings.save binding",
+    "main.cpp settings.save binding -> FilesSettingsStore::save",
+    "FilesSettingsStore::save -> create_directories and write_file_atomic"
+  ],
+  "triggers": [
+    "bookmark add",
+    "bookmark remove",
+    "view settings reply"
+  ],
+  "source_sha256": {
+    "src/vision/files/main.cpp": "84348d5681fab402f21ef3a02945cd3ae41fc75507b0789098b458ce340f1190",
+    "src/vision/files/files_app.cpp": "2fd8ff3e7e3e7680dc36dbfaca1e6eea7895a801a9ade833c9ecc71e2938b750",
+    "src/vision/files/files_settings.cpp": "a25c1fd75cc0137c610269cafe6e9189e147949f01c026647e555bb0d1465066"
+  },
+  "required_fix": [
+    "bounded memory-only UI admission",
+    "worker-only native persistence with serial CAS/revision conflict reporting",
+    "bounded latest-state coalescing without silent truncation",
+    "shutdown seals admission and drains accepted state; join outside UI dispatch",
+    "blocked-filesystem responsiveness, ownership and shutdown regression tests"
+  ],
+  "related_current_mac_tests": {
+    "count": 107,
+    "passed": 107,
+    "scope": "core/native tests only, excludes full application archive fixtures and settings-worker qualification",
+    "receipt_sha256": "e45ddf3a4adb992a3381e9040de17c78c4257b4567432b9023a3000e19d3b767",
+    "junit_sha256": "1c44b756ff0edd3f23c03efd40a2c2c284aab73487d2dcc5f491fae4c1d82776"
+  },
+  "not_proven": [
+    "settings-worker implementation",
+    "full current application suite",
+    "cross-platform archive/sanitizer acceptance",
+    "native-window interaction"
+  ]
+}
