@@ -292,23 +292,33 @@ jobs:
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-provider.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/stages.jsonl
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/Testing/Temporary/
-            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeCache.txt
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/compile_commands.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/compile_commands.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-inputs.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-provider.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-flags.json

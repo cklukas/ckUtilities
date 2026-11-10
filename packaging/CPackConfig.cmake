@@ -64,4 +64,7 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 # verifier that is added after this file is included.
 set(CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}")
 
+# Bind the binary generator's profile check to its install producer.
+set(CPACK_CKTOOLS_INSTALL_PROJECT "${CMAKE_BINARY_DIR};${CMAKE_PROJECT_NAME};ALL;/")
+set(CPACK_CKTOOLS_CHECK_COMPILE_PROFILE "${CMAKE_EXPORT_COMPILE_COMMANDS}")
 include(CPack)

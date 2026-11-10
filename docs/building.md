@@ -28,13 +28,19 @@ The produced commands are `ck-utilities`, `ck-json-view`, `ck-find`, `ck-du`,
 
 ## Release rehearsal
 
-Run the package-consumer, staged-install, archive, and terminal gates from one
-clean Release build:
+Configure a clean Release test tree and a separate production package tree.
+The rehearsal runs the complete Release CTest suite in the test tree, then
+checks the staged and packaged production executables.
 
 ```sh
+cmake --preset pkg -B build/pkg-test -DBUILD_TESTING:BOOL=ON \
+  -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
+  -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk
+cmake --build build/pkg-test
 cmake --preset pkg \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
+  -DCKTOOLS_REHEARSAL_TEST_BINARY_DIR="$PWD/build/pkg-test" \
   -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON \
   -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON \
   -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON \
@@ -44,8 +50,8 @@ cmake --build build/pkg --target verify_ckvision_terminal
 ```
 
 The two commands are intentionally separate because both stage the product
-into the same disposable prefix. The archive verifier rejects UI-runtime and
-test-framework payloads.
+into the same disposable prefix. The production preset disables backend test
+hooks. The archive verifier rejects UI-runtime and test-framework payloads.
 
 ## Packages
 
@@ -67,8 +73,9 @@ It builds the pinned ckVision SDK as a resource, so no separately installed
 `brew install cklukas/ckutilities/ck-utilities`.
 Windows release builds use Visual Studio 2022 (MSVC), Ninja, and a matching
 Release ckVision SDK with the static C runtime. The packaging script builds
-the pinned SDK and suite, runs every registered CTest including ConPTY, and
-extracts and checks the ZIP. Use a fresh task directory under `V:\tmp`.
+the pinned SDK and suite, runs every registered CTest including ConPTY, then
+builds the production ZIP in a fresh test-disabled tree and checks its
+extracted executables. Use a fresh task directory under `V:\tmp`.
 
 For the native action-scope test, supply the exact attached `CKFEA05SCOPE`
 NTFS VHD and a dedicated workspace inside its mount. Keep both addresses under

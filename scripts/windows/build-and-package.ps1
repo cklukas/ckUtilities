@@ -60,7 +60,7 @@ $actionScopeConfigure = @(
 # Bootstrap already created this unique parent. Refuse all prior outputs; never
 # remove/reuse an unknown build or someone's active SDK.
 if (-not [IO.Directory]::Exists((Extended $WorkRoot))) { throw 'CI bootstrap must create the unique WorkRoot' }
-foreach ($output in 'ckvision-build','ckvision-sdk','build','packages','unpacked','journal-cleanup-build','journal-cleanup-fixtures','journal-cleanup-unused-install') {
+foreach ($output in 'ckvision-build','ckvision-sdk','build','build-pkg','packages','unpacked','journal-cleanup-build','journal-cleanup-fixtures','journal-cleanup-unused-install') {
     if ([IO.Directory]::Exists((Extended (Join-Path $WorkRoot $output)))) { throw "Output already exists: $output" }
 }
 $tmp = Join-Path $WorkRoot 'tmp'
@@ -228,10 +228,20 @@ foreach ($test in $journalTests) {
 # CTest above is unchanged and unfiltered; no legacy case or guard is removed.
 $journalPattern='^journal_temporary_cleanup_windows_'+$journalProvider+'_(ordinary|long)_(control|native|native-oom|consumed|consumed-oom)$'
 Invoke-Step 'All ten registered journal supplemental modes (ordinary and >340 long)' { ctest --test-dir $journalBuild --output-on-failure --parallel 1 --no-tests=error --tests-regex $journalPattern --output-junit (Join-Path $WorkRoot 'journal-cleanup-results.xml') }
+$productionBuild=Join-Path $WorkRoot 'build-pkg'
+Invoke-Step 'Configure production frontend/backend' {
+    cmake -S $source -B $productionBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+        "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" `
+        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF `
+        -DBUILD_TESTING:BOOL=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON `
+        -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS:BOOL=OFF -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP:BOOL=OFF `
+        -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1
+}
+Invoke-Step 'Build production frontend/backend' { cmake --build $productionBuild --parallel 1 }
 $packages=Join-Path $WorkRoot 'packages'
 $cpack=Join-Path (Split-Path (Get-Command cmake).Source) 'cpack.exe'
-Push-Location $build
-try { Invoke-Step 'Package ZIP' { & $cpack -G ZIP -B $packages -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1 } } finally { Pop-Location }
+Push-Location $productionBuild
+try { Invoke-Step 'Package production ZIP' { & $cpack --config (Join-Path $productionBuild 'CPackConfig.cmake') -G ZIP -B $packages -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1 } } finally { Pop-Location }
 $zips=@([IO.Directory]::GetFiles((Extended $packages),'ck-utilities-*-windows-*.zip'))
 if ($zips.Count -ne 1) { throw 'Exactly one qualified ZIP is required' }
 $zip=$zips[0];$unpacked=Join-Path $WorkRoot 'unpacked'
