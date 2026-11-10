@@ -5,6 +5,11 @@
 // Utilities tool starts in a real ConPTY pseudo-console, draws its desktop,
 // and exits cleanly through the standard Alt+X quit chord. Each runs with its
 // per-user folders in an isolated scratch directory whose name is not ASCII.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include "cvision/term/windows_clock.hpp"
 #include "cvision/term/windows_terminal_subsession.hpp"
 #include "cvision/term/windows_wait_set.hpp"
@@ -15,6 +20,7 @@
 #include <cstdio>
 #include <fstream>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,6 +32,34 @@ std::string utf8(const std::filesystem::path &path)
 {
     const auto text = path.generic_u8string();
     return {text.begin(), text.end()};
+}
+
+std::optional<std::string> tool_image(std::string_view tool)
+{
+    const std::string executable = std::string(tool) + ".exe";
+    wchar_t package_mode[2]{};
+    const DWORD mode_length = GetEnvironmentVariableW(L"CKTOOLS_TEST_PACKAGE_IMAGE", package_mode, 2);
+    if (mode_length == 0)
+        return utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / executable);
+    if (mode_length != 1 || package_mode[0] != L'1')
+        return std::nullopt;
+
+    constexpr wchar_t variable[] = L"CKTOOLS_EXTRACTED_PACKAGE_BIN";
+    const DWORD needed = GetEnvironmentVariableW(variable, nullptr, 0);
+    if (needed <= 1 || needed > 32768)
+        return std::nullopt;
+    std::wstring directory(needed, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(variable, directory.data(), needed);
+    if (copied != needed - 1)
+        return std::nullopt;
+    directory.resize(copied);
+    const std::filesystem::path bin(directory);
+    if (!directory.starts_with(L"\\\\?\\") || !bin.is_absolute())
+        return std::nullopt;
+
+    // Preserve the extended prefix and separators for ckVision's wide launch.
+    const auto image = (bin / executable).u8string();
+    return std::string(image.begin(), image.end());
 }
 
 } // namespace
@@ -52,8 +86,11 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
                              "ck-sysmon", "ck-config", "ck-files"})
     {
         std::fprintf(stderr, "Tool: %s\n", name);
-        const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / (std::string(name) + ".exe"));
-        auto spec = ckv::term::TerminalLaunchSpec::program(image);
+        const auto image = tool_image(name);
+        CK_CHECK(image.has_value());
+        if (!image)
+            return;
+        auto spec = ckv::term::TerminalLaunchSpec::program(*image);
         spec.exit_policy = ckv::core::TerminalExitPolicy::TerminateAfterGrace;
         spec.working_directory = home_text;
         spec.environment = {{"USERPROFILE", home_text},
@@ -168,8 +205,11 @@ CK_TEST(windows_launcher_starts_files_and_returns_through_conpty)
     std::filesystem::create_directories(files_right);
 
     const std::string home_text = utf8(home);
-    const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / "ck-utilities.exe");
-    auto spec = ckv::term::TerminalLaunchSpec::program(image);
+    const auto image = tool_image("ck-utilities");
+    CK_CHECK(image.has_value());
+    if (!image)
+        return;
+    auto spec = ckv::term::TerminalLaunchSpec::program(*image);
     spec.arguments = {"--launch", "ck-files", utf8(files_left), utf8(files_right)};
     spec.exit_policy = ckv::core::TerminalExitPolicy::TerminateAfterGrace;
     spec.working_directory = home_text;

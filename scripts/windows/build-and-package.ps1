@@ -245,6 +245,7 @@ try { Invoke-Step 'Package production ZIP' { & $cpack --config (Join-Path $produ
 $zips=@([IO.Directory]::GetFiles((Extended $packages),'ck-utilities-*-windows-*.zip'))
 if ($zips.Count -ne 1) { throw 'Exactly one qualified ZIP is required' }
 $zip=$zips[0];$unpacked=Join-Path $WorkRoot 'unpacked'
+$zipBefore=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.Compression.ZipFile]::ExtractToDirectory($zip,(Extended $unpacked))
 $roots=@([IO.Directory]::GetDirectories((Extended $unpacked)))
 if ($roots.Count -ne 1) { throw 'Exactly one product root required' }
@@ -256,10 +257,41 @@ $guides=@([IO.Directory]::GetFiles((Join-Path $docRoot 'tools'),'*.md'))
 if ($guides.Count -ne $tools.Count) { throw 'Archive guide count mismatch' }
 $screenshots=@([IO.Directory]::GetFiles((Join-Path $docRoot 'generated/screenshots'),'*.svg'))
 if ($screenshots.Count -lt 1) { throw 'Archive screenshots absent' }
+$bin=Extended ([IO.Path]::Combine($root,'bin'))
+foreach ($directory in @($root,$bin)) {
+    $attributes=[IO.File]::GetAttributes($directory)
+    if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        ($attributes -band [IO.FileAttributes]::Directory) -eq 0) { throw "Unexpected ZIP directory: $directory" }
+}
+$images=[ordered]@{}
 foreach ($tool in $tools) {
-    & (Join-Path $root "bin/$tool.exe") --help | Out-Null
+    $image=[IO.Path]::Combine($bin,"$tool.exe")
+    $attributes=[IO.File]::GetAttributes($image)
+    if (($attributes -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory)) -ne 0) {
+        throw "Unexpected ZIP executable: $image"
+    }
+    $images[$tool]=(Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant()
+    & $image --help | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "$tool --help failed from ZIP" }
 }
+$previousBin=[Environment]::GetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN','Process')
+try {
+    [Environment]::SetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN',$bin,'Process')
+    Invoke-Step 'Actual ZIP binaries through ConPTY' {
+        ctest --test-dir (Join-Path $build 'tests/package-terminal/Release') --output-on-failure --parallel 1 --no-tests=error --output-junit (Join-Path $WorkRoot 'zip-terminal-results.xml')
+    }
+} finally {
+    [Environment]::SetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN',$previousBin,'Process')
+}
+foreach ($tool in $tools) {
+    $image=[IO.Path]::Combine($bin,"$tool.exe")
+    if ((Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant() -cne $images[$tool]) {
+        throw "Extracted executable changed during ZIP verification: $image"
+    }
+}
 $digest=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($digest -cne $zipBefore) { throw 'ZIP changed during verification' }
+$runtimeReceipt=[ordered]@{package=$zip;sha256=$digest;extracted_bin=$bin;images=$images}
+[IO.File]::WriteAllText((Extended (Join-Path $WorkRoot 'zip-terminal-images.json')),($runtimeReceipt | ConvertTo-Json -Depth 3),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText(($zip+'.sha256'),($digest+'  '+[IO.Path]::GetFileName($zip)),[Text.Encoding]::ASCII)
 Write-Host "PASS complete registered tests and verified ZIP: $zip"

@@ -10,6 +10,9 @@ if(NOT EXISTS "${CKTOOLS_PACKAGE_ARCHIVE}")
   message(FATAL_ERROR "ckVision package archive is missing: ${CKTOOLS_PACKAGE_ARCHIVE}")
 endif()
 
+if(CKTOOLS_TERMINAL_SMOKE_EXECUTABLE)
+  file(SHA256 "${CKTOOLS_PACKAGE_ARCHIVE}" CKTOOLS_PACKAGE_IMAGE_SHA256)
+endif()
 file(REMOVE_RECURSE "${CKTOOLS_PACKAGE_EXTRACT_DIR}")
 file(MAKE_DIRECTORY "${CKTOOLS_PACKAGE_EXTRACT_DIR}")
 
@@ -39,6 +42,9 @@ endif()
 
 list(GET _cktools_archive_roots 0 _cktools_archive_root)
 set(CKTOOLS_PRODUCT_PREFIX "${CKTOOLS_PACKAGE_EXTRACT_DIR}/${_cktools_archive_root}")
+if(IS_SYMLINK "${CKTOOLS_PRODUCT_PREFIX}" OR IS_SYMLINK "${CKTOOLS_PRODUCT_PREFIX}/bin")
+  message(FATAL_ERROR "Packaged product and bin must be directories inside the extracted archive")
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/VerifyCkVisionProductTree.cmake")
 
 set(CKTOOLS_INSTALL_PREFIX "${CKTOOLS_PRODUCT_PREFIX}")
@@ -66,6 +72,12 @@ file(GLOB _cktools_test_libraries
      "${CKTOOLS_PRODUCT_PREFIX}/lib/*gmock*")
 if(_cktools_test_libraries)
   message(FATAL_ERROR "Test-framework library was packaged: ${_cktools_test_libraries}")
+endif()
+
+if(CKTOOLS_TERMINAL_SMOKE_EXECUTABLE)
+  set(CKTOOLS_PACKAGE_IMAGE "${CKTOOLS_PACKAGE_ARCHIVE}")
+  set(CKTOOLS_TERMINAL_CONFIG_ROOT "${CKTOOLS_PACKAGE_EXTRACT_DIR}/terminal-config")
+  include("${CMAKE_CURRENT_LIST_DIR}/VerifyCkVisionTerminal.cmake")
 endif()
 
 message(STATUS "ckVision archive verification passed for ${CKTOOLS_PACKAGE_ARCHIVE}")

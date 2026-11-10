@@ -204,7 +204,7 @@ jobs:
           ref: ${{ env.CKTOOLS_CI_BACKEND_REVISION }}
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
           persist-credentials: false
-      - name: Install required hosted Linux development dependency
+      - name: Install required hosted Linux build and extraction tools
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -213,7 +213,7 @@ jobs:
           # the mandatory llama backend needs at configure time.
           : "${TMPDIR:?bootstrap must select task temporary storage}"
           sudo -n env TMPDIR="$TMPDIR" apt-get update
-          sudo -n env TMPDIR="$TMPDIR" DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libcurl4-openssl-dev
+          sudo -n env TMPDIR="$TMPDIR" DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libcurl4-openssl-dev cpio rpm2cpio
       - name: Require preprovisioned POSIX tools
         if: runner.os != 'Windows'
         shell: bash
@@ -227,7 +227,7 @@ jobs:
           pkg-config --modversion libcurl
           pkg-config --cflags --libs libcurl
           if [[ "$RUNNER_OS" == Linux ]]; then
-            command -v rpm
+            for tool in rpm rpm2cpio cpio dpkg-deb; do command -v "$tool"; done
             command -v unshare
             command -v sudo
             sudo -n true
@@ -290,6 +290,8 @@ jobs:
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/native-prerequisites.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-hook-preflight.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-provider.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/zip-terminal-results.xml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/zip-terminal-images.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/stages.jsonl
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/Testing/Temporary/

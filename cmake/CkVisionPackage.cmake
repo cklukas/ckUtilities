@@ -122,19 +122,27 @@ function(cktools_add_ckvision_archive_verification)
       "the verification target is created.")
   endif()
 
+  set(_cktools_package_terminal_args)
+  if(UNIX AND CKTOOLS_VERIFY_CKVISION_TERMINAL)
+    list(APPEND _cktools_package_terminal_args
+      "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>")
+  endif()
   add_custom_target(verify_ckvision_archive
     COMMAND "${CMAKE_CPACK_COMMAND}" --config "${PROJECT_BINARY_DIR}/CPackConfig.cmake"
       -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_PACKAGE_ARCHIVE=${PROJECT_BINARY_DIR}/${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}.tar.gz"
       "-DCKTOOLS_PACKAGE_EXTRACT_DIR=${PROJECT_BINARY_DIR}/ckvision-package-check"
+      ${_cktools_package_terminal_args}
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
     USES_TERMINAL
+    VERBATIM
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
   if(UNIX AND NOT APPLE)
-    # The same cpack run produced the DEB and RPM: check their install layout.
+    # Verify the DEB and RPM from the same CPack run.
     add_custom_command(TARGET verify_ckvision_archive POST_BUILD
       COMMAND "${CMAKE_COMMAND}" "-DCKTOOLS_PACKAGE_DIR=${PROJECT_BINARY_DIR}"
+        ${_cktools_package_terminal_args}
         -P "${PROJECT_SOURCE_DIR}/cmake/VerifyLinuxPackages.cmake"
       VERBATIM)
   endif()

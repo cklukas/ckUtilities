@@ -18,9 +18,13 @@ set(_cktools_native_executables
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_PRODUCT_PREFIX}/bin/${_cktools_executable}")
-  if(NOT EXISTS "${_cktools_path}")
-    message(FATAL_ERROR "Native executable is missing: ${_cktools_path}")
+  if(NOT EXISTS "${_cktools_path}" OR IS_SYMLINK "${_cktools_path}" OR IS_DIRECTORY "${_cktools_path}")
+    message(FATAL_ERROR "Expected an installed native executable file: ${_cktools_path}")
   endif()
+endforeach()
+
+foreach(_cktools_executable IN LISTS _cktools_native_executables)
+  set(_cktools_path "${CKTOOLS_PRODUCT_PREFIX}/bin/${_cktools_executable}")
   execute_process(
     COMMAND "${_cktools_path}" --help
     TIMEOUT 20
