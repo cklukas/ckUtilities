@@ -7,6 +7,21 @@ boundaries must use wide Win32/native-handle APIs with validated extended
 length paths, or handle-relative native APIs. Narrow Win32 calls and legacy
 `MAX_PATH` assumptions are not acceptable for product I/O.
 
+## Open recovery finding — 2026-11-10
+
+The ordinary operation-recovery scanner still uses `std::filesystem` for root
+status, enumeration and basename conversion on Windows. This path is not
+compliant with the policy above. A native regression creates, writes, flushes,
+closes and reads back a journal below an unchanged 414-unit UTF-16 root, then
+fails discovery at `operation_recovery.root_status` with Denied/code 3. The
+existing scanner also incorrectly labels this Windows error as POSIX.
+
+The correction is in progress: acquire one native directory, preserve exact
+native basenames, and inspect journals through a read-only capability relative
+to that retained directory. Neither a shortened fixture path nor a pathname
+reopen is an acceptable fix. This remains an open qualification gate; the
+historical audit below does not establish coverage for this newer scanner.
+
 ## ckUtilities
 
 The current product sources were audited for ANSI Win32 calls. There are no
