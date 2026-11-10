@@ -29,12 +29,25 @@ function Require-V([string]$Path, [bool]$Temporary) {
     if (-not $comparison.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Development path is outside $prefix : $actual" }
     return $actual
 }
-$WorkRoot = Require-V $WorkRoot $true
-$ActionScopeRoot = Require-V $ActionScopeRoot $true
-$ActionScopeVhd = Require-V $ActionScopeVhd $true
-if ($ActionScopeRoot -match '[;\r\n]' -or $ActionScopeVhd -match '[;\r\n]') {
-    throw 'Action-scope paths must each be one CMake value'
+function Assert-ActionScopePath([string]$Path) {
+    $prefix = 'V:\tmp\'
+    $comparison = $Path.Replace('/', '\')
+    if ($comparison.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+        if ($Path.Contains('/')) { throw 'Use native separators in an extended action-scope path' }
+        $comparison = $comparison.Substring(4)
+    }
+    if (-not $comparison.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        throw 'Action-scope paths must be explicit addresses below V:\tmp'
+    }
+    foreach ($component in $comparison.Substring($prefix.Length).Split([char]'\')) {
+        if ($component -cin @('', '.', '..') -or $component -match '[\x00-\x1f:;*?"<>|]') {
+            throw 'Action-scope paths must use unambiguous components'
+        }
+    }
 }
+$WorkRoot = Require-V $WorkRoot $true
+Assert-ActionScopePath $ActionScopeRoot
+Assert-ActionScopePath $ActionScopeVhd
 if (-not [IO.Directory]::Exists((Extended $ActionScopeRoot)) -or
     -not [IO.File]::Exists((Extended $ActionScopeVhd))) {
     throw 'The dedicated action-scope VHD and mounted workspace must exist'
