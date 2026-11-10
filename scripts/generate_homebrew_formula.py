@@ -11,8 +11,8 @@ import textwrap
 
 CKVISION_URL = "https://github.com/cklukas/ckVision/archive/7ad5bd67553414e7dc0882069482864034cb31f9.tar.gz"
 CKVISION_SHA256 = "d8043bbc33dfb702b4dfe7dc5c99de2c93c71ec80b35d0da7605aa9ba2279648"
-BACKEND_URL = "https://github.com/cklukas/ck-core-fs-lib/archive/771b92a5f474a16233e6ceda98f5ff04348e1da5.tar.gz"
-BACKEND_SHA256 = "fec3ce3390151176691518db49c46eeaeeb287fc6de74ed1b1a96d628b0c5ed8"
+BACKEND_URL = "https://github.com/cklukas/ck-core-fs-lib/archive/4e41414215aaa1fcd626fb33a11e4dffa45c8d71.tar.gz"
+BACKEND_SHA256 = "527f65da44cdd1525dac4122d694fe6aae5d60184e8606f6f2f9d7a8ec02814a"
 
 
 LLAMA_CPP_URL = (
