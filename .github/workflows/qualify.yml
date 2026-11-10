@@ -204,12 +204,28 @@ jobs:
           ref: f82e648d30d2408790a674643394b33a83afdb98
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
           persist-credentials: false
+      - name: Install required hosted Linux development dependency
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The curl executable does not provide headers or libcurl.pc, which
+          # the mandatory llama backend needs at configure time.
+          : "${TMPDIR:?bootstrap must select task temporary storage}"
+          sudo -n env TMPDIR="$TMPDIR" apt-get update
+          sudo -n env TMPDIR="$TMPDIR" DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libcurl4-openssl-dev
       - name: Require preprovisioned POSIX tools
         if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           for tool in cmake ninja python3 pkg-config curl; do command -v "$tool"; done
+          if ! pkg-config --exists libcurl; then
+            echo 'Missing libcurl development files (headers, library and libcurl.pc). Provision the runner before qualification.' >&2
+            exit 1
+          fi
+          pkg-config --modversion libcurl
+          pkg-config --cflags --libs libcurl
           if [[ "$RUNNER_OS" == Linux ]]; then
             command -v rpm
             command -v unshare
