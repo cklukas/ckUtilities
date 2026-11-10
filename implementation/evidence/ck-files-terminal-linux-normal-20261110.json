@@ -1,0 +1,70 @@
+{
+  "utc": "2026-11-10T03:29:31.549839+00:00",
+  "scope": "Current Files settings integration: Linux normal plus macOS native PTY completion and mouse routing. No native-window acceptance claim.",
+  "linux_normal": {
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-settings-linux-normal-20261110/normal-receipt-v1.json",
+    "receipt_sha256": "93e3d29862c3be2c143adfe1fbed3029df72d5e900af056aba385486a7c15a20",
+    "source_pins": {
+      "ckUtilities": "6eb8b3fb9a4b722aca720a3aace2f72c39329e99",
+      "ck-core-fs-lib": "5899b9f977d855a08c7129adedf8d6ab983700f9",
+      "ckvision-source": "7ad5bd67553414e7dc0882069482864034cb31f9"
+    },
+    "registered_ctests": 40,
+    "files_inner_cases": 271,
+    "settings_inner_cases": 10,
+    "archive_native_ctests": 15,
+    "archive_amendment_ctests": 24,
+    "package_consumers": 2,
+    "ctest_xml_sha256": "0230526e5d02e2e6577f58a3bb1654af5038e142da2dae9a06ff24d6c6426038",
+    "compile_objects": 188,
+    "build_seconds": 825.84,
+    "comparable_build_seconds": 873.063,
+    "unchanged_deadlines": {
+      "copy_inner_seconds": 5,
+      "files_ctest_seconds": 60,
+      "native_archive_watchdog_ctest_seconds": [
+        40,
+        45
+      ],
+      "amendment_watchdog_ctest_seconds": [
+        30,
+        35
+      ]
+    },
+    "prior_copy_timeout": "Preserved separately; later pass does not establish the original failure cause.",
+    "GCC14_O1": "Unresolved SDK finding; Release pass does not qualify O1."
+  },
+  "macos_PTY": {
+    "record": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-right-accept-mouse-pty-20261110/run2/record.json",
+    "record_sha256": "6e67119fa5a493ab2db74def209d532408ad255e17bd0a9512625bb7791cddb5",
+    "driver_sha256": "8e0675722786c03ece20d402c1ed2c68af00eed90f27b8700e401f3e1fc7eef9",
+    "raw_sha256": "8726774ff0e23fa4317794d38f9820ea196e2c3990b02f60b3168a1c21859726",
+    "binary_sha256": "f111522a9a958c8c4ea53c922eeaee2bf85ffac2033e7068eb59876d9e5b9cda",
+    "exit": 0,
+    "seconds": 2.3594089589314535,
+    "checks": [
+      "Ctrl+L opens real location editor",
+      "Right accepts directory proposal and Enter navigates to exact target",
+      "SGR click right row changes active panel; Insert marks right only",
+      "SGR click left row changes active panel; Insert preserves right mark and marks left",
+      "Alt+X exits with zero status"
+    ],
+    "snapshot_sha256": {
+      "01-initial.txt": "c52ce64eb38b011be44db2143edcf7ac69c01fd1660156640d6211737e48a05a",
+      "02-location.txt": "65736583a11b87f3e15d4516d4b952ca2e288fd21ae644d6d8babe5e98f4a257",
+      "03-preview.txt": "15d384fc4fdbbb265fd625e058ae46f5433ba51c3d403725711487296a2ecf24",
+      "04-right-accepted.txt": "c9c2afbd5ee25c194d93fd99806c0d6b6352e6b4644f8a668e9f291c362ade34",
+      "05-navigated.txt": "1bfc51d8291c88762136eb0019f650aa57f500c939e526616608a53ed3b83db1",
+      "06-right-mouse-mark.txt": "a5d7ac865e3e66a60f3e6a817dd491b97e83f5576fa2314abe1960a3feda81ef",
+      "07-left-mouse-mark.txt": "7029050e65ed2f4ea83d9e0cb0243ee99c43aa443f23364e42f7d7a3af4f98f3"
+    },
+    "native_window_acceptance": false
+  },
+  "remaining": [
+    "Current Linux ASan/UBSan frontend cohort",
+    "Current Windows normal and matching ASan frontend cohorts",
+    "Native-window mouse and restricted-key acceptance",
+    "Existing copy timeout root cause",
+    "Bounded direct settings-store reads and nonservice serialization audit"
+  ]
+}
