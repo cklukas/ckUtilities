@@ -1,243 +1,75 @@
 name: Release Packages
-
 on:
   release:
     types: [published]
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: ckutilities-native-serial
+  cancel-in-progress: false
+  queue: max
 jobs:
-  release-tests:
-    name: ckVision release tests (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  qualify:
+    uses: ./.github/workflows/qualify.yml
+    with:
+      frontend_sha: ${{ github.sha }}
+      release_tag: ${{ github.event.release.tag_name }}
+  publish:
+    # No assets/formula attached unless every full native platform gate passed.
+    needs: qualify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '1'
+      CTEST_PARALLEL_LEVEL: '1'
+      MAKEFLAGS: -j1
+      ARCHIVE_BUILD_JOBS: '1'
     steps:
-      - name: Checkout release
-        uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install --quiet ninja curl
-
-      - name: Checkout pinned ckVision 1.4.1 source
-        uses: actions/checkout@v5
-        with:
-          repository: cklukas/ckVision
-          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
-          path: .deps/ckvision
-          persist-credentials: false
-
-      - name: Build pinned ckVision SDK
-        id: ckvision
+          pattern: ckutilities-*-packages
+          path: ${{ runner.temp }}/ckutilities-qualified-release
+          merge-multiple: false
+      - name: Require every platform's already-qualified package
         shell: bash
         run: |
-          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
-          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
-
-      - name: Configure
-        run: >
-          cmake --preset dev
-          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
-          -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON
-          -DCKTOOLS_CKVISION_SOURCE_DIR="$GITHUB_WORKSPACE/.deps/ckvision"
-
-      - name: Build native products and tests
-        run: cmake --build build/dev
-
-      - name: Verify ckVision package consumer
-        run: cmake --build build/dev --target verify_ckvision_package
-
-      - name: Run tests
-        run: ctest --test-dir build/dev --output-on-failure
-
-      - name: Regenerate and verify README screenshots
-        shell: bash
-        run: |
-          mkdir -p docs/generated/screenshots
-          build/dev/tools/docgen/capture_ckutilities_screenshots docs/generated/screenshots
-          git diff --exit-code -- docs/generated/screenshots
-          test -z "$(git status --porcelain --untracked-files=all -- docs/generated/screenshots)"
-
-  release-linux:
-    name: Publish ckVision Linux packages
-    needs: release-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout release
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build python3 pkg-config libcurl4-openssl-dev rpm
-
-      - name: Checkout pinned ckVision 1.4.1 source
-        uses: actions/checkout@v5
-        with:
-          repository: cklukas/ckVision
-          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
-          path: .deps/ckvision
-          persist-credentials: false
-
-      - name: Build pinned ckVision SDK
-        id: ckvision
-        shell: bash
-        run: |
-          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
-          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
-
-      - name: Configure verified package
-        run: >
-          cmake --preset pkg
-          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
-          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
-          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
-          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
-
-      - name: Verify and build packages
-        run: |
-          cmake --build build/pkg --target verify_ckvision_rehearsal
-          cmake --build build/pkg --target verify_ckvision_terminal
-
-      - name: Attach Linux packages
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/pkg/*.deb
-            build/pkg/*.rpm
-            build/pkg/*.tar.gz
-
-  release-macos:
-    name: Publish ckVision macOS archive
-    needs: release-tests
-    runs-on: macos-latest
-    steps:
-      - name: Checkout release
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Install dependencies
-        run: brew install --quiet ninja curl
-
-      - name: Checkout pinned ckVision 1.4.1 source
-        uses: actions/checkout@v5
-        with:
-          repository: cklukas/ckVision
-          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
-          path: .deps/ckvision
-          persist-credentials: false
-
-      - name: Build pinned ckVision SDK
-        id: ckvision
-        shell: bash
-        run: |
-          scripts/build_ckvision_sdk.sh .deps/ckvision "$RUNNER_TEMP/ckvision-sdk" "$RUNNER_TEMP/ckvision-build"
-          echo "prefix=$RUNNER_TEMP/ckvision-sdk" >> "$GITHUB_OUTPUT"
-
-      - name: Configure verified archive
-        run: >
-          cmake --preset pkg -DCMAKE_INSTALL_PREFIX=.
-          -DCMAKE_PREFIX_PATH="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_CKVISION_PREFIX="${{ steps.ckvision.outputs.prefix }}"
-          -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
-          -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON
-          -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON
-          -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON
-
-      - name: Verify and build archive
-        run: |
-          cmake --build build/pkg --target verify_ckvision_rehearsal
-          cmake --build build/pkg --target verify_ckvision_terminal
-
-      - name: Attach macOS archive
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/pkg/*.tar.gz
-
-  release-homebrew-formula:
-    name: Attach Homebrew formula
-    needs: release-tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout release
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Generate formula from immutable release source
+          set -euo pipefail
+          root="$RUNNER_TEMP/ckutilities-qualified-release"
+          test -n "$(find "$root/ckutilities-Linux-packages" -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$(find "$root/ckutilities-Linux-packages" -maxdepth 1 -name '*.rpm' -print -quit)"
+          test -n "$(find "$root/ckutilities-Linux-packages" -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -f "$root/ckutilities-Linux-packages/ck-utilities.rb"
+          test -n "$(find "$root/ckutilities-macOS-packages" -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test -n "$(find "$root/ckutilities-Windows-packages" -maxdepth 1 -name '*.zip' -print -quit)"
+          cd "$root/ckutilities-Windows-packages"
+          for checksum in *.zip.sha256; do sha256sum --check --strict "$checksum"; done
+      - name: Attach to the existing release only (never create a release)
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-          REPOSITORY: ${{ github.repository }}
-          SERVER_URL: ${{ github.server_url }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          QUALIFIED_SOURCE_SHA: ${{ github.sha }}
         run: |
-          version="${RELEASE_TAG#v}"
-          source_url="$SERVER_URL/$REPOSITORY/archive/refs/tags/$RELEASE_TAG.tar.gz"
-          curl --fail --location --silent --show-error --output source.tar.gz "$source_url"
-          source_sha256="$(sha256sum source.tar.gz | awk '{print $1}')"
-          python3 scripts/generate_homebrew_formula.py \
-            --version "$version" \
-            --source-url "$source_url" \
-            --source-sha256 "$source_sha256" \
-            --homepage "$SERVER_URL/$REPOSITORY" \
-            --output build/release/ck-utilities.rb
-          ruby -c build/release/ck-utilities.rb
-
-      - name: Attach Homebrew formula
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/release/ck-utilities.rb
-
-  release-windows:
-    name: Publish Windows archive
-    needs: release-tests
-    runs-on: windows-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - name: Checkout release
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Checkout pinned ckVision 1.4.1 source
-        uses: actions/checkout@v5
-        with:
-          repository: cklukas/ckVision
-          ref: 5a5b19de9dfa7c6c250ae78823e11fa8dbd655bf
-          path: .deps/ckvision
-          persist-credentials: false
-
-      - name: Build, test and package
-        run: >
-          ./scripts/windows/build-and-package.ps1
-          -CkVisionSource "$env:GITHUB_WORKSPACE/.deps/ckvision"
-          -WorkRoot "$env:RUNNER_TEMP/ck-utilities"
-
-      - name: Attach Windows archive
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ${{ runner.temp }}/ck-utilities/packages/*.zip
-            ${{ runner.temp }}/ck-utilities/packages/*.zip.sha256
+          set -euo pipefail
+          root="$RUNNER_TEMP/ckutilities-qualified-release"
+          files=()
+          while IFS= read -r -d '' file; do files+=("$file"); done < <(find "$root" -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.rb' -o -name '*.zip' -o -name '*.zip.sha256' \) -print0)
+          (( ${#files[@]} >= 8 ))
+          [[ "$GITHUB_REPOSITORY" == 'cklukas/ckUtilities' ]]
+          [[ "$QUALIFIED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          work=$(mktemp -d "$RUNNER_TEMP/ckutilities-release-tag.XXXXXXXX")
+          export TMPDIR="$work" TMP="$work" TEMP="$work"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+          git -c core.hooksPath=/dev/null init --bare "$work/source.git"
+          git -c core.hooksPath=/dev/null -c credential.helper= --git-dir="$work/source.git" fetch --no-tags \
+            "https://github.com/$GITHUB_REPOSITORY.git" \
+            "+refs/tags/$RELEASE_TAG:refs/tags/qualified"
+          peeled=$(git --git-dir="$work/source.git" rev-parse --verify 'refs/tags/qualified^{commit}')
+          test "$peeled" = "$QUALIFIED_SOURCE_SHA"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)
+          test "$id" = "$RELEASE_ID"
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${files[@]}"

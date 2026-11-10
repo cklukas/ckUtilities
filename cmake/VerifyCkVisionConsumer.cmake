@@ -59,7 +59,7 @@ endif()
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" --build "${CKTOOLS_CKVISION_CONSUMER_BINARY_DIR}"
-    --config "${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}" --parallel
+    --config "${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}" --parallel 1
   RESULT_VARIABLE _cktools_build_result)
 if(NOT _cktools_build_result EQUAL 0)
   message(FATAL_ERROR "ckVision package consumer build failed")
@@ -67,7 +67,7 @@ endif()
 
 execute_process(
   COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${CKTOOLS_CKVISION_CONSUMER_BINARY_DIR}"
-    -C "${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}" --output-on-failure
+    -C "${CKTOOLS_CKVISION_CONSUMER_BUILD_TYPE}" --output-on-failure --parallel 1 --no-tests=error
   RESULT_VARIABLE _cktools_test_result)
 if(NOT _cktools_test_result EQUAL 0)
   message(FATAL_ERROR "ckVision package consumer test failed")

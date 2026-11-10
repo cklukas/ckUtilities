@@ -1,0 +1,302 @@
+name: Shared native qualification
+on:
+  workflow_call:
+    inputs:
+      frontend_sha:
+        type: string
+        required: true
+      release_tag:
+        type: string
+        default: ''
+permissions:
+  contents: read
+# Caller workflows own ONE common concurrency group. Do not repeat that group
+# here: a called workflow must not wait on its own caller's reservation.
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: '1'
+  CTEST_PARALLEL_LEVEL: '1'
+  MAKEFLAGS: -j1
+  ARCHIVE_BUILD_JOBS: '1'
+  CPACK_THREADS: '1'
+  CPACK_ARCHIVE_THREADS: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  CKTOOLS_CI_CKVISION_REVISION: 7ad5bd67553414e7dc0882069482864034cb31f9
+  CKTOOLS_CI_BACKEND_REVISION: f82e648d30d2408790a674643394b33a83afdb98
+  CKTOOLS_CI_FRONTEND_REVISION: ${{ inputs.frontend_sha }}
+  CKTOOLS_CI_RELEASE_TAG: ${{ inputs.release_tag }}
+jobs:
+  admit:
+    name: Admit trusted source before scheduling personal runners
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # No checkout or source-provided script runs before this hosted-only gate.
+      - name: Verify caller and exact source against published master
+        shell: bash
+        env:
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_EVENT: ${{ github.event_name }}
+          CALLER_REF: ${{ github.ref }}
+          CALLER_SHA: ${{ github.sha }}
+          REQUESTED_SHA: ${{ inputs.frontend_sha }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RUNNER_TEMP" == /* && -d "$RUNNER_TEMP" && -w "$RUNNER_TEMP" ]]
+          work=$(mktemp -d "$RUNNER_TEMP/ckutilities-admission.XXXXXXXX")
+          export TMPDIR="$work" TMP="$work" TEMP="$work" ADMISSION_WORK="$work"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+          python3 - <<'ADMISSION'
+          import json, os, re, subprocess
+          from pathlib import Path
+          repository = 'cklukas/ckUtilities'
+          if os.environ['CALLER_REPOSITORY'] != repository:
+              raise RuntimeError('Personal runners accept this repository only')
+          sha = os.environ['REQUESTED_SHA']
+          if not re.fullmatch('[0-9a-f]{40}', sha) or sha != os.environ['CALLER_SHA']:
+              raise RuntimeError('Exact triggering commit required')
+          event = os.environ['CALLER_EVENT']
+          tag = os.environ['REQUESTED_TAG']
+          with open(os.environ['GITHUB_EVENT_PATH']) as stream:
+              payload = json.load(stream)
+          if event in ('push', 'workflow_dispatch'):
+              if os.environ['CALLER_REF'] != 'refs/heads/master' or tag:
+                  raise RuntimeError('Only master push/manual native qualification admitted')
+          elif event == 'release':
+              release = payload.get('release', {})
+              if payload.get('action') != 'published' or release.get('draft') or tag != release.get('tag_name') or not re.fullmatch(r'v[0-9]+(?:\.[0-9]+){2}', tag):
+                  raise RuntimeError('Published numeric release tag required')
+          else:
+              raise RuntimeError('PR and other event sources cannot schedule personal runners')
+          bare = Path(os.environ['ADMISSION_WORK']) / 'source.git'
+          def git(*args):
+              return subprocess.check_output(['git', '-c', 'core.hooksPath=/dev/null',
+                  '-c', 'credential.helper=', '--git-dir=' + str(bare), *args], text=True).strip()
+          git('init', '--bare')
+          git('remote', 'add', 'origin', 'https://github.com/' + repository + '.git')
+          refs = ['+refs/heads/master:refs/remotes/origin/master']
+          if tag:
+              refs.append('+refs/tags/' + tag + ':refs/tags/qualified')
+          git('fetch', '--no-tags', 'origin', *refs)
+          master = git('rev-parse', '--verify', 'refs/remotes/origin/master^{commit}')
+          if git('rev-parse', '--verify', sha + '^{commit}') != sha:
+              raise RuntimeError('Exact source commit missing from fetched master history')
+          git('merge-base', '--is-ancestor', sha, master)
+          if tag and git('rev-parse', '--verify', 'refs/tags/qualified^{commit}') != sha:
+              raise RuntimeError('Peeled release tag does not identify the qualified source')
+          print(json.dumps({'admitted_source': sha, 'published_master': master, 'event': event,
+                            'repository': repository, 'bare_git': str(bare),
+                            'scope': 'trusted-source admission only; no project checkout/scripts/tests'}))
+          ADMISSION
+  qualify:
+    needs: admit
+    name: Complete tests and package / ${{ matrix.platform }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: Linux
+            runner: ubuntu-24.04
+          - platform: macOS
+            runner: [self-hosted, macOS, ckutilities-temp-volumes]
+          - platform: Windows
+            runner: [self-hosted, Windows, X64, ckutilities-v-drive]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      # Runner storage/file-command directories are preprovisioned, not fixed
+      # by this job. All guards run BEFORE checkout and any project tool.
+      - name: Select approved POSIX storage before checkout
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          NATIVE_PARENT_LINUX: ${{ vars.CKTOOLS_LINUX_NATIVE_FIXTURE_PARENT }}
+          NATIVE_PARENT_MAC: ${{ vars.CKTOOLS_MAC_NATIVE_FIXTURE_PARENT }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            permitted=()
+            for volume in /Volumes/S8T /Volumes/PRO-BLADE; do
+              if /sbin/mount | /usr/bin/grep -F " on $volume " >/dev/null && [[ -d "$volume/tmp" && -w "$volume/tmp" ]]; then
+                actual=$(cd -P "$volume/tmp" && pwd -P)
+                [[ "$actual" == "$volume/tmp" ]] && permitted+=("$actual")
+              fi
+            done
+            (( ${#permitted[@]} )) || { echo 'Required mounted Mac temporary volume unavailable' >&2; exit 1; }
+            check_path() {
+              local actual root
+              actual=$(cd -P "$1" && pwd -P)
+              for root in "${permitted[@]}"; do [[ "$actual" == "$root"/* ]] && return 0; done
+              echo "Disallowed Mac runner/native storage: $actual" >&2; return 1
+            }
+            for path in "$GITHUB_WORKSPACE" "$RUNNER_TEMP" "${GITHUB_ENV%/*}" "${GITHUB_OUTPUT%/*}"; do check_path "$path"; done
+            : "${NATIVE_PARENT_MAC:?Provision ownership-enforcing Mac native fixtures below an approved temporary root}"
+            check_path "$NATIVE_PARENT_MAC"
+            native_parent=$NATIVE_PARENT_MAC
+            work=$(mktemp -d "${permitted[0]}/ckutilities-ci.XXXXXXXX")
+          else
+            [[ $(id -u) -ne 0 ]] || { echo 'Ordinary Linux runner required' >&2; exit 1; }
+            [[ "$RUNNER_TEMP" == /* && -d "$RUNNER_TEMP" && -w "$RUNNER_TEMP" ]]
+            native_parent=${NATIVE_PARENT_LINUX:-$RUNNER_TEMP}
+            [[ "$native_parent" == /* && -d "$native_parent" && -w "$native_parent" ]]
+            native_parent=$(cd -P "$native_parent" && pwd -P)
+            work=$(mktemp -d "$RUNNER_TEMP/ckutilities-ci.XXXXXXXX")
+          fi
+          export TMPDIR="$work" TMP="$work" TEMP="$work"
+          native=$(mktemp -d "$native_parent/ckutilities-native.XXXXXXXX")
+          mkdir "$work/tmp" "$work/cache"
+          checkout="source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${RUNNER_OS}"
+          [[ ! -e "$GITHUB_WORKSPACE/$checkout" ]] || { echo 'Refuse reused checkout' >&2; exit 1; }
+          {
+            echo "CKTOOLS_CI_WORK_ROOT=$work"
+            echo "CKTOOLS_CI_NATIVE_ROOT=$native"
+            echo "CKTOOLS_CI_CHECKOUT_REL=$checkout"
+            echo "CKTOOLS_CI_SOURCE_DIR=$GITHUB_WORKSPACE/$checkout"
+            echo "TMPDIR=$work/tmp"; echo "TMP=$work/tmp"; echo "TEMP=$work/tmp"
+            echo "XDG_CACHE_HOME=$work/cache"
+            echo "CLANG_MODULE_CACHE_PATH=$work/cache/clang"
+            echo "CCACHE_DIR=$work/cache/ccache"
+            if [[ "$RUNNER_OS" == Linux ]]; then echo 'CK_FS_NAMESPACE_BOOTSTRAP=privileged-id-map'; fi
+          } >> "$GITHUB_ENV"
+      - name: Require V development storage before checkout
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if (-not [IO.Directory]::Exists('V:\')) { throw 'V development drive unavailable' }
+          function Guard([string]$Path) {
+            $p=[IO.Path]::GetFullPath($Path)
+            if (-not $p.StartsWith('V:\tmp\',[StringComparison]::OrdinalIgnoreCase)) { throw "Runner path not under V:\tmp: $p" }
+            $item=[IO.DirectoryInfo]::new($p)
+            while ($null -ne $item) {
+              if (([IO.File]::GetAttributes(('\\?\'+$item.FullName)) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Runner storage must not redirect' }
+              $item=$item.Parent
+            }
+          }
+          foreach ($p in @($env:GITHUB_WORKSPACE,$env:RUNNER_TEMP,[IO.Path]::GetDirectoryName($env:GITHUB_ENV),[IO.Path]::GetDirectoryName($env:GITHUB_OUTPUT))) { Guard $p }
+          $work=Join-Path 'V:\tmp' ('ckutilities-ci-'+[guid]::NewGuid().ToString('N'))
+          [IO.Directory]::CreateDirectory(('\\?\'+$work)) | Out-Null
+          [IO.Directory]::CreateDirectory(('\\?\'+$work+'\tmp')) | Out-Null
+          foreach ($key in @('TEMP','TMP','TMPDIR')) { [Environment]::SetEnvironmentVariable($key,($work+'\tmp'),'Process') }
+          $checkout="source-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-Windows"
+          $source=Join-Path $env:GITHUB_WORKSPACE $checkout
+          if ([IO.Directory]::Exists(('\\?\'+$source))) { throw 'Refuse reused checkout' }
+          @("CKTOOLS_CI_WORK_ROOT=$work","CKTOOLS_CI_CHECKOUT_REL=$checkout","CKTOOLS_CI_SOURCE_DIR=$source",'CK_FS_REQUIRE_V_DEV_DRIVE=1',"TMPDIR=$work\tmp","TEMP=$work\tmp","TMP=$work\tmp","XDG_CACHE_HOME=$work\cache","CCACHE_DIR=$work\cache\ccache","SCCACHE_DIR=$work\cache\sccache","CLANG_MODULE_CACHE_PATH=$work\cache\clang") | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Checkout exact frontend commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.frontend_sha }}
+          path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout stock ckVision 1.4.2
+        uses: actions/checkout@v5
+        with:
+          repository: cklukas/ckVision
+          ref: 7ad5bd67553414e7dc0882069482864034cb31f9
+          path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ckvision
+          persist-credentials: false
+      - name: Checkout exact published backend
+        uses: actions/checkout@v5
+        with:
+          repository: cklukas/ck-core-fs-lib
+          ref: f82e648d30d2408790a674643394b33a83afdb98
+          path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
+          persist-credentials: false
+      - name: Require preprovisioned POSIX tools
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in cmake ninja python3 pkg-config curl; do command -v "$tool"; done
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            command -v rpm
+            command -v unshare
+            command -v sudo
+            sudo -n true
+          fi
+      - name: Full POSIX qualification and packaging
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash "$CKTOOLS_CI_SOURCE_DIR/scripts/ci/frontend-posix.sh"
+      - name: Full Windows qualification and packaging (mandatory source admission)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & "$env:CKTOOLS_CI_SOURCE_DIR/scripts/windows/build-and-package.ps1" -CkVisionSource "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ckvision" -CkCoreFsSource "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ck-core-fs-lib" -WorkRoot $env:CKTOOLS_CI_WORK_ROOT
+      - name: Prepare formula from the same immutable release source
+        if: runner.os == 'Linux' && inputs.release_tag != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CKTOOLS_CI_SOURCE_DIR"
+          archive="$CKTOOLS_CI_WORK_ROOT/source.tar.gz"
+          curl --fail --location --silent --show-error --output "$archive" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz"
+          digest=$(sha256sum "$archive" | awk '{print $1}')
+          mkdir -p "$CKTOOLS_CI_WORK_ROOT/packages"
+          python3 scripts/generate_homebrew_formula.py --version "${CKTOOLS_CI_RELEASE_TAG#v}" --source-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz" --source-sha256 "$digest" --homepage "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --output "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
+          ruby -c "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
+      - name: Upload qualified package artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: ckutilities-${{ matrix.platform }}-packages
+          if-no-files-found: error
+          path: |
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/*.deb
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/*.rpm
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/*.tar.gz
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/packages/*.zip
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/packages/*.zip.sha256
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/packages/*.rb
+      - name: Preserve source, preflight and test evidence on failure too
+        id: diagnostics
+        if: always() && env.CKTOOLS_CI_WORK_ROOT != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ckutilities-${{ matrix.platform }}-diagnostics
+          if-no-files-found: warn
+          path: |
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/ci-inputs.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/native-prerequisites.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-hook-preflight.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-provider.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/stages.jsonl
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-inputs.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-provider.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-flags.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-ctest-inventory.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-results.xml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/compile_commands.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/Testing/Temporary/
+      - name: Audit and retain terminal POSIX workspace after diagnostics upload
+        if: always() && !cancelled() && runner.os != 'Windows' && steps.diagnostics.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$CKTOOLS_CI_SOURCE_DIR/scripts/ci/cleanup-workspace.py" ]]; then
+            python3 "$CKTOOLS_CI_SOURCE_DIR/scripts/ci/cleanup-workspace.py"
+          else
+            echo 'Checkout unavailable; retain the recorded bootstrap roots for owner cleanup.'
+          fi
+      - name: Audit and retain terminal Windows workspace after diagnostics upload
+        if: always() && !cancelled() && runner.os == 'Windows' && steps.diagnostics.outcome == 'success'
+        shell: pwsh
+        run: |
+          $script=Join-Path $env:CKTOOLS_CI_SOURCE_DIR 'scripts/ci/cleanup-workspace.py'
+          if ([IO.File]::Exists(('\\?\'+$script))) { & python $script; if ($LASTEXITCODE -ne 0) { throw 'Owned cleanup refused; retain recorded roots' } }
+          else { Write-Host 'Checkout unavailable; retain bootstrap roots for owner cleanup.' }
+      - name: Preserve incomplete ownership audit (roots retained)
+        if: always() && env.CKTOOLS_CI_WORK_ROOT != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: ckutilities-${{ matrix.platform }}-cleanup-audit
+          if-no-files-found: warn
+          path: ${{ env.CKTOOLS_CI_WORK_ROOT }}/cleanup-audit.json

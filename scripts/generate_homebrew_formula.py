@@ -11,6 +11,8 @@ import textwrap
 
 CKVISION_URL = "https://github.com/cklukas/ckVision/archive/7ad5bd67553414e7dc0882069482864034cb31f9.tar.gz"
 CKVISION_SHA256 = "d8043bbc33dfb702b4dfe7dc5c99de2c93c71ec80b35d0da7605aa9ba2279648"
+BACKEND_URL = "https://github.com/cklukas/ck-core-fs-lib/archive/f82e648d30d2408790a674643394b33a83afdb98.tar.gz"
+BACKEND_SHA256 = "772e42fc1090880d7c92060a9344656ca1fdc1bbe6ead8f4b5e16aa2f0aa5b43"
 
 
 LLAMA_CPP_URL = (
@@ -55,6 +57,11 @@ def main() -> None:
         sha256 "{CKVISION_SHA256}"
       end
 
+      resource "ck_core_fs" do
+        url "{BACKEND_URL}"
+        sha256 "{BACKEND_SHA256}"
+      end
+
       resource "llama_cpp" do
         url "{LLAMA_CPP_URL}"
         sha256 "{LLAMA_CPP_SHA256}"
@@ -67,6 +74,11 @@ def main() -> None:
       depends_on "nlohmann-json"
 
       def install
+        ENV["CMAKE_BUILD_PARALLEL_LEVEL"] = "1"
+        ENV["CTEST_PARALLEL_LEVEL"] = "1"
+        ENV["ARCHIVE_BUILD_JOBS"] = "1"
+        ENV["MAKEFLAGS"] = "-j1"
+        resource("ck_core_fs").stage buildpath/"ck-core-fs-lib"
         resource("ckvision").stage buildpath/"ckvision"
         ckvision_prefix = buildpath/"ckvision-sdk"
         system "cmake", "-S", "ckvision", "-B", "ckvision-build", "-G", "Ninja",
@@ -75,7 +87,7 @@ def main() -> None:
                "-DCKVISION_BUILD_TESTING=OFF",
                "-DCKVISION_BUILD_FUZZERS=OFF",
                "-DCMAKE_INSTALL_PREFIX=#{{ckvision_prefix}}"
-        system "cmake", "--build", "ckvision-build", "--parallel"
+        system "cmake", "--build", "ckvision-build", "--parallel", "1"
         system "cmake", "--install", "ckvision-build"
 
         resource("llama_cpp").stage buildpath/"llama_cpp"
@@ -90,13 +102,14 @@ def main() -> None:
         json_prefix = Formula["nlohmann-json"].opt_prefix
         system "cmake", "-S", ".", "-B", "build", "-G", "Ninja",
            "-DCMAKE_BUILD_TYPE=Release",
+           "-DCK_CORE_FS_LIB_SOURCE_DIR=#{{buildpath}}/ck-core-fs-lib",
            "-DBUILD_TESTING=OFF",
            "-DLLAMA_BUILD_TESTS=OFF",
            "-DLLAMA_BUILD_EXAMPLES=OFF",
            "-DCMAKE_PREFIX_PATH=#{{ckvision_prefix}};#{{curl_prefix}};#{{json_prefix}}",
            "-DCK_LLAMA_CPP_SOURCE_DIR=#{{llama_source}}",
                *std_cmake_args
-        system "cmake", "--build", "build"
+        system "cmake", "--build", "build", "--parallel", "1"
         # Only the product: the executables, documentation, license and
         # sample configuration. Development headers and libraries, ours and
         # the bundled llama.cpp's, would collide with Homebrew's own

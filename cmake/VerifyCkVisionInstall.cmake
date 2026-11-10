@@ -9,7 +9,7 @@ endforeach()
 file(REMOVE_RECURSE "${CKTOOLS_INSTALL_PREFIX}")
 
 execute_process(
-  COMMAND "${CMAKE_COMMAND}" --build "${CKTOOLS_BINARY_DIR}" --parallel
+  COMMAND "${CMAKE_COMMAND}" --build "${CKTOOLS_BINARY_DIR}" --parallel 1
   RESULT_VARIABLE _cktools_build_result)
 if(NOT _cktools_build_result EQUAL 0)
   message(FATAL_ERROR "ckUtilities build failed before installed-product verification")

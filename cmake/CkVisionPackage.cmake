@@ -124,6 +124,7 @@ function(cktools_add_ckvision_archive_verification)
 
   add_custom_target(verify_ckvision_archive
     COMMAND "${CMAKE_CPACK_COMMAND}" --config "${PROJECT_BINARY_DIR}/CPackConfig.cmake"
+      -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_PACKAGE_ARCHIVE=${PROJECT_BINARY_DIR}/${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}.tar.gz"
       "-DCKTOOLS_PACKAGE_EXTRACT_DIR=${PROJECT_BINARY_DIR}/ckvision-package-check"
@@ -176,10 +177,10 @@ function(cktools_add_ckvision_rehearsal_verification)
   endif()
 
   add_custom_target(verify_ckvision_rehearsal
-    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_package
-    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_cutover
-    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_archive
-    COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PROJECT_BINARY_DIR}" --output-on-failure
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_package --parallel 1
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_cutover --parallel 1
+    COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_archive --parallel 1
+    COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PROJECT_BINARY_DIR}" --output-on-failure --parallel 1 --no-tests=error
     USES_TERMINAL
     COMMENT "Run the complete local ckVision cutover rehearsal")
 endfunction()

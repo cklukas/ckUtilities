@@ -1,0 +1,50 @@
+{
+  "scope": "CI/release infrastructure source checkpoint; no runtime or release acceptance claim",
+  "baseline": "15558a9eb32b6d94e653b08d4d7a000069b17533",
+  "dependency_backend": "f82e648d30d2408790a674643394b33a83afdb98",
+  "dependency_ckvision": "7ad5bd67553414e7dc0882069482864034cb31f9",
+  "backend_archive_sha256": "772e42fc1090880d7c92060a9344656ca1fdc1bbe6ead8f4b5e16aa2f0aa5b43",
+  "archive_entries_git_tree_match": 504,
+  "reviewed_source_packets": [
+    "/Volumes/PRO-BLADE/Development/ckUtilities-ci-qualification/frontend-ci-release-source-20261110-ecHwbT",
+    "/Volumes/PRO-BLADE/Development/ckUtilities-ci-qualification/frontend-ci-release-hosted-admission-20261110-ecHwbT",
+    "/Volumes/PRO-BLADE/Development/ckUtilities-ci-qualification/frontend-ci-cleanup-journal-source-20261110-k6gh47j"
+  ],
+  "final_file_sha256": {
+    ".github/workflows/ci.yml": "19fe2f469d71ad7ac972c40887edbafd02eda44d4fa204e62fac087c13276d72",
+    ".github/workflows/pages.yml": "fb1826fc7abf49432933e59f583de3f0d6a5cd1504b307368eb9a4f2d5ba9d8d",
+    ".github/workflows/qualify.yml": "669a2b889edd362771e4fc61ef879a4e8ae9ac52e21f44d881ae9d8be2be2eca",
+    ".github/workflows/release.yml": "a431a78d200fce19ee29fd168822cfef0fa36a47703bb60cb8160cf372b2ddc2",
+    "cmake/CkVisionPackage.cmake": "1b62255ac22c8a45696944c9a2400a2153bf6c21c225a6939c47fb1c3d4d819a",
+    "cmake/VerifyCkVisionConsumer.cmake": "135e87cba79065d0713daa88934eb1359f81c3d3f0b7b547fee87e725fe39f75",
+    "cmake/VerifyCkVisionInstall.cmake": "4b930b5745b01df78ec14b2ea871a4dd7711ae99e748f1f86686f85a56f20cc6",
+    "scripts/build_ckvision_sdk.sh": "546b0b9fac34a73cce3eeef463b65766e4c0b89a1031224fe4041fe12c250ee6",
+    "scripts/ci/check-posix-fixture.py": "231d1e4de905207e096dd8c4ea615dc826293464a4d67592bf6c91fd1678082d",
+    "scripts/ci/cleanup-workspace.py": "0445e92f9dac90f35ef250ed0833ee6f941af38e322ac04eb77060668e508aed",
+    "scripts/ci/dependency-pins.json": "77f1eccfa122712c531fa7f0884631c9f0d6a3f7fee51cc14235478d79a92648",
+    "scripts/ci/frontend-posix.sh": "d40dea80c33950d75039d6482500eff0835fbfa1000c00575f97ff3d736cb608",
+    "scripts/ci/verify-inputs.py": "b1a0762dad8f6f8e55cceaf020212512ffac62f4d5f0c97bba0d923e88b384f7",
+    "scripts/generate_homebrew_formula.py": "8844d9d18b0b9f29d6f402455ffb278b1ae2a3d9661a78900fd90ac64f165696",
+    "scripts/windows/build-and-package.ps1": "c28284c3a6fcba995a166bfba08cc1d10baa4a7581ad185142229c6c19f6f7c7"
+  },
+  "static_validation": [
+    "Unique-key YAML, inline Bash and Python AST checks PASS",
+    "Generated formula Ruby syntax PASS only",
+    "Actual PowerShell7.6.9 final script AST zero errors",
+    "Definition guard256/256 pure controls including200 captured historical commands, no native work"
+  ],
+  "required_gates": [
+    "Hosted trusted source admission before personal native runners",
+    "All registered first-suite CTests, no test filtering",
+    "Separate uniform journal SDK supplemental ten-mode selection",
+    "All three platforms before release assets; exact source/tag/release identity rechecked"
+  ],
+  "open": [
+    "Actual GitHub execution and native/full package qualification",
+    "Mac/Windows runner provisioning",
+    "Windows48findings/14sources blocks beforeconfigure",
+    "Automatic obsolete-workspace cleanup is NOT implemented by retention; ownership audit/cleanup remains OPEN",
+    "Native-window interactive acceptance"
+  ],
+  "cleanup_status": "Retains roots with explicit unqualified audit; does not claim completed cleanup"
+}
