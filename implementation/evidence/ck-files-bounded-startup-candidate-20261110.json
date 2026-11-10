@@ -1,5 +1,5 @@
 {
-  "state": "Private integration candidate: Macnormal109/109, old-store allocation counterexample, fixed allocation regression, genuine nativePTY oversized-file preservation PASS. No live SDK pin/release/product adoption.",
+  "state": "Private bounded startup integration candidate: Macnormal109/109 and matchingTsan109/109,277innercases each; allocation counterexample+fixed regression, nativePTY file preservation and docs strict PASS. No release/current SDK pin/adoption.",
   "candidate_commit": "d5a388ac99534c975bf11df2515412fcd1c51914",
   "SDK_candidate": "c5197034861a62ca6ae7f2f67891e91ac14be971",
   "code_and_doc_sha256": {
@@ -30,12 +30,31 @@
     "native_window_acceptance": false
   },
   "remaining": [
-    "Fresh matched frontend TSan integration",
-    "SDK Linux/Windows +growth/failure controls and release",
-    "Current Windows/Linux frontend integration",
+    "SDK Linux/Windows normal/sanitizer and growth/failure qualification plus release",
+    "Frontend Linux/Windows bounded integration",
     "Native-window acceptance"
   ],
   "receipt_sha256": "d32e7de8fe883b29aedafd462a64c7bb4f530146c13148a05833b37f2b6aff43",
   "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-bounded-startup-normal-20261110/receipt.json",
-  "status_note": "Normal-only private integration candidate. Fresh matching frontend TSan now running; no current SDK pin/live code adoption."
+  "status_note": "Normal-only private integration candidate. Fresh matching frontend TSan now running; no current SDK pin/live code adoption.",
+  "macOS_TSan": {
+    "tests": 109,
+    "inner_cases": 277,
+    "fail": 0,
+    "skip": 0,
+    "instrumented_TUs": 281,
+    "build_seconds": 284.1487729999935,
+    "ctest_seconds": 100.13907395896968,
+    "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+    "receipt": "/Volumes/PRO-BLADE/Development/ck-core-fs-qualification/ckutilities-bounded-startup-tsan-20261110/receipt.json",
+    "receipt_sha256": "0c30bf54513fe1084b86f093c83eae641f91669f6c4f7fd216ab07afb47d4960",
+    "nativePTY": {
+      "exit": 0,
+      "bytes_preserved": 2097191,
+      "settings_sha256": "5162c12b85d4effa4b59999407aafc02b7b3ef7171add22d5e96f0bd1b165cc7",
+      "warning_after_terminal_restore": true,
+      "sanitizer_findings": 0,
+      "native_window_acceptance": false
+    }
+  }
 }
