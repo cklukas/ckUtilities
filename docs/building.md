@@ -57,7 +57,7 @@ cmake --build build/pkg --target package
 ```
 
 GitHub Actions checks out and builds the immutable ckVision 1.5.0 revision
-`99ef5743e388db5c6a1169fae41b4261418c1120` on each Linux and macOS runner,
+`ba23b20a4af152690de0c98657f25003f43080ef` on each Linux and macOS runner,
 then configures ckUtilities exclusively against that installed SDK. No
 repository variables or prebuilt framework archive are required.
 
