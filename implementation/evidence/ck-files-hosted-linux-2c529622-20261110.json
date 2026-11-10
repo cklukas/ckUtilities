@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "recorded_at_utc": "2026-11-10T20:04:02.487923+00:00",
+  "scope": "Exact published Linux frontend Debug/Release tests and authenticated package inspection; not Windows, macOS, sanitizers or native-window acceptance.",
+  "run": {
+    "id": 42848409330,
+    "url": "https://github.com/cklukas/ckUtilities/actions/runs/42848409330",
+    "head_sha": "2c5296225268f740468ec5a17ab554778335ec7c",
+    "head_branch": "master",
+    "event": "push",
+    "overall_status_observed": "queued",
+    "overall_conclusion_observed": null
+  },
+  "job": {
+    "id": 130031744931,
+    "url": "https://github.com/cklukas/ckUtilities/actions/runs/42848409330/job/130031744931",
+    "name": "qualify / Complete tests and package / Linux",
+    "conclusion": "success",
+    "started_at": "2026-11-10T18:18:21Z",
+    "completed_at": "2026-11-10T19:12:59Z",
+    "elapsed_seconds": 3278
+  },
+  "revisions_and_source_verification": {
+    "frontend": {
+      "revision": "2c5296225268f740468ec5a17ab554778335ec7c",
+      "tree": "ceddd6b96dc615a7bb016369e0818d737bf08bd7",
+      "verified_files": 878
+    },
+    "backend": {
+      "revision": "fc56de16433cf7066c344f8c052debc7e6197535",
+      "tree": "519ea44117858a2e9a8b1b9a47b497fd6f49c126",
+      "verified_files": 512
+    },
+    "ckvision": {
+      "revision": "7ad5bd67553414e7dc0882069482864034cb31f9",
+      "tree": "35c3adca47f6d90a90e3877e892833f404968391",
+      "verified_files": 5124
+    }
+  },
+  "committed_dependency_pins": {
+    "backend": "fc56de16433cf7066c344f8c052debc7e6197535",
+    "backend_archive_sha256": "c2d84a67edb7b5c0bd80d0b3771c066eeecf827d7ed886936192643552db7645",
+    "ckvision": "7ad5bd67553414e7dc0882069482864034cb31f9",
+    "ckvision_version": "1.4.2"
+  },
+  "ctest": {
+    "projects": [
+      {
+        "configuration": "frontend-dev",
+        "registered_and_executed": 463,
+        "passed": 463,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "configuration": "frontend-pkg",
+        "registered_and_executed": 463,
+        "passed": 463,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "independent_ckvision_package_consumers": [
+      {
+        "path": "/home/runner/work/_temp/ckutilities-ci.2kg8dXjo/frontend-dev/ckvision-package-consumer",
+        "tests": [
+          {
+            "ordinal": 1,
+            "total": 1,
+            "id": 1,
+            "name": "ckvision_package_consumer_runs",
+            "status": "Passed"
+          }
+        ]
+      },
+      {
+        "path": "/home/runner/work/_temp/ckutilities-ci.2kg8dXjo/frontend-pkg/ckvision-package-consumer",
+        "tests": [
+          {
+            "ordinal": 1,
+            "total": 1,
+            "id": 1,
+            "name": "ckvision_package_consumer_runs",
+            "status": "Passed"
+          }
+        ]
+      }
+    ],
+    "total_passed": 928,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "case_set_equal": true,
+    "evidence": "Full authenticated case lines cross-checked against digest-bound complete LastTest logs; contiguous IDs, unique names. All four CTest projects passed. Workflow conditional step skips are not CTest skips."
+  },
+  "native_selected": {
+    "held_reader_checks_per_configuration": 333,
+    "configurations": [
+      "Debug",
+      "Release"
+    ],
+    "ordinary_and_long": true,
+    "observed_ordinary_uid": 1001,
+    "observed_gid": 1001,
+    "held_reader_cap_eff_prm": "0",
+    "held_reader_no_new_privs": 1,
+    "recovery_model_unit_cases_per_configuration": 8,
+    "native_recovery_evidence_unit_cases_per_configuration": 5,
+    "recovery_persistent_oom_control": "PASS in both configurations",
+    "retry_scope_six_cases": "positive / positive-alias / positive-legacy / source / candidate / destination all executed and passed in both configurations; exact outputs retained",
+    "source": "selected-native-test-evidence.json"
+  },
+  "artifacts": [
+    {
+      "id": 13795206620,
+      "name": "ckutilities-Linux-diagnostics",
+      "sha256": "5044cbd470e33264a16c63cd719cbf6e9bbf19464f7d78e8e3143fd9da970fc9",
+      "bytes": 460834,
+      "GitHub_digest_match": true
+    },
+    {
+      "id": 13794068046,
+      "name": "ckutilities-Linux-packages",
+      "sha256": "44e0aefadb11c285e6e4a8267ab734c468d67f0b76372637f9efddc30e42819f",
+      "bytes": 52221341,
+      "GitHub_digest_match": true
+    },
+    {
+      "id": 13793973218,
+      "name": "ckutilities-Linux-cleanup-audit",
+      "sha256": "e8b84e4c296d82aae3a6a18264a64f1a15acdd0df85c278cdb3c08da991a7f5c",
+      "bytes": 4460,
+      "GitHub_digest_match": true
+    }
+  ],
+  "package_files": [
+    {
+      "artifact": "ckutilities-Linux-packages",
+      "path": "frontend-pkg/ck-utilities-0.2.0-1.x86_64.rpm",
+      "bytes": 17427177,
+      "sha256": "38d03d7d4ec1f8f904c18f4825bc8958a4b5b65e9b3834e1ebc9ebf1cc2e036d"
+    },
+    {
+      "artifact": "ckutilities-Linux-packages",
+      "path": "frontend-pkg/ck-utilities-0.2.0-linux.tar.gz",
+      "bytes": 17504294,
+      "sha256": "49acce9e6fe1eab9d0ad91f85e39345aec290bc1ddc4e243ec911f2ec611deaa"
+    },
+    {
+      "artifact": "ckutilities-Linux-packages",
+      "path": "frontend-pkg/ck-utilities_0.2.0_amd64.deb",
+      "bytes": 17507802,
+      "sha256": "3f08c6fcae0e92cad26caec6045c625f1bb486d0eef08bf259d24c7c1b4d9171"
+    }
+  ],
+  "package_static_inspection": {
+    "repo_layout_verifier": "PASS",
+    "verifier_source_commit": "2c5296225268f740468ec5a17ab554778335ec7c",
+    "VerifyLinuxPackages.cmake_sha256": "2a33640fbf47300e0aeb3420f3a7ae550892da06fd8caa4640b9cf2df71908ef",
+    "VerifyRpmBuildIds.py_sha256": "4eca0cfd3989bbbcb4092a58d3748393e183bd88612c7fb21b34317076d8aebd",
+    "rpm_build_id_links_matching_actual_owned_ELF": 10,
+    "deb_executable_elf_count": 10,
+    "rpm_executable_elf_count": 10,
+    "architecture": "ELF64 little-endian x86-64",
+    "deb_rpm_GNU_build_ids_match": true,
+    "tools_executed": "Trusted system rpm -qp, dpkg-deb metadata, verified repository CMake -P / Python metadata verifier, ar/tar read-to-memory and Python ELF parser. No package ELF executed or installed."
+  },
+  "serial_build_evidence": {
+    "recorded_parallel_builds": 1,
+    "recorded_parallel_tests": 1,
+    "source_script": "scripts_ci_frontend-posix.sh",
+    "stages": [
+      {
+        "stage": "sdk",
+        "start": "2026-11-10T18:18:39Z",
+        "end": "2026-11-10T18:21:36.624466+00:00",
+        "seconds": 177,
+        "exit": 0
+      },
+      {
+        "stage": "stage-1",
+        "start": "2026-11-10T18:21:36Z",
+        "end": "2026-11-10T18:22:12.917990+00:00",
+        "seconds": 36,
+        "exit": 0
+      },
+      {
+        "stage": "stage-2",
+        "start": "2026-11-10T18:22:12Z",
+        "end": "2026-11-10T18:42:47.144561+00:00",
+        "seconds": 1235,
+        "exit": 0
+      },
+      {
+        "stage": "stage-3",
+        "start": "2026-11-10T18:42:47Z",
+        "end": "2026-11-10T18:42:48.937771+00:00",
+        "seconds": 1,
+        "exit": 0
+      },
+      {
+        "stage": "stage-4",
+        "start": "2026-11-10T18:42:48Z",
+        "end": "2026-11-10T18:47:12.405355+00:00",
+        "seconds": 264,
+        "exit": 0
+      },
+      {
+        "stage": "stage-5",
+        "start": "2026-11-10T18:47:12Z",
+        "end": "2026-11-10T18:47:50.467009+00:00",
+        "seconds": 38,
+        "exit": 0
+      },
+      {
+        "stage": "stage-6",
+        "start": "2026-11-10T18:47:50Z",
+        "end": "2026-11-10T19:10:58.338147+00:00",
+        "seconds": 1388,
+        "exit": 0
+      },
+      {
+        "stage": "stage-7",
+        "start": "2026-11-10T19:10:58Z",
+        "end": "2026-11-10T19:12:34.132155+00:00",
+        "seconds": 96,
+        "exit": 0
+      },
+      {
+        "stage": "stage-8",
+        "start": "2026-11-10T19:12:34Z",
+        "end": "2026-11-10T19:12:49.781282+00:00",
+        "seconds": 15,
+        "exit": 0
+      }
+    ],
+    "configs": {
+      "frontend-dev": "Debug / BUILD_TESTING=ON / CKAI_BACKEND_LLAMA=ON / browser=ON",
+      "frontend-pkg": "Release / -O3 -DNDEBUG / BUILD_TESTING=ON / CKAI_BACKEND_LLAMA=ON / browser=ON"
+    },
+    "freshness": "Recorded source hashes independently equal committed Git bytes; actual build stages, full test reports and current artifact digests retained. Elapsed time alone is not freshness proof.",
+    "historical_comparison": "Previous same 463+463+2 published Linux job elapsed 3351s; current 3278s. Source/input identity checked independently; pipeline records no established clean-runner duration baseline."
+  },
+  "limits": [
+    "Linux Debug and Release normal CI only; this audit adds no sanitizer or Windows/Mac qualification.",
+    "Overall workflow still queued with no conclusion at final metadata fetch; no full-matrix or release qualification claim.",
+    "CI cleanup is RETAINED_UNQUALIFIED, roots_deleted=false, with 510 incomplete observations; safe retention does not complete cleanup.",
+    "Prerequisite probe explicitly does not establish provider qualification; host NoNewPrivs=0 while held-reader actual fixture reports NoNewPrivs=1. No blanket ext4/provider claim from filesystem-name probe.",
+    "No power-loss durability claim.",
+    "No extraction or execution of Linux application commands on Mac; package payload inspected as data."
+  ],
+  "durable_evidence": {
+    "packet": "ckutilities-hosted-linux-2c529622-20261110",
+    "manifest_sha256": "59dd5704c05fecb8bc4883060c67a210f636f3354f3d4823e007f15e28b2d514",
+    "receipt_sha256": "94cbef2fe6a478df4a13d815df4d2f77ee14f6e7505aa7ff4eac18471c98f8b3",
+    "files_independently_verified": 51
+  }
+}

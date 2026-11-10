@@ -1,5 +1,26 @@
 # Files implementation evidence
 
+## 2026-11-10 — Current Linux packages independently verified
+
+Frontend `2c529622`, backend `fc56de1`, and stock ckVision `7ad5bd67`
+passed **463 Debug tests, 463 Release tests, and two installed SDK consumer
+checks**, with zero failed or skipped tests. The held-reader consumer executed
+333 genuine checks in each configuration. All 6,514 recorded source files
+match their committed frontend and dependency trees.
+
+The authenticated package artifact digest matches GitHub's published digest.
+Both DEB and RPM contain all ten executable tools; all ten RPM build-ID links
+match the actual target ELF IDs. The job completed in 3,278 seconds, compared
+with 3,351 seconds for the preceding comparable 463+463+2 run. Input hashes,
+build stages, test output, and package bytes establish freshness independently
+of elapsed time. See the [executed Linux job](https://github.com/cklukas/ckUtilities/actions/runs/42848409330/job/130031744931)
+and [source-bound evidence](evidence/ck-files-hosted-linux-2c529622-20261110.json).
+
+This is Linux qualification of the recorded revisions. Windows and macOS
+qualification and current native-window interaction remain open. The workflow
+was still queued at the evidence fetch. Its cleanup audit reports
+`RETAINED_UNQUALIFIED`, so cleanup is also not counted as complete.
+
 ## 2026-11-10 — Published Linux frontend and backend qualification
 
 The hosted Linux job for frontend `3eec6f2`, backend `fc56de1`, and the pinned
