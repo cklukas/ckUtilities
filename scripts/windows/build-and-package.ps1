@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory)][string]$CkVisionSource,
     [Parameter(Mandatory)][string]$CkCoreFsSource,
     [Parameter(Mandatory)][string]$WorkRoot,
+    [Parameter(Mandatory)][string]$ActionScopeRoot,
+    [Parameter(Mandatory)][string]$ActionScopeVhd,
     [ValidateSet('x64','arm64')][string]$Architecture = 'x64'
 )
 Set-StrictMode -Version Latest
@@ -28,6 +30,20 @@ function Require-V([string]$Path, [bool]$Temporary) {
     return $actual
 }
 $WorkRoot = Require-V $WorkRoot $true
+$ActionScopeRoot = Require-V $ActionScopeRoot $true
+$ActionScopeVhd = Require-V $ActionScopeVhd $true
+if ($ActionScopeRoot -match '[;\r\n]' -or $ActionScopeVhd -match '[;\r\n]') {
+    throw 'Action-scope paths must each be one CMake value'
+}
+if (-not [IO.Directory]::Exists((Extended $ActionScopeRoot)) -or
+    -not [IO.File]::Exists((Extended $ActionScopeVhd))) {
+    throw 'The dedicated action-scope VHD and mounted workspace must exist'
+}
+# The backend verifies the held volume identity and its isolation before test I/O.
+$actionScopeConfigure = @(
+    "-DCK_CORE_FS_ACTION_SCOPE_ROOT:STRING=$ActionScopeRoot"
+    "-DCK_CORE_FS_ACTION_SCOPE_VHD:FILEPATH=$ActionScopeVhd"
+)
 # Bootstrap already created this unique parent. Refuse all prior outputs; never
 # remove/reuse an unknown build or someone's active SDK.
 if (-not [IO.Directory]::Exists((Extended $WorkRoot))) { throw 'CI bootstrap must create the unique WorkRoot' }
@@ -80,7 +96,7 @@ $sdk=Join-Path $WorkRoot 'ckvision-sdk';$build=Join-Path $WorkRoot 'build'
 Invoke-Step 'Configure stock ckVision SDK' { cmake -S $CkVisionSource -B (Join-Path $WorkRoot 'ckvision-build') -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCKVISION_BUILD_EXAMPLES=OFF -DCKVISION_BUILD_TESTING=OFF -DCKVISION_BUILD_FUZZERS=OFF "-DCMAKE_INSTALL_PREFIX=$sdk" }
 Invoke-Step 'Build SDK' { cmake --build (Join-Path $WorkRoot 'ckvision-build') --parallel 1 }
 Invoke-Step 'Install SDK' { cmake --install (Join-Path $WorkRoot 'ckvision-build') }
-Invoke-Step 'Configure complete frontend/backend' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$fixture" "-DCKTOOLS_TEST_TEMP_ROOT=$frontFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$provider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$provider" -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=ON -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=OFF -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1 -DBUILD_TESTING=ON }
+Invoke-Step 'Configure complete frontend/backend' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$fixture" "-DCKTOOLS_TEST_TEMP_ROOT=$frontFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$provider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$provider" -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=ON -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=OFF -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1 -DBUILD_TESTING=ON @actionScopeConfigure }
 Invoke-Step 'Build frontend/backend' { cmake --build $build --parallel 1 }
 Invoke-Step 'Package consumer' { cmake --build $build --target verify_ckvision_package --parallel 1 }
 Invoke-Step 'All registered tests including ConPTY/backend' { ctest --test-dir $build --output-on-failure --parallel 1 --no-tests=error }
@@ -94,7 +110,7 @@ if ($journalProvider -cnotin @('NTFS','ReFS') -or $journalProvider -cne $provide
 & (Join-Path $CkCoreFsSource 'tools/windows_fixture_provider.ps1') -FixtureRoot $journalFixture -Report $journalBuild -ValidatePathsOnly
 & python (Join-Path $source 'scripts/ci/verify-inputs.py') --source $source --vision $CkVisionSource --backend $CkCoreFsSource --report (Join-Path $WorkRoot 'journal-cleanup-inputs.json')
 if ($LASTEXITCODE -ne 0) { throw 'Journal supplemental source/dependency cohort changed' }
-Invoke-Step 'Configure separate uniform safe-hook journal SDK' { cmake -S $CkCoreFsSource -B $journalBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF "-DCMAKE_INSTALL_PREFIX=$WorkRoot/journal-cleanup-unused-install" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$journalFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$journalProvider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$journalProvider" -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=ON -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=OFF -DBUILD_TESTING=ON }
+Invoke-Step 'Configure separate uniform safe-hook journal SDK' { cmake -S $CkCoreFsSource -B $journalBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF "-DCMAKE_INSTALL_PREFIX=$WorkRoot/journal-cleanup-unused-install" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$journalFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$journalProvider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$journalProvider" -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=ON -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=OFF -DBUILD_TESTING=ON @actionScopeConfigure }
 $cache=[IO.File]::ReadAllText((Extended (Join-Path $journalBuild 'CMakeCache.txt')))
 foreach ($setting in @('CK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP:BOOL=ON','CK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS:BOOL=OFF','CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON')) {
     if (-not ($cache.Split("`n").Trim() -ccontains $setting)) { throw "Journal cache contract missing: $setting" }

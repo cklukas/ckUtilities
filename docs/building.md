@@ -58,23 +58,34 @@ cmake --build build/pkg --target package
 
 GitHub Actions checks out and builds the immutable ckVision 1.5.0 revision
 `0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f` on each Linux and macOS runner,
-then configures ckUtilities exclusively against that installed SDK. No
-repository variables or prebuilt framework archive are required.
+then configures ckUtilities against that SDK installation.
 
 Release jobs publish only the native package outputs. A Homebrew formula is
 attached to each release and published in the `cklukas/ckutilities` Homebrew tap.
 It builds the pinned ckVision SDK as a resource, so no separately installed
 `ckvision` formula is required. Install with
 `brew install cklukas/ckutilities/ck-utilities`.
-Windows builds use Visual Studio 2022 (MSVC) with Ninja, in Release with the
-static C runtime, against a ckVision SDK built the same way.
-`scripts/windows/build-and-package.ps1` does all of it - the pinned ckVision
-SDK, the suite, every CTest suite (including a ConPTY test that starts each
-tool and quits it with Alt+X), and the ZIP archive, extracted and checked - and
-is what the CI and release workflows run:
+Windows release builds use Visual Studio 2022 (MSVC), Ninja, and a matching
+Release ckVision SDK with the static C runtime. The packaging script builds
+the pinned SDK and suite, runs every registered CTest including ConPTY, and
+extracts and checks the ZIP. Use a fresh task directory under `V:\tmp`.
+
+For the native action-scope test, supply the exact attached `CKFEA05SCOPE`
+NTFS VHD and a dedicated workspace inside its mount. Keep both addresses under
+`V:\tmp`, omit the trailing workspace separator, and keep the image reserved
+through the run. The ordinary provider fixture remains a separate directory.
+Set the repository variables
+`CKTOOLS_WINDOWS_ACTION_SCOPE_ROOT` and `CKTOOLS_WINDOWS_ACTION_SCOPE_VHD` for
+CI. The backend verifies the held volume against the image before the test
+can modify its Recycle Bin.
 
 ```powershell
-./scripts/windows/build-and-package.ps1 -CkVisionSource C:\src\ckvision -WorkRoot C:\build\ck-utilities
+./scripts/windows/build-and-package.ps1 `
+    -CkVisionSource $CkVisionSource `
+    -CkCoreFsSource $CkCoreFsSource `
+    -WorkRoot $WorkRoot `
+    -ActionScopeRoot $ActionScopeRoot `
+    -ActionScopeVhd $ActionScopeVhd
 ```
 
 ## Documentation screenshots
