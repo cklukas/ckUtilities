@@ -20,6 +20,7 @@ MonitorService::MonitorService(ckv::ui::Application& app, MonitorSource& source,
 }
 MonitorService::~MonitorService() {
     { std::lock_guard lock(mutex_); stopping_ = true; pending_.clear(); }
+    stop_.request_stop();
     ready_.notify_all();
     for (auto& worker : workers_) worker.join();
 }
@@ -36,6 +37,7 @@ void MonitorService::wait_idle(const std::string& endpoint) {
     std::unique_lock lock(mutex_); idle_.wait(lock, [this, &endpoint] { return !active_.contains(endpoint); });
 }
 void MonitorService::work(bool local) {
+    const auto stop = stop_.get_token();
     for (;;) {
         std::string endpoint;
         {
@@ -47,12 +49,14 @@ void MonitorService::work(bool local) {
             endpoint = std::move(*job); pending_.erase(job);
         }
         Sample sample;
-        try { sample = source_.sample(endpoint); }
+        try { sample = source_.sample(endpoint, stop); }
         catch (const std::exception& error) { sample.diagnostic = error.what(); }
         catch (...) { sample.diagnostic = "Metric collection failed"; }
-        app_.post([lifetime = lifetime_, handler = handler_, host = endpoint, result = std::move(sample)]() mutable {
-            if (!lifetime.expired()) handler(std::move(host), std::move(result));
-        });
+        if (!stop.stop_requested()) {
+            app_.post([stop, lifetime = lifetime_, handler = handler_, host = endpoint, result = std::move(sample)]() mutable {
+                if (!stop.stop_requested() && !lifetime.expired()) handler(std::move(host), std::move(result));
+            });
+        }
         { std::lock_guard lock(mutex_); active_.erase(endpoint); }
         idle_.notify_all();
     }

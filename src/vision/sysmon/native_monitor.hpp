@@ -16,7 +16,7 @@ public:
     explicit NativeMonitorSource(const ckv::Clock& clock);
     ~NativeMonitorSource() override;
     std::vector<std::string> hosts() override;
-    Sample sample(const std::string& endpoint) override;
+    Sample sample(const std::string& endpoint, std::stop_token stop = {}) override;
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

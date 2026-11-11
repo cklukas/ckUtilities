@@ -3,7 +3,10 @@
 #include "cvision/testing/cktest.hpp"
 #include "sysmon_test_fixture.hpp"
 #include "cvision/widgets/window.hpp"
+#include <atomic>
+#include <chrono>
 #include <fstream>
+#include <semaphore>
 #include <sstream>
 
 using namespace ck::sysmon;
@@ -138,7 +141,7 @@ CK_TEST(sysmon_remote_wait_does_not_delay_local_worker_and_duplicate_requests_co
         bool blocked = false, proceed = false;
         int remote_calls = 0;
         std::vector<std::string> hosts() override { return {}; }
-        Sample sample(const std::string& endpoint) override {
+        Sample sample(const std::string& endpoint, std::stop_token) override {
             if (!endpoint.empty()) {
                 std::unique_lock lock(mutex); ++remote_calls; blocked = true; entered.notify_all();
                 release.wait(lock, [this] { return proceed; });
@@ -158,6 +161,44 @@ CK_TEST(sysmon_remote_wait_does_not_delay_local_worker_and_duplicate_requests_co
     { std::lock_guard lock(source.mutex); source.proceed = true; }
     source.release.notify_all(); service.wait_idle(); app.step(0);
     CK_CHECK(local_delivered); CK_CHECK(source.remote_calls == 1);
+}
+
+CK_TEST(sysmon_monitor_shutdown_stops_inflight_and_discards_queued_remote_work) {
+    using namespace std::chrono_literals;
+    class StoppableSource final : public MonitorSource {
+    public:
+        std::counting_semaphore<2> entered{0};
+        std::atomic<int> started{0}, stopped{0};
+        std::vector<std::string> hosts() override { return {}; }
+        Sample sample(const std::string&, std::stop_token stop) override {
+            if (++started <= 2) entered.release();
+            std::unique_lock lock(mutex);
+            waiting.wait_for(lock, stop, 3s, [] { return false; });
+            if (stop.stop_requested()) ++stopped;
+            return ck::testing::monitor_sample();
+        }
+    private:
+        std::mutex mutex;
+        std::condition_variable_any waiting;
+    } source;
+    ckv::term::HeadlessTerminal terminal({80, 24});
+    ckv::ManualClock clock;
+    ckv::ui::Application app(terminal, clock);
+    auto lifetime = std::make_shared<int>(0);
+    int delivered = 0;
+    {
+        MonitorService service(app, source, lifetime, [&](std::string, Sample) { ++delivered; });
+        service.request("active-one");
+        service.request("active-two");
+        const bool first = source.entered.try_acquire_for(2s);
+        const bool second = source.entered.try_acquire_for(2s);
+        CK_CHECK(first && second);
+        if (!first || !second) return;
+        service.request("queued");
+    }
+    app.step(0);
+    CK_CHECK(source.started == 2 && source.stopped == 2);
+    CK_CHECK(delivered == 0);
 }
 
 CK_TEST(sysmon_windows_counter_identity_preserves_physical_cards_and_hex_casing) {
