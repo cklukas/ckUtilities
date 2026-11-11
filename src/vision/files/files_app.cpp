@@ -1547,6 +1547,7 @@ struct FilesApp::State {
         }
         panes[pane].volume_view = true;
         panes[pane].model.publish_volumes(std::move(reply.volumes));
+        surfaces[pane]->grid->model_changed();
         panes[pane].error.clear();
         application.set_focus(surfaces[pane]->grid);
         labels();
@@ -2924,8 +2925,9 @@ struct FilesApp::State {
     }
     void page(std::size_t i) {
         auto &p = panes[i];
-        if (p.navigating || p.changing || p.queued_view || p.previewing || !p.active || !surfaces[i]->visible() || !p.stamp.current() ||
-            !services[i]->running())
+        if (p.volume_view || (volume_request && i == volume_pane) || p.navigating || p.changing ||
+            p.queued_view || p.previewing || !p.active || !surfaces[i]->visible() ||
+            !p.stamp.current() || !services[i]->running())
             return;
         auto range = p.model.viewport();
         if (covers(p, range) || (p.blocked && *p.blocked == range) || (p.reading && p.inflight == range))

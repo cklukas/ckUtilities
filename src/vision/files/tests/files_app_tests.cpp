@@ -434,6 +434,11 @@ struct Fixture {
             records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
                                2ull * 1024 * 1024, true, "fixture-read-only", {
                                    FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
+            // Keep the volume viewport larger than the root's cached page.
+            for (int i = 0; i < 96; ++i) {
+                const auto name = "fixture-mount-" + std::to_string(i);
+                records.push_back({name, "/" + name, "fixturefs", {}, {}, false, name, {}, {}});
+            }
             return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
         });
         app = std::make_unique<FilesApp>(
@@ -1853,6 +1858,14 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(f.painted().find("Hint: Move unavailable: volume rows") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     CK_CHECK(f.painted().find("archive capability is unknown") != std::string::npos);
+    f.terminal.resize({180, 46});
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::End));
+    f.loaded();
+    const auto last_volume = f.app->model(0).volume_cursor();
+    CK_CHECK(last_volume && last_volume->identity == "fixture-mount-95");
+    CK_CHECK(f.app->model(0).frame().columns.size() == 3);
+    CK_CHECK(f.app->location(1) == other);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });
     CK_CHECK(!f.app->volume_info_pending());
