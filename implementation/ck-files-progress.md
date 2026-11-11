@@ -16,6 +16,25 @@ The matching instrumented binary opened the accepted directory with
 Enter, marked entries in both panes with mouse focus, and preserved the
 marks during resize. The terminal modes were restored on quit.
 
+The integrated frontend `c17ec8c` passed 111 macOS Release Files and
+keymap CTests with 296 application cases and zero skips. ckVision 1.5.0
+published from the pinned revision `b8d412a` after all package jobs passed.
+Strict ckdocs builds rendered 27 ckUtilities pages and 19 backend pages.
+All ten utility guides contained screenshot references, and the 29
+generated screenshot files matched the tracked assets.
+
+The rpi4 backend CI job for `45e1a78` exited before qualification. Its
+primary runner executed as host root, and the private-scope fixture
+requires an ordinary host user. Windows ordinary-user runtime and macOS
+desktop acceptance remain open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Integrated macOS Release receipt | `6d2a05b73895e8bd5e5d0c4b0657a4ef94e4395570c88453e1801caba7ee355b` |
+| Published ckVision release receipt | `becbb7a0dab25a89263c121b5373cb8d60542bf77e81421f33aea5cd3c8c3221` |
+| Strict documentation builds | `323c5595b6c9cadd598d81b48f0dd452bddce10148aede4dcbed5764dbcb0506` |
+| rpi4 CI first step log | `963f66489b6116a990832e78099bfd6317e5ca201c394beea98b11a306ae3a7f` |
+
 ## 2026-11-11 — Withdrawing location completion
 
 Files cancels a pending completion request when the caret moves away from
