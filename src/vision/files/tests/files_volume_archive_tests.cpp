@@ -587,6 +587,8 @@ CK_TEST(volume_archive_writer_faults_at_each_journal_boundary_without_false_comp
         const auto result=write_with_native_owners(request,&journal);
 #if defined(__APPLE__)
         check_macos_publication_unavailable(result,destination/request.archive_name);
+        std::string journal_contents;
+        CK_CHECK(!ck::io::read_file(journal, journal_contents));
 #else
         std::string published;
         if(index==3) {
@@ -820,10 +822,10 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
     CK_CHECK(reply->error->error.operation=="create_staging_file.fd_publication_unqualified");
     std::string absent;
     CK_CHECK(!ck::io::read_file(scratch.path()/"worker.ckarchive",absent));
+    CK_CHECK(std::filesystem::is_empty(scratch.path() / "journals"));
 #else
     CK_CHECK(reply->state == FilesVolumeArchiveState::Complete);
     CK_CHECK(reply->result && reply->result->publication_confirmed);
-#endif
     std::size_t journal_files = 0;
     for (const auto &entry : std::filesystem::directory_iterator(scratch.path() / "journals")) {
         if (entry.is_regular_file() && entry.path().filename().string().starts_with(".ck-volume-archive-")) {
@@ -842,9 +844,6 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                     CK_CHECK(decoded.value());
                     if (decoded.value()) {
                         const auto &records = decoded.value()->journal->records();
-#if defined(__APPLE__)
-                        CK_CHECK(records.size()==1 && records.back().state==OperationJournalState::Planned);
-#else
                         CK_CHECK(records.size() == 7);
                         if (records.size() == 7) {
                             CK_CHECK(records.front().state == OperationJournalState::Planned);
@@ -882,13 +881,13 @@ CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {
                             CK_CHECK(ck::io::read_file(scratch.path()/"worker.ckarchive",archive));
                             CK_CHECK(recovery.value()->evidence.staging_digest==digest_bytes(std::as_bytes(std::span<const char>(archive))));
                         }
-#endif
                     }
                 }
             }
         }
     }
     CK_CHECK(journal_files == 1);
+#endif
     service.request_stop();
     service.join();
 }

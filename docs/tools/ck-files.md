@@ -194,9 +194,9 @@ xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
 profiles pass for all ten utilities in the Linux aarch64 archive. A Linux
 terminal run copied a private ext4 mount into a sparse archive and verified the
-reconstructed file against the source hash. The macOS APFS destination returned
-an explicit unsupported result at the archive publication boundary. Native
-snapshot providers, archive restart reconciliation, and the remaining
+reconstructed file against the source hash. On macOS, Files disables volume
+Copy because the native archive writer lacks a qualified publication route.
+Native snapshot providers, archive restart reconciliation, and the remaining
 filesystem and desktop acceptance checks are still in qualification.
 
 The operation plan is not a global transaction and does not promise rollback

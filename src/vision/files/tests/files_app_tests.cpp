@@ -1935,10 +1935,17 @@ CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_aft
     CK_CHECK(f.app->availability("ck.files.copy").reason.find("refresh the volume information") != std::string::npos);
     CK_CHECK(f.app->model(0).volume_cursor()->free_bytes == 20);
     CK_CHECK(f.command("ck.files.refresh"));
+#if defined(__APPLE__)
+    constexpr std::string_view unavailable_copy_reason = "archive writes unsupported";
+#else
+    constexpr std::string_view unavailable_copy_reason = "source volume mount identity";
+#endif
     f.until([&] {
         return !f.app->volume_info_pending() &&
-               f.app->availability("ck.files.copy").reason.find("source volume mount identity") != std::string::npos;
+               f.app->availability("ck.files.copy").reason.find(unavailable_copy_reason) != std::string::npos;
     });
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
+    CK_CHECK(f.painted().find(unavailable_copy_reason) != std::string::npos);
     const auto volume = f.app->model(0).volume_cursor();
     CK_CHECK(volume && volume->mount_point == "/second" && volume->free_bytes == 30);
     CK_CHECK(f.app->model(0).cursor().row == 0 && f.app->active_pane() == 0);

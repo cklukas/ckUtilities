@@ -1154,6 +1154,8 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: archive recovery scan is not ready");
                 if (volume_archive_recovery_scan->requires_reconciliation)
                     return unavailable("Copy unavailable: archive recovery review is required");
+                if (!ck::files::NativeArchiveWriteJob::platform_supports_publication())
+                    return unavailable("Copy: archive writes unsupported");
                 if (!volume->archive.root)
                     return unavailable("Copy unavailable: source volume mount identity is unavailable");
                 if (!archive_destination_ready(active))

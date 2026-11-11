@@ -1,5 +1,21 @@
 # Files implementation evidence
 
+## 2026-11-11 — Native archive admission and terminal completion
+
+Files now uses the backend's platform publication capability to disable
+volume Copy and show the reason. The Darwin writer returns Unsupported
+before creating a staging file or archive journal. Linux Release passed
+all 155 registered Files and keymap CTests against backend `45e1a78`.
+The macOS Release run with the shortened status message passed the
+rendered split-pane check, the native no-artifact refusal checks, and all
+111 registered Files and keymap CTests.
+
+Linux xterm on an authenticated private X11 display verified that Right
+moves the caret inside the address and accepts the proposal at the end.
+The matching instrumented binary opened the accepted directory with
+Enter, marked entries in both panes with mouse focus, and preserved the
+marks during resize. The terminal modes were restored on quit.
+
 ## 2026-11-11 — Withdrawing location completion
 
 Files cancels a pending completion request when the caret moves away from

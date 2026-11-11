@@ -1140,11 +1140,11 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     if(!manifest.empty())native.extents.push_back({kHeaderSize,std::move(manifest)});
     for(const auto& entry:encoded)for(const auto& extent:entry.extents)
         native.extents.push_back({data_offset+extent.archive_offset,*extent.bytes});
-    if (!stop_token.stop_requested()) {
-        const auto route = revalidate_archive_destination(*address.value(), *request.destination_owner);
-        if (!route.value())
-            return R::unavailable(route.state(), route.unavailable_detail()->error);
-    }
+    if (stop_token.stop_requested())
+        return R::unavailable(ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.cancelled"));
+    const auto route = revalidate_archive_destination(*address.value(), *request.destination_owner);
+    if (!route.value())
+        return R::unavailable(route.state(), route.unavailable_detail()->error);
     auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native));
     if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
     auto job = std::move(began).take_value();
