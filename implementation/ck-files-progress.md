@@ -1,5 +1,19 @@
 # Files implementation evidence
 
+## 2026-11-11 — Mounted volume archive in the Linux terminal
+
+Frontend `9238776` keeps volume rows visible while the file pane repaints,
+scrolls, and resizes. The earlier binary let a root directory page replace
+the volume grid at 180×46. The corrected binary passed all 82 Files
+application tests, including a scroll past the cached root page.
+
+In the Linux ARM64 terminal run, the ordinary user selected a private ext4
+mount and copied it to the other pane. The review refused publication until
+the nine listed losses were acknowledged. The version-2 archive used
+12,288 allocated bytes for 8,389,714 logical bytes. Reading the manifest
+and reconstructing the sparse file yielded the source SHA-256. The source
+bytes remained unchanged and the app restored the terminal modes on exit.
+
 ## 2026-11-11 — Files command feedback and macOS package replay
 
 Linux ARM64 Release frontend `20b51a2` with the ckVision menu and status
