@@ -26,11 +26,20 @@ The second press arrived in cell coordinates and focused the pane. In a
 separate run with a later first press, the ordinary app tick reset the mode
 after about one second. The Windows wait already includes the probe deadline.
 
+A second timed control placed the pointer on **Location** before launch.
+The first press arrived after 505 ms as `(86,11)`. Both numbers fit within
+the 140×40 cell grid, so the queued pixel report was accepted at the wrong
+cell and focused the right pane. The release arrived after the reset in
+cell coordinates. A second press at the same physical position opened the
+intended menu. Qualification must cover both coordinate ranges and prevent
+queued pixel input from becoming a cell click during mode changes.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | Linux xterm replacement and explicit row binding receipt | `358edf21551d4d1df5dce44665a5ae69f9b59d59903b30f924fefe20c9493034` |
 | Linux xterm first-click trace receipt | `0e1d05c011be9142bb5a78fb37dede43515235a1619a6cc6e0a957b9c8310f86` |
 | Linux xterm first-click timing control receipt | `ecf323e4d7b6955469aa39f55a457e45449274ccabcfd131abd33c43d6b6bed7` |
+| Linux xterm wrong-target first-click receipt | `4025c663d2e6220fbed9e8fddac807fc53996fd6e98f3d62d4d7a8e58ff1cfdd` |
 
 ## 2026-11-11 — Native test scratch-root configuration
 
