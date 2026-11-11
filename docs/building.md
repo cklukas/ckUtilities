@@ -65,9 +65,9 @@ archive on macOS:
 cmake --build build/pkg --target package
 ```
 
-GitHub Actions checks out and builds the immutable ckVision 1.5.0 revision
-`adf767deea9a3cc8dd9d4b397af444c5ad6c873f` on each Linux and macOS runner,
-then configures ckUtilities against that SDK installation.
+GitHub Actions checks out the pinned ckVision revision, builds and installs
+its SDK, and configures ckUtilities against that installation.
+[Dependency pins](https://github.com/cklukas/ckUtilities/blob/master/scripts/ci/dependency-pins.json)
 
 Release jobs publish only the native package outputs. A Homebrew formula is
 attached to each release and published in the `cklukas/ckutilities` Homebrew tap.

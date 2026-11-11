@@ -24,11 +24,13 @@ screenshots and 23 test goldens twice. Both platforms produced identical
 bytes, and only the Files volume guide screenshot changed. Its SHA-256 is
 `1b2faa37a098e51dd4bd2e42635a71464f38e45d77455dd01215c51495d54f42`.
 
-The matching macOS ThreadSanitizer build for `60a835a` passed 111 Files and
-keymap CTests, including 295 application cases, with zero findings or skips.
-It used the qualified Darwin arm64 compiler-rt build with the native
-`errno` shadow-lifetime repair and no diagnostic suppressions. The macOS
-AddressSanitizer/UndefinedBehaviorSanitizer and desktop checks remain open.
+For `60a835a`, the macOS ThreadSanitizer and separate AddressSanitizer/
+UndefinedBehaviorSanitizer builds each passed 111 Files and keymap CTests,
+including 295 application cases, with zero findings or skips. ThreadSanitizer
+used the qualified Darwin arm64 compiler-rt build with the native `errno`
+shadow-lifetime repair. ASan/UBSan used the stock Homebrew LLVM runtime and
+default libc++ container annotations. Both runs used matching instrumented
+SDKs and no diagnostic suppressions. Desktop acceptance remains open.
 The macOS APFS archive provider reported typed Unsupported for publication
 through the staged file descriptor. Windows built the exact `60a835a` application and
 aggregate test executable with MSVC v143 on `V:`. The build receipt binds
@@ -42,6 +44,7 @@ qualification remains open.
 | macOS Release Files and keymap receipt | `4e687d67b32852da049bc8f05f67c581928cf19b4a18fede059c6d963900c98c` |
 | Linux AddressSanitizer and UndefinedBehaviorSanitizer receipt | `e69f1ea26dfa46cdaeea357fb4c73f3c6764c1ffe867350454b30a470c2da106` |
 | Linux ThreadSanitizer receipt | `0f0b8f4aec6e858c2f9088ce82f778f8a26d760477a27d739654fa65b27dff23` |
+| macOS AddressSanitizer and UndefinedBehaviorSanitizer receipt | `1d2c4485e3d10048349d6833511bb1737160dcdd533391968d143485ba63620b` |
 | macOS ThreadSanitizer receipt | `b570025e77c262646fab3ad67779d62fcabdcf8d6f007e4bf2638e17e079381a` |
 | macOS guide-capture receipt | `a7b836fe871bbcdbd3c6101c17a02031a0c7c555f755cbda1c6a708fc3b5c3c5` |
 | Linux guide capture and macOS parity receipt | `088d4062c72ce3be588a6c7d64493910959c5a85ee396807d7eccc331dc30cb8` |

@@ -165,8 +165,9 @@ ownership is unavailable. The Linux terminal run archived a private ext4
 mount, verified sparse allocation, and matched the reconstructed data to the
 source digest. Real-volume acceptance on macOS and Windows remains open.
 An earlier macOS broad app ASan run reported a libc++ container-overflow in
-`DirectoryCursor::read`. A current run needs a matching instrumented SDK
-with default container annotations. The archive decoder now has a deterministic bounded mutation
+`DirectoryCursor::read`. Frontend `60a835a` passed the matching macOS
+ASan/UBSan Files and keymap suite with default container annotations.
+[macOS sanitizer evidence](ck-files-progress.md#2026-11-11--volume-layout-and-current-sanitizer-checks) The archive decoder now has a deterministic bounded mutation
 baseline covering truncation, corruption, reordered frames, invalid semantic
 fields, identity changes and oversized lengths; it passed 18/18 on macOS and
 Linux. Linux ARM64 address/undefined sanitizer qualification of the
