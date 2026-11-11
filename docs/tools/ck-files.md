@@ -36,6 +36,8 @@ execute files or provide an embedded shell.
   **Refresh** updates that pane's volume list and checks for archive recovery
   records. It keeps the selected mount when it can match it after refresh.
   You can keep browsing in the other pane while the volume list loads.
+  If reopening the filesystem root fails or you cancel it, the selected
+  volume stays visible.
   If the volume list cannot be refreshed, the previous values stay visible
   and Copy stays disabled until a refresh succeeds.
   Copy starts volume archive planning on the archive worker only after

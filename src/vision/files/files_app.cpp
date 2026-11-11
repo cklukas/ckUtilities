@@ -988,9 +988,12 @@ struct FilesApp::State {
             return unavailable("Operation staging cleanup unavailable: live copy ownership is required");
         }
         if (command == "ck.files.parent") {
-            if (panes[active].volume_view)
-                return modal_pending() ? unavailable("Parent folder unavailable: active pane is busy")
-                                       : FilesCommandAvailability::available();
+            if (panes[active].volume_view) {
+                if (panes[active].navigating || modal_pending())
+                    return unavailable("Parent folder unavailable: active pane is busy");
+                return services[active]->running() ? FilesCommandAvailability::available()
+                                                   : unavailable("Parent folder unavailable: location worker stopped");
+            }
             if (!ready(active))
                 return unavailable("Parent folder unavailable: active pane is not ready");
             if (!panes[active].active || !panes[active].active->parent().value())
@@ -1121,6 +1124,8 @@ struct FilesApp::State {
             if (panes[active].volume_view) {
                 if (move)
                     return unavailable("Move unavailable: volume rows are archive sources, not movable entries");
+                if (panes[active].navigating)
+                    return unavailable("Copy unavailable: active pane is opening a location");
                 if (volume_pending(active))
                     return unavailable("Copy unavailable: volume information is still loading");
                 if (panes[active].volume_inventory_stale)
@@ -1226,6 +1231,10 @@ struct FilesApp::State {
                     ? "Deleting selected tree..." : "Copying to the other pane...";
         else if (volume_pending(i))
             text = "Reading volume information...";
+        else if (p.cancelling)
+            text = "Cancelling activity...";
+        else if (p.navigating)
+            text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (!p.error.empty())
@@ -1237,12 +1246,7 @@ struct FilesApp::State {
                        volume_bytes(volume->free_bytes) + " free / " + volume_bytes(volume->total_bytes);
             else
                 text = "No visible volumes";
-        }
-        else if (p.cancelling)
-            text = "Cancelling activity...";
-        else if (p.navigating)
-            text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
-        else if (p.preparing_cursor)
+        } else if (p.preparing_cursor)
             text = "Reading current row for view change...";
         else if (p.previewing)
             text = "Reading preview...";
@@ -1270,7 +1274,7 @@ struct FilesApp::State {
         if (p.volume_view && p.volume_inventory_stale)
             text += "; previous volume information retained";
         if (p.navigation_error && p.active)
-            text += "; previous location retained";
+            text += p.volume_view ? "; previous volume view retained" : "; previous location retained";
         if (p.selection.marks && p.selection.marks->total) {
             text += " | Marked: " + std::to_string(p.selection.marks->total);
             if (p.selection.marks->hidden)
@@ -1513,7 +1517,7 @@ struct FilesApp::State {
         }
         const auto pane_items = [this](std::size_t i) {
             const auto &pane = panes[i];
-            if (volume_pending(i))
+            if (volume_pending(i) || (pane.volume_view && pane.navigating))
                 return std::string("loading");
             if (pane.volume_view && pane.volume_inventory_stale)
                 return std::string("stale");
@@ -1587,6 +1591,7 @@ struct FilesApp::State {
         panes[pane].model.publish_volumes(std::move(reply.volumes));
         surfaces[pane]->grid->model_changed();
         panes[pane].error.clear();
+        panes[pane].navigation_error = false;
         labels();
     }
     bool relative_ready(std::size_t i, bool root) const {
@@ -1602,7 +1607,7 @@ struct FilesApp::State {
     }
     bool navigate_relative(std::size_t i, bool root) {
         if (i < 2 && !root && panes[i].volume_view) {
-            if (closing || modal_pending())
+            if (closing || modal_pending() || panes[i].navigating || !services[i]->running())
                 return false;
             return navigate(i, *panes[i].active, panes[i].view);
         }
@@ -1634,6 +1639,8 @@ struct FilesApp::State {
     }
     FilesCommandAvailability refresh_availability(std::size_t i) const {
         if (i < panes.size() && panes[i].volume_view) {
+            if (panes[i].navigating)
+                return FilesCommandAvailability::unavailable("Refresh unavailable: active pane is opening a location");
             if (volume_request)
                 return FilesCommandAvailability::unavailable("Refresh unavailable: volume information is still loading");
             if (!volume_service || !volume_service->running())
@@ -1716,11 +1723,6 @@ struct FilesApp::State {
             labels();
             return false;
         }
-        if (p.volume_view) {
-            p.volume_view = false;
-            p.volume_inventory_stale = false;
-            p.model.clear();
-        }
         p.archive_refresh.reset();
         if (!requested || !p.active || *requested != *p.active)
             p.archive_notice.clear();
@@ -1732,7 +1734,9 @@ struct FilesApp::State {
         p.reading = false;
         p.changing.reset();
         p.queued_view.reset();
-        p.model.set_input_locked(false);
+        // Keep the volume rows visible and inert until the worker accepts a
+        // replacement page. Failure or cancellation leaves the selection here.
+        p.model.set_input_locked(p.volume_view);
         p.cancelling = p.change_error = false;
         p.preparing_cursor = false;
         p.error.clear();
@@ -2906,11 +2910,14 @@ struct FilesApp::State {
         if (reply.kind == FilesPaneReplyKind::View && reply.change_outcome == FilesPaneChangeOutcome::Applied)
             p.range_start.reset();
         bool adopted = false;
-        if (reply.page && reply.page->stamp().current()) {
+        const bool replace_volumes = navigation && reply.state == FilesPaneReplyState::Ready && reply.active_location;
+        if ((!p.volume_view || replace_volumes) && reply.page && reply.page->stamp().current()) {
             if (p.model.publish(reply.page, navigation || (reply.kind == FilesPaneReplyKind::View &&
                                                            reply.change_outcome == FilesPaneChangeOutcome::Applied))) {
                 adopted = true;
                 if (navigation) {
+                    p.volume_view = false;
+                    p.volume_inventory_stale = false;
                     p.active = reply.active_location;
                     p.requested = reply.requested_location;
                     p.navigation_error = false;
@@ -2975,7 +2982,9 @@ struct FilesApp::State {
             p.error = "View not applied; " + p.error;
         p.change_error = preparing_view || reply.change_outcome != FilesPaneChangeOutcome::NotRequested;
         p.navigation_error = navigation;
-        if (navigation && reply.active_location)
+        if (p.volume_view && replace_volumes)
+            p.volume_inventory_stale = true;
+        if (navigation && !p.volume_view && reply.active_location)
             p.active = reply.active_location;
         if (!adopted)
             p.blocked = p.inflight;
@@ -3460,7 +3469,7 @@ struct FilesApp::State {
             labels();
             return;
         }
-        if (!closing && !modal_pending() && panes[active].volume_view) {
+        if (!closing && !modal_pending() && panes[active].volume_view && !panes[active].navigating) {
             (void)navigate_relative(active, false);
             return;
         }

@@ -110,6 +110,8 @@ template <class P> bool FilesPaneGridModel::adopt(std::shared_ptr<const P> page,
         page->visible_rows() > std::numeric_limits<std::size_t>::max())
         return false;
     // Sealed producers validate row IDs, text budgets and complete capture.
+    if (volume_current_)
+        first_ = cursor_ = 0;
     volume_current_ = false;
     volumes_.clear();
     total_ = page->visible_rows();

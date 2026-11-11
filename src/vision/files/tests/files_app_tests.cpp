@@ -155,12 +155,17 @@ class ReadGateFactory final : public IndexFileFactory {
     std::shared_ptr<IndexFileFactory> factory_;
     std::shared_ptr<Gate> gate_;
     std::shared_ptr<std::atomic<bool>> armed_;
+    std::shared_ptr<std::atomic<bool>> fail_next_create_;
 
   public:
     ReadGateFactory(std::shared_ptr<IndexFileFactory> factory, std::shared_ptr<Gate> gate,
-                    std::shared_ptr<std::atomic<bool>> armed)
-        : factory_(std::move(factory)), gate_(std::move(gate)), armed_(std::move(armed)) {}
+                    std::shared_ptr<std::atomic<bool>> armed, std::shared_ptr<std::atomic<bool>> fail_next_create)
+        : factory_(std::move(factory)), gate_(std::move(gate)), armed_(std::move(armed)),
+          fail_next_create_(std::move(fail_next_create)) {}
     Observation<std::unique_ptr<IndexByteFile>> create_file() override {
+        if (fail_next_create_->exchange(false))
+            return Observation<std::unique_ptr<IndexByteFile>>::unavailable(
+                ObservationState::Denied, {ErrorDomain::Adapter, 42, "fixture.directory_index_create"});
         auto result = factory_->create_file();
         if (!result.value())
             return result;
@@ -177,6 +182,7 @@ struct Fixture {
     std::shared_ptr<Gate> gate;
     std::shared_ptr<Gate> directory_gate = std::make_shared<Gate>();
     std::shared_ptr<std::atomic<bool>> block_directory = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<std::atomic<bool>> fail_directory_index_create = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<Gate> home_gate = std::make_shared<Gate>();
     std::shared_ptr<std::atomic<bool>> block_home = std::make_shared<std::atomic<bool>>(false);
     std::shared_ptr<std::atomic<bool>> fail_home = std::make_shared<std::atomic<bool>>(false);
@@ -247,12 +253,13 @@ struct Fixture {
             };
             if (i == 0) {
                 backend.workspace = [open = std::move(backend.workspace), hold = directory_gate,
-                                     arm = block_directory]() -> Observation<std::shared_ptr<IndexFileFactory>> {
+                                     arm = block_directory, fail = fail_directory_index_create]()
+                    -> Observation<std::shared_ptr<IndexFileFactory>> {
                     auto result = open();
                     if (!result.value())
                         return result;
                     return Observation<std::shared_ptr<IndexFileFactory>>::available(
-                        std::make_shared<ReadGateFactory>(*result.value(), hold, arm));
+                        std::make_shared<ReadGateFactory>(*result.value(), hold, arm, fail));
                 };
             }
             if (i == 0 && gate) {
@@ -2000,6 +2007,50 @@ CK_TEST(files_app_pending_volume_reads_preserve_pane_navigation_and_dialog_focus
     cancelled->release();
     f.until([&] { return !f.app->volume_info_pending(); });
     CK_CHECK(!f.app->model(0).volume_cursor() && *f.app->location(0) == *root && f.app->location(1) == other);
+}
+CK_TEST(files_app_failed_or_cancelled_root_reopen_retains_the_selected_volume) {
+    Fixture f;
+    f.loaded();
+    const auto other = f.app->location(1);
+    CK_CHECK(f.app->navigate_root(0));
+    f.loaded();
+    const auto root = f.app->location(0);
+    CK_CHECK(f.command("ck.files.parent"));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Down));
+    const auto selected_volume = [&] {
+        const auto volume = f.app->model(0).volume_cursor();
+        return volume && volume->identity == "fixture-read-only" && f.app->model(0).cursor().row == 1;
+    };
+    CK_CHECK(selected_volume());
+
+    *f.fail_directory_index_create = true;
+    CK_CHECK(f.command("ck.files.parent"));
+    CK_CHECK(f.app->pending(0) && selected_volume());
+    CK_CHECK(f.app->availability("ck.files.copy").reason.find("opening a location") != std::string::npos);
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.refresh")));
+    f.loaded();
+    CK_CHECK(selected_volume() && f.app->location(0) == root);
+    CK_CHECK(f.app->status(0).find("fixture.directory_index_create") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("previous volume view retained") != std::string::npos);
+
+    *f.block_directory = true;
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.directory_gate->wait();
+    CK_CHECK(f.app->pending(0) && selected_volume() && !f.app->pending(1));
+    f.key(ckv::Key::Down);
+    CK_CHECK(selected_volume());
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.directory_gate->release();
+    f.loaded();
+    CK_CHECK(selected_volume() && f.app->location(0) == root);
+    CK_CHECK(f.app->status(0).find("Read cancelled") != std::string::npos);
+
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.loaded();
+    CK_CHECK(!f.app->model(0).volume_cursor() && f.app->model(0).current());
+    CK_CHECK(f.app->model(0).cursor().row == 0 && f.app->target(0));
+    CK_CHECK(*f.app->location(0) == *root && f.app->location(1) == other);
 }
 CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, true);
