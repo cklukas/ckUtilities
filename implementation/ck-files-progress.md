@@ -25,16 +25,47 @@ The Linux build uses backend `43d6fe1` through a source override. Backend
 held-rescan run passed all five selected provider cases, including the
 long-path and exact-name case, through the installed SDK.
 
+Frontend `f70acbc` publishes the refresh and pins the verified `89f21c9`
+backend archive. The tested frontend source and asset bytes match the
+published commit. The qualification snapshot differs in the dependency
+pin and two implementation evidence files.
+
+Linux ARM64 ThreadSanitizer passed all 155 Files and keymap CTests and the
+standalone indexed refresh test. The clean GCC 14 build used the matching
+instrumented ckVision SDK. The logs include the refresh selection and
+completion cancellation regressions. ThreadSanitizer reported no findings.
+Linux ARM64 Release ASan/UBSan passed the same suites and five installed
+backend SDK consumer tests. Clang 19 built the application and consumers
+with matching instrumentation. AddressSanitizer, UndefinedBehaviorSanitizer,
+and leak detection reported no findings.
+macOS ARM64 ASan/UBSan passed all 111 Files and keymap CTests and the
+focused refresh regression on APFS. The build used the matching
+instrumented ckVision SDK with default container annotations and
+reported zero sanitizer findings.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | Linux Release Files and keymap receipt | `a36dd58e9f5ee14b38b61567145966fb02fdf69ce99b8a5d35a06ad3ec430797` |
 | macOS Release Files and keymap receipt | `b8adbc40fe83e8854f4b234d04ca68654882ebd6e8300b727b6bdb1f8a9413b6` |
+| Published frontend source and dependency archive receipt | `eaa11ccc432eb9a8edcd5af1b94d611a037ca9f4bc6a279b101a502013eed17d` |
+| Linux ThreadSanitizer receipt | `f6a4d9e2c3be4f2bde4c0de0b026d7306e129baeabad0a36942efd66750ea1ea` |
+| Linux ASan/UBSan and installed consumer receipt | `87f15fda2c5bcce626be28b40866c59d214a597e0c8d9574cbe7810523e94c8f` |
+| macOS ASan/UBSan receipt | `895d4a684cac5029c70fe5580cd50f28b1158a196850a55f93d3907c1edf5398` |
 | Linux xterm completion, bookmark and refresh receipt | `44f00f539185de538ee7713be7271e888c72105791f83f455ed36468b287902e` |
 | Linux native indexed selection receipt | `9c19e86d73d013cd66db1ef8f3e5c1d4532997304c7437ce1f056eea1c012b8b` |
 | macOS APFS held-rescan receipt | `5ad7a09684d8f081a4ec521c41d0afe28efd7c21de8e730d8e53567b1dcb5f6f` |
 
-Windows ordinary-user execution, current-source sanitizer and race checks,
-and macOS and Windows desktop acceptance remain open.
+Windows ordinary-user execution, the remaining sanitizer checks, and
+macOS and Windows desktop acceptance remain open. The frontend GitHub
+Actions queue is waiting for self-hosted runners with the required Mac
+temporary-volume and Windows development-drive labels.
+
+The rpi4 backend CI run for `89f21c9` stopped at its ordinary-user
+preflight. The installed runner maps the job UID to zero in its user
+namespace. A separate probe ran the exact backend preflight on rpi4 in a
+namespace that preserved the ordinary caller's UID and successfully
+created the nested private test namespace. The CI runner still needs to
+preserve the ordinary identity with its filesystem and network isolation.
 
 ## 2026-11-11 — Exact path copy and terminal clipboard
 

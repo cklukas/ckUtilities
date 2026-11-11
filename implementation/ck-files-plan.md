@@ -424,7 +424,10 @@ authority and does not close the application or release requirements below.
   that a newly inserted row moved the original file to a different position
   while its mark and focus followed it. See the
   [candidate evidence](ck-files-progress.md#2026-11-11--mark-and-cursor-continuity-on-refresh).
-  The candidate's Windows runtime and current-source sanitizer gates remain open.
+  The published `f70acbc` frontend and `89f21c9` backend match the
+  passing Linux ThreadSanitizer cohort and the Linux and macOS ASan/UBSan cohorts.
+  Windows runtime, desktop acceptance, and the remaining race checks
+  stay open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
