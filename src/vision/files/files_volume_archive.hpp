@@ -305,6 +305,7 @@ struct FilesVolumeArchiveRecoveryLimits final {
     std::size_t max_journals = 1024;
     ck::files::OperationJournalLimits journal{};
     ck::files::OperationJournalCodecLimits codec{};
+    std::size_t max_scan_batches = 256;
 };
 
 struct FilesVolumeArchiveRecoveryItem final {
@@ -383,7 +384,7 @@ ck::files::Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_
 // are retained as explicit reconciliation items instead of being ignored.
 ck::files::Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
     const ck::files::NativeAbsolutePath &private_root,
-    FilesVolumeArchiveRecoveryLimits limits = {});
+    FilesVolumeArchiveRecoveryLimits limits = {}, std::stop_token stop_token = {});
 
 // Worker-owned startup boundary for the read-only recovery projection. The
 // service never resumes, deletes, opens for mutation, or publishes an archive.

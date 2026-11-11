@@ -1127,6 +1127,27 @@ CK_TEST(volume_archive_recovery_scan_preserves_native_names_and_reports_unfinish
     }
 }
 
+CK_TEST(volume_archive_recovery_refuses_cancelled_and_incomplete_enumeration) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-bound", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = journal_root(scratch.path());
+    const auto journals = scratch.path() / "journals";
+    CK_CHECK(ck::io::write_file(journals / "unrelated-a", "a"));
+    CK_CHECK(ck::io::write_file(journals / "unrelated-b", "b"));
+    FilesVolumeArchiveRecoveryLimits limits;
+    limits.max_journals = 1;
+    limits.max_scan_batches = 1;
+    const auto bounded = discover_volume_archive_recovery(root, limits);
+    CK_CHECK(!bounded.value() && bounded.state() == ObservationState::Unknown);
+    if (bounded.unavailable_detail())
+        CK_CHECK(bounded.unavailable_detail()->error.operation == "volume_archive.recovery_scan_batches");
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    const auto stopped = discover_volume_archive_recovery(root, {}, cancelled.get_token());
+    CK_CHECK(!stopped.value() && stopped.state() == ObservationState::Unknown);
+    if (stopped.unavailable_detail())
+        CK_CHECK(stopped.unavailable_detail()->error.code == static_cast<std::int64_t>(AdapterError::InterruptedRead));
+}
+
 CK_TEST(volume_archive_recovery_service_scans_off_ui_thread_and_rejects_invalid_limits) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-recovery-service", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto root = journal_root(scratch.path());

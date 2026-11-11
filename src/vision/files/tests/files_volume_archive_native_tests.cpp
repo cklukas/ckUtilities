@@ -25,6 +25,10 @@ dev_t stage_dev=0;ino_t stage_ino=0;int closed=0,reused=-1;std::stop_source* can
 std::string base_path;bool stage(int fd){struct stat s{};return known&&fstat(fd,&s)==0&&s.st_dev==stage_dev&&s.st_ino==stage_ino;}
 bool is(const char* text){return !std::strcmp(mode,text);}
 bool destination_moved = false;
+bool replace_on_journal_read = false;
+bool recovery_root_replaced = false;
+ino_t expected_journal_inode = 0;
+dev_t expected_journal_device = 0;
 void replace_destination() {
     assert(!destination_moved);
     const auto original = base_path + "/dest";
@@ -33,6 +37,20 @@ void replace_destination() {
     assert(mkdir(original.c_str(), 0700) == 0);
     destination_moved = true;
 }
+}
+extern "C" ssize_t __real_pread(int, void *, size_t, off_t);
+extern "C" ssize_t __wrap_pread(int fd, void *data, size_t count, off_t offset) {
+    if (replace_on_journal_read) {
+        struct stat opened{};
+        assert(fstat(fd, &opened) == 0);
+        assert(opened.st_ino == expected_journal_inode && opened.st_dev == expected_journal_device);
+        const auto path = base_path + "/private";
+        assert(rename(path.c_str(), (base_path + "/private-original").c_str()) == 0);
+        assert(mkdir(path.c_str(), 0700) == 0);
+        replace_on_journal_read = false;
+        recovery_root_replaced = true;
+    }
+    return __real_pread(fd, data, count, offset);
 }
 extern "C" int __real_ftruncate(int,off_t);
 extern "C" int __wrap_ftruncate(int fd,off_t n){if(armed){struct stat s{};assert(fstat(fd,&s)==0&&S_ISREG(s.st_mode)&&s.st_nlink==0);known=true;stage_dev=s.st_dev;stage_ino=s.st_ino;}
@@ -97,6 +115,21 @@ void verify_unpublished_archive() {
     assert(report.journal_id != OperationJournalId{} && report.evidence.transaction_id != 0 &&
            !report.operation.has_untrusted_tail && report.operation.items.size() == 1 &&
            report.operation.items.front().state == OperationJournalState::Verified);
+}
+
+void scan_replaced_recovery_root() {
+    struct stat original{};
+    assert(stat((base_path + "/private/" + journal()).c_str(), &original) == 0);
+    expected_journal_inode = original.st_ino;
+    expected_journal_device = original.st_dev;
+    replace_on_journal_read = true;
+    const auto scan = discover_volume_archive_recovery(address(base_path + "/private"));
+    assert(recovery_root_replaced && !scan.value() && scan.state() == ObservationState::Changed);
+    assert(scan.unavailable_detail()->error.operation == "volume_archive.recovery_root_changed");
+    struct stat retained{};
+    assert(stat((base_path + "/private-original/" + journal()).c_str(), &retained) == 0);
+    assert(retained.st_ino == original.st_ino && retained.st_size == original.st_size);
+    assert(lstat((base_path + "/private/" + journal()).c_str(), &retained) == -1 && errno == ENOENT);
 }
 
 void source_change_during_reviewed_write() {
@@ -191,6 +224,11 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  if(is("occupied"))assert(read_file(base_path+"/dest/image.ckarchive")==bytes("original"));
  if(is("hint-replaced")){assert(read_file(base_path+"/dest/saved")==bytes("original")&&read_file(base_path+"/dest/.image.ckarchive.cktmp-1")==bytes("replacement"));}
  else {struct stat s{};assert(lstat((base_path+"/dest/.image.ckarchive.cktmp-1").c_str(),&s)!=0&&errno==ENOENT);}
- dest.reset();auto finished=root->finish_io();if(is("roundtrip")||is("service")||is("service-legacy-root")||is("cancel-after-publish")||is("hint-replaced")||is("cancel-in-write"))assert(finished.value());
+ dest.reset();auto finished=root->finish_io();
+ if (is("recovery-root-replaced")) {
+    assert(finished.value() && *finished.value());
+    scan_replaced_recovery_root();
+ }
+ if(is("roundtrip")||is("service")||is("service-legacy-root")||is("cancel-after-publish")||is("hint-replaced")||is("cancel-in-write"))assert(finished.value());
  std::printf("adapter mode=%s PASS original-creator-close=%d no-reopen/no-path-cleanup\n",mode,closed);
 }

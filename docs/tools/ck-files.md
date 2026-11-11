@@ -50,8 +50,8 @@ execute files or provide an embedded shell.
   Files displays the path only if it can verify the reviewed location. Files
   reports indeterminate durability when a flush or journal step after
   publication cannot be proven. On startup and after each archive attempt,
-  a bounded read-only scan checks private
-  archive journals. Each attempt has its own journal ID, so completed records
+  a bounded read-only scan checks private archive journals through the held
+  journal directory and reports if that directory was replaced. Each attempt has its own journal ID, so completed records
   remain available when Files restarts. Copy remains disabled until the scan
   completes and no journal needs reconciliation.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
+#include "files_recovery_finalization.hpp"
 #include "native_filesystem.hpp"
 #include "native_operation_journal_id.hpp"
 #include "native_archive_write_job.hpp"
@@ -23,7 +24,6 @@
 #include <mutex>
 #include <set>
 #include <stdexcept>
-#include <system_error>
 #include <thread>
 #include <type_traits>
 #include <tuple>
@@ -77,14 +77,6 @@ ArchiveDiagnostic error(AdapterError code, const char *operation,
     return {state, {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
 }
 
-UnavailableObservation filesystem_error(const char *operation, int code) {
-#if defined(_WIN32)
-    return {ObservationState::Failed, {ErrorDomain::Win32, code, operation}};
-#else
-    return {ObservationState::Failed, {ErrorDomain::Posix, code, operation}};
-#endif
-}
-
 template <class T>
 void append_le(std::vector<std::byte> &out, T value) {
     static_assert(std::is_unsigned_v<T>);
@@ -126,24 +118,64 @@ std::optional<ck::files::NativeName> windows_name_from_utf8(std::string_view tex
 
 constexpr std::string_view archive_journal_prefix = ".ck-volume-archive-";
 
-bool is_archive_journal_name(std::string_view value) {
-    if (!value.starts_with(archive_journal_prefix) ||
-        value.size() != archive_journal_prefix.size() + 32)
-        return false;
-    const auto suffix = value.substr(archive_journal_prefix.size());
-    return std::all_of(suffix.begin(), suffix.end(), [](unsigned char byte) {
-        return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f');
-    });
+bool is_archive_journal_name(const ck::files::NativeName &name) {
+    const auto matches = [](const auto &units) {
+        if (units.size() != archive_journal_prefix.size() + 32 ||
+            !std::equal(archive_journal_prefix.begin(), archive_journal_prefix.end(), units.begin()))
+            return false;
+        return std::all_of(units.begin() + archive_journal_prefix.size(), units.end(), [](auto unit) {
+            return (unit >= '0' && unit <= '9') || (unit >= 'a' && unit <= 'f');
+        });
+    };
+    if (const auto *bytes = name.posix_bytes())
+        return matches(*bytes);
+    const auto *units = name.windows_units();
+    return units && matches(*units);
 }
 
-std::optional<ck::files::NativeName> native_journal_name(const std::filesystem::path &path) {
-#if defined(_WIN32)
-    const auto units = path.filename().wstring();
-    return ck::files::NativeName::from_windows(
-        std::u16string(reinterpret_cast<const char16_t *>(units.data()), units.size()));
-#else
-    return ck::files::NativeName::from_posix(path.filename().string());
-#endif
+// Opening the route here only checks that it still names the held object.
+// The resulting cursor is never used for archive publication.
+Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolutePath &path,
+                                                  const ck::files::DirectoryCursor &held,
+                                                  const char *changed_operation =
+                                                      "volume_archive.review.destination_changed") {
+    const auto scope = held.source_scope();
+    if (!scope.value())
+        return Observation<bool>::unavailable(scope.state(), scope.unavailable_detail()->error);
+    ck::files::NativeFileSystem filesystem(*scope.value());
+    const auto changed = [changed_operation] {
+        return Observation<bool>::unavailable(ObservationState::Changed,
+            error(AdapterError::PlanDecisionStale, changed_operation));
+    };
+    const auto route = filesystem.open_native_directory(path);
+    if (!route.value()) {
+        const auto &detail = *route.unavailable_detail();
+        if (detail.state == ObservationState::Gone ||
+            (detail.error.domain == ErrorDomain::Adapter &&
+             detail.error.code == static_cast<std::int64_t>(AdapterError::FinalLinkRejected)))
+            return changed();
+        return Observation<bool>::unavailable(detail.state, detail.error);
+    }
+    const auto original = held.inspect_basic();
+    if (!original.value())
+        return Observation<bool>::unavailable(original.state(), original.unavailable_detail()->error);
+    const auto current = (*route.value())->inspect_basic();
+    if (!current.value())
+        return Observation<bool>::unavailable(current.state(), current.unavailable_detail()->error);
+    const auto &a = *original.value();
+    const auto &b = *current.value();
+    if (!a.identity.value() || !b.identity.value() || !a.mount_id.value() || !b.mount_id.value() ||
+        ck::files::compare_identity(*a.identity.value(), *b.identity.value()) != ck::files::IdentityComparison::Same ||
+        *a.mount_id.value() != *b.mount_id.value())
+        return changed();
+    return Observation<bool>::available(true);
+}
+
+bool valid_archive_recovery_scan(const ck::files::NativeAbsolutePath &root,
+                                 const FilesVolumeArchiveRecoveryLimits &limits) {
+    return root.is_valid() && limits.max_journals != 0 && limits.max_journals <= 16 * 1024 &&
+           limits.journal.max_items != 0 && limits.journal.max_records != 0 && limits.codec.max_bytes != 0 &&
+           limits.max_scan_batches != 0 && limits.max_scan_batches <= 4096;
 }
 
 template <class T>
@@ -671,141 +703,79 @@ Observation<FilesVolumeArchiveRecoveryReport> inspect_volume_archive_recovery(
 }
 
 Observation<FilesVolumeArchiveRecoveryScan> discover_volume_archive_recovery(
-    const ck::files::NativeAbsolutePath &private_root, FilesVolumeArchiveRecoveryLimits limits) {
-    if (!private_root.is_valid() || limits.max_journals == 0 || limits.max_journals > 16 * 1024 ||
-        !limits.journal.max_items || !limits.journal.max_records || !limits.codec.max_bytes)
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            ObservationState::Failed, error(AdapterError::InvalidLimit, "volume_archive.recovery_scan_limits"));
-    FilesVolumeArchiveRecoveryScan result;
-#if defined(_WIN32)
-    // Recovery is a product filesystem boundary. Keep the directory handle
-    // open while enumerating and inspect each journal through the native
-    // child handle; never reopen a long Windows path through std::filesystem.
-    ck::files::NativeFileSystem filesystem;
-    auto cursor = filesystem.open_native_directory(private_root);
-    if (!cursor.value())
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            cursor.state(), cursor.unavailable_detail()->error);
-    for (;;) {
-        const auto batch = (*cursor.value())->read(ck::files::DirectoryCursor::max_batch_size);
-        if (batch.error)
-            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-                batch.error->state, batch.error->error);
-        for (const auto &name : batch.names) {
-            const auto basename = name.display_name();
-            if (!is_archive_journal_name(basename))
-                continue;
-            if (result.journals.size() >= limits.max_journals)
-                return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-                    ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.recovery_count"));
-            FilesVolumeArchiveRecoveryItem item;
-            item.display_name = basename;
-            item.native_name = name;
-            auto child = (*cursor.value())->open_child(name, ck::files::EntryAccess::MetadataOnly);
-            if (!child.value()) {
-                item.error = *child.unavailable_detail();
-                result.requires_reconciliation = true;
-            } else {
-                auto metadata = (*child.value())->inspect_basic();
-                if (!metadata.value() || !metadata.value()->kind.value() ||
-                    *metadata.value()->kind.value() != ck::files::ObjectKind::RegularFile) {
-                    item.error = error(AdapterError::UnsupportedQuery, "volume_archive.recovery_entry_kind");
-                    result.requires_reconciliation = true;
-                } else {
-                    auto file = ck::files::open_native_operation_journal_file(private_root, name, false);
+    const ck::files::NativeAbsolutePath &private_root, FilesVolumeArchiveRecoveryLimits limits,
+    std::stop_token stop_token) {
+    using Result = Observation<FilesVolumeArchiveRecoveryScan>;
+    if (!valid_archive_recovery_scan(private_root, limits))
+        return Result::unavailable(ObservationState::Failed,
+            error(AdapterError::InvalidLimit, "volume_archive.recovery_scan_limits"));
+    const auto cancelled = [] {
+        return Result::unavailable(ObservationState::Unknown,
+            error(AdapterError::InterruptedRead, "volume_archive.recovery_cancelled"));
+    };
+    if (stop_token.stop_requested())
+        return cancelled();
+
+    auto opened = ck::files::open_native_operation_journal_directory(private_root);
+    if (!opened.value())
+        return Result::unavailable(opened.state(), opened.unavailable_detail()->error);
+    auto cursor = std::move(opened).take_value();
+    return detail::finish_recovery_observation<FilesVolumeArchiveRecoveryScan>(
+        [&]() -> Result {
+            FilesVolumeArchiveRecoveryScan result;
+            auto remaining_batches = limits.max_scan_batches;
+            for (;;) {
+                if (remaining_batches == 0)
+                    return Result::unavailable(ObservationState::Unknown,
+                        error(AdapterError::InventoryLimit, "volume_archive.recovery_scan_batches"));
+                --remaining_batches;
+                const auto batch = cursor->read(
+                    std::min(limits.max_journals, ck::files::DirectoryCursor::max_batch_size), stop_token);
+                if (batch.error)
+                    return Result::unavailable(batch.error->state, batch.error->error);
+                if (batch.state == ck::files::DirectoryReadState::Cancelled || stop_token.stop_requested())
+                    return cancelled();
+
+                for (const auto &name : batch.names) {
+                    if (stop_token.stop_requested())
+                        return cancelled();
+                    if (!is_archive_journal_name(name))
+                        continue;
+                    if (result.journals.size() >= limits.max_journals)
+                        return Result::unavailable(ObservationState::Unknown,
+                            error(AdapterError::InventoryLimit, "volume_archive.recovery_count"));
+                    FilesVolumeArchiveRecoveryItem item;
+                    item.native_name = name;
+                    item.display_name = name.display_name();
+                    auto file = ck::files::open_held_operation_journal_file(*cursor, name);
                     if (!file.value()) {
                         item.error = *file.unavailable_detail();
-                        result.requires_reconciliation = true;
                     } else {
-                        auto report = inspect_volume_archive_recovery(**file.value(), limits.journal, limits.codec);
-                        if (report.value()) {
-                            result.requires_reconciliation = result.requires_reconciliation ||
-                                report.value()->operation.requires_reconciliation;
+                        auto report = detail::finish_recovery_observation<FilesVolumeArchiveRecoveryReport>(
+                            [&] { return inspect_volume_archive_recovery(**file.value(), limits.journal, limits.codec); },
+                            [&] { return (*file.value())->finish_io(); }, "volume_archive.recovery_finish_io");
+                        if (report.value())
                             item.report = std::move(report).take_value();
-                        } else {
+                        else
                             item.error = *report.unavailable_detail();
-                            result.requires_reconciliation = true;
-                        }
                     }
+                    result.requires_reconciliation = result.requires_reconciliation ||
+                        item.error || (item.report && item.report->operation.requires_reconciliation);
+                    result.journals.push_back(std::move(item));
                 }
+                if (batch.state == ck::files::DirectoryReadState::End)
+                    break;
+                if (batch.state != ck::files::DirectoryReadState::More)
+                    return Result::unavailable(ObservationState::Failed,
+                        error(AdapterError::InvalidNativeResult, "volume_archive.recovery_enumerate"));
             }
-            result.journals.push_back(std::move(item));
-        }
-        if (batch.state == ck::files::DirectoryReadState::End)
-            break;
-        if (batch.state != ck::files::DirectoryReadState::More)
-            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-                ObservationState::Unknown, error(AdapterError::InterruptedRead, "volume_archive.recovery_enumerate"));
-    }
-#else
-    auto host = private_root.host_path();
-    if (!host.value())
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            host.state(), host.unavailable_detail()->error);
-    std::error_code ec;
-    const auto root_status = std::filesystem::symlink_status(*host.value(), ec);
-    if (ec)
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.recovery_root_status", ec.value()).error);
-    if (!std::filesystem::is_directory(root_status) || std::filesystem::is_symlink(root_status))
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.recovery_root"));
-
-    std::filesystem::directory_iterator iterator(*host.value(), ec);
-    if (ec)
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.recovery_enumerate", ec.value()).error);
-    const std::filesystem::directory_iterator end;
-    for (; iterator != end; iterator.increment(ec)) {
-        if (ec)
-            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-                ObservationState::Denied, filesystem_error("volume_archive.recovery_enumerate", ec.value()).error);
-        const auto entry = *iterator;
-        const auto basename = entry.path().filename().string();
-        if (!is_archive_journal_name(basename))
-            continue;
-        if (result.journals.size() >= limits.max_journals)
-            return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-                ObservationState::Unknown, error(AdapterError::InventoryLimit, "volume_archive.recovery_count"));
-        FilesVolumeArchiveRecoveryItem item;
-        item.display_name = basename;
-        item.native_name = native_journal_name(entry.path());
-        const auto status = entry.symlink_status(ec);
-        if (ec) {
-            item.error = filesystem_error("volume_archive.recovery_entry_status", ec.value());
-            result.requires_reconciliation = true;
-            result.journals.push_back(std::move(item));
-            ec.clear();
-            continue;
-        }
-        if (!item.native_name || std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status)) {
-            item.error = error(AdapterError::UnsupportedQuery, "volume_archive.recovery_entry_kind");
-            result.requires_reconciliation = true;
-            result.journals.push_back(std::move(item));
-            continue;
-        }
-        auto file = ck::files::open_native_operation_journal_file(private_root, *item.native_name, false);
-        if (!file.value()) {
-            item.error = *file.unavailable_detail();
-            result.requires_reconciliation = true;
-        } else {
-            auto report = inspect_volume_archive_recovery(**file.value(), limits.journal, limits.codec);
-            if (report.value()) {
-                result.requires_reconciliation = result.requires_reconciliation ||
-                    report.value()->operation.requires_reconciliation;
-                item.report = std::move(report).take_value();
-            } else {
-                item.error = *report.unavailable_detail();
-                result.requires_reconciliation = true;
-            }
-        }
-        result.journals.push_back(std::move(item));
-    }
-    if (ec)
-        return Observation<FilesVolumeArchiveRecoveryScan>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.recovery_enumerate", ec.value()).error);
-#endif
-    return Observation<FilesVolumeArchiveRecoveryScan>::available(std::move(result));
+            const auto route = revalidate_archive_destination(private_root, *cursor,
+                                                               "volume_archive.recovery_root_changed");
+            if (!route.value())
+                return Result::unavailable(route.state(), route.unavailable_detail()->error);
+            return stop_token.stop_requested() ? cancelled() : Result::available(std::move(result));
+        }, [&] { return ck::files::finish_operation_journal_directory(*cursor); },
+        "volume_archive.recovery_directory_finish_io");
 }
 
 struct FilesVolumeArchiveRecoveryService::State final {
@@ -841,8 +811,7 @@ struct FilesVolumeArchiveRecoveryService::State final {
     }
     static bool valid(const ck::files::NativeAbsolutePath &root,
                       const FilesVolumeArchiveRecoveryLimits &limits) {
-        return root.is_valid() && limits.max_journals != 0 && limits.max_journals <= 16 * 1024 &&
-               limits.journal.max_items != 0 && limits.journal.max_records != 0 && limits.codec.max_bytes != 0;
+        return valid_archive_recovery_scan(root, limits);
     }
     void emit(FilesVolumeArchiveRecoveryReply value) {
         std::lock_guard lock(mutex);
@@ -854,7 +823,7 @@ struct FilesVolumeArchiveRecoveryService::State final {
     }
     void run_one(ck::files::NativeAbsolutePath root, FilesVolumeArchiveRecoveryLimits limits) {
         try {
-            auto scan = discover_volume_archive_recovery(root, limits);
+            auto scan = discover_volume_archive_recovery(root, limits, stop.get_token());
             FilesVolumeArchiveRecoveryReply result;
             if (scan.value()) {
                 result.state = FilesVolumeArchiveRecoveryState::Ready;
@@ -1056,42 +1025,6 @@ bool FilesVolumeArchiveRecoveryCleanupService::working() const {
 }
 
 namespace {
-
-// Opening the route here only checks that it still names the held object.
-// The resulting cursor is never used for archive publication.
-Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolutePath &path,
-                                                  const ck::files::DirectoryCursor &held) {
-    const auto scope = held.source_scope();
-    if (!scope.value())
-        return Observation<bool>::unavailable(scope.state(), scope.unavailable_detail()->error);
-    ck::files::NativeFileSystem filesystem(*scope.value());
-    const auto changed = [] {
-        return Observation<bool>::unavailable(ObservationState::Changed,
-            error(AdapterError::PlanDecisionStale, "volume_archive.review.destination_changed"));
-    };
-    const auto route = filesystem.open_native_directory(path);
-    if (!route.value()) {
-        const auto &detail = *route.unavailable_detail();
-        if (detail.state == ObservationState::Gone ||
-            (detail.error.domain == ErrorDomain::Adapter &&
-             detail.error.code == static_cast<std::int64_t>(AdapterError::FinalLinkRejected)))
-            return changed();
-        return Observation<bool>::unavailable(detail.state, detail.error);
-    }
-    const auto original = held.inspect_basic();
-    if (!original.value())
-        return Observation<bool>::unavailable(original.state(), original.unavailable_detail()->error);
-    const auto current = (*route.value())->inspect_basic();
-    if (!current.value())
-        return Observation<bool>::unavailable(current.state(), current.unavailable_detail()->error);
-    const auto &a = *original.value();
-    const auto &b = *current.value();
-    if (!a.identity.value() || !b.identity.value() || !a.mount_id.value() || !b.mount_id.value() ||
-        ck::files::compare_identity(*a.identity.value(), *b.identity.value()) != ck::files::IdentityComparison::Same ||
-        *a.mount_id.value() != *b.mount_id.value())
-        return changed();
-    return Observation<bool>::available(true);
-}
 
 Observation<bool> revalidate_archive_source(const FilesVolumeArchiveSourceRevalidation *source,
                                             std::stop_token token) {
