@@ -10,6 +10,15 @@ if(NOT EXISTS "${CKTOOLS_PACKAGE_ARCHIVE}")
   message(FATAL_ERROR "ckVision package archive is missing: ${CKTOOLS_PACKAGE_ARCHIVE}")
 endif()
 
+if(CMAKE_HOST_APPLE)
+  # List AppleDouble entries without interpreting them as metadata.
+  execute_process(COMMAND /usr/bin/tar --options !mac-ext -tf "${CKTOOLS_PACKAGE_ARCHIVE}"
+    OUTPUT_VARIABLE _cktools_archive_listing COMMAND_ERROR_IS_FATAL ANY)
+  if(_cktools_archive_listing MATCHES "(^|\n|/)[.]_")
+    message(FATAL_ERROR "Mac metadata sidecar in product archive: ${CKTOOLS_PACKAGE_ARCHIVE}")
+  endif()
+endif()
+
 if(CKTOOLS_TERMINAL_SMOKE_EXECUTABLE)
   file(SHA256 "${CKTOOLS_PACKAGE_ARCHIVE}" CKTOOLS_PACKAGE_IMAGE_SHA256)
 endif()
