@@ -59,16 +59,19 @@ if tag:
         raise RuntimeError('Release tag does not match the actual pinned frontend product version')
 # Hash tracked source/assets only; nested dependency worktrees are separate.
 inputs = {}
+input_modes = {}
 for name, root in [('frontend', a.source), ('ckvision', a.vision), ('backend', a.backend)]:
     paths = subprocess.check_output(['git', '-C', str(root), 'ls-files', '--stage', '-z']).split(b'\0')
     files = {}
+    modes = {}
     for raw in paths:
         if raw:
             metadata, filename = raw.split(b'\t', 1)
-            if metadata.startswith(b'160000 '):
-                files[os.fsdecode(filename)] = {'gitlink': metadata.split()[1].decode('ascii')}
-                continue
             relative = os.fsdecode(filename)
+            modes[relative] = metadata.split()[0].decode('ascii')
+            if metadata.startswith(b'160000 '):
+                files[relative] = {'gitlink': metadata.split()[1].decode('ascii')}
+                continue
             path = native_io(root / relative)
             if path.is_symlink():
                 data = os.fsencode(os.readlink(path))
@@ -76,7 +79,9 @@ for name, root in [('frontend', a.source), ('ckvision', a.vision), ('backend', a
                 data = path.read_bytes()
             files[relative] = hashlib.sha256(data).hexdigest()
     inputs[name] = files
+    input_modes[name] = modes
 record = {'revisions': observed, 'release_tag': tag, 'source_asset_sha256': inputs,
+          'source_asset_git_mode': input_modes,
           'parallel_builds': 1, 'parallel_tests': 1,
           'baseline': 'No comparable clean runner baseline established; inspect actual compiler/input/output records.'}
 native_io(a.report).write_text(json.dumps(record, indent=2) + '\n')

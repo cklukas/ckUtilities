@@ -71,8 +71,9 @@ then configures ckUtilities against that SDK installation.
 
 Release jobs publish only the native package outputs. A Homebrew formula is
 attached to each release and published in the `cklukas/ckutilities` Homebrew tap.
-It builds the pinned ckVision SDK as a resource, so no separately installed
-`ckvision` formula is required. Install with
+The release job compares the ckVision and backend resource archives with the
+pinned checkouts, including their file contents and Git modes. The formula
+builds and uses the verified ckVision SDK. Install with
 `brew install cklukas/ckutilities/ck-utilities`.
 Windows release builds use Visual Studio 2022 (MSVC), Ninja, and a matching
 Release ckVision SDK with the static C runtime. The packaging script builds

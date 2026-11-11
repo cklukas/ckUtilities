@@ -4,15 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
 import pathlib
 import re
+import tarfile
 import textwrap
-
-
-CKVISION_URL = "https://github.com/cklukas/ckVision/archive/7ad5bd67553414e7dc0882069482864034cb31f9.tar.gz"
-CKVISION_SHA256 = "d8043bbc33dfb702b4dfe7dc5c99de2c93c71ec80b35d0da7605aa9ba2279648"
-BACKEND_URL = "https://github.com/cklukas/ck-core-fs-lib/archive/4e41414215aaa1fcd626fb33a11e4dffa45c8d71.tar.gz"
-BACKEND_SHA256 = "527f65da44cdd1525dac4122d694fe6aae5d60184e8606f6f2f9d7a8ec02814a"
 
 
 LLAMA_CPP_URL = (
@@ -28,8 +26,70 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--source-sha256", required=True)
     parser.add_argument("--homepage", required=True)
+    parser.add_argument("--ci-inputs", required=True, type=pathlib.Path)
+    parser.add_argument("--ckvision-archive", required=True, type=pathlib.Path)
+    parser.add_argument("--backend-archive", required=True, type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path)
     return parser.parse_args()
+
+
+def verified_resource(key, repository, archive_path, report, pins):
+    revision = report["revisions"][key]
+    if not re.fullmatch(r"[0-9a-f]{40}", revision) or revision != pins[key]:
+        raise ValueError(f"{repository} checkout does not match the release source pin")
+    hashes = report["source_asset_sha256"][key]
+    modes = report["source_asset_git_mode"][key]
+    if not hashes or set(hashes) != set(modes) or any(
+        mode not in {"100644", "100755", "120000"} for mode in modes.values()
+    ):
+        raise ValueError(f"{repository} archive needs a complete Git file inventory")
+
+    prefix = f"{repository}-{revision}"
+    directories = {prefix}
+    for name in hashes:
+        directories.update(str(parent) for parent in (pathlib.PurePosixPath(prefix) / name).parents
+                           if parent != pathlib.PurePosixPath("."))
+    seen = set()
+    verified = set()
+    with archive_path.open("rb") as source:
+        digest = hashlib.file_digest(source, "sha256").hexdigest()
+        expected_digest = pins.get(f"{key}_archive_sha256")
+        if expected_digest is not None and digest != expected_digest:
+            raise ValueError(f"{repository} archive SHA-256 differs from the release source pin")
+        source.seek(0)
+        with tarfile.open(fileobj=source, mode="r:gz", ignore_zeros=True) as archive:
+            for member in archive:
+                name = member.name
+                if name in seen or name.split("/")[0] != prefix:
+                    raise ValueError(f"Unexpected {repository} archive entry {name!r}")
+                seen.add(name)
+                if member.isdir() and name in directories:
+                    continue
+
+                relative = name.removeprefix(prefix + "/")
+                if relative not in hashes:
+                    raise ValueError(f"Untracked {repository} archive entry {name!r}")
+                mode = modes[relative]
+                if mode == "120000" and member.issym():
+                    actual = hashlib.sha256(os.fsencode(member.linkname)).hexdigest()
+                elif mode in {"100644", "100755"} and member.type in (tarfile.REGTYPE, tarfile.AREGTYPE):
+                    executable = mode == "100755"
+                    if (bool(member.mode & 0o100) != executable or member.mode & 0o7000 or
+                            (not executable and member.mode & 0o011)):
+                        raise ValueError(f"{repository} archive mode differs for {relative!r}")
+                    with archive.extractfile(member) as data:
+                        actual = hashlib.file_digest(data, "sha256").hexdigest()
+                else:
+                    raise ValueError(f"{repository} archive type differs for {relative!r}")
+                if actual != hashes[relative]:
+                    raise ValueError(f"{repository} archive bytes differ for {relative!r}")
+                verified.add(relative)
+        if verified != set(hashes):
+            raise ValueError(f"{repository} archive is missing files from the pinned checkout")
+        source.seek(0)
+        if hashlib.file_digest(source, "sha256").hexdigest() != digest:
+            raise ValueError(f"{repository} archive changed during verification")
+    return f"https://github.com/cklukas/{repository}/archive/{revision}.tar.gz", digest
 
 
 def main() -> None:
@@ -42,6 +102,13 @@ def main() -> None:
         raise SystemExit("source URL must be an immutable archive tag or commit, not a branch")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", args.source_sha256):
         raise SystemExit("source SHA-256 must be a 64-character hexadecimal digest")
+    pins = json.loads((pathlib.Path(__file__).resolve().parent / "ci/dependency-pins.json").read_text())
+    report = json.loads(args.ci_inputs.read_text())
+    try:
+        ckvision_url, ckvision_sha256 = verified_resource("ckvision", "ckVision", args.ckvision_archive, report, pins)
+        backend_url, backend_sha256 = verified_resource("backend", "ck-core-fs-lib", args.backend_archive, report, pins)
+    except (KeyError, OSError, ValueError, tarfile.TarError) as error:
+        raise SystemExit(f"Homebrew resource verification failed: {error}") from error
 
     formula = f'''\
     class CkUtilities < Formula
@@ -53,13 +120,13 @@ def main() -> None:
       license "GPL-3.0-or-later"
 
       resource "ckvision" do
-        url "{CKVISION_URL}"
-        sha256 "{CKVISION_SHA256}"
+        url "{ckvision_url}"
+        sha256 "{ckvision_sha256}"
       end
 
       resource "ck_core_fs" do
-        url "{BACKEND_URL}"
-        sha256 "{BACKEND_SHA256}"
+        url "{backend_url}"
+        sha256 "{backend_sha256}"
       end
 
       resource "llama_cpp" do
@@ -103,6 +170,7 @@ def main() -> None:
         system "cmake", "-S", ".", "-B", "build", "-G", "Ninja",
            "-DCMAKE_BUILD_TYPE=Release",
            "-DCK_CORE_FS_LIB_SOURCE_DIR=#{{buildpath}}/ck-core-fs-lib",
+           "-DCKTOOLS_CKVISION_PREFIX=#{{ckvision_prefix}}",
            "-DBUILD_TESTING=OFF",
            "-DLLAMA_BUILD_TESTS=OFF",
            "-DLLAMA_BUILD_EXAMPLES=OFF",

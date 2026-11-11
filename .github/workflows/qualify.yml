@@ -261,10 +261,20 @@ jobs:
           set -euo pipefail
           cd "$CKTOOLS_CI_SOURCE_DIR"
           archive="$CKTOOLS_CI_WORK_ROOT/source.tar.gz"
-          curl --fail --location --silent --show-error --output "$archive" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz"
+          ckvision_archive="$CKTOOLS_CI_WORK_ROOT/ckvision-source.tar.gz"
+          backend_archive="$CKTOOLS_CI_WORK_ROOT/backend-source.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$archive" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$ckvision_archive" "https://github.com/cklukas/ckVision/archive/$CKTOOLS_CI_CKVISION_REVISION.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$backend_archive" "https://github.com/cklukas/ck-core-fs-lib/archive/$CKTOOLS_CI_BACKEND_REVISION.tar.gz"
           digest=$(sha256sum "$archive" | awk '{print $1}')
           mkdir -p "$CKTOOLS_CI_WORK_ROOT/packages"
-          python3 scripts/generate_homebrew_formula.py --version "${CKTOOLS_CI_RELEASE_TAG#v}" --source-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz" --source-sha256 "$digest" --homepage "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --output "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
+          python3 scripts/generate_homebrew_formula.py \
+            --version "${CKTOOLS_CI_RELEASE_TAG#v}" \
+            --source-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz" \
+            --source-sha256 "$digest" --homepage "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --ci-inputs "$CKTOOLS_CI_WORK_ROOT/ci-inputs.json" \
+            --ckvision-archive "$ckvision_archive" --backend-archive "$backend_archive" \
+            --output "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
           ruby -c "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
       - name: Upload qualified package artifacts
         uses: actions/upload-artifact@v5
