@@ -18,10 +18,19 @@ the capability probe deadline, so the quiet terminal can stay in pixel mode
 until the click wakes the wait. A matching SDK regression and real-window
 retest are pending.
 
+In a timed control, the pointer was placed before the application started.
+The first press arrived 478 ms after the probe began, beyond its 250 ms
+deadline. The wait had requested 990 ms. The terminal reset was written
+after that press had arrived in pixels, and the right pane stayed inactive.
+The second press arrived in cell coordinates and focused the pane. In a
+separate run with a later first press, the ordinary app tick reset the mode
+after about one second. The Windows wait already includes the probe deadline.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | Linux xterm replacement and explicit row binding receipt | `358edf21551d4d1df5dce44665a5ae69f9b59d59903b30f924fefe20c9493034` |
 | Linux xterm first-click trace receipt | `0e1d05c011be9142bb5a78fb37dede43515235a1619a6cc6e0a957b9c8310f86` |
+| Linux xterm first-click timing control receipt | `ecf323e4d7b6955469aa39f55a457e45449274ccabcfd131abd33c43d6b6bed7` |
 
 ## 2026-11-11 — Native test scratch-root configuration
 
