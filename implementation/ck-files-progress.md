@@ -1,5 +1,28 @@
 # Files implementation evidence
 
+## 2026-11-11 — Exact path copy and terminal clipboard
+
+Frontend `b4d0dd4` copies the focused entry through the pane worker. It uses
+the exact native component and projects it to ordinary absolute path text
+or the reversible Exact Names format. The cancellation test preserves the
+previous clipboard. Linux and macOS Release passed all 155 and 111 Files
+and keymap CTests, respectively.
+
+Frontend `f1e8df4` adds the explicit POSIX clipboard option to the host
+entry point. The exact Linux and macOS products passed the CLI checks. In
+two successive ordinary-user Linux xterm sessions, Copy path pasted back
+into Files and opened the intended folder while leaving the right pane
+in place. The default session left the X11 clipboard empty. In the session
+with `--osc52-clipboard`, an independent X11 reader obtained the exact
+absolute path. Both sessions restored terminal modes on exit.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux Release Copy path and Files/keymap receipt | `b75b4b462a49239240d2807713772f1f9b77ba400547a013e9db66afca4f71c0` |
+| macOS Release Copy path and Files/keymap receipt | `f4e5331a88ebd2bd4cfa931fcc79156acd026f4e092cb4f123d4edddc12fc96c` |
+| Linux xterm default and OSC 52 receipt | `734c4572a056c7654ca5155de159cd01e5771759b1f8213566e828b6c63754ef` |
+| macOS Release CLI receipt | `93af86237dc189385558421d8c8dc70c547bed7c8e64dc08cb70686b37719377` |
+
 ## 2026-11-11 — Bookmark picker and indexed refresh
 
 Frontend `912b961` opens saved locations from the Location menu. Linux and
