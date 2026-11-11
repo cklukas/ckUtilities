@@ -1,5 +1,42 @@
 # Files implementation evidence
 
+## 2026-11-11 — Volume layout and current sanitizer checks
+
+Frontend `e402898e2008cfe8ea524cb7b0235c30a9cbc8cb` separates long
+mount labels from the filesystem-type column and places the pane-retention
+message before the native error. The Linux ARM64 Release check passed 140
+focused Files cases, 44 native archive cases, and the keymap suite. Actual
+xterm windows on a private X11 display verified the mount-label ellipsis,
+volume selection after a missing location, and the existing keyboard and
+mouse paths. The run checked 20 bitmap-font and 25 Xft observations.
+
+With backend `0f560c067e9ecda7842ed0043276abdbfcbb08e0` and ckVision
+`b8d412aa5a4f35b8609767bf18eccc3f6e9f8216`, macOS ARM64 Release passed
+111 Files and keymap CTests, including 295 application cases. Linux ARM64
+Clang 19 AddressSanitizer and UndefinedBehaviorSanitizer passed 154 Files
+CTests and five installed-consumer checks. The separate GCC 14
+ThreadSanitizer run passed the same counts. Neither Linux sanitizer run
+reported a finding or skipped a test.
+
+Frontend `60a835aab1bd12c5845ba4e7118d560792a01c4a` pins the ckVision
+revision used in these builds. macOS regenerated all 29 guide screenshots
+and 23 test goldens twice with identical bytes. The only changed asset was
+the Files volume guide screenshot. Linux capture parity is pending.
+
+The macOS APFS archive provider reported typed Unsupported for publication
+through the staged file descriptor. Current macOS sanitizer and desktop
+acceptance remain open. Windows built the earlier `f712039` executable on
+`V:` with this SDK. The current build and ordinary-user Windows runtime
+qualification remain open.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux Release, PTY and xterm summary | `7d2e56ce3194aa64cc423f29c092a82e60e352cec3c7007c5502ae826a1f3579` |
+| macOS Release Files and keymap receipt | `4e687d67b32852da049bc8f05f67c581928cf19b4a18fede059c6d963900c98c` |
+| Linux AddressSanitizer and UndefinedBehaviorSanitizer receipt | `e69f1ea26dfa46cdaeea357fb4c73f3c6764c1ffe867350454b30a470c2da106` |
+| Linux ThreadSanitizer receipt | `0f0b8f4aec6e858c2f9088ce82f778f8a26d760477a27d739654fa65b27dff23` |
+| macOS guide-capture receipt | `a7b836fe871bbcdbd3c6101c17a02031a0c7c555f755cbda1c6a708fc3b5c3c5` |
+
 ## 2026-11-11 — Volume navigation and terminal emulator input
 
 Frontend `bf5e8bc48d2027450228234ae1159b19e3836425` keeps the selected

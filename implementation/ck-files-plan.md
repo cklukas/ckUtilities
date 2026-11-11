@@ -453,7 +453,10 @@ authority and does not close the application or release requirements below.
   macOS Files and keymap suite, and terminal input checks on both platforms.
   The Linux xterm check used an isolated X11 display. The
   [qualification record](ck-files-progress.md#2026-11-11--volume-navigation-and-terminal-emulator-input)
-  records its scope, the macOS APFS refusal, and the open visual findings.
+  records that run and its visual findings. Frontend `e402898` resolves
+  those layout findings and passes matching Linux ASan/UBSan and TSan
+  checks. See the [current qualification record](ck-files-progress.md#2026-11-11--volume-layout-and-current-sanitizer-checks)
+  for exact scope and the remaining APFS, Windows, and desktop gates.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
