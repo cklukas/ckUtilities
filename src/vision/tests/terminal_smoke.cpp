@@ -31,6 +31,7 @@ struct Invocation
 {
     std::string terminal;
     std::string config_root;
+    std::string home;
     bool files_input_contract = false;
     std::vector<char *> command;
 };
@@ -100,14 +101,16 @@ bool parse_invocation(int argc, char **argv, Invocation &result)
         const std::string_view option(argv[index++]);
         if (option == "--files-input-contract")
             result.files_input_contract = true;
-        else if (option == "--term" || option == "--config-root")
+        else if (option == "--term" || option == "--config-root" || option == "--home")
         {
-            if (index >= argc)
+            if (index >= argc || argv[index][0] == '\0')
                 return false;
             if (option == "--term")
                 result.terminal = argv[index++];
-            else
+            else if (option == "--config-root")
                 result.config_root = argv[index++];
+            else
+                result.home = argv[index++];
         }
         else
             return false;
@@ -212,7 +215,7 @@ int main(int argc, char **argv)
 {
     Invocation invocation;
     if (!parse_invocation(argc, argv, invocation))
-        return report_failure("Usage: ck_vision_terminal_smoke [--files-input-contract] --term TERM --config-root PATH -- EXECUTABLE [ARGS...]");
+        return report_failure("Usage: ck_vision_terminal_smoke [--files-input-contract] --term TERM --config-root PATH [--home PATH] -- EXECUTABLE [ARGS...]");
 
     ContractFiles contract_files;
     std::string contract_failure;
@@ -305,7 +308,8 @@ int main(int argc, char **argv)
         if (::dup2(slave, STDIN_FILENO) < 0 || ::dup2(slave, STDOUT_FILENO) < 0 ||
             ::dup2(slave, STDERR_FILENO) < 0 ||
             ::setenv("TERM", invocation.terminal.c_str(), 1) != 0 ||
-            ::setenv("XDG_CONFIG_HOME", invocation.config_root.c_str(), 1) != 0)
+            ::setenv("XDG_CONFIG_HOME", invocation.config_root.c_str(), 1) != 0 ||
+            (!invocation.home.empty() && ::setenv("HOME", invocation.home.c_str(), 1) != 0))
             _exit(127);
         if (slave > STDERR_FILENO)
             (void)::close(slave);

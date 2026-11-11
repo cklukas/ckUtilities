@@ -56,14 +56,20 @@ else()
 endif()
 file(MAKE_DIRECTORY "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
 file(CHMOD "${CKTOOLS_TERMINAL_CONFIG_ROOT}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+# Keep a local package smoke independent of the invoking user's SSH aliases.
+set(_cktools_terminal_home "${CKTOOLS_TERMINAL_CONFIG_ROOT}/home")
+file(MAKE_DIRECTORY "${_cktools_terminal_home}")
+file(CHMOD "${_cktools_terminal_home}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_INSTALL_PREFIX}/bin/${_cktools_executable}")
   if(NOT EXISTS "${_cktools_path}")
+    file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
     message(FATAL_ERROR "Native executable is missing: ${_cktools_path}")
   endif()
   if(DEFINED CKTOOLS_PACKAGE_IMAGE)
     if(IS_SYMLINK "${_cktools_path}" OR IS_DIRECTORY "${_cktools_path}")
+      file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
       message(FATAL_ERROR "Packaged tool must be its own executable file: ${_cktools_path}")
     endif()
     file(SHA256 "${_cktools_path}" _cktools_image_before)
@@ -84,6 +90,7 @@ foreach(_cktools_executable IN LISTS _cktools_native_executables)
       COMMAND "${CKTOOLS_TERMINAL_SMOKE_EXECUTABLE}"
         --term "${_cktools_terminal_profile}"
         --config-root "${CKTOOLS_TERMINAL_CONFIG_ROOT}"
+        --home "${_cktools_terminal_home}"
         -- "${_cktools_path}" ${_cktools_arguments}
       TIMEOUT 12
       RESULT_VARIABLE _cktools_terminal_result
@@ -99,6 +106,7 @@ foreach(_cktools_executable IN LISTS _cktools_native_executables)
   if(DEFINED CKTOOLS_PACKAGE_IMAGE)
     file(SHA256 "${_cktools_path}" _cktools_image_after)
     if(NOT "${_cktools_image_before}" STREQUAL "${_cktools_image_after}")
+      file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
       message(FATAL_ERROR "Extracted tool changed during PTY verification: ${_cktools_path}")
     endif()
     message(STATUS "Packaged PTY image SHA256 ${_cktools_image_after} ${_cktools_path}")
