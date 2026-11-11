@@ -414,6 +414,14 @@ authority and does not close the application or release requirements below.
 - [x] Test pending scans, stale replies, blocked storage, rapid navigation,
   resize, narrow layout, all suite themes, mouse and keyboard operation.
 
+- [ ] Preserve proven selection continuity across a fresh indexed scan.
+  The `912b961` Linux xterm run reopened a pane-local bookmark with the
+  keyboard, then reproduced loss of an unchanged file's mark on refresh.
+  The new file appeared in the refreshed listing and the other pane retained
+  its location. Extend indexed refresh with worker-held identity evidence for
+  surviving selections. Surface invalidation for removed, replaced, or
+  unqualified entries, including hidden marks. See the
+  [terminal observation](ck-files-progress.md#2026-11-11--bookmark-picker-and-indexed-refresh).
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no

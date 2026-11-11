@@ -1,5 +1,39 @@
 # Files implementation evidence
 
+## 2026-11-11 — Bookmark picker and indexed refresh
+
+Frontend `912b961` opens saved locations from the Location menu. Linux and
+macOS Release passed the focused menu regression and all 155 and 111 Files
+and keymap CTests, respectively. The exact Linux product in an authenticated
+xterm window accepted a location completion with Right, saved two locations
+in the left pane, opened the bookmark picker by keyboard, cancelled a
+selection and reopened the saved folder. The right pane retained its
+original listing. Alt+X restored the terminal modes and exited cleanly.
+
+The same terminal run reproduced mark loss on explicit refresh. After
+marking an unchanged file and adding a second file externally, Ctrl+R showed
+both files and dropped the mark. The Files worker currently implements refresh
+as navigation into a new indexed pane. The indexed refresh gate stays open
+until it preserves proven continuity and reports invalidated selections.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux Release bookmark and Files/keymap receipt | `88778bc6f8978182198011152d4352f60283f279a92e7d369fb4084385c10216` |
+| macOS Release bookmark and Files/keymap receipt | `d8ee617b38646ad9cd25ae0d8e4cc3e2fc5add04352f1fb8de94ab3ac15ddb7f` |
+| Linux xterm bookmark and refresh receipt | `e29618ec2353cb24d9e2330e391f6fd47445f7b51a2961ac76a27b0c62d2b1ff` |
+
+Frontend `c17ec8c` passed all 155 Linux ARM64 Files and keymap CTests under
+ASan/UBSan and under ThreadSanitizer. Its ASan/UBSan run also passed five
+installed SDK consumer tests. The matching macOS ASan/UBSan run passed all 111
+Files and keymap CTests. These results cover the integrated completion and
+archive-admission checkpoint.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux ASan/UBSan receipt | `c7932c7d24d168af8da89150d2cdb6d3d6c72e6a75eaa2235fc9b2a549a602ce` |
+| Linux ThreadSanitizer receipt | `8293f56209f2cdd46a9155830577f0664066148c0fa5e5fdf86da7c3f3fde64a` |
+| macOS ASan/UBSan receipt | `a6b4c2657a075c30342e20f4b079bc37cca0642f169f7830cb29bc4af916ba6f` |
+
 ## 2026-11-11 — Native archive admission and terminal completion
 
 Files now uses the backend's platform publication capability to disable
