@@ -7,6 +7,7 @@
 #include "ck/vision/keymap.hpp"
 #include "name_mapping.hpp"
 #include <cvision/core/text.hpp>
+#include <cvision/widgets/common_components.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
@@ -378,6 +379,7 @@ struct FilesApp::State {
     ckv::ui::CommandId highlighted_menu_command = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId pressed_footer_command = ckv::ui::kInvalidCommand;
     std::size_t last_input_mouse_count = 0;
+    bool palette_focused = false;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_file_id = ckv::ui::kInvalidCommand;
@@ -590,7 +592,9 @@ struct FilesApp::State {
                      item(unmark_visible, "&Unmark visible"), item(invert, "&Invert visible marks"),
                      item(clear, "&Clear all marks (including hidden)"), item(range, "&Set range start"),
                      item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
-                ckv::widgets::MenuBarItem{"&View", {item(options_id, "View &options...")}}};
+                ckv::widgets::MenuBarItem{
+                    "&View", {item(options_id, "View &options..."),
+                              item(application.commands().standard().command_palette, "&Commands...")}}};
             options.application_status_items = {
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{enter_id, "&Enter folder"}, 35},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{parent_id, "&Parent folder"}, 32},
@@ -624,8 +628,15 @@ struct FilesApp::State {
                             active = i;
                             layout();
                         }
+                    const bool focused = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused()) != nullptr;
+                    if (palette_focused != focused) {
+                        palette_focused = focused;
+                        wake.request();
+                    }
                 } else {
                     update_footer_hint(kind);
+                    if (palette_focused && kind == ckv::ui::Application::AttentionChange::Input)
+                        wake.request(); // Refresh after the palette has handled the input.
                 }
             });
             wake.bind([this] { pump(); });
@@ -1246,8 +1257,12 @@ struct FilesApp::State {
         if (p.range_start)
             text += " | Range start set";
         std::string hint;
-        const auto inspected_command = highlighted_menu_command != ckv::ui::kInvalidCommand
+        auto inspected_command = highlighted_menu_command != ckv::ui::kInvalidCommand
             ? highlighted_menu_command : pressed_footer_command;
+        if (i == active && palette_focused) {
+            if (const auto *palette = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused()))
+                inspected_command = palette->inspected_command().value_or(ckv::ui::kInvalidCommand);
+        }
         if (i == active && inspected_command != ckv::ui::kInvalidCommand) {
             if (const auto *command = application.commands().find(inspected_command))
                 hint = availability(command->key).reason;

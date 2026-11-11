@@ -136,8 +136,10 @@ closes. Startup reading uses the same opened file for its bytes and revision.
 
 Use **Alt+O** to open Operations and **Alt+L** to open Location without
 function keys. Highlight an unavailable menu command or click its disabled
-footer action to see the reason in the active pane. For example, Enter Folder
-on the volume list directs you back to the filesystem listing.
+footer action to see the reason in the active pane. **View > Commands** opens
+the command palette, where you can also highlight a disabled match to see
+its reason. Enter Folder on the volume list directs you back to the
+filesystem listing.
 
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching

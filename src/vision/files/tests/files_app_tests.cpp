@@ -1845,6 +1845,14 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(f.key(ckv::Key::Escape));
     CK_CHECK(f.app->status(0).find("archive capability is unknown") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape)); // Return focus from the menu bar to the volume rows.
+    CK_CHECK(f.alt("v"));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "c"}}));
+    CK_CHECK(f.application.dispatch(ckv::TextEvent{"Move to other pane", false}));
+    CK_CHECK(f.painted().find("Hint: Move unavailable: volume rows") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Enter));
+    CK_CHECK(f.painted().find("Hint: Move unavailable: volume rows") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(f.painted().find("archive capability is unknown") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Volumes and mounts above") == std::string::npos; });
     CK_CHECK(!f.app->volume_info_pending());
