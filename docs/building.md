@@ -52,6 +52,9 @@ cmake --build build/pkg --target verify_ckvision_terminal
 The two commands are intentionally separate because both stage the product
 into the same disposable prefix. The production preset disables backend test
 hooks. The archive verifier rejects UI-runtime and test-framework payloads.
+If the build volume cannot enforce directory ownership, set
+`CKTOOLS_TERMINAL_CONFIG_PARENT` to an existing private directory on an
+ownership-enforcing filesystem. Each terminal check uses a fresh child directory.
 
 ## Packages
 

@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.25)
 
 foreach(_cktools_required
     CKTOOLS_INSTALL_PREFIX
-    CKTOOLS_TERMINAL_CONFIG_ROOT
     CKTOOLS_TERMINAL_SMOKE_EXECUTABLE)
   if(NOT DEFINED ${_cktools_required} OR "${${_cktools_required}}" STREQUAL "")
     message(FATAL_ERROR "${_cktools_required} is required for terminal-profile verification")
@@ -37,8 +36,26 @@ if(DEFINED CKTOOLS_PACKAGE_IMAGE)
   endif()
 endif()
 
-file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+if(DEFINED CKTOOLS_TERMINAL_CONFIG_PARENT AND NOT "${CKTOOLS_TERMINAL_CONFIG_PARENT}" STREQUAL "")
+  if(NOT IS_ABSOLUTE "${CKTOOLS_TERMINAL_CONFIG_PARENT}" OR
+     NOT IS_DIRECTORY "${CKTOOLS_TERMINAL_CONFIG_PARENT}" OR
+     IS_SYMLINK "${CKTOOLS_TERMINAL_CONFIG_PARENT}")
+    message(FATAL_ERROR "Terminal configuration parent must be an existing absolute directory")
+  endif()
+  string(RANDOM LENGTH 20 ALPHABET "0123456789abcdef" _cktools_config_nonce)
+  set(CKTOOLS_TERMINAL_CONFIG_ROOT
+      "${CKTOOLS_TERMINAL_CONFIG_PARENT}/cktools-terminal-${_cktools_config_nonce}")
+  if(EXISTS "${CKTOOLS_TERMINAL_CONFIG_ROOT}" OR IS_SYMLINK "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+    message(FATAL_ERROR "Terminal configuration directory already exists: ${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+  endif()
+else()
+  if(NOT DEFINED CKTOOLS_TERMINAL_CONFIG_ROOT OR "${CKTOOLS_TERMINAL_CONFIG_ROOT}" STREQUAL "")
+    message(FATAL_ERROR "CKTOOLS_TERMINAL_CONFIG_ROOT is required for terminal-profile verification")
+  endif()
+  file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+endif()
 file(MAKE_DIRECTORY "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+file(CHMOD "${CKTOOLS_TERMINAL_CONFIG_ROOT}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_INSTALL_PREFIX}/bin/${_cktools_executable}")

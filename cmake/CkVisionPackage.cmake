@@ -32,6 +32,8 @@ option(CKTOOLS_VERIFY_CKVISION_ARCHIVE
 option(CKTOOLS_VERIFY_CKVISION_TERMINAL
        "Enable real-PTY terminal-profile verification for the staged native product"
        OFF)
+set(CKTOOLS_TERMINAL_CONFIG_PARENT "" CACHE PATH
+    "Existing ownership-enforcing parent for disposable terminal-profile configuration")
 
 function(cktools_require_ckvision)
   if(CKTOOLS_CKVISION_PREFIX)
@@ -125,7 +127,8 @@ function(cktools_add_ckvision_archive_verification)
   set(_cktools_package_terminal_args)
   if(UNIX AND CKTOOLS_VERIFY_CKVISION_TERMINAL)
     list(APPEND _cktools_package_terminal_args
-      "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>")
+      "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
+      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${CKTOOLS_TERMINAL_CONFIG_PARENT}")
   endif()
   add_custom_target(verify_ckvision_archive
     COMMAND "${CMAKE_CPACK_COMMAND}" --config "${PROJECT_BINARY_DIR}/CPackConfig.cmake"
@@ -164,10 +167,12 @@ function(cktools_add_ckvision_terminal_verification)
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
       "-DCKTOOLS_TERMINAL_CONFIG_ROOT=${PROJECT_BINARY_DIR}/ckvision-terminal-config"
+      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${CKTOOLS_TERMINAL_CONFIG_PARENT}"
       "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionTerminal.cmake"
     DEPENDS verify_ckvision_install ck_vision_terminal_smoke
     USES_TERMINAL
+    VERBATIM
     COMMENT "Smoke-test staged ckVision executables in real terminal profiles")
 endfunction()
 

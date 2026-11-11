@@ -61,6 +61,7 @@ run_stage release-tests-build cmake --build "$work/frontend-pkg-test" --parallel
 run_stage production-configure cmake --preset pkg -B "$work/frontend-pkg" "${common[@]}" "${prefix[@]}" \
   -DBUILD_TESTING:BOOL=OFF \
   -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON \
+  "-DCKTOOLS_TERMINAL_CONFIG_PARENT:PATH=$native/frontend-pkg" \
   "-DCKTOOLS_REHEARSAL_TEST_BINARY_DIR:PATH=$work/frontend-pkg-test"
 run_stage production-build cmake --build "$work/frontend-pkg" --parallel 1
 # Rehearsal runs all Release CTests in the paired test tree and verifies the OFF product.
