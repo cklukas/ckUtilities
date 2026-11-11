@@ -244,18 +244,29 @@ Push-Location $productionBuild
 try { Invoke-Step 'Package production ZIP' { & $cpack --config (Join-Path $productionBuild 'CPackConfig.cmake') -G ZIP -B $packages -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1 } } finally { Pop-Location }
 $zips=@([IO.Directory]::GetFiles((Extended $packages),'ck-utilities-*-windows-*.zip'))
 if ($zips.Count -ne 1) { throw 'Exactly one qualified ZIP is required' }
-$zip=$zips[0];$unpacked=Join-Path $WorkRoot 'unpacked'
+$zip=$zips[0]
+$unpacked=[IO.Path]::Combine($WorkRoot,'unpacked')
+if ($unpacked.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+    $unpacked=$unpacked.Substring(4)
+}
+# Exercise extended Unicode addresses during every packaged launch.
+while ($unpacked.Length -le 260) {
+    $unpacked=[IO.Path]::Combine($unpacked,'packaged tool address 雪')
+}
+if ([IO.Path]::GetFullPath($unpacked) -cne $unpacked) { throw 'ZIP destination would change during normalization' }
 $zipBefore=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.Compression.ZipFile]::ExtractToDirectory($zip,(Extended $unpacked))
+# ZipFile normalizes archive entries and checks containment before System.IO
+# applies the extended-length prefix at the Windows filesystem boundary.
+[IO.Compression.ZipFile]::ExtractToDirectory($zip,$unpacked)
 $roots=@([IO.Directory]::GetDirectories((Extended $unpacked)))
 if ($roots.Count -ne 1) { throw 'Exactly one product root required' }
 $root=$roots[0];$top=@([IO.Directory]::GetFileSystemEntries($root) | ForEach-Object {[IO.Path]::GetFileName($_)} | Sort-Object)
 if (($top -join ',') -ne 'bin,share') { throw "Unexpected ZIP layout: $($top -join ',')" }
 $tools='ck-utilities','ck-json-view','ck-find','ck-du','ck-files','ck-edit','ck-chat','ck-todo','ck-sysmon','ck-config'
-$docRoot=Join-Path $root 'share/doc/ck-utilities'
-$guides=@([IO.Directory]::GetFiles((Join-Path $docRoot 'tools'),'*.md'))
+$docRoot=[IO.Path]::Combine($root,'share','doc','ck-utilities')
+$guides=@([IO.Directory]::GetFiles([IO.Path]::Combine($docRoot,'tools'),'*.md'))
 if ($guides.Count -ne $tools.Count) { throw 'Archive guide count mismatch' }
-$screenshots=@([IO.Directory]::GetFiles((Join-Path $docRoot 'generated/screenshots'),'*.svg'))
+$screenshots=@([IO.Directory]::GetFiles([IO.Path]::Combine($docRoot,'generated','screenshots'),'*.svg'))
 if ($screenshots.Count -lt 1) { throw 'Archive screenshots absent' }
 $bin=Extended ([IO.Path]::Combine($root,'bin'))
 foreach ($directory in @($root,$bin)) {
@@ -271,13 +282,11 @@ foreach ($tool in $tools) {
         throw "Unexpected ZIP executable: $image"
     }
     $images[$tool]=(Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant()
-    & $image --help | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "$tool --help failed from ZIP" }
 }
 $previousBin=[Environment]::GetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN','Process')
 try {
     [Environment]::SetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN',$bin,'Process')
-    Invoke-Step 'Actual ZIP binaries through ConPTY' {
+    Invoke-Step 'Actual ZIP binaries through native help and ConPTY' {
         ctest --test-dir (Join-Path $build 'tests/package-terminal/Release') --output-on-failure --parallel 1 --no-tests=error --output-junit (Join-Path $WorkRoot 'zip-terminal-results.xml')
     }
 } finally {
