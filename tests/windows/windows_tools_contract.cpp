@@ -5,8 +5,15 @@
 // Utilities tool starts in a real ConPTY pseudo-console, draws its desktop,
 // and exits cleanly through the standard Alt+X quit chord. Each runs with its
 // per-user folders in an isolated scratch directory whose name is not ASCII.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include "cvision/term/process_runner.hpp"
 #include "cvision/term/windows_clock.hpp"
 #include "cvision/term/windows_terminal_subsession.hpp"
+#include "cvision/term/windows_text.hpp"
 #include "cvision/term/windows_wait_set.hpp"
 #include "cvision/testing/cktest.hpp"
 #include "scratch_directory.hpp"
@@ -15,8 +22,10 @@
 #include <cstdio>
 #include <fstream>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace
@@ -26,6 +35,47 @@ std::string utf8(const std::filesystem::path &path)
 {
     const auto text = path.generic_u8string();
     return {text.begin(), text.end()};
+}
+
+std::optional<std::string> tool_image(std::string_view tool)
+{
+    const std::string executable = std::string(tool) + ".exe";
+    wchar_t package_mode[2]{};
+    const DWORD mode_length = GetEnvironmentVariableW(L"CKTOOLS_TEST_PACKAGE_IMAGE", package_mode, 2);
+    if (mode_length == 0)
+        return utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / executable);
+    if (mode_length != 1 || package_mode[0] != L'1')
+        return std::nullopt;
+
+    constexpr wchar_t variable[] = L"CKTOOLS_EXTRACTED_PACKAGE_BIN";
+    const DWORD needed = GetEnvironmentVariableW(variable, nullptr, 0);
+    if (needed <= 1 || needed > 32768)
+        return std::nullopt;
+    std::wstring directory(needed, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(variable, directory.data(), needed);
+    if (copied != needed - 1)
+        return std::nullopt;
+    directory.resize(copied);
+    if (!directory.starts_with(L"\\\\?\\"))
+        return std::nullopt;
+
+    // Apply the same address and encoding checks as ckVision's wide launch.
+    const auto image = (std::filesystem::path(directory) / executable).native();
+    const auto native = ckv::term::windows_extended_path(image);
+    if (!native || *native != image)
+        return std::nullopt;
+    return ckv::term::windows_utf8(*native);
+}
+
+ckv::core::ProcessRunResult run_tool_help(ckv::core::ProcessRunner &runner, ckv::core::ProcessLaunchSpec launch)
+{
+    launch.arguments = {"--help"};
+    ckv::core::ProcessRunRequest request;
+    request.launch = std::move(launch);
+    request.descendants = ckv::core::ProcessDescendantPolicy::TerminateOnCompletion;
+    request.max_stdout_bytes = 0;
+    request.max_stderr_bytes = 0;
+    return runner.run(request);
 }
 
 } // namespace
@@ -47,13 +97,17 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
     const std::string home_text = utf8(home);
 
     ckv::term::WindowsClock clock;
+    ckv::term::NativeProcessRunner runner(clock);
     ckv::term::WindowsWaitSet waits(clock);
     for (const char *name : {"ck-utilities", "ck-json-view", "ck-find", "ck-du", "ck-edit", "ck-chat", "ck-todo",
                              "ck-sysmon", "ck-config", "ck-files"})
     {
         std::fprintf(stderr, "Tool: %s\n", name);
-        const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / (std::string(name) + ".exe"));
-        auto spec = ckv::term::TerminalLaunchSpec::program(image);
+        const auto image = tool_image(name);
+        CK_CHECK(image.has_value());
+        if (!image)
+            return;
+        auto spec = ckv::term::TerminalLaunchSpec::program(*image);
         spec.exit_policy = ckv::core::TerminalExitPolicy::TerminateAfterGrace;
         spec.working_directory = home_text;
         spec.environment = {{"USERPROFILE", home_text},
@@ -61,6 +115,14 @@ CK_TEST(windows_every_tool_starts_draws_and_quits_through_conpty)
                             {"APPDATA", utf8(home / "AppData" / "Roaming")},
                             {"LOCALAPPDATA", utf8(home / "AppData" / "Local")},
                             {"CK_AI_FORCE_STUB", "1"}};
+        const auto help = run_tool_help(runner, spec);
+        CK_CHECK(help.successful());
+        if (!help.successful()) {
+            std::fprintf(stderr, "Native --help failed for %s (state %d, native error %llu): %s\n",
+                         name, static_cast<int>(help.state),
+                         static_cast<unsigned long long>(help.error.code), help.diagnostic.c_str());
+            return;
+        }
         // ck-todo's first run asks a modal question, and the quit chord is
         // suppressed while a modal is open; its demo opens straight on a board.
         if (std::string_view(name) == "ck-todo")
@@ -168,8 +230,11 @@ CK_TEST(windows_launcher_starts_files_and_returns_through_conpty)
     std::filesystem::create_directories(files_right);
 
     const std::string home_text = utf8(home);
-    const auto image = utf8(std::filesystem::path(CKTOOLS_TOOL_BINARY_DIR) / "ck-utilities.exe");
-    auto spec = ckv::term::TerminalLaunchSpec::program(image);
+    const auto image = tool_image("ck-utilities");
+    CK_CHECK(image.has_value());
+    if (!image)
+        return;
+    auto spec = ckv::term::TerminalLaunchSpec::program(*image);
     spec.arguments = {"--launch", "ck-files", utf8(files_left), utf8(files_right)};
     spec.exit_policy = ckv::core::TerminalExitPolicy::TerminateAfterGrace;
     spec.working_directory = home_text;

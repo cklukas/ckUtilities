@@ -9,7 +9,10 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "ck-utilities")
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
 
 if(APPLE)
-  set(CPACK_GENERATOR "TGZ")
+  set(CPACK_GENERATOR "External")
+  set(CPACK_CKTOOLS_MACOS_PORTABLE_ARCHIVE ON)
+  set(CPACK_EXTERNAL_ENABLE_STAGING ON)
+  set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/PackMacOSRuntime.cmake")
   set(CPACK_PACKAGE_FILE_NAME "ck-utilities-${CPACK_PACKAGE_VERSION}-macos")
   # Use an empty packaging install prefix so the macOS archive contains the
   # installed tree directly under the top-level directory. Using "." here
@@ -64,4 +67,7 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 # verifier that is added after this file is included.
 set(CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}")
 
+# Bind the binary generator's profile check to its install producer.
+set(CPACK_CKTOOLS_INSTALL_PROJECT "${CMAKE_BINARY_DIR};${CMAKE_PROJECT_NAME};ALL;/")
+set(CPACK_CKTOOLS_CHECK_COMPILE_PROFILE "${CMAKE_EXPORT_COMPILE_COMMANDS}")
 include(CPack)

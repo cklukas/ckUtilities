@@ -57,7 +57,9 @@
       "inherits": "release",
       "binaryDir": "build/pkg",
       "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "/usr"
+        "CMAKE_INSTALL_PREFIX": "/usr",
+        "BUILD_TESTING": "OFF",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     }
   ],

@@ -32,5 +32,14 @@ if(WIN32)
     ckchat_ckvision cktodo_ckvision cksysmon_ckvision ckconfig_ckvision ckfiles_ckvision)
   add_test(NAME ck_windows_tools_contract COMMAND ck_windows_tools_contract)
   set_tests_properties(ck_windows_tools_contract PROPERTIES
-    LABELS "platform;windows;native" TIMEOUT 300)
+    LABELS "platform;windows;native" TIMEOUT 300
+    ENVIRONMENT "CKTOOLS_TEST_PACKAGE_IMAGE=")
+
+  # This inventory is invoked separately after ZIP extraction.
+  file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/package-terminal/$<CONFIG>/CTestTestfile.cmake"
+    CONTENT [=[
+add_test(ck_windows_package_tools_contract [==[$<TARGET_FILE:ck_windows_tools_contract>]==])
+set_tests_properties(ck_windows_package_tools_contract PROPERTIES TIMEOUT 300
+  ENVIRONMENT "CKTEST_FILTER=;CKTOOLS_TEST_PACKAGE_IMAGE=1")
+]=])
 endif()

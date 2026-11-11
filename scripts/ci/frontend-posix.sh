@@ -12,7 +12,7 @@ export CPACK_THREADS=1 CPACK_ARCHIVE_THREADS=1
 cd "$source_dir"
 python3 scripts/ci/verify-inputs.py --source "$source_dir" --vision "$vision" --backend "$backend" --report "$work/ci-inputs.json"
 python3 scripts/ci/check-posix-fixture.py --root "$native" --backend "$backend" --report "$work/native-prerequisites.json"
-for output in ckvision-sdk ckvision-build frontend-dev frontend-pkg; do
+for output in ckvision-sdk ckvision-build frontend-dev frontend-pkg-test frontend-pkg; do
   [[ ! -e "$work/$output" ]] || { echo "Refuse existing output: $work/$output" >&2; exit 1; }
 done
 # Native fixtures remain distinct from source/build storage. Mac build storage
@@ -35,9 +35,9 @@ sdk="$work/ckvision-sdk"
 run_stage sdk bash scripts/build_ckvision_sdk.sh "$vision" "$sdk" "$work/ckvision-build"
 common=("-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk"
   "-DCK_CORE_FS_LIB_SOURCE_DIR=$backend" -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON
-  -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1 -DBUILD_TESTING=ON
+  -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1
   -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF)
-run_stage stage-1 cmake --preset dev -B "$work/frontend-dev" "${common[@]}" \
+run_stage stage-1 cmake --preset dev -B "$work/frontend-dev" "${common[@]}" -DBUILD_TESTING:BOOL=ON \
   "-DCK_CORE_FS_NATIVE_TEST_ROOT=$native/backend-dev" \
   "-DCKTOOLS_TEST_TEMP_ROOT=$native/frontend-dev" \
   -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=ON "-DCKTOOLS_CKVISION_SOURCE_DIR=$vision"
@@ -51,12 +51,19 @@ mkdir -p docs/generated/screenshots
 "$work/frontend-dev/tools/docgen/capture_sysmon_screenshots" docs/generated/screenshots
 git diff --exit-code -- docs/generated/screenshots src/vision/todo/tests/golden src/vision/sysmon/tests/golden
 test -z "$(git status --porcelain --untracked-files=all -- docs/generated/screenshots src/vision/todo/tests/golden src/vision/sysmon/tests/golden)"
-package=(-DCKTOOLS_VERIFY_CKVISION_INSTALL=ON -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON)
-if [[ "${RUNNER_OS:?}" == macOS ]]; then package+=(-DCMAKE_INSTALL_PREFIX=.); fi
-run_stage stage-5 cmake --preset pkg -B "$work/frontend-pkg" "${common[@]}" "${package[@]}" \
+prefix=()
+if [[ "${RUNNER_OS:?}" == macOS ]]; then prefix+=(-DCMAKE_INSTALL_PREFIX=.); fi
+run_stage release-tests-configure cmake --preset pkg -B "$work/frontend-pkg-test" "${common[@]}" "${prefix[@]}" \
+  -DBUILD_TESTING:BOOL=ON \
   "-DCK_CORE_FS_NATIVE_TEST_ROOT=$native/backend-pkg" \
   "-DCKTOOLS_TEST_TEMP_ROOT=$native/frontend-pkg"
-run_stage stage-6 cmake --build "$work/frontend-pkg" --parallel 1
-# Rehearsal runs its entire package-tree CTest set. No -R/-E/label filtering.
-run_stage stage-7 cmake --build "$work/frontend-pkg" --target verify_ckvision_rehearsal --parallel 1
-run_stage stage-8 cmake --build "$work/frontend-pkg" --target verify_ckvision_terminal --parallel 1
+run_stage release-tests-build cmake --build "$work/frontend-pkg-test" --parallel 1
+run_stage production-configure cmake --preset pkg -B "$work/frontend-pkg" "${common[@]}" "${prefix[@]}" \
+  -DBUILD_TESTING:BOOL=OFF \
+  -DCKTOOLS_VERIFY_CKVISION_INSTALL=ON -DCKTOOLS_VERIFY_CKVISION_ARCHIVE=ON -DCKTOOLS_VERIFY_CKVISION_TERMINAL=ON \
+  "-DCKTOOLS_TERMINAL_CONFIG_PARENT:PATH=$native/frontend-pkg" \
+  "-DCKTOOLS_REHEARSAL_TEST_BINARY_DIR:PATH=$work/frontend-pkg-test"
+run_stage production-build cmake --build "$work/frontend-pkg" --parallel 1
+# Rehearsal runs all Release CTests in the paired test tree and verifies the OFF product.
+run_stage production-rehearsal cmake --build "$work/frontend-pkg" --target verify_ckvision_rehearsal --parallel 1
+run_stage production-terminal cmake --build "$work/frontend-pkg" --target verify_ckvision_terminal --parallel 1

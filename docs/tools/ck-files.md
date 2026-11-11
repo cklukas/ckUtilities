@@ -109,6 +109,10 @@ execute files or provide an embedded shell.
   conflicting writes are reported. An uncertain save is not reported as saved
   or blindly retried; any final save error prints after the Files screen closes.
 
+Saved settings larger than 1 MiB remain unchanged. Files starts with defaults;
+changes stay in memory, and a final save error is reported after the screen
+closes. Startup reading uses the same opened file for its bytes and revision.
+
 ## Default commands
 
 | Key | Action |

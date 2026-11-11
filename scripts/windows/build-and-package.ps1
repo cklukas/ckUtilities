@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory)][string]$CkVisionSource,
     [Parameter(Mandatory)][string]$CkCoreFsSource,
     [Parameter(Mandatory)][string]$WorkRoot,
+    [Parameter(Mandatory)][string]$ActionScopeRoot,
+    [Parameter(Mandatory)][string]$ActionScopeVhd,
     [ValidateSet('x64','arm64')][string]$Architecture = 'x64'
 )
 Set-StrictMode -Version Latest
@@ -27,11 +29,38 @@ function Require-V([string]$Path, [bool]$Temporary) {
     if (-not $comparison.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw "Development path is outside $prefix : $actual" }
     return $actual
 }
+function Assert-ActionScopePath([string]$Path) {
+    $prefix = 'V:\tmp\'
+    $comparison = $Path.Replace('/', '\')
+    if ($comparison.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+        if ($Path.Contains('/')) { throw 'Use native separators in an extended action-scope path' }
+        $comparison = $comparison.Substring(4)
+    }
+    if (-not $comparison.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        throw 'Action-scope paths must be explicit addresses below V:\tmp'
+    }
+    foreach ($component in $comparison.Substring($prefix.Length).Split([char]'\')) {
+        if ($component -cin @('', '.', '..') -or $component -match '[\x00-\x1f:;*?"<>|]') {
+            throw 'Action-scope paths must use unambiguous components'
+        }
+    }
+}
 $WorkRoot = Require-V $WorkRoot $true
+Assert-ActionScopePath $ActionScopeRoot
+Assert-ActionScopePath $ActionScopeVhd
+if (-not [IO.Directory]::Exists((Extended $ActionScopeRoot)) -or
+    -not [IO.File]::Exists((Extended $ActionScopeVhd))) {
+    throw 'The dedicated action-scope VHD and mounted workspace must exist'
+}
+# The backend verifies the held volume identity and its isolation before test I/O.
+$actionScopeConfigure = @(
+    "-DCK_CORE_FS_ACTION_SCOPE_ROOT:STRING=$ActionScopeRoot"
+    "-DCK_CORE_FS_ACTION_SCOPE_VHD:FILEPATH=$ActionScopeVhd"
+)
 # Bootstrap already created this unique parent. Refuse all prior outputs; never
 # remove/reuse an unknown build or someone's active SDK.
 if (-not [IO.Directory]::Exists((Extended $WorkRoot))) { throw 'CI bootstrap must create the unique WorkRoot' }
-foreach ($output in 'ckvision-build','ckvision-sdk','build','packages','unpacked','journal-cleanup-build','journal-cleanup-fixtures','journal-cleanup-unused-install') {
+foreach ($output in 'ckvision-build','ckvision-sdk','build','build-pkg','packages','unpacked','journal-cleanup-build','journal-cleanup-fixtures','journal-cleanup-unused-install') {
     if ([IO.Directory]::Exists((Extended (Join-Path $WorkRoot $output)))) { throw "Output already exists: $output" }
 }
 $tmp = Join-Path $WorkRoot 'tmp'
@@ -80,7 +109,7 @@ $sdk=Join-Path $WorkRoot 'ckvision-sdk';$build=Join-Path $WorkRoot 'build'
 Invoke-Step 'Configure stock ckVision SDK' { cmake -S $CkVisionSource -B (Join-Path $WorkRoot 'ckvision-build') -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCKVISION_BUILD_EXAMPLES=OFF -DCKVISION_BUILD_TESTING=OFF -DCKVISION_BUILD_FUZZERS=OFF "-DCMAKE_INSTALL_PREFIX=$sdk" }
 Invoke-Step 'Build SDK' { cmake --build (Join-Path $WorkRoot 'ckvision-build') --parallel 1 }
 Invoke-Step 'Install SDK' { cmake --install (Join-Path $WorkRoot 'ckvision-build') }
-Invoke-Step 'Configure complete frontend/backend' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$fixture" "-DCKTOOLS_TEST_TEMP_ROOT=$frontFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$provider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$provider" -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=ON -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=OFF -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1 -DBUILD_TESTING=ON }
+Invoke-Step 'Configure complete frontend/backend' { cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCKTOOLS_VERIFY_CKVISION_PACKAGE=ON "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$fixture" "-DCKTOOLS_TEST_TEMP_ROOT=$frontFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$provider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$provider" -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=ON -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=OFF -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1 -DBUILD_TESTING=ON @actionScopeConfigure }
 Invoke-Step 'Build frontend/backend' { cmake --build $build --parallel 1 }
 Invoke-Step 'Package consumer' { cmake --build $build --target verify_ckvision_package --parallel 1 }
 Invoke-Step 'All registered tests including ConPTY/backend' { ctest --test-dir $build --output-on-failure --parallel 1 --no-tests=error }
@@ -94,7 +123,7 @@ if ($journalProvider -cnotin @('NTFS','ReFS') -or $journalProvider -cne $provide
 & (Join-Path $CkCoreFsSource 'tools/windows_fixture_provider.ps1') -FixtureRoot $journalFixture -Report $journalBuild -ValidatePathsOnly
 & python (Join-Path $source 'scripts/ci/verify-inputs.py') --source $source --vision $CkVisionSource --backend $CkCoreFsSource --report (Join-Path $WorkRoot 'journal-cleanup-inputs.json')
 if ($LASTEXITCODE -ne 0) { throw 'Journal supplemental source/dependency cohort changed' }
-Invoke-Step 'Configure separate uniform safe-hook journal SDK' { cmake -S $CkCoreFsSource -B $journalBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF "-DCMAKE_INSTALL_PREFIX=$WorkRoot/journal-cleanup-unused-install" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$journalFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$journalProvider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$journalProvider" -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=ON -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=OFF -DBUILD_TESTING=ON }
+Invoke-Step 'Configure separate uniform safe-hook journal SDK' { cmake -S $CkCoreFsSource -B $journalBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_EXPORT_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF "-DCMAKE_INSTALL_PREFIX=$WorkRoot/journal-cleanup-unused-install" "-DCK_CORE_FS_NATIVE_TEST_ROOT=$journalFixture" "-DCK_CORE_FS_ARCHIVE_TEST_FS=$journalProvider" "-DCK_CORE_FS_METADATA_TARGET_NATIVE_FS=$journalProvider" -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP=ON -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS=OFF -DBUILD_TESTING=ON @actionScopeConfigure }
 $cache=[IO.File]::ReadAllText((Extended (Join-Path $journalBuild 'CMakeCache.txt')))
 foreach ($setting in @('CK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP:BOOL=ON','CK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS:BOOL=OFF','CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON')) {
     if (-not ($cache.Split("`n").Trim() -ccontains $setting)) { throw "Journal cache contract missing: $setting" }
@@ -199,28 +228,79 @@ foreach ($test in $journalTests) {
 # CTest above is unchanged and unfiltered; no legacy case or guard is removed.
 $journalPattern='^journal_temporary_cleanup_windows_'+$journalProvider+'_(ordinary|long)_(control|native|native-oom|consumed|consumed-oom)$'
 Invoke-Step 'All ten registered journal supplemental modes (ordinary and >340 long)' { ctest --test-dir $journalBuild --output-on-failure --parallel 1 --no-tests=error --tests-regex $journalPattern --output-junit (Join-Path $WorkRoot 'journal-cleanup-results.xml') }
+$productionBuild=Join-Path $WorkRoot 'build-pkg'
+Invoke-Step 'Configure production frontend/backend' {
+    cmake -S $source -B $productionBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+        "-DCMAKE_PREFIX_PATH=$sdk" "-DCKTOOLS_CKVISION_PREFIX=$sdk" "-DCK_CORE_FS_LIB_SOURCE_DIR=$CkCoreFsSource" `
+        -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF `
+        -DBUILD_TESTING:BOOL=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON `
+        -DCK_CORE_FS_TEST_NATIVE_CLOSE_HOOKS:BOOL=OFF -DCK_CORE_FS_TEST_JOURNAL_TEMPORARY_CLEANUP:BOOL=OFF `
+        -DCPACK_THREADS=1 -DCPACK_ARCHIVE_THREADS=1
+}
+Invoke-Step 'Build production frontend/backend' { cmake --build $productionBuild --parallel 1 }
 $packages=Join-Path $WorkRoot 'packages'
 $cpack=Join-Path (Split-Path (Get-Command cmake).Source) 'cpack.exe'
-Push-Location $build
-try { Invoke-Step 'Package ZIP' { & $cpack -G ZIP -B $packages -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1 } } finally { Pop-Location }
+Push-Location $productionBuild
+try { Invoke-Step 'Package production ZIP' { & $cpack --config (Join-Path $productionBuild 'CPackConfig.cmake') -G ZIP -B $packages -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1 } } finally { Pop-Location }
 $zips=@([IO.Directory]::GetFiles((Extended $packages),'ck-utilities-*-windows-*.zip'))
 if ($zips.Count -ne 1) { throw 'Exactly one qualified ZIP is required' }
-$zip=$zips[0];$unpacked=Join-Path $WorkRoot 'unpacked'
-[IO.Compression.ZipFile]::ExtractToDirectory($zip,(Extended $unpacked))
+$zip=$zips[0]
+$unpacked=[IO.Path]::Combine($WorkRoot,'unpacked')
+if ($unpacked.StartsWith('\\?\', [StringComparison]::Ordinal)) {
+    $unpacked=$unpacked.Substring(4)
+}
+# Exercise extended Unicode addresses during every packaged launch.
+while ($unpacked.Length -le 260) {
+    $unpacked=[IO.Path]::Combine($unpacked,'packaged tool address 雪')
+}
+if ([IO.Path]::GetFullPath($unpacked) -cne $unpacked) { throw 'ZIP destination would change during normalization' }
+$zipBefore=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+# ZipFile normalizes archive entries and checks containment before System.IO
+# applies the extended-length prefix at the Windows filesystem boundary.
+[IO.Compression.ZipFile]::ExtractToDirectory($zip,$unpacked)
 $roots=@([IO.Directory]::GetDirectories((Extended $unpacked)))
 if ($roots.Count -ne 1) { throw 'Exactly one product root required' }
 $root=$roots[0];$top=@([IO.Directory]::GetFileSystemEntries($root) | ForEach-Object {[IO.Path]::GetFileName($_)} | Sort-Object)
 if (($top -join ',') -ne 'bin,share') { throw "Unexpected ZIP layout: $($top -join ',')" }
 $tools='ck-utilities','ck-json-view','ck-find','ck-du','ck-files','ck-edit','ck-chat','ck-todo','ck-sysmon','ck-config'
-$docRoot=Join-Path $root 'share/doc/ck-utilities'
-$guides=@([IO.Directory]::GetFiles((Join-Path $docRoot 'tools'),'*.md'))
+$docRoot=[IO.Path]::Combine($root,'share','doc','ck-utilities')
+$guides=@([IO.Directory]::GetFiles([IO.Path]::Combine($docRoot,'tools'),'*.md'))
 if ($guides.Count -ne $tools.Count) { throw 'Archive guide count mismatch' }
-$screenshots=@([IO.Directory]::GetFiles((Join-Path $docRoot 'generated/screenshots'),'*.svg'))
+$screenshots=@([IO.Directory]::GetFiles([IO.Path]::Combine($docRoot,'generated','screenshots'),'*.svg'))
 if ($screenshots.Count -lt 1) { throw 'Archive screenshots absent' }
+$bin=Extended ([IO.Path]::Combine($root,'bin'))
+foreach ($directory in @($root,$bin)) {
+    $attributes=[IO.File]::GetAttributes($directory)
+    if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        ($attributes -band [IO.FileAttributes]::Directory) -eq 0) { throw "Unexpected ZIP directory: $directory" }
+}
+$images=[ordered]@{}
 foreach ($tool in $tools) {
-    & (Join-Path $root "bin/$tool.exe") --help | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "$tool --help failed from ZIP" }
+    $image=[IO.Path]::Combine($bin,"$tool.exe")
+    $attributes=[IO.File]::GetAttributes($image)
+    if (($attributes -band ([IO.FileAttributes]::ReparsePoint -bor [IO.FileAttributes]::Directory)) -ne 0) {
+        throw "Unexpected ZIP executable: $image"
+    }
+    $images[$tool]=(Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+$previousBin=[Environment]::GetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN','Process')
+try {
+    [Environment]::SetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN',$bin,'Process')
+    Invoke-Step 'Actual ZIP binaries through native help and ConPTY' {
+        ctest --test-dir (Join-Path $build 'tests/package-terminal/Release') --output-on-failure --parallel 1 --no-tests=error --output-junit (Join-Path $WorkRoot 'zip-terminal-results.xml')
+    }
+} finally {
+    [Environment]::SetEnvironmentVariable('CKTOOLS_EXTRACTED_PACKAGE_BIN',$previousBin,'Process')
+}
+foreach ($tool in $tools) {
+    $image=[IO.Path]::Combine($bin,"$tool.exe")
+    if ((Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant() -cne $images[$tool]) {
+        throw "Extracted executable changed during ZIP verification: $image"
+    }
 }
 $digest=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($digest -cne $zipBefore) { throw 'ZIP changed during verification' }
+$runtimeReceipt=[ordered]@{package=$zip;sha256=$digest;extracted_bin=$bin;images=$images}
+[IO.File]::WriteAllText((Extended (Join-Path $WorkRoot 'zip-terminal-images.json')),($runtimeReceipt | ConvertTo-Json -Depth 3),[Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText(($zip+'.sha256'),($digest+'  '+[IO.Path]::GetFileName($zip)),[Text.Encoding]::ASCII)
 Write-Host "PASS complete registered tests and verified ZIP: $zip"

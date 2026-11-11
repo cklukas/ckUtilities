@@ -1,11 +1,10 @@
 include_guard(GLOBAL)
 
-# This is the released ckVision commit validated for ckUtilities. It is a compatibility
-# record for development and CI, not a source-tree dependency: consumers must
-# find an installed package through CMAKE_PREFIX_PATH or the normal CMake
-# package search paths.
+# Record the ckVision compatibility pin used for development and CI.
+# Consumers find the installed package through CMAKE_PREFIX_PATH or the
+# normal CMake package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "7ad5bd67553414e7dc0882069482864034cb31f9"
+    "adf767deea9a3cc8dd9d4b397af444c5ad6c873f"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 
@@ -32,6 +31,8 @@ option(CKTOOLS_VERIFY_CKVISION_ARCHIVE
 option(CKTOOLS_VERIFY_CKVISION_TERMINAL
        "Enable real-PTY terminal-profile verification for the staged native product"
        OFF)
+set(CKTOOLS_TERMINAL_CONFIG_PARENT "" CACHE PATH
+    "Existing ownership-enforcing parent for disposable terminal-profile configuration")
 
 function(cktools_require_ckvision)
   if(CKTOOLS_CKVISION_PREFIX)
@@ -43,10 +44,10 @@ function(cktools_require_ckvision)
     get_filename_component(_ckvision_prefix
                            "${CKTOOLS_CKVISION_PREFIX}" ABSOLUTE
                            BASE_DIR "${CMAKE_SOURCE_DIR}")
-    find_package(ckvision 1.4.2 CONFIG REQUIRED
+    find_package(ckvision 1.5.0 CONFIG REQUIRED
                  PATHS "${_ckvision_prefix}" NO_DEFAULT_PATH)
   else()
-    find_package(ckvision 1.4.2 CONFIG REQUIRED)
+    find_package(ckvision 1.5.0 CONFIG REQUIRED)
   endif()
 
   if(NOT TARGET ckvision::cvision)
@@ -122,19 +123,28 @@ function(cktools_add_ckvision_archive_verification)
       "the verification target is created.")
   endif()
 
+  set(_cktools_package_terminal_args)
+  if(UNIX AND CKTOOLS_VERIFY_CKVISION_TERMINAL)
+    list(APPEND _cktools_package_terminal_args
+      "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
+      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${CKTOOLS_TERMINAL_CONFIG_PARENT}")
+  endif()
   add_custom_target(verify_ckvision_archive
     COMMAND "${CMAKE_CPACK_COMMAND}" --config "${PROJECT_BINARY_DIR}/CPackConfig.cmake"
       -D CPACK_THREADS=1 -D CPACK_ARCHIVE_THREADS=1
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_PACKAGE_ARCHIVE=${PROJECT_BINARY_DIR}/${CKTOOLS_CPACK_BINARY_PACKAGE_FILE_NAME}.tar.gz"
       "-DCKTOOLS_PACKAGE_EXTRACT_DIR=${PROJECT_BINARY_DIR}/ckvision-package-check"
+      ${_cktools_package_terminal_args}
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionArchive.cmake"
     USES_TERMINAL
+    VERBATIM
     COMMENT "Extract and smoke-test the packaged ckVision cutover archive")
   if(UNIX AND NOT APPLE)
-    # The same cpack run produced the DEB and RPM: check their install layout.
+    # Verify the DEB and RPM from the same CPack run.
     add_custom_command(TARGET verify_ckvision_archive POST_BUILD
       COMMAND "${CMAKE_COMMAND}" "-DCKTOOLS_PACKAGE_DIR=${PROJECT_BINARY_DIR}"
+        ${_cktools_package_terminal_args}
         -P "${PROJECT_SOURCE_DIR}/cmake/VerifyLinuxPackages.cmake"
       VERBATIM)
   endif()
@@ -155,32 +165,45 @@ function(cktools_add_ckvision_terminal_verification)
   add_custom_target(verify_ckvision_terminal
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
-      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${PROJECT_BINARY_DIR}"
+      "-DCKTOOLS_TERMINAL_CONFIG_ROOT=${PROJECT_BINARY_DIR}/ckvision-terminal-config"
+      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${CKTOOLS_TERMINAL_CONFIG_PARENT}"
       "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionTerminal.cmake"
     DEPENDS verify_ckvision_install ck_vision_terminal_smoke
     USES_TERMINAL
+    VERBATIM
     COMMENT "Smoke-test staged ckVision executables in real terminal profiles")
 endfunction()
 
-# Keep the complete local cutover rehearsal discoverable as one target without
-# making any individual gate implicit for normal development builds. It is
-# available only when every opt-in product, package-consumer, and archive gate
-# was requested by the caller. Invoke the gates serially: the install and CPack
-# paths both build from this tree, so parallel prerequisite scheduling would
-# make the composed target needlessly contend with itself.
+# The rehearsal tests the paired Release tree and stages only this production tree.
 function(cktools_add_ckvision_rehearsal_verification)
-  if(NOT CKTOOLS_VERIFY_CKVISION_PACKAGE OR
+  if(BUILD_TESTING OR NOT CKTOOLS_VERIFY_CKVISION_PACKAGE OR
      NOT CKTOOLS_VERIFY_CKVISION_INSTALL OR
-     NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE)
+     NOT CKTOOLS_VERIFY_CKVISION_ARCHIVE OR
+     NOT CKTOOLS_REHEARSAL_TEST_BINARY_DIR)
     return()
+  endif()
+
+  if(NOT IS_ABSOLUTE "${CKTOOLS_REHEARSAL_TEST_BINARY_DIR}" OR
+     NOT EXISTS "${CKTOOLS_REHEARSAL_TEST_BINARY_DIR}/CMakeCache.txt")
+    message(FATAL_ERROR "Rehearsal requires a configured absolute Release test tree")
+  endif()
+  load_cache("${CKTOOLS_REHEARSAL_TEST_BINARY_DIR}" READ_WITH_PREFIX _cktools_rehearsal_
+    BUILD_TESTING CMAKE_BUILD_TYPE CMAKE_HOME_DIRECTORY CK_CORE_FS_LIB_SOURCE_DIR CKTOOLS_CKVISION_PREFIX)
+  if(NOT "${_cktools_rehearsal_BUILD_TESTING}" STREQUAL "ON" OR
+     NOT "${_cktools_rehearsal_CMAKE_BUILD_TYPE}" STREQUAL "Release" OR
+     NOT "${_cktools_rehearsal_CMAKE_HOME_DIRECTORY}" STREQUAL "${PROJECT_SOURCE_DIR}" OR
+     NOT "${_cktools_rehearsal_CK_CORE_FS_LIB_SOURCE_DIR}" STREQUAL "${CK_CORE_FS_LIB_SOURCE_DIR}" OR
+     NOT "${_cktools_rehearsal_CKTOOLS_CKVISION_PREFIX}" STREQUAL "${CKTOOLS_CKVISION_PREFIX}")
+    message(FATAL_ERROR "Rehearsal requires the same frontend and dependency inputs in its Release test tree")
   endif()
 
   add_custom_target(verify_ckvision_rehearsal
     COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_package --parallel 1
+    COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${CKTOOLS_REHEARSAL_TEST_BINARY_DIR}" --output-on-failure --parallel 1 --no-tests=error
     COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_cutover --parallel 1
     COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target verify_ckvision_archive --parallel 1
-    COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PROJECT_BINARY_DIR}" --output-on-failure --parallel 1 --no-tests=error
     USES_TERMINAL
+    VERBATIM
     COMMENT "Run the complete local ckVision cutover rehearsal")
 endfunction()

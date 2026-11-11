@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_settings.hpp"
 #include "cvision/core/utf8.hpp"
+#if defined(_WIN32)
+#include <cvision/term/windows_filesystem.hpp>
+#else
+#include <cvision/term/posix_filesystem.hpp>
+#endif
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
@@ -272,15 +277,33 @@ std::optional<FilesPersistentSettings> parse_files_settings(std::string_view tex
 }
 
 FilesSettingsLoad FilesSettingsStore::load() {
+    if (auto *memory = dynamic_cast<ckv::MemoryFileSystem *>(&files_))
+        return load([memory](std::string_view path, std::size_t cap) { return memory->read_file_bounded(path, cap); });
+#if defined(_WIN32)
+    if (auto *native = dynamic_cast<ckv::term::WindowsFileSystem *>(&files_))
+#else
+    if (auto *native = dynamic_cast<ckv::term::PosixFileSystem *>(&files_))
+#endif
+        return load([native](std::string_view path, std::size_t cap) { return native->read_file_bounded(path, cap); });
+    revision_.reset();
+    writable_ = false;
+    return {{}, "Files settings unavailable: supplied filesystem has no bounded reader"};
+}
+
+FilesSettingsLoad FilesSettingsStore::load(const BoundedRead &read) {
     revision_.reset();
     writable_ = false;
     if (path_.empty()) return {{}, "Settings unavailable: no user configuration directory"};
-    const auto file = files_.read_file(path_);
+    if (!read) return {{}, "Files settings unavailable: no bounded reader"};
+    const auto file = read(path_, kMaxSettingsBytes);
     if (!file) {
         if (files_.exists(path_)) return {{}, "Cannot read Files settings: " + path_};
         writable_ = true;
         return {};
     }
+    // Refuse a broken injected reader before accepting any save authority.
+    if (file->contents.size() > kMaxSettingsBytes)
+        return {{}, "Files settings exceed 1 MiB; existing file preserved: " + path_};
     revision_ = file->fingerprint;
     writable_ = true;
     if (auto settings = parse_files_settings(file->contents)) return {std::move(*settings), {}};

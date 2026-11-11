@@ -1,5 +1,19 @@
 # Files implementation evidence
 
+## 2026-11-11 — Linux Release candidate with the ledger race fix
+
+Linux ARM64 frontend `7973713`, published backend `098c081`, and locally
+built ckVision `adf767d` passed all 464 Release CTests, including the
+directory reader lifecycle regression. The installed SDK consumer also passed.
+The paired production build disabled backend test hooks. It passed 30 PTY
+checks on the staged runtime and 30 each on the extracted TGZ, DEB and RPM.
+The JUnit SHA-256 is
+`1080b1ad3e1bd395eff6b92513b7271011f5b2af104df027396da8a71e7c9ed0`.
+The independent package receipt SHA-256 is
+`31e4b4073583bf85215f165eebf9cc6df8ba45465c63116a7a0ba8f1b0c9ad35`.
+The SDK release, the matching Windows run, and desktop-window acceptance
+remain open.
+
 ## 2026-11-11 — Private HOME for package terminal checks
 
 Candidate `efc1518` gives the launched tool a private HOME during the

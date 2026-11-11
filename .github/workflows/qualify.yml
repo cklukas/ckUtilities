@@ -20,8 +20,8 @@ env:
   CPACK_THREADS: '1'
   CPACK_ARCHIVE_THREADS: '1'
   PYTHONDONTWRITEBYTECODE: '1'
-  CKTOOLS_CI_CKVISION_REVISION: 7ad5bd67553414e7dc0882069482864034cb31f9
-  CKTOOLS_CI_BACKEND_REVISION: fc56de16433cf7066c344f8c052debc7e6197535
+  CKTOOLS_CI_CKVISION_REVISION: adf767deea9a3cc8dd9d4b397af444c5ad6c873f
+  CKTOOLS_CI_BACKEND_REVISION: 098c0811c00eb36d41a7b5128121b7f05f30d2af
   CKTOOLS_CI_FRONTEND_REVISION: ${{ inputs.frontend_sha }}
   CKTOOLS_CI_RELEASE_TAG: ${{ inputs.release_tag }}
 jobs:
@@ -190,21 +190,21 @@ jobs:
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Checkout stock ckVision 1.4.2
+      - name: Checkout exact ckVision revision
         uses: actions/checkout@v5
         with:
           repository: cklukas/ckVision
-          ref: 7ad5bd67553414e7dc0882069482864034cb31f9
+          ref: ${{ env.CKTOOLS_CI_CKVISION_REVISION }}
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ckvision
           persist-credentials: false
       - name: Checkout exact published backend
         uses: actions/checkout@v5
         with:
           repository: cklukas/ck-core-fs-lib
-          ref: fc56de16433cf7066c344f8c052debc7e6197535
+          ref: ${{ env.CKTOOLS_CI_BACKEND_REVISION }}
           path: ${{ env.CKTOOLS_CI_CHECKOUT_REL }}/.deps/ck-core-fs-lib
           persist-credentials: false
-      - name: Install required hosted Linux development dependency
+      - name: Install required hosted Linux build and extraction tools
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -213,7 +213,7 @@ jobs:
           # the mandatory llama backend needs at configure time.
           : "${TMPDIR:?bootstrap must select task temporary storage}"
           sudo -n env TMPDIR="$TMPDIR" apt-get update
-          sudo -n env TMPDIR="$TMPDIR" DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libcurl4-openssl-dev
+          sudo -n env TMPDIR="$TMPDIR" DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends libcurl4-openssl-dev cpio rpm2cpio
       - name: Require preprovisioned POSIX tools
         if: runner.os != 'Windows'
         shell: bash
@@ -227,7 +227,7 @@ jobs:
           pkg-config --modversion libcurl
           pkg-config --cflags --libs libcurl
           if [[ "$RUNNER_OS" == Linux ]]; then
-            command -v rpm
+            for tool in rpm rpm2cpio cpio dpkg-deb; do command -v "$tool"; done
             command -v unshare
             command -v sudo
             sudo -n true
@@ -239,8 +239,21 @@ jobs:
       - name: Full Windows qualification and packaging (mandatory source admission)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          CKTOOLS_WINDOWS_ACTION_SCOPE_ROOT: ${{ vars.CKTOOLS_WINDOWS_ACTION_SCOPE_ROOT }}
+          CKTOOLS_WINDOWS_ACTION_SCOPE_VHD: ${{ vars.CKTOOLS_WINDOWS_ACTION_SCOPE_VHD }}
         run: |
-          & "$env:CKTOOLS_CI_SOURCE_DIR/scripts/windows/build-and-package.ps1" -CkVisionSource "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ckvision" -CkCoreFsSource "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ck-core-fs-lib" -WorkRoot $env:CKTOOLS_CI_WORK_ROOT
+          if (-not $env:CKTOOLS_WINDOWS_ACTION_SCOPE_ROOT -or -not $env:CKTOOLS_WINDOWS_ACTION_SCOPE_VHD) {
+            throw 'Configure the dedicated Windows action-scope workspace and VHD before qualification'
+          }
+          $qualification = @{
+            CkVisionSource = "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ckvision"
+            CkCoreFsSource = "$env:CKTOOLS_CI_SOURCE_DIR/.deps/ck-core-fs-lib"
+            WorkRoot = $env:CKTOOLS_CI_WORK_ROOT
+            ActionScopeRoot = $env:CKTOOLS_WINDOWS_ACTION_SCOPE_ROOT
+            ActionScopeVhd = $env:CKTOOLS_WINDOWS_ACTION_SCOPE_VHD
+          }
+          & "$env:CKTOOLS_CI_SOURCE_DIR/scripts/windows/build-and-package.ps1" @qualification
       - name: Prepare formula from the same immutable release source
         if: runner.os == 'Linux' && inputs.release_tag != ''
         shell: bash
@@ -248,10 +261,20 @@ jobs:
           set -euo pipefail
           cd "$CKTOOLS_CI_SOURCE_DIR"
           archive="$CKTOOLS_CI_WORK_ROOT/source.tar.gz"
-          curl --fail --location --silent --show-error --output "$archive" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz"
+          ckvision_archive="$CKTOOLS_CI_WORK_ROOT/ckvision-source.tar.gz"
+          backend_archive="$CKTOOLS_CI_WORK_ROOT/backend-source.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$archive" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$ckvision_archive" "https://github.com/cklukas/ckVision/archive/$CKTOOLS_CI_CKVISION_REVISION.tar.gz"
+          curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --output "$backend_archive" "https://github.com/cklukas/ck-core-fs-lib/archive/$CKTOOLS_CI_BACKEND_REVISION.tar.gz"
           digest=$(sha256sum "$archive" | awk '{print $1}')
           mkdir -p "$CKTOOLS_CI_WORK_ROOT/packages"
-          python3 scripts/generate_homebrew_formula.py --version "${CKTOOLS_CI_RELEASE_TAG#v}" --source-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz" --source-sha256 "$digest" --homepage "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --output "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
+          python3 scripts/generate_homebrew_formula.py \
+            --version "${CKTOOLS_CI_RELEASE_TAG#v}" \
+            --source-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/archive/$CKTOOLS_CI_FRONTEND_REVISION.tar.gz" \
+            --source-sha256 "$digest" --homepage "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --ci-inputs "$CKTOOLS_CI_WORK_ROOT/ci-inputs.json" \
+            --ckvision-archive "$ckvision_archive" --backend-archive "$backend_archive" \
+            --output "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
           ruby -c "$CKTOOLS_CI_WORK_ROOT/packages/ck-utilities.rb"
       - name: Upload qualified package artifacts
         uses: actions/upload-artifact@v5
@@ -277,25 +300,37 @@ jobs:
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/native-prerequisites.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-hook-preflight.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/windows-provider.json
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/zip-terminal-results.xml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/zip-terminal-images.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/stages.jsonl
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/Testing/Temporary/
-            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/Testing/Temporary/
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/Testing/Temporary/
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeFiles/CMakeOutput.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeError.log
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeError.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-build/CMakeFiles/CMakeOutput.log
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-dev/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg-test/CMakeCache.txt
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/frontend-pkg/compile_commands.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/build/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/CMakeCache.txt
+            ${{ env.CKTOOLS_CI_WORK_ROOT }}/build-pkg/compile_commands.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-inputs.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-provider.json
             ${{ env.CKTOOLS_CI_WORK_ROOT }}/journal-cleanup-flags.json
