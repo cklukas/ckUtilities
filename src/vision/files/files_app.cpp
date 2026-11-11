@@ -317,6 +317,7 @@ struct FilesApp::State {
     std::shared_ptr<void> lifetime = std::make_shared<int>(0);
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> bookmark_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_dialog;
@@ -357,6 +358,9 @@ struct FilesApp::State {
     ckv::widgets::Window *view_dialog_window = nullptr;
     std::weak_ptr<void> view_dialog_lifetime;
     bool close_after_view = false;
+    ckv::widgets::Window *bookmark_dialog_window = nullptr;
+    std::weak_ptr<void> bookmark_dialog_lifetime;
+    bool close_after_bookmark = false;
     ckv::widgets::Window *properties_dialog_window = nullptr;
     std::weak_ptr<void> properties_dialog_lifetime;
     ckv::widgets::Window *preview_dialog_window = nullptr;
@@ -484,6 +488,9 @@ struct FilesApp::State {
             history_forward_id = own(
                 "ck.files.history_forward", [this] { navigate_history_forward(active); },
                 [this] { return availability("ck.files.history_forward").enabled; });
+            const auto bookmark_open_id = own(
+                "ck.files.bookmark_open", [this] { show_bookmarks(); },
+                [this] { return availability("ck.files.bookmark_open").enabled; });
             bookmark_add_id = own(
                 "ck.files.bookmark_add", [this] { add_bookmark(active); },
                 [this] { return availability("ck.files.bookmark_add").enabled; });
@@ -578,7 +585,8 @@ struct FilesApp::State {
                     {item(location_id, "&Go to location..."), item(enter_id, "&Enter folder"),
                      item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
                      item(home_id, "&Home location"), item(history_back_id, "Go &back"),
-                     item(history_forward_id, "Go &forward"), item(bookmark_add_id, "Add &bookmark"),
+                     item(history_forward_id, "Go &forward"), item(bookmark_open_id, "Open boo&kmark..."),
+                     item(bookmark_add_id, "Add &bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
                      item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
                      item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
@@ -727,6 +735,8 @@ struct FilesApp::State {
         confirmation.reset();
         location_dialog.reset();
         view_dialog.reset();
+        bookmark_dialog.reset();
+        bookmark_dialog_window = nullptr;
         properties_dialog.reset();
         preview_dialog.reset();
         link_dialog.reset();
@@ -856,6 +866,7 @@ struct FilesApp::State {
     }
     bool modal_pending() const {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
+               (bookmark_dialog && !bookmark_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
                (preview_dialog && !preview_dialog->completed()) ||
                (link_dialog && !link_dialog->completed()) ||
@@ -1030,6 +1041,13 @@ struct FilesApp::State {
             return ready(active) && panes[active].history_position + 1 < panes[active].history.size()
                        ? FilesCommandAvailability::available()
                        : unavailable("Go forward unavailable: no later location is available");
+        if (command == "ck.files.bookmark_open") {
+            if (!ready(active))
+                return unavailable("Open bookmark unavailable: active pane is not ready");
+            return panes[active].bookmarks.empty()
+                       ? unavailable("Open bookmark unavailable: this pane has no bookmarks")
+                       : FilesCommandAvailability::available();
+        }
         if (command == "ck.files.bookmark_add")
             return ready(active) && panes[active].active
                        ? FilesCommandAvailability::available()
@@ -2596,6 +2614,55 @@ struct FilesApp::State {
                 navigate(pane, std::move(*location), std::move(view));
             });
     }
+    void show_bookmarks() {
+        if (!availability("ck.files.bookmark_open").enabled)
+            return;
+        const auto pane = active;
+        const auto navigation = panes[pane].navigation;
+        auto bookmarks = panes[pane].bookmarks;
+        std::vector<std::string> names;
+        names.reserve(bookmarks.size());
+        for (const auto &bookmark : bookmarks)
+            names.push_back(bookmark->display_text());
+
+        using namespace ckv::widgets;
+        DialogDescriptor descriptor;
+        descriptor.title = pane == 0 ? "Left bookmarks" : "Right bookmarks";
+        descriptor.fields = {{.label = "&Location", .kind = FieldKind::Combo,
+                              .options = std::move(names), .initial_selection = 0}};
+        descriptor.buttons = {{"&Open", ButtonRole::Accept, {}}, {"&Cancel", ButtonRole::Dismiss, {}}};
+        bookmark_dialog.emplace(
+            present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        bookmark_dialog_window = shell->desktop().active_window();
+        bookmark_dialog_lifetime = bookmark_dialog_window->lifetime_token();
+        bookmark_dialog->set_completion_handler(
+            [this, weak = std::weak_ptr<void>(lifetime), pane, navigation,
+             bookmarks = std::move(bookmarks)](const DialogResult &result) {
+                if (weak.expired())
+                    return;
+                bookmark_dialog_window = nullptr;
+                if (close_after_bookmark) {
+                    close_after_bookmark = false;
+                    request_close();
+                    return;
+                }
+                if (!result.accepted || result.selected.size() != 1 || result.selected[0] < 0)
+                    return;
+                const auto index = static_cast<std::size_t>(result.selected[0]);
+                if (panes[pane].navigation != navigation || !ready(pane)) {
+                    panes[pane].error = "Location changed while the bookmark picker was open";
+                    labels();
+                    return;
+                }
+                const auto &current = panes[pane].bookmarks;
+                if (index >= bookmarks.size() || index >= current.size() || bookmarks[index] != current[index]) {
+                    panes[pane].error = "The selected bookmark changed";
+                    labels();
+                    return;
+                }
+                navigate_bookmark(pane, index);
+            });
+    }
     void show_view_options() {
         if (!ready(active))
             return;
@@ -3536,6 +3603,12 @@ struct FilesApp::State {
             close_after_view = true;
             if (view_dialog_window && !view_dialog_lifetime.expired())
                 view_dialog_window->close();
+            return;
+        }
+        if (bookmark_dialog && !bookmark_dialog->completed()) {
+            close_after_bookmark = true;
+            if (bookmark_dialog_window && !bookmark_dialog_lifetime.expired())
+                bookmark_dialog_window->close();
             return;
         }
         if (properties_dialog && !properties_dialog->completed()) {

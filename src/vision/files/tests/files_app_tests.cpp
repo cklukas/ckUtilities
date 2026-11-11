@@ -2709,6 +2709,53 @@ CK_TEST(files_app_persists_acknowledged_view_and_bookmark_changes) {
     saved = parse_files_settings(files.read_file("/user/ck-files.settings")->contents);
     CK_CHECK(saved && saved->views[0].show_hidden);
 }
+CK_TEST(files_app_opens_a_bookmark_from_the_location_menu_in_its_own_pane) {
+    Fixture f;
+    f.loaded();
+    constexpr auto open = "ck.files.bookmark_open";
+    const auto left = f.app->location(0);
+    const auto right = f.app->location(1);
+    CK_CHECK(!f.application.commands().is_enabled(f.id(open)));
+    CK_CHECK(f.app->availability(open).reason == "Open bookmark unavailable: this pane has no bookmarks");
+    CK_CHECK(f.app->add_bookmark(0));
+    CK_CHECK(f.app->navigate(0, right->root_address()));
+    f.loaded();
+    const auto target = f.app->location(0);
+    CK_CHECK(f.app->add_bookmark(0));
+    CK_CHECK(f.app->navigate_history_back(0));
+    f.loaded();
+    CK_CHECK(f.app->location(0) && *f.app->location(0) == *left);
+    f.app->switch_pane();
+    CK_CHECK(!f.application.commands().is_enabled(f.id(open)));
+    f.app->switch_pane();
+
+    const auto open_picker = [&] {
+        CK_CHECK(f.alt("l"));
+        CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "k"}}));
+        f.application.step(f.clock.now_nanos());
+        CK_CHECK(f.painted().find("Left bookmarks") != std::string::npos);
+    };
+    open_picker();
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.loaded();
+    CK_CHECK(f.app->location(0) && *f.app->location(0) == *left);
+    open_picker();
+    std::vector<ckv::widgets::ComboBox *> choices;
+    find_views(f.application.root(), choices);
+    auto *picker = choices.at(0);
+    CK_CHECK(choices.size() == 1 && picker->mode() == ckv::widgets::ComboBoxMode::PickOnly);
+    picker->set_selected_index(1);
+    CK_CHECK(f.alt("o"));
+    f.until([&] {
+        return !f.app->pending(0) && f.app->location(0) && *f.app->location(0) == *target;
+    });
+    CK_CHECK(f.app->location(1) == right);
+
+    open_picker();
+    CK_CHECK(f.application.execute_command(f.application.commands().standard().quit));
+    f.until([&] { return f.exits == 1; });
+    CK_CHECK(f.app->location(0) && *f.app->location(0) == *target);
+}
 CK_TEST(files_app_operation_review_is_modal_and_cancel_is_plan_bound) {
     Fixture f;
     f.loaded();
