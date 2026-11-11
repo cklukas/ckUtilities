@@ -18,13 +18,22 @@
     "asan_error_reports": 0,
     "owned_processes_after": 0,
     "result": "failed",
-    "receipt_sha256": "046d88d67a33c9bd2c915a4d35ea662f9de1ebe7245e77eedf5f2d57c5532c8d"
+    "receipt_sha256": "046d88d67a33c9bd2c915a4d35ea662f9de1ebe7245e77eedf5f2d57c5532c8d",
+    "reviewed_tree_timing_followup": {
+      "revision": "6dfe138a3539ca0ad82b672f925387f73293afaa",
+      "first_copy_seconds": 90.853,
+      "deadline_seconds": 180,
+      "last_unfinished_case": "test_copy(true)",
+      "result": "timeout",
+      "receipt_sha256": "2bef837ae50efce1b0a02e49ae0afe47246461aaf1e89258da3210ffe3bf1071"
+    }
   },
   "settings_fixture": {
     "revision": "9271ddaa2e12400c9c46418180fbfc38bbf065d4",
     "cause": "The fixture supplied UTF-16 entry names to a directory index configured for Linux POSIX names.",
     "macos_arm64_release_settings_suite_passed": 10,
-    "windows_retest": "pending",
+    "windows_x64_address_settings_suite_passed": 10,
+    "windows_receipt_sha256": "a0b8f74911fad0201513dd4cea94f038d10ae6aa3792523a8e30f1389536088e",
     "receipt_sha256": "ce9f244f06eb3a35149bc9311ba6db2fd2767dc61ed35a53f6d98014826fe784"
   },
   "successor_ckvision_windows_x64_release": {

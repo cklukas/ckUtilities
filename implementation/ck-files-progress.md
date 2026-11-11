@@ -32,7 +32,14 @@ logs contain zero AddressSanitizer error reports.
 The settings test configured its directory index for Linux names while
 providing UTF-16 entries on Windows. Candidate `9271dda` selects the matching
 storage model and checks the exact saved bookmark path. All 10 focused
-macOS Release settings tests passed. Windows retesting remains pending.
+macOS Release settings tests passed. All 10 also passed on Windows x64
+with MSVC v143 AddressSanitizer after relinking the verified original
+application test dependencies with the corrected settings test source.
+
+An instrumented timing replay of the Windows reviewed-tree regression
+finished its first copy in 90.853 seconds. The second copy was still
+running at the original 180-second deadline. The reviewed-tree failure
+remains open.
 
 The successor ckVision SDK `adf767d` passed 238 of 239 Windows Release
 CTests, the independent installed reader, and 150 native controls. The
