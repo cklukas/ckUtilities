@@ -22,6 +22,11 @@ Without arguments, both panes start from the current directory. Use
 `--help` (or `-h`) for the command-line synopsis. The application does not
 execute files or provide an embedded shell.
 
+On Linux and macOS, put `--osc52-clipboard` before the directory arguments
+when your terminal permits OSC 52 clipboard writes. Without the option,
+copied paths stay in the Files clipboard. On Windows, Files uses the native
+clipboard.
+
 ## Features
 
 - Two independent panes with an explicit active-pane indicator, resizable

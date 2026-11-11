@@ -56,18 +56,30 @@ int run(const std::vector<std::string> &args) {
         return 0;
     }
     if (args.size() > 1 && (args[1] == "--help" || args[1] == "-h")) {
-        std::printf("Usage: %s [LEFT_DIRECTORY [RIGHT_DIRECTORY]]\n",
+        std::printf("Usage: %s"
+#if !defined(_WIN32)
+                    " [--osc52-clipboard]"
+#endif
+                    " [LEFT_DIRECTORY [RIGHT_DIRECTORY]]\n",
                     args.empty() ? "ck-files" : args[0].c_str());
         return 0;
     }
-    if (args.size() > 3) {
+    std::size_t first_directory = 1;
+#if !defined(_WIN32)
+    const bool osc52_clipboard = args.size() > 1 && args[1] == "--osc52-clipboard";
+    if (osc52_clipboard)
+        ++first_directory;
+#endif
+    if (args.size() > first_directory + 2) {
         std::fprintf(stderr, "ck-files: expected at most two directory arguments\n");
         return 2;
     }
 
     const std::filesystem::path current = std::filesystem::current_path();
-    const std::filesystem::path left_path = args.size() > 1 ? ck::host::utf8_path(args[1]) : current;
-    const std::filesystem::path right_path = args.size() > 2 ? ck::host::utf8_path(args[2]) : left_path;
+    const std::filesystem::path left_path =
+        args.size() > first_directory ? ck::host::utf8_path(args[first_directory]) : current;
+    const std::filesystem::path right_path =
+        args.size() > first_directory + 1 ? ck::host::utf8_path(args[first_directory + 1]) : left_path;
     const std::string config_root_text = ck::host::suite_config_root();
     if (config_root_text.empty()) {
         std::fprintf(stderr, "ck-files: cannot resolve a private configuration root\n");
@@ -108,7 +120,13 @@ int run(const std::vector<std::string> &args) {
         auto loaded_settings = settings.load();
 
         ck::host::NativeClock clock;
+#if defined(_WIN32)
         ck::host::NativeTerminal terminal(clock);
+#else
+        auto capabilities = ckv::term::baseline_capabilities();
+        capabilities.clipboard_write = osc52_clipboard;
+        ck::host::NativeTerminal terminal(clock, 1, 0, capabilities);
+#endif
         ckv::ui::Application application(terminal, clock);
         ck::vision::DefaultKeymapPersistence keymap_persistence;
         ck::vision::KeymapController keymap("ck-files", application.commands(), keymap_persistence);
