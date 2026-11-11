@@ -43,7 +43,10 @@ remains open.
 
 The successor ckVision SDK `adf767d` passed 238 of 239 Windows Release
 CTests, the independent installed reader, and 150 native controls. The
-visual golden-byte test exceeded its 60-second deadline. See the
+visual golden-byte test exceeded its 60-second deadline in that run. A
+focused rerun used the same executable and fixture inputs and matched all
+290 outputs in 57.1227 seconds under the original deadline. The unfiltered
+Windows SDK and application gates remain open. See the
 [source-bound evidence](evidence/ck-files-windows-address-and-settings-20261111.json).
 
 ## 2026-11-11 — Integrated ThreadSanitizer and Windows native fixtures

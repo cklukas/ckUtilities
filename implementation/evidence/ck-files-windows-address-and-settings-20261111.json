@@ -45,6 +45,12 @@
     "native_controls_passed": 150,
     "owned_processes_after": 0,
     "result": "failed",
-    "receipt_sha256": "1674055b96a188d9a28e8720e857d73c2a5b9517f4f9d0996457182bbb4bdf1f"
+    "receipt_sha256": "1674055b96a188d9a28e8720e857d73c2a5b9517f4f9d0996457182bbb4bdf1f",
+    "focused_golden_followup": {
+      "matched": 290,
+      "seconds": 57.1227,
+      "deadline_seconds": 60,
+      "receipt_sha256": "f5efe36d0f86a07bb245b0df49b2f10916e8b05cbdeaf9c78dfd11410556a541"
+    }
   }
 }
