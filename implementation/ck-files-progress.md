@@ -1,5 +1,22 @@
 # Files implementation evidence
 
+## 2026-11-11 — Windows AddressSanitizer results and settings fixture
+
+Windows x64 frontend `ce4b02a`, backend `4e41414`, and ckVision `0d81e2e`
+passed 357 of 363 CTests with MSVC v143 AddressSanitizer. The isolated-volume
+action and ConPTY contract passed. Six tests failed or timed out, and the
+logs contain zero AddressSanitizer error reports.
+
+The settings test configured its directory index for Linux names while
+providing UTF-16 entries on Windows. Candidate `9271dda` selects the matching
+storage model and checks the exact saved bookmark path. All 10 focused
+macOS Release settings tests passed. Windows retesting remains pending.
+
+The successor ckVision SDK `adf767d` passed 238 of 239 Windows Release
+CTests, the independent installed reader, and 150 native controls. The
+visual golden-byte test exceeded its 60-second deadline. See the
+[source-bound evidence](evidence/ck-files-windows-address-and-settings-20261111.json).
+
 ## 2026-11-11 — Integrated ThreadSanitizer and Windows native fixtures
 
 Frontend `9364cd2`, backend `e081549`, and ckVision `0d81e2e` passed

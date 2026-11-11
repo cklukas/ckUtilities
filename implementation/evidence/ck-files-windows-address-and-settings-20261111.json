@@ -1,0 +1,41 @@
+{
+  "windows_x64_address": {
+    "configuration": "MSVC v143 Release with AddressSanitizer",
+    "frontend": "ce4b02ab9fc7e032e5fa40fb17486dadd5340621",
+    "backend": "4e41414215aaa1fcd626fb33a11e4dffa45c8d71",
+    "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f",
+    "passed": 357,
+    "skipped": 0,
+    "failed": [
+      "ck_vision_files_tests",
+      "reviewed_tree_plan",
+      "test_files_operation_content_native",
+      "test_files_security_native",
+      "tree_c_copy",
+      "tree_c_keepboth"
+    ],
+    "native_controls_passed": ["action_native_scope", "ck_windows_tools_contract"],
+    "asan_error_reports": 0,
+    "owned_processes_after": 0,
+    "result": "failed",
+    "receipt_sha256": "046d88d67a33c9bd2c915a4d35ea662f9de1ebe7245e77eedf5f2d57c5532c8d"
+  },
+  "settings_fixture": {
+    "revision": "9271ddaa2e12400c9c46418180fbfc38bbf065d4",
+    "cause": "The fixture supplied UTF-16 entry names to a directory index configured for Linux POSIX names.",
+    "macos_arm64_release_settings_suite_passed": 10,
+    "windows_retest": "pending",
+    "receipt_sha256": "ce9f244f06eb3a35149bc9311ba6db2fd2767dc61ed35a53f6d98014826fe784"
+  },
+  "successor_ckvision_windows_x64_release": {
+    "ckvision": "adf767deea9a3cc8dd9d4b397af444c5ad6c873f",
+    "passed": 238,
+    "skipped": 0,
+    "failed": {"generated_golden_bytes": "Timeout at 60.1569 seconds"},
+    "independent_installed_reader_passed": true,
+    "native_controls_passed": 150,
+    "owned_processes_after": 0,
+    "result": "failed",
+    "receipt_sha256": "1674055b96a188d9a28e8720e857d73c2a5b9517f4f9d0996457182bbb4bdf1f"
+  }
+}
