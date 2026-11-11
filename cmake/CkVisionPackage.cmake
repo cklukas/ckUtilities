@@ -1,11 +1,10 @@
 include_guard(GLOBAL)
 
-# This is the released ckVision commit validated for ckUtilities. It is a compatibility
-# record for development and CI, not a source-tree dependency: consumers must
-# find an installed package through CMAKE_PREFIX_PATH or the normal CMake
-# package search paths.
+# Record the ckVision compatibility pin used for development and CI.
+# Consumers find the installed package through CMAKE_PREFIX_PATH or the
+# normal CMake package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f"
+    "adf767deea9a3cc8dd9d4b397af444c5ad6c873f"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 

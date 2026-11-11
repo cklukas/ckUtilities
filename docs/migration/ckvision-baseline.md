@@ -8,12 +8,12 @@ checkout is not a build input.
 | Field | Value |
 | --- | --- |
 | ckVision version | `1.5.0` |
-| Pinned source revision | `0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f` |
+| Pinned source revision | `adf767deea9a3cc8dd9d4b397af444c5ad6c873f` |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |
 | Previous SDK evidence | [1.4.2 integration record](../../implementation/evidence/ckvision-1.4.2-integration-20261102.json) and [1.4.1 integration record](../../implementation/evidence/ckvision-1.4.1-integration-20261102.json) |
 
-CI checks out this exact public revision and builds an installed SDK on every
+CI checks out this exact revision and builds an installed SDK on every
 Linux and macOS runner before it configures ckUtilities. This keeps the
 application’s dependency boundary identical to a user build while eliminating
 manual SDK-archive configuration.
