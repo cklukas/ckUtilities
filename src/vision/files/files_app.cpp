@@ -283,6 +283,11 @@ struct FilesApp::State {
         FilesVolumeRecord volume;
         std::shared_ptr<const FilesPaneLocation> destination;
     };
+    struct VolumeRequest {
+        std::size_t pane;
+        FilesPaneTicket navigation;
+        bool retired = false;
+    };
     ckv::ui::Application &application;
     std::array<FilesPaneService *, 2> services;
     std::array<FilesCompletionService *, 2> completion_services;
@@ -380,8 +385,7 @@ struct FilesApp::State {
     std::weak_ptr<void> operation_recovery_lifetime;
     ckv::widgets::Window *operation_recovery_cleanup_window = nullptr;
     std::weak_ptr<void> operation_recovery_cleanup_lifetime;
-    bool volume_request = false;
-    std::size_t volume_pane = 0;
+    std::optional<VolumeRequest> volume_request;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId highlighted_menu_command = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId pressed_footer_command = ckv::ui::kInvalidCommand;
@@ -749,7 +753,7 @@ struct FilesApp::State {
         volume_archive_recovery_cleanup_error.clear();
         operation_recovery_dialog.reset();
         operation_recovery_window = nullptr;
-        volume_request = false;
+        volume_request.reset();
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_execution_request.reset();
@@ -866,7 +870,6 @@ struct FilesApp::State {
                (archive_cleanup_dialog && !archive_cleanup_dialog->completed()) ||
                (operation_recovery_dialog && !operation_recovery_dialog->completed()) ||
                (operation_recovery_cleanup_dialog && !operation_recovery_cleanup_dialog->completed()) ||
-               volume_request ||
                (volume_archive_review_dialog && !volume_archive_review_dialog->completed()) ||
                volume_archive_planning_request.has_value() ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
@@ -932,7 +935,7 @@ struct FilesApp::State {
             if (modal_pending())
                 return unavailable("Cancel unavailable: a dialog is open");
             if (operation_execution_request || volume_archive_execution_request ||
-                pending(panes[active]) || panes[active].volume_view)
+                pending(panes[active]) || volume_pending(active) || panes[active].volume_view)
                 return FilesCommandAvailability::available();
             return unavailable("Cancel unavailable: no activity is running");
         }
@@ -992,6 +995,12 @@ struct FilesApp::State {
                 return unavailable("Parent folder unavailable: active pane is not ready");
             if (!panes[active].active || !panes[active].active->parent().value())
                 return unavailable("Parent folder unavailable: location has no parent");
+            if (panes[active].active->components().empty()) {
+                if (volume_request)
+                    return unavailable("Volumes unavailable: volume information is still loading");
+                if (!volume_service || !volume_service->running())
+                    return unavailable("Volumes unavailable: volume information worker is unavailable");
+            }
             return FilesCommandAvailability::available();
         }
         if (command == "ck.files.root") {
@@ -1112,7 +1121,7 @@ struct FilesApp::State {
             if (panes[active].volume_view) {
                 if (move)
                     return unavailable("Move unavailable: volume rows are archive sources, not movable entries");
-                if (volume_request && active == volume_pane)
+                if (volume_pending(active))
                     return unavailable("Copy unavailable: volume information is still loading");
                 if (panes[active].volume_inventory_stale)
                     return unavailable("Copy unavailable: refresh the volume information first");
@@ -1186,9 +1195,13 @@ struct FilesApp::State {
     static bool pending(const Pane &p) {
         return p.navigating || p.reading || p.changing || p.queued_view || p.previewing || p.mutating;
     }
+    bool volume_pending(std::size_t i) const {
+        return volume_request && volume_request->pane == i && !volume_request->retired &&
+               volume_request->navigation == panes[i].navigation;
+    }
     bool ready(std::size_t i, bool continuation = false) const {
         return i < 2 && !closing && !operation_execution_request && (continuation || !modal_pending()) &&
-               !pending(panes[i]) && !panes[i].volume_view && panes[i].active &&
+               !pending(panes[i]) && !volume_pending(i) && !panes[i].volume_view && panes[i].active &&
                panes[i].model.current() && services[i]->running();
     }
     bool archive_destination_ready(std::size_t source_pane) const {
@@ -1196,7 +1209,7 @@ struct FilesApp::State {
             return false;
         const auto destination_pane = 1 - source_pane;
         const auto &destination = panes[destination_pane];
-        return !destination.volume_view && !pending(destination) && destination.active &&
+        return !destination.volume_view && !pending(destination) && !volume_pending(destination_pane) && destination.active &&
                destination.model.current() && services[destination_pane]->running();
     }
     std::string status(std::size_t i) const {
@@ -1211,7 +1224,7 @@ struct FilesApp::State {
                 ? "Moving to the other pane..."
                 : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
                     ? "Deleting selected tree..." : "Copying to the other pane...";
-        else if (volume_request && i == volume_pane)
+        else if (volume_pending(i))
             text = "Reading volume information...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
@@ -1498,7 +1511,12 @@ struct FilesApp::State {
             if (surfaces[i]->footer->text() != text)
                 surfaces[i]->footer->set_text(std::move(text));
         }
-        const auto pane_items = [](const Pane &pane) {
+        const auto pane_items = [this](std::size_t i) {
+            const auto &pane = panes[i];
+            if (volume_pending(i))
+                return std::string("loading");
+            if (pane.volume_view && pane.volume_inventory_stale)
+                return std::string("stale");
             if (!pane.model.current())
                 return pending(pane) ? std::string("loading") : std::string("stale");
             return std::to_string(pane.model.row_count());
@@ -1514,7 +1532,7 @@ struct FilesApp::State {
                 ? "Moving"
                 : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
                     ? "Deleting" : "Copying";
-        else if (volume_request)
+        else if (volume_pending(0) || volume_pending(1))
             activity = "Reading volumes";
         else if (modal_pending())
             activity = "Dialog open";
@@ -1523,7 +1541,7 @@ struct FilesApp::State {
         else
             activity = "Ready";
         window->set_footer("Active: " + std::string(active == 0 ? "Left" : "Right") +
-                           " | Items: L " + pane_items(panes[0]) + " / R " + pane_items(panes[1]) +
+                           " | Items: L " + pane_items(0) + " / R " + pane_items(1) +
                            " | Marked: L " + std::to_string(pane_marks(panes[0])) +
                            " / R " + std::to_string(pane_marks(panes[1])) + " | " + activity);
     }
@@ -1541,8 +1559,7 @@ struct FilesApp::State {
             labels();
             return false;
         }
-        volume_pane = i;
-        volume_request = true;
+        volume_request = VolumeRequest{i, panes[i].navigation};
         if (panes[i].volume_view) {
             panes[i].volume_inventory_stale = true;
             if (volume_archive_recovery_service)
@@ -1555,8 +1572,11 @@ struct FilesApp::State {
     void consume_volume(FilesVolumeReply reply) {
         if (!volume_request)
             return;
-        const auto pane = volume_pane;
-        volume_request = false;
+        const auto pane = volume_request->pane;
+        const auto current = volume_pending(pane);
+        volume_request.reset();
+        if (!current)
+            return;
         if (reply.state != FilesVolumeReplyState::Ready) {
             panes[pane].error = volume_failure(reply);
             labels();
@@ -1567,8 +1587,6 @@ struct FilesApp::State {
         panes[pane].model.publish_volumes(std::move(reply.volumes));
         surfaces[pane]->grid->model_changed();
         panes[pane].error.clear();
-        if (pane == active)
-            application.set_focus(surfaces[pane]->grid);
         labels();
     }
     bool relative_ready(std::size_t i, bool root) const {
@@ -1578,15 +1596,14 @@ struct FilesApp::State {
         if (!next.value())
             return false;
         if (*next.value() == *panes[i].active)
-            return !root && panes[i].active->components().empty() && volume_service && volume_service->running();
+            return !root && !volume_request && panes[i].active->components().empty() &&
+                   volume_service && volume_service->running();
         return true;
     }
     bool navigate_relative(std::size_t i, bool root) {
         if (i < 2 && !root && panes[i].volume_view) {
             if (closing || modal_pending())
                 return false;
-            panes[i].volume_view = false;
-            panes[i].model.clear();
             return navigate(i, *panes[i].active, panes[i].view);
         }
         if (!relative_ready(i, root))
@@ -1698,6 +1715,11 @@ struct FilesApp::State {
             p.error = "Navigation request rejected";
             labels();
             return false;
+        }
+        if (p.volume_view) {
+            p.volume_view = false;
+            p.volume_inventory_stale = false;
+            p.model.clear();
         }
         p.archive_refresh.reset();
         if (!requested || !p.active || *requested != *p.active)
@@ -2235,7 +2257,7 @@ struct FilesApp::State {
         return address;
     }
     void prepare_volume_archive() {
-        if (!archive_destination_ready(active) || !panes[active].volume_view)
+        if (!availability("ck.files.copy").enabled)
             return;
         const auto volume = panes[active].model.volume_cursor();
         const auto destination_pane = 1 - active;
@@ -2559,7 +2581,8 @@ struct FilesApp::State {
                     labels();
                     return;
                 }
-                if (!panes[pane].navigating && panes[pane].active && panes[pane].model.current() &&
+                if (!panes[pane].navigating && !panes[pane].volume_view && !volume_pending(pane) &&
+                    panes[pane].active && panes[pane].model.current() &&
                     *panes[pane].active == *location)
                     return;
                 auto view = panes[pane].view;
@@ -2959,7 +2982,7 @@ struct FilesApp::State {
     }
     void page(std::size_t i) {
         auto &p = panes[i];
-        if (p.volume_view || (volume_request && i == volume_pane) || p.navigating || p.changing ||
+        if (p.volume_view || volume_pending(i) || p.navigating || p.changing ||
             p.queued_view || p.previewing || !p.active || !surfaces[i]->visible() ||
             !p.stamp.current() || !services[i]->running())
             return;
@@ -2979,7 +3002,8 @@ struct FilesApp::State {
     }
     bool archive_destination_current(const VolumeArchiveOrigin &origin) const {
         const auto &destination = panes[1 - origin.source_pane];
-        return !destination.volume_view && !destination.navigating && destination.active &&
+        return !destination.volume_view && !volume_pending(1 - origin.source_pane) &&
+               !destination.navigating && destination.active &&
                destination.navigation == origin.destination_navigation &&
                *destination.active == *origin.destination;
     }
@@ -3144,7 +3168,7 @@ struct FilesApp::State {
             pane.archive_refresh.reset();
             return;
         }
-        if (pending(pane) || modal_pending() || operation_execution_request)
+        if (pending(pane) || volume_pending(i) || modal_pending() || operation_execution_request)
             return;
         pane.archive_refresh.reset();
         if (!refresh(i))
@@ -3396,8 +3420,10 @@ struct FilesApp::State {
                 if (auto reply = volume_service->take())
                     consume_volume(std::move(*reply));
                 if (volume_request && !volume_service->running()) {
-                    volume_request = false;
-                    panes[volume_pane].error = "Volume information worker stopped";
+                    const auto pane = volume_request->pane;
+                    if (volume_pending(pane))
+                        panes[pane].error = "Volume information worker stopped";
+                    volume_request.reset();
                 }
             }
             for (std::size_t i = 0; i < panes.size(); ++i)
@@ -3436,6 +3462,14 @@ struct FilesApp::State {
         }
         if (!closing && !modal_pending() && panes[active].volume_view) {
             (void)navigate_relative(active, false);
+            return;
+        }
+        if (!closing && !modal_pending() && volume_pending(active)) {
+            // Native enumeration may still be waiting for storage. Keep its
+            // worker slot occupied until it returns and discard that reply.
+            volume_request->retired = true;
+            panes[active].error = "Volume scan cancelled";
+            labels();
             return;
         }
         if (!closing && !modal_pending() && pending(panes[active])) {
@@ -3564,7 +3598,7 @@ struct FilesApp::State {
         }
         if (confirmation && !confirmation->completed())
             return;
-        if (!services[0]->working() && !services[1]->working()) {
+        if (!services[0]->working() && !services[1]->working() && !volume_request) {
             finish_exit();
             return;
         }
@@ -3737,7 +3771,7 @@ bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();
 }
 bool FilesApp::volume_info_pending() const {
-    return state_->volume_request;
+    return state_->volume_request.has_value();
 }
 bool FilesApp::review_operation(ck::files::OperationReviewModel::Pointer model,
     ck::files::NameEncoding destination_encoding, OperationRevalidation revalidate,
@@ -3765,7 +3799,7 @@ std::size_t FilesApp::active_pane() const noexcept { return state_->active; }
 bool FilesApp::narrow() const noexcept { return state_->compact; }
 bool FilesApp::pending(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    return State::pending(p);
+    return State::pending(p) || state_->volume_pending(pane);
 }
 std::string FilesApp::status(std::size_t pane) const { return state_->status(pane); }
 FilesCommandAvailability FilesApp::availability(std::string_view command) const {
@@ -3773,7 +3807,7 @@ FilesCommandAvailability FilesApp::availability(std::string_view command) const 
 }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || p.navigating || p.changing || p.queued_view || p.previewing || p.mutating ||
+    if (state_->closing || state_->volume_pending(pane) || p.navigating || p.changing || p.queued_view || p.previewing || p.mutating ||
         !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())

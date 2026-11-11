@@ -1938,6 +1938,69 @@ CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_aft
     const auto retained_row = f.app->target(1);
     CK_CHECK(f.app->location(1) == other && other_row && retained_row && retained_row->row.row == other_row->row.row);
 }
+CK_TEST(files_app_pending_volume_reads_preserve_pane_navigation_and_dialog_focus) {
+    auto initial = std::make_shared<Gate>();
+    auto refresh = std::make_shared<Gate>();
+    auto cancelled = std::make_shared<Gate>();
+    auto scans = std::make_shared<std::atomic<unsigned>>(0);
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {},
+              false, false, false, false, false, {}, [initial, refresh, cancelled, scans] {
+        const auto scan = ++*scans;
+        (scan == 1 ? initial : scan == 2 ? refresh : cancelled)->block();
+        return Observation<std::vector<FilesVolumeRecord>>::available(
+            {{"Fixture volume", "/fixture", "fixturefs", 100, 20, false, "fixture-id", {}, {}}});
+    });
+    struct ReleaseScans {
+        std::array<std::shared_ptr<Gate>, 3> gates;
+        ~ReleaseScans() {
+            for (const auto &gate : gates)
+                gate->release();
+        }
+    } release_scans{{initial, refresh, cancelled}};
+    f.loaded();
+    CK_CHECK(f.app->navigate_root(0));
+    f.loaded();
+    const auto root = f.app->location(0);
+    CK_CHECK(f.command("ck.files.parent"));
+    initial->wait();
+    CK_CHECK(f.app->pending(0) && !f.app->pending(1));
+    CK_CHECK(f.command("ck.files.switch_pane"));
+    CK_CHECK(f.app->active_pane() == 1 && f.location_key());
+    const auto destination = f.scratch.path() / "left";
+    f.editor_input()->set_text(f.path_text(destination));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->pending(1) && f.app->location(1)->root_address() == address(destination); });
+    CK_CHECK(f.app->pending(0) && f.app->location(0) == root);
+    const auto other = f.app->location(1);
+
+    CK_CHECK(f.command("ck.files.switch_pane"));
+    CK_CHECK(f.app->active_pane() == 0 && f.location_key());
+    auto *const editor = f.editor_input();
+    initial->release();
+    f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(f.app->model(0).volume_cursor().has_value() && f.editor_input() == editor);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    CK_CHECK(f.command("ck.files.refresh"));
+    refresh->wait();
+    CK_CHECK(f.location_key());
+    // Explicitly reopening the same root supersedes the pending mount view.
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->pending(0) && f.app->model(0).current(); });
+    CK_CHECK(f.app->volume_info_pending() && !f.app->model(0).volume_cursor());
+    refresh->release();
+    f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(!f.app->model(0).volume_cursor() && *f.app->location(0) == *root && f.app->location(1) == other);
+
+    CK_CHECK(f.command("ck.files.parent"));
+    cancelled->wait();
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(!f.app->pending(0) && f.app->volume_info_pending());
+    CK_CHECK(f.app->status(0).find("Volume scan cancelled") != std::string::npos);
+    cancelled->release();
+    f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(!f.app->model(0).volume_cursor() && *f.app->location(0) == *root && f.app->location(1) == other);
+}
 CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, true);
     f.loaded();
