@@ -16,13 +16,10 @@ struct FilesVolumeArchiveSourceLimits final {
     ck::files::ObjectInventoryLimits object{};
 };
 
-// Worker-only native source adapter. It revalidates the enumerated volume,
-// opens the mount without following its final component, stays on the root
-// mount, and returns a complete immutable archive document or an explicit
-// unavailable observation. It never asks for elevation or unmounts a volume.
-// Windows remains fail-closed until the archive has a native UTF-16 path
-// codec; display UTF-8 is never used to reconstruct a source path.
-ck::files::Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
+// Worker-only native source adapter. Capture traverses the held root with
+// exact native names and retains that owner for the approval revalidation.
+// The review model receives only the immutable archive document.
+ck::files::Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_source(
     const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live,
     std::stop_token stop_token = {}, FilesVolumeArchiveSourceLimits limits = {});
 

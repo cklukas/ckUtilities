@@ -40,9 +40,9 @@ execute files or provide an embedded shell.
   archive, not a raw block image; Move is never used for this operation. The
   review shows consistency, logical/data bytes, sparse shape, links, and
   explicit preservation losses. Changing focus during planning keeps the
-  reviewed source and destination panes. The worker keeps the destination
-  directory open through approval. If the destination was replaced or the
-  archive name was taken, Files asks for a new review. After confirmed
+  reviewed source and destination panes. The worker keeps the source mount
+  root and destination directory open through approval. If either was
+  replaced or the archive name was taken, Files asks for a new review. After confirmed
   publication, Files refreshes the original destination when it still shows
   the reviewed directory and displays the result in that pane. The worker revalidates
   the source, records durable journal states, and verifies data before

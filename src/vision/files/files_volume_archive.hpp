@@ -168,6 +168,16 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
     FilesVolumeArchiveReviewSummary summary_;
 };
 
+// A live source capture contains the bytes reviewed by the user and a
+// worker-owned native binding that checks the exact mount root again.
+using FilesVolumeArchiveSourceRevalidation =
+    std::function<ck::files::Observation<bool>(std::stop_token)>;
+
+struct FilesVolumeArchiveSourceCapture final {
+    FilesVolumeArchiveDocument document;
+    FilesVolumeArchiveSourceRevalidation revalidate;
+};
+
 // Worker-owned planning boundary. It builds and validates the immutable source
 // document and destination conflict state, then returns the review model to the
 // UI. It never writes an archive; approval is a separate UI action.
@@ -176,7 +186,7 @@ struct FilesVolumeArchivePlanningRequest final {
     ck::files::NativeAbsolutePath destination_directory;
     std::string archive_name;
     FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live;
-    std::function<ck::files::Observation<FilesVolumeArchiveDocument>(std::stop_token)> build_document;
+    std::function<ck::files::Observation<FilesVolumeArchiveSourceCapture>(std::stop_token)> capture_source;
 };
 
 enum class FilesVolumeArchivePlanningSubmission {

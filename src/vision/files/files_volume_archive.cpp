@@ -1220,6 +1220,11 @@ namespace {
 
 using ArchiveDestination = std::shared_ptr<const ck::files::DirectoryCursor>;
 
+struct ArchiveBindings {
+    ArchiveDestination destination;
+    FilesVolumeArchiveSourceRevalidation source;
+};
+
 Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
     const ck::files::DirectoryCursor &directory, ck::files::NameEncoding encoding, std::string_view archive_name) {
     const auto name = encoding == ck::files::NameEncoding::WindowsUtf16
@@ -1271,6 +1276,12 @@ Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolute
 }
 
 bool archive_source_matches(const FilesVolumeRecord &expected, const FilesVolumeRecord &observed) {
+    const auto &a = expected.archive.root;
+    const auto &b = observed.archive.root;
+    if (a.has_value() != b.has_value() ||
+        (a && (a->mount_id != b->mount_id ||
+               ck::files::compare_identity(a->identity, b->identity) != ck::files::IdentityComparison::Same)))
+        return false;
     return expected.identity == observed.identity && expected.mount_point == observed.mount_point &&
            expected.filesystem == observed.filesystem && expected.native_mount_units == observed.native_mount_units &&
            expected.archive.support == observed.archive.support &&
@@ -1375,11 +1386,11 @@ struct FilesVolumeArchiveService::State final {
         signal();
         return static_cast<bool>(ready_review);
     }
-    ArchiveDestination run_plan(PlanJob job, std::stop_token token) {
+    ArchiveBindings run_plan(PlanJob job, std::stop_token token) {
         auto &[ticket, value] = job;
         FilesVolumeArchivePlanningReply result;
         result.request = ticket;
-        auto fail = [&](UnavailableObservation detail) -> ArchiveDestination {
+        auto fail = [&](UnavailableObservation detail) -> ArchiveBindings {
             result.error = std::move(detail);
             finish_plan(std::move(result));
             return {};
@@ -1394,12 +1405,12 @@ struct FilesVolumeArchiveService::State final {
                 return fail(*opened.unavailable_detail());
             auto destination = ArchiveDestination(std::move(opened).take_value());
 
-            auto document = value.build_document(token);
-            if (!document.value())
-                return fail(*document.unavailable_detail());
-            auto complete = std::move(document).take_value();
-            complete.consistency = value.consistency;
-            if (!archive_source_matches(value.source, complete.source))
+            auto captured = value.capture_source(token);
+            if (!captured.value())
+                return fail(*captured.unavailable_detail());
+            auto source = std::move(captured).take_value();
+            source.document.consistency = value.consistency;
+            if (!source.revalidate || !archive_source_matches(value.source, source.document.source))
                 return fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.plan.identity_revalidation",
                                   ObservationState::Changed));
 
@@ -1412,13 +1423,15 @@ struct FilesVolumeArchiveService::State final {
                                                             value.archive_name);
             if (!conflict.value())
                 return fail(*conflict.unavailable_detail());
-            auto review = FilesVolumeArchiveReview::create(std::move(complete), std::move(value.destination_directory),
+            auto review = FilesVolumeArchiveReview::create(std::move(source.document), std::move(value.destination_directory),
                                                            std::move(value.archive_name), *conflict.value());
             if (!review.value())
                 return fail(*review.unavailable_detail());
             result.review = std::move(review).take_value();
             result.state = FilesVolumeArchivePlanningState::Ready;
-            return finish_plan(std::move(result)) ? std::move(destination) : ArchiveDestination{};
+            if (!finish_plan(std::move(result)))
+                return {};
+            return {std::move(destination), std::move(source.revalidate)};
         } catch (...) {
             result.state = FilesVolumeArchivePlanningState::WorkerFault;
             finish_plan(std::move(result));
@@ -1431,7 +1444,8 @@ struct FilesVolumeArchiveService::State final {
                value.transaction_id != 0 && static_cast<bool>(value.build_document) && (value.prepared_journal_root || (value.journal_root && value.journal_root->is_valid()));
     }
     void run_one(FilesVolumeArchiveTicket ticket, FilesVolumeArchiveRequest value, std::stop_token token,
-                 ArchiveDestination destination = {}) {
+                 ArchiveBindings bindings = {}) {
+        auto &destination = bindings.destination;
         FilesVolumeArchiveReply result;result.request=ticket;
         ck::files::PreparedJournalRoot::Pointer root;bool owns_root=false,root_attempted=false;
         struct RootCloseObserver final:ck::files::MetadataCaptureFailureLatch {
@@ -1473,7 +1487,7 @@ struct FilesVolumeArchiveService::State final {
             }
         };
         auto cache_error=[&](UnavailableObservation detail) {
-            destination.reset();
+            bindings = {};
             close_noexcept();result.failure_pod=read_root();
             if(result.failure_pod){const auto& f=*result.failure_pod;
                 try{result.error=UnavailableObservation{f.state,{f.domain,f.code,f.operation.data()}};}catch(...){result.error.reset();}
@@ -1486,6 +1500,15 @@ struct FilesVolumeArchiveService::State final {
             if (token.stop_requested()) {
                 cache_error(error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown));
                 return;
+            }
+            if (bindings.source) {
+                const auto source = bindings.source(token);
+                if (!source.value()) { cache_error(*source.unavailable_detail()); return; }
+                if (!*source.value()) {
+                    cache_error(error(AdapterError::UnqualifiedIdentity, "volume_archive.source.mount_changed",
+                                      ObservationState::Changed));
+                    return;
+                }
             }
             if (destination) {
                 const auto route = revalidate_archive_destination(value.destination_directory, *destination);
@@ -1532,7 +1555,7 @@ struct FilesVolumeArchiveService::State final {
                     .native_journal_id=value.journal_id, .journal_limits=value.journal_limits};
                 return write_volume_archive(request,token);
             };
-            auto written=invoke();scope.reset();destination.reset();
+            auto written=invoke();scope.reset();bindings = {};
             if(!written.value()){cache_error(*written.unavailable_detail());return;}
             result.result=std::move(written).take_value();
             close_noexcept();result.failure_pod=read_root();
@@ -1542,7 +1565,7 @@ struct FilesVolumeArchiveService::State final {
         }catch(...){
             // Every writer local unwound and drained BEFORE this handler. Keep
             // native first-error POD even if diagnostic allocation stays denied.
-            destination.reset();
+            bindings = {};
             close_noexcept();result.failure_pod=read_root();
             if(!result.failure_pod){ck::files::NativeArchiveFailure fallback;fallback.state=ObservationState::Failed;fallback.domain=ErrorDomain::Adapter;
                 fallback.code=static_cast<std::int64_t>(AdapterError::InvalidNativeResult);constexpr char op[]="volume_archive.worker_fault";
@@ -1554,13 +1577,14 @@ struct FilesVolumeArchiveService::State final {
             emit(std::move(result));
         }
     }
-    void run_review(ReviewedJob job, ArchiveDestination destination, std::stop_token token) {
+    void run_review(ReviewedJob job, ArchiveBindings bindings, std::stop_token token) {
         try {
             const auto &review = job.approval.review();
-            if (!destination) {
+            if (!bindings.destination || !bindings.source) {
+                bindings = {};
                 FilesVolumeArchiveReply failed;
                 failed.request = job.ticket;
-                failed.error = error(AdapterError::PlanDecisionStale, "volume_archive.review.destination_missing",
+                failed.error = error(AdapterError::PlanDecisionStale, "volume_archive.review.binding_missing",
                                      ObservationState::Changed);
                 emit(std::move(failed));
                 return;
@@ -1579,9 +1603,9 @@ struct FilesVolumeArchiveService::State final {
                 .transaction_id=job.transaction_id, .build_document=std::move(build_document),
                 .journal_root=std::move(job.journal_root), .journal_id=job.journal_id,
                 .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
-            run_one(job.ticket, std::move(request), token, std::move(destination));
+            run_one(job.ticket, std::move(request), token, std::move(bindings));
         } catch (...) {
-            destination.reset();
+            bindings = {};
             FilesVolumeArchiveReply failed;
             failed.request = job.ticket;
             failed.state = FilesVolumeArchiveState::WorkerFault;
@@ -1589,7 +1613,7 @@ struct FilesVolumeArchiveService::State final {
         }
     }
     void run() {
-        ArchiveDestination destination;
+        ArchiveBindings bindings;
         for (;;) {
             std::optional<Job> job;
             {
@@ -1605,7 +1629,7 @@ struct FilesVolumeArchiveService::State final {
                 }
                 if (discard_review) {
                     lock.unlock();
-                    destination.reset();
+                    bindings = {};
                     lock.lock();
                     discard_review = false;
                     continue;
@@ -1616,9 +1640,9 @@ struct FilesVolumeArchiveService::State final {
             }
             const auto token = stop.get_token();
             if (auto *plan = std::get_if<PlanJob>(&*job))
-                destination = run_plan(std::move(*plan), token);
+                bindings = run_plan(std::move(*plan), token);
             else if (auto *review = std::get_if<ReviewedJob>(&*job))
-                run_review(std::move(*review), std::move(destination), token);
+                run_review(std::move(*review), std::move(bindings), token);
             else {
                 auto &write = std::get<WriteJob>(*job);
                 run_one(std::move(write.first), std::move(write.second), token);
@@ -1636,7 +1660,7 @@ FilesVolumeArchivePlanningSubmitted FilesVolumeArchiveService::plan(FilesVolumeA
         return {FilesVolumeArchivePlanningSubmission::Stopped, {}};
     if (request.source.identity.empty() || request.source.mount_point.empty() ||
         !request.destination_directory.is_valid() ||
-        (!request.archive_name.empty() && !safe_archive_name(request.archive_name)) || !request.build_document)
+        (!request.archive_name.empty() && !safe_archive_name(request.archive_name)) || !request.capture_source)
         return {FilesVolumeArchivePlanningSubmission::Invalid, {}};
     if (state_->reserved())
         return {FilesVolumeArchivePlanningSubmission::Busy, {}};

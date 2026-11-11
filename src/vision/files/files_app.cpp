@@ -1144,6 +1144,8 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: archive recovery scan is not ready");
                 if (volume_archive_recovery_scan->requires_reconciliation)
                     return unavailable("Copy unavailable: archive recovery review is required");
+                if (!volume->archive.root)
+                    return unavailable("Copy unavailable: source volume mount identity is unavailable");
                 if (!archive_destination_ready(active))
                     return unavailable("Copy unavailable: destination pane is not ready");
                 return FilesCommandAvailability::available();
@@ -2216,7 +2218,7 @@ struct FilesApp::State {
         const auto volume = panes[active].model.volume_cursor();
         const auto destination_pane = 1 - active;
         const auto destination_location = panes[destination_pane].active;
-        if (!volume || !destination_location)
+        if (!volume || !volume->archive.root || !destination_location)
             return;
         const auto destination = native_location_address(*destination_location);
         if (!destination) {
@@ -2226,12 +2228,12 @@ struct FilesApp::State {
         }
         VolumeArchiveOrigin origin{active, panes[active].navigation, panes[destination_pane].navigation,
                                    *volume, destination_location};
-        auto build_document = [source = origin.volume](std::stop_token token) {
-            return build_native_volume_archive_document(source, FilesVolumeArchiveConsistency::Live, token);
+        auto capture_source = [source = origin.volume](std::stop_token token) {
+            return capture_native_volume_archive_source(source, FilesVolumeArchiveConsistency::Live, token);
         };
         FilesVolumeArchivePlanningRequest request{
             origin.volume, *destination, FilesVolumeArchiveReview::default_archive_name(origin.volume.name),
-            FilesVolumeArchiveConsistency::Live, std::move(build_document)};
+            FilesVolumeArchiveConsistency::Live, std::move(capture_source)};
         const auto submitted = volume_archive_service->plan(std::move(request));
         if (submitted.state != FilesVolumeArchivePlanningSubmission::Accepted) {
             panes[active].error = "Volume archive planning worker is unavailable";
@@ -3072,7 +3074,9 @@ struct FilesApp::State {
                 message += ": " + std::string(reply.failure_pod->operation.data());
             } else if (reply.error) {
                 const auto &operation = reply.error->error.operation;
-                if (operation == "volume_archive.review.destination_changed")
+                if (operation == "volume_archive.source.mount_changed")
+                    message = "Source volume mount changed. Start a new review.";
+                else if (operation == "volume_archive.review.destination_changed")
                     message = "Archive destination changed. Start a new review.";
                 else if (operation == "volume_archive.review.destination_conflict")
                     message = "An entry now uses the archive name. Start a new review.";

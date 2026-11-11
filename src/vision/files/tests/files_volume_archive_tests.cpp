@@ -710,7 +710,10 @@ CK_TEST(volume_archive_planning_service_returns_review_without_writing) {
     FilesVolumeArchiveService service;
     FilesVolumeArchivePlanningRequest request{
         source(), address(scratch.path()), "planned.ckarchive", FilesVolumeArchiveConsistency::Live,
-        [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }};
+        [](std::stop_token) {
+            return Observation<FilesVolumeArchiveSourceCapture>::available(
+                {document(), [](std::stop_token) { return Observation<bool>::available(true); }});
+        }};
     const auto submitted = service.plan(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchivePlanningSubmission::Accepted);
     std::optional<FilesVolumeArchivePlanningReply> reply;
@@ -738,7 +741,10 @@ CK_TEST(volume_archive_review_refuses_destination_replacement) {
     FilesVolumeArchiveService service;
     const auto submitted = service.plan({
         source(), address(destination), "reviewed.ckarchive", FilesVolumeArchiveConsistency::Live,
-        [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }});
+        [](std::stop_token) {
+            return Observation<FilesVolumeArchiveSourceCapture>::available(
+                {document(), [](std::stop_token) { return Observation<bool>::available(true); }});
+        }});
     CK_CHECK(submitted.state == FilesVolumeArchivePlanningSubmission::Accepted);
     std::optional<FilesVolumeArchivePlanningReply> review;
     for (int i = 0; i != 5000 && !review; ++i) {

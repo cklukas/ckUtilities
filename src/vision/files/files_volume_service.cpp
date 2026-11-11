@@ -4,6 +4,7 @@
 #include "native_filesystem.hpp"
 #include "windows_name.hpp"
 #include <algorithm>
+#include <charconv>
 #include <condition_variable>
 #include <cwchar>
 #include <iterator>
@@ -130,10 +131,21 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
                 record.archive.support = FilesVolumeArchiveSupport::Unknown;
                 record.archive.diagnostic = "Archive capability probe could not qualify the mount identity";
             } else {
-                record.archive.support = FilesVolumeArchiveSupport::LiveReadable;
-                record.archive.snapshot_available = false;
-                record.archive.diagnostic =
-                    "Live source traversal qualified; snapshot provider not configured";
+                const auto volume_address = ck::files::NativeAbsolutePath::from_windows(
+                    std::u16string_view(reinterpret_cast<const char16_t *>(volume.data()), volume.size()));
+                if (volume_address.value()) {
+                    const auto volume_root = filesystem_adapter.open_native_directory(*volume_address.value());
+                    if (volume_root.value() && (*volume_root.value())->identity().value() &&
+                        ck::files::compare_identity(*metadata.value()->identity.value(),
+                            *(*volume_root.value())->identity().value()) == ck::files::IdentityComparison::Same)
+                        record.archive.root = {*metadata.value()->identity.value(), *metadata.value()->mount_id.value()};
+                }
+                if (record.archive.root) {
+                    record.archive.support = FilesVolumeArchiveSupport::LiveReadable;
+                    record.archive.diagnostic = "Live source traversal qualified; snapshot provider not configured";
+                } else {
+                    record.archive.diagnostic = "Mount path could not be bound to its volume root";
+                }
             }
         }
     }
@@ -142,7 +154,9 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
 
 Observation<std::vector<FilesVolumeRecord>> enumerate_windows() {
     std::vector<FilesVolumeRecord> result;
-    wchar_t volume_name[MAX_PATH]{};
+    // FindFirstVolumeW returns a volume GUID name, including its trailing
+    // separator. This buffer holds that format, independently of path limits.
+    wchar_t volume_name[64]{};
     HANDLE handle = FindFirstVolumeW(volume_name, static_cast<DWORD>(std::size(volume_name)));
     if (handle == INVALID_HANDLE_VALUE)
         return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Failed,
@@ -210,7 +224,13 @@ void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string nam
     result.push_back(std::move(record));
 }
 
-void probe_posix_archive_capability(FilesVolumeRecord &record) {
+void probe_posix_archive_capability(FilesVolumeRecord &record,
+#if defined(__APPLE__)
+                                    const ck::files::NativeIdentifier &filesystem_id
+#else
+                                    std::uint64_t mount_id
+#endif
+) {
     auto address = ck::files::NativeAbsolutePath::from_posix(record.mount_point);
     if (!address.value()) {
         record.archive.support = FilesVolumeArchiveSupport::Unsupported;
@@ -250,6 +270,18 @@ void probe_posix_archive_capability(FilesVolumeRecord &record) {
         record.archive.diagnostic = "Archive capability probe could not qualify the mount identity";
         return;
     }
+#if defined(__APPLE__)
+    const auto location = (*opened.value())->inspect_location();
+    const bool matches = location.value() && location.value()->filesystem_query_id.value() &&
+        *location.value()->filesystem_query_id.value() == filesystem_id;
+#else
+    const bool matches = *metadata.value()->mount_id.value() == mount_id;
+#endif
+    if (!matches) {
+        record.archive.diagnostic = "Mount path could not be bound to its volume root";
+        return;
+    }
+    record.archive.root = {*metadata.value()->identity.value(), *metadata.value()->mount_id.value()};
     // This is only a source-read eligibility probe. The worker still performs
     // the complete object inventory and the review/writer rejects any hard
     // loss, unsupported object, or source change.
@@ -260,34 +292,42 @@ void probe_posix_archive_capability(FilesVolumeRecord &record) {
 
 #if defined(__APPLE__)
 Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
-    struct statfs *mounts = nullptr;
-    const int count = getmntinfo(&mounts, MNT_NOWAIT);
-    if (count <= 0)
-        return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Failed,
-                                                                          failure("volumes.macos.getmntinfo", ErrorDomain::Posix,
-                                                                                  errno)
-                                                                              .error);
+    std::vector<struct statfs> snapshot;
+    {
+        // getmntinfo returns shared storage. Copy it before another Files
+        // worker can request the inventory, then release the lock before I/O.
+        static std::mutex inventory_mutex;
+        const std::lock_guard lock(inventory_mutex);
+        struct statfs *mounts = nullptr;
+        const int count = getmntinfo(&mounts, MNT_NOWAIT);
+        if (count <= 0)
+            return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Failed,
+                failure("volumes.macos.getmntinfo", ErrorDomain::Posix, errno).error);
+        snapshot.assign(mounts, mounts + count);
+    }
     std::vector<FilesVolumeRecord> result;
     std::set<std::string> seen;
-    for (int i = 0; i < count; ++i) {
-        const std::string mount = mounts[i].f_mntonname;
+    for (const auto &entry : snapshot) {
+        const std::string mount = entry.f_mntonname;
         if (!seen.insert(mount).second)
             continue;
         // A device path or volume label can be reused after an unmount. Keep
         // the filesystem identity and source only as an opaque revalidation
         // token; the archive worker compares this token again before reading.
         const std::string identity =
-            "macos:" + std::to_string(static_cast<std::int64_t>(mounts[i].f_fsid.val[0])) + ":" +
-            std::to_string(static_cast<std::int64_t>(mounts[i].f_fsid.val[1])) + ":" +
-            std::string(mounts[i].f_mntfromname);
-        append_posix_volume(result, mounts[i].f_mntfromname, mount, mounts[i].f_fstypename,
-                             (mounts[i].f_flags & MNT_RDONLY) != 0, identity);
+            "macos:" + std::to_string(static_cast<std::int64_t>(entry.f_fsid.val[0])) + ":" +
+            std::to_string(static_cast<std::int64_t>(entry.f_fsid.val[1])) + ":" +
+            std::string(entry.f_mntfromname);
+        append_posix_volume(result, entry.f_mntfromname, mount, entry.f_fstypename,
+                             (entry.f_flags & MNT_RDONLY) != 0, identity);
+        ck::files::NativeIdentifier filesystem_id;
+        static_assert(sizeof(entry.f_fsid) <= sizeof(filesystem_id.bytes));
+        std::memcpy(filesystem_id.bytes.data(), &entry.f_fsid, sizeof(entry.f_fsid));
+        probe_posix_archive_capability(result.back(), filesystem_id);
     }
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
     });
-    for (auto &record : result)
-        probe_posix_archive_capability(record);
     return Observation<std::vector<FilesVolumeRecord>>::available(std::move(result));
 }
 #else
@@ -334,6 +374,11 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_linux() {
                                      decoded_source;
         append_posix_volume(result, decoded_source, mount_point, decode_mountinfo(filesystem), read_only,
                              identity);
+        const auto &mount_id = before_separator[0];
+        std::uint64_t native_mount_id = 0;
+        const auto parsed = std::from_chars(mount_id.data(), mount_id.data() + mount_id.size(), native_mount_id);
+        if (parsed.ec == std::errc{} && parsed.ptr == mount_id.data() + mount_id.size())
+            probe_posix_archive_capability(result.back(), native_mount_id);
     }
     if (result.empty())
         return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Unknown,
@@ -341,8 +386,6 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_linux() {
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
     });
-    for (auto &record : result)
-        probe_posix_archive_capability(record);
     return Observation<std::vector<FilesVolumeRecord>>::available(std::move(result));
 }
 #endif

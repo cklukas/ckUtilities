@@ -211,88 +211,46 @@ struct Frame final {
     std::size_t depth = 0;
 };
 
-bool revalidate_volume(const FilesVolumeRecord &source, UnavailableObservation &failure_detail) {
-    const auto volumes = enumerate_native_volumes();
-    if (!volumes.value()) {
-        failure_detail = *volumes.unavailable_detail();
-        return false;
-    }
-    const auto found = std::any_of(volumes.value()->begin(), volumes.value()->end(), [&](const auto &current) {
-        return current.mount_point == source.mount_point && current.identity == source.identity &&
-               (source.native_mount_units.empty() || current.native_mount_units == source.native_mount_units);
-    });
-    if (found)
-        return true;
-    failure_detail = failure(AdapterError::MetadataChanged, "volume_archive.source.revalidation",
-                             ObservationState::Changed);
-    return false;
+bool same_mount_root(const FilesVolumeMountRoot &expected, const BasicMetadata &actual) {
+    return actual.kind.value() && *actual.kind.value() == ObjectKind::Directory &&
+           actual.identity.value() && actual.mount_id.value() &&
+           *actual.mount_id.value() == expected.mount_id &&
+           same_identity(expected.identity, *actual.identity.value());
 }
 
-} // namespace
-
-Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
-    const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
-    FilesVolumeArchiveSourceLimits limits) {
-    if (source.identity.empty() || source.mount_point.empty())
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
-            AdapterError::UnqualifiedIdentity, "volume_archive.source.identity");
-#if defined(_WIN32)
-    if (source.native_mount_units.empty())
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
-            AdapterError::UnrepresentableName, "volume_archive.source.windows_native_mount");
-#endif
-    if (source.archive.support != FilesVolumeArchiveSupport::LiveReadable &&
-        source.archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
-            AdapterError::ProviderReviewRequired, "volume_archive.source.capability");
-    if (consistency == FilesVolumeArchiveConsistency::Snapshot)
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
-            AdapterError::ProviderReviewRequired, "volume_archive.source.snapshot_provider");
-    if (limits.max_entries == 0 || limits.max_entries > 8'000'000 || limits.max_depth == 0 ||
-        limits.max_depth > 4096 || !limits.object.query.valid() || !limits.object.retained.valid())
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Failed,
-            AdapterError::InvalidLimit, "volume_archive.source.limits");
+Observation<bool> revalidate_source_root(const NativeAbsolutePath &route, const DirectoryCursor &held,
+                                        const FilesVolumeMountRoot &expected, std::stop_token stop_token) {
     if (stop_token.stop_requested())
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
-            AdapterError::InterruptedRead, "volume_archive.source.cancelled");
+        return unavailable<bool>(ObservationState::Unknown, AdapterError::InterruptedRead,
+                                  "volume_archive.source.cancelled");
+    const auto original = held.inspect_basic();
+    if (!original.value())
+        return unavailable<bool>(*original.unavailable_detail());
+    // A second native open checks the route. All source bytes were read through
+    // the retained owner, so this observation cannot redirect the capture.
+    NativeFileSystem filesystem(expected.identity.scope);
+    const auto current = filesystem.open_native_directory(route);
+    if (!current.value()) {
+        const auto &detail = *current.unavailable_detail();
+        if (detail.state != ObservationState::Gone &&
+            (detail.error.domain != ErrorDomain::Adapter ||
+             detail.error.code != static_cast<std::int64_t>(AdapterError::FinalLinkRejected)))
+            return unavailable<bool>(detail);
+    } else {
+        const auto metadata = (*current.value())->inspect_basic();
+        if (!metadata.value())
+            return unavailable<bool>(*metadata.unavailable_detail());
+        if (same_mount_root(expected, *original.value()) && same_mount_root(expected, *metadata.value()))
+            return Observation<bool>::available(true);
+    }
+    return unavailable<bool>(ObservationState::Changed, AdapterError::MetadataChanged,
+                              "volume_archive.source.mount_changed");
+}
 
-    UnavailableObservation revalidation;
-    if (!revalidate_volume(source, revalidation))
-        return unavailable<FilesVolumeArchiveDocument>(revalidation);
-
-    const auto path_encoding =
-#if defined(_WIN32)
-        ck::files::NameEncoding::WindowsUtf16;
-#else
-        ck::files::NameEncoding::PosixBytes;
-#endif
-    auto root_address =
-#if defined(_WIN32)
-        NativeAbsolutePath::from_windows(source.native_mount_units);
-#else
-        NativeAbsolutePath::from_posix(source.mount_point);
-#endif
-    if (!root_address.value())
-        return unavailable<FilesVolumeArchiveDocument>(*root_address.unavailable_detail());
-    NativeFileSystem filesystem;
-    auto opened = filesystem.open_native_directory(*root_address.value());
-    if (!opened.value())
-        return unavailable<FilesVolumeArchiveDocument>(*opened.unavailable_detail());
-    auto root = std::shared_ptr<DirectoryCursor>(std::move(opened).take_value());
-    if (!root)
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Failed,
-            AdapterError::InvalidNativeResult, "volume_archive.source.root");
-    const auto root_metadata = root->inspect_basic();
-    if (!root_metadata.value())
-        return unavailable<FilesVolumeArchiveDocument>(*root_metadata.unavailable_detail());
-    if (!root_metadata.value()->kind.value() || *root_metadata.value()->kind.value() != ObjectKind::Directory)
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unsupported,
-            AdapterError::NotDirectory, "volume_archive.source.root_kind");
-    if (!root_metadata.value()->identity.value() || !root_metadata.value()->mount_id.value())
-        return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
-            AdapterError::UnqualifiedIdentity, "volume_archive.source.root_identity");
-    const auto root_mount = *root_metadata.value()->mount_id.value();
-
+Observation<FilesVolumeArchiveDocument> capture_volume_document(
+    const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
+    const FilesVolumeArchiveSourceLimits &limits, std::shared_ptr<DirectoryCursor> root,
+    ck::files::NameEncoding path_encoding, std::uint64_t root_mount) {
     FilesVolumeArchiveDocument document;
     document.source = source;
     document.consistency = consistency;
@@ -339,7 +297,8 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
         if (!metadata_only.value())
             return unavailable<FilesVolumeArchiveDocument>(*metadata_only.unavailable_detail());
         auto metadata_source = std::move(metadata_only).take_value();
-        const auto &metadata = metadata_source->metadata();
+        // The content-read upgrade may release the original metadata owner.
+        const auto metadata = metadata_source->metadata();
         if (!metadata.kind.value() || !metadata.identity.value())
             return unavailable<FilesVolumeArchiveDocument>(ObservationState::Unknown,
                 AdapterError::UnqualifiedIdentity, "volume_archive.source.child_identity");
@@ -384,8 +343,12 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
             if (!upgraded.value())
                 return unavailable<FilesVolumeArchiveDocument>(*upgraded.unavailable_detail());
             UnavailableObservation continuity;
-            if (!same_identity(held->metadata().identity, (*upgraded.value())->metadata().identity, continuity))
+            const auto &upgraded_metadata = (*upgraded.value())->metadata();
+            if (!same_identity(metadata.identity, upgraded_metadata.identity, continuity))
                 return unavailable<FilesVolumeArchiveDocument>(continuity);
+            if (!upgraded_metadata.mount_id.value() || *upgraded_metadata.mount_id.value() != root_mount)
+                return unavailable<FilesVolumeArchiveDocument>(ObservationState::Changed,
+                    AdapterError::MetadataChanged, "volume_archive.source.child_mount_changed");
             held = std::move(upgraded).take_value();
         }
 
@@ -480,17 +443,88 @@ Observation<FilesVolumeArchiveDocument> build_native_volume_archive_document(
             if (!child.value())
                 return unavailable<FilesVolumeArchiveDocument>(*child.unavailable_detail());
             auto child_cursor = std::shared_ptr<DirectoryCursor>(std::move(child).take_value());
-            if (!child_cursor || !child_cursor->identity().value() ||
-                !same_identity(*metadata.identity.value(), *child_cursor->identity().value()))
+            const auto current = child_cursor->inspect_basic();
+            if (!current.value())
+                return unavailable<FilesVolumeArchiveDocument>(*current.unavailable_detail());
+            if (!same_mount_root({*metadata.identity.value(), root_mount}, *current.value()))
                 return unavailable<FilesVolumeArchiveDocument>(ObservationState::Changed,
                     AdapterError::MetadataChanged, "volume_archive.source.directory_identity");
             frames.push_back({std::move(child_cursor), path, frame.depth + 1});
         }
     }
 
-    if (!revalidate_volume(source, revalidation))
-        return unavailable<FilesVolumeArchiveDocument>(revalidation);
     return Observation<FilesVolumeArchiveDocument>::available(std::move(document));
+}
+
+} // namespace
+
+Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_source(
+    const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency, std::stop_token stop_token,
+    FilesVolumeArchiveSourceLimits limits) {
+    if (source.identity.empty() || source.mount_point.empty())
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unknown,
+            AdapterError::UnqualifiedIdentity, "volume_archive.source.identity");
+#if defined(_WIN32)
+    if (source.native_mount_units.empty())
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unsupported,
+            AdapterError::UnrepresentableName, "volume_archive.source.windows_native_mount");
+#endif
+    if (source.archive.support != FilesVolumeArchiveSupport::LiveReadable &&
+        source.archive.support != FilesVolumeArchiveSupport::SnapshotPreferred)
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unknown,
+            AdapterError::ProviderReviewRequired, "volume_archive.source.capability");
+    if (consistency == FilesVolumeArchiveConsistency::Snapshot)
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unsupported,
+            AdapterError::ProviderReviewRequired, "volume_archive.source.snapshot_provider");
+    if (limits.max_entries == 0 || limits.max_entries > 8'000'000 || limits.max_depth == 0 ||
+        limits.max_depth > 4096 || !limits.object.query.valid() || !limits.object.retained.valid())
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Failed,
+            AdapterError::InvalidLimit, "volume_archive.source.limits");
+    if (stop_token.stop_requested())
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Unknown,
+            AdapterError::InterruptedRead, "volume_archive.source.cancelled");
+
+    if (!source.archive.root)
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Changed,
+            AdapterError::UnqualifiedIdentity, "volume_archive.source.unbound_mount");
+
+    const auto expected = *source.archive.root;
+    auto root_address =
+#if defined(_WIN32)
+        NativeAbsolutePath::from_windows(source.native_mount_units);
+#else
+        NativeAbsolutePath::from_posix(source.mount_point);
+#endif
+    if (!root_address.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*root_address.unavailable_detail());
+    NativeFileSystem filesystem(expected.identity.scope);
+    auto opened = filesystem.open_native_directory(*root_address.value());
+    if (!opened.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*opened.unavailable_detail());
+    auto root = std::shared_ptr<DirectoryCursor>(std::move(opened).take_value());
+    if (!root)
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Failed,
+            AdapterError::InvalidNativeResult, "volume_archive.source.root");
+    const auto root_metadata = root->inspect_basic();
+    if (!root_metadata.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*root_metadata.unavailable_detail());
+    if (!same_mount_root(expected, *root_metadata.value()))
+        return unavailable<FilesVolumeArchiveSourceCapture>(ObservationState::Changed,
+            AdapterError::MetadataChanged, "volume_archive.source.mount_changed");
+
+    auto document = capture_volume_document(source, consistency, stop_token, limits, root,
+                                             root_address.value()->encoding(), expected.mount_id);
+    if (!document.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*document.unavailable_detail());
+    const auto route = std::move(root_address).take_value();
+    const auto bound = revalidate_source_root(route, *root, expected, stop_token);
+    if (!bound.value())
+        return unavailable<FilesVolumeArchiveSourceCapture>(*bound.unavailable_detail());
+    auto revalidate = [route, held_root = std::move(root), expected](std::stop_token token) {
+        return revalidate_source_root(route, *held_root, expected, token);
+    };
+    return Observation<FilesVolumeArchiveSourceCapture>::available(
+        {std::move(document).take_value(), std::move(revalidate)});
 }
 
 } // namespace ck::vision

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "observation.hpp"
+#include "file_metadata.hpp"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -20,10 +20,18 @@ enum class FilesVolumeArchiveSupport {
     Unsupported,
 };
 
+struct FilesVolumeMountRoot {
+    ck::files::ObjectIdentity identity;
+    std::uint64_t mount_id;
+};
+
 struct FilesVolumeArchiveCapability {
     FilesVolumeArchiveSupport support = FilesVolumeArchiveSupport::Unknown;
     bool snapshot_available = false;
     std::string diagnostic;
+    // Native, read-only evidence from the mount inventory. No handle crosses
+    // to the UI. The archive worker must open and bind the exact root again.
+    std::optional<FilesVolumeMountRoot> root{};
 };
 
 struct FilesVolumeRecord {
