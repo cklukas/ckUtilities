@@ -120,6 +120,27 @@ are never upgraded because a filesystem label looks familiar.
   mount case, source-change case, destination-conflict case, cancellation
   case, crash/restart recovery case and full-disk/short-write case.
 
+### Darwin publication gate
+
+The native writer requires no-replace publication of the exact staged file
+through the retained destination directory. Apple DTS confirms that Darwin
+has no public API for adding a hard link to an already-open file descriptor.
+A later lookup can detect a substituted entry only after the link has changed
+the namespace. [Apple DTS response](https://developer.apple.com/forums/thread/850377)
+
+Darwin's `fclonefileat` takes a held source descriptor and an absent destination
+name. It creates a separate file and returns a status code. A future clone
+provider needs its own contract for obtaining the created object's identity and
+proving sparse layout and durability before issuing a publication receipt.
+The current backend returns typed Unsupported for Darwin staging.
+[Darwin clonefile manual](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/clonefile.2)
+
+Surface the backend's destination publication capability before Files offers
+volume Copy. A known refusal should disable Copy with the same reason in the
+menu, palette, and footer. Keep checks worker-owned and repeat the destination
+identity and capability checks at approval. Include an ordinary-user test that
+verifies the refusal creates neither a staging file nor an archive journal.
+
 ## Current state
 
 The versioned sparse writer, single-worker boundary, archive-specific review
@@ -139,11 +160,13 @@ worker-only cleanup boundary is implemented and qualified on Windows using the
 existing handle-bound discard adapter; macOS/Linux explicitly refuse it until
 their adapters provide the same race-safe protocol. The digest is not
 permission to resume, publish, or delete through a pathname. The cleanup
-boundary is not exposed as a UI command yet. Real-volume interactive archive
-acceptance also remains open. The macOS broad app ASan
-fixture currently reports an existing libc++ container-overflow diagnostic in
-`DirectoryCursor::read`; this is retained as an explicit validation blocker,
-not suppressed. The archive decoder now has a deterministic bounded mutation
+command remains disabled for restart records when the creator's live
+ownership is unavailable. The Linux terminal run archived a private ext4
+mount, verified sparse allocation, and matched the reconstructed data to the
+source digest. Real-volume acceptance on macOS and Windows remains open.
+An earlier macOS broad app ASan run reported a libc++ container-overflow in
+`DirectoryCursor::read`. A current run needs a matching instrumented SDK
+with default container annotations. The archive decoder now has a deterministic bounded mutation
 baseline covering truncation, corruption, reordered frames, invalid semantic
 fields, identity changes and oversized lengths; it passed 18/18 on macOS and
 Linux. Linux ARM64 address/undefined sanitizer qualification of the
