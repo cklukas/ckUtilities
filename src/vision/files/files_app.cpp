@@ -272,7 +272,16 @@ struct FilesApp::State {
         std::optional<std::uint64_t> worker_focus;
         std::optional<ck::files::PaneRowId> range_start;
         std::string error;
+        std::string archive_notice;
+        std::optional<FilesPaneTicket> archive_refresh;
         bool volume_view = false;
+    };
+    struct VolumeArchiveOrigin {
+        std::size_t source_pane;
+        FilesPaneTicket source_navigation;
+        FilesPaneTicket destination_navigation;
+        FilesVolumeRecord volume;
+        std::shared_ptr<const FilesPaneLocation> destination;
     };
     ckv::ui::Application &application;
     std::array<FilesPaneService *, 2> services;
@@ -334,8 +343,7 @@ struct FilesApp::State {
     bool operation_recovery_cleanup_request = false;
     std::string operation_recovery_cleanup_error;
     std::unique_ptr<FilesVolumeArchiveReviewDialog> volume_archive_review_dialog;
-    FilesVolumeRecord volume_archive_source;
-    std::shared_ptr<const FilesPaneLocation> volume_archive_destination;
+    std::optional<VolumeArchiveOrigin> volume_archive_origin;
     std::optional<ck::files::FileOperation> operation_execution_kind;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
     FilesApp::OperationRevalidation operation_planning_revalidation;
@@ -762,7 +770,7 @@ struct FilesApp::State {
         volume_archive_review_dialog.reset();
         volume_archive_planning_request.reset();
         volume_archive_execution_request.reset();
-        volume_archive_destination.reset();
+        volume_archive_origin.reset();
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
@@ -1212,7 +1220,9 @@ struct FilesApp::State {
                     ? "Deleting selected tree..." : "Copying to the other pane...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
-            if (volume)
+            if (!p.error.empty())
+                text = p.error;
+            else if (volume)
                 text = (volume->read_only ? "RO" : "RW") + std::string(" | ") +
                        (volume->mount_point.empty() ? volume->name : volume->mount_point) + " | " +
                        (volume->filesystem.empty() ? "Unknown" : volume->filesystem) + " | " +
@@ -1243,6 +1253,8 @@ struct FilesApp::State {
             text = "Stale listing";
         else if (p.reading)
             text = "Loading page...";
+        else if (!p.archive_notice.empty())
+            text = p.archive_notice;
         else
             text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
         if (p.active && !p.model.current() && text.find("Stale") == text.npos)
@@ -1664,6 +1676,9 @@ struct FilesApp::State {
             labels();
             return false;
         }
+        p.archive_refresh.reset();
+        if (!requested || !p.active || *requested != *p.active)
+            p.archive_notice.clear();
         p.navigation = p.request = submitted.ticket;
         p.requested = std::move(requested);
         p.navigating = true;
@@ -2215,12 +2230,13 @@ struct FilesApp::State {
             labels();
             return;
         }
-        const auto source = *volume;
-        auto build_document = [source](std::stop_token token) {
+        VolumeArchiveOrigin origin{active, panes[active].navigation, panes[destination_pane].navigation,
+                                   *volume, destination_location};
+        auto build_document = [source = origin.volume](std::stop_token token) {
             return build_native_volume_archive_document(source, FilesVolumeArchiveConsistency::Live, token);
         };
         FilesVolumeArchivePlanningRequest request{
-            source, *destination, FilesVolumeArchiveReview::default_archive_name(source.name),
+            origin.volume, *destination, FilesVolumeArchiveReview::default_archive_name(origin.volume.name),
             FilesVolumeArchiveConsistency::Live, std::move(build_document)};
         const auto submitted = volume_archive_planning_service->request(std::move(request));
         if (submitted.state != FilesVolumeArchivePlanningSubmission::Accepted) {
@@ -2228,10 +2244,11 @@ struct FilesApp::State {
             labels();
             return;
         }
-        volume_archive_source = source;
-        volume_archive_destination = destination_location;
+        volume_archive_origin = std::move(origin);
         volume_archive_planning_request = submitted.ticket;
         panes[active].error.clear();
+        panes[destination_pane].archive_notice.clear();
+        watch();
         labels();
     }
     bool can_prepare_copy() const {
@@ -2697,7 +2714,9 @@ struct FilesApp::State {
     void watch() {
         const bool pending = settings_waiting || operation_planning_request.has_value() || volume_request ||
             volume_archive_planning_request.has_value() || volume_archive_execution_request.has_value() ||
-            std::any_of(panes.begin(), panes.end(), [](const Pane &p) { return State::pending(p); });
+            std::any_of(panes.begin(), panes.end(), [](const Pane &p) {
+                return State::pending(p) || p.archive_refresh.has_value();
+            });
         if (pending && !watchdog)
             watchdog = application.start_timer(250'000'000, true, [this] { pump(); });
         if (!pending && watchdog) {
@@ -2943,47 +2962,63 @@ struct FilesApp::State {
             p.error = "Page request rejected";
         }
     }
+    bool archive_destination_current(const VolumeArchiveOrigin &origin) const {
+        const auto &destination = panes[1 - origin.source_pane];
+        return !destination.volume_view && !destination.navigating && destination.active &&
+               destination.navigation == origin.destination_navigation &&
+               *destination.active == *origin.destination;
+    }
+    bool archive_review_current(const VolumeArchiveOrigin &origin) const {
+        const auto &source = panes[origin.source_pane];
+        const auto volume = source.model.volume_cursor();
+        return source.volume_view && source.navigation == origin.source_navigation && volume &&
+               volume->identity == origin.volume.identity && volume->mount_point == origin.volume.mount_point &&
+               archive_destination_current(origin);
+    }
+    void report_archive_error(std::string message) {
+        if (volume_archive_origin)
+            panes[volume_archive_origin->source_pane].error = std::move(message);
+        volume_archive_origin.reset();
+        labels();
+    }
     void consume_volume_archive_plan(FilesVolumeArchivePlanningReply reply) {
         if (!volume_archive_planning_request || reply.request != *volume_archive_planning_request)
             return;
         volume_archive_planning_request.reset();
+        if (!volume_archive_origin)
+            return;
         if (reply.state != FilesVolumeArchivePlanningState::Ready || !reply.review) {
-            panes[active].error = "Volume archive planning failed";
+            std::string message = "Volume archive planning failed";
             if (reply.error)
-                panes[active].error += ": " + reply.error->error.operation;
-            labels();
+                message += ": " + reply.error->error.operation;
+            report_archive_error(std::move(message));
+            return;
+        }
+        if (!archive_review_current(*volume_archive_origin)) {
+            report_archive_error("Volume archive review became stale; start a new review");
             return;
         }
         const auto review = std::move(reply.review);
-        const auto source_pane = active;
-        const auto destination_pane = 1 - source_pane;
         volume_archive_review_dialog = std::make_unique<FilesVolumeArchiveReviewDialog>(
             application, shell->desktop(), shell->roles(), review,
-            [this, weak = std::weak_ptr<void>(lifetime), review, source_pane, destination_pane](
+            [this, weak = std::weak_ptr<void>(lifetime), review](
                 ck::files::Observation<FilesVolumeArchiveApproval> result) mutable {
                 if (weak.expired())
                     return;
                 volume_archive_review_dialog.reset();
                 if (!result.value()) {
-                    panes[source_pane].error = "Volume archive cancelled";
-                    labels();
+                    report_archive_error("Volume archive cancelled");
                     return;
                 }
-                const auto current_volume = panes[source_pane].model.volume_cursor();
-                if (!panes[source_pane].volume_view || !current_volume ||
-                    current_volume->identity != volume_archive_source.identity ||
-                    current_volume->mount_point != volume_archive_source.mount_point ||
-                    !volume_archive_destination || !panes[destination_pane].active ||
-                    *volume_archive_destination != *panes[destination_pane].active) {
-                    panes[source_pane].error = "Volume archive review became stale; start a new review";
-                    labels();
+                if (!volume_archive_origin || !archive_review_current(*volume_archive_origin)) {
+                    report_archive_error("Volume archive review became stale; start a new review");
                     return;
                 }
                 if (!volume_archive_service || !volume_archive_service->running()) {
-                    panes[source_pane].error = "Volume archive worker is unavailable";
-                    labels();
+                    report_archive_error("Volume archive worker is unavailable");
                     return;
                 }
+                const auto &origin = *volume_archive_origin;
                 auto review_document = review->document();
                 review_document.losses_reviewed = review_document.losses.empty() ||
                     result.value()->continued_with_listed_losses;
@@ -3001,19 +3036,19 @@ struct FilesApp::State {
                 for (unsigned byte = 0; byte != sizeof(serial); ++byte)
                     journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
                 FilesVolumeArchiveRequest request{
-                    .source=volume_archive_source, .destination_directory=review->destination_directory(),
+                    .source=origin.volume, .destination_directory=review->destination_directory(),
                     .archive_name=review->archive_name(), .consistency=review->document().consistency,
                     .transaction_id=serial, .build_document=std::move(build_document),
                     .journal_root=std::optional<ck::files::NativeAbsolutePath>{*operation_journal_root},
                     .journal_id=journal_id, .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
                 const auto submitted = volume_archive_service->request(std::move(request));
                 if (submitted.state != FilesVolumeArchiveSubmission::Accepted) {
-                    panes[source_pane].error = "Volume archive worker rejected the approved review";
-                    labels();
+                    report_archive_error("Volume archive worker rejected the approved review");
                     return;
                 }
                 volume_archive_execution_request = submitted.ticket;
-                panes[source_pane].error.clear();
+                panes[origin.source_pane].error.clear();
+                watch();
                 labels();
             });
         labels();
@@ -3022,29 +3057,55 @@ struct FilesApp::State {
         if (!volume_archive_execution_request || reply.request != *volume_archive_execution_request)
             return;
         volume_archive_execution_request.reset();
+        if (!volume_archive_origin)
+            return;
         if (reply.state == FilesVolumeArchiveState::Complete ||
             reply.state == FilesVolumeArchiveState::Indeterminate) {
-            const auto destination_pane = 1 - active;
+            const auto &origin = *volume_archive_origin;
+            auto &destination = panes[1 - origin.source_pane];
             const auto &result = reply.result;
+            const bool published = reply.state == FilesVolumeArchiveState::Complete ||
+                                   (result && result->publication_confirmed);
             std::string message = reply.state == FilesVolumeArchiveState::Complete
-                                      ? "Volume archive created"
-                                      : (result&&result->publication_confirmed?"Volume archive published; durability is indeterminate":"Volume archive publication is indeterminate");
-            if (result)
-                message += ": " + result->published_path.string();
+                ? "Volume archive created"
+                : published ? "Volume archive published; durability is indeterminate"
+                            : "Volume archive publication is indeterminate";
+            if (result) {
+                const auto address = ck::files::NativeAbsolutePath::from_host(result->published_path);
+                if (address.value())
+                    message += ": " + FilesPaneLocation(*address.value()).display_text();
+            }
             if (reply.failure_pod)
                 message += ": " + std::string(reply.failure_pod->operation.data());
-            panes[destination_pane].error = std::move(message);
+            destination.archive_notice = std::move(message);
+            if (published && archive_destination_current(origin))
+                destination.archive_refresh = origin.destination_navigation;
         } else {
-            panes[active].error = reply.state == FilesVolumeArchiveState::Cancelled
-                                      ? "Volume archive cancelled"
-                                      : "Volume archive failed";
+            std::string message = reply.state == FilesVolumeArchiveState::Cancelled
+                ? "Volume archive cancelled" : "Volume archive failed";
             if (reply.failure_pod)
-                panes[active].error += ": " + std::string(reply.failure_pod->operation.data());
+                message += ": " + std::string(reply.failure_pod->operation.data());
             else if (reply.error)
-                panes[active].error += ": " + reply.error->error.operation;
+                message += ": " + reply.error->error.operation;
+            report_archive_error(std::move(message));
+            return;
         }
-        volume_archive_destination.reset();
+        volume_archive_origin.reset();
         labels();
+    }
+    void refresh_archive_destination(std::size_t i) {
+        auto &pane = panes[i];
+        if (!pane.archive_refresh)
+            return;
+        if (*pane.archive_refresh != pane.navigation || pane.volume_view) {
+            pane.archive_refresh.reset();
+            return;
+        }
+        if (pending(pane) || modal_pending() || operation_execution_request)
+            return;
+        pane.archive_refresh.reset();
+        if (!refresh(i))
+            pane.archive_notice += "; refresh could not be started";
     }
     void consume_planning(FilesOperationPlanningReply reply) {
         if (!operation_planning_request || reply.request != *operation_planning_request)
@@ -3155,7 +3216,7 @@ struct FilesApp::State {
                     consume_volume_archive_plan(std::move(*reply));
                 if (volume_archive_planning_request && !volume_archive_planning_service->running()) {
                     volume_archive_planning_request.reset();
-                    panes[active].error = "Volume archive planning worker stopped";
+                    report_archive_error("Volume archive planning worker stopped");
                 }
             }
             if (volume_archive_recovery_service) {
@@ -3291,8 +3352,7 @@ struct FilesApp::State {
                     consume_volume_archive(std::move(*reply));
                 if (volume_archive_execution_request && !volume_archive_service->running()) {
                     volume_archive_execution_request.reset();
-                    panes[active].error = "Volume archive worker stopped";
-                    labels();
+                    report_archive_error("Volume archive worker stopped");
                 }
             }
             if (volume_service) {
@@ -3303,6 +3363,8 @@ struct FilesApp::State {
                     panes[volume_pane].error = "Volume information worker stopped";
                 }
             }
+            for (std::size_t i = 0; i < panes.size(); ++i)
+                refresh_archive_destination(i);
             watch();
             labels();
             pumping = false;
