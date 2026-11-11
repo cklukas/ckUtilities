@@ -16,10 +16,18 @@ Enter opened the selected mount. The app exited and restored the terminal
 state. The source selected by the Linux and Windows preprocessor branches
 is identical before and after the fix.
 
+The matching macOS ARM64 ASan/UBSan build passed all 111 Files and keymap
+CTests with zero findings. The instrumented application and SDK used
+stock sanitizer and libc++ container annotation settings. The matching
+ThreadSanitizer build passed the same 111 CTests with zero findings, using
+the qualified Darwin runtime and the matching instrumented ckVision SDK.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | macOS Release build and Files/keymap receipt | `671e2f5d6a49bb0d2fcd4182092d0a9a0172cbdc159e723add57e2959cc7eb8a` |
 | macOS native APFS capacity regression receipt | `eaa1518632cb30fd599173f459ba1a829addd58a9c0f23d1fb6c4254ba892f41` |
+| macOS ASan/UBSan Files/keymap receipt | `dc18440c385e91280a2cceab8d77b1ce2360ab5826004e8e4fa7c6343c1fa718` |
+| macOS ThreadSanitizer Files/keymap receipt | `5b7acba483e8cdd64e978f1a425a082509ffaf54dee8d5a9de89426033d6e578` |
 
 ## 2026-11-11 — Mark and cursor continuity on refresh
 
@@ -106,6 +114,15 @@ The workstation v143 build on `V:` compiled and linked the standalone
 indexed refresh test, the installed package, and its platform consumer.
 The ordinary-user workstation test handoff is staged.
 
+The workstation also built and linked the `f70acbc` frontend and aggregate
+Files and keymap tests using MSVC v143 14.44.35207, Windows SDK 10.0.26100.0,
+and the matching ckVision 1.5.0 SDK on `V:`. All 192 compile and link steps
+matched the fresh build plan. The receipt records the three executable
+hashes and both CTest registrations. The workstation handoff was read
+back byte-for-byte. Its suite and interactive desktop modes both verify
+the binary and require an ordinary Windows token. Execution remains
+pending, along with the separate allocation-fault tests.
+
 Strict ckdocs builds of `f70acbc` and `89f21c9` rendered 27 frontend
 pages and 19 backend pages. All ten frontend utility guides resolved
 their screenshots, and all 29 screenshot assets matched the source bytes.
@@ -125,6 +142,8 @@ their screenshots, and all 29 screenshot assets matched the source bytes.
 | macOS native APFS volume and archive admission receipt | `4781d378e7ed3ffb4b48e281e03f653fddf57792e59bcd1ac1b769e70c0a51f5` |
 | Hosted Windows NTFS backend receipt | `7969b9820a0e33ff2d7b4fa0ad417dd9e7341d90859321c90dc44340f3e5eee1` |
 | Windows v143 backend compile receipt | `22c0a7143e7e7b0e1c91679849cd44bf046101d87c460ca6675b32cff16ae0cf` |
+| Windows v143 frontend and test compile receipt | `5846e8e54737fbf817b5c047c7729a295e19facb78ea1bcee3b4eedf87e12e48` |
+| Windows ordinary-user frontend handoff receipt | `fea509fe1391da162b6ab4b07fb8074a968727f616aa548313a00290a7125384` |
 | Strict frontend and backend ckdocs receipt | `f84ade1f9bc7e5ad1aed94dae4ac0670acc822bc0d872f41d36c707e9570f1ce` |
 | Linux xterm completion, bookmark and refresh receipt | `44f00f539185de538ee7713be7271e888c72105791f83f455ed36468b287902e` |
 | Linux native indexed selection receipt | `9c19e86d73d013cd66db1ef8f3e5c1d4532997304c7437ce1f056eea1c012b8b` |
