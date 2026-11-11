@@ -33,6 +33,10 @@ execute files or provide an embedded shell.
   Space shows free and total capacity together. The selected row's footer adds
   its mount, filesystem, space, and read-only state. The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
+  **Refresh** updates that pane's volume list and checks for archive recovery
+  records. It keeps the selected mount when it can match it after refresh.
+  If the volume list cannot be refreshed, the previous values stay visible
+  and Copy stays disabled until a refresh succeeds.
   Copy starts volume archive planning on the archive worker only after
   native identity, live-read capability, destination, and private-journal
   checks pass. It remains visibly disabled otherwise, with the specific reason

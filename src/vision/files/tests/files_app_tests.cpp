@@ -199,7 +199,8 @@ struct Fixture {
                      bool qualified_volume = false, bool recovery_journal = false,
                      bool operation_recovery_journal = false, bool eligible_archive_recovery = false,
                      bool eligible_operation_recovery = false,
-                     std::function<Observation<std::shared_ptr<IndexFileFactory>>()> completion_workspace = {})
+                     std::function<Observation<std::shared_ptr<IndexFileFactory>>()> completion_workspace = {},
+                     FilesVolumeEnumerator enumerate_volumes = {})
         : terminal(size), gate(std::move(blocked)) {
 #ifndef _WIN32
         std::filesystem::permissions(scratch.path(), std::filesystem::perms::owner_all,
@@ -420,25 +421,27 @@ struct Fixture {
             operation_recovery_cleanup_service =
                 std::make_unique<FilesOperationRecoveryCleanupService>(wake.callback());
         }
-        volume_service = std::make_unique<FilesVolumeService>(wake.callback(), [qualified_volume] {
-            std::vector<FilesVolumeRecord> records;
-            records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
-                               3ull * 1024 * 1024, false, "fixture-volume", {
-                                   qualified_volume ? FilesVolumeArchiveSupport::LiveReadable
-                                                    : FilesVolumeArchiveSupport::Unknown,
-                                   false,
-                                   qualified_volume ? "Live source traversal qualified"
-                                                    : "fixture capability probe pending"}, {}});
-            records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
-                               2ull * 1024 * 1024, true, "fixture-read-only", {
-                                   FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
-            // Keep the volume viewport larger than the root's cached page.
-            for (int i = 0; i < 96; ++i) {
-                const auto name = "fixture-mount-" + std::to_string(i);
-                records.push_back({name, "/" + name, "fixturefs", {}, {}, false, name, {}, {}});
-            }
-            return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
-        });
+        if (!enumerate_volumes)
+            enumerate_volumes = [qualified_volume] {
+                std::vector<FilesVolumeRecord> records;
+                records.push_back({"Fixture volume", "/fixture", "fixturefs", 10ull * 1024 * 1024,
+                                   3ull * 1024 * 1024, false, "fixture-volume", {
+                                       qualified_volume ? FilesVolumeArchiveSupport::LiveReadable
+                                                        : FilesVolumeArchiveSupport::Unknown,
+                                       false,
+                                       qualified_volume ? "Live source traversal qualified"
+                                                        : "fixture capability probe pending"}, {}});
+                records.push_back({"Fixture read-only", "/fixture-ro", "readonlyfs", 4ull * 1024 * 1024,
+                                   2ull * 1024 * 1024, true, "fixture-read-only", {
+                                       FilesVolumeArchiveSupport::Unknown, false, "fixture capability probe pending"}, {}});
+                // Keep the volume viewport larger than the root's cached page.
+                for (int i = 0; i < 96; ++i) {
+                    const auto name = "fixture-mount-" + std::to_string(i);
+                    records.push_back({name, "/" + name, "fixturefs", {}, {}, false, name, {}, {}});
+                }
+                return Observation<std::vector<FilesVolumeRecord>>::available(std::move(records));
+            };
+        volume_service = std::make_unique<FilesVolumeService>(wake.callback(), std::move(enumerate_volumes));
         app = std::make_unique<FilesApp>(
             application, std::array<FilesPaneService *, 2>{services[0].get(), services[1].get()}, wake,
             std::array<NativeAbsolutePath, 2>{
@@ -1888,6 +1891,52 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
+}
+CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_after_failure) {
+    using VolumeInventory = Observation<std::vector<FilesVolumeRecord>>;
+    auto scans = std::make_shared<std::atomic<unsigned>>(0);
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {},
+              true, false, false, false, false, {}, [scans] {
+        const auto scan = ++*scans;
+        if (scan == 2)
+            return VolumeInventory::unavailable(ObservationState::Denied,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::InvalidNativeResult),
+                 "fixture.volume_refresh_denied"});
+        FilesVolumeRecord first{"Shared volume", "/first", "fixturefs", 100, 10, false, "shared-id",
+                                {FilesVolumeArchiveSupport::LiveReadable, false, {}}, {}};
+        FilesVolumeRecord second{"Shared volume", "/second", "fixturefs", 100, scan == 1 ? 20u : 30u,
+                                 false, "shared-id", {FilesVolumeArchiveSupport::LiveReadable, false, {}}, {}};
+        if (scan == 1)
+            return VolumeInventory::available({first, second});
+        return VolumeInventory::available({second, first});
+    });
+    f.loaded();
+    const auto other = f.app->location(1);
+    const auto other_row = f.app->target(1);
+    CK_CHECK(f.app->navigate_root(0));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.parent"));
+    f.until([&] { return f.app->model(0).volume_cursor().has_value(); });
+    CK_CHECK(f.key(ckv::Key::Down));
+    CK_CHECK(f.app->model(0).volume_cursor()->mount_point == "/second");
+    CK_CHECK(f.command("ck.files.refresh"));
+    CK_CHECK(f.app->volume_info_pending());
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.refresh")));
+    CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.copy")));
+    f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(f.app->status(0).find("previous volume information retained") != std::string::npos);
+    CK_CHECK(f.app->availability("ck.files.copy").reason.find("refresh the volume information") != std::string::npos);
+    CK_CHECK(f.app->model(0).volume_cursor()->free_bytes == 20);
+    CK_CHECK(f.command("ck.files.refresh"));
+    f.until([&] {
+        return !f.app->volume_info_pending() &&
+               f.app->availability("ck.files.copy").reason.find("source volume mount identity") != std::string::npos;
+    });
+    const auto volume = f.app->model(0).volume_cursor();
+    CK_CHECK(volume && volume->mount_point == "/second" && volume->free_bytes == 30);
+    CK_CHECK(f.app->model(0).cursor().row == 0 && f.app->active_pane() == 0);
+    const auto retained_row = f.app->target(1);
+    CK_CHECK(f.app->location(1) == other && other_row && retained_row && retained_row->row.row == other_row->row.row);
 }
 CK_TEST(files_app_archive_cleanup_requires_live_creator_ownership) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, false, true);

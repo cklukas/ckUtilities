@@ -274,7 +274,7 @@ struct FilesApp::State {
         std::string error;
         std::string archive_notice;
         std::optional<FilesPaneTicket> archive_refresh;
-        bool volume_view = false;
+        bool volume_view = false, volume_inventory_stale = false;
     };
     struct VolumeArchiveOrigin {
         std::size_t source_pane;
@@ -986,7 +986,8 @@ struct FilesApp::State {
         }
         if (command == "ck.files.parent") {
             if (panes[active].volume_view)
-                return FilesCommandAvailability::available();
+                return modal_pending() ? unavailable("Parent folder unavailable: active pane is busy")
+                                       : FilesCommandAvailability::available();
             if (!ready(active))
                 return unavailable("Parent folder unavailable: active pane is not ready");
             if (!panes[active].active || !panes[active].active->parent().value())
@@ -1029,8 +1030,7 @@ struct FilesApp::State {
                                             : unavailable("Remove bookmark unavailable: location is not bookmarked");
         }
         if (command == "ck.files.refresh")
-            return ready(active) ? FilesCommandAvailability::available()
-                                 : unavailable("Refresh unavailable: active pane is not ready");
+            return refresh_availability(active);
         if (command == "ck.files.properties")
             return ready(active) && panes[active].model.cursor_row()
                        ? FilesCommandAvailability::available()
@@ -1112,6 +1112,10 @@ struct FilesApp::State {
             if (panes[active].volume_view) {
                 if (move)
                     return unavailable("Move unavailable: volume rows are archive sources, not movable entries");
+                if (volume_request && active == volume_pane)
+                    return unavailable("Copy unavailable: volume information is still loading");
+                if (panes[active].volume_inventory_stale)
+                    return unavailable("Copy unavailable: refresh the volume information first");
                 const auto volume = panes[active].model.volume_cursor();
                 if (!volume)
                     return unavailable("Copy unavailable: no volume is selected");
@@ -1207,6 +1211,8 @@ struct FilesApp::State {
                 ? "Moving to the other pane..."
                 : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
                     ? "Deleting selected tree..." : "Copying to the other pane...";
+        else if (volume_request && i == volume_pane)
+            text = "Reading volume information...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (!p.error.empty())
@@ -1248,6 +1254,8 @@ struct FilesApp::State {
             text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
         if (p.active && !p.model.current() && text.find("Stale") == text.npos)
             text += "; stale listing";
+        if (p.volume_view && p.volume_inventory_stale)
+            text += "; previous volume information retained";
         if (p.navigation_error && p.active)
             text += "; previous location retained";
         if (p.selection.marks && p.selection.marks->total) {
@@ -1506,6 +1514,8 @@ struct FilesApp::State {
                 ? "Moving"
                 : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
                     ? "Deleting" : "Copying";
+        else if (volume_request)
+            activity = "Reading volumes";
         else if (modal_pending())
             activity = "Dialog open";
         else if (pending(panes[0]) || pending(panes[1]))
@@ -1524,7 +1534,7 @@ struct FilesApp::State {
     }
     bool show_volume_info(std::size_t i) {
         if (i >= 2 || closing || !volume_service || !volume_service->running() || !panes[i].active ||
-            !panes[i].active->components().empty() || panes[i].volume_view || volume_request || modal_pending())
+            !panes[i].active->components().empty() || volume_request || modal_pending())
             return false;
         if (!volume_service->request()) {
             panes[i].error = "Volume information is busy";
@@ -1533,6 +1543,12 @@ struct FilesApp::State {
         }
         volume_pane = i;
         volume_request = true;
+        if (panes[i].volume_view) {
+            panes[i].volume_inventory_stale = true;
+            if (volume_archive_recovery_service)
+                scan_archive_recovery();
+        }
+        watch();
         labels();
         return true;
     }
@@ -1547,10 +1563,12 @@ struct FilesApp::State {
             return;
         }
         panes[pane].volume_view = true;
+        panes[pane].volume_inventory_stale = false;
         panes[pane].model.publish_volumes(std::move(reply.volumes));
         surfaces[pane]->grid->model_changed();
         panes[pane].error.clear();
-        application.set_focus(surfaces[pane]->grid);
+        if (pane == active)
+            application.set_focus(surfaces[pane]->grid);
         labels();
     }
     bool relative_ready(std::size_t i, bool root) const {
@@ -1565,6 +1583,8 @@ struct FilesApp::State {
     }
     bool navigate_relative(std::size_t i, bool root) {
         if (i < 2 && !root && panes[i].volume_view) {
+            if (closing || modal_pending())
+                return false;
             panes[i].volume_view = false;
             panes[i].model.clear();
             return navigate(i, *panes[i].active, panes[i].view);
@@ -1595,7 +1615,21 @@ struct FilesApp::State {
         return accept_navigation(i, services[i]->navigate_home(std::move(view), panes[i].model.viewport().rows), {},
                                  true);
     }
+    FilesCommandAvailability refresh_availability(std::size_t i) const {
+        if (i < panes.size() && panes[i].volume_view) {
+            if (volume_request)
+                return FilesCommandAvailability::unavailable("Refresh unavailable: volume information is still loading");
+            if (!volume_service || !volume_service->running())
+                return FilesCommandAvailability::unavailable("Refresh unavailable: volume information worker is unavailable");
+            if (!closing && !modal_pending())
+                return FilesCommandAvailability::available();
+        }
+        return ready(i) ? FilesCommandAvailability::available()
+                        : FilesCommandAvailability::unavailable("Refresh unavailable: active pane is not ready");
+    }
     bool refresh(std::size_t i) {
+        if (i < panes.size() && panes[i].volume_view)
+            return refresh_availability(i).enabled && show_volume_info(i);
         if (!ready(i) || !panes[i].active)
             return false;
         return navigate(i, FilesPaneLocation(*panes[i].active), panes[i].view);
@@ -2693,6 +2727,7 @@ struct FilesApp::State {
     }
     void watch() {
         const bool pending = settings_waiting || operation_planning_request.has_value() || volume_request ||
+            volume_archive_recovery_request ||
             volume_archive_planning_request.has_value() || volume_archive_execution_request.has_value() ||
             std::any_of(panes.begin(), panes.end(), [](const Pane &p) {
                 return State::pending(p) || p.archive_refresh.has_value();
@@ -3036,6 +3071,7 @@ struct FilesApp::State {
         }
         volume_archive_recovery_error.clear();
         volume_archive_recovery_request = true;
+        watch();
         return true;
     }
     void consume_volume_archive(FilesVolumeArchiveReply reply) {

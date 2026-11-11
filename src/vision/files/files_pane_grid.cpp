@@ -135,11 +135,22 @@ bool FilesPaneGridModel::publish(std::shared_ptr<const ck::files::IndexedPanePag
     return adopt(std::move(page), follow_worker_focus);
 }
 void FilesPaneGridModel::publish_volumes(std::vector<FilesVolumeRecord> volumes) {
+    std::size_t selected = 0;
+    if (volume_current_ && cursor_ < volumes_.size() && !volumes_[cursor_].identity.empty()) {
+        const auto &previous = volumes_[cursor_];
+        const auto same_mount = [&](const FilesVolumeRecord &record) {
+            return record.identity == previous.identity && record.mount_point == previous.mount_point &&
+                   record.native_mount_units == previous.native_mount_units;
+        };
+        const auto match = std::find_if(volumes.begin(), volumes.end(), same_mount);
+        if (match != volumes.end() && std::none_of(match + 1, volumes.end(), same_mount))
+            selected = static_cast<std::size_t>(match - volumes.begin());
+    }
     page_ = std::monostate{};
     volumes_ = std::move(volumes);
     total_ = volumes_.size();
     page_first_ = first_ = 0;
-    cursor_ = std::min<std::size_t>(cursor_, total_ ? static_cast<std::size_t>(total_ - 1) : 0);
+    cursor_ = selected;
     volume_current_ = true;
     input_locked_ = false;
     reveal();
