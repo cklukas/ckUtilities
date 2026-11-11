@@ -42,6 +42,19 @@ macOS ARM64 ASan/UBSan passed all 111 Files and keymap CTests and the
 focused refresh regression on APFS. The build used the matching
 instrumented ckVision SDK with default container annotations and
 reported zero sanitizer findings.
+macOS ARM64 ThreadSanitizer passed all 111 Files and keymap CTests and the
+focused refresh case on the published `f70acbc` source. It used the matching
+instrumented ckVision SDK and the locally built Darwin runtime with the
+native TLS lifetime correction. No suppressions were loaded. The detached
+thread control passed and the intentional race control returned exit 66.
+
+The exact macOS Release executable passed a native controlling-PTY
+check. Right accepted the folder proposal and Enter opened it. Mouse
+selection and Insert marked one entry in each pane. Ctrl+R inserted a new
+first row while the original left row kept its mark and focus, and both
+marks survived resize. Alt+X exited cleanly and restored the terminal
+settings that Files controls. The only raw mode difference was the
+kernel-maintained pending-input flag.
 
 | Evidence | SHA-256 |
 | --- | --- |
@@ -51,12 +64,14 @@ reported zero sanitizer findings.
 | Linux ThreadSanitizer receipt | `f6a4d9e2c3be4f2bde4c0de0b026d7306e129baeabad0a36942efd66750ea1ea` |
 | Linux ASan/UBSan and installed consumer receipt | `87f15fda2c5bcce626be28b40866c59d214a597e0c8d9574cbe7810523e94c8f` |
 | macOS ASan/UBSan receipt | `895d4a684cac5029c70fe5580cd50f28b1158a196850a55f93d3907c1edf5398` |
+| macOS ThreadSanitizer receipt | `9f0befe6bcc32cb303a1c3e18c4e9768bd3d97316bf500b281e6567b7c9166ae` |
+| macOS native PTY input and refresh receipt | `cae059613da46bbe81f09524e5eba1571dddb09a6e2b3facfa0544cb8addc8a4` |
 | Linux xterm completion, bookmark and refresh receipt | `44f00f539185de538ee7713be7271e888c72105791f83f455ed36468b287902e` |
 | Linux native indexed selection receipt | `9c19e86d73d013cd66db1ef8f3e5c1d4532997304c7437ce1f056eea1c012b8b` |
 | macOS APFS held-rescan receipt | `5ad7a09684d8f081a4ec521c41d0afe28efd7c21de8e730d8e53567b1dcb5f6f` |
 
-Windows ordinary-user execution, the remaining sanitizer checks, and
-macOS and Windows desktop acceptance remain open. The frontend GitHub
+Windows ordinary-user execution and macOS and Windows desktop acceptance
+remain open. The frontend GitHub
 Actions queue is waiting for self-hosted runners with the required Mac
 temporary-volume and Windows development-drive labels.
 

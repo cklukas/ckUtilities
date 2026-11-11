@@ -425,9 +425,10 @@ authority and does not close the application or release requirements below.
   while its mark and focus followed it. See the
   [candidate evidence](ck-files-progress.md#2026-11-11--mark-and-cursor-continuity-on-refresh).
   The published `f70acbc` frontend and `89f21c9` backend match the
-  passing Linux ThreadSanitizer cohort and the Linux and macOS ASan/UBSan cohorts.
-  Windows runtime, desktop acceptance, and the remaining race checks
-  stay open.
+  passing Linux and macOS ThreadSanitizer and ASan/UBSan cohorts.
+  A native macOS PTY confirmed Right-to-accept, row selection, Ctrl+R
+  mark and focus retention, resize, and terminal restoration.
+  Windows runtime and desktop acceptance stay open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
