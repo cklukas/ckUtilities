@@ -69,6 +69,16 @@ nine preservation losses. The version-2 archive occupied 12,288 allocated
 bytes for 8,389,714 logical bytes. Independent reconstruction matched the
 sparse source file's SHA-256 and the source bytes remained unchanged.
 
+An ordinary-user macOS controlling-PTY run with the same Release source
+opened the left pane's native APFS mount inventory from `/`, displayed
+filesystem type and available and total space, and kept the right pane
+intact. The selected volume's F5 action showed `Copy: archive writes
+unsupported`. No archive or journal was created. Enter opened the selected
+mount and Alt+X restored the terminal state. This run also reproduced an
+incorrect 5.83 TiB total for a 24 TB APFS volume before and after Ctrl+R.
+A native comparison measured 5,859,391,478 blocks through `statfs` and
+1,564,424,182 through `statvfs`, a difference of exactly 2³² blocks.
+
 Hosted Windows 2025 passed 88 backend tests, including indexed mark
 binding, and five installed SDK consumer tests on NTFS for `89f21c9`.
 The workstation v143 build on `V:` compiled and linked the standalone
@@ -91,6 +101,7 @@ their screenshots, and all 29 screenshot assets matched the source bytes.
 | macOS native PTY input and refresh receipt | `cae059613da46bbe81f09524e5eba1571dddb09a6e2b3facfa0544cb8addc8a4` |
 | Linux xterm volume layout and navigation receipt | `e02e0a2605ce6ff875cfa986bd3e0e421691b03b05451263b24d3a4d974f3246` |
 | Linux native sparse volume archive receipt | `c750fa50459c3654ec54788a0dfefdbbd11e188b5c395a189181180ba4dddaa7` |
+| macOS native APFS volume and archive admission receipt | `4781d378e7ed3ffb4b48e281e03f653fddf57792e59bcd1ac1b769e70c0a51f5` |
 | Hosted Windows NTFS backend receipt | `7969b9820a0e33ff2d7b4fa0ad417dd9e7341d90859321c90dc44340f3e5eee1` |
 | Windows v143 backend compile receipt | `22c0a7143e7e7b0e1c91679849cd44bf046101d87c460ca6675b32cff16ae0cf` |
 | Strict frontend and backend ckdocs receipt | `f84ade1f9bc7e5ad1aed94dae4ac0670acc822bc0d872f41d36c707e9570f1ce` |
