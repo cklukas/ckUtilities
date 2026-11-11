@@ -428,6 +428,8 @@ authority and does not close the application or release requirements below.
   passing Linux and macOS ThreadSanitizer and ASan/UBSan cohorts.
   A native macOS PTY confirmed Right-to-accept, row selection, Ctrl+R
   mark and focus retention, resize, and terminal restoration.
+  The hosted Windows NTFS backend passed the native indexed mark-binding
+  test, all 88 backend tests, and five installed SDK consumer tests.
   Windows runtime and desktop acceptance stay open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
@@ -464,6 +466,8 @@ authority and does not close the application or release requirements below.
   remain open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
+  The current Linux Release build passed xterm volume navigation and
+  an ordinary-user sparse archive creation and reconstruction check.
   Frontend `bf5e8bc` passed the Linux focused Release archive cases, the
   macOS Files and keymap suite, and terminal input checks on both platforms.
   The Linux xterm check used an isolated X11 display. The

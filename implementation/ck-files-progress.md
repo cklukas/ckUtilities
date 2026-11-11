@@ -56,6 +56,29 @@ marks survived resize. Alt+X exited cleanly and restored the terminal
 settings that Files controls. The only raw mode difference was the
 kernel-maintained pending-input flag.
 
+The current Linux Release product also passed 25 observations in real
+xterm windows on a private X11 display. The 80-column volume view kept a
+long ext4 mount label in its own column. A failed location change left the
+volume list and the other pane visible. The restricted vt100 profile
+verified menu-driven folder creation, pane switching, and return from the
+volume list to the filesystem root.
+
+An ordinary-user Linux PTY run against a private ext4 mount verified
+volume archive publication. The review required acknowledgement of all
+nine preservation losses. The version-2 archive occupied 12,288 allocated
+bytes for 8,389,714 logical bytes. Independent reconstruction matched the
+sparse source file's SHA-256 and the source bytes remained unchanged.
+
+Hosted Windows 2025 passed 88 backend tests, including indexed mark
+binding, and five installed SDK consumer tests on NTFS for `89f21c9`.
+The workstation v143 build on `V:` compiled and linked the standalone
+indexed refresh test, the installed package, and its platform consumer.
+The ordinary-user workstation test handoff is staged.
+
+Strict ckdocs builds of `f70acbc` and `89f21c9` rendered 27 frontend
+pages and 19 backend pages. All ten frontend utility guides resolved
+their screenshots, and all 29 screenshot assets matched the source bytes.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | Linux Release Files and keymap receipt | `a36dd58e9f5ee14b38b61567145966fb02fdf69ce99b8a5d35a06ad3ec430797` |
@@ -66,6 +89,11 @@ kernel-maintained pending-input flag.
 | macOS ASan/UBSan receipt | `895d4a684cac5029c70fe5580cd50f28b1158a196850a55f93d3907c1edf5398` |
 | macOS ThreadSanitizer receipt | `9f0befe6bcc32cb303a1c3e18c4e9768bd3d97316bf500b281e6567b7c9166ae` |
 | macOS native PTY input and refresh receipt | `cae059613da46bbe81f09524e5eba1571dddb09a6e2b3facfa0544cb8addc8a4` |
+| Linux xterm volume layout and navigation receipt | `e02e0a2605ce6ff875cfa986bd3e0e421691b03b05451263b24d3a4d974f3246` |
+| Linux native sparse volume archive receipt | `c750fa50459c3654ec54788a0dfefdbbd11e188b5c395a189181180ba4dddaa7` |
+| Hosted Windows NTFS backend receipt | `7969b9820a0e33ff2d7b4fa0ad417dd9e7341d90859321c90dc44340f3e5eee1` |
+| Windows v143 backend compile receipt | `22c0a7143e7e7b0e1c91679849cd44bf046101d87c460ca6675b32cff16ae0cf` |
+| Strict frontend and backend ckdocs receipt | `f84ade1f9bc7e5ad1aed94dae4ac0670acc822bc0d872f41d36c707e9570f1ce` |
 | Linux xterm completion, bookmark and refresh receipt | `44f00f539185de538ee7713be7271e888c72105791f83f455ed36468b287902e` |
 | Linux native indexed selection receipt | `9c19e86d73d013cd66db1ef8f3e5c1d4532997304c7437ce1f056eea1c012b8b` |
 | macOS APFS held-rescan receipt | `5ad7a09684d8f081a4ec521c41d0afe28efd7c21de8e730d8e53567b1dcb5f6f` |
