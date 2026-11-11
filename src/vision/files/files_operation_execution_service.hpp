@@ -26,6 +26,7 @@ struct FilesOperationExecutionRequest final {
     ck::files::PaneStateStamp source_stamp, destination_stamp;
     ck::files::IndexedSourceLimits source_limits;
     ck::files::NativeAbsolutePath journal_root;
+    // An empty ID requests native allocation on the execution worker.
     ck::files::OperationJournalId journal_id{};
     ck::files::NativeOperationCopyBatchPolicy policy{};
     std::function<ck::files::Observation<std::unique_ptr<ck::files::OperationJournalFile>>(

@@ -51,8 +51,9 @@ execute files or provide an embedded shell.
   reports indeterminate durability when a flush or journal step after
   publication cannot be proven. On startup and after each archive attempt,
   a bounded read-only scan checks private
-  archive journals. Copy remains disabled until the scan completes and no
-  journal needs reconciliation.
+  archive journals. Each attempt has its own journal ID, so completed records
+  remain available when Files restarts. Copy remains disabled until the scan
+  completes and no journal needs reconciliation.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals. A separate
   worker boundary refuses restart cleanup because the original archive

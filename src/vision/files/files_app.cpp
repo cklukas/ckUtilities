@@ -410,7 +410,6 @@ struct FilesApp::State {
     ckv::ui::CommandId preview_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId inspect_link_id = ckv::ui::kInvalidCommand;
     SuiteCommandScope commands;
-    std::uint64_t operation_serial = 1;
     State(ckv::ui::Application &app, std::array<FilesPaneService *, 2> supplied, FilesAppWake &signal,
           std::array<ck::files::NativeAbsolutePath, 2> locations, std::function<void()> quit, ThemeScheme theme,
           std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning,
@@ -1874,13 +1873,9 @@ struct FilesApp::State {
                 labels();
                 return false;
             }
-            ck::files::OperationJournalId journal_id;
-            const auto serial = operation_serial++;
-            for (unsigned byte = 0; byte != sizeof(serial); ++byte)
-                journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
             FilesOperationExecutionRequest execution{
                 ck::files::FileOperation::Delete, services[i], nullptr,
-                p.navigation, {}, p.stamp, {}, {}, *operation_journal_root, journal_id, {}, {}};
+                p.navigation, {}, p.stamp, {}, {}, *operation_journal_root, {}, {}, {}};
             execution.source_limits.held_entries = 1024;
             execution.source_limits.access = ck::files::EntryAccess::MetadataOnly;
             execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
@@ -2304,13 +2299,9 @@ struct FilesApp::State {
                 labels();
                 return;
             }
-            ck::files::OperationJournalId journal_id;
-            const auto serial = operation_serial++;
-            for (unsigned byte = 0; byte != sizeof(serial); ++byte)
-                journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
             FilesOperationExecutionRequest execution{
                 operation, services[source_pane], services[destination_pane], source_navigation, destination_navigation,
-                source_stamp, destination_stamp, {}, *operation_journal_root, journal_id, {}, {}};
+                source_stamp, destination_stamp, {}, *operation_journal_root, {}, {}, {}};
             execution.source_limits.held_entries = 1024;
             execution.source_limits.access = ck::files::EntryAccess::ContentRead;
             execution.policy.allow_unhandled_metadata_loss =
@@ -3015,12 +3006,8 @@ struct FilesApp::State {
                     return;
                 }
                 const auto &origin = *volume_archive_origin;
-                ck::files::OperationJournalId journal_id;
-                const auto serial = operation_serial++;
-                for (unsigned byte = 0; byte != sizeof(serial); ++byte)
-                    journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
                 const auto submitted = volume_archive_service->execute_review(
-                    ticket, std::move(result).take_value(), *operation_journal_root, journal_id, serial);
+                    ticket, std::move(result).take_value(), *operation_journal_root);
                 if (submitted.state != FilesVolumeArchiveSubmission::Accepted) {
                     volume_archive_service->cancel_plan(ticket);
                     report_archive_error("Volume archive worker rejected the approved review");

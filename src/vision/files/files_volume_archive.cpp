@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_volume_archive.hpp"
 #include "native_filesystem.hpp"
+#include "native_operation_journal_id.hpp"
 #include "native_archive_write_job.hpp"
 #include "private_journal_scope.hpp"
 #include "platform/prepared_journal_root_bridge.hpp"
@@ -1398,8 +1399,6 @@ struct FilesVolumeArchiveService::State final {
         FilesVolumeArchiveTicket ticket;
         FilesVolumeArchiveApproval approval;
         ck::files::NativeAbsolutePath journal_root;
-        ck::files::OperationJournalId journal_id;
-        std::uint64_t transaction_id;
     };
     using Job = std::variant<PlanJob, WriteJob, ReviewedJob>;
     std::optional<Job> pending;
@@ -1645,17 +1644,39 @@ struct FilesVolumeArchiveService::State final {
         }
     }
     void run_review(ReviewedJob job, ArchiveBindings bindings, std::stop_token token) {
+        auto fail = [&](UnavailableObservation detail, FilesVolumeArchiveState state = FilesVolumeArchiveState::Failed) {
+            bindings = {};
+            FilesVolumeArchiveReply failed;
+            failed.request = job.ticket;
+            failed.state = state;
+            failed.error = std::move(detail);
+            emit(std::move(failed));
+        };
         try {
             const auto &review = job.approval.review();
             if (!bindings.destination || !bindings.source) {
-                bindings = {};
-                FilesVolumeArchiveReply failed;
-                failed.request = job.ticket;
-                failed.error = error(AdapterError::PlanDecisionStale, "volume_archive.review.binding_missing",
-                                     ObservationState::Changed);
-                emit(std::move(failed));
+                fail(error(AdapterError::PlanDecisionStale, "volume_archive.review.binding_missing",
+                           ObservationState::Changed));
                 return;
             }
+            if (token.stop_requested()) {
+                fail(error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown),
+                     FilesVolumeArchiveState::Cancelled);
+                return;
+            }
+            const auto generated = ck::files::new_native_operation_journal_id();
+            if (!generated.value()) {
+                fail(*generated.unavailable_detail());
+                return;
+            }
+            const auto journal_id = *generated.value();
+            // The archive evidence format still stores a nonzero 64-bit
+            // transaction number. Exclusive journal creation uses all 128 bits.
+            std::uint64_t transaction_id = 0;
+            for (std::size_t offset = 0; offset < journal_id.bytes.size() && transaction_id == 0;
+                 offset += sizeof(transaction_id))
+                for (std::size_t byte = 0; byte < sizeof(transaction_id); ++byte)
+                    transaction_id |= std::to_integer<std::uint64_t>(journal_id.bytes[offset + byte]) << (byte * 8U);
             auto build_document = [approval = job.approval](std::stop_token stop_token) {
                 if (stop_token.stop_requested())
                     return review_rejected<FilesVolumeArchiveDocument>(ObservationState::Unknown,
@@ -1667,8 +1688,8 @@ struct FilesVolumeArchiveService::State final {
             FilesVolumeArchiveRequest request{
                 .source=review->document().source, .destination_directory=review->destination_directory(),
                 .archive_name=review->archive_name(), .consistency=review->document().consistency,
-                .transaction_id=job.transaction_id, .build_document=std::move(build_document),
-                .journal_root=std::move(job.journal_root), .journal_id=job.journal_id,
+                .transaction_id=transaction_id, .build_document=std::move(build_document),
+                .journal_root=std::move(job.journal_root), .journal_id=journal_id,
                 .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
             run_one(job.ticket, std::move(request), token, std::move(bindings));
         } catch (...) {
@@ -1768,18 +1789,16 @@ std::optional<FilesVolumeArchivePlanningReply> FilesVolumeArchiveService::take_p
 }
 FilesVolumeArchiveSubmitted FilesVolumeArchiveService::execute_review(
     const FilesVolumeArchivePlanningTicket &plan, FilesVolumeArchiveApproval approval,
-    ck::files::NativeAbsolutePath journal_root, ck::files::OperationJournalId journal_id,
-    std::uint64_t transaction_id) {
+    ck::files::NativeAbsolutePath journal_root) {
     std::lock_guard lock(state_->mutex);
     if (state_->stopping)
         return {FilesVolumeArchiveSubmission::Stopped, {}};
     if (!plan.valid() || plan != state_->latest_plan || !state_->ready_review ||
-        state_->ready_review != approval.review() || !journal_root.is_valid() || transaction_id == 0)
+        state_->ready_review != approval.review() || !journal_root.is_valid())
         return {FilesVolumeArchiveSubmission::Invalid, {}};
     auto ticket = FilesVolumeArchiveTicket(state_->next++);
     std::stop_source stop;
-    state_->pending.emplace(State::ReviewedJob{ticket, std::move(approval), std::move(journal_root),
-                                               journal_id, transaction_id});
+    state_->pending.emplace(State::ReviewedJob{ticket, std::move(approval), std::move(journal_root)});
     state_->latest = ticket;
     state_->latest_plan = {};
     state_->ready_review.reset();

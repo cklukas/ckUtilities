@@ -513,8 +513,7 @@ class FilesVolumeArchiveService final {
     bool cancel_plan(const FilesVolumeArchivePlanningTicket &request);
     std::optional<FilesVolumeArchivePlanningReply> take_plan();
     FilesVolumeArchiveSubmitted execute_review(const FilesVolumeArchivePlanningTicket &ticket,
-        FilesVolumeArchiveApproval approval, ck::files::NativeAbsolutePath journal_root,
-        ck::files::OperationJournalId journal_id, std::uint64_t transaction_id);
+        FilesVolumeArchiveApproval approval, ck::files::NativeAbsolutePath journal_root);
 
     FilesVolumeArchiveSubmitted request(FilesVolumeArchiveRequest request);
     bool cancel(const FilesVolumeArchiveTicket &request);

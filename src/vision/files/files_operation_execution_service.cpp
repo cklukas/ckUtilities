@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_execution_service.hpp"
+#include "native_operation_journal_id.hpp"
 
 #include "native_operation_delete_tree.hpp"
 
@@ -164,6 +165,19 @@ struct FilesOperationExecutionService::State final {
             emit(std::move(result));
         };
 
+        if (stop_token.stop_requested()) {
+            fail(error(ck::files::AdapterError::InterruptedRead, "files_execution.cancelled",
+                       ck::files::ObservationState::Unknown));
+            return;
+        }
+        if (value.journal_id == ck::files::OperationJournalId{}) {
+            const auto id = ck::files::new_native_operation_journal_id();
+            if (!id.value()) {
+                fail(*id.unavailable_detail());
+                return;
+            }
+            value.journal_id = *id.value();
+        }
         auto handoff = std::make_shared<Handoff>();
         const bool deletion = value.operation == ck::files::FileOperation::Delete;
         const auto source_submission = value.source_service->acquire_operation_sources(

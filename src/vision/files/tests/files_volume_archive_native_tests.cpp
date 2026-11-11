@@ -91,10 +91,12 @@ void verify_unpublished_archive() {
         struct stat image{};
         assert(lstat((base_path + component).c_str(), &image) != 0 && errno == ENOENT);
     }
-    const auto decoded = take(decode_operation_journal(read_file(base_path + "/private/" + journal())));
-    assert(!decoded.tail && decoded.journal->state(0) == OperationJournalState::Verified);
-    const auto report = take(inspect_volume_archive_recovery(*decoded.journal));
-    assert(report.operation.requires_reconciliation);
+    const auto scan = take(discover_volume_archive_recovery(address(base_path + "/private")));
+    assert(scan.journals.size() == 1 && scan.journals.front().report && scan.requires_reconciliation);
+    const auto &report = *scan.journals.front().report;
+    assert(report.journal_id != OperationJournalId{} && report.evidence.transaction_id != 0 &&
+           !report.operation.has_untrusted_tail && report.operation.items.size() == 1 &&
+           report.operation.items.front().state == OperationJournalState::Verified);
 }
 
 void source_change_during_reviewed_write() {
@@ -113,7 +115,7 @@ void source_change_during_reviewed_write() {
     }
     assert(review && review->state == FilesVolumeArchivePlanningState::Ready && review->review);
     auto approved = take(review->review->approve(FilesVolumeArchiveReviewDecision::Proceed));
-    auto started = worker.execute_review(planned.ticket, std::move(approved), address(base_path + "/private"), id(), 1);
+    auto started = worker.execute_review(planned.ticket, std::move(approved), address(base_path + "/private"));
     assert(started.state == FilesVolumeArchiveSubmission::Accepted);
     std::optional<FilesVolumeArchiveReply> result;
     for (unsigned i = 0; i < 5000 && !result; ++i) {

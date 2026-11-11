@@ -768,9 +768,9 @@ CK_TEST(volume_archive_review_refuses_destination_replacement) {
     std::filesystem::rename(destination, original);
 #endif
     CK_CHECK(ck::io::create_directories(destination));
-    const auto approved = service.execute_review(submitted.ticket, *approval.value(), journals, journal_id(12), 12);
+    const auto approved = service.execute_review(submitted.ticket, *approval.value(), journals);
     CK_CHECK(approved.state == FilesVolumeArchiveSubmission::Accepted);
-    CK_CHECK(service.execute_review(submitted.ticket, *approval.value(), journals, journal_id(13), 13).state ==
+    CK_CHECK(service.execute_review(submitted.ticket, *approval.value(), journals).state ==
              FilesVolumeArchiveSubmission::Invalid);
     std::optional<FilesVolumeArchiveReply> result;
     for (int i = 0; i != 5000 && !result; ++i) {
