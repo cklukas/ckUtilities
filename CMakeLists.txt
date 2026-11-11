@@ -54,6 +54,14 @@ add_subdirectory(lib/ckai_core)
 include(CTest)
 if(BUILD_TESTING)
   enable_testing()
+  # Declare the test root before any subdirectory embeds it in a C++ literal.
+  set(CKTOOLS_TEST_TEMP_ROOT "${PROJECT_BINARY_DIR}/test-scratch" CACHE PATH
+      "Explicit root for native test scratch directories")
+  cmake_path(SET CKTOOLS_TEST_TEMP_ROOT "${CKTOOLS_TEST_TEMP_ROOT}")
+  if(NOT IS_ABSOLUTE "${CKTOOLS_TEST_TEMP_ROOT}")
+    message(FATAL_ERROR "CKTOOLS_TEST_TEMP_ROOT must be absolute")
+  endif()
+  file(MAKE_DIRECTORY "${CKTOOLS_TEST_TEMP_ROOT}")
 endif()
 
 cktools_add_ui_boundary_check()
