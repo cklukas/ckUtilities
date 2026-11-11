@@ -155,7 +155,7 @@ function(cktools_add_ckvision_terminal_verification)
   add_custom_target(verify_ckvision_terminal
     COMMAND "${CMAKE_COMMAND}"
       "-DCKTOOLS_INSTALL_PREFIX=${PROJECT_BINARY_DIR}/ckvision-install-check"
-      "-DCKTOOLS_TERMINAL_CONFIG_ROOT=${PROJECT_BINARY_DIR}/ckvision-terminal-config"
+      "-DCKTOOLS_TERMINAL_CONFIG_PARENT=${PROJECT_BINARY_DIR}"
       "-DCKTOOLS_TERMINAL_SMOKE_EXECUTABLE=$<TARGET_FILE:ck_vision_terminal_smoke>"
       -P "${PROJECT_SOURCE_DIR}/cmake/VerifyCkVisionTerminal.cmake"
     DEPENDS verify_ckvision_install ck_vision_terminal_smoke

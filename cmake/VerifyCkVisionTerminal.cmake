@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 foreach(_cktools_required
     CKTOOLS_INSTALL_PREFIX
-    CKTOOLS_TERMINAL_CONFIG_ROOT
+    CKTOOLS_TERMINAL_CONFIG_PARENT
     CKTOOLS_TERMINAL_SMOKE_EXECUTABLE)
   if(NOT DEFINED ${_cktools_required} OR "${${_cktools_required}}" STREQUAL "")
     message(FATAL_ERROR "${_cktools_required} is required for terminal-profile verification")
@@ -26,12 +26,28 @@ set(_cktools_native_executables
     ck-files)
 set(_cktools_terminal_profiles xterm-256color xterm vt100)
 
-file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+if(NOT IS_ABSOLUTE "${CKTOOLS_TERMINAL_CONFIG_PARENT}" OR
+   NOT IS_DIRECTORY "${CKTOOLS_TERMINAL_CONFIG_PARENT}" OR
+   IS_SYMLINK "${CKTOOLS_TERMINAL_CONFIG_PARENT}")
+  message(FATAL_ERROR "Terminal configuration parent must be an existing absolute directory")
+endif()
+string(RANDOM LENGTH 20 ALPHABET "0123456789abcdef" _cktools_config_nonce)
+set(CKTOOLS_TERMINAL_CONFIG_ROOT
+    "${CKTOOLS_TERMINAL_CONFIG_PARENT}/cktools-terminal-${_cktools_config_nonce}")
+if(EXISTS "${CKTOOLS_TERMINAL_CONFIG_ROOT}" OR IS_SYMLINK "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+  message(FATAL_ERROR "Terminal configuration directory already exists: ${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+endif()
 file(MAKE_DIRECTORY "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
+file(CHMOD "${CKTOOLS_TERMINAL_CONFIG_ROOT}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+# Keep the package smoke independent of the invoking user's SSH aliases.
+set(_cktools_terminal_home "${CKTOOLS_TERMINAL_CONFIG_ROOT}/home")
+file(MAKE_DIRECTORY "${_cktools_terminal_home}")
+file(CHMOD "${_cktools_terminal_home}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
 
 foreach(_cktools_executable IN LISTS _cktools_native_executables)
   set(_cktools_path "${CKTOOLS_INSTALL_PREFIX}/bin/${_cktools_executable}")
   if(NOT EXISTS "${_cktools_path}")
+    file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
     message(FATAL_ERROR "Native executable is missing: ${_cktools_path}")
   endif()
   # ck-todo opens a modal welcome dialog on first run, and ckVision suppresses
@@ -50,12 +66,13 @@ foreach(_cktools_executable IN LISTS _cktools_native_executables)
       COMMAND "${CKTOOLS_TERMINAL_SMOKE_EXECUTABLE}"
         --term "${_cktools_terminal_profile}"
         --config-root "${CKTOOLS_TERMINAL_CONFIG_ROOT}"
+        --home "${_cktools_terminal_home}"
         -- "${_cktools_path}" ${_cktools_arguments}
       TIMEOUT 12
       RESULT_VARIABLE _cktools_terminal_result
       OUTPUT_VARIABLE _cktools_terminal_output
       ERROR_VARIABLE _cktools_terminal_error)
-    if(NOT _cktools_terminal_result EQUAL 0)
+    if(NOT "${_cktools_terminal_result}" STREQUAL "0")
       file(REMOVE_RECURSE "${CKTOOLS_TERMINAL_CONFIG_ROOT}")
       message(FATAL_ERROR
         "${_cktools_executable} failed the ${_cktools_terminal_profile} PTY smoke: "
