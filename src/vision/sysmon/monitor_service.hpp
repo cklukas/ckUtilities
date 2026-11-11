@@ -7,6 +7,7 @@
 #include <functional>
 #include <mutex>
 #include <set>
+#include <stop_token>
 #include <thread>
 
 namespace ck::sysmon {
@@ -31,6 +32,7 @@ private:
     std::deque<std::string> pending_;
     std::set<std::string> active_;
     bool stopping_ = false;
+    std::stop_source stop_;
     // A dedicated local worker and two remote workers. Remote timeouts cannot
     // steal the local refresh slot or queue unbounded repeated requests.
     std::vector<std::thread> workers_;

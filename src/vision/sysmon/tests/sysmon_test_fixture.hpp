@@ -37,7 +37,7 @@ inline ck::sysmon::Sample v3d_monitor_sample() {
 class FixedMonitorSource : public ck::sysmon::MonitorSource {
 public:
     std::vector<std::string> hosts() override { return {"render-node", "offline-node"}; }
-    ck::sysmon::Sample sample(const std::string& endpoint) override {
+    ck::sysmon::Sample sample(const std::string& endpoint, std::stop_token) override {
         if (endpoint == "offline-node") { ck::sysmon::Sample result; result.diagnostic = "Passwordless SSH unavailable"; return result; }
         return monitor_sample();
     }

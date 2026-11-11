@@ -42,7 +42,7 @@ struct NativeMonitorSource::Impl {
     std::string home, system, ssh, cwd;
     std::mutex mutex;
     std::map<std::string, std::string> commands;
-    ckv::core::ProcessRunResult run(const std::string& host, const std::string& command) {
+    ckv::core::ProcessRunResult run(const std::string& host, const std::string& command, std::stop_token stop) {
         ckv::term::NativeProcessRunner runner(clock);
         ckv::core::ProcessRunRequest request;
         request.launch = ckv::core::ProcessLaunchSpec::program(ssh, {
@@ -54,27 +54,31 @@ struct NativeMonitorSource::Impl {
         request.descendants = ckv::core::ProcessDescendantPolicy::TerminateOnCompletion;
         request.idle_budget_nanos = 10'000'000'000;
         request.max_stdout_bytes = 32768; request.max_stderr_bytes = 2048;
-        return runner.run(request);
+        return runner.run(request, stop);
     }
-    Sample remote(const std::string& endpoint) {
+    Sample remote(const std::string& endpoint, std::stop_token stop) {
         std::string command;
         { std::lock_guard lock(mutex); if (commands.contains(endpoint)) command = commands.at(endpoint); }
         if (command.empty()) {
-            const auto ready = run(endpoint, "echo CK_SYSMON_READY");
+            const auto ready = run(endpoint, "echo CK_SYSMON_READY", stop);
+            if (stop.stop_requested()) return {};
             if (!ready.successful() || ready.stdout_capture.bytes.find("CK_SYSMON_READY") == std::string::npos)
                 return failure(ready);
-            const auto helper = run(endpoint, "ck-sysmon --sample");
+            const auto helper = run(endpoint, "ck-sysmon --sample", stop);
+            if (stop.stop_requested()) return {};
             if (helper.successful()) {
                 const auto sample = decode(helper);
                 if (sample) { std::lock_guard lock(mutex); commands[endpoint] = "ck-sysmon --sample"; return *sample; }
             }
-            const auto os = run(endpoint, "uname -s");
+            const auto os = run(endpoint, "uname -s", stop);
+            if (stop.stop_requested()) return {};
             if (os.successful() && os.stdout_capture.bytes.find("Linux") != std::string::npos) command = posix_command(linux_script);
             else if (os.successful() && os.stdout_capture.bytes.find("Darwin") != std::string::npos) command = posix_command(darwin_script);
             else command = powershell_command(windows_script);
             { std::lock_guard lock(mutex); commands[endpoint] = command; }
         }
-        const auto result = run(endpoint, command);
+        const auto result = run(endpoint, command, stop);
+        if (stop.stop_requested()) return {};
         if (!result.successful()) return failure(result);
         const auto sample = decode(result);
         if (sample) return *sample;
@@ -103,5 +107,8 @@ struct NativeMonitorSource::Impl {
 NativeMonitorSource::NativeMonitorSource(const ckv::Clock& clock) : impl_(std::make_unique<Impl>(clock)) {}
 NativeMonitorSource::~NativeMonitorSource() = default;
 std::vector<std::string> NativeMonitorSource::hosts() { return configured_hosts(impl_->home + "/.ssh/config", impl_->system, impl_->home); }
-Sample NativeMonitorSource::sample(const std::string& endpoint) { return endpoint.empty() ? native_sample() : impl_->remote(endpoint); }
+Sample NativeMonitorSource::sample(const std::string& endpoint, std::stop_token stop) {
+    if (stop.stop_requested()) return {};
+    return endpoint.empty() ? native_sample() : impl_->remote(endpoint, stop);
+}
 } // namespace ck::sysmon

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -53,7 +54,9 @@ class MonitorSource {
 public:
     virtual ~MonitorSource() = default;
     virtual std::vector<std::string> hosts() = 0;
-    virtual Sample sample(const std::string& endpoint) = 0;
+    // The token is shared by the service workers and may stop a remote
+    // sample between native calls or during an owned helper wait.
+    virtual Sample sample(const std::string& endpoint, std::stop_token stop) = 0;
 };
 
 using History = std::deque<std::optional<double>>;
