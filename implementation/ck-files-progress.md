@@ -34,12 +34,18 @@ cell coordinates. A second press at the same physical position opened the
 intended menu. Qualification must cover both coordinate ranges and prevent
 queued pixel input from becoming a cell click during mode changes.
 
+Stock xterm 398 answered the paired 1006 and 1016 mode queries in request
+order and reported only one coordinate mode active at each transition.
+Neither geometry query produced a cell metric. This supports preserving
+baseline cell input until a terminal proves its pixel geometry.
+
 | Evidence | SHA-256 |
 | --- | --- |
 | Linux xterm replacement and explicit row binding receipt | `358edf21551d4d1df5dce44665a5ae69f9b59d59903b30f924fefe20c9493034` |
 | Linux xterm first-click trace receipt | `0e1d05c011be9142bb5a78fb37dede43515235a1619a6cc6e0a957b9c8310f86` |
 | Linux xterm first-click timing control receipt | `ecf323e4d7b6955469aa39f55a457e45449274ccabcfd131abd33c43d6b6bed7` |
 | Linux xterm wrong-target first-click receipt | `4025c663d2e6220fbed9e8fddac807fc53996fd6e98f3d62d4d7a8e58ff1cfdd` |
+| Linux xterm mouse mode and geometry protocol receipt | `d52aec53ccc4b94379c90b362b77ceef372e46e762093bfcbab5a19ac5cb0e9e` |
 
 ## 2026-11-11 — Native test scratch-root configuration
 
@@ -53,12 +59,22 @@ configuring test targets.
 Fresh macOS configurations checked all 140 compile commands that consume
 the root with both the default and an explicit path. All received the
 expected absolute path, and the production Files compile commands matched
-across both configurations. The workstation rebuild and ordinary-user
-execution are pending.
+across both configurations.
+
+The workstation passed native-path configuration from untyped, typed,
+and cached inputs, then compiled the previously failing recovery objects.
+The fresh MSVC v143 Release build completed all 303 planned steps on `V:`.
+It linked all six Files and keymap test executables. CTest enumerated 111
+registrations, including both standalone allocation-fault cases. The
+ordinary-user full-suite launcher was staged and read back byte-for-byte.
+It uses the shared runtime lock and leaves the verified desktop executable
+available for the separate interactive check. Windows execution is pending.
 
 | Evidence | SHA-256 |
 | --- | --- |
 | Windows baseline failure and macOS configuration receipt | `5e8968873eefe56ec416373a13ec3090dc2b5a877d2fa1e0ad08e93fe5781516` |
+| Windows full Files/keymap v143 compile receipt | `945784dff5188ce20c754f2990d08bf2bc410a0dd201ece0958769394ab2d4ca` |
+| Windows ordinary-user full-suite handoff receipt | `4c9bdeca2f0099f80663e4ba3ac9c02ce6e9e84d8f543771bf8c8d8b28d3e694` |
 
 ## 2026-11-11 — Full capacity for large macOS volumes
 
