@@ -192,13 +192,12 @@ current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
 and clean `Alt+X` shutdown for the installed utility set. The same three
-profiles pass for all ten utilities in the Linux aarch64 archive. This is still
-an implementation checkpoint, not a claim that every release gate is complete:
-recovery execution, full filesystem-matrix coverage, and final
-mouse/restricted-key acceptance remain tracked work. Volume archive live
-traversal is focused-qualified on the three build platforms; native snapshot providers,
-archive restart reconciliation, and real-volume interactive archive fixtures
-remain open release gates.
+profiles pass for all ten utilities in the Linux aarch64 archive. A Linux
+terminal run copied a private ext4 mount into a sparse archive and verified the
+reconstructed file against the source hash. The macOS APFS destination returned
+an explicit unsupported result at the archive publication boundary. Native
+snapshot providers, archive restart reconciliation, and the remaining
+filesystem and desktop acceptance checks are still in qualification.
 
 The operation plan is not a global transaction and does not promise rollback
 after a partial failure. Cancellation stops new work at a safe boundary and
