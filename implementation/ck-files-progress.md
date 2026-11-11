@@ -1,5 +1,41 @@
 # Files implementation evidence
 
+## 2026-11-11 — Mark and cursor continuity on refresh
+
+The refresh candidate scans the held pane directory and carries marks and
+cursor focus to the new index only when it can verify the same native object.
+The worker checks that the displayed route still resolves to the held
+directory before publishing. If refresh fails, the old rows stay visible as
+a stale listing and row commands stay disabled until a refresh or navigation
+succeeds. When a cursor binding is lost, **Marks → Use current row** requires
+an explicit confirmation. A second refresh cannot clear that requirement.
+
+Linux ARM64 Release passed all 155 Files and keymap CTests with zero skips.
+macOS ARM64 Release passed all 111 Files and keymap CTests, including the
+focused refresh regression on APFS.
+In the authenticated xterm session, Right accepted the location completion,
+the bookmark picker reopened the left folder, and Ctrl+R inserted a new row
+ahead of the marked file. The original file stayed marked and focused. The
+right pane retained its location, and Alt+X restored the terminal modes.
+
+The frontend candidate uses base `7073152` and patch SHA-256
+`f9adf36c159a0ccf8d611816d37bf7b09edc76f718a9233e48128af1ad1ac102`.
+The Linux build uses backend `43d6fe1` through a source override. Backend
+`89f21c9` changes only the Darwin qualification fixture. Its macOS APFS
+held-rescan run passed all five selected provider cases, including the
+long-path and exact-name case, through the installed SDK.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux Release Files and keymap receipt | `a36dd58e9f5ee14b38b61567145966fb02fdf69ce99b8a5d35a06ad3ec430797` |
+| macOS Release Files and keymap receipt | `b8adbc40fe83e8854f4b234d04ca68654882ebd6e8300b727b6bdb1f8a9413b6` |
+| Linux xterm completion, bookmark and refresh receipt | `44f00f539185de538ee7713be7271e888c72105791f83f455ed36468b287902e` |
+| Linux native indexed selection receipt | `9c19e86d73d013cd66db1ef8f3e5c1d4532997304c7437ce1f056eea1c012b8b` |
+| macOS APFS held-rescan receipt | `5ad7a09684d8f081a4ec521c41d0afe28efd7c21de8e730d8e53567b1dcb5f6f` |
+
+Windows ordinary-user execution, current-source sanitizer and race checks,
+and macOS and Windows desktop acceptance remain open.
+
 ## 2026-11-11 — Exact path copy and terminal clipboard
 
 Frontend `b4d0dd4` copies the focused entry through the pane worker. It uses
@@ -35,9 +71,8 @@ original listing. Alt+X restored the terminal modes and exited cleanly.
 
 The same terminal run reproduced mark loss on explicit refresh. After
 marking an unchanged file and adding a second file externally, Ctrl+R showed
-both files and dropped the mark. The Files worker currently implements refresh
-as navigation into a new indexed pane. The indexed refresh gate stays open
-until it preserves proven continuity and reports invalidated selections.
+both files and dropped the mark. At that checkpoint, the Files worker
+implemented refresh as navigation into a new indexed pane.
 
 | Evidence | SHA-256 |
 | --- | --- |

@@ -417,11 +417,14 @@ authority and does not close the application or release requirements below.
 - [ ] Preserve proven selection continuity across a fresh indexed scan.
   The `912b961` Linux xterm run reopened a pane-local bookmark with the
   keyboard, then reproduced loss of an unchanged file's mark on refresh.
-  The new file appeared in the refreshed listing and the other pane retained
-  its location. Extend indexed refresh with worker-held identity evidence for
-  surviving selections. Surface invalidation for removed, replaced, or
-  unqualified entries, including hidden marks. See the
-  [terminal observation](ck-files-progress.md#2026-11-11--bookmark-picker-and-indexed-refresh).
+  The refresh candidate uses worker-held identity evidence to carry forward
+  surviving marks and focus, and reports invalidation for removed, replaced,
+  or unqualified entries, including hidden marks. Release passed all 155
+  Linux and 111 macOS Files and keymap CTests. A real xterm window confirmed
+  that a newly inserted row moved the original file to a different position
+  while its mark and focus followed it. See the
+  [candidate evidence](ck-files-progress.md#2026-11-11--mark-and-cursor-continuity-on-refresh).
+  The candidate's Windows runtime and current-source sanitizer gates remain open.
 - [x] Move settings persistence out of UI callbacks into a bounded, joined
   worker; preserve revision conflicts and errors, and drain accepted writes
   during shutdown. UI admission is memory-only; the production binding has no
