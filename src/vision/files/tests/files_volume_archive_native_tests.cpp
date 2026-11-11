@@ -132,7 +132,7 @@ void scan_replaced_recovery_root() {
     assert(lstat((base_path + "/private/" + journal()).c_str(), &retained) == -1 && errno == ENOENT);
 }
 
-void source_change_during_reviewed_write() {
+void reviewed_write_refuses_changed_admission() {
     FilesVolumeArchiveService worker;
     auto planned = worker.plan({
         source(), address(base_path + "/dest"), "image.ckarchive", FilesVolumeArchiveConsistency::Live,
@@ -147,6 +147,12 @@ void source_change_during_reviewed_write() {
         if (!review) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     assert(review && review->state == FilesVolumeArchivePlanningState::Ready && review->review);
+    const bool late_journal = is("recovery-journal-appeared-during-review");
+    const auto existing = base_path + "/private/" + journal();
+    if (late_journal) {
+        const int file = open(existing.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+        assert(file >= 0 && write(file, "partial", 7) == 7 && close(file) == 0);
+    }
     auto approved = take(review->review->approve(FilesVolumeArchiveReviewDecision::Proceed));
     auto started = worker.execute_review(planned.ticket, std::move(approved), address(base_path + "/private"));
     assert(started.state == FilesVolumeArchiveSubmission::Accepted);
@@ -158,10 +164,20 @@ void source_change_during_reviewed_write() {
     worker.request_stop();
     worker.join();
     assert(result && result->state == FilesVolumeArchiveState::Failed && result->error &&
-           result->error->state == ObservationState::Changed &&
-           result->error->error.operation == "volume_archive.source.mount_changed");
-    assert(write_seen && closed == 1);
-    verify_unpublished_archive();
+           result->error->state == ObservationState::Changed);
+    if (late_journal) {
+        assert(result->error->error.operation == "volume_archive.recovery_admission_required");
+        assert(!write_seen && closed == 0 && read_file(existing) == bytes("partial"));
+        const auto scan = take(discover_volume_archive_recovery(address(base_path + "/private")));
+        assert(scan.journals.size() == 1 && scan.requires_reconciliation);
+        struct stat missing{};
+        assert(lstat((base_path + "/dest/image.ckarchive").c_str(), &missing) == -1 && errno == ENOENT);
+    } else {
+        assert(result->error->error.operation == "volume_archive.source.mount_changed");
+        assert(write_seen && closed == 1);
+        verify_unpublished_archive();
+    }
+
 }
 }
 
@@ -173,9 +189,9 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  if(is("occupied")){int fd=open((base_path+"/dest/image.ckarchive").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  if(is("hint-replaced")){int fd=open((base_path+"/dest/.image.ckarchive.cktmp-1").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  std::stop_source stop;cancel_source=&stop;armed=true;
- if (is("source-mount-changed-during-write")) {
+ if (is("source-mount-changed-during-write") || is("recovery-journal-appeared-during-review")) {
   take(root->finish_io());
-  source_change_during_reviewed_write();
+  reviewed_write_refuses_changed_admission();
   return 0;
  }
  const bool service_mode=is("service")||is("service-legacy-root")||is("service-oom");

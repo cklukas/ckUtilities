@@ -3086,6 +3086,11 @@ struct FilesApp::State {
                     message = "Archive destination changed. Start a new review.";
                 else if (operation == "volume_archive.review.destination_conflict")
                     message = "An entry now uses the archive name. Start a new review.";
+                else if (operation == "volume_archive.recovery_admission_required")
+                    message = "An archive journal needs recovery review before copying.";
+                else if (operation == "volume_archive.recovery_root_changed" ||
+                         operation == "volume_archive.recovery_directory_changed")
+                    message = "The archive journal directory changed during inspection.";
                 else
                     message += ": " + operation;
             }

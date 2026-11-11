@@ -53,7 +53,9 @@ execute files or provide an embedded shell.
   a bounded read-only scan checks private archive journals through the held
   journal directory and reports if that directory was replaced. Each attempt has its own journal ID, so completed records
   remain available when Files restarts. Copy remains disabled until the scan
-  completes and no journal needs reconciliation.
+  completes and no journal needs reconciliation. At approval, the archive
+  worker checks recovery again and uses the same inspected directory for the
+  new journal.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals. A separate
   worker boundary refuses restart cleanup because the original archive
