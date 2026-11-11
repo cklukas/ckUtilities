@@ -1,5 +1,20 @@
 # Files implementation evidence
 
+## 2026-11-11 — Withdrawing location completion
+
+Files cancels a pending completion request when the caret moves away from
+the end of the field, text is selected, or the address is invalid. Valid
+prefix edits still let the worker reuse a pending scan for the same parent.
+The regression blocks the workspace open, moves the caret or enters an
+invalid address, and checks that the worker returns Cancelled without a
+proposal.
+
+Linux ARM64 ASan/UBSan confirmed both assertions failed with the old
+controller. The fixed controller passed the focused test and all 295
+application cases. The source-only test checkpoint `fed0afd` and its
+integration commit `1837696` have identical product and test sources.
+The receipt SHA-256 is `dffe0cfa95aeea37ad5698a1e85a0f38c3f94db68dfdb1f9970b6213960f3fea`.
+
 ## 2026-11-11 — Volume layout and current sanitizer checks
 
 Frontend `e402898e2008cfe8ea524cb7b0235c30a9cbc8cb` separates long
