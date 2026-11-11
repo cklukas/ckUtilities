@@ -2285,6 +2285,62 @@ CK_TEST(files_app_location_completion_native_failure_edit_success_preserves_rout
     CK_CHECK(f.app->location(1) == other);
 }
 
+CK_TEST(files_location_controller_cancels_a_scan_when_the_edit_no_longer_admits_completion) {
+    for (const bool invalid_path : {false, true}) {
+        Fixture f;
+        f.loaded();
+        ckv::ManualClock clock;
+        ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34});
+        ckv::ui::Application application(terminal, clock);
+        SuiteShell shell(application, {.application_name = "Files"});
+
+        Gate gate;
+        auto backend = native_files_pane_backend(address(f.scratch.path() / "completion-cache-left"));
+        backend.workspace = [open_workspace = std::move(backend.workspace), &gate] {
+            gate.block();
+            return open_workspace();
+        };
+        FilesCompletionService service(std::move(backend));
+        struct ReleaseWorkspace {
+            Gate &gate;
+            ~ReleaseWorkspace() { gate.release(); }
+        } release_workspace{gate};
+
+        auto draft = FilesLocationDraft::start(*f.app->location(0));
+        if (!draft.value())
+            throw std::runtime_error("completion dialog draft unavailable");
+        FilesLocationDialog dialog(application, shell.desktop(), shell.roles(), std::move(draft).take_value(),
+                                   &service, [](std::optional<FilesPaneLocation>) {});
+        auto *field = dialog.input();
+        if (!field)
+            throw std::runtime_error("completion dialog input unavailable");
+        const auto prefix = f.path_text(f.scratch.path() / "left") + "/left-item-";
+        field->set_text(prefix);
+        gate.wait();
+
+        if (invalid_path) {
+            field->set_text("relative");
+            CK_CHECK(has_location_feedback(application, "Completion needs a valid location."));
+        } else {
+            CK_CHECK(application.dispatch(ckv::KeyEvent{{ckv::Key::Home, ckv::Modifier::None, {}}}));
+            CK_CHECK(field->text() == prefix);
+        }
+        gate.release();
+
+        std::optional<FilesCompletionReply> reply;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        do {
+            reply = service.take();
+            if (!reply)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (!reply && std::chrono::steady_clock::now() < deadline);
+        CK_CHECK(reply && reply->state == FilesCompletionReplyState::Cancelled && !reply->page);
+        if (reply)
+            dialog.publish_completion(std::move(*reply));
+        CK_CHECK(!field->has_completion_preview());
+    }
+}
+
 CK_TEST(files_location_controller_rejects_replayed_worker_failure_by_ticket_and_revision) {
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();

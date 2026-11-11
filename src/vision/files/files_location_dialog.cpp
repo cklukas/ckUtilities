@@ -44,21 +44,23 @@ class FilesLocationCompletionProvider final : public ckv::widgets::CompletionPro
 
     void request(const ckv::widgets::CompletionRequest &request) override {
         query_ = request;
-        ticket_ = {};
         snapshot_ = {request.revision, ckv::widgets::CompletionState::Pending, {}};
         set_hint({});
         if (!request.revision || request.has_selection || request.cursor != ckv::text::split_graphemes(request.text).size()) {
+            cancel();
             snapshot_.state = ckv::widgets::CompletionState::Ready;
             return;
         }
         auto parsed = parse_files_location_completion(request.text, syntax_, encoding_, limits_);
         if (!parsed.value()) {
+            cancel();
             snapshot_.state = ckv::widgets::CompletionState::Failed;
             set_hint("Completion needs a valid location.");
             return;
         }
         const auto submitted = service_.request(std::move(parsed).take_value(), request.revision, true);
         if (submitted.state != FilesCompletionSubmission::Accepted) {
+            cancel();
             snapshot_.state = ckv::widgets::CompletionState::Failed;
             set_hint(submitted.state == FilesCompletionSubmission::LimitExceeded
                          ? "Completion limit reached; narrow the location."
