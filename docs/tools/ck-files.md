@@ -39,12 +39,16 @@ execute files or provide an embedded shell.
   in the active-pane status. Approval creates a versioned sparse filesystem
   archive, not a raw block image; Move is never used for this operation. The
   review shows consistency, logical/data bytes, sparse shape, links, and
-  explicit preservation losses. The worker revalidates the source, records
-  durable journal states, verifies data before no-replace publication, and
-  reports indeterminate durability when publication has happened but a later
-  flush or journal step cannot be proven. On startup, a bounded read-only
-  recovery scan checks private archive journals; Copy remains disabled until
-  the scan is complete and no reconciliation-required journal is present.
+  explicit preservation losses. Changing focus during planning keeps the
+  reviewed source and destination panes. After confirmed publication,
+  Files refreshes the original destination when it still shows the reviewed
+  directory and displays the result in that pane. The worker revalidates
+  the source, records durable journal states, and verifies data before
+  no-replace publication. It reports indeterminate durability when publication
+  succeeds and a later flush or journal step cannot be proven. On startup,
+  a bounded read-only recovery scan checks private archive journals. Copy
+  remains disabled until the scan completes and no journal needs
+  reconciliation.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals. A separate
   worker boundary refuses restart cleanup because the original archive
