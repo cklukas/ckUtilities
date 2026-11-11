@@ -376,6 +376,8 @@ struct FilesApp::State {
     std::size_t volume_pane = 0;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId highlighted_menu_command = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId pressed_footer_command = ckv::ui::kInvalidCommand;
+    std::size_t last_input_mouse_count = 0;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_file_id = ckv::ui::kInvalidCommand;
@@ -612,6 +614,7 @@ struct FilesApp::State {
                 labels();
             };
             create_window();
+            last_input_mouse_count = application.mouse_events_dispatched();
             observer = application.add_attention_observer([this](auto kind) {
                 if (closing)
                     return;
@@ -621,6 +624,8 @@ struct FilesApp::State {
                             active = i;
                             layout();
                         }
+                } else {
+                    update_footer_hint(kind);
                 }
             });
             wake.bind([this] { pump(); });
@@ -663,6 +668,28 @@ struct FilesApp::State {
         }
     }
     ~State() { cleanup(); }
+    void update_footer_hint(ckv::ui::Application::AttentionChange kind) {
+        auto next = ckv::ui::kInvalidCommand;
+        const auto *footer = shell->status_line();
+        if (kind == ckv::ui::Application::AttentionChange::Input) {
+            const auto count = application.mouse_events_dispatched();
+            const auto &mouse = application.last_mouse_event();
+            if (count != last_input_mouse_count && mouse && mouse->action == ckv::MouseAction::Down &&
+                mouse->button == ckv::MouseButton::Left && footer && application.hovered_view() == footer &&
+                !application.input_capture()) {
+                const auto hit = footer->command_at(mouse->cell);
+                if (hit != ckv::ui::kInvalidCommand && !application.commands().is_enabled(hit))
+                    next = hit;
+            }
+            last_input_mouse_count = count;
+        } else if (application.hovered_view() == footer) {
+            return;
+        }
+        if (next != pressed_footer_command) {
+            pressed_footer_command = next;
+            labels();
+        }
+    }
     void cleanup() noexcept {
         if (settings.worker)
             settings.worker->request_close();
@@ -1015,10 +1042,13 @@ struct FilesApp::State {
                        ? FilesCommandAvailability::available()
                        : unavailable("Link inspection unavailable: select a symbolic link or reparse point");
         }
-        if (command == "ck.files.enter_directory")
+        if (command == "ck.files.enter_directory") {
+            if (panes[active].volume_view)
+                return unavailable("Enter folder unavailable: return to the filesystem listing");
             return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory
                        ? FilesCommandAvailability::available()
                        : unavailable("Enter folder unavailable: select a folder");
+        }
         if (command == "ck.files.create_directory")
             return ready(active) ? FilesCommandAvailability::available()
                                  : unavailable("New folder unavailable: active pane is not ready");
@@ -1216,8 +1246,10 @@ struct FilesApp::State {
         if (p.range_start)
             text += " | Range start set";
         std::string hint;
-        if (i == active && highlighted_menu_command != ckv::ui::kInvalidCommand) {
-            if (const auto *command = application.commands().find(highlighted_menu_command))
+        const auto inspected_command = highlighted_menu_command != ckv::ui::kInvalidCommand
+            ? highlighted_menu_command : pressed_footer_command;
+        if (i == active && inspected_command != ckv::ui::kInvalidCommand) {
+            if (const auto *command = application.commands().find(inspected_command))
                 hint = availability(command->key).reason;
         } else if (i == active && p.volume_view) {
             // A volume row has one meaningful operation: archive Copy. Keep

@@ -1828,6 +1828,13 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
     CK_CHECK(f.app->status(0).find("archive capability is unknown") != std::string::npos);
     CK_CHECK(f.app->availability("ck.files.move").reason.find("volume rows are archive sources") != std::string::npos);
     CK_CHECK(f.painted().find("RO") != std::string::npos);
+    const ckv::Point footer_enter{2, 23};
+    CK_CHECK(f.application.dispatch(ckv::MouseEvent{
+        .action = ckv::MouseAction::Down, .button = ckv::MouseButton::Left, .cell = footer_enter}));
+    CK_CHECK(f.application.dispatch(ckv::MouseEvent{
+        .action = ckv::MouseAction::Up, .button = ckv::MouseButton::Left, .cell = footer_enter}));
+    CK_CHECK(f.painted().find("Enter folder unavailable: return to the filesystem listing") != std::string::npos);
+    CK_CHECK(f.app->model(0).cursor().row == 1);
     CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "o"}}));
     CK_CHECK(f.key(ckv::Key::End));
     const auto move_reason = f.app->availability("ck.files.move").reason;

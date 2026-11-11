@@ -72,6 +72,7 @@ public:
 
     ckv::widgets::Desktop &desktop() noexcept;
     ckv::widgets::MenuBar *menu_bar() noexcept { return shell_.menu_bar(); }
+    ckv::widgets::StatusLine *status_line() noexcept { return shell_.status_line(); }
     const ckv::ui::StandardRoles &roles() const noexcept { return roles_; }
     const ckv::widgets::ClockView *clock_view() const noexcept { return clock_view_; }
 
