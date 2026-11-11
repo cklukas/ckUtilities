@@ -1,5 +1,41 @@
 # Files implementation evidence
 
+## 2026-11-11 — Volume navigation and terminal emulator input
+
+Frontend `bf5e8bc48d2027450228234ae1159b19e3836425` keeps the selected
+volume visible until the filesystem worker delivers a replacement page.
+A failed or cancelled reopen retains the selection. A successful reopen
+selects the first file row. The Linux ARM64 Release run passed 139 focused
+Files cases, 44 archive cases, three backend cases, and the keymap suite.
+Three controlling PTY runs covered recovery refresh, a missing location,
+completion, mouse marking, and restricted keyboard navigation.
+
+The same Linux binary passed 20 observations in two xterm 398 windows on
+an authenticated private Xvfb display. X11 keyboard and mouse events
+exercised Right-to-accept, Enter navigation, pane focus, marking, and
+window resize under `xterm-256color`. Under `vt100`, menu mnemonics created
+a folder in the active pane and switched panes. Backspace opened the mount
+list and returned to the filesystem. Both sessions exited normally and
+restored the terminal settings.
+
+The matching macOS ARM64 Release build with backend `0f560c0` and
+ckVision `b8d412a` passed all 111 Files and keymap CTest entries, including
+294 application cases. Its controlling PTY confirmed Right-to-accept,
+mouse focus, mark retention on resize, and volume selection retention
+after a missing location. The APFS archive provider returned its typed
+publication refusal.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux focused Release and PTY summary | `1cfdc5e4a3597a52c2b374045a8f41417b4b2e1a354a250d821390295a464efc` |
+| Linux xterm window summary | `9f0cf324ef838b88b4fb723912fb7869ea245e16c16318270a24afe1e768ea18` |
+| macOS Files and keymap receipt | `474b96fa44d0f3ac2a72b2448309ccd907bd464e8ceec46ca5d046915d98bfd4` |
+| macOS controlling PTY summary | `fa8fb8d159303ad8f483ca88e694bb436c5ba82bbc7330a6154f2a73a4d1afaf` |
+
+Long mount names can run into the Type column. At 120 terminal columns,
+a native error can clip the volume retention message in the pane footer.
+Physical desktop sessions and Windows runtime acceptance remain open.
+
 ## 2026-11-11 — Mounted volume archive in the Linux terminal
 
 Frontend `9238776` keeps volume rows visible while the file pane repaints,

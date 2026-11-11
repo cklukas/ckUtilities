@@ -449,6 +449,11 @@ authority and does not close the application or release requirements below.
   remain open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
+  Frontend `bf5e8bc` passed the Linux focused Release archive cases, the
+  macOS Files and keymap suite, and terminal input checks on both platforms.
+  The Linux xterm check used an isolated X11 display. The
+  [qualification record](ck-files-progress.md#2026-11-11--volume-navigation-and-terminal-emulator-input)
+  records its scope, the macOS APFS refusal, and the open visual findings.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
