@@ -1,5 +1,27 @@
 # Files implementation evidence
 
+## 2026-11-11 — Private HOME for package terminal checks
+
+Candidate `efc1518` gives the launched tool a private HOME during the
+package terminal checks. The local checks therefore run independently of
+SSH aliases configured in the invoking user's home. The helper still checks
+resize, the standard quit chord and restored terminal modes under the
+original deadlines.
+
+macOS ARM64 passed 30 staged and 30 extracted checks. Linux ARM64 passed
+30 staged checks and 30 each from the TGZ, DEB and RPM. The checks verified
+the executable bytes and the private HOME on the running processes. The
+package checks used the verified `cf57c0c` Release images with the rebuilt
+verification helper. The receipt SHA-256 values are
+`4a4bdb42eecd6bc83c5077c8a464a857a234c336c0c38178259d1a04705c8c14`
+and `0be94cf8ffd7ef5428dac1b323416199b9f3958eb81e313ede5f5f73cdc9399a`,
+respectively.
+
+The original macOS quit failure exposed a separate `ck-sysmon` shutdown
+wait while an SSH sampler was active. Cancellation of that worker remains
+open. The Linux Release run also retains its failing native directory
+lifecycle regression.
+
 ## 2026-11-11 — Windows AddressSanitizer results and settings fixture
 
 Windows x64 frontend `ce4b02a`, backend `4e41414`, and ckVision `0d81e2e`
