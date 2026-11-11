@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_pane_service.hpp"
+#include "files_location_draft.hpp"
 #include "native_index_file.hpp"
 #include "native_home.hpp"
 #include <algorithm>
@@ -38,12 +39,12 @@ struct Change {
     Read request;
     FilesPaneChange command;
 };
-struct Preview {
+struct RowInspection {
     FilesPaneTicket ticket, navigation;
     PaneStateStamp stamp;
     PaneRowId row;
     FilesPanePreviewLimits limits;
-    bool link = false;
+    FilesPaneReplyKind kind;
 };
 struct CreateDirectory {
     FilesPaneTicket ticket, navigation;
@@ -148,7 +149,7 @@ struct FilesPaneService::State {
     std::optional<Navigate> navigation;
     std::optional<Read> read;
     std::optional<Change> change;
-    std::optional<Preview> preview;
+    std::optional<RowInspection> preview;
     std::optional<Operation> operation;
     std::optional<FilesPaneReply> reply;
     FilesPaneTicket latest_navigation, latest_request, cancelled;
@@ -274,7 +275,7 @@ struct FilesPaneService::State {
             std::optional<Navigate> nav;
             std::optional<Read> page;
             std::optional<Change> edit;
-            std::optional<Preview> inspection;
+            std::optional<RowInspection> inspection;
             std::optional<Operation> op;
             std::stop_source stop;
             {
@@ -543,21 +544,41 @@ struct FilesPaneService::State {
                 result.request = inspection->ticket;
                 result.navigation = inspection->navigation;
                 result.active_location = result.requested_location = active;
-                result.kind = inspection->link ? FilesPaneReplyKind::Link : FilesPaneReplyKind::Preview;
-                if (!pane->data() || !pane->accepts(inspection->stamp)) {
+                result.kind = inspection->kind;
+                if (!active || !pane->data() || inspection->navigation != active_epoch ||
+                    !pane->accepts(inspection->stamp)) {
                     result.state = FilesPaneReplyState::Stale;
                 } else if (stop.stop_requested()) {
                     result.state = FilesPaneReplyState::Cancelled;
                 } else {
                     auto opened = pane->open_row(inspection->stamp, inspection->row,
-                                                 inspection->link ? ck::files::EntryAccess::MetadataOnly
-                                                                  : ck::files::EntryAccess::ContentRead,
+                                                 inspection->kind == FilesPaneReplyKind::Preview
+                                                     ? EntryAccess::ContentRead : EntryAccess::MetadataOnly,
                                                  {limits.page_wire_bytes, limits.path_bytes, limits.diagnostic_bytes},
                                                  stop.get_token());
                     if (!opened.value()) {
                         result.state = stop.stop_requested() ? FilesPaneReplyState::Cancelled : FilesPaneReplyState::Failed;
                         result.error = *opened.unavailable_detail();
-                    } else if (inspection->link) {
+                    } else if (inspection->kind == FilesPaneReplyKind::PathText) {
+                        FilesLocationTextLimits text_limits{.path = {limits.path_bytes},
+                                                            .components = limits.location_components};
+                        auto route = active->descend(opened.value()->name, text_limits.path, text_limits.components);
+                        if (!route.value()) {
+                            result.error = *route.unavailable_detail();
+                        } else {
+                            auto draft = FilesLocationDraft::start(std::move(route).take_value(), text_limits);
+                            if (!draft.value()) {
+                                result.error = *draft.unavailable_detail();
+                            } else if (stop.stop_requested()) {
+                                result.state = FilesPaneReplyState::Cancelled;
+                            } else {
+                                result.state = FilesPaneReplyState::Ready;
+                                result.path_text = FilesPanePathText{
+                                    draft.value()->text(),
+                                    draft.value()->syntax() == FilesLocationTextSyntax::ExactNames};
+                            }
+                        }
+                    } else if (inspection->kind == FilesPaneReplyKind::Link) {
                         const auto kind = (*opened.value()).child ? (*opened.value()).child->metadata().kind :
                                                                  Observation<ObjectKind>::unavailable(
                                                                      ObservationState::Unknown,
@@ -1301,29 +1322,18 @@ FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneS
 }
 FilesPaneSubmitted FilesPaneService::preview(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
                                              FilesPanePreviewLimits limits) {
-    if (!navigation.valid() || !row.scope.is_valid() || !row.number || !limits.valid())
+    if (!limits.valid())
         return {FilesPaneSubmission::Invalid, {}};
-    FilesPaneTicket request;
-    {
-        std::lock_guard lock(state_->mutex);
-        if (state_->stopping || !state_->alive.load())
-            return {FilesPaneSubmission::Stopped, {}};
-        if (navigation != state_->latest_navigation)
-            return {FilesPaneSubmission::Invalid, {}};
-        if (state_->navigation_busy || state_->change_busy || state_->busy || state_->navigation || state_->read ||
-            state_->change || state_->preview || state_->reply)
-            return {FilesPaneSubmission::Busy, {}};
-        if (!state_->next)
-            return {FilesPaneSubmission::Exhausted, {}};
-        request = ticket(state_->next++);
-        state_->preview = Preview{request, navigation, std::move(stamp), std::move(row), limits};
-        state_->latest_request = request;
-        state_->cancelled = {};
-    }
-    state_->condition.notify_one();
-    return {FilesPaneSubmission::Accepted, request};
+    return inspect_row(navigation, std::move(stamp), std::move(row), FilesPaneReplyKind::Preview, limits);
 }
 FilesPaneSubmitted FilesPaneService::inspect_link(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row) {
+    return inspect_row(navigation, std::move(stamp), std::move(row), FilesPaneReplyKind::Link);
+}
+FilesPaneSubmitted FilesPaneService::copy_path(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row) {
+    return inspect_row(navigation, std::move(stamp), std::move(row), FilesPaneReplyKind::PathText);
+}
+FilesPaneSubmitted FilesPaneService::inspect_row(FilesPaneTicket navigation, PaneStateStamp stamp, PaneRowId row,
+                                                 FilesPaneReplyKind kind, FilesPanePreviewLimits limits) {
     if (!navigation.valid() || !row.scope.is_valid() || !row.number)
         return {FilesPaneSubmission::Invalid, {}};
     FilesPaneTicket request;
@@ -1334,12 +1344,12 @@ FilesPaneSubmitted FilesPaneService::inspect_link(FilesPaneTicket navigation, Pa
         if (navigation != state_->latest_navigation)
             return {FilesPaneSubmission::Invalid, {}};
         if (state_->navigation_busy || state_->change_busy || state_->busy || state_->navigation || state_->read ||
-            state_->change || state_->preview || state_->reply)
+            state_->change || state_->preview || state_->operation || state_->reply)
             return {FilesPaneSubmission::Busy, {}};
         if (!state_->next)
             return {FilesPaneSubmission::Exhausted, {}};
         request = ticket(state_->next++);
-        state_->preview = Preview{request, navigation, std::move(stamp), std::move(row), {}, true};
+        state_->preview = RowInspection{request, navigation, std::move(stamp), std::move(row), limits, kind};
         state_->latest_request = request;
         state_->cancelled = {};
     }

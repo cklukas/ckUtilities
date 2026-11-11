@@ -1273,6 +1273,41 @@ CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->preview_pending());
 }
+CK_TEST(files_app_location_menu_copies_the_bound_row_and_cancellation_keeps_the_clipboard) {
+    Fixture f;
+    f.loaded();
+    const auto command = "ck.files.copy_path";
+    auto capabilities = f.terminal.capabilities();
+    capabilities.clipboard_write = true;
+    f.terminal.set_capabilities(capabilities);
+
+    CK_CHECK(f.alt("l"));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "y"}}));
+    f.loaded();
+    const auto left = f.path_text(f.scratch.path() / "left" / "left-item-0");
+    CK_CHECK(f.application.clipboard_text() == left && f.terminal.clipboard() == left);
+
+    *f.block_directory = true;
+    CK_CHECK(f.command(command));
+    f.directory_gate->wait();
+    CK_CHECK(f.app->pending(0) && !f.app->pending(1));
+    f.app->switch_pane();
+    CK_CHECK(!f.application.commands().is_enabled(f.id(command)));
+    f.app->switch_pane();
+    CK_CHECK(f.command("ck.files.cancel_read"));
+    f.directory_gate->release();
+    f.loaded();
+    CK_CHECK(f.app->status(0).find("Copy path cancelled") != std::string::npos);
+    CK_CHECK(f.application.clipboard_text() == left && f.terminal.clipboard() == left);
+
+    f.app->switch_pane();
+    capabilities.clipboard_write = false;
+    f.terminal.set_capabilities(capabilities);
+    CK_CHECK(f.command(command));
+    f.loaded();
+    CK_CHECK(f.application.clipboard_text() == f.path_text(f.scratch.path() / "right" / "right-item-0"));
+    CK_CHECK(f.app->status(1).find("system clipboard unavailable") != std::string::npos);
+}
 CK_TEST(files_app_view_options_materialize_typed_controls_and_accept_via_mouse_after_narrow_resize) {
     Fixture f;
     f.loaded();

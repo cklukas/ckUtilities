@@ -77,6 +77,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.bookmark_remove", "&Remove bookmark", "Files", ""},
     CommandDefinition{"ck.files.refresh", "&Refresh listing", "Files", "Ctrl+R"},
     CommandDefinition{"ck.files.properties", "&Properties...", "Files", ""},
+    CommandDefinition{"ck.files.copy_path", "Cop&y path", "Files", ""},
     CommandDefinition{"ck.files.preview", "Pre&view", "Files", "F3"},
     CommandDefinition{"ck.files.inspect_link", "Inspect link target", "Files", ""},
     CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},

@@ -79,7 +79,7 @@ struct Trace {
     std::atomic<bool> block_home{false};
     std::atomic<int> home_fault{0};
     Gate home_gate;
-    bool replace_child = false, long_child_name = false;
+    bool replace_child = false, long_child_name = false, exact_child_name = false;
     Gate open_gate, read_gate, child_gate, retire_gate;
     std::mutex mutex;
     std::condition_variable changed;
@@ -260,7 +260,8 @@ class ChildSource final : public BasicFileSystem {
             fs_.put(inner, child_name("leaf"), fs_.make_node(ObjectKind::RegularFile));
             fs_.put(folder, child_name(trace_->long_child_name ? std::string(200, 'x') : "inner"), inner);
             fs_.put(root, child_name("folder"), folder);
-            fs_.put(root, child_name("file"), fs_.make_node(ObjectKind::RegularFile));
+            fs_.put(root, child_name(trace_->exact_child_name ? "file\twith-tab" : "file"),
+                    fs_.make_node(ObjectKind::RegularFile));
             fs_.put(root, child_name("link"), fs_.make_node(ObjectKind::SymbolicLink));
             if (trace_->replace_child && root_name == std::string_view("one")) {
                 auto replacement = fs_.make_node(ObjectKind::Directory);
@@ -598,6 +599,30 @@ CK_TEST(files_service_view_change_cancelled_during_blocked_cache_read_preserves_
     CK_CHECK(f.service->read_page(nav.ticket, result.stamp, {0, 5}).state == FilesPaneSubmission::Accepted);
     auto retained = f.reply();
     CK_CHECK(!retained.page->view().descending && retained.page->rows()[0].id == first.page->rows()[0].id);
+    f.stopped();
+}
+CK_TEST(files_service_copies_exact_native_name_from_a_stamped_row) {
+    Fixture f;
+    f.trace->exact_child_name = true;
+    f.start_children();
+    const auto navigation = f.service->navigate(address("one"));
+    CK_CHECK(navigation.state == FilesPaneSubmission::Accepted);
+    const auto page = f.reply();
+    const auto name = child_name("file\twith-tab");
+    const auto row = std::find_if(page.page->rows().begin(), page.page->rows().end(), [&](const auto &entry) {
+        return entry.display_name == name.display_name();
+    });
+    if (row == page.page->rows().end())
+        throw std::runtime_error("missing exact name fixture row");
+    const auto submitted = f.service->copy_path(navigation.ticket, page.stamp, row->id);
+    CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+    const auto reply = f.reply();
+    CK_CHECK(reply.request == submitted.ticket && reply.navigation == navigation.ticket &&
+             reply.kind == FilesPaneReplyKind::PathText && reply.state == FilesPaneReplyState::Ready &&
+             reply.path_text && reply.path_text->exact_names);
+    const auto decoded = take(parse_files_location_text(reply.path_text->text, FilesLocationTextSyntax::ExactNames,
+                                                       page.active_location->root_address().encoding()));
+    CK_CHECK(decoded == take(page.active_location->descend(name, {}, FilesPaneLocation::hard_components)));
     f.stopped();
 }
 CK_TEST(files_service_navigation_supersedes_a_blocked_state_change_without_replaying_it) {

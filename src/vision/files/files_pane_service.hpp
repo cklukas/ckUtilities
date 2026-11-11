@@ -52,7 +52,11 @@ struct FilesPanePreview {
     std::vector<std::byte> bytes;
     bool complete = false;
 };
-enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Link, Mutation, Fault };
+struct FilesPanePathText {
+    std::string text;
+    bool exact_names = false;
+};
+enum class FilesPaneReplyKind { Navigation, Page, Focus, Marks, View, Preview, Link, PathText, Mutation, Fault };
 enum class FilesPaneChangeOutcome { NotRequested, NotApplied, Applied, Unknown };
 struct FilesPaneReply {
     FilesPaneTicket request, navigation;
@@ -63,6 +67,8 @@ struct FilesPaneReply {
     // Bounded, owner-free link metadata read through the worker-held row.
     // The payload is diagnostic data only; it is never reparsed as authority.
     std::shared_ptr<const ck::files::LinkMetadata> link;
+    // Clipboard projection of the worker-bound row, with no live native owner.
+    std::optional<FilesPanePathText> path_text;
     // A worker-owned mutation outcome. No native owner or path authority is
     // published; a successful mutation requires a subsequent refresh before
     // the UI treats the listing as current.
@@ -172,6 +178,8 @@ class FilesPaneService final {
     // or path authority crosses into the UI.
     FilesPaneSubmitted inspect_link(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                     ck::files::PaneRowId row);
+    FilesPaneSubmitted copy_path(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                 ck::files::PaneRowId row);
     // Create one exact native directory component relative to the currently
     // held pane directory. The worker validates the navigation stamp and
     // performs exclusive native creation; callers must refresh after success.
@@ -238,6 +246,9 @@ class FilesPaneService final {
     FilesPaneServiceLimits limits() const noexcept;
 
   private:
+    FilesPaneSubmitted inspect_row(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                                   ck::files::PaneRowId row, FilesPaneReplyKind kind,
+                                   FilesPanePreviewLimits limits = {});
     static FilesPaneTicket ticket(std::uint64_t number) { return FilesPaneTicket(number); }
     struct State;
     std::unique_ptr<State> state_;

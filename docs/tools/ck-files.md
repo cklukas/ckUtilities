@@ -81,6 +81,10 @@ execute files or provide an embedded shell.
 - Bounded read-only text and hexadecimal preview, properties, and path copy.
   Preview never runs a file, hydrates provider-managed content implicitly, or
   treats a display name as a rewritten native path.
+  **Location → Copy path** copies the focused entry's absolute path. A native
+  name that cannot be expressed as ordinary path text uses the reversible
+  **Exact Names** format from the location editor. Files reports whether the
+  system clipboard accepted the copy or the terminal received a request.
 - Rename, create-folder, create-empty-file, hard-link, and qualified symbolic-link actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Hard links are regular-file-only, identity-bound, no-replace mutations, flushed before success, and currently target the selected file's pane. POSIX symbolic links store an opaque target without normalization or traversal; Windows keeps this command disabled until handle-relative reparse publication is qualified. **Inspect link target** reads bounded POSIX link or Windows reparse metadata from the held object without following or executing it; opaque Windows payloads remain explicitly opaque. Case-only
   renames and platform-specific name rules are capability-checked rather than
   silently normalized.

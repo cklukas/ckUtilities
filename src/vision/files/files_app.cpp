@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 #include <vector>
 #include <stdexcept>
 namespace ck::vision {
@@ -247,6 +248,10 @@ std::string volume_failure(const FilesVolumeReply &reply) {
 }
 } // namespace
 struct FilesApp::State {
+    struct RowInspection {
+        FilesPaneTicket ticket;
+        FilesPaneReplyKind kind;
+    };
     struct Pane {
         FilesPaneGridModel model;
         FilesPaneTicket navigation, request;
@@ -257,7 +262,7 @@ struct FilesApp::State {
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
              deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
-             creating_symbolic_link = false, link_inspecting = false;
+             creating_symbolic_link = false;
         std::optional<FilesPaneReplyKind> changing;
         std::optional<ck::files::PaneView> queued_view;
         ck::files::PaneView view;
@@ -265,8 +270,7 @@ struct FilesApp::State {
         std::size_t history_position = 0;
         std::optional<std::size_t> history_target;
         std::vector<std::shared_ptr<const FilesPaneLocation>> bookmarks;
-        std::optional<FilesPaneTicket> preview_request;
-        bool previewing = false;
+        std::optional<RowInspection> inspection;
         ck::files::NameEncoding encoding = ck::files::NameEncoding::PosixBytes;
         ck::files::IndexedPaneSelection selection;
         std::optional<std::uint64_t> worker_focus;
@@ -501,6 +505,8 @@ struct FilesApp::State {
                              [this] { return availability("ck.files.refresh").enabled; });
             properties_id = own("ck.files.properties", [this] { show_properties(); },
                                 [this] { return availability("ck.files.properties").enabled; });
+            const auto copy_path_id = own("ck.files.copy_path", [this] { copy_path(); },
+                                          [this] { return availability("ck.files.copy_path").enabled; });
             preview_id = own("ck.files.preview", [this] { show_preview(); },
                              [this] { return availability("ck.files.preview").enabled; });
             inspect_link_id = own("ck.files.inspect_link", [this] { show_inspect_link(); },
@@ -589,6 +595,7 @@ struct FilesApp::State {
                      item(bookmark_add_id, "Add &bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
                      item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
+                     item(copy_path_id, "Cop&y path"),
                      item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
                                                             item(create_file_id, "New &file..."),
@@ -1065,6 +1072,15 @@ struct FilesApp::State {
             return ready(active) && panes[active].model.cursor_row()
                        ? FilesCommandAvailability::available()
                        : unavailable("Properties unavailable: no current entry is selected");
+        if (command == "ck.files.copy_path") {
+            if (std::any_of(panes.begin(), panes.end(), [](const Pane &pane) {
+                    return pane.inspection && pane.inspection->kind == FilesPaneReplyKind::PathText;
+                }))
+                return unavailable("Copy path unavailable: a path is already being read");
+            return ready(active) && panes[active].model.target()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Copy path unavailable: select a current file or folder entry");
+        }
         if (command == "ck.files.preview")
             return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::RegularFile
                        ? FilesCommandAvailability::available()
@@ -1218,7 +1234,7 @@ struct FilesApp::State {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
     static bool pending(const Pane &p) {
-        return p.navigating || p.reading || p.changing || p.queued_view || p.previewing || p.mutating;
+        return p.navigating || p.reading || p.changing || p.queued_view || p.inspection || p.mutating;
     }
     bool volume_pending(std::size_t i) const {
         return volume_request && volume_request->pane == i && !volume_request->retired &&
@@ -1268,8 +1284,10 @@ struct FilesApp::State {
                 text = "No visible volumes";
         } else if (p.preparing_cursor)
             text = "Reading current row for view change...";
-        else if (p.previewing)
-            text = "Reading preview...";
+        else if (p.inspection)
+            text = p.inspection->kind == FilesPaneReplyKind::PathText ? "Reading selected path..."
+                   : p.inspection->kind == FilesPaneReplyKind::Link  ? "Reading link metadata..."
+                                                                     : "Reading preview...";
         else if (p.mutating)
             text = p.renaming ? "Renaming..." : p.trashing ? "Moving to Trash / Recycle Bin..."
                               : p.deleting ? "Deleting permanently..." : "Creating folder...";
@@ -1754,6 +1772,7 @@ struct FilesApp::State {
         p.reading = false;
         p.changing.reset();
         p.queued_view.reset();
+        p.inspection.reset();
         // Keep the volume rows visible and inert until the worker accepts a
         // replacement page. Failure or cancellation leaves the selection here.
         p.model.set_input_locked(p.volume_view);
@@ -2799,8 +2818,7 @@ struct FilesApp::State {
             labels();
             return;
         }
-        panes[pane].preview_request = submitted.ticket;
-        panes[pane].previewing = true;
+        panes[pane].inspection = RowInspection{submitted.ticket, FilesPaneReplyKind::Preview};
         labels();
     }
     void show_inspect_link() {
@@ -2816,9 +2834,23 @@ struct FilesApp::State {
             labels();
             return;
         }
-        panes[pane].preview_request = submitted.ticket;
-        panes[pane].link_inspecting = true;
-        panes[pane].previewing = true;
+        panes[pane].inspection = RowInspection{submitted.ticket, FilesPaneReplyKind::Link};
+        labels();
+    }
+    void copy_path() {
+        if (!availability("ck.files.copy_path").enabled)
+            return;
+        auto &pane = panes[active];
+        const auto target = pane.model.target();
+        if (!target)
+            return;
+        const auto submitted = services[active]->copy_path(pane.navigation, target->stamp, target->row);
+        if (submitted.state == FilesPaneSubmission::Accepted) {
+            pane.inspection = RowInspection{submitted.ticket, FilesPaneReplyKind::PathText};
+            watch();
+        } else {
+            pane.error = "Copy path request rejected";
+        }
         labels();
     }
     void watch() {
@@ -2844,10 +2876,6 @@ struct FilesApp::State {
     }
     void consume_preview(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
-        if (!p.preview_request || reply.request != *p.preview_request)
-            return;
-        p.preview_request.reset();
-        p.previewing = false;
         p.cancelling = false;
         if (reply.state != FilesPaneReplyState::Ready || !reply.preview) {
             p.error = failure(reply);
@@ -2876,11 +2904,6 @@ struct FilesApp::State {
     }
     void consume_link(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
-        if (!p.preview_request || reply.request != *p.preview_request)
-            return;
-        p.preview_request.reset();
-        p.previewing = false;
-        p.link_inspecting = false;
         p.cancelling = false;
         if (reply.state != FilesPaneReplyState::Ready || !reply.link) {
             p.error = failure(reply);
@@ -2907,10 +2930,32 @@ struct FilesApp::State {
             });
         labels();
     }
+    void consume_path_text(std::size_t i, FilesPaneReply reply) {
+        auto &pane = panes[i];
+        if (std::exchange(pane.cancelling, false)) {
+            pane.error = "Copy path cancelled";
+        } else if (reply.state != FilesPaneReplyState::Ready || !reply.path_text) {
+            pane.error = failure(reply);
+        } else if (!closing) {
+            const std::string subject = reply.path_text->exact_names ? "Exact Names address" : "Path";
+            const auto result = application.set_clipboard_text(std::move(reply.path_text->text));
+            if (result.status == ckv::ClipboardWriteStatus::Ok)
+                pane.error = subject + " copied to clipboard";
+            else if (result.status == ckv::ClipboardWriteStatus::Submitted)
+                pane.error = subject + " copied in Files; clipboard request sent to terminal";
+            else
+                pane.error = subject + " copied in Files; system clipboard unavailable";
+        }
+        labels();
+    }
     void consume(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
-        if (p.preview_request && reply.request == *p.preview_request) {
-            if (p.link_inspecting)
+        if (p.inspection && reply.request == p.inspection->ticket && reply.navigation == p.navigation) {
+            const auto kind = p.inspection->kind;
+            p.inspection.reset();
+            if (kind == FilesPaneReplyKind::PathText)
+                consume_path_text(i, std::move(reply));
+            else if (kind == FilesPaneReplyKind::Link)
                 consume_link(i, std::move(reply));
             else
                 consume_preview(i, std::move(reply));
@@ -3061,7 +3106,7 @@ struct FilesApp::State {
     void page(std::size_t i) {
         auto &p = panes[i];
         if (p.volume_view || volume_pending(i) || p.navigating || p.changing ||
-            p.queued_view || p.previewing || !p.active || !surfaces[i]->visible() ||
+            p.queued_view || p.inspection || !p.active || !surfaces[i]->visible() ||
             !p.stamp.current() || !services[i]->running())
             return;
         auto range = p.model.viewport();
@@ -3463,8 +3508,7 @@ struct FilesApp::State {
                 if (!services[i]->running() && pending(panes[i])) {
                     const bool changing = panes[i].changing.has_value();
                     panes[i].navigating = panes[i].reading = false;
-                    panes[i].previewing = false;
-                    panes[i].preview_request.reset();
+                    panes[i].inspection.reset();
                     panes[i].mutating = panes[i].renaming = panes[i].trashing = false;
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
@@ -3552,7 +3596,8 @@ struct FilesApp::State {
         }
         if (!closing && !modal_pending() && pending(panes[active])) {
             panes[active].queued_view.reset();
-            const auto request = panes[active].preview_request.value_or(panes[active].request);
+            const auto &pane = panes[active];
+            const auto request = pane.inspection ? pane.inspection->ticket : pane.request;
             services[active]->cancel(request);
             panes[active].cancelling = true;
             labels();
@@ -3845,7 +3890,9 @@ bool FilesApp::properties_pending() const {
     return state_->properties_dialog && !state_->properties_dialog->completed();
 }
 bool FilesApp::preview_pending() const {
-    return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) { return pane.previewing; }) ||
+    return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) {
+               return pane.inspection && pane.inspection->kind != FilesPaneReplyKind::PathText;
+           }) ||
            (state_->preview_dialog && !state_->preview_dialog->completed());
 }
 bool FilesApp::operation_review_pending() const {
@@ -3891,7 +3938,7 @@ FilesCommandAvailability FilesApp::availability(std::string_view command) const 
 }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || state_->volume_pending(pane) || p.navigating || p.changing || p.queued_view || p.previewing || p.mutating ||
+    if (state_->closing || state_->volume_pending(pane) || p.navigating || p.changing || p.queued_view || p.inspection || p.mutating ||
         !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())
