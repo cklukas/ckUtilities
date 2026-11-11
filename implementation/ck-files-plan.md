@@ -440,7 +440,12 @@ authority and does not close the application or release requirements below.
   Its macOS ARM64 tests and private PTY runs pass for oversized-settings
   preservation and location completion. See
   [candidate evidence](evidence/ck-files-integrated-1.5-candidate-20261110.json).
-  Exact integrated sanitizer, Windows runtime, and desktop acceptance remain open.
+  Candidate `9364cd2` passes matching Linux and macOS ARM64 ThreadSanitizer,
+  and the Linux PTY exercises Right-to-accept, navigation and mouse marking
+  in both panes. See the
+  [race and native fixture evidence](evidence/ck-files-race-and-native-fixtures-20261111.json).
+  Current release sanitizer, full Windows runtime, and desktop acceptance
+  remain open.
 - [ ] Complete current-source archive integration, sanitizer and real-window
   acceptance. Earlier passing cohorts do not close gates after source changes.
 

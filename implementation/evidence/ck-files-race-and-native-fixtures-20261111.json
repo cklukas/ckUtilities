@@ -1,0 +1,66 @@
+{
+  "integrated_revisions": {
+    "frontend": "9364cd2037346227ecd258981d629443ffb9400d",
+    "backend": "e0815494948604a931733503d6e0c50ab7811e9f",
+    "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f"
+  },
+  "linux_arm64_tsan": {
+    "compiler": "GCC 14",
+    "passed_files_tests": 149,
+    "failed": 0,
+    "skipped": 0,
+    "receipt_sha256": "6ddcc92286d0c6443b67c12d9a6905f908140e59be0db9d6f2ad1f0bd0db0093",
+    "artifact_manifest_sha256": "f296b0539121b415e87371d941625f01306b8e09097e3337b52652cfef2b923a",
+    "pty": {
+      "scope": "Independent real Linux controlling PTY on lima-ckdev",
+      "desktop_interaction": false,
+      "exit_and_terminal": {
+        "exit": 0,
+        "TERM": "xterm-256color",
+        "termios_restored": true,
+        "dec_private_modes_restored": true
+      },
+      "binary_sha256": "8da32eff44da7661cd6aeb6e645a817735f941a47409ced57772e921fe55b44e",
+      "steps": [
+        "01-initial",
+        "02-completion-warning",
+        "03-warning-cleared-preview",
+        "04-right-accepted",
+        "05-enter-navigated",
+        "06-right-focus-mark",
+        "07-left-focus-mark",
+        "08-resized"
+      ],
+      "sanitizer_findings": [],
+      "receipt_sha256": "d4bbcde2ffed64ad1442f475c969275359d52d47907d7f0fe63402a5c476156c",
+      "artifact_manifest_sha256": "88afacfacd03c9cbfa066ed876e8486522f321128e742f9042ea9bf95c351aca"
+    }
+  },
+  "macos_arm64_tsan": {
+    "passed_files_tests": 110,
+    "passed_ckvision_tests": 241,
+    "passed_installed_ckvision_consumer": 1,
+    "failed": 0,
+    "skipped": 0,
+    "receipt_sha256": "cf4c7349409a3919a074841339b3b4a19f3d783a2a6731992fbf6215af854fe0",
+    "artifact_manifest_sha256": "9e144734d0563635760ff60921ebd3eca31741d9f1e20aa65662fb49f4d19164"
+  },
+  "windows_x64_focused_backend": {
+    "backend": "4e41414215aaa1fcd626fb33a11e4dffa45c8d71",
+    "scope": "Five Windows native backend cases on each of independently observed NTFS and ReFS providers. The suite uses the registered per-test deadlines.",
+    "passed": {
+      "NTFS": 5,
+      "ReFS": 5
+    },
+    "failed": 0,
+    "skipped": 0,
+    "tests": [
+      "native_sync_hierarchy_windows_oom",
+      "tree_fixture_native_root",
+      "directory_postorder_worker",
+      "native_directory_replay_job",
+      "action_private_scope"
+    ],
+    "receipt_sha256": "84dd41af8c5bfec09b88e68b1ae2e0f7bc38c51a1283036e13de9f1c6c8b5167"
+  }
+}

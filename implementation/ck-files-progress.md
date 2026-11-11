@@ -1,5 +1,24 @@
 # Files implementation evidence
 
+## 2026-11-11 — Integrated ThreadSanitizer and Windows native fixtures
+
+Frontend `9364cd2`, backend `e081549`, and ckVision `0d81e2e` passed
+ThreadSanitizer on ARM64 Linux and macOS. Linux passed 149 Files CTests.
+macOS passed 110 Files CTests, 241 ckVision CTests, and the independently
+installed SDK consumer. The runs recorded zero failures or skips.
+
+The Linux test opened the same instrumented executable in a native PTY.
+It showed a location completion warning, cleared the warning on edit,
+accepted the next proposal with Right, and opened the directory with Enter.
+Mouse marking worked in both panes, marks survived a resize from 140×40 to
+120×32, and the terminal modes were restored on exit.
+
+Windows x64 backend `4e41414` passed five focused native tests on NTFS and
+five on ReFS. They cover allocation failure, admitted fixture roots, private
+action scope, directory postorder, and directory replay. Full Windows
+application and package qualification and desktop-window acceptance remain
+open. See the [source-bound evidence](evidence/ck-files-race-and-native-fixtures-20261111.json).
+
 ## 2026-11-10 — Bounded settings and completion in the integrated candidate
 
 The macOS ARM64 candidate `aa2b1f1` passed 110 Files CTests with backend
