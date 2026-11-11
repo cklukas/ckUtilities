@@ -98,6 +98,12 @@ class Bytes final:public IndexByteFile {
 class MemoryWorkspace final:public IndexFileFactory {
   public:Observation<std::unique_ptr<IndexByteFile>> create_file()override{return Observation<std::unique_ptr<IndexByteFile>>::available(std::make_unique<Bytes>());}
 };
+#ifdef _WIN32
+constexpr auto pane_storage_model = StorageModel::WindowsHandleAttributes;
+#else
+constexpr auto pane_storage_model = StorageModel::LinuxStatx;
+#endif
+
 NativeAbsolutePath pane_address(std::size_t pane){
 #ifdef _WIN32
     return take(NativeAbsolutePath::from_windows(pane?u"V:\\settings-right":u"V:\\settings-left"));
@@ -130,7 +136,15 @@ struct AppFixture {
     std::unique_ptr<FilesApp> app;
     unsigned quits=0;
     explicit AppFixture(FilesPersistentSettings initial={},bool persist=true){files.foreign_write(files_settings_text(initial));auto loaded=store.load(files.bounded_reader());files.enforce=true;settings=std::make_unique<FilesSettingsService>(store,wake.callback());
-        for(auto &pane:panes){FilesPaneBackend backend;backend.storage_model=StorageModel::LinuxStatx;backend.filesystem=[]{return std::make_unique<PaneFS>();};backend.workspace=[]{return Observation<std::shared_ptr<IndexFileFactory>>::available(std::make_shared<MemoryWorkspace>());};pane=std::make_unique<FilesPaneService>(std::move(backend),FilesPaneServiceLimits{},wake.callback());}
+        for (auto &pane : panes) {
+            FilesPaneBackend backend;
+            backend.storage_model = pane_storage_model;
+            backend.filesystem = [] { return std::make_unique<PaneFS>(); };
+            backend.workspace = [] {
+                return Observation<std::shared_ptr<IndexFileFactory>>::available(std::make_shared<MemoryWorkspace>());
+            };
+            pane = std::make_unique<FilesPaneService>(std::move(backend), FilesPaneServiceLimits{}, wake.callback());
+        }
         app=std::make_unique<FilesApp>(application,std::array<FilesPaneService*,2>{panes[0].get(),panes[1].get()},wake,std::array<NativeAbsolutePath,2>{pane_address(0),pane_address(1)},[this]{++quits;},ThemeScheme::Classic,std::array<FilesCompletionService*,2>{},nullptr,nullptr,std::shared_ptr<const NativeAbsolutePath>{},FilesSettingsBinding{std::move(loaded.value),std::move(loaded.diagnostic),persist?settings.get():nullptr});
         loaded_panes();}
     ~AppFixture(){files.gate.release();files.second_gate.release();app.reset();for(auto &pane:panes)pane->join();settings->request_close();settings->join();application.step(0);}
@@ -152,7 +166,8 @@ CK_TEST(files_settings_service_blocked_save_keeps_real_app_bookmarks_refresh_and
     f.app->request_close();CK_CHECK(f.quits==1 && !f.settings->drained());
     f.files.gate.release();f.settings->join();
     const auto persisted=parse_files_settings(f.files.observed()->contents);
-    CK_CHECK(persisted && persisted->bookmarks[0].empty() && persisted->bookmarks[1].size()==1 && persisted->views[0].show_hidden);
+    CK_CHECK(persisted && persisted->bookmarks[0].empty() && persisted->bookmarks[1].size()==1 &&
+             persisted->bookmarks[1].front()==FilesPaneLocation(pane_address(1)) && persisted->views[0].show_hidden);
     CK_CHECK(f.files.writes==2 && f.files.overlap==0 && f.files.worker_changed==0 && f.files.ui_io==0);
     f.files.print_threads();
 }
