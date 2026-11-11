@@ -289,7 +289,6 @@ struct FilesApp::State {
     FilesOperationPlanningService *planning_service = nullptr;
     FilesOperationExecutionService *execution_service = nullptr;
     FilesVolumeService *volume_service = nullptr;
-    FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr;
     FilesVolumeArchiveService *volume_archive_service = nullptr;
     FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr;
     FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr;
@@ -417,14 +416,14 @@ struct FilesApp::State {
           std::array<FilesCompletionService *, 2> supplied_completion, FilesOperationPlanningService *planning,
           FilesOperationExecutionService *execution,
           std::shared_ptr<const ck::files::NativeAbsolutePath> journal_root, FilesSettingsBinding supplied_settings,
-          FilesVolumeService *volumes, FilesVolumeArchivePlanningService *archive_planning,
+          FilesVolumeService *volumes,
           FilesVolumeArchiveService *archive_service, FilesVolumeArchiveRecoveryService *archive_recovery,
           FilesVolumeArchiveRecoveryCleanupService *archive_recovery_cleanup,
           FilesOperationRecoveryService *operation_recovery,
           FilesOperationRecoveryCleanupService *operation_recovery_cleanup)
         : application(app), services(supplied), completion_services(supplied_completion), planning_service(planning),
           execution_service(execution), volume_service(volumes),
-          volume_archive_planning_service(archive_planning), volume_archive_service(archive_service),
+          volume_archive_service(archive_service),
           volume_archive_recovery_service(archive_recovery),
           volume_archive_recovery_cleanup_service(archive_recovery_cleanup),
           operation_recovery_service(operation_recovery),
@@ -790,8 +789,6 @@ struct FilesApp::State {
             execution_service->request_stop();
         if (volume_service)
             volume_service->request_stop();
-        if (volume_archive_planning_service)
-            volume_archive_planning_service->request_stop();
         if (volume_archive_service)
             volume_archive_service->request_stop();
         if (volume_archive_recovery_service)
@@ -939,7 +936,7 @@ struct FilesApp::State {
             return modal_pending() ? unavailable("Switch pane unavailable: a dialog is open")
                                    : FilesCommandAvailability::available();
         if (command == "ck.files.cancel_read") {
-            if (volume_archive_planning_request && volume_archive_planning_service)
+            if (volume_archive_planning_request && volume_archive_service)
                 return FilesCommandAvailability::available();
             if (modal_pending())
                 return unavailable("Cancel unavailable: a dialog is open");
@@ -1135,8 +1132,7 @@ struct FilesApp::State {
                                            : "Copy unavailable: archive capability is unknown");
                 if (!operation_journal_root || !operation_journal_root->is_valid())
                     return unavailable("Copy unavailable: archive journal is not configured");
-                if (!volume_archive_planning_service || !volume_archive_service ||
-                    !volume_archive_planning_service->running() || !volume_archive_service->running())
+                if (!volume_archive_service || !volume_archive_service->running())
                     return unavailable("Copy unavailable: archive worker is unavailable");
                 if (!volume_archive_recovery_service)
                     return unavailable("Copy unavailable: archive recovery service is not configured");
@@ -1198,8 +1194,7 @@ struct FilesApp::State {
                panes[i].model.current() && services[i]->running();
     }
     bool archive_destination_ready(std::size_t source_pane) const {
-        if (source_pane >= 2 || !volume_archive_planning_service || !volume_archive_service ||
-            !volume_archive_planning_service->running() || !volume_archive_service->running())
+        if (source_pane >= 2 || !volume_archive_service || !volume_archive_service->running())
             return false;
         const auto destination_pane = 1 - source_pane;
         const auto &destination = panes[destination_pane];
@@ -2216,8 +2211,7 @@ struct FilesApp::State {
         return address;
     }
     void prepare_volume_archive() {
-        if (!archive_destination_ready(active) || !panes[active].volume_view ||
-            !volume_archive_planning_service)
+        if (!archive_destination_ready(active) || !panes[active].volume_view)
             return;
         const auto volume = panes[active].model.volume_cursor();
         const auto destination_pane = 1 - active;
@@ -2238,7 +2232,7 @@ struct FilesApp::State {
         FilesVolumeArchivePlanningRequest request{
             origin.volume, *destination, FilesVolumeArchiveReview::default_archive_name(origin.volume.name),
             FilesVolumeArchiveConsistency::Live, std::move(build_document)};
-        const auto submitted = volume_archive_planning_service->request(std::move(request));
+        const auto submitted = volume_archive_service->plan(std::move(request));
         if (submitted.state != FilesVolumeArchivePlanningSubmission::Accepted) {
             panes[active].error = "Volume archive planning worker is unavailable";
             labels();
@@ -2985,32 +2979,39 @@ struct FilesApp::State {
         if (!volume_archive_planning_request || reply.request != *volume_archive_planning_request)
             return;
         volume_archive_planning_request.reset();
-        if (!volume_archive_origin)
+        const auto ticket = reply.request;
+        if (!volume_archive_origin) {
+            volume_archive_service->cancel_plan(ticket);
             return;
+        }
         if (reply.state != FilesVolumeArchivePlanningState::Ready || !reply.review) {
-            std::string message = "Volume archive planning failed";
+            std::string message = reply.state == FilesVolumeArchivePlanningState::Cancelled
+                ? "Volume archive cancelled" : "Volume archive planning failed";
             if (reply.error)
                 message += ": " + reply.error->error.operation;
             report_archive_error(std::move(message));
             return;
         }
         if (!archive_review_current(*volume_archive_origin)) {
+            volume_archive_service->cancel_plan(ticket);
             report_archive_error("Volume archive review became stale; start a new review");
             return;
         }
         const auto review = std::move(reply.review);
         volume_archive_review_dialog = std::make_unique<FilesVolumeArchiveReviewDialog>(
             application, shell->desktop(), shell->roles(), review,
-            [this, weak = std::weak_ptr<void>(lifetime), review](
-                ck::files::Observation<FilesVolumeArchiveApproval> result) mutable {
+            [this, weak = std::weak_ptr<void>(lifetime), ticket](
+                ck::files::Observation<FilesVolumeArchiveApproval> result) {
                 if (weak.expired())
                     return;
                 volume_archive_review_dialog.reset();
                 if (!result.value()) {
+                    volume_archive_service->cancel_plan(ticket);
                     report_archive_error("Volume archive cancelled");
                     return;
                 }
                 if (!volume_archive_origin || !archive_review_current(*volume_archive_origin)) {
+                    volume_archive_service->cancel_plan(ticket);
                     report_archive_error("Volume archive review became stale; start a new review");
                     return;
                 }
@@ -3019,30 +3020,14 @@ struct FilesApp::State {
                     return;
                 }
                 const auto &origin = *volume_archive_origin;
-                auto review_document = review->document();
-                review_document.losses_reviewed = review_document.losses.empty() ||
-                    result.value()->continued_with_listed_losses;
-                auto build_document = [archive_document = std::move(review_document)](std::stop_token token) mutable {
-                    if (token.stop_requested())
-                        return ck::files::Observation<FilesVolumeArchiveDocument>::unavailable(
-                            ck::files::ObservationState::Unknown,
-                            {ck::files::ErrorDomain::Adapter,
-                             static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
-                             "volume_archive.cancelled"});
-                    return ck::files::Observation<FilesVolumeArchiveDocument>::available(archive_document);
-                };
                 ck::files::OperationJournalId journal_id;
                 const auto serial = operation_serial++;
                 for (unsigned byte = 0; byte != sizeof(serial); ++byte)
                     journal_id.bytes[byte] = std::byte{static_cast<unsigned char>(serial >> (byte * 8U))};
-                FilesVolumeArchiveRequest request{
-                    .source=origin.volume, .destination_directory=review->destination_directory(),
-                    .archive_name=review->archive_name(), .consistency=review->document().consistency,
-                    .transaction_id=serial, .build_document=std::move(build_document),
-                    .journal_root=std::optional<ck::files::NativeAbsolutePath>{*operation_journal_root},
-                    .journal_id=journal_id, .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
-                const auto submitted = volume_archive_service->request(std::move(request));
+                const auto submitted = volume_archive_service->execute_review(
+                    ticket, std::move(result).take_value(), *operation_journal_root, journal_id, serial);
                 if (submitted.state != FilesVolumeArchiveSubmission::Accepted) {
+                    volume_archive_service->cancel_plan(ticket);
                     report_archive_error("Volume archive worker rejected the approved review");
                     return;
                 }
@@ -3083,10 +3068,17 @@ struct FilesApp::State {
         } else {
             std::string message = reply.state == FilesVolumeArchiveState::Cancelled
                 ? "Volume archive cancelled" : "Volume archive failed";
-            if (reply.failure_pod)
+            if (reply.failure_pod) {
                 message += ": " + std::string(reply.failure_pod->operation.data());
-            else if (reply.error)
-                message += ": " + reply.error->error.operation;
+            } else if (reply.error) {
+                const auto &operation = reply.error->error.operation;
+                if (operation == "volume_archive.review.destination_changed")
+                    message = "Archive destination changed. Start a new review.";
+                else if (operation == "volume_archive.review.destination_conflict")
+                    message = "An entry now uses the archive name. Start a new review.";
+                else
+                    message += ": " + operation;
+            }
             report_archive_error(std::move(message));
             return;
         }
@@ -3211,10 +3203,10 @@ struct FilesApp::State {
                             "files_app.operation_planning_worker"}));
                 }
             }
-            if (volume_archive_planning_service) {
-                if (auto reply = volume_archive_planning_service->take())
+            if (volume_archive_service) {
+                if (auto reply = volume_archive_service->take_plan())
                     consume_volume_archive_plan(std::move(*reply));
-                if (volume_archive_planning_request && !volume_archive_planning_service->running()) {
+                if (volume_archive_planning_request && !volume_archive_service->running()) {
                     volume_archive_planning_request.reset();
                     report_archive_error("Volume archive planning worker stopped");
                 }
@@ -3382,8 +3374,8 @@ struct FilesApp::State {
         wake.request();
     }
     void cancel_read() {
-        if (!closing && volume_archive_planning_request && volume_archive_planning_service) {
-            volume_archive_planning_service->cancel(*volume_archive_planning_request);
+        if (!closing && volume_archive_planning_request && volume_archive_service) {
+            volume_archive_service->cancel_plan(*volume_archive_planning_request);
             labels();
             return;
         }
@@ -3434,8 +3426,6 @@ struct FilesApp::State {
             execution_service->request_stop();
         if (volume_service)
             volume_service->request_stop();
-        if (volume_archive_planning_service)
-            volume_archive_planning_service->request_stop();
         if (volume_archive_service)
             volume_archive_service->request_stop();
         if (volume_archive_recovery_service)
@@ -3619,7 +3609,6 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
                    FilesOperationExecutionService *execution_service,
                    std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root,
                    FilesSettingsBinding settings, FilesVolumeService *volume_service,
-                   FilesVolumeArchivePlanningService *volume_archive_planning_service,
                    FilesVolumeArchiveService *volume_archive_service,
                    FilesVolumeArchiveRecoveryService *volume_archive_recovery_service,
                    FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service,
@@ -3628,7 +3617,7 @@ FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneServic
     : state_(std::make_unique<State>(application, services, wake, std::move(locations), std::move(host_quit), theme,
                                      completion_services, planning_service, execution_service,
                                      std::move(operation_journal_root), std::move(settings), volume_service,
-                                     volume_archive_planning_service, volume_archive_service,
+                                     volume_archive_service,
                                      volume_archive_recovery_service, volume_archive_recovery_cleanup_service,
                                      operation_recovery_service, operation_recovery_cleanup_service)) {}
 FilesApp::~FilesApp() = default;

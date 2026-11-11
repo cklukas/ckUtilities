@@ -33,16 +33,18 @@ execute files or provide an embedded shell.
   Space shows free and total capacity together. The selected row's footer adds
   its mount, filesystem, space, and read-only state. The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
-  Copy starts a separate Volume archive planning/review worker only after
+  Copy starts volume archive planning on the archive worker only after
   native identity, live-read capability, destination, and private-journal
   checks pass. It remains visibly disabled otherwise, with the specific reason
   in the active-pane status. Approval creates a versioned sparse filesystem
   archive, not a raw block image; Move is never used for this operation. The
   review shows consistency, logical/data bytes, sparse shape, links, and
   explicit preservation losses. Changing focus during planning keeps the
-  reviewed source and destination panes. After confirmed publication,
-  Files refreshes the original destination when it still shows the reviewed
-  directory and displays the result in that pane. The worker revalidates
+  reviewed source and destination panes. The worker keeps the destination
+  directory open through approval. If the destination was replaced or the
+  archive name was taken, Files asks for a new review. After confirmed
+  publication, Files refreshes the original destination when it still shows
+  the reviewed directory and displays the result in that pane. The worker revalidates
   the source, records durable journal states, and verifies data before
   no-replace publication. It reports indeterminate durability when publication
   succeeds and a later flush or journal step cannot be proven. On startup,

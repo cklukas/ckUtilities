@@ -58,7 +58,6 @@ class FilesApp final {
              FilesOperationExecutionService *execution_service = nullptr,
              std::shared_ptr<const ck::files::NativeAbsolutePath> operation_journal_root = {},
              FilesSettingsBinding settings = {}, FilesVolumeService *volume_service = nullptr,
-             FilesVolumeArchivePlanningService *volume_archive_planning_service = nullptr,
              FilesVolumeArchiveService *volume_archive_service = nullptr,
              FilesVolumeArchiveRecoveryService *volume_archive_recovery_service = nullptr,
              FilesVolumeArchiveRecoveryCleanupService *volume_archive_recovery_cleanup_service = nullptr,

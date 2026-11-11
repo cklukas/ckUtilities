@@ -28,6 +28,7 @@
 #include <tuple>
 #include <utility>
 #include <string_view>
+#include <variant>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -1217,54 +1218,63 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
 
 namespace {
 
+using ArchiveDestination = std::shared_ptr<const ck::files::DirectoryCursor>;
+
 Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
-    const ck::files::NativeAbsolutePath &destination_directory, std::string_view archive_name) {
-#if defined(_WIN32)
-    ck::files::NativeFileSystem filesystem;
-    auto cursor = filesystem.open_native_directory(destination_directory);
-    if (!cursor.value())
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            cursor.state(), cursor.unavailable_detail()->error);
-    const auto name = windows_name_from_utf8(archive_name);
+    const ck::files::DirectoryCursor &directory, ck::files::NameEncoding encoding, std::string_view archive_name) {
+    const auto name = encoding == ck::files::NameEncoding::WindowsUtf16
+        ? windows_name_from_utf8(archive_name) : ck::files::NativeName::from_posix(std::string(archive_name));
     if (!name)
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::UnrepresentableName, "volume_archive.plan.name"));
-    auto lookup = (*cursor.value())->lookup_child(*name, ck::files::ChildLookupMode::NativeDefault);
+        return review_rejected<FilesVolumeArchiveDestinationState>(ObservationState::Unsupported,
+            AdapterError::UnrepresentableName, "volume_archive.plan.name");
+    const auto lookup = directory.lookup_child(*name, ck::files::ChildLookupMode::NativeDefault);
     if (!lookup.value())
         return Observation<FilesVolumeArchiveDestinationState>::unavailable(
             lookup.state(), lookup.unavailable_detail()->error);
-    return Observation<FilesVolumeArchiveDestinationState>::available(
-        lookup.value()->state() == ck::files::ChildLookupState::Found
-            ? FilesVolumeArchiveDestinationState::Conflict
-            : FilesVolumeArchiveDestinationState::Ready);
-#else
-    auto host = destination_directory.host_path();
-    if (!host.value())
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            host.unavailable_detail()->state, host.unavailable_detail()->error);
-    std::error_code ec;
-    const auto directory_status = std::filesystem::symlink_status(*host.value(), ec);
-    if (ec)
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            ObservationState::Denied, filesystem_error("volume_archive.plan.destination", ec.value()).error);
-    if (!std::filesystem::exists(directory_status))
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            ObservationState::Unknown, error(AdapterError::PlanDecisionStale, "volume_archive.plan.destination").error);
-    if (!std::filesystem::is_directory(directory_status))
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            ObservationState::Unsupported, error(AdapterError::NotDirectory, "volume_archive.plan.destination").error);
-
-    const auto target = *host.value() / std::filesystem::path(std::string(archive_name));
-    const auto target_status = std::filesystem::symlink_status(target, ec);
-    if (ec && ec != std::errc::no_such_file_or_directory)
-        return Observation<FilesVolumeArchiveDestinationState>::unavailable(
-            ObservationState::Unknown, filesystem_error("volume_archive.plan.conflict", ec.value()).error);
-    if (ec == std::errc::no_such_file_or_directory)
+    switch (lookup.value()->state()) {
+    case ck::files::ChildLookupState::Found:
+        return Observation<FilesVolumeArchiveDestinationState>::available(FilesVolumeArchiveDestinationState::Conflict);
+    case ck::files::ChildLookupState::Missing:
         return Observation<FilesVolumeArchiveDestinationState>::available(FilesVolumeArchiveDestinationState::Ready);
-    return Observation<FilesVolumeArchiveDestinationState>::available(
-        std::filesystem::exists(target_status) ? FilesVolumeArchiveDestinationState::Conflict
-                                                : FilesVolumeArchiveDestinationState::Ready);
-#endif
+    case ck::files::ChildLookupState::Unknown:
+        break;
+    }
+    return review_rejected<FilesVolumeArchiveDestinationState>(ObservationState::Unknown,
+        AdapterError::UnqualifiedIdentity, "volume_archive.plan.destination_name_unknown");
+}
+
+// Opening the route here only checks that it still names the held object.
+// The resulting cursor is never used for archive publication.
+Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolutePath &path,
+                                                  const ck::files::DirectoryCursor &held) {
+    const auto scope = held.source_scope();
+    if (!scope.value())
+        return Observation<bool>::unavailable(scope.state(), scope.unavailable_detail()->error);
+    ck::files::NativeFileSystem filesystem(*scope.value());
+    const auto route = filesystem.open_native_directory(path);
+    if (!route.value())
+        return Observation<bool>::unavailable(route.state(), route.unavailable_detail()->error);
+    const auto original = held.inspect_basic();
+    if (!original.value())
+        return Observation<bool>::unavailable(original.state(), original.unavailable_detail()->error);
+    const auto current = (*route.value())->inspect_basic();
+    if (!current.value())
+        return Observation<bool>::unavailable(current.state(), current.unavailable_detail()->error);
+    const auto &a = *original.value();
+    const auto &b = *current.value();
+    if (!a.identity.value() || !b.identity.value() || !a.mount_id.value() || !b.mount_id.value() ||
+        ck::files::compare_identity(*a.identity.value(), *b.identity.value()) != ck::files::IdentityComparison::Same ||
+        *a.mount_id.value() != *b.mount_id.value())
+        return review_rejected<bool>(ObservationState::Changed, AdapterError::PlanDecisionStale,
+                                     "volume_archive.review.destination_changed");
+    return Observation<bool>::available(true);
+}
+
+bool archive_source_matches(const FilesVolumeRecord &expected, const FilesVolumeRecord &observed) {
+    return expected.identity == observed.identity && expected.mount_point == observed.mount_point &&
+           expected.filesystem == observed.filesystem && expected.native_mount_units == observed.native_mount_units &&
+           expected.archive.support == observed.archive.support &&
+           expected.archive.snapshot_available == observed.archive.snapshot_available;
 }
 
 } // namespace
@@ -1294,188 +1304,29 @@ Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
     return Observation<FilesVolumeArchiveApproval>::available({shared_from_this(), true});
 }
 
-struct FilesVolumeArchivePlanningService::State final {
-    std::function<void()> wake;
-    std::mutex mutex;
-    std::condition_variable condition;
-    std::optional<std::pair<FilesVolumeArchivePlanningTicket, FilesVolumeArchivePlanningRequest>> pending;
-    std::optional<FilesVolumeArchivePlanningReply> reply;
-    FilesVolumeArchivePlanningTicket latest;
-    std::uint64_t next = 1;
-    std::stop_source stop;
-    bool stopping = false, busy = false, signalled = false;
-    std::thread worker;
-
-    explicit State(std::function<void()> callback) : wake(std::move(callback)), worker([this] { run(); }) {}
-    ~State() {
-        request_stop();
-        join();
-    }
-    void request_stop() noexcept {
-        std::lock_guard lock(mutex);
-        stopping = true;
-        stop.request_stop();
-        condition.notify_all();
-    }
-    void join() {
-        if (worker.joinable())
-            worker.join();
-    }
-    void signal() {
-        if (signalled || !wake)
-            return;
-        signalled = true;
-        try { wake(); } catch (...) {}
-    }
-    void emit(FilesVolumeArchivePlanningReply value) {
-        std::lock_guard lock(mutex);
-        if (stopping || value.request != latest)
-            return;
-        reply = std::move(value);
-        busy = false;
-        signal();
-    }
-    static bool valid(const FilesVolumeArchivePlanningRequest &value) {
-        return !value.source.identity.empty() && !value.source.mount_point.empty() &&
-               value.destination_directory.is_valid() &&
-               (value.archive_name.empty() || safe_archive_name(value.archive_name)) &&
-               static_cast<bool>(value.build_document);
-    }
-    void run_one(FilesVolumeArchivePlanningTicket ticket, FilesVolumeArchivePlanningRequest value,
-                 std::stop_token token) {
-        FilesVolumeArchivePlanningReply result;
-        result.request = ticket;
-        auto fail = [&](UnavailableObservation detail) {
-            result.state = token.stop_requested() ? FilesVolumeArchivePlanningState::Cancelled
-                                                   : FilesVolumeArchivePlanningState::Failed;
-            result.error = std::move(detail);
-            emit(std::move(result));
-        };
-        try {
-            auto document = value.build_document(token);
-            if (!document.value()) {
-                fail(*document.unavailable_detail());
-                return;
-            }
-            auto complete = std::move(document).take_value();
-            complete.consistency = value.consistency;
-            if (complete.source.identity != value.source.identity ||
-                complete.source.mount_point != value.source.mount_point ||
-                complete.source.filesystem != value.source.filesystem ||
-                complete.source.native_mount_units != value.source.native_mount_units ||
-                complete.source.archive.support != value.source.archive.support ||
-                complete.source.archive.snapshot_available != value.source.archive.snapshot_available) {
-                fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.plan.identity_revalidation",
-                            ObservationState::Changed));
-                return;
-            }
-            auto destination = probe_archive_destination(value.destination_directory,
-                                                         value.archive_name.empty()
-                                                             ? FilesVolumeArchiveReview::default_archive_name(value.source.name)
-                                                             : value.archive_name);
-            if (!destination.value()) {
-                fail(*destination.unavailable_detail());
-                return;
-            }
-            auto review = FilesVolumeArchiveReview::create(std::move(complete), value.destination_directory,
-                                                           std::move(value.archive_name), *destination.value());
-            if (!review.value()) {
-                fail(*review.unavailable_detail());
-                return;
-            }
-            result.review = std::move(review).take_value();
-            result.state = FilesVolumeArchivePlanningState::Ready;
-            emit(std::move(result));
-        } catch (...) {
-            fail(error(AdapterError::PlanInvalid, "volume_archive.plan.worker_fault"));
-        }
-    }
-    void run() {
-        for (;;) {
-            std::optional<std::pair<FilesVolumeArchivePlanningTicket, FilesVolumeArchivePlanningRequest>> job;
-            {
-                std::unique_lock lock(mutex);
-                condition.wait(lock, [this] { return stopping || pending.has_value(); });
-                if (stopping) {
-                    pending.reset();
-                    return;
-                }
-                job = std::move(*pending);
-                pending.reset();
-                busy = true;
-                stop = std::stop_source{};
-                signalled = false;
-            }
-            run_one(std::move(job->first), std::move(job->second), stop.get_token());
-        }
-    }
-};
-
-FilesVolumeArchivePlanningService::FilesVolumeArchivePlanningService(std::function<void()> wake)
-    : state_(std::make_unique<State>(std::move(wake))) {}
-FilesVolumeArchivePlanningService::~FilesVolumeArchivePlanningService() = default;
-FilesVolumeArchivePlanningSubmitted FilesVolumeArchivePlanningService::request(
-    FilesVolumeArchivePlanningRequest request) {
-    std::lock_guard lock(state_->mutex);
-    if (state_->stopping)
-        return {FilesVolumeArchivePlanningSubmission::Stopped, {}};
-    if (!State::valid(request))
-        return {FilesVolumeArchivePlanningSubmission::Invalid, {}};
-    if (state_->busy || state_->pending)
-        return {FilesVolumeArchivePlanningSubmission::Busy, {}};
-    auto ticket = FilesVolumeArchivePlanningTicket(state_->next++);
-    state_->latest = ticket;
-    state_->pending = std::make_pair(ticket, std::move(request));
-    state_->condition.notify_one();
-    return {FilesVolumeArchivePlanningSubmission::Accepted, ticket};
-}
-bool FilesVolumeArchivePlanningService::cancel(const FilesVolumeArchivePlanningTicket &request) {
-    std::lock_guard lock(state_->mutex);
-    if (!request.valid() || request != state_->latest || (!state_->busy && !state_->pending))
-        return false;
-    if (state_->pending && !state_->busy) {
-        state_->pending.reset();
-        FilesVolumeArchivePlanningReply cancelled;
-        cancelled.request = request;
-        cancelled.state = FilesVolumeArchivePlanningState::Cancelled;
-        cancelled.error = error(AdapterError::InterruptedRead, "volume_archive.plan.cancelled",
-                                ObservationState::Unknown);
-        state_->reply = std::move(cancelled);
-        state_->signal();
-        return true;
-    }
-    state_->stop.request_stop();
-    state_->condition.notify_all();
-    return true;
-}
-std::optional<FilesVolumeArchivePlanningReply> FilesVolumeArchivePlanningService::take() {
-    std::lock_guard lock(state_->mutex);
-    auto result = std::move(state_->reply);
-    state_->reply.reset();
-    state_->signalled = false;
-    return result;
-}
-void FilesVolumeArchivePlanningService::request_stop() noexcept { state_->request_stop(); }
-void FilesVolumeArchivePlanningService::join() { state_->join(); }
-bool FilesVolumeArchivePlanningService::running() const noexcept {
-    std::lock_guard lock(state_->mutex);
-    return !state_->stopping;
-}
-bool FilesVolumeArchivePlanningService::working() const {
-    std::lock_guard lock(state_->mutex);
-    return state_->busy || state_->pending.has_value();
-}
-
 struct FilesVolumeArchiveService::State final {
     std::function<void()> wake;
     std::mutex mutex;
     std::condition_variable condition;
-    std::optional<std::pair<FilesVolumeArchiveTicket, FilesVolumeArchiveRequest>> pending;
+    using PlanJob = std::pair<FilesVolumeArchivePlanningTicket, FilesVolumeArchivePlanningRequest>;
+    using WriteJob = std::pair<FilesVolumeArchiveTicket, FilesVolumeArchiveRequest>;
+    struct ReviewedJob {
+        FilesVolumeArchiveTicket ticket;
+        FilesVolumeArchiveApproval approval;
+        ck::files::NativeAbsolutePath journal_root;
+        ck::files::OperationJournalId journal_id;
+        std::uint64_t transaction_id;
+    };
+    using Job = std::variant<PlanJob, WriteJob, ReviewedJob>;
+    std::optional<Job> pending;
+    std::optional<FilesVolumeArchivePlanningReply> plan_reply;
     std::optional<FilesVolumeArchiveReply> reply;
-    FilesVolumeArchiveTicket latest, cancelled;
+    FilesVolumeArchiveReview::Pointer ready_review;
+    FilesVolumeArchivePlanningTicket latest_plan;
+    FilesVolumeArchiveTicket latest;
     std::uint64_t next = 1;
     std::stop_source stop;
-    bool stopping = false, busy = false, signalled = false;
+    bool stopping = false, busy = false, signalled = false, discard_review = false;
     std::thread worker;
 
     explicit State(std::function<void()> callback) : wake(std::move(callback)), worker([this] { run(); }) {}
@@ -1507,12 +1358,80 @@ struct FilesVolumeArchiveService::State final {
         busy = false;
         signal();
     }
+    bool reserved() const {
+        return busy || pending || ready_review || discard_review;
+    }
+    bool finish_plan(FilesVolumeArchivePlanningReply result) {
+        std::lock_guard lock(mutex);
+        if (stopping)
+            return false;
+        if (stop.stop_requested()) {
+            result.state = FilesVolumeArchivePlanningState::Cancelled;
+            result.review.reset();
+        }
+        ready_review = result.review;
+        plan_reply = std::move(result);
+        busy = false;
+        signal();
+        return static_cast<bool>(ready_review);
+    }
+    ArchiveDestination run_plan(PlanJob job, std::stop_token token) {
+        auto &[ticket, value] = job;
+        FilesVolumeArchivePlanningReply result;
+        result.request = ticket;
+        auto fail = [&](UnavailableObservation detail) -> ArchiveDestination {
+            result.error = std::move(detail);
+            finish_plan(std::move(result));
+            return {};
+        };
+        try {
+            if (token.stop_requested())
+                return fail(error(AdapterError::InterruptedRead, "volume_archive.plan.cancelled",
+                                  ObservationState::Unknown));
+            ck::files::NativeFileSystem filesystem;
+            auto opened = filesystem.open_native_directory(value.destination_directory);
+            if (!opened.value())
+                return fail(*opened.unavailable_detail());
+            auto destination = ArchiveDestination(std::move(opened).take_value());
+
+            auto document = value.build_document(token);
+            if (!document.value())
+                return fail(*document.unavailable_detail());
+            auto complete = std::move(document).take_value();
+            complete.consistency = value.consistency;
+            if (!archive_source_matches(value.source, complete.source))
+                return fail(error(AdapterError::UnqualifiedIdentity, "volume_archive.plan.identity_revalidation",
+                                  ObservationState::Changed));
+
+            const auto route = revalidate_archive_destination(value.destination_directory, *destination);
+            if (!route.value())
+                return fail(*route.unavailable_detail());
+            if (value.archive_name.empty())
+                value.archive_name = FilesVolumeArchiveReview::default_archive_name(value.source.name);
+            const auto conflict = probe_archive_destination(*destination, value.destination_directory.encoding(),
+                                                            value.archive_name);
+            if (!conflict.value())
+                return fail(*conflict.unavailable_detail());
+            auto review = FilesVolumeArchiveReview::create(std::move(complete), std::move(value.destination_directory),
+                                                           std::move(value.archive_name), *conflict.value());
+            if (!review.value())
+                return fail(*review.unavailable_detail());
+            result.review = std::move(review).take_value();
+            result.state = FilesVolumeArchivePlanningState::Ready;
+            return finish_plan(std::move(result)) ? std::move(destination) : ArchiveDestination{};
+        } catch (...) {
+            result.state = FilesVolumeArchivePlanningState::WorkerFault;
+            finish_plan(std::move(result));
+            return {};
+        }
+    }
     static bool valid(const FilesVolumeArchiveRequest &value) {
         return value.source.identity.size() != 0 && value.source.mount_point.size() != 0 &&
                value.destination_directory.is_valid() && safe_archive_name(value.archive_name) &&
                value.transaction_id != 0 && static_cast<bool>(value.build_document) && (value.prepared_journal_root || (value.journal_root && value.journal_root->is_valid()));
     }
-    void run_one(FilesVolumeArchiveTicket ticket, FilesVolumeArchiveRequest value, std::stop_token token) {
+    void run_one(FilesVolumeArchiveTicket ticket, FilesVolumeArchiveRequest value, std::stop_token token,
+                 ArchiveDestination destination = {}) {
         FilesVolumeArchiveReply result;result.request=ticket;
         ck::files::PreparedJournalRoot::Pointer root;bool owns_root=false,root_attempted=false;
         struct RootCloseObserver final:ck::files::MetadataCaptureFailureLatch {
@@ -1554,6 +1473,7 @@ struct FilesVolumeArchiveService::State final {
             }
         };
         auto cache_error=[&](UnavailableObservation detail) {
+            destination.reset();
             close_noexcept();result.failure_pod=read_root();
             if(result.failure_pod){const auto& f=*result.failure_pod;
                 try{result.error=UnavailableObservation{f.state,{f.domain,f.code,f.operation.data()}};}catch(...){result.error.reset();}
@@ -1563,15 +1483,33 @@ struct FilesVolumeArchiveService::State final {
             result.state=clean_cancelled?FilesVolumeArchiveState::Cancelled:FilesVolumeArchiveState::Failed;emit(std::move(result));
         };
         try {
+            if (token.stop_requested()) {
+                cache_error(error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown));
+                return;
+            }
+            if (destination) {
+                const auto route = revalidate_archive_destination(value.destination_directory, *destination);
+                if (!route.value()) { cache_error(*route.unavailable_detail()); return; }
+                const auto conflict = probe_archive_destination(*destination, value.destination_directory.encoding(),
+                                                                value.archive_name);
+                if (!conflict.value()) { cache_error(*conflict.unavailable_detail()); return; }
+                if (*conflict.value() != FilesVolumeArchiveDestinationState::Ready) {
+                    cache_error(error(AdapterError::PlanDecisionStale, "volume_archive.review.destination_conflict",
+                                      ObservationState::Changed));
+                    return;
+                }
+            }
             if(value.prepared_journal_root)root=value.prepared_journal_root;
             else {auto acquired=ck::files::acquire_native_journal_root(*value.journal_root);
                 if(!acquired.value()){cache_error(*acquired.unavailable_detail());return;}root=std::move(acquired).take_value();owns_root=true;}
             auto journal_name=archive_journal_name(root->encoding(),value.journal_id);
             if(!journal_name){cache_error(error(AdapterError::UnrepresentableName,"volume_archive.journal_name",ObservationState::Unsupported));return;}
-            ck::files::NativeFileSystem filesystem;
-            auto opened=filesystem.open_native_directory(value.destination_directory);
-            if(!opened.value()){cache_error(*opened.unavailable_detail());return;}
-            auto destination=std::shared_ptr<const ck::files::DirectoryCursor>(std::move(opened).take_value());
+            if (!destination) {
+                ck::files::NativeFileSystem filesystem;
+                auto opened = filesystem.open_native_directory(value.destination_directory);
+                if (!opened.value()) { cache_error(*opened.unavailable_detail()); return; }
+                destination = ArchiveDestination(std::move(opened).take_value());
+            }
             // Admit private scope before source acquisition or any archive effect.
             auto guard=ck::files::JournalScopeGuard::create_for_namespace_child(root,destination,token);
             if(!guard.value()){destination.reset();cache_error(*guard.unavailable_detail());return;}
@@ -1579,9 +1517,7 @@ struct FilesVolumeArchiveService::State final {
             auto document=value.build_document(token);
             if(!document.value()){scope.reset();destination.reset();cache_error(*document.unavailable_detail());return;}
             auto complete=std::move(document).take_value();complete.consistency=value.consistency;
-            if(complete.source.identity!=value.source.identity||complete.source.mount_point!=value.source.mount_point||
-                complete.source.filesystem!=value.source.filesystem||complete.source.native_mount_units!=value.source.native_mount_units||
-                complete.source.archive.support!=value.source.archive.support||complete.source.archive.snapshot_available!=value.source.archive.snapshot_available){
+            if(!archive_source_matches(value.source,complete.source)){
                 scope.reset();destination.reset();cache_error(error(AdapterError::UnqualifiedIdentity,"volume_archive.identity_revalidation",ObservationState::Changed));return;}
             auto host=value.destination_directory.host_path();
             if(!host.value()){scope.reset();destination.reset();cache_error(*host.unavailable_detail());return;}
@@ -1606,6 +1542,7 @@ struct FilesVolumeArchiveService::State final {
         }catch(...){
             // Every writer local unwound and drained BEFORE this handler. Keep
             // native first-error POD even if diagnostic allocation stays denied.
+            destination.reset();
             close_noexcept();result.failure_pod=read_root();
             if(!result.failure_pod){ck::files::NativeArchiveFailure fallback;fallback.state=ObservationState::Failed;fallback.domain=ErrorDomain::Adapter;
                 fallback.code=static_cast<std::int64_t>(AdapterError::InvalidNativeResult);constexpr char op[]="volume_archive.worker_fault";
@@ -1617,23 +1554,75 @@ struct FilesVolumeArchiveService::State final {
             emit(std::move(result));
         }
     }
+    void run_review(ReviewedJob job, ArchiveDestination destination, std::stop_token token) {
+        try {
+            const auto &review = job.approval.review();
+            if (!destination) {
+                FilesVolumeArchiveReply failed;
+                failed.request = job.ticket;
+                failed.error = error(AdapterError::PlanDecisionStale, "volume_archive.review.destination_missing",
+                                     ObservationState::Changed);
+                emit(std::move(failed));
+                return;
+            }
+            auto build_document = [approval = job.approval](std::stop_token stop_token) {
+                if (stop_token.stop_requested())
+                    return review_rejected<FilesVolumeArchiveDocument>(ObservationState::Unknown,
+                        AdapterError::InterruptedRead, "volume_archive.cancelled");
+                auto document = approval.review()->document();
+                document.losses_reviewed = document.losses.empty() || approval.continued_with_listed_losses();
+                return Observation<FilesVolumeArchiveDocument>::available(std::move(document));
+            };
+            FilesVolumeArchiveRequest request{
+                .source=review->document().source, .destination_directory=review->destination_directory(),
+                .archive_name=review->archive_name(), .consistency=review->document().consistency,
+                .transaction_id=job.transaction_id, .build_document=std::move(build_document),
+                .journal_root=std::move(job.journal_root), .journal_id=job.journal_id,
+                .journal_limits={}, .open_journal={}, .prepared_journal_root={}};
+            run_one(job.ticket, std::move(request), token, std::move(destination));
+        } catch (...) {
+            destination.reset();
+            FilesVolumeArchiveReply failed;
+            failed.request = job.ticket;
+            failed.state = FilesVolumeArchiveState::WorkerFault;
+            emit(std::move(failed));
+        }
+    }
     void run() {
+        ArchiveDestination destination;
         for (;;) {
-            std::optional<std::pair<FilesVolumeArchiveTicket, FilesVolumeArchiveRequest>> job;
+            std::optional<Job> job;
             {
                 std::unique_lock lock(mutex);
-                condition.wait(lock, [this] { return stopping || pending.has_value(); });
+                condition.wait(lock, [this] { return stopping || pending || discard_review; });
                 if (stopping) {
                     pending.reset();
+                    ready_review.reset();
+                    plan_reply.reset();
+                    busy = false;
+                    discard_review = false;
                     return;
                 }
-                job = std::move(*pending);
+                if (discard_review) {
+                    lock.unlock();
+                    destination.reset();
+                    lock.lock();
+                    discard_review = false;
+                    continue;
+                }
+                job = std::move(pending);
                 pending.reset();
                 busy = true;
-                stop = std::stop_source{};
-                signalled = false;
             }
-            run_one(std::move(job->first), std::move(job->second), stop.get_token());
+            const auto token = stop.get_token();
+            if (auto *plan = std::get_if<PlanJob>(&*job))
+                destination = run_plan(std::move(*plan), token);
+            else if (auto *review = std::get_if<ReviewedJob>(&*job))
+                run_review(std::move(*review), std::move(destination), token);
+            else {
+                auto &write = std::get<WriteJob>(*job);
+                run_one(std::move(write.first), std::move(write.second), token);
+            }
         }
     }
 };
@@ -1641,17 +1630,86 @@ struct FilesVolumeArchiveService::State final {
 FilesVolumeArchiveService::FilesVolumeArchiveService(std::function<void()> wake)
     : state_(std::make_unique<State>(std::move(wake))) {}
 FilesVolumeArchiveService::~FilesVolumeArchiveService() = default;
+FilesVolumeArchivePlanningSubmitted FilesVolumeArchiveService::plan(FilesVolumeArchivePlanningRequest request) {
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping)
+        return {FilesVolumeArchivePlanningSubmission::Stopped, {}};
+    if (request.source.identity.empty() || request.source.mount_point.empty() ||
+        !request.destination_directory.is_valid() ||
+        (!request.archive_name.empty() && !safe_archive_name(request.archive_name)) || !request.build_document)
+        return {FilesVolumeArchivePlanningSubmission::Invalid, {}};
+    if (state_->reserved())
+        return {FilesVolumeArchivePlanningSubmission::Busy, {}};
+    auto ticket = FilesVolumeArchivePlanningTicket(state_->next++);
+    std::stop_source stop;
+    state_->pending.emplace(State::PlanJob{ticket, std::move(request)});
+    state_->latest_plan = ticket;
+    state_->latest = {};
+    state_->stop = std::move(stop);
+    state_->condition.notify_one();
+    return {FilesVolumeArchivePlanningSubmission::Accepted, ticket};
+}
+bool FilesVolumeArchiveService::cancel_plan(const FilesVolumeArchivePlanningTicket &ticket) {
+    std::lock_guard lock(state_->mutex);
+    if (!ticket.valid() || ticket != state_->latest_plan || state_->stopping)
+        return false;
+    if (state_->ready_review) {
+        state_->ready_review.reset();
+        if (state_->plan_reply) {
+            state_->plan_reply->review.reset();
+            state_->plan_reply->state = FilesVolumeArchivePlanningState::Cancelled;
+        }
+        state_->discard_review = true;
+        state_->latest_plan = {};
+    } else if (state_->busy || state_->pending) {
+        state_->stop.request_stop();
+    } else {
+        return false;
+    }
+    state_->condition.notify_one();
+    return true;
+}
+std::optional<FilesVolumeArchivePlanningReply> FilesVolumeArchiveService::take_plan() {
+    std::lock_guard lock(state_->mutex);
+    auto result = std::exchange(state_->plan_reply, std::nullopt);
+    state_->signalled = state_->reply.has_value();
+    return result;
+}
+FilesVolumeArchiveSubmitted FilesVolumeArchiveService::execute_review(
+    const FilesVolumeArchivePlanningTicket &plan, FilesVolumeArchiveApproval approval,
+    ck::files::NativeAbsolutePath journal_root, ck::files::OperationJournalId journal_id,
+    std::uint64_t transaction_id) {
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping)
+        return {FilesVolumeArchiveSubmission::Stopped, {}};
+    if (!plan.valid() || plan != state_->latest_plan || !state_->ready_review ||
+        state_->ready_review != approval.review() || !journal_root.is_valid() || transaction_id == 0)
+        return {FilesVolumeArchiveSubmission::Invalid, {}};
+    auto ticket = FilesVolumeArchiveTicket(state_->next++);
+    std::stop_source stop;
+    state_->pending.emplace(State::ReviewedJob{ticket, std::move(approval), std::move(journal_root),
+                                               journal_id, transaction_id});
+    state_->latest = ticket;
+    state_->latest_plan = {};
+    state_->ready_review.reset();
+    state_->stop = std::move(stop);
+    state_->condition.notify_one();
+    return {FilesVolumeArchiveSubmission::Accepted, ticket};
+}
 FilesVolumeArchiveSubmitted FilesVolumeArchiveService::request(FilesVolumeArchiveRequest request) {
     std::lock_guard lock(state_->mutex);
     if (state_->stopping)
         return {FilesVolumeArchiveSubmission::Stopped, {}};
     if (!State::valid(request))
         return {FilesVolumeArchiveSubmission::Invalid, {}};
-    if (state_->busy || state_->pending)
+    if (state_->reserved())
         return {FilesVolumeArchiveSubmission::Busy, {}};
     auto ticket = FilesVolumeArchiveTicket(state_->next++);
+    std::stop_source stop;
+    state_->pending.emplace(State::WriteJob{ticket, std::move(request)});
     state_->latest = ticket;
-    state_->pending = std::make_pair(ticket, std::move(request));
+    state_->latest_plan = {};
+    state_->stop = std::move(stop);
     state_->condition.notify_one();
     return {FilesVolumeArchiveSubmission::Accepted, ticket};
 }
@@ -1659,26 +1717,13 @@ bool FilesVolumeArchiveService::cancel(const FilesVolumeArchiveTicket &request) 
     std::lock_guard lock(state_->mutex);
     if (!request.valid() || request != state_->latest || (!state_->busy && !state_->pending))
         return false;
-    state_->cancelled = request;
-    if (state_->pending && !state_->busy) {
-        state_->pending.reset();
-        FilesVolumeArchiveReply cancelled;
-        cancelled.request = request;
-        cancelled.state = FilesVolumeArchiveState::Cancelled;
-        cancelled.error = error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown);
-        state_->reply = std::move(cancelled);
-        state_->signal();
-        return true;
-    }
     state_->stop.request_stop();
-    state_->condition.notify_all();
     return true;
 }
 std::optional<FilesVolumeArchiveReply> FilesVolumeArchiveService::take() {
     std::lock_guard lock(state_->mutex);
-    auto result = std::move(state_->reply);
-    state_->reply.reset();
-    state_->signalled = false;
+    auto result = std::exchange(state_->reply, std::nullopt);
+    state_->signalled = state_->plan_reply.has_value();
     return result;
 }
 void FilesVolumeArchiveService::request_stop() noexcept { state_->request_stop(); }
@@ -1689,7 +1734,7 @@ bool FilesVolumeArchiveService::running() const noexcept {
 }
 bool FilesVolumeArchiveService::working() const {
     std::lock_guard lock(state_->mutex);
-    return state_->busy || state_->pending.has_value();
+    return state_->reserved();
 }
 
 } // namespace ck::vision

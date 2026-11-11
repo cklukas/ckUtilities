@@ -122,8 +122,6 @@ int run(const std::vector<std::string> &args) {
         auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
         auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
         auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback());
-        auto volume_archive_planning_service =
-            std::make_unique<ck::vision::FilesVolumeArchivePlanningService>(wake.callback());
         auto volume_archive_service = std::make_unique<ck::vision::FilesVolumeArchiveService>(wake.callback());
         auto volume_archive_recovery_service =
             std::make_unique<ck::vision::FilesVolumeArchiveRecoveryService>(wake.callback());
@@ -152,7 +150,7 @@ int run(const std::vector<std::string> &args) {
             ck::vision::ThemeScheme::Classic,
             {completion_services[0].get(), completion_services[1].get()}, planning_service.get(), execution_service.get(),
             std::make_shared<const NativeAbsolutePath>(*operation_journal_root),
-            {std::move(loaded_settings.value), std::move(loaded_settings.diagnostic), &settings_service}, volume_service.get(), volume_archive_planning_service.get(),
+            {std::move(loaded_settings.value), std::move(loaded_settings.diagnostic), &settings_service}, volume_service.get(),
             volume_archive_service.get(), volume_archive_recovery_service.get(),
             volume_archive_recovery_cleanup_service.get(), operation_recovery_service.get(),
             operation_recovery_cleanup_service.get());

@@ -18,6 +18,14 @@
 #include <stdexcept>
 #include <thread>
 
+#if defined(_WIN32)
+#include "windows_name.hpp"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace {
 using namespace ck::files;
 using namespace ck::vision;
@@ -656,8 +664,8 @@ CK_TEST(volume_archive_review_reports_sparse_shape_and_binds_default_name) {
     CK_CHECK(!model->requires_loss_consent());
     const auto approval = model->approve(FilesVolumeArchiveReviewDecision::Proceed);
     CK_CHECK(approval.value());
-    CK_CHECK(!approval.value()->continued_with_listed_losses);
-    CK_CHECK(approval.value()->review == model);
+    CK_CHECK(!approval.value()->continued_with_listed_losses());
+    CK_CHECK(approval.value()->review() == model);
 }
 
 CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_unreviewed_losses) {
@@ -677,7 +685,7 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     const auto approved = model->approve(FilesVolumeArchiveReviewDecision::ContinueWithListedLosses,
                                          std::span<const std::size_t>(&loss, 1));
     CK_CHECK(approved.value());
-    CK_CHECK(approved.value()->continued_with_listed_losses);
+    CK_CHECK(approved.value()->continued_with_listed_losses());
 
     auto unreviewed = model->document();
     auto unreviewed_request=write_request(unreviewed,scratch.path(),"loss.ckarchive",17);
@@ -699,15 +707,15 @@ CK_TEST(volume_archive_review_refuses_unrepresentable_windows_path_encoding) {
 
 CK_TEST(volume_archive_planning_service_returns_review_without_writing) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-planning", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
-    FilesVolumeArchivePlanningService service;
+    FilesVolumeArchiveService service;
     FilesVolumeArchivePlanningRequest request{
         source(), address(scratch.path()), "planned.ckarchive", FilesVolumeArchiveConsistency::Live,
         [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }};
-    const auto submitted = service.request(std::move(request));
+    const auto submitted = service.plan(std::move(request));
     CK_CHECK(submitted.state == FilesVolumeArchivePlanningSubmission::Accepted);
     std::optional<FilesVolumeArchivePlanningReply> reply;
     for (int i = 0; i != 500 && !reply; ++i) {
-        reply = service.take();
+        reply = service.take_plan();
         if (!reply)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
@@ -718,6 +726,67 @@ CK_TEST(volume_archive_planning_service_returns_review_without_writing) {
     CK_CHECK(!std::filesystem::exists(scratch.path() / "planned.ckarchive"));
     service.request_stop();
     service.join();
+}
+
+CK_TEST(volume_archive_review_refuses_destination_replacement) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-replaced", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto parent = scratch.path() / std::string(140, 'a') / std::string(140, 'b');
+    const auto destination = parent / "destination";
+    const auto original = parent / "original";
+    const auto journals = journal_root(scratch.path());
+    CK_CHECK(ck::io::create_directories(destination));
+    FilesVolumeArchiveService service;
+    const auto submitted = service.plan({
+        source(), address(destination), "reviewed.ckarchive", FilesVolumeArchiveConsistency::Live,
+        [](std::stop_token) { return Observation<FilesVolumeArchiveDocument>::available(document()); }});
+    CK_CHECK(submitted.state == FilesVolumeArchivePlanningSubmission::Accepted);
+    std::optional<FilesVolumeArchivePlanningReply> review;
+    for (int i = 0; i != 5000 && !review; ++i) {
+        review = service.take_plan();
+        if (!review)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(review && review->state == FilesVolumeArchivePlanningState::Ready && review->review);
+    if (!review || !review->review)
+        return;
+    const auto approval = review->review->approve(FilesVolumeArchiveReviewDecision::Proceed);
+    CK_CHECK(approval.value());
+    if (!approval.value())
+        return;
+
+#if defined(_WIN32)
+    const auto from = windows_extended_path(destination.native());
+    const auto to = windows_extended_path(original.native());
+    CK_CHECK(from && to && MoveFileExW(from->c_str(), to->c_str(), 0));
+#else
+    std::filesystem::rename(destination, original);
+#endif
+    CK_CHECK(ck::io::create_directories(destination));
+    const auto approved = service.execute_review(submitted.ticket, *approval.value(), journals, journal_id(12), 12);
+    CK_CHECK(approved.state == FilesVolumeArchiveSubmission::Accepted);
+    CK_CHECK(service.execute_review(submitted.ticket, *approval.value(), journals, journal_id(13), 13).state ==
+             FilesVolumeArchiveSubmission::Invalid);
+    std::optional<FilesVolumeArchiveReply> result;
+    for (int i = 0; i != 5000 && !result; ++i) {
+        result = service.take();
+        if (!result)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CK_CHECK(result && result->error);
+    if (!result || !result->error)
+        return;
+    CK_CHECK(result->state == FilesVolumeArchiveState::Failed);
+    CK_CHECK(result->error->state == ObservationState::Changed);
+    CK_CHECK(result->error->error.operation == "volume_archive.review.destination_changed");
+    NativeFileSystem filesystem;
+    for (const auto &path : {address(destination), address(original), journals}) {
+        auto directory = filesystem.open_native_directory(path);
+        CK_CHECK(directory.value());
+        if (directory.value()) {
+            const auto listing = (*directory.value())->read(4);
+            CK_CHECK(listing.state == DirectoryReadState::End && listing.names.empty());
+        }
+    }
 }
 
 CK_TEST(volume_archive_service_keeps_build_and_publication_on_worker) {

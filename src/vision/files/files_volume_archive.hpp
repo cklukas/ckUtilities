@@ -114,9 +114,19 @@ enum class FilesVolumeArchiveReviewDecision : std::uint8_t {
 
 class FilesVolumeArchiveReview;
 
-struct FilesVolumeArchiveApproval final {
-    std::shared_ptr<const FilesVolumeArchiveReview> review;
-    bool continued_with_listed_losses = false;
+class FilesVolumeArchiveApproval final {
+  public:
+    const std::shared_ptr<const FilesVolumeArchiveReview> &review() const noexcept { return review_; }
+    bool continued_with_listed_losses() const noexcept { return continued_with_listed_losses_; }
+
+  private:
+    friend class FilesVolumeArchiveReview;
+    FilesVolumeArchiveApproval(std::shared_ptr<const FilesVolumeArchiveReview> review,
+                               bool continued_with_listed_losses)
+        : review_(std::move(review)), continued_with_listed_losses_(continued_with_listed_losses) {}
+
+    std::shared_ptr<const FilesVolumeArchiveReview> review_;
+    bool continued_with_listed_losses_;
 };
 
 class FilesVolumeArchiveReview final : public std::enable_shared_from_this<FilesVolumeArchiveReview> {
@@ -138,8 +148,8 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
 
     // Approval binds the immutable document, destination, archive name and
     // loss list together. It performs no I/O and never authorizes mutation by
-    // itself; the future worker must retain this review pointer and recheck
-    // the source/destination identities before writing.
+    // itself. The worker pairs it with the retained native destination from
+    // this exact review before writing.
     ck::files::Observation<FilesVolumeArchiveApproval> approve(
         FilesVolumeArchiveReviewDecision decision,
         std::span<const std::size_t> reviewed_losses = {}) const;
@@ -190,7 +200,7 @@ struct FilesVolumeArchivePlanningTicket final {
     friend bool operator==(const FilesVolumeArchivePlanningTicket &, const FilesVolumeArchivePlanningTicket &) = default;
 
   private:
-    friend class FilesVolumeArchivePlanningService;
+    friend class FilesVolumeArchiveService;
     explicit FilesVolumeArchivePlanningTicket(std::uint64_t number)
         : identity_(std::make_shared<const std::uint64_t>(number)) {}
     std::shared_ptr<const std::uint64_t> identity_;
@@ -206,26 +216,6 @@ struct FilesVolumeArchivePlanningReply final {
     FilesVolumeArchivePlanningState state = FilesVolumeArchivePlanningState::Failed;
     FilesVolumeArchiveReview::Pointer review;
     std::optional<ck::files::UnavailableObservation> error;
-};
-
-class FilesVolumeArchivePlanningService final {
-  public:
-    explicit FilesVolumeArchivePlanningService(std::function<void()> wake = {});
-    ~FilesVolumeArchivePlanningService();
-    FilesVolumeArchivePlanningService(const FilesVolumeArchivePlanningService &) = delete;
-    FilesVolumeArchivePlanningService &operator=(const FilesVolumeArchivePlanningService &) = delete;
-
-    FilesVolumeArchivePlanningSubmitted request(FilesVolumeArchivePlanningRequest request);
-    bool cancel(const FilesVolumeArchivePlanningTicket &request);
-    std::optional<FilesVolumeArchivePlanningReply> take();
-    void request_stop() noexcept;
-    void join();
-    bool running() const noexcept;
-    bool working() const;
-
-  private:
-    struct State;
-    std::unique_ptr<State> state_;
 };
 
 struct FilesVolumeArchiveWriteRequest final {
@@ -503,6 +493,16 @@ class FilesVolumeArchiveService final {
     ~FilesVolumeArchiveService();
     FilesVolumeArchiveService(const FilesVolumeArchiveService &) = delete;
     FilesVolumeArchiveService &operator=(const FilesVolumeArchiveService &) = delete;
+
+    // Planning and approved publication run on the same worker. The UI sees
+    // only the review model and ticket. The worker retains the native owner
+    // until the review is executed, discarded, or the service stops.
+    FilesVolumeArchivePlanningSubmitted plan(FilesVolumeArchivePlanningRequest request);
+    bool cancel_plan(const FilesVolumeArchivePlanningTicket &request);
+    std::optional<FilesVolumeArchivePlanningReply> take_plan();
+    FilesVolumeArchiveSubmitted execute_review(const FilesVolumeArchivePlanningTicket &ticket,
+        FilesVolumeArchiveApproval approval, ck::files::NativeAbsolutePath journal_root,
+        ck::files::OperationJournalId journal_id, std::uint64_t transaction_id);
 
     FilesVolumeArchiveSubmitted request(FilesVolumeArchiveRequest request);
     bool cancel(const FilesVolumeArchiveTicket &request);

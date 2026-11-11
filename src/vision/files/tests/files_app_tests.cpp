@@ -185,7 +185,6 @@ struct Fixture {
     std::unique_ptr<FilesOperationPlanningService> planning_service;
     std::unique_ptr<FilesOperationExecutionService> execution_service;
     std::unique_ptr<FilesVolumeService> volume_service;
-    std::unique_ptr<FilesVolumeArchivePlanningService> volume_archive_planning_service;
     std::unique_ptr<FilesVolumeArchiveService> volume_archive_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryCleanupService> volume_archive_recovery_cleanup_service;
@@ -411,7 +410,6 @@ struct Fixture {
         execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         if (qualified_volume || recovery_journal || eligible_archive_recovery) {
-            volume_archive_planning_service = std::make_unique<FilesVolumeArchivePlanningService>(wake.callback());
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
             volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
             volume_archive_recovery_cleanup_service =
@@ -451,7 +449,7 @@ struct Fixture {
             std::array<FilesCompletionService *, 2>{completion_services[0].get(), completion_services[1].get()},
             planning_service.get(), execution_service.get(),
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
-            volume_service.get(), volume_archive_planning_service.get(), volume_archive_service.get(),
+            volume_service.get(), volume_archive_service.get(),
             volume_archive_recovery_service.get(), volume_archive_recovery_cleanup_service.get(),
             operation_recovery_service.get(), operation_recovery_cleanup_service.get());
     }
@@ -468,8 +466,6 @@ struct Fixture {
             service->join();
         planning_service->join();
         execution_service->join();
-        if (volume_archive_planning_service)
-            volume_archive_planning_service->join();
         if (volume_archive_service)
             volume_archive_service->join();
         if (volume_archive_recovery_service)
