@@ -417,6 +417,10 @@ authority and does not close the application or release requirements below.
   [native APFS regression check](ck-files-progress.md#2026-11-11--full-capacity-for-large-macos-volumes)
   verified the corrected total after refresh and the pane-local archive
   availability hint on a 24 TB volume.
+- [ ] Expire the ckVision POSIX capability probe during a quiet wait and
+  verify the first mouse click in a real xterm with default settings.
+  The [first-click trace](ck-files-progress.md#2026-11-11--same-name-replacement-and-the-first-xterm-click)
+  shows an SGR pixel click arriving before the terminal returned to cell mode.
 
 - [ ] Preserve proven selection continuity across a fresh indexed scan.
   The `912b961` Linux xterm run reopened a pane-local bookmark with the
@@ -432,6 +436,8 @@ authority and does not close the application or release requirements below.
   passing Linux and macOS ThreadSanitizer and ASan/UBSan cohorts.
   A native macOS PTY confirmed Right-to-accept, row selection, Ctrl+R
   mark and focus retention, resize, and terminal restoration.
+  In Linux xterm a same-name replacement lost its mark and stayed blocked
+  through a second refresh until **Marks → Use current row** bound it.
   The hosted Windows NTFS backend passed the native indexed mark-binding
   test, all 88 backend tests, and five installed SDK consumer tests.
   Windows runtime and desktop acceptance stay open.

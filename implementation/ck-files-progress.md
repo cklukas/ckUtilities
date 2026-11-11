@@ -1,5 +1,28 @@
 # Files implementation evidence
 
+## 2026-11-11 — Same-name replacement and the first xterm click
+
+A real Linux xterm window verified the keyboard path when a file at the
+same name was replaced by a different inode. Refresh dropped its left-pane
+mark and kept the right-pane mark. Rename and Copy stayed blocked through
+a second scan. **Marks → Use current row** bound the visible replacement
+and made Rename available again. Cancel preserved both files and quitting
+restored the terminal. At 140 columns the left status clipped the last two
+letters of the instruction. The Marks menu displayed the complete command.
+
+The same Release build failed a separate startup mouse check. With xterm
+398's default settings, the terminal confirmed SGR pixel mode but sent no
+cell-size or text-area metric. The first click arrived as pixel coordinates
+and left the original pane active. The matching ckVision POSIX wait omits
+the capability probe deadline, so the quiet terminal can stay in pixel mode
+until the click wakes the wait. A matching SDK regression and real-window
+retest are pending.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Linux xterm replacement and explicit row binding receipt | `358edf21551d4d1df5dce44665a5ae69f9b59d59903b30f924fefe20c9493034` |
+| Linux xterm first-click trace receipt | `0e1d05c011be9142bb5a78fb37dede43515235a1619a6cc6e0a957b9c8310f86` |
+
 ## 2026-11-11 — Native test scratch-root configuration
 
 The Windows v143 allocation-fault build exposed a CMake ordering bug.
