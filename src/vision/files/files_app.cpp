@@ -648,16 +648,8 @@ struct FilesApp::State {
             });
             wake.bind([this] { pump(); });
             bound = true;
-            if (volume_archive_recovery_service) {
-                if (!operation_journal_root || !operation_journal_root->is_valid()) {
-                    volume_archive_recovery_error = "archive journal is not configured";
-                } else if (volume_archive_recovery_service->request(*operation_journal_root) ==
-                           FilesVolumeArchiveRecoverySubmission::Accepted) {
-                    volume_archive_recovery_request = true;
-                } else {
-                    volume_archive_recovery_error = "archive recovery scan could not be started";
-                }
-            }
+            if (volume_archive_recovery_service)
+                scan_archive_recovery();
             if (operation_recovery_service) {
                 if (!operation_journal_root || !operation_journal_root->is_valid()) {
                     operation_recovery_error = "operation journal is not configured";
@@ -940,7 +932,8 @@ struct FilesApp::State {
                 return FilesCommandAvailability::available();
             if (modal_pending())
                 return unavailable("Cancel unavailable: a dialog is open");
-            if (operation_execution_request || pending(panes[active]) || panes[active].volume_view)
+            if (operation_execution_request || volume_archive_execution_request ||
+                pending(panes[active]) || panes[active].volume_view)
                 return FilesCommandAvailability::available();
             return unavailable("Cancel unavailable: no activity is running");
         }
@@ -3040,10 +3033,31 @@ struct FilesApp::State {
             });
         labels();
     }
+    bool scan_archive_recovery() {
+        volume_archive_recovery_scan.reset();
+        if (!volume_archive_recovery_service || !operation_journal_root ||
+            !operation_journal_root->is_valid()) {
+            volume_archive_recovery_error = "archive journal is not configured";
+            return false;
+        }
+        if (volume_archive_recovery_request)
+            return true;
+        if (volume_archive_recovery_service->request(*operation_journal_root) !=
+            FilesVolumeArchiveRecoverySubmission::Accepted) {
+            volume_archive_recovery_error = "archive recovery scan could not be started";
+            return false;
+        }
+        volume_archive_recovery_error.clear();
+        volume_archive_recovery_request = true;
+        return true;
+    }
     void consume_volume_archive(FilesVolumeArchiveReply reply) {
         if (!volume_archive_execution_request || reply.request != *volume_archive_execution_request)
             return;
         volume_archive_execution_request.reset();
+        // A failed or cancelled writer can leave a durable recovery record.
+        // Refresh before Copy or recovery inspection can reuse the old scan.
+        scan_archive_recovery();
         if (!volume_archive_origin)
             return;
         if (reply.state == FilesVolumeArchiveState::Complete ||
@@ -3057,15 +3071,20 @@ struct FilesApp::State {
                 ? "Volume archive created"
                 : published ? "Volume archive published; durability is indeterminate"
                             : "Volume archive publication is indeterminate";
-            if (result) {
-                const auto address = ck::files::NativeAbsolutePath::from_host(result->published_path);
+            const bool verified_path = result && result->published_path;
+            if (verified_path) {
+                const auto address = ck::files::NativeAbsolutePath::from_host(*result->published_path);
                 if (address.value())
                     message += ": " + FilesPaneLocation(*address.value()).display_text();
+            } else if (published) {
+                message = reply.state == FilesVolumeArchiveState::Complete
+                    ? "Volume archive created in the reviewed folder. Its current path could not be verified."
+                    : "Volume archive published in the reviewed folder. Its current path and durability could not be verified.";
             }
             if (reply.failure_pod)
                 message += ": " + std::string(reply.failure_pod->operation.data());
             destination.archive_notice = std::move(message);
-            if (published && archive_destination_current(origin))
+            if (verified_path && archive_destination_current(origin))
                 destination.archive_refresh = origin.destination_navigation;
         } else {
             std::string message = reply.state == FilesVolumeArchiveState::Cancelled
@@ -3240,13 +3259,7 @@ struct FilesApp::State {
                     volume_archive_recovery_cleanup_request = false;
                     if (reply->state == FilesVolumeArchiveRecoveryCleanupState::Complete && reply->removed) {
                         volume_archive_recovery_cleanup_error.clear();
-                        volume_archive_recovery_scan.reset();
-                        if (volume_archive_recovery_service && operation_journal_root &&
-                            operation_journal_root->is_valid() &&
-                            volume_archive_recovery_service->request(*operation_journal_root) ==
-                                FilesVolumeArchiveRecoverySubmission::Accepted)
-                            volume_archive_recovery_request = true;
-                        else
+                        if (!scan_archive_recovery())
                             volume_archive_recovery_cleanup_error =
                                 "Archive staging cleanup completed; recovery rescan could not be started";
                     } else {

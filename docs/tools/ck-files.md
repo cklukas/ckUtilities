@@ -42,15 +42,17 @@ execute files or provide an embedded shell.
   explicit preservation losses. Changing focus during planning keeps the
   reviewed source and destination panes. The worker keeps the source mount
   root and destination directory open through approval. If either was
-  replaced or the archive name was taken, Files asks for a new review. After confirmed
-  publication, Files refreshes the original destination when it still shows
-  the reviewed directory and displays the result in that pane. The worker revalidates
-  the source, records durable journal states, and verifies data before
-  no-replace publication. It reports indeterminate durability when publication
-  succeeds and a later flush or journal step cannot be proven. On startup,
-  a bounded read-only recovery scan checks private archive journals. Copy
-  remains disabled until the scan completes and no journal needs
-  reconciliation.
+  replaced or the archive name was taken, Files asks for a new review.
+  After confirmed publication, Files displays the result in the original
+  destination pane and refreshes it when the pane still shows that directory.
+  The worker verifies the archive data, checks both routes again, and
+  publishes through the held folder. If the folder moves during publication,
+  Files displays the path only if it can verify the reviewed location. Files
+  reports indeterminate durability when a flush or journal step after
+  publication cannot be proven. On startup and after each archive attempt,
+  a bounded read-only scan checks private
+  archive journals. Copy remains disabled until the scan completes and no
+  journal needs reconciliation.
   Snapshot providers remain capability-gated. **Inspect archive recovery** is
   available as a bounded, read-only review of matching journals. A separate
   worker boundary refuses restart cleanup because the original archive

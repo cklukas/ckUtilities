@@ -463,7 +463,7 @@ CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_rep
     CK_CHECK(written.value()->publication == FilesVolumeArchivePublication::Durable);
     CK_CHECK(written.value()->digests_verified && written.value()->publication_confirmed);
     std::string content;
-    CK_CHECK(ck::io::read_file(written.value()->published_path,content));
+    CK_CHECK(written.value()->published_path && ck::io::read_file(*written.value()->published_path, content));
     const auto native_bytes=std::as_bytes(std::span<const char>(content.data(),content.size()));
     CK_CHECK(std::equal(bytes.begin(),bytes.end(),native_bytes.begin(),native_bytes.end()));
 #endif

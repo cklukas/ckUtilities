@@ -257,7 +257,9 @@ enum class FilesVolumeArchivePublication {
 };
 
 struct FilesVolumeArchiveWriteResult final {
-    std::filesystem::path published_path;
+    // Present only when publication was confirmed and a fresh native check
+    // still maps the reviewed path to the held destination directory.
+    std::optional<std::filesystem::path> published_path;
     std::uint64_t logical_size = 0;
     std::uint64_t data_bytes = 0;
     std::size_t entry_count = 0;

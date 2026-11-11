@@ -1054,8 +1054,58 @@ bool FilesVolumeArchiveRecoveryCleanupService::working() const {
     return state_->busy || state_->pending.has_value();
 }
 
-Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
-                                                                std::stop_token stop_token) {
+namespace {
+
+// Opening the route here only checks that it still names the held object.
+// The resulting cursor is never used for archive publication.
+Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolutePath &path,
+                                                  const ck::files::DirectoryCursor &held) {
+    const auto scope = held.source_scope();
+    if (!scope.value())
+        return Observation<bool>::unavailable(scope.state(), scope.unavailable_detail()->error);
+    ck::files::NativeFileSystem filesystem(*scope.value());
+    const auto changed = [] {
+        return Observation<bool>::unavailable(ObservationState::Changed,
+            error(AdapterError::PlanDecisionStale, "volume_archive.review.destination_changed"));
+    };
+    const auto route = filesystem.open_native_directory(path);
+    if (!route.value()) {
+        const auto &detail = *route.unavailable_detail();
+        if (detail.state == ObservationState::Gone ||
+            (detail.error.domain == ErrorDomain::Adapter &&
+             detail.error.code == static_cast<std::int64_t>(AdapterError::FinalLinkRejected)))
+            return changed();
+        return Observation<bool>::unavailable(detail.state, detail.error);
+    }
+    const auto original = held.inspect_basic();
+    if (!original.value())
+        return Observation<bool>::unavailable(original.state(), original.unavailable_detail()->error);
+    const auto current = (*route.value())->inspect_basic();
+    if (!current.value())
+        return Observation<bool>::unavailable(current.state(), current.unavailable_detail()->error);
+    const auto &a = *original.value();
+    const auto &b = *current.value();
+    if (!a.identity.value() || !b.identity.value() || !a.mount_id.value() || !b.mount_id.value() ||
+        ck::files::compare_identity(*a.identity.value(), *b.identity.value()) != ck::files::IdentityComparison::Same ||
+        *a.mount_id.value() != *b.mount_id.value())
+        return changed();
+    return Observation<bool>::available(true);
+}
+
+Observation<bool> revalidate_archive_source(const FilesVolumeArchiveSourceRevalidation *source,
+                                            std::stop_token token) {
+    if (!source)
+        return Observation<bool>::available(true);
+    const auto checked = (*source)(token);
+    if (checked.value() && !*checked.value())
+        return Observation<bool>::unavailable(ObservationState::Changed,
+            error(AdapterError::UnqualifiedIdentity, "volume_archive.source.mount_changed"));
+    return checked;
+}
+
+Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
+    const FilesVolumeArchiveWriteRequest &request, std::stop_token stop_token,
+    const FilesVolumeArchiveSourceRevalidation *source) {
     using R=Observation<FilesVolumeArchiveWriteResult>;
     if(!valid_request(request))return R::unavailable(ObservationState::Unsupported,error(AdapterError::PlanInvalid,"volume_archive.request"));
     if(!request.destination_owner||!request.prepared_journal_root||!request.native_journal_name||request.append_journal||request.append_journal_evidence)
@@ -1077,8 +1127,8 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
         ck::files::NativeName::from_posix(request.archive_name):windows_name_from_utf8(request.archive_name);
     const auto hint=archive_staging_name(*address.value(),request.archive_name,request.transaction_id);
     if(!final||!hint)return R::unavailable(ObservationState::Unsupported,error(AdapterError::UnrepresentableName,"volume_archive.exact_names"));
-    // Presentation result only. Every effect below addresses the retained native
-    // destination; this address is never reopened, resized, hashed or removed.
+    // The address records the reviewed route and can label a confirmed result.
+    // Every native write and the publication itself use the held directory.
     auto output_address=address.value()->child_address(*final);
     if(!output_address.value())return R::unavailable(output_address.state(),output_address.unavailable_detail()->error);
     auto output=output_address.value()->host_path();if(!output.value())return R::unavailable(output.state(),output.unavailable_detail()->error);
@@ -1101,20 +1151,70 @@ Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolum
     if(!manifest.empty())native.extents.push_back({kHeaderSize,std::move(manifest)});
     for(const auto& entry:encoded)for(const auto& extent:entry.extents)
         native.extents.push_back({data_offset+extent.archive_offset,*extent.bytes});
+    if (!stop_token.stop_requested()) {
+        const auto route = revalidate_archive_destination(*address.value(), *request.destination_owner);
+        if (!route.value())
+            return R::unavailable(route.state(), route.unavailable_detail()->error);
+    }
     auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native));
     if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
-    auto job=std::move(began).take_value();ck::files::NativeArchiveProgress progress;
-    do {progress=job->advance(stop_token);if(progress.phase==ck::files::NativeArchivePhase::Drain&&!progress.drained)std::this_thread::sleep_for(std::chrono::milliseconds(1));}while(progress.phase!=ck::files::NativeArchivePhase::Complete&&
-        progress.phase!=ck::files::NativeArchivePhase::Cancelled&&progress.phase!=ck::files::NativeArchivePhase::NeedsReconciliation);
-    // No native consumer survives error/result formatting, even under OOM.
+    auto job = std::move(began).take_value();
+    using Phase = ck::files::NativeArchivePhase;
+    auto progress = job->progress();
+    std::optional<UnavailableObservation> stopped_by_review;
+    while (progress.phase != Phase::Complete && progress.phase != Phase::Cancelled &&
+           progress.phase != Phase::NeedsReconciliation) {
+        // Check before the durable intent and again after its flush. The
+        // native publish is still relative to the held directory if the
+        // requested route changes during the final system call.
+        if (!stop_token.stop_requested() &&
+            (progress.phase == Phase::CommitIntent || progress.phase == Phase::Publish)) {
+            auto checked = revalidate_archive_source(source, stop_token);
+            if (checked.value())
+                checked = revalidate_archive_destination(*address.value(), *request.destination_owner);
+            if (!checked.value()) {
+                stopped_by_review = *checked.unavailable_detail();
+                progress = job->finish_io();
+                continue;
+            }
+        }
+        progress = job->advance(stop_token);
+        if (progress.phase == Phase::Drain && !progress.drained)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    // Finish the native writer before interpreting a route check or reporting
+    // a result. In particular, a drain failure outranks a stale review.
     job.reset();
-    if(progress.phase==ck::files::NativeArchivePhase::Complete)
-        return R::available({*output.value(),logical_size,data_bytes,encoded.size(),FilesVolumeArchivePublication::Durable,{},progress.image_verified,true});
-    if(progress.published||progress.publication_uncertain)
-        return R::available({*output.value(),logical_size,data_bytes,encoded.size(),FilesVolumeArchivePublication::PublishedDurabilityUnknown,
-            progress.failure?progress.failure->operation.data():"volume_archive.publication_unknown",progress.image_verified,progress.published});
-    if(progress.failure)return R::unavailable(progress.failure->state,{progress.failure->domain,progress.failure->code,progress.failure->operation.data()});
+    std::optional<std::filesystem::path> verified_path;
+    if (progress.published) {
+        try {
+            if (revalidate_archive_destination(*address.value(), *request.destination_owner).value())
+                verified_path = std::move(output).take_value();
+        } catch (...) {
+            // The publication result survives inability to label its location.
+        }
+    }
+    if (progress.phase == Phase::Complete)
+        return R::available({std::move(verified_path),logical_size,data_bytes,encoded.size(),
+            FilesVolumeArchivePublication::Durable,{},progress.image_verified,true});
+    if (progress.published || progress.publication_uncertain)
+        return R::available({std::move(verified_path),logical_size,data_bytes,encoded.size(),
+            FilesVolumeArchivePublication::PublishedDurabilityUnknown,
+            progress.failure ? progress.failure->operation.data() : "volume_archive.publication_unknown",
+            progress.image_verified,progress.published});
+    if (progress.failure)
+        return R::unavailable(progress.failure->state,{progress.failure->domain,progress.failure->code,
+                                                      progress.failure->operation.data()});
+    if (stopped_by_review)
+        return R::unavailable(stopped_by_review->state, std::move(stopped_by_review->error));
     return R::unavailable(ObservationState::Unknown,error(AdapterError::InterruptedRead,"volume_archive.cancelled"));
+}
+
+} // namespace
+
+Observation<FilesVolumeArchiveWriteResult> write_volume_archive(const FilesVolumeArchiveWriteRequest &request,
+                                                                std::stop_token stop_token) {
+    return write_bound_volume_archive(request, stop_token, nullptr);
 }
 
 namespace {
@@ -1246,33 +1346,6 @@ Observation<FilesVolumeArchiveDestinationState> probe_archive_destination(
     }
     return review_rejected<FilesVolumeArchiveDestinationState>(ObservationState::Unknown,
         AdapterError::UnqualifiedIdentity, "volume_archive.plan.destination_name_unknown");
-}
-
-// Opening the route here only checks that it still names the held object.
-// The resulting cursor is never used for archive publication.
-Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolutePath &path,
-                                                  const ck::files::DirectoryCursor &held) {
-    const auto scope = held.source_scope();
-    if (!scope.value())
-        return Observation<bool>::unavailable(scope.state(), scope.unavailable_detail()->error);
-    ck::files::NativeFileSystem filesystem(*scope.value());
-    const auto route = filesystem.open_native_directory(path);
-    if (!route.value())
-        return Observation<bool>::unavailable(route.state(), route.unavailable_detail()->error);
-    const auto original = held.inspect_basic();
-    if (!original.value())
-        return Observation<bool>::unavailable(original.state(), original.unavailable_detail()->error);
-    const auto current = (*route.value())->inspect_basic();
-    if (!current.value())
-        return Observation<bool>::unavailable(current.state(), current.unavailable_detail()->error);
-    const auto &a = *original.value();
-    const auto &b = *current.value();
-    if (!a.identity.value() || !b.identity.value() || !a.mount_id.value() || !b.mount_id.value() ||
-        ck::files::compare_identity(*a.identity.value(), *b.identity.value()) != ck::files::IdentityComparison::Same ||
-        *a.mount_id.value() != *b.mount_id.value())
-        return review_rejected<bool>(ObservationState::Changed, AdapterError::PlanDecisionStale,
-                                     "volume_archive.review.destination_changed");
-    return Observation<bool>::available(true);
 }
 
 bool archive_source_matches(const FilesVolumeRecord &expected, const FilesVolumeRecord &observed) {
@@ -1501,15 +1574,9 @@ struct FilesVolumeArchiveService::State final {
                 cache_error(error(AdapterError::InterruptedRead, "volume_archive.cancelled", ObservationState::Unknown));
                 return;
             }
-            if (bindings.source) {
-                const auto source = bindings.source(token);
-                if (!source.value()) { cache_error(*source.unavailable_detail()); return; }
-                if (!*source.value()) {
-                    cache_error(error(AdapterError::UnqualifiedIdentity, "volume_archive.source.mount_changed",
-                                      ObservationState::Changed));
-                    return;
-                }
-            }
+            const auto source = bindings.source ? &bindings.source : nullptr;
+            const auto source_checked = revalidate_archive_source(source, token);
+            if (!source_checked.value()) { cache_error(*source_checked.unavailable_detail()); return; }
             if (destination) {
                 const auto route = revalidate_archive_destination(value.destination_directory, *destination);
                 if (!route.value()) { cache_error(*route.unavailable_detail()); return; }
@@ -1553,7 +1620,7 @@ struct FilesVolumeArchiveService::State final {
                     .append_journal={}, .append_journal_evidence={}, .destination_owner=destination,
                     .prepared_journal_root=root, .native_journal_name=*journal_name,
                     .native_journal_id=value.journal_id, .journal_limits=value.journal_limits};
-                return write_volume_archive(request,token);
+                return write_bound_volume_archive(request, token, source);
             };
             auto written=invoke();scope.reset();bindings = {};
             if(!written.value()){cache_error(*written.unavailable_detail());return;}

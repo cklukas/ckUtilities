@@ -24,6 +24,15 @@ const char* mode="roundtrip";bool armed=false,known=false,write_seen=false,close
 dev_t stage_dev=0;ino_t stage_ino=0;int closed=0,reused=-1;std::stop_source* cancel_source=nullptr;
 std::string base_path;bool stage(int fd){struct stat s{};return known&&fstat(fd,&s)==0&&s.st_dev==stage_dev&&s.st_ino==stage_ino;}
 bool is(const char* text){return !std::strcmp(mode,text);}
+bool destination_moved = false;
+void replace_destination() {
+    assert(!destination_moved);
+    const auto original = base_path + "/dest";
+    const auto moved = base_path + "/moved";
+    assert(rename(original.c_str(), moved.c_str()) == 0);
+    assert(mkdir(original.c_str(), 0700) == 0);
+    destination_moved = true;
+}
 }
 extern "C" int __real_ftruncate(int,off_t);
 extern "C" int __wrap_ftruncate(int fd,off_t n){if(armed){struct stat s{};assert(fstat(fd,&s)==0&&S_ISREG(s.st_mode)&&s.st_nlink==0);known=true;stage_dev=s.st_dev;stage_ino=s.st_ino;}
@@ -32,6 +41,7 @@ extern "C" ssize_t __real_pwrite(int,const void*,size_t,off_t);
 extern "C" ssize_t __wrap_pwrite(int fd,const void* data,size_t n,off_t at){
  const auto r=__real_pwrite(fd,data,n,at);
  if(armed&&stage(fd)&&!write_seen){write_seen=true;
+  if (is("destination-moved-during-write")) replace_destination();
   if(is("hint-replaced")){const auto hint=base_path+"/dest/.image.ckarchive.cktmp-1";const auto saved=base_path+"/dest/saved";assert(rename(hint.c_str(),saved.c_str())==0);int x=open(hint.c_str(),O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC,0600);assert(x>=0&&write(x,"replacement",11)==11&&close(x)==0);}
   if(is("cancel-in-write")||is("cancel-close")||is("cancel-close-oom")){assert(cancel_source);cancel_source->request_stop();}
   if(is("upstream-oom-close"))deny_alloc=true;
@@ -52,7 +62,10 @@ extern "C" int __wrap_close(int fd){const bool target=armed&&stage(fd);if(target
   errno=EIO;return -1;}
  return r;}
 extern "C" int __real_linkat(int,const char*,int,const char*,int);
-extern "C" int __wrap_linkat(int a,const char* b,int c,const char* d,int e){const int r=__real_linkat(a,b,c,d,e);if(armed&&r==0){linked=true;if(is("cancel-after-publish")){assert(cancel_source);cancel_source->request_stop();}}return r;}
+extern "C" int __wrap_linkat(int a,const char* b,int c,const char* d,int e){
+ if (armed && is("destination-moved-at-publish") && !destination_moved && !std::strcmp(d, "image.ckarchive"))
+     replace_destination();
+ const int r=__real_linkat(a,b,c,d,e);if(armed&&r==0){linked=true;if(is("cancel-after-publish")){assert(cancel_source);cancel_source->request_stop();}}return r;}
 namespace {
 template<class T>T take(Observation<T> r){if(!r.value()){std::fprintf(stderr,"unavailable %d/%lld %s\n",int(r.state()),(long long)r.unavailable_detail()->error.code,r.unavailable_detail()->error.operation.c_str());std::abort();}return std::move(r).take_value();}
 NativeName name(const char* s){return *NativeName::from_posix(s);}NativeAbsolutePath address(const std::string& s){return take(NativeAbsolutePath::from_posix(s));}
@@ -72,6 +85,51 @@ void verify_archive(const std::string& path,OperationJournalState expected_state
  assert(decoded.journal->state(0)==expected_state);
 }
 }
+namespace {
+void verify_unpublished_archive() {
+    for (const auto *component : {"/dest/image.ckarchive", "/moved/image.ckarchive"}) {
+        struct stat image{};
+        assert(lstat((base_path + component).c_str(), &image) != 0 && errno == ENOENT);
+    }
+    const auto decoded = take(decode_operation_journal(read_file(base_path + "/private/" + journal())));
+    assert(!decoded.tail && decoded.journal->state(0) == OperationJournalState::Verified);
+    const auto report = take(inspect_volume_archive_recovery(*decoded.journal));
+    assert(report.operation.requires_reconciliation);
+}
+
+void source_change_during_reviewed_write() {
+    FilesVolumeArchiveService worker;
+    auto planned = worker.plan({
+        source(), address(base_path + "/dest"), "image.ckarchive", FilesVolumeArchiveConsistency::Live,
+        [](std::stop_token) {
+            return Observation<FilesVolumeArchiveSourceCapture>::available(
+                {document(), [](std::stop_token) { return Observation<bool>::available(!write_seen); }});
+        }});
+    assert(planned.state == FilesVolumeArchivePlanningSubmission::Accepted);
+    std::optional<FilesVolumeArchivePlanningReply> review;
+    for (unsigned i = 0; i < 5000 && !review; ++i) {
+        review = worker.take_plan();
+        if (!review) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    assert(review && review->state == FilesVolumeArchivePlanningState::Ready && review->review);
+    auto approved = take(review->review->approve(FilesVolumeArchiveReviewDecision::Proceed));
+    auto started = worker.execute_review(planned.ticket, std::move(approved), address(base_path + "/private"), id(), 1);
+    assert(started.state == FilesVolumeArchiveSubmission::Accepted);
+    std::optional<FilesVolumeArchiveReply> result;
+    for (unsigned i = 0; i < 5000 && !result; ++i) {
+        result = worker.take();
+        if (!result) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    worker.request_stop();
+    worker.join();
+    assert(result && result->state == FilesVolumeArchiveState::Failed && result->error &&
+           result->error->state == ObservationState::Changed &&
+           result->error->error.operation == "volume_archive.source.mount_changed");
+    assert(write_seen && closed == 1);
+    verify_unpublished_archive();
+}
+}
+
 int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_path=argv[1];assert(mkdir((base_path+"/dest").c_str(),0700)==0&&mkdir((base_path+"/private").c_str(),0700)==0);
  // Caller durably provisions the private Root namespace before acquisition.
  int parent=open(base_path.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);assert(parent>=0&&fsync(parent)==0&&close(parent)==0);
@@ -80,6 +138,11 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  if(is("occupied")){int fd=open((base_path+"/dest/image.ckarchive").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  if(is("hint-replaced")){int fd=open((base_path+"/dest/.image.ckarchive.cktmp-1").c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC,0600);assert(fd>=0&&write(fd,"original",8)==8&&close(fd)==0);}
  std::stop_source stop;cancel_source=&stop;armed=true;
+ if (is("source-mount-changed-during-write")) {
+  take(root->finish_io());
+  source_change_during_reviewed_write();
+  return 0;
+ }
  const bool service_mode=is("service")||is("service-legacy-root")||is("service-oom");
  if(service_mode){if(is("service-oom"))mode="upstream-oom-close";
   FilesVolumeArchiveService worker;FilesVolumeArchiveRequest request{source(),address(base_path+"/dest"),"image.ckarchive",FilesVolumeArchiveConsistency::Live,1,[](auto){return Observation<FilesVolumeArchiveDocument>::available(document());},address(base_path+"/private"),id(),{},[](const auto&,const auto&,bool)->Observation<std::unique_ptr<OperationJournalFile>>{std::abort();},{}};
@@ -92,6 +155,17 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
   FilesVolumeArchiveWriteRequest request{document(),base_path+"/dest","image.ckarchive",1,{},{},{},{},{},{},{}};request.destination_owner=dest;request.prepared_journal_root=root;request.native_journal_name=name(journal().c_str());request.native_journal_id=id();
   try{auto result=write_volume_archive(request,stop.get_token());
    if(is("occupied"))assert(!result.value()&&result.state()==ObservationState::Changed);
+   else if (is("destination-moved-during-write")) {
+    assert(destination_moved && !result.value() && result.state() == ObservationState::Changed);
+    assert(result.unavailable_detail()->error.operation == "volume_archive.review.destination_changed");
+    verify_unpublished_archive();
+   }
+   else if (is("destination-moved-at-publish")) {
+    assert(destination_moved && result.value() && result.value()->publication == FilesVolumeArchivePublication::Durable &&
+           result.value()->publication_confirmed && !result.value()->published_path);
+    struct stat image{};
+    assert(lstat((base_path + "/dest/image.ckarchive").c_str(), &image) != 0 && errno == ENOENT);
+   }
    else if(is("cancel-in-write"))assert(!result.value()&&result.unavailable_detail()->error.code==static_cast<std::int64_t>(AdapterError::InterruptedRead));
    else if(is("cancel-close"))assert(!result.value()&&result.unavailable_detail()->error.domain==ErrorDomain::Posix&&result.unavailable_detail()->error.code==EIO);
    else if(is("first-enospc-close-oom"))assert(!result.value()&&result.unavailable_detail()->error.domain==ErrorDomain::Posix&&result.unavailable_detail()->error.code==ENOSPC);
@@ -110,6 +184,7 @@ int main(int argc,char** argv){assert(argc==3&&getuid()!=0);mode=argv[2];base_pa
  if(is("close-oom")||is("first-enospc-close-oom")||is("upstream-oom-close")||is("cancel-close")||is("cancel-close-oom")){
   detail::PreparedJournalConsumerFailure failure;assert(detail::read_prepared_journal_consumer_failure(*root,failure)&&!failure.pending&&failure.domain==ErrorDomain::Posix&&failure.code==(is("first-enospc-close-oom")?ENOSPC:EIO));}
  if(is("roundtrip")||is("service")||is("service-legacy-root")||is("cancel-after-publish")||is("hint-replaced"))verify_archive(base_path+"/dest/image.ckarchive");
+ if(is("destination-moved-at-publish"))verify_archive(base_path+"/moved/image.ckarchive");
  if(is("post-link-flush"))verify_archive(base_path+"/dest/image.ckarchive",OperationJournalState::CommitIntended);
  if(is("occupied"))assert(read_file(base_path+"/dest/image.ckarchive")==bytes("original"));
  if(is("hint-replaced")){assert(read_file(base_path+"/dest/saved")==bytes("original")&&read_file(base_path+"/dest/.image.ckarchive.cktmp-1")==bytes("replacement"));}
