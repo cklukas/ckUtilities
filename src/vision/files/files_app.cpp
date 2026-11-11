@@ -2637,7 +2637,7 @@ struct FilesApp::State {
         bookmark_dialog_lifetime = bookmark_dialog_window->lifetime_token();
         bookmark_dialog->set_completion_handler(
             [this, weak = std::weak_ptr<void>(lifetime), pane, navigation,
-             bookmarks = std::move(bookmarks)](const DialogResult &result) {
+             snapshot = std::move(bookmarks)](const DialogResult &result) {
                 if (weak.expired())
                     return;
                 bookmark_dialog_window = nullptr;
@@ -2655,7 +2655,7 @@ struct FilesApp::State {
                     return;
                 }
                 const auto &current = panes[pane].bookmarks;
-                if (index >= bookmarks.size() || index >= current.size() || bookmarks[index] != current[index]) {
+                if (index >= snapshot.size() || index >= current.size() || snapshot[index] != current[index]) {
                     panes[pane].error = "The selected bookmark changed";
                     labels();
                     return;
