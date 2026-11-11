@@ -1,5 +1,24 @@
 # Files implementation evidence
 
+## 2026-11-11 — Native test scratch-root configuration
+
+The Windows v143 allocation-fault build exposed a CMake ordering bug.
+The standalone recovery fixture embedded the untyped command-line scratch
+root before the host subdirectory declared it as a path. MSVC read the
+backslashes in the resulting string literal as escapes and rejected the
+translation unit. Commit `b807444` declares and normalizes the root before
+configuring test targets.
+
+Fresh macOS configurations checked all 140 compile commands that consume
+the root with both the default and an explicit path. All received the
+expected absolute path, and the production Files compile commands matched
+across both configurations. The workstation rebuild and ordinary-user
+execution are pending.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Windows baseline failure and macOS configuration receipt | `5e8968873eefe56ec416373a13ec3090dc2b5a877d2fa1e0ad08e93fe5781516` |
+
 ## 2026-11-11 — Full capacity for large macOS volumes
 
 The macOS volume worker now reads fresh 64-bit `statfs` counters. It
@@ -67,6 +86,12 @@ Linux ARM64 Release ASan/UBSan passed the same suites and five installed
 backend SDK consumer tests. Clang 19 built the application and consumers
 with matching instrumentation. AddressSanitizer, UndefinedBehaviorSanitizer,
 and leak detection reported no findings.
+Hosted Ubuntu 24.04 also passed the exact `89f21c9` backend with Browser
+enabled (199 tests) and disabled (198 tests). Its separate Clang 22.1.2
+x64 ASan/UBSan and ThreadSanitizer runs passed 199 and 200 backend tests
+respectively, including indexed mark binding. Each job passed five
+installed SDK consumer tests, with zero skips or sanitizer findings.
+See the [hosted qualification run](https://github.com/cklukas/ck-core-fs-lib/actions/runs/42992552528).
 macOS ARM64 ASan/UBSan passed all 111 Files and keymap CTests and the
 focused refresh regression on APFS. The build used the matching
 instrumented ckVision SDK with default container annotations and
@@ -134,6 +159,7 @@ their screenshots, and all 29 screenshot assets matched the source bytes.
 | Published frontend source and dependency archive receipt | `eaa11ccc432eb9a8edcd5af1b94d611a037ca9f4bc6a279b101a502013eed17d` |
 | Linux ThreadSanitizer receipt | `f6a4d9e2c3be4f2bde4c0de0b026d7306e129baeabad0a36942efd66750ea1ea` |
 | Linux ASan/UBSan and installed consumer receipt | `87f15fda2c5bcce626be28b40866c59d214a597e0c8d9574cbe7810523e94c8f` |
+| Hosted Linux backend Release and sanitizer receipt | `8abc60839e20f79db84bf772218a8c99a8529f7da4e8af5e4794a1b12cb27395` |
 | macOS ASan/UBSan receipt | `895d4a684cac5029c70fe5580cd50f28b1158a196850a55f93d3907c1edf5398` |
 | macOS ThreadSanitizer receipt | `9f0befe6bcc32cb303a1c3e18c4e9768bd3d97316bf500b281e6567b7c9166ae` |
 | macOS native PTY input and refresh receipt | `cae059613da46bbe81f09524e5eba1571dddb09a6e2b3facfa0544cb8addc8a4` |
