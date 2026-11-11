@@ -6,6 +6,7 @@
 #include "scratch_directory.hpp"
 #include "simulated_filesystem.hpp"
 #include <cvision/core/clock.hpp>
+#include <cvision/core/text.hpp>
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/ui/application.hpp>
 #include <cvision/widgets/splitter.hpp>
@@ -129,6 +130,35 @@ CK_TEST(files_grid_clamps_geometry_and_exposes_named_columns_at_supported_widths
         CK_CHECK(used <= width || width < 5);
     }
     CK_CHECK(model.column_label(4) == "Modified (UTC)" && model.row_header_width() == 0);
+}
+CK_TEST(files_grid_volume_columns_use_available_width_and_separate_elided_labels) {
+    const std::string mount = "/mnt/\xe7\x95\x8c/long-volume-name";
+    FilesPaneGridModel model;
+    model.publish_volumes({{"Test volume", mount, "fuse.long-filesystem", 1024, 512, false, "test-id", {}, {}}});
+    for (const auto width : {1, 20, 21, 37, 38, 39, 78, 120}) {
+        model.set_viewport(3, width);
+        const auto frame = model.frame();
+        const auto columns = width < 21 ? 1u : width < 38 ? 2u : 3u;
+        CK_CHECK(frame.columns.size() == columns && frame.columns.front() == 1);
+        int used = 0;
+        for (const auto column : frame.columns) {
+            used += model.column_width(column);
+            const auto text_width = ckv::text::text_width(model.cell(0, column).text);
+            CK_CHECK(text_width <= model.column_width(column));
+            if (column != frame.columns.back())
+                CK_CHECK(text_width < model.column_width(column));
+        }
+        CK_CHECK(used == width);
+    }
+    model.set_viewport(3, 38);
+    CK_CHECK(model.cell(0, 1).text == "/mnt/\xe2\x80\xa6");
+    model.set_viewport(3, 39);
+    CK_CHECK(model.cell(0, 1).text == "/mnt/\xe7\x95\x8c\xe2\x80\xa6");
+    model.set_viewport(3, 78);
+    CK_CHECK(model.cell(0, 1).text == mount && model.cell(0, 2).text.ends_with("\xe2\x80\xa6"));
+    CK_CHECK(model.cell(0, 3).text == "512B/1.00K");
+    const auto selected = model.volume_cursor();
+    CK_CHECK(selected && selected->mount_point == mount);
 }
 CK_TEST(files_grid_displays_zero_and_uint64_sizes_and_utc_without_rounding_native_metadata) {
     PaneModel pane;

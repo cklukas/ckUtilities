@@ -31,7 +31,9 @@ execute files or provide an embedded shell.
   rows with a read-only volume and mount listing above the normal filesystem
   boundary. Mount shows the mount/drive name; Type shows the filesystem format;
   Space shows free and total capacity together. The selected row's footer adds
-  its mount, filesystem, space, and read-only state. The view uses
+  its mount, filesystem, space, and read-only state. Long labels end in an
+  ellipsis. In narrow panes, Space and then Type give way to the Mount column.
+  The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
   **Refresh** updates that pane's volume list and checks for archive recovery
   records. It keeps the selected mount when it can match it after refresh.

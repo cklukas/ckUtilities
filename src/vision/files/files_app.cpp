@@ -1238,7 +1238,7 @@ struct FilesApp::State {
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (!p.error.empty())
-                text = p.error;
+                text = p.navigation_error ? "Volume view kept. " + p.error : p.error;
             else if (volume)
                 text = (volume->read_only ? "RO" : "RW") + std::string(" | ") +
                        (volume->mount_point.empty() ? volume->name : volume->mount_point) + " | " +
@@ -1273,8 +1273,8 @@ struct FilesApp::State {
             text += "; stale listing";
         if (p.volume_view && p.volume_inventory_stale)
             text += "; previous volume information retained";
-        if (p.navigation_error && p.active)
-            text += p.volume_view ? "; previous volume view retained" : "; previous location retained";
+        if (p.navigation_error && p.active && !p.volume_view)
+            text += "; previous location retained";
         if (p.selection.marks && p.selection.marks->total) {
             text += " | Marked: " + std::to_string(p.selection.marks->total);
             if (p.selection.marks->hidden)

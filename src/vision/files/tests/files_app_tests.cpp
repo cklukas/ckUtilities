@@ -2032,7 +2032,8 @@ CK_TEST(files_app_failed_or_cancelled_root_reopen_retains_the_selected_volume) {
     f.loaded();
     CK_CHECK(selected_volume() && f.app->location(0) == root);
     CK_CHECK(f.app->status(0).find("fixture.directory_index_create") != std::string::npos);
-    CK_CHECK(f.app->status(0).find("previous volume view retained") != std::string::npos);
+    CK_CHECK(f.app->status(0).starts_with("Volume view kept. Access denied"));
+    CK_CHECK(f.painted().find("Volume view kept. Access denied") != std::string::npos);
 
     *f.block_directory = true;
     CK_CHECK(f.key(ckv::Key::Escape));

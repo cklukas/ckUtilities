@@ -1,6 +1,7 @@
 // Copyright (c) 2026 C. Klukas. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_pane_grid.hpp"
+#include <cvision/core/text.hpp>
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
@@ -9,6 +10,12 @@
 #include <sstream>
 namespace ck::vision {
 namespace {
+constexpr int minimum_mount_width = 8;
+constexpr int filesystem_width = 13;
+constexpr int space_width = 17; // Two maximum uint64_t capacities and their slash.
+constexpr int volume_type_threshold = minimum_mount_width + filesystem_width;
+constexpr int volume_space_threshold = volume_type_threshold + space_width;
+
 std::string kind_text(const ck::files::Observation<ck::files::ObjectKind> &kind) {
     if (!kind.value())
         return "Unknown";
@@ -67,6 +74,7 @@ std::string volume_short(const std::optional<std::uint64_t> &value) {
         ++unit;
     }
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     if (unit == 0)
         out << *value;
     else
@@ -215,7 +223,11 @@ ckv::widgets::GridFrame FilesPaneGridModel::frame() const {
     for (std::uint64_t i = 0; i < count; ++i)
         result.rows.push_back(static_cast<std::size_t>(first_ + i));
     if (volume_current_) {
-        result.columns = {1, 2, 3};
+        result.columns = {1};
+        if (width_ >= volume_type_threshold)
+            result.columns.push_back(2);
+        if (width_ >= volume_space_threshold)
+            result.columns.push_back(3);
         return result;
     }
     result.columns = {0, 1};
@@ -231,13 +243,12 @@ int FilesPaneGridModel::column_width(ckv::widgets::GridIndex column) const {
     if (volume_current_) {
         switch (column) {
         case 1:
-            // Keep the filesystem and combined space column visible in the
-            // normal two-pane layout; long mount paths clip in their cell.
-            return std::min(20, std::max(5, width_ - 8 - 20));
+            return std::max(1, width_ - (width_ >= volume_type_threshold ? filesystem_width : 0) -
+                                   (width_ >= volume_space_threshold ? space_width : 0));
         case 2:
-            return 8;
+            return filesystem_width;
         case 3:
-            return 20;
+            return space_width;
         default:
             return 1;
         }
@@ -295,10 +306,12 @@ ckv::widgets::GridCell FilesPaneGridModel::cell(ckv::widgets::GridIndex at, ckv:
         const auto &volume = volumes_[at];
         switch (column) {
         case 1:
-            result.text = volume.mount_point.empty() ? volume.name : volume.mount_point;
+            result.text = ckv::text::elide_to_width(volume.mount_point.empty() ? volume.name : volume.mount_point,
+                column_width(1) - (width_ >= volume_type_threshold ? 1 : 0));
             break;
         case 2:
-            result.text = volume.filesystem.empty() ? "Unknown" : volume.filesystem;
+            result.text = ckv::text::elide_to_width(volume.filesystem.empty() ? "Unknown" : volume.filesystem,
+                filesystem_width - (width_ >= volume_space_threshold ? 1 : 0));
             break;
         case 3:
             result.text = volume_short(volume.free_bytes) + "/" + volume_short(volume.total_bytes);
