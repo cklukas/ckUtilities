@@ -375,6 +375,7 @@ struct FilesApp::State {
     bool volume_request = false;
     std::size_t volume_pane = 0;
     ckv::ui::CommandId switch_id = ckv::ui::kInvalidCommand, cancel_id = ckv::ui::kInvalidCommand;
+    ckv::ui::CommandId highlighted_menu_command = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId enter_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_directory_id = ckv::ui::kInvalidCommand;
     ckv::ui::CommandId create_file_id = ckv::ui::kInvalidCommand;
@@ -550,8 +551,7 @@ struct FilesApp::State {
             const auto options_id = own("ck.files.view_options", [this] { show_view_options(); },
                                         [this] { return availability("ck.files.view_options").enabled; });
             const auto item = [](auto id, const char *title) {
-                return ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{id, title})
-                    .with_disabled_reason("See the active pane status for why this command is unavailable.");
+                return ckv::widgets::MenuItem::command(ckv::widgets::CommandPresentation{id, title});
             };
             SuiteShellOptions options;
             options.application_name = "Files";
@@ -605,6 +605,12 @@ struct FilesApp::State {
                     ckv::widgets::CommandPresentation{operation_recovery_cleanup_id, "Clean up operation staging"}, 24},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{options_id, "&View options"}, 20}};
             shell = std::make_unique<SuiteShell>(application, std::move(options));
+            shell->menu_bar()->on_highlight_changed = [this](const ckv::widgets::MenuHighlight &highlight) {
+                if (closing)
+                    return;
+                highlighted_menu_command = highlight.command;
+                labels();
+            };
             create_window();
             observer = application.add_attention_observer([this](auto kind) {
                 if (closing)
@@ -1210,7 +1216,10 @@ struct FilesApp::State {
         if (p.range_start)
             text += " | Range start set";
         std::string hint;
-        if (p.volume_view) {
+        if (i == active && highlighted_menu_command != ckv::ui::kInvalidCommand) {
+            if (const auto *command = application.commands().find(highlighted_menu_command))
+                hint = availability(command->key).reason;
+        } else if (i == active && p.volume_view) {
             // A volume row has one meaningful operation: archive Copy. Keep
             // its reason visible beside the row so the disabled menu, palette
             // and keyboard command never leave the user guessing.
