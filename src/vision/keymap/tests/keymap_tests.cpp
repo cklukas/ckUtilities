@@ -63,6 +63,13 @@ int main()
     ck::vision::KeymapController first("ck-test", first_registry, persistence);
     require(first.load(), "A missing in-memory keymap must load as defaults.");
 
+    ckv::ui::CommandRegistry files_registry;
+    const auto cancel = ck::vision::declare_suite_command(files_registry, "ck-files", "ck.files.cancel_read", [] {});
+    ck::vision::KeymapController files_keymap("ck-files", files_registry, persistence);
+    require(cancel != ckv::ui::kInvalidCommand && files_keymap.load() &&
+                files_registry.command_for_key(chord("Esc")) == cancel,
+            "Loading the Files keymap must retain the Escape default for cancelling activity.");
+
     const auto rejected = first.update("ck.test.save", chord("Ctrl+O"));
     require(rejected.status == ck::vision::KeymapUpdateStatus::Conflict && rejected.conflict &&
                 rejected.conflict->existing_command_key == "ck.test.open",

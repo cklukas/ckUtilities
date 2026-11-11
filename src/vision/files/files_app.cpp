@@ -435,7 +435,6 @@ struct FilesApp::State {
                 throw std::logic_error("missing Files command metadata");
             application.commands().set_command_scope(switch_id, {.contexts = {"ck.files.pane"}});
             application.commands().set_command_scope(cancel_id, {.contexts = {"ck.files.pane"}});
-            application.commands().bind_key({ckv::Key::Escape, ckv::Modifier::None, {}}, cancel_id);
             application.commands().set_enabled_predicate(switch_id,
                                                          [this] { return availability("ck.files.switch_pane").enabled; });
             application.commands().set_enabled_predicate(cancel_id,
@@ -574,7 +573,7 @@ struct FilesApp::State {
                                                             item(create_hard_link_id, "New &hard link..."),
                                                             item(create_symbolic_link_id, "New &symbolic link..."),
                                                             item(inspect_link_id, "Inspect link target"),
-                                                            item(create_directory_id, "New &folder..."),
+                                                            item(create_directory_id, "New f&older..."),
                                                             item(trash_id, "Move to &Trash / Recycle Bin..."),
                                                             item(delete_id, "&Delete permanently..."),
                                                             item(archive_recovery_id, "Inspect archive &recovery..."),
