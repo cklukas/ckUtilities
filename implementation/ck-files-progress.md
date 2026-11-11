@@ -1,5 +1,20 @@
 # Files implementation evidence
 
+## 2026-11-11 — Files command feedback and macOS package replay
+
+Linux ARM64 Release frontend `20b51a2` with the ckVision menu and status
+changes passed 82 Files application cases and 30 status line cases. A
+private vt100 terminal at 80×24 showed the precise reason for Move in the
+volume menu and Enter Folder in the footer. Both commands stayed inert.
+Leaving the footer cleared its reason, and the terminal modes were restored
+after resizing and quitting.
+
+The earlier paired macOS Release cohort `1a847d5` / `098c081` /
+`adf767d` passed all 295 CTests and the independent installed consumer.
+The staged and extracted packages each passed 30 terminal cases. The
+successful replay used the same binaries and archive after the process
+observer failed to identify an exiting process in the first rehearsal.
+
 ## 2026-11-11 — Linux Release candidate with the ledger race fix
 
 Linux ARM64 frontend `7973713`, published backend `098c081`, and locally
