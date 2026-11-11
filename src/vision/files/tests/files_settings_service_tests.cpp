@@ -140,6 +140,7 @@ struct AppFixture {
             FilesPaneBackend backend;
             backend.storage_model = pane_storage_model;
             backend.filesystem = [] { return std::make_unique<PaneFS>(); };
+            backend.refresh_scan = ck::testing::SimulatedFileSystem::open_read_only_scan;
             backend.workspace = [] {
                 return Observation<std::shared_ptr<IndexFileFactory>>::available(std::make_shared<MemoryWorkspace>());
             };

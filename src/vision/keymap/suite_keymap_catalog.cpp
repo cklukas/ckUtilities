@@ -97,6 +97,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.switch_pane", "S&witch pane", "Files", "F4"},
     CommandDefinition{"ck.files.cancel_read", "&Cancel activity", "Files", "Esc"},
     CommandDefinition{"ck.files.toggle_mark", "&Toggle mark", "Files", "Insert"},
+    CommandDefinition{"ck.files.confirm_focus", "Use current &row", "Files", ""},
     CommandDefinition{"ck.files.mark_visible", "&Mark visible", "Files", ""},
     CommandDefinition{"ck.files.unmark_visible", "&Unmark visible", "Files", ""},
     CommandDefinition{"ck.files.invert_marks", "&Invert visible marks", "Files", ""},

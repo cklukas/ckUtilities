@@ -79,7 +79,11 @@ clipboard.
   plan](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,
-  and quick filename filtering.
+  and quick filename filtering. **Ctrl+R** keeps the cursor and marks on
+  entries whose identity Files can still verify. The pane footer reports lost
+  marks and a lost cursor binding. Update or clear the marks before starting
+  Copy or Move. Choose **Marks → Use current row** to confirm
+  the row under the cursor if its previous binding was lost.
 - Keyboard and mouse navigation, focused-row identity, mark/unmark, range
   selection, select all, invert, clear selection, and an always-visible exact
   source count for operations.

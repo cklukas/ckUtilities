@@ -115,6 +115,12 @@ public:
     const std::vector<Call>& calls() const noexcept { return state_->calls; }
     std::size_t live_cursors() const noexcept { return state_->cursors; }
     std::size_t live_entries() const noexcept { return state_->entries; }
+    static Observed<std::unique_ptr<ck::files::DirectoryCursor>>
+    open_read_only_scan(std::shared_ptr<const ck::files::DirectoryCursor> parent) {
+        using Result = Observed<std::unique_ptr<ck::files::DirectoryCursor>>;
+        const auto *cursor = dynamic_cast<const Cursor *>(parent.get());
+        return cursor ? Result::available(cursor->rescan()) : failed<Result>("simulated.scan_parent");
+    }
     Observed<std::unique_ptr<ck::files::DirectoryCursor>> open_directory(const std::filesystem::path& path,
         ck::files::DirectoryLinkPolicy policy = ck::files::DirectoryLinkPolicy::RejectFinalLink) const override {
         using Result = Observed<std::unique_ptr<ck::files::DirectoryCursor>>;
@@ -325,6 +331,9 @@ private:
             ++state_->cursors;
         }
         ~Cursor() override { --state_->cursors; }
+        std::unique_ptr<ck::files::DirectoryCursor> rescan() const {
+            return std::make_unique<Cursor>(state_, node_);
+        }
         Observed<ck::files::AdapterScope> source_scope() const override {
             return Observed<ck::files::AdapterScope>::available(state_->scope);
         }

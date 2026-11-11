@@ -23,10 +23,15 @@ struct ChildNavigation {
     PaneStateStamp stamp;
     PaneRowId row;
 };
+struct RefreshNavigation {
+    FilesPaneTicket navigation;
+    PaneStateStamp stamp;
+};
 struct HomeNavigation {};
+using NavigationDestination = std::variant<FilesPaneLocation, ChildNavigation, RefreshNavigation, HomeNavigation>;
 struct Navigate {
     FilesPaneTicket ticket;
-    std::variant<FilesPaneLocation, ChildNavigation, HomeNavigation> destination;
+    NavigationDestination destination;
     PaneView view;
     std::size_t rows;
 };
@@ -116,6 +121,47 @@ UnavailableObservation operation_error(AdapterError code, const char *operation,
                                        ObservationState state = ObservationState::Failed) {
     return {state, {ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
 }
+Observation<std::unique_ptr<DirectoryCursor>> open_location(BasicFileSystem &filesystem,
+                                                             const FilesPaneLocation &location,
+                                                             std::stop_token stop) {
+    using Result = Observation<std::unique_ptr<DirectoryCursor>>;
+    auto opened = filesystem.open_native_directory(location.root_address());
+    for (const auto &name : location.components()) {
+        if (stop.stop_requested())
+            return Result::unavailable(ObservationState::Unknown,
+                operation_error(AdapterError::InterruptedRead, "pane.location.cancelled").error);
+        if (!opened.value())
+            return opened;
+        if (!*opened.value())
+            throw std::runtime_error("null route directory");
+        opened = (*opened.value())->open_directory_child(name);
+    }
+    if (opened.value() && !*opened.value())
+        throw std::runtime_error("null route directory");
+    return opened;
+}
+std::optional<UnavailableObservation> verify_location(BasicFileSystem &filesystem, const FilesPaneLocation &location,
+                                                      const DirectoryCursor &held, std::stop_token stop) {
+    // The route is corroboration for the location shown in the pane. Only the
+    // original held directory can supply refresh rows or authorize actions.
+    auto named = open_location(filesystem, location, stop);
+    if (!named.value())
+        return *named.unavailable_detail();
+    const auto named_id = (*named.value())->identity();
+    const auto held_id = held.identity();
+    if (named_id.value() && held_id.value() &&
+        compare_identity(*named_id.value(), *held_id.value()) == IdentityComparison::Same)
+        return {};
+    return operation_error(AdapterError::MetadataChanged, "pane.location.directory_binding", ObservationState::Changed);
+}
+void include_focused_row(const IndexedPane &pane, FilesPaneReadRange &range) {
+    if (const auto focus = pane.focused_position()) {
+        if (*focus < range.first)
+            range.first = *focus;
+        else if (*focus - range.first >= range.rows)
+            range.first = *focus - (range.rows - 1);
+    }
+}
 void cancel_operation(Operation &operation) noexcept {
     try {
         std::visit(
@@ -161,7 +207,7 @@ struct FilesPaneService::State {
     std::jthread worker;
     State(FilesPaneBackend b, FilesPaneServiceLimits l, std::function<void()> w)
         : backend(std::move(b)), limits(l), wake(std::move(w)) {}
-    FilesPaneSubmitted submit_navigation(std::variant<FilesPaneLocation, ChildNavigation, HomeNavigation> destination,
+    FilesPaneSubmitted submit_navigation(NavigationDestination destination,
                                          PaneView view, std::size_t first_page_rows) {
         std::optional<std::stop_source> stop;
         FilesPaneTicket request;
@@ -188,6 +234,28 @@ struct FilesPaneService::State {
         }
         if (stop)
             stop->request_stop();
+        condition.notify_one();
+        return {FilesPaneSubmission::Accepted, request};
+    }
+    FilesPaneSubmitted submit_bound_navigation(FilesPaneTicket previous, NavigationDestination destination,
+                                               PaneView view, std::size_t first_page_rows) {
+        FilesPaneTicket request;
+        {
+            std::lock_guard lock(mutex);
+            if (stopping || !alive.load())
+                return {FilesPaneSubmission::Stopped, {}};
+            if (previous != latest_navigation)
+                return {FilesPaneSubmission::Invalid, {}};
+            if (busy || navigation || read || change || preview || operation || reply)
+                return {FilesPaneSubmission::Busy, {}};
+            if (!next)
+                return {FilesPaneSubmission::Exhausted, {}};
+            request = FilesPaneService::ticket(next++);
+            navigation.emplace(Navigate{request, std::move(destination), std::move(view), first_page_rows});
+            latest_navigation = latest_request = request;
+            cancelled = {};
+            navigation_busy = true;
+        }
         condition.notify_one();
         return {FilesPaneSubmission::Accepted, request};
     }
@@ -265,7 +333,8 @@ struct FilesPaneService::State {
     }
     void loop() {
         // All native owners and all index/model retirement stay in this scope.
-        auto pane = std::make_unique<IndexedPane>();
+        const auto retained_mark_limit = backend.refresh_scan ? IndexedPane::max_mark_bindings : 0;
+        auto pane = std::make_unique<IndexedPane>(retained_mark_limit);
         std::unique_ptr<BasicFileSystem> filesystem;
         std::shared_ptr<IndexFileFactory> factory;
         auto budget = std::make_shared<IndexStorageBudget>(limits.cache_bytes, limits.cache_files);
@@ -320,15 +389,23 @@ struct FilesPaneService::State {
             }
             if (nav) {
                 const auto *absolute = std::get_if<FilesPaneLocation>(&nav->destination);
+                const auto *refresh = std::get_if<RefreshNavigation>(&nav->destination);
+                const bool refresh_ready = !refresh ||
+                    (backend.refresh_scan && active && pane->data() && refresh->navigation == active_epoch &&
+                     pane->accepts(refresh->stamp));
+                if (refresh && refresh_ready)
+                    nav->view = pane->data()->view();
                 std::shared_ptr<const FilesPaneLocation> requested;
                 if (absolute)
                     requested = std::make_shared<const FilesPaneLocation>(*absolute);
+                else if (refresh && refresh_ready)
+                    requested = active;
                 FilesPaneReply result;
                 result.kind = FilesPaneReplyKind::Navigation;
                 result.request = result.navigation = nav->ticket;
                 result.active_location = active;
                 result.requested_location = requested;
-                auto candidate = std::make_unique<IndexedPane>();
+                auto candidate = std::make_unique<IndexedPane>(retained_mark_limit);
                 bool committed = false;
                 auto request = candidate->begin_listing(nav->view);
                 const auto fail = [&](const UnavailableObservation &error,
@@ -375,9 +452,9 @@ struct FilesPaneService::State {
                 const auto *origin = std::get_if<ChildNavigation>(&nav->destination);
                 const bool origin_ready =
                     !origin || (active && origin->navigation == active_epoch && pane->accepts(origin->stamp));
-                if (!origin_ready)
+                if (!origin_ready || !refresh_ready)
                     result.state = FilesPaneReplyState::Stale;
-                if (!stop.stop_requested() && origin_ready && !result.error) {
+                if (!stop.stop_requested() && origin_ready && refresh_ready && !result.error) {
                     if (!filesystem) {
                         filesystem = backend.filesystem();
                         if (!filesystem)
@@ -396,23 +473,24 @@ struct FilesPaneService::State {
                     if (factory && !result.error && !stop.stop_requested()) {
                         std::unique_ptr<DirectoryCursor> directory;
                         if (absolute) {
-                            auto opened = filesystem->open_native_directory(absolute->root_address());
+                            auto opened = open_location(*filesystem, *absolute, stop.get_token());
                             if (!opened.value())
                                 fail(*opened.unavailable_detail());
                             else
                                 directory = std::move(opened).take_value();
-                            for (const auto &name : absolute->components()) {
-                                if (!directory || stop.stop_requested())
-                                    break;
-                                auto child = directory->open_directory_child(name);
-                                if (!child.value()) {
-                                    fail(*child.unavailable_detail());
-                                    directory.reset();
-                                    break;
+                        } else if (refresh) {
+                            auto held = pane->hold_directory(refresh->stamp);
+                            if (!held.value()) {
+                                fail(*held.unavailable_detail());
+                            } else {
+                                auto opened = backend.refresh_scan(*held.value());
+                                if (!opened.value())
+                                    fail(*opened.unavailable_detail());
+                                else {
+                                    directory = std::move(opened).take_value();
+                                    if (!directory)
+                                        throw std::runtime_error("null refresh directory");
                                 }
-                                directory = std::move(child).take_value();
-                                if (!directory)
-                                    throw std::runtime_error("null route directory");
                             }
                         } else {
                             const auto &child = std::get<ChildNavigation>(nav->destination);
@@ -491,20 +569,41 @@ struct FilesPaneService::State {
                                 else if (prepared.value() && !stop.stop_requested()) {
                                     const auto published = candidate->publish(*prepared.value(), stop.get_token());
                                     if (published == IndexedPanePublish::Applied) {
-                                        capture(*candidate, candidate->state_stamp(), {0, nav->rows}, stop.get_token(),
-                                                result);
-                                        if (result.state == FilesPaneReplyState::Ready) {
-                                            // No native I/O or native-owner destruction under this lock.
-                                            std::lock_guard lock(mutex);
-                                            if (!stopping && latest_request == nav->ticket &&
-                                                cancelled != nav->ticket && !stop.stop_requested()) {
-                                                pane.swap(candidate);
-                                                active = requested;
-                                                result.active_location = active;
-                                                committed = true;
+                                        if (refresh) {
+                                            auto carried = candidate->reconcile_refresh_selection(
+                                                *pane, refresh->stamp, candidate->state_stamp(), stop.get_token());
+                                            if (!carried.value()) {
+                                                result.state = FilesPaneReplyState::Failed;
+                                                result.error = *carried.unavailable_detail();
                                             } else {
-                                                result.state = FilesPaneReplyState::Cancelled;
-                                                result.page.reset();
+                                                auto held = candidate->hold_directory(candidate->state_stamp());
+                                                if (!held.value())
+                                                    result.error = *held.unavailable_detail();
+                                                else
+                                                    result.error = verify_location(
+                                                        *filesystem, *requested, **held.value(), stop.get_token());
+                                                if (result.error)
+                                                    result.state = FilesPaneReplyState::Failed;
+                                            }
+                                        }
+                                        if (!result.error) {
+                                            FilesPaneReadRange range{0, nav->rows};
+                                            if (refresh)
+                                                include_focused_row(*candidate, range);
+                                            capture(*candidate, candidate->state_stamp(), range, stop.get_token(), result);
+                                            if (result.state == FilesPaneReplyState::Ready) {
+                                                // Native I/O and native-owner destruction stay outside this lock.
+                                                std::lock_guard lock(mutex);
+                                                if (!stopping && latest_request == nav->ticket &&
+                                                    cancelled != nav->ticket && !stop.stop_requested()) {
+                                                    pane.swap(candidate);
+                                                    active = requested;
+                                                    result.active_location = active;
+                                                    committed = true;
+                                                } else {
+                                                    result.state = FilesPaneReplyState::Cancelled;
+                                                    result.page.reset();
+                                                }
                                             }
                                         }
                                     } else if (published == IndexedPanePublish::Failed && candidate->listing_error())
@@ -1150,12 +1249,7 @@ struct FilesPaneService::State {
         const auto total = pane.visible_rows();
         range.first = std::min(range.first, total > range.rows ? total - range.rows : 0);
         if (result.kind != FilesPaneReplyKind::Marks)
-            if (const auto focus = pane.focused_position()) {
-                if (*focus < range.first)
-                    range.first = *focus;
-                else if (*focus - range.first >= range.rows)
-                    range.first = *focus - (range.rows - 1);
-            }
+            include_focused_row(pane, range);
         FilesPaneReply display;
         capture(pane, pane.state_stamp(), range, stop, display);
         if (result.change_outcome == FilesPaneChangeOutcome::Applied) {
@@ -1220,6 +1314,7 @@ FilesPaneBackend native_files_pane_backend(NativeAbsolutePath cache_root) {
     };
     backend.workspace = [root = std::move(cache_root)] { return open_native_index_workspace(root); };
     backend.home = [](NativePathLimits limits, std::stop_token stop) { return native_home_address(limits, stop); };
+    backend.refresh_scan = DirectoryCursor::open_read_only_scan;
 #if defined(_WIN32)
     backend.storage_model = StorageModel::WindowsHandleAttributes;
 #elif defined(__APPLE__)
@@ -1242,6 +1337,7 @@ FilesPaneService::FilesPaneService(FilesPaneBackend backend, FilesPaneServiceLim
 }
 FilesPaneService::~FilesPaneService() { join(); }
 FilesPaneServiceLimits FilesPaneService::limits() const noexcept { return state_->limits; }
+bool FilesPaneService::can_refresh() const noexcept { return static_cast<bool>(state_->backend.refresh_scan); }
 FilesPaneSubmitted FilesPaneService::navigate(NativeAbsolutePath location, PaneView view, std::size_t first_page_rows) {
     if (!location.is_valid())
         return {FilesPaneSubmission::Invalid, {}};
@@ -1270,26 +1366,17 @@ FilesPaneSubmitted FilesPaneService::enter_directory(FilesPaneTicket navigation,
         return {FilesPaneSubmission::Invalid, {}};
     if (!first_page_rows || first_page_rows > state_->limits.page_rows || view.display_substring.size() > 4096)
         return {FilesPaneSubmission::LimitExceeded, {}};
-    FilesPaneTicket request;
-    {
-        std::lock_guard lock(state_->mutex);
-        if (state_->stopping || !state_->alive.load())
-            return {FilesPaneSubmission::Stopped, {}};
-        if (navigation != state_->latest_navigation)
-            return {FilesPaneSubmission::Invalid, {}};
-        if (state_->busy || state_->navigation || state_->read || state_->change || state_->preview || state_->reply)
-            return {FilesPaneSubmission::Busy, {}};
-        if (!state_->next)
-            return {FilesPaneSubmission::Exhausted, {}};
-        request = ticket(state_->next++);
-        state_->navigation.emplace(Navigate{request, ChildNavigation{navigation, std::move(stamp), std::move(row)},
-                                            std::move(view), first_page_rows});
-        state_->latest_navigation = state_->latest_request = request;
-        state_->cancelled = {};
-        state_->navigation_busy = true;
-    }
-    state_->condition.notify_one();
-    return {FilesPaneSubmission::Accepted, request};
+    return state_->submit_bound_navigation(navigation, ChildNavigation{navigation, std::move(stamp), std::move(row)},
+                                           std::move(view), first_page_rows);
+}
+FilesPaneSubmitted FilesPaneService::refresh(FilesPaneTicket navigation, PaneStateStamp stamp,
+                                             std::size_t first_page_rows) {
+    if (!can_refresh() || !navigation.valid() || !stamp.current())
+        return {FilesPaneSubmission::Invalid, {}};
+    if (!first_page_rows || first_page_rows > state_->limits.page_rows)
+        return {FilesPaneSubmission::LimitExceeded, {}};
+    return state_->submit_bound_navigation(navigation, RefreshNavigation{navigation, std::move(stamp)}, {},
+                                           first_page_rows);
 }
 FilesPaneSubmitted FilesPaneService::read_page(FilesPaneTicket navigation, PaneStateStamp stamp,
                                                FilesPaneReadRange range) {

@@ -132,6 +132,9 @@ struct FilesPaneBackend {
         home;
     ck::files::StorageModel storage_model = ck::files::StorageModel::Unknown;
     std::shared_ptr<const ck::files::MonotonicClock> clock = ck::files::system_monotonic_clock();
+    // A fresh enumeration through the already held directory on its worker.
+    std::function<ck::files::Observation<std::unique_ptr<ck::files::DirectoryCursor>>(
+        std::shared_ptr<const ck::files::DirectoryCursor>)> refresh_scan;
 };
 // Builds value-only configuration; native source/workspace opening is deferred
 // to the worker. The cache root must be explicit and already private/qualified.
@@ -170,6 +173,9 @@ class FilesPaneService final {
     FilesPaneSubmitted enter_directory(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
                                        ck::files::PaneRowId row, ck::files::PaneView view = {},
                                        std::size_t first_page_rows = 256);
+    FilesPaneSubmitted refresh(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp,
+                               std::size_t first_page_rows = 256);
+    bool can_refresh() const noexcept;
     FilesPaneSubmitted read_page(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, FilesPaneReadRange range);
     FilesPaneSubmitted preview(FilesPaneTicket navigation, ck::files::PaneStateStamp stamp, ck::files::PaneRowId row,
                                FilesPanePreviewLimits limits = {});

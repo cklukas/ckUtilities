@@ -854,15 +854,53 @@ CK_TEST(files_app_pane_commands_do_not_run_from_unrelated_input_or_view_options)
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->view_options_pending() && !f.app->pending(0) && f.app->selection(0).marks->total == 0);
 }
-CK_TEST(files_app_refresh_is_an_async_reopen_and_properties_use_acknowledged_row_metadata) {
+CK_TEST(files_app_refresh_preserves_the_bound_mark_and_focus_after_rows_move) {
     Fixture f;
     f.loaded();
     const auto before = f.app->location(0);
     const auto history = f.app->history_size(0);
+    const auto other = f.app->target(1)->row.row;
+    CK_CHECK(f.key(ckv::Key::End));
+    f.loaded();
+    const auto selected = f.app->model(0).cursor().row;
+    const auto label = f.app->model(0).cell(static_cast<int>(selected), 1).text;
+    CK_CHECK(f.command("ck.files.toggle_mark"));
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor_marked() == true);
+
+    NativeFileSystem filesystem;
+    auto directory = filesystem.open_native_directory(address(f.scratch.path() / "left"));
+    CK_CHECK(directory.value());
+#ifdef _WIN32
+    const auto name = NativeName::from_windows(u"0-before-refresh");
+#else
+    const auto name = NativeName::from_posix("0-before-refresh");
+#endif
+    CK_CHECK(name);
+    {
+        auto created = (*directory.value())->create_child_file(*name);
+        CK_CHECK(created.value());
+        const auto finished = (*created.value())->finish_content_writes();
+        CK_CHECK(finished.value() && *finished.value());
+    }
+
+    // Force failure after scan admission. A retained old listing is visible
+    // while row commands are disabled, and retry uses the same worker anchor.
+    *f.fail_directory_index_create = true;
     CK_CHECK(f.command("ck.files.refresh"));
     CK_CHECK(f.app->pending(0) && f.app->history_size(0) == history);
     f.loaded();
+    CK_CHECK(f.app->model(0).row_count() == 100 && f.app->model(0).cursor_marked() == true);
+    CK_CHECK(f.app->status(0).find("stale listing") != std::string::npos);
+    CK_CHECK(!f.app->target(0) && !f.command("ck.files.copy_path"));
+
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Ctrl, "r"}}));
+    f.loaded();
     CK_CHECK(f.app->location(0) && before && *f.app->location(0) == *before && f.app->history_size(0) == history);
+    CK_CHECK(f.app->model(0).row_count() == 101 && f.app->model(0).cursor().row == selected + 1);
+    CK_CHECK(f.app->model(0).cell(static_cast<int>(selected + 1), 1).text == label);
+    CK_CHECK(f.app->model(0).cursor_marked() == true && f.app->selection(0).marks->total == 1);
+    CK_CHECK(f.app->target(1)->row.row == other);
     CK_CHECK(f.command("ck.files.properties") && f.app->properties_pending());
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
@@ -892,6 +930,8 @@ CK_TEST(files_app_new_folder_uses_strict_dialog_worker_mutation_and_refreshes_li
     CK_CHECK(std::filesystem::is_directory(f.scratch.path() / "left" / "created-by-app"));
     CK_CHECK(f.app->model(0).row_count() == 101);
     CK_CHECK(f.app->status(0).find("Last scan: 101 items") != std::string::npos);
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::RegularFile);
+    CK_CHECK(f.key(ckv::Key::Home) && f.app->model(0).cursor_kind() == ObjectKind::Directory);
     CK_CHECK(f.app->status(0).find("Hint: Trash / Recycle Bin unavailable: recursive identity-bound Trash is not qualified") !=
              std::string::npos);
 }
@@ -1011,7 +1051,14 @@ CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listin
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
     CK_CHECK(std::filesystem::is_regular_file(f.scratch.path() / "left" / "renamed-by-app"));
     CK_CHECK(f.app->model(0).row_count() == 100);
-    CK_CHECK(f.app->status(0) == "Last scan: 100 items");
+    CK_CHECK(f.app->status(0).find("Choose Use current row") != std::string::npos);
+    CK_CHECK(!f.command("ck.files.rename"));
+    CK_CHECK(f.command("ck.files.refresh"));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).invalidated_refresh_focus && !f.command("ck.files.rename"));
+    CK_CHECK(f.command("ck.files.confirm_focus"));
+    f.loaded();
+    CK_CHECK(!f.app->selection(0).invalidated_refresh_focus);
 }
 CK_TEST(files_app_permanent_delete_requires_explicit_confirmation_and_cancel_preserves_entry) {
     Fixture f;

@@ -260,6 +260,7 @@ struct FilesApp::State {
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
+        bool refreshing = false, refresh_failed = false, queued_refresh = false;
         bool change_error = false, cancelling = false, preparing_cursor = false, mutating = false, renaming = false,
              deleting = false, trashing = false, creating_file = false, creating_hard_link = false,
              creating_symbolic_link = false;
@@ -563,6 +564,13 @@ struct FilesApp::State {
             const auto clear = own(
                 "ck.files.clear_marks", [this] { change_marks(active, ck::files::IndexedClearMarks{}); },
                 [this] { return availability("ck.files.clear_marks").enabled; });
+            const auto confirm_focus = own(
+                "ck.files.confirm_focus",
+                [this] {
+                    if (const auto target = panes[active].model.target())
+                        begin_change(active, FilesPaneFocusRow{target->row});
+                },
+                [this] { return availability("ck.files.confirm_focus").enabled; });
             const auto range = own(
                 "ck.files.range_start",
                 [this] {
@@ -615,7 +623,8 @@ struct FilesApp::State {
                     "&Marks",
                     {item(toggle, "&Toggle mark"), item(mark_visible, "&Mark visible"),
                      item(unmark_visible, "&Unmark visible"), item(invert, "&Invert visible marks"),
-                     item(clear, "&Clear all marks (including hidden)"), item(range, "&Set range start"),
+                     item(clear, "&Clear all marks (including hidden)"), item(confirm_focus, "Use current &row"),
+                     item(range, "&Set range start"),
                      item(mark_range, "Mark th&rough cursor"), item(unmark_range, "Unmark through curs&or")}},
                 ckv::widgets::MenuBarItem{
                     "&View", {item(options_id, "View &options..."),
@@ -944,6 +953,10 @@ struct FilesApp::State {
         };
         if (closing)
             return unavailable(std::string(command) + " unavailable: Files is closing");
+        if (panes[active].selection.invalidated_refresh_focus &&
+            (command == "ck.files.rename" || command == "ck.files.trash" ||
+             command == "ck.files.permanently_delete" || command == "ck.files.create_hard_link"))
+            return unavailable("Use current row before acting on this entry");
         if (command == "ck.files.switch_pane")
             return modal_pending() ? unavailable("Switch pane unavailable: a dialog is open")
                                    : FilesCommandAvailability::available();
@@ -1201,6 +1214,12 @@ struct FilesApp::State {
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");
+            if (panes[active].selection.invalidated_refresh_marks)
+                return unavailable(std::string(move ? "Move" : "Copy") +
+                                   " unavailable: review the marks lost during refresh");
+            if (panes[active].selection.invalidated_refresh_focus &&
+                (!panes[active].selection.marks || !panes[active].selection.marks->total))
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: choose Use current row");
             if (!panes[active].model.target())
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: no entry is selected");
             const auto kind = panes[active].model.cursor_kind();
@@ -1218,9 +1237,14 @@ struct FilesApp::State {
                        ? FilesCommandAvailability::available()
                        : unavailable("Marking unavailable: no file rows are visible");
         if (command == "ck.files.clear_marks")
-            return ready(active) && panes[active].selection.marks && panes[active].selection.marks->total != 0
+            return ready(active) && ((panes[active].selection.marks && panes[active].selection.marks->total != 0) ||
+                                     panes[active].selection.invalidated_refresh_marks)
                        ? FilesCommandAvailability::available()
                        : unavailable("Clear marks unavailable: no entries are marked");
+        if (command == "ck.files.confirm_focus")
+            return ready(active) && panes[active].selection.invalidated_refresh_focus && panes[active].model.target()
+                       ? FilesCommandAvailability::available()
+                       : unavailable("Use current row unavailable: no unresolved current row");
         if (command == "ck.files.mark_range" || command == "ck.files.unmark_range")
             return ready(active) && panes[active].range_start && panes[active].model.target()
                        ? FilesCommandAvailability::available()
@@ -1234,23 +1258,24 @@ struct FilesApp::State {
         return i < 2 && !closing && !modal_pending() && services[i]->running();
     }
     static bool pending(const Pane &p) {
-        return p.navigating || p.reading || p.changing || p.queued_view || p.inspection || p.mutating;
+        return p.navigating || p.reading || p.changing || p.queued_view || p.queued_refresh || p.inspection || p.mutating;
     }
     bool volume_pending(std::size_t i) const {
         return volume_request && volume_request->pane == i && !volume_request->retired &&
                volume_request->navigation == panes[i].navigation;
     }
-    bool ready(std::size_t i, bool continuation = false) const {
+    bool ready(std::size_t i, bool continuation = false, bool allow_stale_listing = false) const {
         return i < 2 && !closing && !operation_execution_request && (continuation || !modal_pending()) &&
                !pending(panes[i]) && !volume_pending(i) && !panes[i].volume_view && panes[i].active &&
-               panes[i].model.current() && services[i]->running();
+               panes[i].model.current() && (allow_stale_listing || !panes[i].refresh_failed) && services[i]->running();
     }
     bool archive_destination_ready(std::size_t source_pane) const {
         if (source_pane >= 2 || !volume_archive_service || !volume_archive_service->running())
             return false;
         const auto destination_pane = 1 - source_pane;
         const auto &destination = panes[destination_pane];
-        return !destination.volume_view && !pending(destination) && !volume_pending(destination_pane) && destination.active &&
+        return !destination.volume_view && !destination.refresh_failed && !pending(destination) &&
+               !volume_pending(destination_pane) && destination.active &&
                destination.model.current() && services[destination_pane]->running();
     }
     std::string status(std::size_t i) const {
@@ -1270,7 +1295,8 @@ struct FilesApp::State {
         else if (p.cancelling)
             text = "Cancelling activity...";
         else if (p.navigating)
-            text = p.entering ? "Opening folder..." : p.homing ? "Opening home location..." : "Opening location...";
+            text = p.refreshing ? "Refreshing listing..." : p.entering ? "Opening folder..."
+                              : p.homing ? "Opening home location..." : "Opening location...";
         else if (p.volume_view) {
             const auto volume = p.model.volume_cursor();
             if (!p.error.empty())
@@ -1283,7 +1309,7 @@ struct FilesApp::State {
             else
                 text = "No visible volumes";
         } else if (p.preparing_cursor)
-            text = "Reading current row for view change...";
+            text = p.queued_refresh ? "Reading current row for refresh..." : "Reading current row for view change...";
         else if (p.inspection)
             text = p.inspection->kind == FilesPaneReplyKind::PathText ? "Reading selected path..."
                    : p.inspection->kind == FilesPaneReplyKind::Link  ? "Reading link metadata..."
@@ -1292,7 +1318,8 @@ struct FilesApp::State {
             text = p.renaming ? "Renaming..." : p.trashing ? "Moving to Trash / Recycle Bin..."
                               : p.deleting ? "Deleting permanently..." : "Creating folder...";
         else if (p.changing)
-            text = *p.changing == FilesPaneReplyKind::Focus   ? "Preparing current row for view change..."
+            text = *p.changing == FilesPaneReplyKind::Focus   ? (p.queued_refresh ? "Preparing current row for refresh..."
+                                                                                : "Preparing current row for view change...")
                    : *p.changing == FilesPaneReplyKind::Marks ? "Updating marks..."
                                                               : "Updating view...";
         else if (!p.error.empty())
@@ -1307,7 +1334,7 @@ struct FilesApp::State {
             text = p.archive_notice;
         else
             text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
-        if (p.active && !p.model.current() && text.find("Stale") == text.npos)
+        if (p.active && (!p.model.current() || p.refresh_failed) && text.find("Stale") == text.npos)
             text += "; stale listing";
         if (p.volume_view && p.volume_inventory_stale)
             text += "; previous volume information retained";
@@ -1318,6 +1345,10 @@ struct FilesApp::State {
             if (p.selection.marks->hidden)
                 text += " (" + std::to_string(p.selection.marks->hidden) + " hidden; review required)";
         }
+        if (p.selection.invalidated_refresh_marks)
+            text += " | Marks lost on refresh: " + std::to_string(p.selection.invalidated_refresh_marks);
+        if (p.selection.invalidated_refresh_focus)
+            text += " | Choose Use current row";
         if (p.range_start)
             text += " | Range start set";
         std::string hint;
@@ -1686,15 +1717,31 @@ struct FilesApp::State {
             if (!closing && !modal_pending())
                 return FilesCommandAvailability::available();
         }
-        return ready(i) ? FilesCommandAvailability::available()
-                        : FilesCommandAvailability::unavailable("Refresh unavailable: active pane is not ready");
+        if (i >= panes.size() || !services[i]->can_refresh())
+            return FilesCommandAvailability::unavailable("Refresh unavailable: held directory scans are unsupported");
+        return ready(i, false, true) ? FilesCommandAvailability::available()
+                                    : FilesCommandAvailability::unavailable("Refresh unavailable: active pane is not ready");
     }
     bool refresh(std::size_t i) {
-        if (i < panes.size() && panes[i].volume_view)
-            return refresh_availability(i).enabled && show_volume_info(i);
-        if (!ready(i) || !panes[i].active)
+        if (!refresh_availability(i).enabled)
             return false;
-        return navigate(i, FilesPaneLocation(*panes[i].active), panes[i].view);
+        auto &p = panes[i];
+        if (p.volume_view)
+            return show_volume_info(i);
+        if (!p.refresh_failed) {
+            if (auto prepared = prepare_current_row(i)) {
+                p.queued_refresh = *prepared;
+                labels();
+                return *prepared;
+            }
+        }
+        return start_refresh(i);
+    }
+    bool start_refresh(std::size_t i) {
+        auto &p = panes[i];
+        p.history_target.reset();
+        const auto submitted = services[i]->refresh(p.navigation, p.stamp, p.model.viewport().rows);
+        return accept_navigation(i, submitted, p.active, false, true);
     }
     bool navigate_history(std::size_t i, std::size_t target) {
         if (!ready(i) || target >= panes[i].history.size() || target == panes[i].history_position)
@@ -1754,10 +1801,10 @@ struct FilesApp::State {
         return navigate(i, FilesPaneLocation(*panes[i].bookmarks[bookmark]), std::move(view));
     }
     bool accept_navigation(std::size_t i, FilesPaneSubmitted submitted,
-                           std::shared_ptr<const FilesPaneLocation> requested, bool home = false) {
+                           std::shared_ptr<const FilesPaneLocation> requested, bool home = false, bool refreshing = false) {
         auto &p = panes[i];
         if (submitted.state != FilesPaneSubmission::Accepted) {
-            p.error = "Navigation request rejected";
+            p.error = refreshing ? "Refresh request rejected" : "Navigation request rejected";
             labels();
             return false;
         }
@@ -1767,15 +1814,17 @@ struct FilesApp::State {
         p.navigation = p.request = submitted.ticket;
         p.requested = std::move(requested);
         p.navigating = true;
+        p.refreshing = refreshing;
         p.entering = false;
         p.homing = home;
         p.reading = false;
         p.changing.reset();
         p.queued_view.reset();
+        p.queued_refresh = false;
         p.inspection.reset();
         // Keep the volume rows visible and inert until the worker accepts a
         // replacement page. Failure or cancellation leaves the selection here.
-        p.model.set_input_locked(p.volume_view);
+        p.model.set_input_locked(p.volume_view || refreshing);
         p.cancelling = p.change_error = false;
         p.preparing_cursor = false;
         p.error.clear();
@@ -2050,37 +2099,41 @@ struct FilesApp::State {
             if (const auto target = p.model.target())
                 change_marks(active, ck::files::IndexedMarkRange{*p.range_start, target->row, marked});
     }
+    // The visible cursor can move independently of the indexed worker.
+    // A view change or refresh first acknowledges its exact scoped row.
+    std::optional<bool> prepare_current_row(std::size_t i) {
+        auto &p = panes[i];
+        if (p.selection.invalidated_refresh_focus || p.worker_focus == p.model.cursor().row || !p.model.row_count())
+            return {};
+        if (const auto target = p.model.target())
+            return begin_change(i, FilesPaneFocusRow{target->row});
+        // Wheel scrolling can leave the cursor outside the displayed cache.
+        // Read its exact dataset position before asking the worker to validate
+        // a row identity; never manufacture one from the position.
+        const auto range = p.model.viewport();
+        const auto first = p.model.cursor().row;
+        auto submitted = services[i]->read_page(p.navigation, p.stamp, {first, range.rows});
+        if (submitted.state != FilesPaneSubmission::Accepted)
+            return false;
+        p.request = submitted.ticket;
+        p.inflight = {first, range.rows};
+        p.reading = p.preparing_cursor = true;
+        p.cancelling = p.change_error = false;
+        p.error.clear();
+        p.blocked.reset();
+        p.model.set_input_locked(true);
+        watch();
+        return true;
+    }
     bool change_view(std::size_t i, ck::files::PaneView view) {
         if (!ready(i) || !ck::files::valid_pane_order({view.sort, view.descending, view.folders_first}) ||
             view.display_substring.size() > 4096)
             return false;
-        auto &p = panes[i];
-        if (const auto target = p.model.target(); target && p.worker_focus != p.model.cursor().row) {
-            if (!begin_change(i, FilesPaneFocusRow{target->row}))
-                return false;
-            p.queued_view = std::move(view);
-            return true;
-        }
-        // Wheel scrolling can leave the cursor outside the displayed cache.
-        // Read its exact dataset position before asking the worker to validate
-        // a row identity; never manufacture one from the position.
-        if (p.model.row_count() && !p.model.target() && p.worker_focus != p.model.cursor().row) {
-            const auto range = p.model.viewport();
-            const auto first = p.model.cursor().row;
-            auto submitted = services[i]->read_page(p.navigation, p.stamp, {first, range.rows});
-            if (submitted.state != FilesPaneSubmission::Accepted)
-                return false;
-            p.request = submitted.ticket;
-            p.inflight = {first, range.rows};
-            p.reading = p.preparing_cursor = true;
-            p.queued_view = std::move(view);
-            p.cancelling = p.change_error = false;
-            p.error.clear();
-            p.blocked.reset();
-            p.model.set_input_locked(true);
-            watch();
+        if (auto prepared = prepare_current_row(i)) {
+            if (*prepared)
+                panes[i].queued_view = std::move(view);
             labels();
-            return true;
+            return *prepared;
         }
         return begin_change(i, FilesPaneChangeView{std::move(view)});
     }
@@ -2981,9 +3034,9 @@ struct FilesApp::State {
             p.model.set_input_locked(false);
             if (reply.state == FilesPaneReplyState::Ready && reply.mutation_applied.value_or(false)) {
                 p.error.clear();
-                // The old page is not a current listing after a successful
-                // mutation. Reopen the retained route through the worker so
-                // the UI never presents a stale post-mutation page.
+                // A confirmed mutation makes the old listing stale until a
+                // worker publishes a verified refresh of the held directory.
+                p.refresh_failed = true;
                 if (!refresh(i))
                     p.error = was_delete ? "Entry permanently deleted; refresh could not be started"
                                          : was_trash ? "Entry moved to Trash / Recycle Bin; refresh could not be started"
@@ -3009,13 +3062,15 @@ struct FilesApp::State {
         if (reply.navigation != p.navigation || reply.request != p.request)
             return;
         const bool navigation = reply.request == reply.navigation;
+        const bool refreshing = p.refreshing;
         const bool reading_cursor = p.preparing_cursor;
         const bool preparing_view = p.changing == FilesPaneReplyKind::Focus || reading_cursor;
         auto queued_view = std::move(p.queued_view);
         p.queued_view.reset();
+        const bool queued_refresh = std::exchange(p.queued_refresh, false);
         const bool cancelled = p.cancelling;
         p.stamp = reply.stamp;
-        p.navigating = p.entering = p.homing = false;
+        p.navigating = p.entering = p.homing = p.refreshing = false;
         p.reading = false;
         p.changing.reset();
         p.cancelling = false;
@@ -3035,8 +3090,9 @@ struct FilesApp::State {
                     p.active = reply.active_location;
                     p.requested = reply.requested_location;
                     p.navigation_error = false;
+                    p.refresh_failed = false;
                     p.range_start.reset();
-                    if (p.active) {
+                    if (p.active && !refreshing) {
                         if (p.history_target) {
                             p.history_position = *p.history_target;
                             p.history_target.reset();
@@ -3063,23 +3119,30 @@ struct FilesApp::State {
             if (!p.navigation_error && !p.change_error)
                 p.error.clear();
             if (cancelled && navigation) {
-                p.error = "Location opened before cancellation completed";
+                p.error = refreshing ? "Listing refreshed before cancellation completed"
+                                     : "Location opened before cancellation completed";
                 p.change_error = true;
             } else if (cancelled && preparing_view) {
-                p.error = "View change cancelled before application";
+                p.error = queued_refresh ? "Refresh cancelled before scanning" : "View change cancelled before application";
                 p.change_error = true;
             } else if (cancelled && reply.change_outcome == FilesPaneChangeOutcome::Applied) {
                 p.error = "Change applied before cancellation completed";
                 p.change_error = true;
             }
-            if (queued_view && reading_cursor && !cancelled) {
+            if ((queued_view || queued_refresh) && reading_cursor && !cancelled) {
                 if (const auto target = p.model.target()) {
-                    if (begin_change(i, FilesPaneFocusRow{target->row}, true))
+                    if (begin_change(i, FilesPaneFocusRow{target->row}, true)) {
                         p.queued_view = std::move(queued_view);
+                        p.queued_refresh = queued_refresh;
+                    }
                 } else {
-                    p.error = "View not applied; current row was not delivered";
+                    p.error = queued_refresh ? "Refresh not started; current row was not delivered"
+                                             : "View not applied; current row was not delivered";
                     p.change_error = true;
                 }
+            } else if (queued_refresh && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
+                       reply.change_outcome == FilesPaneChangeOutcome::Applied) {
+                start_refresh(i);
             } else if (queued_view && reply.kind == FilesPaneReplyKind::Focus && !cancelled &&
                        reply.change_outcome == FilesPaneChangeOutcome::Applied)
                 begin_change(i, FilesPaneChangeView{std::move(*queued_view)}, true);
@@ -3087,15 +3150,20 @@ struct FilesApp::State {
         }
         p.error = reply.state == FilesPaneReplyState::Ready ? "Stale page rejected" : failure(reply);
         if (reply.change_outcome == FilesPaneChangeOutcome::Applied)
-            p.error = (preparing_view ? "View not applied; current row acknowledged; " : "Change applied; ") + p.error;
+            p.error = (queued_refresh ? "Refresh not started; current row acknowledged; "
+                       : preparing_view ? "View not applied; current row acknowledged; " : "Change applied; ") + p.error;
         else if (reply.change_outcome == FilesPaneChangeOutcome::Unknown)
             p.error = "Change outcome unknown; reopen location before further actions. " + p.error;
         else if (reply.change_outcome == FilesPaneChangeOutcome::NotApplied)
             p.error = "Change not applied; " + p.error;
         else if (preparing_view)
-            p.error = "View not applied; " + p.error;
+            p.error = (queued_refresh ? "Refresh not started; " : "View not applied; ") + p.error;
         p.change_error = preparing_view || reply.change_outcome != FilesPaneChangeOutcome::NotRequested;
-        p.navigation_error = navigation;
+        if (refreshing) {
+            p.refresh_failed = true;
+            p.error = "Refresh failed; " + p.error;
+        }
+        p.navigation_error = navigation && !refreshing;
         if (p.volume_view && replace_volumes)
             p.volume_inventory_stale = true;
         if (navigation && !p.volume_view && reply.active_location)
@@ -3106,7 +3174,7 @@ struct FilesApp::State {
     void page(std::size_t i) {
         auto &p = panes[i];
         if (p.volume_view || volume_pending(i) || p.navigating || p.changing ||
-            p.queued_view || p.inspection || !p.active || !surfaces[i]->visible() ||
+            p.queued_view || p.queued_refresh || p.inspection || !p.active || !surfaces[i]->visible() ||
             !p.stamp.current() || !services[i]->running())
             return;
         auto range = p.model.viewport();
@@ -3254,8 +3322,10 @@ struct FilesApp::State {
             if (reply.failure_pod)
                 message += ": " + std::string(reply.failure_pod->operation.data());
             destination.archive_notice = std::move(message);
-            if (verified_path && archive_destination_current(origin))
+            if (verified_path && archive_destination_current(origin)) {
+                destination.refresh_failed = true;
                 destination.archive_refresh = origin.destination_navigation;
+            }
         } else {
             std::string message = reply.state == FilesVolumeArchiveState::Cancelled
                 ? "Volume archive cancelled" : "Volume archive failed";
@@ -3332,8 +3402,11 @@ struct FilesApp::State {
         if (reply.state == FilesOperationExecutionState::Complete ||
             reply.state == FilesOperationExecutionState::RetainedSource) {
             const auto source = active;
+            panes[source].refresh_failed = true;
+            if (operation != ck::files::FileOperation::Delete)
+                panes[1 - source].refresh_failed = true;
             const bool source_refreshed = refresh(source);
-            const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - active);
+            const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - source);
             if (!source_refreshed || !destination_refreshed) {
                 std::string detail = std::string(operation == ck::files::FileOperation::Move ? "Move" :
                                                   operation == ck::files::FileOperation::Delete ? "Delete" : "Copy") +
@@ -3512,6 +3585,7 @@ struct FilesApp::State {
                     panes[i].mutating = panes[i].renaming = panes[i].trashing = false;
                     panes[i].changing.reset();
                     panes[i].queued_view.reset();
+                    panes[i].queued_refresh = false;
                     panes[i].model.set_input_locked(false);
                     panes[i].error = changing ? "Worker stopped; change outcome unknown" : "Worker stopped";
                 }
@@ -3595,7 +3669,6 @@ struct FilesApp::State {
             return;
         }
         if (!closing && !modal_pending() && pending(panes[active])) {
-            panes[active].queued_view.reset();
             const auto &pane = panes[active];
             const auto request = pane.inspection ? pane.inspection->ticket : pane.request;
             services[active]->cancel(request);
@@ -3938,7 +4011,8 @@ FilesCommandAvailability FilesApp::availability(std::string_view command) const 
 }
 std::optional<FilesAppTarget> FilesApp::target(std::size_t pane) const {
     const auto &p = state_->panes.at(pane);
-    if (state_->closing || state_->volume_pending(pane) || p.navigating || p.changing || p.queued_view || p.inspection || p.mutating ||
+    if (state_->closing || state_->volume_pending(pane) || p.refresh_failed || p.navigating || p.changing ||
+        p.queued_view || p.queued_refresh || p.inspection || p.mutating ||
         !state_->services.at(pane)->running())
         return {};
     if (auto target = p.model.target())
