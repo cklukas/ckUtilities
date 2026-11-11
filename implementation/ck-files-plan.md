@@ -413,6 +413,10 @@ authority and does not close the application or release requirements below.
   removal. Define refresh semantics; do not present a stale listing as current.
 - [x] Test pending scans, stale replies, blocked storage, rapid navigation,
   resize, narrow layout, all suite themes, mouse and keyboard operation.
+- [x] Preserve full macOS volume capacity above 2³² filesystem blocks. The
+  [native APFS regression check](ck-files-progress.md#2026-11-11--full-capacity-for-large-macos-volumes)
+  verified the corrected total after refresh and the pane-local archive
+  availability hint on a 24 TB volume.
 
 - [ ] Preserve proven selection continuity across a fresh indexed scan.
   The `912b961` Linux xterm run reopened a pane-local bookmark with the

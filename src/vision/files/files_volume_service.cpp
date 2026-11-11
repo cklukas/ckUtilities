@@ -23,7 +23,6 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <sys/mount.h>
-#include <sys/statvfs.h>
 #include <unistd.h>
 #else
 #include <sys/statvfs.h>
@@ -209,7 +208,6 @@ std::string decode_mountinfo(std::string value) {
     }
     return result;
 }
-#endif
 
 void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string name, std::string mount,
                          std::string filesystem, bool read_only, std::string identity) {
@@ -223,6 +221,7 @@ void append_posix_volume(std::vector<FilesVolumeRecord> &result, std::string nam
     }
     result.push_back(std::move(record));
 }
+#endif
 
 void probe_posix_archive_capability(FilesVolumeRecord &record,
 #if defined(__APPLE__)
@@ -314,16 +313,24 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
         // A device path or volume label can be reused after an unmount. Keep
         // the filesystem identity and source only as an opaque revalidation
         // token; the archive worker compares this token again before reading.
-        const std::string identity =
+        std::string identity =
             "macos:" + std::to_string(static_cast<std::int64_t>(entry.f_fsid.val[0])) + ":" +
             std::to_string(static_cast<std::int64_t>(entry.f_fsid.val[1])) + ":" +
             std::string(entry.f_mntfromname);
-        append_posix_volume(result, entry.f_mntfromname, mount, entry.f_fstypename,
-                             (entry.f_flags & MNT_RDONLY) != 0, identity);
+        FilesVolumeRecord record{entry.f_mntfromname, mount, entry.f_fstypename, {}, {},
+                                 (entry.f_flags & MNT_RDONLY) != 0, std::move(identity), {}, {}};
+        // Darwin statvfs can truncate the APFS total block count above UINT32_MAX.
+        struct statfs stats{};
+        if (statfs(mount.c_str(), &stats) == 0 && mount == stats.f_mntonname &&
+            std::memcmp(&stats.f_fsid, &entry.f_fsid, sizeof(entry.f_fsid)) == 0) {
+            record.total_bytes = filesystem_bytes(stats.f_blocks, stats.f_bsize);
+            record.free_bytes = filesystem_bytes(stats.f_bavail, stats.f_bsize);
+        }
         ck::files::NativeIdentifier filesystem_id;
         static_assert(sizeof(entry.f_fsid) <= sizeof(filesystem_id.bytes));
         std::memcpy(filesystem_id.bytes.data(), &entry.f_fsid, sizeof(entry.f_fsid));
-        probe_posix_archive_capability(result.back(), filesystem_id);
+        probe_posix_archive_capability(record, filesystem_id);
+        result.push_back(std::move(record));
     }
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;

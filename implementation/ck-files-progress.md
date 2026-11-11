@@ -1,5 +1,26 @@
 # Files implementation evidence
 
+## 2026-11-11 — Full capacity for large macOS volumes
+
+The macOS volume worker now reads fresh 64-bit `statfs` counters. It
+checks the returned mount point and filesystem ID against the inventory
+before displaying the space values. A failed query or a changed mount
+leaves the space values unknown.
+
+The exact macOS ARM64 Release build passed all 111 Files and keymap CTests.
+On the same 24 TB APFS mount and native controlling PTY, the previous app
+showed a total of 5.83 TiB. The rebuilt app showed 21.8 TiB, matching
+`statfs`, and kept the correct value and selected mount after Ctrl+R. The
+other pane stayed intact, F5 showed the archive availability reason, and
+Enter opened the selected mount. The app exited and restored the terminal
+state. The source selected by the Linux and Windows preprocessor branches
+is identical before and after the fix.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS Release build and Files/keymap receipt | `671e2f5d6a49bb0d2fcd4182092d0a9a0172cbdc159e723add57e2959cc7eb8a` |
+| macOS native APFS capacity regression receipt | `eaa1518632cb30fd599173f459ba1a829addd58a9c0f23d1fb6c4254ba892f41` |
+
 ## 2026-11-11 — Mark and cursor continuity on refresh
 
 The refresh candidate scans the held pane directory and carries marks and
