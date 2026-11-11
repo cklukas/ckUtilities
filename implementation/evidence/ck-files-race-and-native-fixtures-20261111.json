@@ -62,5 +62,65 @@
       "action_private_scope"
     ],
     "receipt_sha256": "84dd41af8c5bfec09b88e68b1ae2e0f7bc38c51a1283036e13de9f1c6c8b5167"
+  },
+  "linux_arm64_address_undefined": {
+    "revisions": {
+      "frontend": "ce4b02ab9fc7e032e5fa40fb17486dadd5340621",
+      "backend": "4e41414215aaa1fcd626fb33a11e4dffa45c8d71",
+      "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f"
+    },
+    "compiler": "Clang 19",
+    "passed": {
+      "files": 149,
+      "ckvision": 243,
+      "installed_ckvision_consumer": 1,
+      "installed_backend_c11_consumer": 1
+    },
+    "failed": 0,
+    "skipped": 0,
+    "files_compiler_invocations": 301,
+    "receipt_sha256": "46308e90ee4e8161671f8fc2ae7185674eab3c68b184cb2c1e3ca9cfe7c500e0",
+    "pty": {
+      "scope": "Real Linux ARM64 controlling PTY on lima-ckdev",
+      "exit": 0,
+      "desktop_interaction": false,
+      "termios_restored": true,
+      "dec_private_modes_restored": true,
+      "leak_check_observed": true,
+      "sanitizer_findings": [],
+      "steps": [
+        "01-initial",
+        "02-completion-warning",
+        "03-warning-cleared-preview",
+        "04-right-accepted",
+        "05-enter-navigated",
+        "06-right-focus-mark",
+        "07-left-focus-mark",
+        "08-resized"
+      ],
+      "receipt_sha256": "1aca76d8809b5b4d309ed71815e6bacf7576214cd3a90086e150e5f632a8b701",
+      "artifact_manifest_sha256": "a209966b215ed31fa05af6f4e7b856d522280160e778fe55225455eb9b11987a"
+    }
+  },
+  "macos_arm64_portable_package": {
+    "production_revisions": {
+      "frontend": "2af22309bd507b418a4a462d2bdeccee1911d48f",
+      "backend": "4e41414215aaa1fcd626fb33a11e4dffa45c8d71",
+      "ckvision": "0d81e2eb81d5ba2c2fd6420189b7498e829ebd9f"
+    },
+    "packaging_commit": "87d5989baa8accf6958131e1169ed27822d15763",
+    "archive_sha256": "8fdf3b924e71f1fcdb719396566b3eb13e0c2ae57cb430116baee3eb9600051d",
+    "payload_files": 53,
+    "appledouble_sidecars": 0,
+    "runtime_bytes_and_modes_verified": true,
+    "staged_pty_cases_passed": 30,
+    "extracted_pty_cases_passed": 30,
+    "profiles": [
+      "xterm-256color",
+      "xterm",
+      "vt100"
+    ],
+    "receipt_sha256": "551b85a34565ef9811148a5770228e3384ff1b21ab6063261a21281c1f2c06ca",
+    "artifact_manifest_sha256": "f304e0e70e34b32f1b1602c15fd57eadc8bb9b6f13b7a18f73eec10cde64c026"
   }
 }

@@ -442,7 +442,8 @@ authority and does not close the application or release requirements below.
   [candidate evidence](evidence/ck-files-integrated-1.5-candidate-20261110.json).
   Candidate `9364cd2` passes matching Linux and macOS ARM64 ThreadSanitizer,
   and the Linux PTY exercises Right-to-accept, navigation and mouse marking
-  in both panes. See the
+  in both panes. Linux ARM64 candidate `ce4b02a` passes the matching Clang 19
+  ASan/UBSan tests and the same PTY interactions. See the
   [race and native fixture evidence](evidence/ck-files-race-and-native-fixtures-20261111.json).
   Current release sanitizer, full Windows runtime, and desktop acceptance
   remain open.

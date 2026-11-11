@@ -13,6 +13,17 @@ accepted the next proposal with Right, and opened the directory with Enter.
 Mouse marking worked in both panes, marks survived a resize from 140×40 to
 120×32, and the terminal modes were restored on exit.
 
+Linux ARM64 frontend `ce4b02a`, backend `4e41414`, and ckVision `0d81e2e`
+passed 149 Files CTests, 243 SDK CTests, and both installed consumers with
+Clang 19 ASan and UBSan. The matching Linux PTY repeated the completion and
+mouse checks, restored terminal modes, and exited with the leak check clean.
+
+On macOS ARM64, portable archive code `87d5989` staged the verified `2af2230`
+Release runtime and produced a TGZ with 53 files and zero AppleDouble sidecars.
+File bytes and modes matched the Runtime staging tree. Both the staged and
+extracted products passed 30 PTY cases across `xterm-256color`, `xterm`, and
+`vt100`.
+
 Windows x64 backend `4e41414` passed five focused native tests on NTFS and
 five on ReFS. They cover allocation failure, admitted fixture roots, private
 action scope, directory postorder, and directory replay. Full Windows
