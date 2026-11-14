@@ -1168,8 +1168,9 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
 #endif
 }
 CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes) {
-    Fixture f;
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {}, false, false, true);
     f.loaded();
+    f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
     CK_CHECK(f.command("ck.files.move"));
     f.until([&] { return f.app->operation_review_pending(); });
     f.application.step(f.clock.now_nanos());
@@ -1198,6 +1199,13 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
     });
     CK_CHECK(f.app->status(0).find("Last scan:") != std::string::npos);
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
+    f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
+    CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
+    f.until([&] {
+        const auto text = f.painted();
+        return text.find("Operation recovery review") != std::string::npos &&
+               text.find(".ck-move-journal-") != std::string::npos && text.find("State: complete") != std::string::npos;
+    });
 }
 #if defined(__APPLE__)
 CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)

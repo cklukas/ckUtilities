@@ -348,6 +348,7 @@ struct FilesApp::State {
     bool volume_archive_recovery_cleanup_request = false;
     std::string volume_archive_recovery_cleanup_error;
     bool operation_recovery_request = false;
+    bool operation_recovery_dirty = false;
     std::optional<FilesOperationRecoveryScan> operation_recovery_scan;
     std::string operation_recovery_error;
     bool operation_recovery_cleanup_request = false;
@@ -677,16 +678,8 @@ struct FilesApp::State {
             bound = true;
             if (volume_archive_recovery_service)
                 scan_archive_recovery();
-            if (operation_recovery_service) {
-                if (!operation_journal_root || !operation_journal_root->is_valid()) {
-                    operation_recovery_error = "operation journal is not configured";
-                } else if (operation_recovery_service->request(*operation_journal_root) ==
-                           FilesOperationRecoverySubmission::Accepted) {
-                    operation_recovery_request = true;
-                } else {
-                    operation_recovery_error = "operation recovery scan could not be started";
-                }
-            }
+            if (operation_recovery_service)
+                scan_operation_recovery();
             application.commands().set_handler(application.commands().standard().quit, [this] { request_close(); });
             for (std::size_t i = 0; i < 2; ++i) {
                 panes[i].encoding = locations[i].encoding();
@@ -982,6 +975,8 @@ struct FilesApp::State {
                        : FilesCommandAvailability::available();
         }
         if (command == "ck.files.inspect_operation_recovery") {
+            if (operation_execution_request)
+                return unavailable("Recovery inspection unavailable: a file operation is writing its journal");
             if (operation_recovery_request)
                 return unavailable("Recovery inspection unavailable: operation recovery scan is still running");
             if (!operation_recovery_scan)
@@ -3410,10 +3405,32 @@ struct FilesApp::State {
                 "files_app.operation_planning"}});
         completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error));
     }
+    bool scan_operation_recovery() {
+        if (!operation_recovery_service)
+            return false;
+        operation_recovery_scan.reset();
+        if (operation_recovery_request) {
+            operation_recovery_dirty = true;
+            return true;
+        }
+        operation_recovery_dirty = false;
+        if (!operation_journal_root || !operation_journal_root->is_valid()) {
+            operation_recovery_error = "operation journal is not configured";
+            return false;
+        }
+        if (operation_recovery_service->request(*operation_journal_root) != FilesOperationRecoverySubmission::Accepted) {
+            operation_recovery_error = "operation recovery scan could not be started";
+            return false;
+        }
+        operation_recovery_error.clear();
+        operation_recovery_request = true;
+        return true;
+    }
     void consume_execution(FilesOperationExecutionReply reply) {
         if (!operation_execution_request || reply.request != *operation_execution_request)
             return;
         operation_execution_request.reset();
+        scan_operation_recovery();
         const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
         if (reply.state == FilesOperationExecutionState::Complete ||
             reply.state == FilesOperationExecutionState::RetainedSource) {
@@ -3547,7 +3564,9 @@ struct FilesApp::State {
             if (operation_recovery_service) {
                 if (auto reply = operation_recovery_service->take()) {
                     operation_recovery_request = false;
-                    if (reply->state == FilesOperationRecoveryState::Ready && reply->scan) {
+                    if (operation_recovery_dirty) {
+                        scan_operation_recovery();
+                    } else if (reply->state == FilesOperationRecoveryState::Ready && reply->scan) {
                         operation_recovery_scan = std::move(reply->scan);
                         operation_recovery_error.clear();
                     } else {
@@ -3560,6 +3579,7 @@ struct FilesApp::State {
                 }
                 if (operation_recovery_request && !operation_recovery_service->running()) {
                     operation_recovery_request = false;
+                    operation_recovery_dirty = false;
                     operation_recovery_error = "operation recovery worker stopped";
                     labels();
                 }
@@ -3569,13 +3589,7 @@ struct FilesApp::State {
                     operation_recovery_cleanup_request = false;
                     if (reply->state == FilesOperationRecoveryCleanupState::Complete) {
                         operation_recovery_cleanup_error.clear();
-                        operation_recovery_scan.reset();
-                        if (operation_recovery_service && operation_journal_root &&
-                            operation_journal_root->is_valid() &&
-                            operation_recovery_service->request(*operation_journal_root) ==
-                                FilesOperationRecoverySubmission::Accepted)
-                            operation_recovery_request = true;
-                        else
+                        if (!scan_operation_recovery())
                             operation_recovery_cleanup_error =
                                 "Operation staging cleanup completed; recovery rescan could not be started";
                     } else {
@@ -3616,6 +3630,7 @@ struct FilesApp::State {
                     consume_execution(std::move(*reply));
                 if (operation_execution_request && !execution_service->running()) {
                     operation_execution_request.reset();
+                    scan_operation_recovery();
                     panes[active].error = operation_execution_kind &&
                             *operation_execution_kind == ck::files::FileOperation::Move
                         ? "Move worker stopped"
