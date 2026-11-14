@@ -38,5 +38,27 @@
     "receipt_sha256": "3ceb926db7f8ca97beece6fb784a049216d8410f1ce9528904e1811d61fee6b1",
     "terminal_stream_sha256": "fb00ea28513d75b50ef18f8ffb284b6561b6428c0e8787e9d9518d4580b75a7b",
     "verified": "F5 opened the folder review. Alt+P opened the full paths. Escape closed the path details, and the next Escape cancelled the folder copy. The destination stayed empty and the source contents were unchanged. Alt+X exited the verified product and restored the terminal. This run used normal worker notifications."
+  },
+  "linux_arm64_release": {
+    "source_delta_archive_sha256": "aac44052cf13836e3c8984a3d5ed087bbeedc56be973d6af45728bb4efa1daf3",
+    "tested_frontend_manifest_sha256": "9c68b393919a661cdfdb404ba3d4b3b786ffae860bd7aab373a3b52d40d30547",
+    "build": {"start_utc": "2026-11-14T16:09:57Z", "end_utc": "2026-11-14T16:14:30Z", "elapsed_seconds": 273.31, "steps": 8},
+    "product_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "product_sha256": "6a3cc7fde16d32d011071db24a2fc881ef9ef9dc776c319226e6eba7d9bf50ac",
+    "test_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/src/vision/files/ck_vision_files_tests",
+    "test_sha256": "1a0a02a8c21512be43d37b65b536ceca635710a7f55eb8e6e138890929f74ba0",
+    "files_and_keymap_ctest_entries_passed": 158,
+    "application_cases_passed": 311,
+    "ctest_elapsed_seconds": 69.72,
+    "ctest_log_sha256": "9cf494edc27c2d7e1fd91af79f687ef788315c072d838aac68f67c4524ceadf3",
+    "ctest_junit_sha256": "312cc709251bf6266f7ebce8549993a788efb23642b3198025e36164de69a5dd"
+  },
+  "linux_xterm_398": {
+    "receipt": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/desktop-7dd5c8/receipt.json",
+    "receipt_sha256": "a284a28b0d70880f6f1da9ef91a08f853ef10158c63fb0a6f9f46187ffa8575d",
+    "terminal_log_sha256": "18b2537e98f8e5cd8069733f9d451e24ae781a9bf830809fc353d3a0a8fa57a7",
+    "screenshots_sha256": {"03-refresh.png": "a5dd07b1d9fa8b761ee817e32db64096e6092745fc5e6f2de2bc1b8dbf7fa613", "05-volume-properties.png": "d114a0eebb01568a5bb34f9dca51e05da4a5e0a93a392268d72ce5df15b7aae9"},
+    "scope": "Debian xterm on isolated Xvfb, driven with X11 keyboard events. Verified the single app process and both executable hashes. Examined window captures and matched the controlling terminal modes before and after exit.",
+    "verified": "Right accepted the location proposal and Enter opened the selected directory. Read-only text preview showed the expected content. An earlier inserted name moved the marked file down one row without reassigning its mark. Backspace at the root displayed volume rows in the left pane while the right file remained visible. Volume Properties showed ext4 and exact available and total bytes. Alt+X exited normally."
   }
 }
