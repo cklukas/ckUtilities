@@ -25,6 +25,16 @@
     },
     "frontend_patch_sha256": "57308850ac87c906547d97bcbc1d38cbd094ac247a523e69fe065db0b1694bef",
     "backend_patch_sha256": "740b7552e87be13cde733c1a74e82292947ecc5c774c9067c75840ae3e3d9e9a",
+    "full_files_label": {
+      "passed": 110,
+      "elapsed_seconds": 19.81,
+      "allocation_targets_build_start_utc": "2026-11-14T12:50:39Z",
+      "allocation_targets_build_end_utc": "2026-11-14T12:50:42Z",
+      "allocation_targets_build_seconds": 2.88,
+      "settings_allocation_executable_sha256": "11033bffdcb24c7e96f4df31b6c585f854888bf758a581fb8da22a47095beb69",
+      "recovery_oom_executable_sha256": "8c0b2b34872ccea111ce46967317e8d72ef93bb2c8d8630dd4ab9f6b4914042a",
+      "initial_run": "108 passed, two allocation entries could not start because their targets were not built. Building both named targets resolved the missing executables."
+    },
     "tests": [
       {
         "suite": "ck_vision_files_tests",

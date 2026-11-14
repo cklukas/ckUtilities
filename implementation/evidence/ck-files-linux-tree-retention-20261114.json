@@ -1,0 +1,68 @@
+{
+  "result": "PASS",
+  "platform": "Linux arm64",
+  "host": "lima-ckdev",
+  "compiler": "Clang 19",
+  "configuration": "Release",
+  "parallelism": 1,
+  "work_root": "/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD",
+  "evidence": "/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/evidence",
+  "source_scope": "Supplied patch snapshots applied to exact base Git trees; later frontend dialog changes and concurrent live edits excluded.",
+  "frontend": {
+    "base": "7c17743a0ff39351efd01c3fac2ac8c75dcda4df",
+    "files": 886,
+    "patch_sha256": "60a70bc63654e326232690fe78435f35a1dda99833c0c5240e2b3b5b1ea0c51a",
+    "source_manifest_sha256": "f071fa019a1656da979bfd29b9cd127cf077b72d9e94130818c1e938f87156a3"
+  },
+  "backend": {
+    "base": "80a8eafa11bb90f00d9da074fa6a713c20642519",
+    "files": 539,
+    "patch_sha256": "b6d597591758c42fc9cdd851ae70b52f6551b2e52cd11f21b67ad7c6bd8283b2",
+    "source_manifest_sha256": "cfb68b5beab8e1bcbbe532018d43480c5ec7c86f1c349fc02b3cdaa40bc01f3b"
+  },
+  "ckvision": {
+    "commit": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+    "prefix": "/home/klukas.guest/tmp/ckfiles-60a835-guide.ChSTMxMD/sdk-install",
+    "archive_sha256": "42a37fb4035c5bc0506bbfa53a8f52e086564c2e8e5473540f1c1bd7f9bbd10a",
+    "installed_manifest_sha256": "acc6c8eca67477f54434d7417e3a6db9690e7bcee33a23868e0d5e34efee2c41"
+  },
+  "dependency_manifest_sha256": "cb64249a2a0322ac80f1afc74d3fb2dc770b2ab9890d3eba0e7727f846506d5e",
+  "configure": {
+    "start_utc": "2026-11-14T12:20:09.707432647Z",
+    "end_utc": "2026-11-14T12:20:44.680059057Z",
+    "elapsed_seconds": 34.972627,
+    "command": "cmake -S /home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/frontend -B /home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_C_COMPILER=/usr/bin/clang-19 -DCMAKE_CXX_COMPILER=/usr/bin/clang++-19 -DCMAKE_AR:FILEPATH=/usr/bin/ar -DCMAKE_RANLIB:FILEPATH=/usr/bin/ranlib -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCKTOOLS_CKVISION_PREFIX=/home/klukas.guest/tmp/ckfiles-60a835-guide.ChSTMxMD/sdk-install -DCMAKE_PREFIX_PATH=/home/klukas.guest/tmp/ckfiles-60a835-guide.ChSTMxMD/sdk-install -DCK_CORE_FS_LIB_SOURCE_DIR=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/backend -DCK_CORE_FS_NATIVE_TEST_ROOT=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/tmp/fixtures -DCKTOOLS_TEST_TEMP_ROOT=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/tmp/fixtures -DCKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/tmp/fixtures -DCK_LLAMA_CPP_SOURCE_DIR=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/dependencies/llama -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/dependencies/googletest-1.14.0 -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON=/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/dependencies/nlohmann -DFETCHCONTENT_FULLY_DISCONNECTED=ON -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=ON -DGGML_CCACHE=OFF -DBUILD_TESTING=ON -DCKTOOLS_BUILD_DOCUMENTATION_CAPTURES=OFF",
+    "exit": 0
+  },
+  "build": {
+    "start_utc": "2026-11-14T12:20:44.742228411Z",
+    "end_utc": "2026-11-14T12:49:55.660041914Z",
+    "elapsed_seconds": 1750.917813,
+    "command": "cmake --build /home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/build -j1 --verbose --target ck_files_native_tests",
+    "exit": 0
+  },
+  "output": {
+    "path": "/home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/build/tests/unit/ck_files/ck_files_native_tests",
+    "size": 3758736,
+    "mtime_utc": "2026-11-14T12:49:55.613611+00:00",
+    "sha256": "8770a4eb8065f24b510257e023f986eca2d488de7fc14b8831a5f601998346ca",
+    "architecture": "AArch64",
+    "bundled_assets": []
+  },
+  "test": {
+    "start_utc": "2026-11-14T12:49:55.713706656Z",
+    "end_utc": "2026-11-14T12:49:56.392115505Z",
+    "elapsed_seconds": 0.678409,
+    "command": "ctest --test-dir /home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/build -j1 --no-tests=error -V --output-on-failure --output-junit /home/klukas.guest/tmp/ckfiles-tree-retention-linux.oCT0xsGD/evidence/native.xml -R \\^test_files_operation_content_native\\$",
+    "exit": 0,
+    "suite": "test_files_operation_content_native",
+    "cases": 21,
+    "ctest_registered": 1,
+    "ctest_passed": 1,
+    "regression": "native_operation_move_tree_publishes_then_retains_source_without_stability_proof",
+    "verbose_log_sha256": "09f0a02686cc6b4548b932981ce05d519a10c035a3d0a07bf7e88f5198da1ab5",
+    "junit_sha256": "b19c4741a12d5487cdb54c1f95fec1c42a4fe813c7606d4b6a601da23a24095a"
+  },
+  "frontend_suite": "Not run; optional, elapsed build time and supplied snapshot predates the later dialog fix.",
+  "notes": "Exact base blob and mode verification; patch postimages match embedded Git blob IDs; before/after source and dependency manifests match. Native build planned and executed 162 steps. Historical same-output Ninja action time was 287.191s, not a predicted wall time. Current run used fresh direct compiler invocations and experienced shared host/VM contention."
+}
