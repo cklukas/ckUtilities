@@ -1,0 +1,22 @@
+{
+  "frontend": "9b17c2405dac5a178a7563cc9630b91d6639d725",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "change": "CTest runs the application binary in four disjoint serial shards. Each shard keeps a 60-second deadline and starts with an empty CKTEST_FILTER. Product and test object files and their inputs are unchanged by this registration change.",
+  "macos_arm64_release": {
+    "configure_start_utc": "2026-11-14T15:00:09Z",
+    "configure_end_utc": "2026-11-14T15:00:22Z",
+    "configure_elapsed_seconds": 13.62,
+    "build_check": "The configured dependency graph reported no work for the product or application test image. The test image matched its prior verified SHA-256.",
+    "test_executable_sha256": "830c29ed4a1328eb1cc15830ebcde7e14cffbfe87f03c1c568a4131eb04236b6",
+    "application_cases_passed": 309,
+    "case_census_sha256": "121a669f6b292a5903d2a0a287c6a274b35e03eeb7ca20fb1ff59ca441d61350",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 37.26,
+    "ctest_log_sha256": "19beac57e4e774d469a52c965e97db2027a2269fc9f262f4f5e2136688757532",
+    "ctest_registration_sha256": "d43a376bb56f5033b398f422aae1e307d468b4d54953de60e52610c1dd7c5bd0",
+    "verification": "Compared the executed case names for the four CTest shards against the executable's full registration list. Every case ran exactly once."
+  },
+  "previous_timeout_followup": "The matched ASan/UBSan and ThreadSanitizer preview builds passed all 307 application cases in disjoint shards. The full unsharded attempts remain recorded as timed out.",
+  "open": ["Latest matching sanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+}
