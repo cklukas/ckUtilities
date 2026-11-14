@@ -44,7 +44,7 @@ CP-00 input and every NC-specific row stays explicitly mapped or deferred.
 | Copy volume to a folder | Implemented as CKARV01 sparse archive planning/execution with explicit capability refusal | `ck-files`; CP-13 restore and provider completion | archive format/allocation/journal evidence |
 | Ordinary file/tree copy | Implemented through frozen inventory, loss review, no-replace staging/publication and verification | `ck-files`; CP-04 filesystem matrix | operation and native Files suites |
 | Same-volume rename/move | Implemented with identity-checked native no-replace rename | `ck-files`; CP-04 race/crash matrix | move and native adapter tests |
-| Cross-volume file/tree move | Windows source exclusion is qualified; POSIX source-side quarantine is not yet enabled | `ck-files`; CP-01 | operation status explains refusal where unsupported |
+| Cross-volume file/tree move | Windows writer-open refusal is qualified. The current regular-file adapter still requires a source-stability proof that covers reviewed metadata. POSIX retirement needs a journaled capture protocol and source-stability proof. | `ck-files`; CP-01 | operation status explains refusal where unsupported |
 | Recursive permanent deletion | Journaled worker freezes the tree, revalidates identities and retires bottom-up; the Windows directory command path is qualified, while POSIX recursive retirement remains disabled until its adapter protocol is qualified | `ck-files`; CP-02/CP-04 | Windows 223-test matrix and native deletion test; macOS/Linux safety-retention evidence |
 | Native Trash / Recycle Bin | Single-entry native disposition with restore metadata; recursive Trash remains disabled and never falls back to permanent deletion | `ck-files`; CP-02 for recursive/foreign mounts | native Trash tests; recursive Trash acceptance still open |
 | Create files and links | New empty file and identity-bound same-pane hard-link actions are exposed; qualified POSIX symbolic-link creation is exposed with an opaque-target dialog; read-only link/reparse inspection is worker-owned and bounded; Windows reparse publication, junctions and cross-pane hard-link workflow remain open | `ck-files`; CP-05 | CP-05 empty-file, hard-link, symbolic-link and link-inspection qualification; remaining link operations stay disabled with status reasons |
@@ -67,9 +67,9 @@ The review found four safety-sensitive points that must remain explicit:
 
 1. POSIX cross-volume move must not use a pathname unlink, advisory lock or
    unchanged timestamp as a source-stability proof. It remains disabled until
-   a same-filesystem private quarantine protocol is journaled, recoverable and
-   qualified on macOS and Linux. Windows handle-bound source exclusion remains
-   a separate qualified path.
+   a same-filesystem private quarantine protocol and its source-stability
+   proof are qualified on macOS and Linux. Windows handle-bound sharing
+   denial has separate open-writer evidence.
 2. Recursive deletion and recursive Trash are distinct operations. Neither may
    traverse links, mounts or newly appeared children, and neither may be
    implemented by calling the direct-child primitive repeatedly without a
