@@ -16,12 +16,29 @@
     "files_ctest_elapsed_seconds": 18.82,
     "documentation_contract": "passed"
   },
+  "macos_arm64_real_conflict_regression": {
+    "frontend": "8a9f2bea8c0dc6765bd39081dcfa18d200952f3d",
+    "tested_source": "Pinned f7e5842 source with the regression test patch, verified byte-identical to the committed test source",
+    "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+    "test_patch_sha256": "9cfbc4afaf9bdba8bdecf059a95e06ea1e7d20cb46f20b18d7d9f8c7a0117cdc",
+    "frontend_manifest_sha256": "34817926e9018ec3661f2b44317f7f9d03e17b100548f5fd59c4dc9954db9a5d",
+    "backend_manifest_sha256": "1ae3f61c0d646adaa1392b7495250ff49255568b58f27afc6de7d7031d9fa799",
+    "build_start_utc": "2026-11-14T13:41:03Z",
+    "build_end_utc": "2026-11-14T13:50:49Z",
+    "build_elapsed_seconds": 586.52,
+    "build_steps": 187,
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "d16febf007cafa9a96f12378094b7119049273ea7983a9d50d85457adb068ad4",
+    "focused_regression": "passed",
+    "application_cases_passed": 306,
+    "application_ctest_elapsed_seconds": 14.88,
+    "result": "After an explicit per-file Keep existing decision, a new external destination entry invalidates the review. Both conflicting files and the late file retain their exact bytes, and the journal directory stays empty."
+  },
   "verified": [
     "The worker accepts a folder-wide conflict choice and typed row overrides, validates them against its sealed review, and constructs selected-row backend rules with mandatory retention for replacements.",
     "The application regression adds an external file to a previously empty destination after review. Apply requires a fresh review and preserves the late file without opening a journal."
   ],
   "open": [
-    "Source-matched execution coverage for a real conflicting file with an explicit row override",
     "Positive insertion and retained replacement on supported providers",
     "Linux, Windows, and sanitizer qualification for this revision"
   ]
