@@ -479,5 +479,23 @@
     "ctest_entries_passed": 158,
     "ctest_junit_sha256": "0d42f6814361f5c649c3020692ca1c10a69ab41e5c645e2e083053ea4f5064ca",
     "ctest_log_sha256": "6acc405bfe6a185d0e5559cd2b464300f658602002ad7ce885febbe1f0d102ac"
+  },
+  "linux_arm64_matched_sdk_address_undefined": {
+    "compiler": "Clang 19 using libstdc++",
+    "configuration": "Release, fail-fast ASan/UBSan with leak detection",
+    "start_utc": "2026-11-14T18:54:50Z",
+    "end_utc": "2026-11-14T19:04:57Z",
+    "elapsed_build_seconds": 607.442,
+    "build_steps": 315,
+    "frontend_manifest_sha256": "b15310abdb48a696d93305cbd3cda201a87f4edb64c90a46d9e9b2384d657c23",
+    "backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+    "sdk_manifest_and_toolchain_sha256": "8c5b8f236f9393d514287d4db4645da79adc64074b4b80720456076ce63a85b7",
+    "sdk_check": "297 SDK files verified ae5c54d5dfd918ae49127af101edd846ce1eb0f38cd18d2ead462c9068574592",
+    "soft_open_descriptor_limit": 1024,
+    "executable_receipt_sha256": "5ef57a10cd20e226f4f40c62d302b8e3e3c671a9167e9d6cdd9a374929d9ba85",
+    "focus_log_sha256": "ac1245ac49b3023264bfd8002af9abf2ae03b7bebe10baab855127a99211d377",
+    "ctest_entries_passed": 158,
+    "ctest_junit_sha256": "860a2404e09e11a28f2fdb7e4602921759f0b7b8ee1c47bbb768db2c2e40e8c5",
+    "ctest_log_sha256": "20cf05fb785f8a722217add58eb536092f97222a4ed48fc9b726e30dd494dc21"
   }
 }
