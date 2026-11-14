@@ -340,10 +340,8 @@ struct FilesOperationExecutionService::State final {
                 return;
             }
             auto job = std::move(batch).take_value();
-            while (job->state() != ck::files::OperationBatchState::Complete &&
-                   job->state() != ck::files::OperationBatchState::Failed &&
-                   job->state() != ck::files::OperationBatchState::Cancelled &&
-                   job->state() != ck::files::OperationBatchState::NeedsReconciliation)
+            while (job->state() == ck::files::OperationBatchState::Ready ||
+                   job->state() == ck::files::OperationBatchState::Running)
                 job->advance(stop_token);
             result.result = job->result();
             result.state = execution_state(job->state(), stop_token.stop_requested());
@@ -391,11 +389,8 @@ struct FilesOperationExecutionService::State final {
                         return;
                     }
                     auto job = std::move(batch).take_value();
-                    while (job->state() != ck::files::OperationBatchState::Complete &&
-                           job->state() != ck::files::OperationBatchState::Failed &&
-                           job->state() != ck::files::OperationBatchState::Cancelled &&
-                           job->state() != ck::files::OperationBatchState::RetainedSource &&
-                           job->state() != ck::files::OperationBatchState::NeedsReconciliation)
+                    while (job->state() == ck::files::OperationBatchState::Ready ||
+                           job->state() == ck::files::OperationBatchState::Running)
                         job->advance(stop_token);
                     result.result = job->result();
                     result.state = execution_state(job->state(), stop_token.stop_requested());
