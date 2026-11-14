@@ -43,7 +43,7 @@
     "incremental_test_fixture_build_seconds": 15.22
   },
   "linux_arm64_release": {
-    "scope": "Native fixture on the pre-correction test snapshot. This Linux run populated its directory before advancing the already-open cursor. The corrected test opens the cursor after setup and is queued on the same backend.",
+    "scope": "Native qualification on the final source fixture with directory enumeration opened after setup. The initial Linux dependency rebuild and suite are also recorded.",
     "soft_open_descriptor_limit": 1024,
     "fixture_entries_including_root": 1153,
     "ctest_entries_passed": 158,
@@ -56,6 +56,34 @@
     "build_log_sha256": "4d75a29f51e7e348fdb96198cd67113d07a5d2d76a923a57a37f48649505f7ab",
     "binaries_sha256_receipt": "d20694abfdbd6e10d84fc64efa3d21b624722f6e268871b24bf2cd33ab4914b4",
     "native_case_log_sha256": "a95b3fdf6450891ba60333ece510bf411804499a51e785ad3e3723a3518983bb",
-    "ctest_junit_sha256": "c896e68c26dad1d34a6905f03df27fe73cc7f2ebd39de8932d4b5fd60dba4456"
+    "ctest_junit_sha256": "c896e68c26dad1d34a6905f03df27fe73cc7f2ebd39de8932d4b5fd60dba4456",
+    "fixture_correction": {
+      "build_start_utc": "2026-11-14T18:15:00Z",
+      "build_end_utc": "2026-11-14T18:15:13Z",
+      "elapsed_build_seconds": 12.639,
+      "frontend_manifest_sha256": "f26aa78c22fd2464e2b6d2697e8ae71e4e1dd6c6920cd7f5ae37dff69be4a5b9",
+      "binaries_sha256_receipt": "aa71b9b7bb69ed9bf2f43ea5aedf41476e95fcecdf87b2801ccd7fbb82d49bcf",
+      "native_case_log_sha256": "a95b3fdf6450891ba60333ece510bf411804499a51e785ad3e3723a3518983bb",
+      "ctest_junit_sha256": "dbac5e59245cef9ee255dc05820bcb6da88085793a250d533c28e6fb61ffbf0b",
+      "ctest_entries_passed": 158
+    }
+  },
+  "macos_matched_sdk_sanitizers": {
+    "asan": {
+      "entries_passed": 114,
+      "test_log_sha256": "1691f3b000f52ce26f495984c7978417b67d42d0b60fb7826f69acc9af58770a",
+      "build_start_utc": "2026-11-14T18:06:35Z",
+      "build_end_utc": "2026-11-14T18:06:43Z",
+      "test_wall_seconds": 129.06,
+      "image_receipt_sha256": "f2e2d2daadfab2084716124091c36bb5d2ad32308a5d7715054be61205bae36d"
+    },
+    "tsan": {
+      "entries_passed": 114,
+      "test_log_sha256": "db2464a1ba34b2d9dc1d8c1375f43e4903a3e5f76bec5fb2eba98f24b2447439",
+      "build_start_utc": "2026-11-14T18:08:53Z",
+      "build_end_utc": "2026-11-14T18:10:13Z",
+      "test_wall_seconds": 226.86,
+      "image_receipt_sha256": "857417745b09343bcfcaedb74e1ae4ae5dde1a5db2663292ff99080bdd04e95d"
+    }
   }
 }
