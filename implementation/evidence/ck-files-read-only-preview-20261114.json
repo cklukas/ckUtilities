@@ -95,5 +95,20 @@
       ]
     }
   },
-  "open": ["Linux and ordinary-user Windows runtime and desktop acceptance for this revision"]
+  "linux_arm64_release": {
+    "source_delta_archive_sha256": "7f3bafb90f7678f00993093f7564d94b83966646ae6d67d6f92b013434ec87fe",
+    "tested_frontend_manifest_sha256": "6181ef9eccd35aab2f8e7cf3f8b091ab0e7e30d75fe858d9c7feadd863bee653",
+    "build_start_utc": "2026-11-14T15:37:13Z",
+    "build_end_utc": "2026-11-14T15:41:21Z",
+    "build_steps": 8,
+    "test_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "8ff3df9221e103d94b21cdc04a9f9e243f749bd0b7081b01b462be5701c5b3e2",
+    "product_sha256": "ff6a74a017cf10d2ca53ddcdf33085889b0231a1c95918f27effc04fb8b05ccd",
+    "files_and_keymap_ctest_entries_passed": 155,
+    "application_cases_passed": 306,
+    "ctest_elapsed_seconds": 55.27,
+    "ctest_log_sha256": "9f9b2f0d8453a8a6ba8bcf68761d38321b200dcd2700656414e153c55109f345",
+    "ctest_junit_sha256": "b73608f2a7bca6a18e5405101cf647b1aea222e9b6b2adac6c97d98a50267a8a"
+  },
+  "open": ["Ordinary-user Windows runtime and Linux and Windows desktop acceptance for this revision"]
 }
