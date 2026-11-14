@@ -14,6 +14,40 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Refresh operation recovery after execution
+
+Frontend `b483f9e` starts a fresh journal scan when a Files operation
+finishes or its worker faults. If a previous scan is in progress, the
+app waits for that reply and scans again before accepting its results.
+The recovery command is unavailable while the file worker is writing.
+The macOS arm64 Release Files suite passed 299/299, including an accepted
+same-volume move whose completed journal becomes visible in the existing
+session. The four-step rebuild ran from 12:25:09 to 12:25:32 UTC in
+22.84 s. The test executable SHA-256 was
+`6e3d85a288f76368b0f6416680dd79e4931261184827578e589049461a963024`.
+
+## 2026-11-14 — Darwin held-descriptor clone probe
+
+On ownership-enabled APFS, macOS 27.2.1 arm64, UID 501, `fclonefileat`
+cloned the held file after its old name had been repopulated with a
+different file. The destination had a new inode and contained the held
+file's bytes, resource fork and test xattr. An occupied destination
+returned `EEXIST` and kept its original bytes. A subsequent write to the
+held original left the clones unchanged.
+
+The fixture source had mode 04640 and a source ACL, and the destination
+parent had an inheritable ACL. Both clones had mode 0640. The default
+clone inherited the destination ACL. `CLONE_ACL` preserved the source
+entry and added the inherited destination entry. This makes clone a
+candidate for explicit, provider-qualified publication. Integration
+still needs a pre-publication preservation decision, proof of the new
+object, durability, and a distinct recovery receipt for its identity.
+No macOS publication or source retirement gate is closed by this
+single-operation probe. [Darwin clonefile contract](https://github.com/apple-oss-distributions/xnu/blob/xnu-12377.121.6/bsd/man/man2/clonefile.2)
+
+Probe SHA-256 `498798514bac5753061dc91d366743fe540d08991cb5411e45e3da00e21ff69d`.
+Result SHA-256 `85db21c34090cf53c3492493aaa7cd984e2c5c7c80a23eea7a5aeaa4fe63d0c6`.
+
 ## 2026-11-14 — Preserve sources after recursive move publication
 
 The legacy recursive move worker previously retired entries on Windows

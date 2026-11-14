@@ -113,9 +113,9 @@ clipboard.
   the native platform boundary where qualified, including identity-checked
   directory trees on the native filesystem; unsupported or uncertain behavior
   retains the source and reports the reason instead of falling back.
-- A separate **Inspect operation recovery** review scans ordinary copy, tree
-  copy, move, and recursive-delete journals after startup. It is read-only:
-  interrupted moves with exact name receipts show their source and destination
+- **Inspect operation recovery** shows a read-only scan of copy, move, and
+  recursive-delete journals. The scan runs at startup and after file operations.
+  Interrupted moves with exact name receipts show their source and destination
   names. Malformed, truncated, legacy, ambiguous, or untrusted records remain
   visible as reconciliation items. **Clean up operation staging** is disabled
   for recovered journals: cleanup requires the originating copy worker's live
