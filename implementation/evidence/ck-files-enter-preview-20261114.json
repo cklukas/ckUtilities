@@ -83,5 +83,18 @@
       "ctest_log_sha256": "65e89aa7682e895b14b019b6ee80b55aea658ede314d84c05f4df96cd22b99a3"
     }
   },
-  "open": ["Current Windows ordinary-user and Linux runtime, and Linux/CI regeneration of the guide screenshots"]
+  "linux_arm64_release": {
+    "tested_frontend_manifest_sha256": "b74cbef7f92b1f256d75bd7c9cfe8eb7dcaa4afeeb2d5071753b06eee0ada0cf",
+    "build_start_utc": "2026-11-14T14:26:26Z",
+    "build_end_utc": "2026-11-14T15:36:08Z",
+    "build_elapsed_seconds": 4182.49,
+    "build_steps": 132,
+    "test_executable_sha256": "699f66eb56d53b625ff471bfa82441497106f0002f16bb3463b724d120d080c0",
+    "product_sha256": "86cdfb28230aabe041da547fcf350b69b13690d98e31bfd3aa00c5ee4bbf337e",
+    "application_cases_passed": 305,
+    "files_and_keymap_ctest_entries_passed": 155,
+    "ctest_elapsed_seconds": 47.59,
+    "ctest_log_sha256": "350da2e3bc4cd313db99dc11c6e666815ab5c26aab978919ef4e488beb591f0d"
+  },
+  "open": ["Current Windows ordinary-user runtime and Linux/CI regeneration of the guide screenshots"]
 }
