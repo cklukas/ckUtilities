@@ -23,6 +23,14 @@
     "ctest_elapsed_seconds": 129.83,
     "ctest_log_sha256": "d575e46c86e352856a3eb47bbff42ae06cd5014bd0c2dbf4377b95ef72c920b7"
   },
+  "macos_arm64_matched_sdk_thread": {
+    "tested_frontend_manifest_sha256": "c82d49f0c8b6a1bfc2da6c49593c2c8fc428332ad80d685c67c8a1acd511d514",
+    "build": {"start_utc": "2026-11-14T16:10:53Z", "end_utc": "2026-11-14T16:11:14Z", "elapsed_seconds": 21.13, "steps": 7},
+    "test_sha256": "ad9de6ec9394ccf6962edddcdb60fce7218b6fe015ba01b7ae8a94e96b7042db",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 179.85,
+    "ctest_log_sha256": "191b9f20019965b9889c3efde9de9c63abadcff2178ad5c15fb7e2229f59aaa6"
+  },
   "macos_native_pty": {
     "terminal_exit": 0,
     "program_controlled_terminal_modes_restored": true,
