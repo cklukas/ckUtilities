@@ -82,12 +82,15 @@ CK_TEST(native_recursive_inventory_observer_walks_a_wide_directory_under_a_handl
     const ck::testing::ScratchDirectory scratch("files-recursive-observer", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     NativeFileSystem filesystem;
     const auto absolute = take(NativeAbsolutePath::from_host(scratch.path()));
-    auto root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_native_directory(absolute)));
     constexpr std::size_t leaves = 1152;
-    for (std::size_t i = 0; i < leaves; ++i) {
-        const auto leaf = name(("entry-" + std::to_string(i)).c_str());
-        take(root->create_child_file(leaf));
+    {
+        auto fixture_writer = take(filesystem.open_native_directory(absolute));
+        for (std::size_t i = 0; i < leaves; ++i) {
+            const auto leaf = name(("entry-" + std::to_string(i)).c_str());
+            take(fixture_writer->create_child_file(leaf));
+        }
     }
+    auto root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_native_directory(absolute)));
     std::size_t observed = 0;
     RecursiveInventoryLimits limits;
     limits.inventory.max_entries = leaves + 1;
@@ -102,7 +105,9 @@ CK_TEST(native_recursive_inventory_observer_walks_a_wide_directory_under_a_handl
     for (std::size_t step = 0; step < leaves * 2 && job.state() == RecursiveInventoryState::Collecting; ++step)
         job.advance();
     const auto sealed = take(job.completed());
-    CK_CHECK(sealed->entries().size() == leaves + 1 && observed == leaves);
+    if (sealed->entries().size() != leaves + 1 || observed != leaves)
+        throw std::runtime_error("wide inventory count " + std::to_string(sealed->entries().size()) +
+                                 ", observed " + std::to_string(observed));
     CK_CHECK(!job.completed_sources().value());
 }
 
