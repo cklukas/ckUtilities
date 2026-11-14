@@ -209,8 +209,8 @@ closes. Startup reading uses the same opened file for its bytes and revision.
 | Alt+X | Quit |
 
 Use **Alt+O** to open Operations and **Alt+L** to open Location without
-function keys. Under **Location**, use **Add bookmark** to save the active
-pane's location and **Open bookmark** to choose one of that pane's saved
+function keys. Under **Location**, use **Add bookmark** (**D**) to save the active
+pane's location and **Open bookmark** (**K**) to choose one of that pane's saved
 locations. Highlight an unavailable menu command or click its disabled
 footer action to see the reason in the active pane. **View > Commands** opens
 the command palette, where you can also highlight a disabled match to see

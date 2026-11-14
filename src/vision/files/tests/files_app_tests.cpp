@@ -3528,7 +3528,9 @@ CK_TEST(files_app_opens_a_bookmark_from_the_location_menu_in_its_own_pane) {
     CK_CHECK(f.app->navigate(0, right->root_address()));
     f.loaded();
     const auto target = f.app->location(0);
-    CK_CHECK(f.app->add_bookmark(0));
+    CK_CHECK(f.alt("l"));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "d"}}));
+    CK_CHECK(*f.app->location(0) == *target);
     CK_CHECK(f.app->navigate_history_back(0));
     f.loaded();
     CK_CHECK(f.app->location(0) && *f.app->location(0) == *left);

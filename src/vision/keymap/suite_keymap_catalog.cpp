@@ -73,7 +73,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.history_back", "Go &back", "Files", ""},
     CommandDefinition{"ck.files.history_forward", "Go &forward", "Files", ""},
     CommandDefinition{"ck.files.bookmark_open", "Open boo&kmark...", "Files", ""},
-    CommandDefinition{"ck.files.bookmark_add", "&Add bookmark", "Files", ""},
+    CommandDefinition{"ck.files.bookmark_add", "A&dd bookmark", "Files", ""},
     CommandDefinition{"ck.files.bookmark_remove", "&Remove bookmark", "Files", ""},
     CommandDefinition{"ck.files.refresh", "&Refresh listing", "Files", "Ctrl+R"},
     CommandDefinition{"ck.files.properties", "&Properties...", "Files", ""},

@@ -650,7 +650,7 @@ struct FilesApp::State {
                      item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
                      item(home_id, "&Home location"), item(history_back_id, "Go &back"),
                      item(history_forward_id, "Go &forward"), item(bookmark_open_id, "Open boo&kmark..."),
-                     item(bookmark_add_id, "Add &bookmark"),
+                     item(bookmark_add_id, "A&dd bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
                      item(properties_id, "Propert&ies..."), item(preview_id, "Pre&view"),
                      item(copy_path_id, "Cop&y path"),
