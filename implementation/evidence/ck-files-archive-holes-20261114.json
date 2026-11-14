@@ -23,6 +23,15 @@
     "ctest_elapsed_seconds": 119.25,
     "ctest_log_sha256": "e16c8de97294272728fcc2169ebca7851aedb2fea4bada4fa70fffdc8598dd07"
   },
+  "macos_arm64_matched_sdk_thread": {
+    "tested_frontend_manifest_sha256": "3363dbdb8b79fa052603fa82b40163fea25c73f4f118d91f738015e82a839ea8",
+    "build": {"start_utc": "2026-11-14T16:34:54Z", "end_utc": "2026-11-14T16:34:59Z", "elapsed_seconds": 5.08, "steps": 7},
+    "build_review": "The matched build logs show both modified units compiled, the archive library relinked, and all four executable links completed. The earlier watchdog ThreadSanitizer build compiled two different units and ran alongside other builds. The shorter elapsed time was checked against the dry run, output timestamps and source and executable hashes.",
+    "test_sha256": "56b578d4b5137182599ddc2ea847ee26baf323725d5ec5059fe1c758a8422635",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 150.90,
+    "ctest_log_sha256": "542039434a87108b7e7545397fe46cff5ec1a9ea9e286b168953fc6be1f22407"
+  },
   "linux_arm64_release": {
     "source_delta_archive_sha256": "0493601d0795718f10823f40332f8ae32459e73c21f9c79deb1bc35382bfdd36",
     "tested_frontend_manifest_sha256": "f55065627210931e27c1726672139e5485e97cac0d85b432284797c7ffbbde38",
@@ -48,5 +57,5 @@
     "stored_extent_count": 2,
     "verified": "The ordinary-user Files process selected a private tmpfs fixture in the left volume pane and prepared the archive in the right ext4 pane. The review reported one sparse file and 8192 stored extent bytes. Each listed non-hard loss was acknowledged before creation. The destination listed the resulting archive. An independent parser checked its manifest, verified the physical holes, and reconstructed the source contents byte for byte. The app exited successfully and terminal modes matched. Only fixture-mount setup used privilege, inside a private mount namespace."
   },
-  "open": ["Matching macOS ThreadSanitizer, current Windows build and ordinary-user acceptance"]
+  "open": ["Current Windows build and ordinary-user acceptance"]
 }
