@@ -12,6 +12,10 @@ writable parent directory.
 
 ![Files volume and mount information](../generated/screenshots/ck-files-volumes.svg)
 
+**Location → Properties** displays the selected mount's exact capacity.
+
+![Files Volume Properties showing the mount, access state, and exact byte counts](../generated/screenshots/ck-files-volume-properties.svg)
+
 ## Usage
 
 ```text

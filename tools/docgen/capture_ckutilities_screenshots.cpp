@@ -383,13 +383,21 @@ void capture_files(const std::filesystem::path &directory)
     }
     if (!app->navigate_parent(0))
         throw std::runtime_error("could not request the documentation Files volume view");
-    for (int step = 0; step != 100; ++step)
+    for (int step = 0; step != 500 && app->volume_info_pending(); ++step)
     {
         application.step(clock.now_nanos());
         clock.advance(1'000'000);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    if (app->volume_info_pending() || !app->model(0).volume_cursor())
+        throw std::runtime_error("documentation Files volume inventory did not finish");
+    application.step(clock.now_nanos());
     write_svg(directory, "ck-files-volumes", terminal.display());
+    const auto properties = application.commands().id_for("ck.files.properties");
+    if (!properties || !application.execute_command(*properties) || !app->properties_pending())
+        throw std::runtime_error("could not open documentation Files volume properties");
+    application.step(clock.now_nanos());
+    write_svg(directory, "ck-files-volume-properties", terminal.display());
     app.reset();
     left_service->join();
     right_service->join();
