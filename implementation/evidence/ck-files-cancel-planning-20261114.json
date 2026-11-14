@@ -1,0 +1,63 @@
+{
+  "frontend": "1779ba74ba03444ac88efbbc2e3d43c9f225b48a",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "verified": [
+    "F5 starts Copy planning and Esc cancels a completed worker reply before it reaches review. The watchdog handles the cancelled reply even with its wake suppressed.",
+    "F6 starts Move planning and Esc cancels while the source worker is blocked. Move reports the busy worker until it drains and the original source and absent target are verified through native handles."
+  ],
+  "macos_arm64_release": {
+    "tested_frontend_manifest_sha256": "941f4cb5b7b24e011e8f1a157e5a52a0c3ca3b18d98fc0917312cff63c7e5ee8",
+    "build_start_utc": "2026-11-14T15:48:16Z",
+    "build_end_utc": "2026-11-14T15:49:17Z",
+    "build_elapsed_whole_seconds": 60,
+    "build_steps": 9,
+    "build_review": "Four compiled translation units and five link steps matched the dry run. The prior comparable build compiled three units and had the same five link steps. Changed inputs were compared byte-for-byte before building and the runtime snapshot was checked again after the build.",
+    "product_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "product_sha256": "e5e0a943d0034bb02d2a8d14f42c18c2c55c0a0a650416ea07afd3af3e84b485",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "b49b31b3e101f10051c2b5286796968bd5fd6d026af333015899a5cc88964d59",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "application_cases_passed": 312,
+    "ctest_elapsed_seconds": 37.41,
+    "ctest_log_sha256": "f4a82dee2445c866813f7868abe5295ede6cc89d6ae17ce3d2979c83c0bc9d0c"
+  },
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "tested_frontend_manifest_sha256": "bf407da0abc4d8b697b4bc1f3cdea3eacc29b0697b8abaa81eb412d89eaa9332",
+    "build_start_utc": "2026-11-14T15:48:43Z",
+    "build_end_utc": "2026-11-14T15:50:00Z",
+    "build_elapsed_seconds": 76.95,
+    "build_steps": 9,
+    "test_executable_sha256": "7262a42d4eb1ed2c11d3fe754a2804ac85514c80dd545efb72439457e3bc3c6a",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 75.44,
+    "ctest_log_sha256": "a9a856181cd6a63f011e1064b6c6f636dd17f8815c855b2da9ff6789766a9d4a"
+  },
+  "macos_arm64_matched_sdk_thread": {
+    "tested_frontend_manifest_sha256": "bf407da0abc4d8b697b4bc1f3cdea3eacc29b0697b8abaa81eb412d89eaa9332",
+    "build_start_utc": "2026-11-14T15:51:22Z",
+    "build_end_utc": "2026-11-14T15:51:36Z",
+    "build_elapsed_seconds": 14.13,
+    "build_steps": 9,
+    "test_executable_sha256": "a8567b9622938f8e9f9f278d2eda8e7433e380e0cb2c7d892c9a58b93f8ab9e3",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 190.60,
+    "ctest_log_sha256": "c502f18b1e843a7a3845f204480b31d5e574ecd63897e018bf69b341535208c7"
+  },
+  "folder_review_path_test": {
+    "frontend": "6cfa3b427429a520a8df723266262dc3afe9b7e4",
+    "initial_linux_result": "The transfer suite failed two assertions that required full absolute paths in single-line dialog previews. The exact full paths are available through Paths and names.",
+    "verified": "Both preview labels appear. Paths and names exposes the exact source, destination, and selected folder. Escape closes the reader first and then cancels the folder operation without writing a journal or any destination entries.",
+    "macos_release_test_frontend_manifest_sha256": "9500b056579ca89eafe43cdc771dffa0b492180f840ea5f2639d36a9750b8deb",
+    "build_start_utc": "2026-11-14T15:55:47Z",
+    "build_end_utc": "2026-11-14T15:56:12Z",
+    "build_elapsed_seconds": 24.86,
+    "build_steps": 2,
+    "test_executable_sha256": "d19a1854fc1b71422c1a84b8797ba939c595f3d46265853a7973f84f013a50da",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 23.00,
+    "ctest_log_sha256": "5e7d946bfb25cc3756912eb62690055367410c651b6669620e6e41d577aade27"
+  },
+  "documentation": "ckdocs check and strict build passed for 27 pages. The Files guide documents Escape during transfer planning.",
+  "open": ["Linux and Windows qualification for this revision"]
+}
