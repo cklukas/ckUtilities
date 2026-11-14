@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_review_dialog.hpp"
 
+#include "frozen_inventory.hpp"
 #include "name_mapping.hpp"
 
 #include <cvision/widgets/dialog.hpp>
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -105,12 +107,15 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
     ck::files::OperationReviewModel::Pointer model;
     ck::files::NameEncoding destination_encoding;
     Completion completion;
+    ck::files::FrozenInventory::Pointer inventory;
+    std::function<bool(ck::files::ConsentAction)> supports_action;
     DialogDescriptor descriptor;
     std::optional<DescriptorDialogPresentation> presentation;
     ckv::widgets::Window *window = nullptr;
     std::weak_ptr<void> window_lifetime;
     std::vector<std::size_t> issue_fields;
     std::vector<std::size_t> name_fields;
+    std::optional<std::size_t> review_all_field;
     std::size_t action_field = 0;
     std::size_t field_count = 0;
     std::vector<ck::files::ConsentAction> actions;
@@ -119,9 +124,11 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
     bool delivered = false;
 
     State(ckv::ui::Application &app, ckv::widgets::Desktop &desk, const ckv::ui::StandardRoles &standard_roles,
-        ck::files::OperationReviewModel::Pointer review, ck::files::NameEncoding encoding, Completion handler)
+        ck::files::OperationReviewModel::Pointer review, ck::files::NameEncoding encoding, Completion handler,
+        ck::files::FrozenInventory::Pointer review_inventory, std::function<bool(ConsentAction)> supported)
         : application(app), desktop(desk), roles(standard_roles), model(std::move(review)),
-          destination_encoding(encoding), completion(std::move(handler)) {
+          destination_encoding(encoding), completion(std::move(handler)), inventory(std::move(review_inventory)),
+          supports_action(std::move(supported)) {
         if (!model || (destination_encoding != ck::files::NameEncoding::PosixBytes &&
                        destination_encoding != ck::files::NameEncoding::WindowsUtf16))
             throw std::invalid_argument("invalid Files operation review dialog");
@@ -148,7 +155,9 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
     }
 
     void choose_actions() {
-        actions = {ConsentAction::Cancel, ConsentAction::ChooseAnotherDestination};
+        actions = {ConsentAction::Cancel};
+        if (model->plan()->requires_review())
+            actions.push_back(ConsentAction::ChooseAnotherDestination);
         const bool issues = !model->issue_rows().empty();
         const bool conflicts = !model->conflict_rows().empty();
         if (!issues && !conflicts) {
@@ -164,7 +173,30 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
                 actions.push_back(ConsentAction::Replace);
             if (all_mergeable())
                 actions.push_back(ConsentAction::MergeDirectories);
+        } else if (supports_action && conflicts) {
+            actions.push_back(ConsentAction::SkipConflict);
         }
+        if (supports_action)
+            std::erase_if(actions, [this](const auto action) { return !supports_action(action); });
+    }
+
+    std::string item_label(std::size_t item) const {
+        if (!inventory || item >= inventory->entries().size())
+            return "item " + std::to_string(item + 1);
+        const auto& path = inventory->entries()[item].source_path;
+        const auto parent = inventory->mount_policy() == InventoryMountPolicy::DirectObjects
+            ? path.parent_address() : inventory->entries().front().source_path.parent_address();
+        if (!parent.value())
+            return path.display_text();
+        const auto relative = path.relative_components_from(*parent.value());
+        if (!relative.value() || relative.value()->empty())
+            return path.display_text();
+        std::string label;
+        for (const auto& component : *relative.value()) {
+            if (!label.empty()) label += '/';
+            label += component.display_name();
+        }
+        return label;
     }
 
     static std::string action_label(ConsentAction action) {
@@ -174,7 +206,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         case ConsentAction::Proceed: return "Proceed";
         case ConsentAction::SkipAffectedItems: return "Skip affected items";
         case ConsentAction::ContinueWithListedLosses: return "Continue with listed losses";
-        case ConsentAction::SkipConflict: return "Skip listed conflicts";
+        case ConsentAction::SkipConflict: return "Keep existing targets and skip conflicts";
         case ConsentAction::KeepBoth: return "Keep both with reviewed names";
         case ConsentAction::Replace: return "Replace existing files";
         case ConsentAction::MergeDirectories: return "Merge existing directories";
@@ -188,23 +220,33 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         descriptor.resizable = true;
         descriptor.field_description_rows = 2;
         descriptor.fields.push_back({.label = summary_text(model->summary()), .kind = FieldKind::Note});
-        if (model->issue_rows().size() && model->conflict_rows().size())
-            descriptor.fields.push_back({.label = "Preservation and collision decisions are reviewed separately; choose a new destination first.",
+        if (supports_action && !model->conflict_rows().empty()) {
+            const bool skip_supported = std::find(actions.begin(), actions.end(), ConsentAction::SkipConflict) != actions.end();
+            descriptor.fields.push_back({.label = skip_supported
+                ? "Conflicting items stay where they are. Review losses for the other items."
+                : "Choose another destination to continue this transfer.",
                 .kind = FieldKind::Note});
+        }
         for (const auto &row : model->issue_rows()) {
             issue_fields.push_back(descriptor.fields.size());
             const auto &issue = row.issue;
-            descriptor.fields.push_back({.label = "Review issue " + std::to_string(row.ordinal + 1) + ": " +
+            descriptor.fields.push_back({.label = item_label(issue.item) + " · " +
                                              consequence(issue.consequence) + " — " + feature(issue.feature) +
                                              " (" + issue_state(issue.state) + ")" +
                                              (issue.hard_failure ? " [cannot be continued]" : ""),
                 .kind = FieldKind::Check,
                 .initial_checked = false});
         }
+        if (issue_fields.size() > 1) {
+            review_all_field = descriptor.fields.size();
+            descriptor.fields.push_back({.label = "I reviewed all listed preservation losses", .kind = FieldKind::Check});
+        }
         for (const auto &row : model->conflict_rows()) {
-            descriptor.fields.push_back({.label = "Conflict " + std::to_string(row.ordinal + 1) + ": " +
+            descriptor.fields.push_back({.label = item_label(row.conflict.item) + " · " +
                                              conflict_kind(row.conflict.kind),
                 .kind = FieldKind::Note});
+            if (std::find(actions.begin(), actions.end(), ConsentAction::KeepBoth) == actions.end())
+                continue;
             FieldDescriptor name;
             name.label = "Keep both name " + std::to_string(row.ordinal + 1);
             name.validate = [](const std::string &value) { return value.size() <= 64 * 1024; };
@@ -234,8 +276,9 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
             const auto action = self->actions[static_cast<std::size_t>(result.selected[self->action_field])];
             std::vector<std::size_t> reviewed;
             reviewed.reserve(self->issue_fields.size());
+            const bool review_all = self->review_all_field && result.checked[*self->review_all_field];
             for (std::size_t index = 0; index < self->issue_fields.size(); ++index)
-                if (result.checked[self->issue_fields[index]])
+                if (review_all || result.checked[self->issue_fields[index]])
                     reviewed.push_back(index);
             std::vector<std::size_t> conflicts;
             const auto conflict_action = action == ConsentAction::SkipConflict || action == ConsentAction::KeepBoth ||
@@ -251,8 +294,6 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
                         return DialogVeto{"Keep both requires a valid native basename for every conflict.", field};
                     names.push_back(std::move(*parsed));
                 }
-            } else {
-                conflicts.clear();
             }
             auto bound = self->model->bind(action, std::move(reviewed), std::move(conflicts), std::move(names));
             if (!bound.value())
@@ -304,9 +345,10 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
 
 FilesOperationReviewDialog::FilesOperationReviewDialog(ckv::ui::Application &application, ckv::widgets::Desktop &desktop,
     const ckv::ui::StandardRoles &roles, ck::files::OperationReviewModel::Pointer model,
-    ck::files::NameEncoding destination_encoding, Completion completion)
+    ck::files::NameEncoding destination_encoding, Completion completion,
+    ck::files::FrozenInventory::Pointer inventory, std::function<bool(ConsentAction)> supports_action)
     : state_(std::make_shared<State>(application, desktop, roles, std::move(model), destination_encoding,
-                                     std::move(completion))) {
+                                     std::move(completion), std::move(inventory), std::move(supports_action))) {
     state_->present();
 }
 

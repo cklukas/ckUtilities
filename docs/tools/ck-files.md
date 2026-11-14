@@ -97,9 +97,13 @@ clipboard.
 - Rename, create-folder, create-empty-file, hard-link, and qualified symbolic-link actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Hard links are regular-file-only, identity-bound, no-replace mutations, flushed before success, and currently target the selected file's pane. POSIX symbolic links store an opaque target without normalization or traversal; Windows keeps this command disabled until handle-relative reparse publication is qualified. **Inspect link target** reads bounded POSIX link or Windows reparse metadata from the held object without following or executing it; opaque Windows payloads remain explicitly opaque. Case-only
   renames and platform-specific name rules are capability-checked rather than
   silently normalized.
-- Copy and move planning that shows the exact sources, destination, conflicts,
-  metadata/stream preservation, unresolved risks, and expected losses before
-  execution. Conflict choices are scoped to the reviewed job.
+- Copy and move review identifies the source files affected by conflicts or
+  preservation losses. For a batch of individual files, **Keep existing
+  targets and skip conflicts** leaves the occupied targets and their sources
+  in place. Files transfers the other items once you acknowledge their listed
+  losses. You can acknowledge all listed losses with one checkbox.
+  **Choose another destination** opens the location editor for the receiving
+  pane. Files asks for a fresh review if the approved transfer changes.
 - Cancellable worker-owned jobs with honest progress, per-item outcomes,
   source/destination identity revalidation, durable journal boundaries, and
   explicit committed, retained, skipped, failed, and indeterminate results.

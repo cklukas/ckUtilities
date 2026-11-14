@@ -1219,6 +1219,91 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
                text.find(".ck-move-journal-") != std::string::npos && text.find("State: complete") != std::string::npos;
     });
 }
+CK_TEST(files_app_keep_existing_moves_only_the_nonconflicting_marked_file) {
+    Fixture f;
+    const auto root = f.scratch.path() / "right";
+    NativeFileSystem filesystem;
+    const auto destination = filesystem.open_native_directory(address(root));
+#ifdef _WIN32
+    const auto name = NativeName::from_windows(u"left-item-0");
+#else
+    const auto name = NativeName::from_posix("left-item-0");
+#endif
+    if (!destination.value() || !name)
+        throw std::runtime_error("cannot open conflict fixture destination");
+    {
+        const auto existing = (*destination.value())->create_child_file(*name);
+        if (!existing.value())
+            throw std::runtime_error("cannot seed occupied target");
+        const auto finished = (*existing.value())->finish_content_writes();
+        CK_CHECK(finished.value() && *finished.value());
+    }
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Insert));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Down));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Insert));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 2);
+    CK_CHECK(f.command("ck.files.move"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+    const auto painted = f.painted();
+    CK_CHECK(painted.find("left-item-0") != std::string::npos &&
+        painted.find("existing file") != std::string::npos);
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1 && checks.size() >= 2);
+    checks.back()->set_checked(0, true); // Acknowledge all listed preservation losses.
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    combos.front()->set_selected_index(2);
+    CK_CHECK(apply != nullptr && apply->activate_mnemonic("a"));
+    const auto source = f.scratch.path() / "left";
+    f.until([&] {
+        return !f.app->pending(0) && !f.app->pending(1) &&
+            f.app->status(0).find("1 conflict skipped") != std::string::npos &&
+            !std::filesystem::exists(source / "left-item-1");
+    });
+    CK_CHECK(std::filesystem::file_size(root / "left-item-0") == 0);
+    CK_CHECK(std::filesystem::file_size(source / "left-item-0") == 1);
+    CK_CHECK(std::filesystem::file_size(root / "left-item-1") == 1);
+}
+
+CK_TEST(files_app_choose_another_destination_opens_the_other_pane_location_editor) {
+    Fixture f;
+    f.loaded();
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    CK_CHECK(combos.size() == 1);
+    combos.front()->set_selected_index(1);
+    CK_CHECK(apply != nullptr && apply->activate_mnemonic("a"));
+    f.until([&] { return f.app->location_editor_pending(); });
+    f.editor_input()->set_text(f.path_text(f.scratch.path()));
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->location_editor_pending(); });
+    f.loaded();
+    CK_CHECK(f.app->location(0)->root_address() == address(f.scratch.path() / "left"));
+    CK_CHECK(f.app->location(1)->root_address() == address(f.scratch.path()));
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+}
+
 #if defined(__APPLE__)
 CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)
 #else

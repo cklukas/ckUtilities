@@ -35,6 +35,9 @@ struct FilesOperationExecutionRequest final {
     std::optional<ck::files::ConsentReceipt> receipt;
 };
 
+// Actions implemented by the current Files transfer worker for this evidence.
+bool files_transfer_action_supported(const FilesOperationReviewEvidence& evidence, ck::files::ConsentAction action);
+
 enum class FilesOperationExecutionSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
 enum class FilesOperationExecutionState {
     Complete,
@@ -69,6 +72,7 @@ struct FilesOperationExecutionReply final {
     ck::files::OperationBatchResult result;
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
+    std::vector<std::size_t> skipped_items;
 };
 
 class FilesOperationExecutionService final {

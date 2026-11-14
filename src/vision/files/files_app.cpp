@@ -367,6 +367,7 @@ struct FilesApp::State {
     using PlanningCompletion = std::function<void(ck::files::Observation<ck::files::ConsentReceipt>,
         FilesOperationReviewEvidence::Pointer)>;
     PlanningCompletion operation_planning_completion;
+    bool operation_planning_is_transfer = false;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -2444,13 +2445,6 @@ struct FilesApp::State {
         planning.projection_policy.require_unhandled_metadata_consent = true;
         const auto revalidate = [this, source_pane, destination_pane, source_navigation, destination_navigation](
                                     const ck::files::ConsentReceipt &receipt) {
-            if (receipt.action != ck::files::ConsentAction::Proceed &&
-                receipt.action != ck::files::ConsentAction::ContinueWithListedLosses)
-                return ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
-                    ck::files::ObservationState::Unsupported,
-                    {ck::files::ErrorDomain::Adapter,
-                     static_cast<std::int64_t>(ck::files::AdapterError::ProviderReviewRequired),
-                     "files_app.copy_decision"});
             if (panes[source_pane].navigation != source_navigation || panes[destination_pane].navigation != destination_navigation ||
                 !panes[source_pane].stamp.current() || !panes[destination_pane].stamp.current())
                 return ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
@@ -2471,8 +2465,12 @@ struct FilesApp::State {
                 labels();
                 return;
             }
-            if (result.value()->action == ck::files::ConsentAction::Cancel ||
-                result.value()->action == ck::files::ConsentAction::ChooseAnotherDestination) {
+            if (result.value()->action == ck::files::ConsentAction::ChooseAnotherDestination) {
+                if (panes[destination_pane].navigation == destination_navigation)
+                    show_location(destination_pane);
+                return;
+            }
+            if (result.value()->action == ck::files::ConsentAction::Cancel) {
                 labels();
                 return;
             }
@@ -2499,7 +2497,7 @@ struct FilesApp::State {
             labels();
         };
         if (!submit_operation_planning(std::move(planning), panes[destination_pane].encoding,
-                                      revalidate, completion)) {
+                                      revalidate, completion, true)) {
             panes[source_pane].error = operation == ck::files::FileOperation::Move
                 ? "Move planning is unavailable" : "Copy planning is unavailable";
             labels();
@@ -2654,9 +2652,11 @@ struct FilesApp::State {
             });
     }
     void show_location() {
-        if (!can_edit_location(active))
+        show_location(active);
+    }
+    void show_location(std::size_t pane) {
+        if (!can_edit_location(pane))
             return;
-        const auto pane = active;
         const auto navigation = panes[pane].navigation;
         const auto service_limits = services[pane]->limits();
         FilesLocationTextLimits limits;
@@ -3396,17 +3396,25 @@ struct FilesApp::State {
         const auto encoding = *operation_planning_encoding;
         auto revalidate = std::move(operation_planning_revalidation);
         auto completion = std::move(operation_planning_completion);
+        const bool transfer = std::exchange(operation_planning_is_transfer, false);
         operation_planning_request.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
             const auto fallback = completion;
+            const auto inventory = reply.evidence ? reply.evidence->inventory : nullptr;
+            std::function<bool(ck::files::ConsentAction)> supports_action;
+            if (transfer && reply.evidence)
+                supports_action = [evidence = reply.evidence](auto action) {
+                    return files_transfer_action_supported(*evidence, action);
+                };
             auto deliver = [deliver_result = std::move(completion), evidence = std::move(reply.evidence)](
                                ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
                 deliver_result(std::move(result), std::move(evidence));
             };
-            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(deliver)))
+            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(deliver),
+                                  inventory, std::move(supports_action)))
                 fallback(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
                     ck::files::ObservationState::Failed,
                     {ck::files::ErrorDomain::Adapter,
@@ -3457,6 +3465,15 @@ struct FilesApp::State {
         const bool source_current = still_displays(source, origin.source_navigation);
         const bool destination_current = operation != ck::files::FileOperation::Delete &&
             still_displays(destination, origin.destination_navigation);
+        const auto skipped = reply.skipped_items.empty() ? std::string{} :
+            std::to_string(reply.skipped_items.size()) +
+                (reply.skipped_items.size() == 1 ? " conflict skipped" : " conflicts skipped");
+        if (reply.state == FilesOperationExecutionState::Complete && reply.result.items.empty() && !skipped.empty()) {
+            if (source_current)
+                panes[source].error = skipped;
+            labels();
+            return;
+        }
         const auto refresh_affected = [&](std::size_t pane) {
             panes[pane].refresh_failed = true;
             return refresh(pane);
@@ -3482,11 +3499,14 @@ struct FilesApp::State {
                 auto detail = reply.state == FilesOperationExecutionState::RetainedSource
                     ? retention_message() : std::string(label) + " completed";
                 detail += "; refresh could not be started";
+                if (!skipped.empty())
+                    detail += ". " + skipped;
                 panes[source].error = std::move(detail);
                 if (destination_current)
                     panes[destination].error = panes[source].error;
-            } else if (reply.state == FilesOperationExecutionState::RetainedSource) {
-                const auto detail = retention_message();
+            } else if (reply.state == FilesOperationExecutionState::RetainedSource || !skipped.empty()) {
+                const auto detail = reply.state == FilesOperationExecutionState::RetainedSource
+                    ? retention_message() + (skipped.empty() ? "" : ". " + skipped) : skipped;
                 panes[source].error = detail;
                 panes[source].change_error = true; // Keep the outcome through the queued refresh.
                 if (destination_current) {
@@ -3516,6 +3536,8 @@ struct FilesApp::State {
             }
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
                 detail += ": worker stopped";
+            if (!skipped.empty())
+                detail += ". " + skipped;
             panes[source].error = std::move(detail);
         }
         labels();
@@ -3890,7 +3912,8 @@ struct FilesApp::State {
 
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
         ck::files::NameEncoding destination_encoding, FilesApp::OperationRevalidation revalidate,
-        FilesOperationReviewDialog::Completion completion) {
+        FilesOperationReviewDialog::Completion completion, ck::files::FrozenInventory::Pointer inventory = {},
+        std::function<bool(ck::files::ConsentAction)> supports_action = {}) {
         if (closing || modal_pending() || !model || !revalidate || !completion)
             return false;
         const auto weak = std::weak_ptr<void>(lifetime);
@@ -3914,12 +3937,12 @@ struct FilesApp::State {
                     }
                 }
                 delivered_completion(std::move(result));
-            });
+            }, std::move(inventory), std::move(supports_action));
         return true;
     }
     template<class Request>
     bool submit_operation_planning(Request request, ck::files::NameEncoding destination_encoding,
-        FilesApp::OperationRevalidation revalidate, PlanningCompletion completion) {
+        FilesApp::OperationRevalidation revalidate, PlanningCompletion completion, bool transfer = false) {
         if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
             !planning_service->running())
             return false;
@@ -3930,6 +3953,7 @@ struct FilesApp::State {
         operation_planning_encoding = destination_encoding;
         operation_planning_revalidation = std::move(revalidate);
         operation_planning_completion = std::move(completion);
+        operation_planning_is_transfer = transfer;
         labels();
         return true;
     }

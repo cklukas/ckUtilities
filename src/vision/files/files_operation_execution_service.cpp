@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <numeric>
 #include <stdexcept>
 
 namespace ck::vision {
@@ -36,11 +37,15 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
            (deletion ? !request.destination_service && !request.reviewed && !request.receipt
                      : request.destination_service && request.destination_service != request.source_service &&
                            request.destination_navigation.valid() && request.destination_stamp.current() &&
-                           request.policy.copy_limits.valid() && request.reviewed && request.reviewed->plan &&
-                           request.reviewed->plan->operation() == request.operation && request.receipt &&
+                           request.policy.copy_limits.valid() && request.reviewed && request.reviewed->inventory &&
+                           request.reviewed->plan && request.reviewed->plan->operation() == request.operation &&
+                           request.receipt && request.reviewed->plan->receipt_matches(*request.receipt) &&
                            (request.receipt->action == ck::files::ConsentAction::Proceed ||
-                            request.receipt->action == ck::files::ConsentAction::ContinueWithListedLosses) &&
-                           request.reviewed->plan->receipt_matches(*request.receipt));
+                            request.receipt->action == ck::files::ConsentAction::ContinueWithListedLosses ||
+                            (request.receipt->action == ck::files::ConsentAction::SkipConflict &&
+                             request.reviewed->inventory->mount_policy() == ck::files::InventoryMountPolicy::DirectObjects &&
+                             request.reviewed->plan->skips_conflicts_with_reviewed_losses(
+                                 request.receipt->reviewed_issues, request.receipt->resolved_conflicts))));
 }
 
 FilesOperationExecutionState execution_state(ck::files::OperationBatchState state,
@@ -66,6 +71,22 @@ FilesOperationExecutionState execution_state(ck::files::OperationBatchState stat
 }
 
 } // namespace
+
+bool files_transfer_action_supported(const FilesOperationReviewEvidence& evidence, ck::files::ConsentAction action) {
+    using namespace ck::files;
+    if (action == ConsentAction::Cancel || action == ConsentAction::ChooseAnotherDestination ||
+        action == ConsentAction::Proceed || action == ConsentAction::ContinueWithListedLosses)
+        return true;
+    if (action != ConsentAction::SkipConflict || !evidence.plan || !evidence.inventory ||
+        evidence.inventory->mount_policy() != InventoryMountPolicy::DirectObjects)
+        return false;
+    // Ask the same plan validator used by admission, with all rows
+    // acknowledged, to see whether this action can ever be submitted.
+    std::vector<std::size_t> issues(evidence.plan->issues().size()), conflicts(evidence.plan->conflicts().size());
+    std::iota(issues.begin(), issues.end(), 0);
+    std::iota(conflicts.begin(), conflicts.end(), 0);
+    return evidence.plan->skips_conflicts_with_reviewed_losses(issues, conflicts);
+}
 
 struct FilesOperationExecutionService::State final {
     struct Handoff final {
@@ -350,12 +371,47 @@ struct FilesOperationExecutionService::State final {
         value.policy.allow_unhandled_metadata_loss =
             revalidated.value()->action == ck::files::ConsentAction::ContinueWithListedLosses;
 
+        std::vector<ck::files::HeldChild::Pointer> direct_sources;
+        std::vector<ck::files::NativeName> direct_names;
+        std::vector<std::size_t> direct_items;
+        if (!recursive) {
+            std::vector<bool> skipped(sources->sources().size());
+            if (revalidated.value()->action == ck::files::ConsentAction::SkipConflict)
+                for (const auto& conflict : fresh.plan->conflicts())
+                    skipped[conflict.item] = true;
+            for (const auto index : revalidated.value()->reviewed_issues) {
+                if (!skipped[fresh.plan->issues()[index].item]) {
+                    value.policy.allow_unhandled_metadata_loss = true;
+                    break;
+                }
+            }
+            for (std::size_t i = 0; i < skipped.size(); ++i) {
+                if (skipped[i]) {
+                    result.skipped_items.push_back(i);
+                } else {
+                    direct_sources.push_back(sources->sources()[i]);
+                    direct_names.push_back(fresh.destination_names[i]);
+                    direct_items.push_back(i);
+                }
+            }
+            sources.reset();
+            if (direct_sources.empty()) {
+                result.result.state = ck::files::OperationBatchState::Complete;
+                result.state = FilesOperationExecutionState::Complete;
+                emit(std::move(result));
+                return;
+            }
+        }
+        const auto remap_direct_items = [&] {
+            for (auto& item : result.result.items)
+                item.item = direct_items[item.item];
+        };
+
         if (value.operation == ck::files::FileOperation::Move && !recursive) {
             ck::files::NativeOperationMoveBatchRequest move;
-            move.sources = sources->sources();
-            sources.reset();
+            move.sources = std::move(direct_sources);
             move.destination = std::move(handoff->destination_result->directory);
-            move.destination_names = fresh.destination_names;
+            move.destination_names = std::move(direct_names);
             move.journal_root = std::move(value.journal_root);
             move.journal_id = value.journal_id;
             move.journal_limits = value.policy.journal_limits;
@@ -372,6 +428,7 @@ struct FilesOperationExecutionService::State final {
                    job->state() == ck::files::OperationBatchState::Running)
                 job->advance(stop_token);
             result.result = job->result();
+            remap_direct_items();
             result.state = execution_state(job->state(), stop_token.stop_requested());
             if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
                 result.error = first_batch_failure(result.result);
@@ -470,11 +527,10 @@ struct FilesOperationExecutionService::State final {
             return;
         }
         ck::files::NativeOperationCopyBatchRequest copy;
-        copy.sources = sources->sources();
-        sources.reset();
+        copy.sources = std::move(direct_sources);
         copy.destination = std::move(handoff->destination_result->directory);
         copy.destination_address = handoff->destination_result->address;
-        copy.destination_names = fresh.destination_names;
+        copy.destination_names = std::move(direct_names);
         copy.journal_root = std::move(value.journal_root);
         copy.journal_id = value.journal_id;
         copy.policy = value.policy;
@@ -492,6 +548,7 @@ struct FilesOperationExecutionService::State final {
                job->state() != ck::files::OperationBatchState::NeedsReconciliation)
             job->advance(stop_token);
         result.result = job->result();
+        remap_direct_items();
         result.state = execution_state(job->state(), stop_token.stop_requested());
         if (result.state != FilesOperationExecutionState::Complete && !result.result.items.empty())
             result.error = first_batch_failure(result.result);

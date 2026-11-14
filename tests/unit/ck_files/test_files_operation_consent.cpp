@@ -153,6 +153,25 @@ CK_TEST(operation_plan_from_frozen_inventory_preserves_hard_link_aliases) {
         ObservationState::Failed);
 }
 
+CK_TEST(operation_consent_skip_conflicts_requires_consent_only_for_transferred_items) {
+    auto first = item(21), second = item(22), third = item(23);
+    second.source.scope = first.source.scope;
+    third.source.scope = first.source.scope;
+    const auto operation = plan({first, second, third}, {
+        {0, PreservationFeature::MainData, PreservationIssueState::Unknown, PreservationConsequence::Uncertain, true},
+        {1, PreservationFeature::ExtendedAttributes, PreservationIssueState::Missing,
+            PreservationConsequence::MetadataLoss, false}
+    }, {{0, DestinationConflictKind::ExistingFile}, {2, DestinationConflictKind::ExistingFile}});
+    CK_CHECK(!operation->bind(ConsentAction::SkipConflict, {}, {0, 1}).value());
+    CK_CHECK(!operation->bind(ConsentAction::SkipConflict, {1}, {0}).value());
+    CK_CHECK(!operation->bind(ConsentAction::SkipConflict, {1}, {0, 0}).value());
+    const auto receipt = take(operation->bind(ConsentAction::SkipConflict, {1}, {0, 1}));
+    CK_CHECK(operation->receipt_matches(receipt));
+    auto unchecked = receipt;
+    unchecked.reviewed_issues.clear();
+    CK_CHECK(!operation->receipt_matches(unchecked));
+}
+
 CK_TEST(operation_plan_from_frozen_inventory_rejects_incomplete_topology_evidence) {
     const auto inventory = inventory_with_hard_link_aliases();
     auto groups = inventory->hard_link_groups();

@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace ck::vision {
 
@@ -22,7 +23,9 @@ class FilesOperationReviewDialog final {
 
     FilesOperationReviewDialog(ckv::ui::Application &application, ckv::widgets::Desktop &desktop,
         const ckv::ui::StandardRoles &roles, ck::files::OperationReviewModel::Pointer model,
-        ck::files::NameEncoding destination_encoding, Completion completion);
+        ck::files::NameEncoding destination_encoding, Completion completion,
+        std::shared_ptr<const ck::files::FrozenInventory> inventory = {},
+        std::function<bool(ck::files::ConsentAction)> supports_action = {});
     ~FilesOperationReviewDialog();
     FilesOperationReviewDialog(const FilesOperationReviewDialog &) = delete;
     FilesOperationReviewDialog &operator=(const FilesOperationReviewDialog &) = delete;
