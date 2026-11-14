@@ -1213,7 +1213,8 @@ struct FilesApp::State {
         }
         if (command == "ck.files.copy" || command == "ck.files.move") {
             const bool move = command == "ck.files.move";
-            if (operation_execution_request || volume_archive_execution_request || volume_archive_planning_request ||
+            if (operation_planning_request || operation_execution_request ||
+                volume_archive_execution_request || volume_archive_planning_request ||
                 (volume_archive_review_dialog && !volume_archive_review_dialog->completed()))
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: another operation is running");
             if (panes[active].volume_view) {
@@ -1257,17 +1258,28 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: destination pane is not ready");
                 return FilesCommandAvailability::available();
             }
-            if (!execution_service || !operation_journal_root)
+            if (!planning_service || !execution_service || !operation_journal_root)
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker is not configured");
+            if (!planning_service->running() || !execution_service->running())
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: operation worker stopped");
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");
-            if (panes[active].selection.invalidated_refresh_marks)
+            const auto &selection = panes[active].selection;
+            if (selection.invalidated_refresh_marks)
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: review the marks lost during refresh");
-            if (panes[active].selection.invalidated_refresh_focus &&
-                (!panes[active].selection.marks || !panes[active].selection.marks->total))
+            if (selection.invalidated_refresh_focus && (!selection.marks || !selection.marks->total))
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: choose Use current row");
+            if (selection.state == ck::files::PaneSourcesState::HiddenMarksNeedReview)
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: reveal or clear hidden marks");
+            if (selection.origin == ck::files::PaneSourcesOrigin::Marks) {
+                if (selection.state != ck::files::PaneSourcesState::Ready || !selection.candidates)
+                    return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: marked entries are not ready");
+                if (selection.candidates > ck::files::IndexedSourceLimits{}.held_entries)
+                    return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: too many entries are marked");
+                return FilesCommandAvailability::available();
+            }
             if (!panes[active].model.target())
                 return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: no entry is selected");
             const auto kind = panes[active].model.cursor_kind();
@@ -1449,7 +1461,7 @@ struct FilesApp::State {
                     }
                 }
             };
-            if (p.model.target())
+            if (p.model.target() || p.selection.origin == ck::files::PaneSourcesOrigin::Marks)
                 report_first_unavailable(selected_contextual);
             else
                 report_first_unavailable(empty_listing_contextual);
@@ -2464,17 +2476,6 @@ struct FilesApp::State {
         watch();
         labels();
     }
-    bool can_prepare_copy() const {
-        if (panes[active].volume_view)
-            return archive_destination_ready(active) && panes[active].model.volume_cursor().has_value();
-        if (!execution_service || !operation_journal_root || active > 1 ||
-            operation_execution_request || !ready(active) || !ready(1 - active))
-            return false;
-        if (!panes[active].model.target().has_value())
-            return false;
-        const auto kind = panes[active].model.cursor_kind();
-        return kind == ck::files::ObjectKind::RegularFile || kind == ck::files::ObjectKind::Directory;
-    }
     bool start_transfer(FilesOperationExecutionRequest execution, std::size_t source, std::size_t destination) {
         const OperationExecutionOrigin origin{execution.operation, source,
             execution.source_navigation, execution.destination_navigation};
@@ -2498,13 +2499,15 @@ struct FilesApp::State {
     }
 
     void prepare_copy(ck::files::FileOperation operation) {
+        if (operation != ck::files::FileOperation::Copy && operation != ck::files::FileOperation::Move)
+            return;
+        const auto command = operation == ck::files::FileOperation::Copy ? "ck.files.copy" : "ck.files.move";
+        if (!availability(command).enabled)
+            return;
         if (operation == ck::files::FileOperation::Copy && panes[active].volume_view) {
             prepare_volume_archive();
             return;
         }
-        if ((operation != ck::files::FileOperation::Copy && operation != ck::files::FileOperation::Move) ||
-            !can_prepare_copy())
-            return;
         const auto source_pane = active;
         const auto destination_pane = 1 - active;
         const auto source_navigation = panes[source_pane].navigation;

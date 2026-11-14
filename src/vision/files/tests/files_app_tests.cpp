@@ -877,15 +877,21 @@ CK_TEST(files_app_filtering_keeps_hidden_marks_explicit_and_clear_all_removes_th
     f.loaded();
     CK_CHECK(f.app->model(0).row_count() == 1 && f.app->selection(0).marks->hidden == 99);
     CK_CHECK(f.app->status(0).find("99 hidden; review required") != std::string::npos);
+    CK_CHECK(!f.command("ck.files.copy") && !f.command("ck.files.move"));
+    CK_CHECK(f.app->availability("ck.files.copy").reason == "Copy unavailable: reveal or clear hidden marks");
+    CK_CHECK(f.app->availability("ck.files.move").reason == "Move unavailable: reveal or clear hidden marks");
+    CK_CHECK(f.app->status(0).find("Hint: Copy unavailable: reveal or clear hidden marks") != std::string::npos);
     CK_CHECK(f.command("ck.files.unmark_visible"));
     f.loaded();
     CK_CHECK(f.app->selection(0).marks->total == 99 && !*f.app->model(0).cursor_marked());
-    CK_CHECK(f.command("ck.files.clear_marks"));
-    f.loaded();
-    CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.clear_marks"));
     view.display_substring = "no item matches";
     CK_CHECK(f.app->change_view(0, view));
     f.loaded();
+    CK_CHECK(f.app->model(0).row_count() == 0 && f.app->selection(0).marks->hidden == 99);
+    CK_CHECK(f.app->status(0).find("Hint: Copy unavailable: reveal or clear hidden marks") != std::string::npos);
+    CK_CHECK(f.command("ck.files.clear_marks"));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 0 && !f.command("ck.files.clear_marks"));
     CK_CHECK(f.app->model(0).row_count() == 0 && !f.command("ck.files.toggle_mark") &&
              !f.command("ck.files.mark_visible"));
     CK_CHECK(f.command("ck.files.view_options"));
@@ -895,7 +901,43 @@ CK_TEST(files_app_filtering_keeps_hidden_marks_explicit_and_clear_all_removes_th
     CK_CHECK(f.app->change_view(0, view));
     f.loaded();
     CK_CHECK(f.app->model(0).row_count() == 100 && f.app->target(0));
+    CK_CHECK(f.app->availability("ck.files.copy").enabled && f.app->availability("ck.files.move").enabled);
 }
+#ifndef _WIN32
+CK_TEST(files_app_transfer_planning_uses_the_marked_file_with_the_cursor_on_a_link) {
+    Fixture f;
+    f.loaded();
+    NativeFileSystem filesystem;
+    const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left"));
+    const auto name = NativeName::from_posix("zz-link");
+    if (!source.value() || !name)
+        throw std::runtime_error("cannot open marked transfer fixture");
+    const auto link = (*source.value())->create_symbolic_link(SymbolicLinkTarget{std::string("left-item-0")}, *name);
+    if (!link.value() || !*link.value())
+        throw std::runtime_error("cannot create marked transfer fixture link");
+    CK_CHECK(f.command("ck.files.refresh"));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.toggle_mark"));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 1);
+    CK_CHECK(f.key(ckv::Key::End, ckv::Modifier::Ctrl));
+    f.until([&] { return !f.app->pending(0) && f.app->model(0).cursor_kind() == ObjectKind::SymbolicLink; });
+    CK_CHECK(f.app->availability("ck.files.copy").enabled && f.app->availability("ck.files.move").enabled);
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    const auto review = f.painted();
+    CK_CHECK(review.find("Review file operation") != std::string::npos);
+    CK_CHECK(review.find("left-item-0 · ") != std::string::npos);
+    CK_CHECK(review.find("zz-link · ") == std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->operation_review_pending(); });
+    f.loaded();
+    CK_CHECK(f.command("ck.files.clear_marks"));
+    f.loaded();
+    CK_CHECK(!f.command("ck.files.copy") && !f.command("ck.files.move"));
+    CK_CHECK(f.app->availability("ck.files.copy").reason == "Copy unavailable: selected row is not a file or folder");
+}
+#endif
 CK_TEST(files_app_pane_commands_do_not_run_from_unrelated_input_or_view_options) {
     Fixture f;
     f.loaded();

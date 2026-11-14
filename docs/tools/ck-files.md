@@ -86,6 +86,8 @@ clipboard.
   marks and a lost cursor binding. Update or clear the marks before starting
   Copy or Move. Choose **Marks → Use current row** to confirm
   the row under the cursor if its previous binding was lost.
+  Copy and Move use the marked entries when marks are present. Reveal or clear
+  marks hidden by a filter to enable either command.
 - Keyboard and mouse navigation, focused-row identity, mark/unmark, range
   selection, select all, invert, clear selection, and an always-visible exact
   source count for operations.
