@@ -14,6 +14,17 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Interactive xterm mouse check
+
+The user tested the verified Linux Release build `f70acbc` with ckVision
+`b8d412a` in a visible xterm 398 window forwarded to the Mac through XQuartz.
+Both executable hashes matched the prior timing-controlled run. The Files
+process ran under UID 501 in its own PTY with separate fixture panes and
+settings. The user reported that the mouse worked and asked to close the
+item for Files and continue with the other work packages. The interactive
+check used manual click timing. The timed results below remain part of the
+qualification record.
+
 ## 2026-11-11 — Same-name replacement and the first xterm click
 
 A real Linux xterm window verified the keyboard path when a file at the
@@ -29,8 +40,7 @@ The same Release build failed a separate startup mouse check. With xterm
 cell-size or text-area metric. The first click arrived as pixel coordinates
 and left the original pane active. The matching ckVision POSIX wait omits
 the capability probe deadline, so the quiet terminal can stay in pixel mode
-until the click wakes the wait. A matching SDK regression and real-window
-retest are pending.
+until the click wakes the wait. See the [interactive follow-up](#2026-11-14--interactive-xterm-mouse-check).
 
 In a timed control, the pointer was placed before the application started.
 The first press arrived 478 ms after the probe began, beyond its 250 ms
