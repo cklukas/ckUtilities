@@ -1,5 +1,19 @@
 # Files implementation evidence
 
+## 2026-11-14 — Honor the explicit ckVision SDK prefix
+
+Changing `CKTOOLS_CKVISION_PREFIX` in an existing build now selects the
+new SDK even when CMake has cached the previous `ckvision_DIR`. The
+configuration rejects a package redirect outside the requested prefix.
+
+Configure checks on macOS, Linux, and Windows reproduced the stale
+selection and verified the corrected archive path in both directions.
+The macOS and Linux checks switched between normal and ASan archives.
+The Windows check switched between two installed SDKs on `V:`. All
+three checks covered default lookup, a missing prefix, and an outside
+redirect. Receipt SHA-256
+`697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
+
 ## 2026-11-11 — Same-name replacement and the first xterm click
 
 A real Linux xterm window verified the keyboard path when a file at the

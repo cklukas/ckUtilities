@@ -36,16 +36,19 @@ set(CKTOOLS_TERMINAL_CONFIG_PARENT "" CACHE PATH
 
 function(cktools_require_ckvision)
   if(CKTOOLS_CKVISION_PREFIX)
-    # A qualification or release build that names an SDK must not silently
-    # resolve a different package from a system prefix.  PATHS plus
-    # NO_DEFAULT_PATH keeps the dependency provenance bound to the requested
-    # installed SDK while still allowing ordinary developer builds to use the
-    # platform's normal package search below.
-    get_filename_component(_ckvision_prefix
-                           "${CKTOOLS_CKVISION_PREFIX}" ABSOLUTE
-                           BASE_DIR "${CMAKE_SOURCE_DIR}")
+    file(REAL_PATH "${CKTOOLS_CKVISION_PREFIX}" _ckvision_prefix
+         BASE_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    # The explicit prefix takes precedence over a previously cached package
+    # directory, including when switching between sanitizer SDKs.
+    set(ckvision_DIR "")
     find_package(ckvision 1.5.0 CONFIG REQUIRED
                  PATHS "${_ckvision_prefix}" NO_DEFAULT_PATH)
+    file(REAL_PATH "${ckvision_CONFIG}" _ckvision_config)
+    cmake_path(IS_PREFIX _ckvision_prefix "${_ckvision_config}" NORMALIZE _ckvision_in_prefix)
+    if(NOT _ckvision_in_prefix)
+      message(FATAL_ERROR
+              "Requested ckVision SDK at '${_ckvision_prefix}', but CMake loaded '${_ckvision_config}'.")
+    endif()
   else()
     find_package(ckvision 1.5.0 CONFIG REQUIRED)
   endif()
