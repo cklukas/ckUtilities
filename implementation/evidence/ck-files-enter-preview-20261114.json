@@ -60,5 +60,28 @@
     "ckdocs_strict_pages": 27,
     "utility_guide_contract": "passed for all 10 guides"
   },
-  "open": ["Current Windows ordinary-user and Linux runtime, sanitizers, and Linux/CI regeneration of the guide screenshots"]
+  "macos_arm64_matched_sdk_sanitizers": {
+    "frontend_manifest_sha256": "bb52d0054119d6d970ec7d1b4b41c7a2ac0586b04325a226ca5147239fd7568d",
+    "backend_manifest_sha256": "1ae3f61c0d646adaa1392b7495250ff49255568b58f27afc6de7d7031d9fa799",
+    "configuration": "Debug, with the backend and ckVision SDK built under the same sanitizer profile and the same frontend source verified after each build",
+    "address_and_undefined": {
+      "build_start_utc": "2026-11-14T14:26:41Z",
+      "build_end_utc": "2026-11-14T14:27:39Z",
+      "build_elapsed_seconds": 58.48,
+      "test_executable_sha256": "565070d529d3d971291b7f34bb4bfa4f21386546a0cacc116184b685a32ce9f6",
+      "files_and_keymap_ctest_entries_passed": 111,
+      "ctest_elapsed_seconds": 106.69,
+      "ctest_log_sha256": "388d94df2c1642d76da9831a439fe035d70adc1f17ef5f29901e0f83e0398caa"
+    },
+    "thread": {
+      "build_start_utc": "2026-11-14T14:29:28Z",
+      "build_end_utc": "2026-11-14T14:29:48Z",
+      "build_elapsed_seconds": 20.30,
+      "test_executable_sha256": "f94a48bd882b616325367a712fab59213dda275d3c46295f77ec43de14921fe9",
+      "files_and_keymap_ctest_entries_passed": 111,
+      "ctest_elapsed_seconds": 370.81,
+      "ctest_log_sha256": "65e89aa7682e895b14b019b6ee80b55aea658ede314d84c05f4df96cd22b99a3"
+    }
+  },
+  "open": ["Current Windows ordinary-user and Linux runtime, and Linux/CI regeneration of the guide screenshots"]
 }
