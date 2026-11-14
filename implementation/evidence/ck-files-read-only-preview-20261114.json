@@ -25,9 +25,30 @@
     "terminal_stream_sha256": "2cc72eb38705b776f572c16be599aa16417e5700ac1c6904c04581626d10c786",
     "verified": "Enter previews UTF-8 text. Tab and Enter switch to exact hex bytes and back to text. Escape returns to the same two directories. The product exits normally and restores terminal modes."
   },
+  "windows_x64_release_elevated_smoke": {
+    "toolchain": "MSVC v143 14.44, static CRT",
+    "filesystem": "ReFS",
+    "build_start_utc": "2026-11-14T14:28:43.7161000Z",
+    "build_end_utc": "2026-11-14T14:29:52.4188976Z",
+    "build_elapsed_seconds": 68.70,
+    "build_steps": 5,
+    "source_delta_archive_sha256": "7f3bafb90f7678f00993093f7564d94b83966646ae6d67d6f92b013434ec87fe",
+    "test_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "test_executable_sha256": "4b9688441d23218a23219f51a5c8234b29e2b8efafdd69b70f9f1eaf981ec0f8",
+    "product_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\bin\\ck-files.exe",
+    "product_sha256": "6d6fd7bc676a96f78daa8dcc21beee1658a04253fbd1d73189be975057285f40",
+    "passed": ["Text/hex and Enter", "Terminal control bytes and 64 KiB bound", "Stale folder review"]
+  },
+  "windows_ordinary_handoff": {
+    "launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-b46f0f4-ordinary.ps1",
+    "launcher_sha256": "e8a2648f0d3fab5a9329eb20828806b6bf1e39bda833d9c27ed64c51755ecc45",
+    "helper_sha256": "ad51de61ef9865fb0f31eb9abc8982d5232c9e3c68e7c88d24b3cd839cf04685",
+    "modes": ["Suite", "Desktop"],
+    "scope": "Ordinary interactive Windows Terminal, staged with exact executable pins and byte readback. The Suite mode runs the two Files and keymap CTests. Desktop mode exercises Right-to-accept, text/hex, refresh, clipboard, volume rows, and terminal restoration."
+  },
   "verified": [
     "Preview uses the existing bounded worker read and starts in TextView for display-safe UTF-8, with a hex switch for the same bytes.",
     "A file beginning with an escape sequence takes the hex route with no text option. The 64 KiB read limit is visible in the preview footer."
   ],
-  "open": ["Linux, Windows and matched-SDK sanitizer qualification for this revision"]
+  "open": ["Linux, ordinary-user Windows runtime and desktop acceptance, and matched-SDK sanitizer qualification for this revision"]
 }
