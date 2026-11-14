@@ -69,5 +69,70 @@
       "sdk_configuration_sha256": "24d030a1a6bbc538ec094e6523949295300ac75d08e709c524e79044dfa0ee24",
       "executable_receipt_sha256": "b86a566e7138a8c3313ef179720de5ac3b6e16d0a4e9e2f8d61d7fcde1c92e3c"
     }
+  },
+  "linux_arm64_release": {
+    "start_utc": "2026-11-14T18:28:24Z",
+    "end_utc": "2026-11-14T18:32:12Z",
+    "elapsed_seconds": 228.01,
+    "build_actions": 8,
+    "build_log_sha256": "87c863559e6a72a256ad87e64303caa492a43b3056e044b2f78f86ca75c8e0d7",
+    "frontend_manifest_sha256": "b15310abdb48a696d93305cbd3cda201a87f4edb64c90a46d9e9b2384d657c23",
+    "backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+    "soft_open_descriptor_limit": 1024,
+    "executable_receipt_sha256": "f85f61ab7ae5bb4c029b427af46ed8da3f20cf24451211a302f521bcffa5fd77",
+    "focused_log_sha256": "ac1245ac49b3023264bfd8002af9abf2ae03b7bebe10baab855127a99211d377",
+    "ctest_entries_passed": 158,
+    "ctest_junit_sha256": "aa7d61838452348b6e3887f4e0494168a233ede1778a391db8cadfe1f9c5975f"
+  },
+  "linux_xterm": {
+    "result": "pass",
+    "ended_utc": "2026-11-14T18:34:19.541261+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "c856eb09ed325773364c39026e7df443d8f1317dacb298513993db4a332add00",
+    "pid": 1287179,
+    "window": "4194316",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-panes",
+        "sha256": "12e0de2f41593da7e53fdb9d74b3e55c06b0b37644b23fc482bdf8f910bdc6a3"
+      },
+      {
+        "label": "01b-location-proposal",
+        "sha256": "a767fd473eae6aa169fb1d97529953a2dd666a4a2ebc3de00117d33a27d1ca9f"
+      },
+      {
+        "label": "02-preview",
+        "sha256": "74eb9ec0650b3e975d8de8f76e5ba4ffc2ede954430be97d6ffea8836688550c"
+      },
+      {
+        "label": "03-refresh",
+        "sha256": "5e4b93254fdc037a148135c0e91d5ca01b7cadd757f557ad1990a9ddf40e54c3"
+      }
+    ],
+    "actions": [
+      "Open location editor",
+      "Select location input",
+      "Right accepts location completion",
+      "Enter opens completed directory",
+      "Read selected file",
+      "Close preview",
+      "Mark focused row",
+      "Refresh preserves selected identity",
+      "Quit Files"
+    ],
+    "terminal_log_sha256": "99305160e5a095f0862a95f788a6c6e2149bc864cffb37db397338fe02ebc1a9",
+    "scope": "Ordinary-user interactive X11 keyboard and rendering in Debian xterm 398. The blocked-provider case is covered separately by the application regression.",
+    "terminal_mode_restored": true,
+    "process_exit": 0,
+    "receipt_sha256": "bc31fc766bb8e903934797a60ba49c79e12c1c68b3cc20fde14dc57b1492d5f4"
+  },
+  "docs": {
+    "commit": "25fd8e1",
+    "strict_ckdocs_pages": 27,
+    "utility_guides_with_feature_lists_and_embedded_screenshots": 10,
+    "strict_build_log_sha256": "5519068cafa40886fa6d231faab131a45cfb4044a469bf1aaf2399ca21b0e7fc",
+    "guide_verifier_sha256": "bf2694da12ffd4c32bf91778a1f4225bda6195e51dfe47db4c77fb1184d606f7"
   }
 }
