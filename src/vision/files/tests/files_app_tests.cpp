@@ -3482,6 +3482,7 @@ CK_TEST(files_app_location_editor_quit_retirement_and_external_detach_never_subm
         CK_CHECK(f.location_key());
         f.editor_input()->set_text(f.path_text(f.scratch.path() / "right"));
         if (action == 0) {
+            f.until([&] { return !f.completion_services[0]->working(); });
             f.app->request_close();
             CK_CHECK(f.exits == 0);
             f.until([&] { return f.exits == 1; });
@@ -3513,6 +3514,40 @@ CK_TEST(files_app_location_editor_quit_retirement_and_external_detach_never_subm
             }
         }
     }
+}
+CK_TEST(files_app_quit_during_blocked_location_completion_offers_stay_and_exit) {
+    auto gate = std::make_shared<Gate>();
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {},
+              false, false, false, false, false,
+              [gate]() -> Observation<std::shared_ptr<IndexFileFactory>> {
+                  gate->block();
+                  return Observation<std::shared_ptr<IndexFileFactory>>::unavailable(
+                      ObservationState::Denied, {ErrorDomain::Adapter, 42, "injected.completion_workspace"});
+              });
+    struct ReleaseGate {
+        Gate &gate;
+        ~ReleaseGate() { gate.release(); }
+    } release{*gate};
+    f.loaded();
+    const auto before = f.app->location(0);
+    CK_CHECK(f.location_key());
+    f.editor_input()->set_text(f.path_text(f.scratch.path() / "left") + "/left-item-");
+    gate->wait();
+    CK_CHECK(f.completion_services[0]->working());
+    CK_CHECK(f.application.execute_command(f.application.commands().standard().quit));
+    f.until([&] { return f.app->close_confirmation_pending() || f.exits != 0; });
+    CK_CHECK(!f.app->location_editor_pending() && f.app->close_confirmation_pending() && f.exits == 0);
+    CK_CHECK(f.key(ckv::Key::Enter)); // Stay is the default.
+    f.until([&] { return !f.app->close_confirmation_pending(); });
+    CK_CHECK(f.exits == 0 && f.app->location(0) == before && !f.app->pending(0));
+    CK_CHECK(f.command("ck.files.switch_pane") && f.app->active_pane() == 1);
+
+    f.app->request_close();
+    CK_CHECK(f.app->close_confirmation_pending());
+    CK_CHECK(f.alt("x"));
+    f.until([&] { return f.exits == 1; });
+    CK_CHECK(f.completion_services[0]->working()); // The storage call still owns its worker.
+    gate->release();
 }
 CK_TEST(files_app_location_editor_scrolls_after_narrow_resize_and_accepts_through_the_real_go_button) {
     Fixture f;

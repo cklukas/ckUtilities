@@ -4235,8 +4235,11 @@ struct FilesApp::State {
             volume_archive_recovery_cleanup_request || operation_recovery_cleanup_request ||
             panes[0].mutating || panes[1].mutating;
         const bool planning_active = operation_planning_request || volume_archive_planning_request;
-        if (!operation_active && !planning_active && !services[0]->working() && !services[1]->working() &&
-            !volume_request && !volume_archive_recovery_request && !operation_recovery_request) {
+        const bool completion_active = std::any_of(completion_services.begin(), completion_services.end(),
+            [](const FilesCompletionService *service) { return service && service->working(); });
+        if (!operation_active && !planning_active && !completion_active && !services[0]->working() &&
+            !services[1]->working() && !volume_request && !volume_archive_recovery_request &&
+            !operation_recovery_request) {
             finish_exit();
             return;
         }
