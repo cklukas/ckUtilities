@@ -288,6 +288,12 @@ struct FilesApp::State {
         FilesVolumeRecord volume;
         std::shared_ptr<const FilesPaneLocation> destination;
     };
+    struct OperationExecutionOrigin {
+        ck::files::FileOperation kind;
+        std::size_t source_pane;
+        FilesPaneTicket source_navigation;
+        FilesPaneTicket destination_navigation;
+    };
     struct VolumeRequest {
         std::size_t pane;
         FilesPaneTicket navigation;
@@ -355,7 +361,7 @@ struct FilesApp::State {
     std::string operation_recovery_cleanup_error;
     std::unique_ptr<FilesVolumeArchiveReviewDialog> volume_archive_review_dialog;
     std::optional<VolumeArchiveOrigin> volume_archive_origin;
-    std::optional<ck::files::FileOperation> operation_execution_kind;
+    std::optional<OperationExecutionOrigin> operation_execution_origin;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
     FilesApp::OperationRevalidation operation_planning_revalidation;
     FilesOperationReviewDialog::Completion operation_planning_completion;
@@ -776,7 +782,7 @@ struct FilesApp::State {
         operation_review_dialog.reset();
         operation_planning_request.reset();
         operation_execution_request.reset();
-        operation_execution_kind.reset();
+        operation_execution_origin.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
@@ -1281,9 +1287,9 @@ struct FilesApp::State {
         else if (volume_archive_execution_request)
             text = "Creating volume archive...";
         else if (operation_execution_request)
-            text = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
+            text = operation_execution_origin->kind == ck::files::FileOperation::Move
                 ? "Moving to the other pane..."
-                : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                : operation_execution_origin->kind == ck::files::FileOperation::Delete
                     ? "Deleting selected tree..." : "Copying to the other pane...";
         else if (volume_pending(i))
             text = "Reading volume information...";
@@ -1612,9 +1618,9 @@ struct FilesApp::State {
         if (volume_archive_execution_request)
             activity = "Archiving volume";
         else if (operation_execution_request)
-            activity = operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Move
+            activity = operation_execution_origin->kind == ck::files::FileOperation::Move
                 ? "Moving"
-                : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                : operation_execution_origin->kind == ck::files::FileOperation::Delete
                     ? "Deleting" : "Copying";
         else if (volume_pending(0) || volume_pending(1))
             activity = "Reading volumes";
@@ -2048,7 +2054,7 @@ struct FilesApp::State {
                 return false;
             }
             operation_execution_request = submitted.ticket;
-            operation_execution_kind = ck::files::FileOperation::Delete;
+            operation_execution_origin = OperationExecutionOrigin{ck::files::FileOperation::Delete, i, p.navigation, {}};
             p.error.clear();
             labels();
             return true;
@@ -2481,7 +2487,8 @@ struct FilesApp::State {
                 return;
             }
             operation_execution_request = submitted.ticket;
-            operation_execution_kind = operation;
+            operation_execution_origin = OperationExecutionOrigin{
+                operation, source_pane, source_navigation, destination_navigation};
             panes[source_pane].error.clear();
             panes[destination_pane].error.clear();
             labels();
@@ -3431,7 +3438,20 @@ struct FilesApp::State {
             return;
         operation_execution_request.reset();
         scan_operation_recovery();
-        const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
+        const auto origin = *std::exchange(operation_execution_origin, std::nullopt);
+        const auto operation = origin.kind;
+        const auto source = origin.source_pane;
+        const auto destination = 1 - source;
+        const auto still_displays = [&](std::size_t pane, const FilesPaneTicket &navigation) {
+            return panes[pane].navigation == navigation && !panes[pane].volume_view;
+        };
+        const bool source_current = still_displays(source, origin.source_navigation);
+        const bool destination_current = operation != ck::files::FileOperation::Delete &&
+            still_displays(destination, origin.destination_navigation);
+        const auto refresh_affected = [&](std::size_t pane) {
+            panes[pane].refresh_failed = true;
+            return refresh(pane);
+        };
         if (reply.state == FilesOperationExecutionState::Complete ||
             reply.state == FilesOperationExecutionState::RetainedSource) {
             const auto retention_message = [&] {
@@ -3445,12 +3465,8 @@ struct FilesApp::State {
                 }
                 return detail;
             };
-            const auto source = active;
-            panes[source].refresh_failed = true;
-            if (operation != ck::files::FileOperation::Delete)
-                panes[1 - source].refresh_failed = true;
-            const bool source_refreshed = refresh(source);
-            const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - source);
+            const bool source_refreshed = !source_current || refresh_affected(source);
+            const bool destination_refreshed = !destination_current || refresh_affected(destination);
             if (!source_refreshed || !destination_refreshed) {
                 const auto label = operation == ck::files::FileOperation::Move ? "Move" :
                     operation == ck::files::FileOperation::Delete ? "Delete" : "Copy";
@@ -3458,12 +3474,16 @@ struct FilesApp::State {
                     ? retention_message() : std::string(label) + " completed";
                 detail += "; refresh could not be started";
                 panes[source].error = std::move(detail);
-                if (operation != ck::files::FileOperation::Delete)
-                    panes[1 - active].error = panes[source].error;
+                if (destination_current)
+                    panes[destination].error = panes[source].error;
             } else if (reply.state == FilesOperationExecutionState::RetainedSource) {
                 const auto detail = retention_message();
                 panes[source].error = detail;
-                panes[1 - source].error = detail;
+                panes[source].change_error = true; // Keep the outcome through the queued refresh.
+                if (destination_current) {
+                    panes[destination].error = detail;
+                    panes[destination].change_error = true;
+                }
             }
         } else {
             const std::string label = operation == ck::files::FileOperation::Move ? "Move" :
@@ -3484,9 +3504,8 @@ struct FilesApp::State {
             }
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
                 detail += ": worker stopped";
-            panes[active].error = std::move(detail);
+            panes[source].error = std::move(detail);
         }
-        operation_execution_kind.reset();
         labels();
     }
     void pump() {
@@ -3631,10 +3650,10 @@ struct FilesApp::State {
                 if (operation_execution_request && !execution_service->running()) {
                     operation_execution_request.reset();
                     scan_operation_recovery();
-                    panes[active].error = operation_execution_kind &&
-                            *operation_execution_kind == ck::files::FileOperation::Move
+                    const auto origin = *std::exchange(operation_execution_origin, std::nullopt);
+                    panes[origin.source_pane].error = origin.kind == ck::files::FileOperation::Move
                         ? "Move worker stopped"
-                        : operation_execution_kind && *operation_execution_kind == ck::files::FileOperation::Delete
+                        : origin.kind == ck::files::FileOperation::Delete
                             ? "Delete worker stopped" : "Copy worker stopped";
                     labels();
                 }

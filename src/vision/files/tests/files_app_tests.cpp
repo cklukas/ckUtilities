@@ -190,6 +190,7 @@ struct Fixture {
     std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
     std::unique_ptr<FilesOperationPlanningService> planning_service;
     std::unique_ptr<FilesOperationExecutionService> execution_service;
+    std::atomic<bool> hold_execution_wakeup{false};
     std::unique_ptr<FilesVolumeService> volume_service;
     std::unique_ptr<FilesVolumeArchiveService> volume_archive_service;
     std::unique_ptr<FilesVolumeArchiveRecoveryService> volume_archive_recovery_service;
@@ -444,7 +445,10 @@ struct Fixture {
                     throw std::runtime_error("cannot append eligible operation recovery journal");
             }
         }
-        execution_service = std::make_unique<FilesOperationExecutionService>(wake.callback());
+        execution_service = std::make_unique<FilesOperationExecutionService>([this] {
+            if (!hold_execution_wakeup.load())
+                wake.request();
+        });
         planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
         if (qualified_volume || recovery_journal || eligible_archive_recovery) {
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
@@ -1155,9 +1159,17 @@ CK_TEST(files_app_copy_acceptance_executes_after_review_and_refreshes_both_panes
     // The copy adapter declares an explicit portable-metadata boundary; the
     // action order is Cancel, choose destination, continue, skip.
     combos.front()->set_selected_index(2);
+#if defined(__APPLE__)
+    f.hold_execution_wakeup = true;
+#endif
     CK_CHECK(apply->activate_mnemonic("a"));
 #if defined(__APPLE__)
+    f.until([&] { return f.app->status(0).find("Copying to the other pane") != std::string::npos; });
+    CK_CHECK(f.command("ck.files.switch_pane") && f.app->active_pane() == 1);
+    f.hold_execution_wakeup = false;
+    f.wake.request();
     expect_mac_copy_publication_refusal(f, source_before, target_before);
+    CK_CHECK(f.app->status(1).find("Copy needs reconciliation") == std::string::npos);
 #else
     f.until([&] { return std::filesystem::exists(f.scratch.path() / "right" / "left-item-0") &&
                         !f.app->pending(0) && !f.app->pending(1) &&
