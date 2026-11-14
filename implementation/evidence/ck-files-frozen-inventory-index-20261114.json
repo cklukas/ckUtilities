@@ -43,5 +43,48 @@
     "focused_ctest_entries": 4,
     "full_ctest_entries": 114,
     "ctest_junit_sha256": "17f7c948d1f59bcf8f24e2b117289f7fc2df0f56ad02c8696c4f3eb22ba9ee05"
+  },
+  "macos_arm64_matched_sdk_sanitizers": {
+    "asan": {
+      "build": {
+        "start_utc": "2026-11-14T18:14:36Z",
+        "end_utc": "2026-11-14T18:16:26Z",
+        "elapsed_seconds_to_utc_precision": 110.0,
+        "actions": 45,
+        "log_sha256": "7c4084c62b858d401776a2057c511c2274922079b14e2e1974ebce22b44bac1c"
+      },
+      "ctest_entries_passed": 114,
+      "ctest_log_sha256": "25a7b718a106a900f02bb19dc4fbb5edf407e544cdbea65efed21bc5abf6bb29",
+      "executable_receipt_sha256": "b5293c853bb063eabc21c02479c0a333a73fdc40ce9cc1ee16ebcdfba342a56a"
+    },
+    "tsan": {
+      "build": {
+        "start_utc": "2026-11-14T18:17:49Z",
+        "end_utc": "2026-11-14T18:18:53Z",
+        "elapsed_seconds_to_utc_precision": 64.0,
+        "actions": 45,
+        "log_sha256": "f9d1a15047a42bdacfe37596a33941a3652c0fe1f94bceab4ddeb68a5a6d808e"
+      },
+      "ctest_entries_passed": 114,
+      "ctest_log_sha256": "162d41ba56a1f286f96f7cc532526dcd227054a8699aa70f668fc672964a1eaf",
+      "executable_receipt_sha256": "0f56424728a168146eb99789f3b7ca0d865cff4f0c4ede16c4b502caec31b578"
+    }
+  },
+  "linux_arm64_release": {
+    "build": {
+      "start_utc": "2026-11-14T18:16:14Z",
+      "end_utc": "2026-11-14T18:27:19Z",
+      "wall_seconds": 665.0,
+      "actions": 47,
+      "log_sha256": "7d0966cadbd0b20ff2c5c81765ec2f7b24f2937c8c1d3c8f9d1c96b6fe48cf04"
+    },
+    "measured_build_seconds": 664.812,
+    "soft_open_descriptor_limit": 1024,
+    "frontend_manifest_sha256": "e9d029c6a1dc48b6a3bd1474b277ec6bdc6e1e2b6af96b408752195e4180f0f7",
+    "backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+    "executable_receipt_sha256": "e3c4a533025b8db8284d0d880511a63fefb46497398fa675eca90b610830fc13",
+    "focused_ctest_entries": 4,
+    "full_ctest_entries": 158,
+    "ctest_junit_sha256": "ba4ebeef495eb7655c79658ce50bd31ed94df2f26ddc9a4e1c51a9e1675fd8d6"
   }
 }

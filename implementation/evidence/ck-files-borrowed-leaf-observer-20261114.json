@@ -14,7 +14,13 @@
     "repeat_driver_log_sha256": "d1eb1bc71c7059c1bc560a295bb2c2c28e98675596da468aba27b8415da69050",
     "repeat_stdout_sha256": "f1fd4717b5d6749b78b64563ca2fd2091270576fbf33d9d7c9b608fc1e793ec8",
     "ordinary_launcher": "V:\\tmp\\ckfq107e70c-ySy9\\run-5dc1433-ordinary.ps1",
-    "launcher_sha256": "091dfbf7edf93334b57aab62be77ee8845642718e2b8202515dbd075885ed5c5"
+    "launcher_sha256": "091dfbf7edf93334b57aab62be77ee8845642718e2b8202515dbd075885ed5c5",
+    "direct_recheck": {
+      "scope": "Exact hash-verified Release binary, elevated SSH Session 0. The existing folder review and cancellation regression passed. The previous failures and delay remain unexplained.",
+      "elapsed_seconds": 424.4161531,
+      "log_sha256": "c4745942c42c46990e2aaf71f023d98ede00f3e146943aa45621b3756e64d79e",
+      "ordinary_desktop": "Pending"
+    }
   },
   "docs": {
     "ckUtilities_pages": 27,

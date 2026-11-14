@@ -1,0 +1,73 @@
+{
+  "scope": "Quit during blocked location completion presents Stay and Stop activity and exit. Stay keeps both pane locations usable. Exit hands off to the host while storage still owns its worker, with the join outside event dispatch.",
+  "frontend": "1304a5f471c0eb0625c1f624efab970985c46724",
+  "backend": "1f426ce52357d57347cb119ff700cba421c52410",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "source_patch_sha256": "ed2abefc987938d245c487266d8af8f46564527ffb4ba731bde2481ef04e8b59",
+  "changed_source_manifest_sha256": "6d4cb071d3e3fc3ec274c7bb5a14a6d7df0800304f8612d402b182ed58a18e05",
+  "base_backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+  "base_frontend_manifest_sha256": "fc87157b3800b28b812eec2894c30e8f27080984f2aa0fd21f7f7b7dba3371e3",
+  "macos_arm64_release": {
+    "scope": "Two changed translation units and affected links, with source and matching SDK inherited from the frozen inventory qualification. No desktop app launched.",
+    "test_only_control": {
+      "outcome": "Old controller immediately allowed exit after dismissing the location dialog while completion remained blocked.",
+      "build": {
+        "start_utc": "2026-11-14T18:22:21Z",
+        "end_utc": "2026-11-14T18:22:32Z",
+        "elapsed_seconds_to_utc_precision": 11.0,
+        "actions": 2,
+        "log_sha256": "c7e8d659ee22eeb5b0e185fb083a5270d7c85c29d6a832b71ebfbbcfb26fc379"
+      },
+      "test_log_sha256": "ac6b62c2d0550b709c134d441a99bad1cabf70ade9a5bc369bceb515976cd541"
+    },
+    "candidate": {
+      "build": {
+        "start_utc": "2026-11-14T18:23:00Z",
+        "end_utc": "2026-11-14T18:23:14Z",
+        "elapsed_seconds_to_utc_precision": 14.0,
+        "actions": 6,
+        "log_sha256": "c4f1cc890f8674f5ac7c469e7ca4a847cca13ae7c80cc0705d0d51b10aa08331"
+      },
+      "executable_receipt_sha256": "d8f6a28b4409962bbe8243c1d4003d2287a05693727b2527bf43ea5016d18867",
+      "first_suite_attempt": "113/114. The pre-existing destination-change folder review case encountered journal_scope.ancestor_changed. The same case passed in isolation and all cases passed in the subsequent full run. The trigger for the first refusal remains unverified.",
+      "first_suite_log_sha256": "be52ed6d7d3e65ae5b0ea59af356fd22857a773dd991d6381c60a25d6946aeae",
+      "folder_review_isolated_log_sha256": "936810854edb30c00d025ca698e2958df2460a749dbbd5243830d6c4a4288b5a",
+      "focused_log_sha256": "0fbdcaabb9617ba89c65d238e3badbbb687e37c7ce88255df906a7d31e230342",
+      "ctest_entries_passed": 114,
+      "ctest_log_sha256": "57481a374ff585b07f49f3f1341ede5681bd4d0ef53de2e74f3eefc6319e0763",
+      "ctest_junit_sha256": "faa5f40f50503c6874d0f5e69ca35848d139ae96fd741607d752017145ef85b3"
+    }
+  },
+  "macos_arm64_matched_sdk_sanitizers": {
+    "asan": {
+      "build": {
+        "start_utc": "2026-11-14T18:24:10Z",
+        "end_utc": "2026-11-14T18:24:31Z",
+        "wall_seconds": 21.0,
+        "actions": 7,
+        "log_sha256": "4f4afa77e39ffcf364fad26fa9689dac9d2079782e245db75b133531a3a0a938"
+      },
+      "ctest_entries_passed": 114,
+      "focused_log_sha256": "ac1245ac49b3023264bfd8002af9abf2ae03b7bebe10baab855127a99211d377",
+      "ctest_log_sha256": "ea95f66eb441eaa3f3462dc952a6f331ab67b6efc7766ec9b426cf18b5b9b013",
+      "ctest_junit_sha256": "b88197890dabc51f8014c952347b486ff20e2f7b62c3602d34e776ee788eb884",
+      "sdk_configuration_sha256": "74c3f5a0fed48eafa7df50d1b1695dc2f521980632072bf30a08865251b4ca64",
+      "executable_receipt_sha256": "a76db9809ac4eb222ca78814f107f91f041221a7f8d8d66ccd9b457712686a21"
+    },
+    "tsan": {
+      "build": {
+        "start_utc": "2026-11-14T18:24:31Z",
+        "end_utc": "2026-11-14T18:24:41Z",
+        "wall_seconds": 10.0,
+        "actions": 7,
+        "log_sha256": "e5127fc6df4cd89ac1abc07ad03177c289e35e07c1b93dfe47d1c129def46be8"
+      },
+      "ctest_entries_passed": 114,
+      "focused_log_sha256": "ac1245ac49b3023264bfd8002af9abf2ae03b7bebe10baab855127a99211d377",
+      "ctest_log_sha256": "ca3dbdb285b14acabcc5842ce85ca8def5b81bfdcdf6c07988e0d26927d88c07",
+      "ctest_junit_sha256": "ee70812bfef8c24005e26bdcbe35146229a86218197ae774ddd0d25e53f318ed",
+      "sdk_configuration_sha256": "24d030a1a6bbc538ec094e6523949295300ac75d08e709c524e79044dfa0ee24",
+      "executable_receipt_sha256": "b86a566e7138a8c3313ef179720de5ac3b6e16d0a4e9e2f8d61d7fcde1c92e3c"
+    }
+  }
+}
