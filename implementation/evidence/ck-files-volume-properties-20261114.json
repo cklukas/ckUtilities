@@ -27,6 +27,28 @@
     "ctest_elapsed_seconds": 209.76,
     "ctest_log_sha256": "5e00ae0c86742c7adf7061c20b33da5c266b582660b15eea4aba42ef8a62c2f1"
   },
+  "macos_arm64_matched_sdk_thread": {
+    "configuration": "Debug frontend, backend and ckVision SDK with halt-on-error ThreadSanitizer",
+    "tested_frontend_manifest_sha256": "e357107f03f062ece89a6499912fdaf597e866816261e72eabc55fcc324a235a",
+    "build": {"start_utc": "2026-11-14T15:29:37Z", "end_utc": "2026-11-14T15:31:27Z", "elapsed_seconds": 110.09, "steps": 20},
+    "test_executable_sha256": "1728274ac0da894463318ebc8d157cbb23c6f4f0fa1aa105786ce0cc49140453",
+    "application_cases_passed": 310,
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 323.89,
+    "ctest_log_sha256": "e526fdf1a82b5c782aa82aff5df162f21ae0db6bf16145e25af6622e2b713eb3"
+  },
+  "macos_documentation_capture": {
+    "publication_commit": "b2ab355bae788fa1a9390be8e44e1c2882d39ada",
+    "capture_delta_sha256": "2e045ed4156a013242e967f4609292e22786defd1aa54de6a2afa7d1b0bab5ca",
+    "input_frontend_manifest_sha256": "3e14f873d269db9de0a2484e6cd874c9b179e9a07933e21ccdebd790351ea10e",
+    "capture_executable_sha256": "cfcf2305b8fc0f1902170c77bc6054277cb4cae70762f949e32fa50cd88ab2b1",
+    "build": {"start_utc": "2026-11-14T15:24:10Z", "end_utc": "2026-11-14T15:37:27Z", "elapsed_seconds": 797.65, "steps": 312},
+    "repeat_elapsed_seconds": 12.11,
+    "repeat_identical_assets": 53,
+    "asset_manifest_sha256": "180d20f20ac8f5b349f1640496b93093747728e6e9c01322621dce636b274912",
+    "new_svg_sha256": "18592d719c8d0e8531974f2606917b7bdf5510c7e60534e0c51caae0690797e6",
+    "visual_review": "The real Volume Properties dialog shows the fixture's mount, access and exact byte counts. The inactive pane remains visible. No native volume names are present in the fixture capture."
+  },
   "windows_x64_release": {
     "configuration": "MSVC v143 14.44, static CRT, ReFS V: development drive",
     "build": {"start_utc": "2026-11-14T15:22:24.1357193Z", "end_utc": "2026-11-14T15:25:50.7652260Z", "elapsed_seconds": 206.63, "steps": 18},
@@ -56,5 +78,5 @@
     "first_attempt": "The Location menu used P for both Properties and Parent folder. The first PTY attempt invoked Parent folder. Properties now uses I and the new application regression drives that mnemonic."
   },
   "docs_pages_checked": 27,
-  "open": ["Latest matching ThreadSanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+  "open": ["Linux suite and screenshot reproduction, Windows ordinary-user suite and interactive desktop acceptance"]
 }
