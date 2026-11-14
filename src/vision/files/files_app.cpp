@@ -14,6 +14,7 @@
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
+#include <cerrno>
 #include <iomanip>
 #include <sstream>
 #include <utility>
@@ -2571,9 +2572,16 @@ struct FilesApp::State {
                                     ck::files::Observation<ck::files::ConsentReceipt> result,
                                     FilesOperationReviewEvidence::Pointer evidence) {
             if (!result.value()) {
+                const auto *failure = result.unavailable_detail();
+                if (failure && failure->error.domain == ck::files::ErrorDomain::Posix &&
+                    (failure->error.code == EMFILE || failure->error.code == ENFILE)) {
+                    panes[source_pane].error = "Open-file limit reached during planning";
+                    labels();
+                    return;
+                }
                 panes[source_pane].error = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
                     " was not authorized: " +
-                    (result.unavailable_detail() ? result.unavailable_detail()->error.operation : "review failed");
+                    (failure ? failure->error.operation : "review failed");
                 labels();
                 return;
             }

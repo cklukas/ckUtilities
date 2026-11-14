@@ -1331,8 +1331,17 @@ CK_TEST(files_app_folder_transfer_uses_one_bounded_scope_for_all_planning_stages
     CK_CHECK(f.key(ckv::Key::F6));
     f.until([&] { return f.app->status(0).find("Planning move") == std::string::npos; });
     CK_CHECK(!f.app->operation_review_pending());
-    CK_CHECK(f.app->status(0).find("Move exceeds the " + std::to_string(max_items) + "-entry review limit") !=
-             std::string::npos);
+    const auto status = f.app->status(0);
+    const auto item_limit = "Move exceeds the " + std::to_string(max_items) + "-entry review limit";
+#ifdef _WIN32
+    if (status.find(item_limit) == std::string::npos)
+#else
+    // A normal POSIX process can run out of descriptors while acquiring the
+    // exact source handles, before it reaches the application entry limit.
+    if (status.find(item_limit) == std::string::npos &&
+        status.find("Open-file limit reached during planning") == std::string::npos)
+#endif
+        throw std::runtime_error(status);
     CK_CHECK((*destination.value())->open_child(*folder).state() == ObservationState::Gone);
     const auto journal_entries = (*journals.value())->read(1);
     CK_CHECK(journal_entries.state == DirectoryReadState::End && journal_entries.names.empty());
