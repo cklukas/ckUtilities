@@ -1,0 +1,28 @@
+{
+  "frontend": "5220013b449d2340ddc077b9c4755dbad55c93e3",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "fixture": "Ownership-enabled APFS",
+    "build_root": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build",
+    "dependency_rebuild": {"start_utc": "2026-11-14T13:15:34Z", "end_utc": "2026-11-14T13:16:18Z", "seconds": 44.16, "steps": 29},
+    "final_rebuild": {"start_utc": "2026-11-14T13:17:03Z", "end_utc": "2026-11-14T13:17:20Z", "seconds": 16.80, "steps": 5},
+    "frontend_patch_sha256": "0b37feacc38373bcdc1e4927882fb79bbd32e5112005aadda068cf69c1a6451f",
+    "backend_patch_sha256": "fe616b6b46f5fc47d3fe2bf5b1dd267f4992f5d7be3627cd6c7dd9222704b092",
+    "test_executable_sha256": {
+      "src/vision/files/ck_vision_files_tests": "3f5ac5477ff34c9c7ba257f8fdafa76776f92263dff9578c2fa0985c26f78113",
+      "tests/unit/ck_files/ck_files_core_tests": "d17439601d42c6d8558a656e72225e5975b8555154b7b6a0790149731e3324dc",
+      "tests/unit/ck_files/ck_files_native_tests": "7af3e154c70ab612a5d4e1a5d246a487d905f6bf443f4fb0b756d3e1da84339d"
+    },
+    "files_ctest_entries_passed": 110,
+    "files_application_cases_passed": 304,
+    "test_seconds": 31.39,
+    "documentation_contract": "passed"
+  },
+  "verified": [
+    "Fresh discovery reads completed and interrupted retention journal fixtures from the held private journal root. It preserves the legacy original-target basename and reads the explicit source name in newer evidence.",
+    "The dialog renders the original and recorded retained basenames for the completed record. Interrupted and malformed journal fixtures require review. A reviewed incoming journal is discoverable even if its bytes are incomplete."
+  ],
+  "scope": "Read-only journal discovery and UI presentation. The retained-target fixtures encode the production journal states and payloads without invoking provider replacement. This suite does not qualify a successful retained replacement or restore, or prove a recorded target still exists.",
+  "open": ["Backend-held replacement integration in Files", "Live restore and explicit version disposal", "Current Linux, Windows and sanitizer qualification"]
+}
