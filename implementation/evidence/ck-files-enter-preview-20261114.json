@@ -24,5 +24,18 @@
     "scope": "Real controlling terminal with the exact product process and bundled asset bytes. macOS test used keyboard input.",
     "terminal_exit": 0
   },
-  "open": ["Current Windows and Linux runtime, sanitizers, and regenerating the guide screenshots on CI"]
+  "windows_x64_elevated_smoke": {
+    "toolchain": "MSVC v143 14.44, static CRT",
+    "build_start_utc": "2026-11-14T14:11:30.1854502Z",
+    "build_end_utc": "2026-11-14T14:12:52.0807667Z",
+    "build_steps": 10,
+    "build_elapsed_seconds": 81.90,
+    "source_delta_archive_sha256": "481fa4746094b48c9870f4b1e87292509c6cc7de14e4832e849bc6c7b5cbaf9f",
+    "test_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "test_executable_sha256": "6438c26a99daef8e478d187f12614a79b8f0f2baf5d89f96b23d3481ae9747af",
+    "runtime_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\bin\\ck-files.exe",
+    "runtime_executable_sha256": "2a109f74aebf9e7437aad8998ff4caebbcf80fad588e8ded0d7b093965088287",
+    "passed": ["Enter previews a regular file", "Escape keeps the volume view during cancellation", "Per-file folder review refuses a late destination addition"]
+  },
+  "open": ["Current Windows ordinary-user and Linux runtime, sanitizers, and regenerating the guide screenshots on CI"]
 }
