@@ -50,5 +50,16 @@
     "Preview uses the existing bounded worker read and starts in TextView for display-safe UTF-8, with a hex switch for the same bytes.",
     "A file beginning with an escape sequence takes the hex route with no text option. The 64 KiB read limit is visible in the preview footer."
   ],
+  "macos_arm64_matched_sdk_address_and_undefined_attempt": {
+    "tested_frontend_manifest_sha256": "7cad070d0c65a298da7d0477dc003ccc3e0630cdd5233437756e011d00422d8c",
+    "build_start_utc": "2026-11-14T14:36:04Z",
+    "build_end_utc": "2026-11-14T14:37:14Z",
+    "build_elapsed_seconds": 69.59,
+    "test_executable_sha256": "a85cd27437e17d41fdcbbed724de00936e6dd92a98af6c7aee2c4efcdbb307f1",
+    "files_and_keymap_ctest_entries_passed": 110,
+    "ctest_log_sha256": "0ef1e355ecb28761ce4a13147278c0fe4608e59219104202dabe7d84c7d5c246",
+    "repeat_log_sha256": "4f6a63ebac4959b587162d2a02afb8ce218f7e77b8e142ef6f6862d7342dd3c9",
+    "result": "The application suite exceeded its 60-second CTest deadline twice. The stops occurred in different location and home cases. No sanitizer report appeared in either run. The application suite remains unqualified."
+  },
   "open": ["Linux, ordinary-user Windows runtime and desktop acceptance, and matched-SDK sanitizer qualification for this revision"]
 }
