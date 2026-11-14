@@ -47,6 +47,16 @@
     "ctest_log_sha256": "d9a9cb8917e97ae313e75a1570f03e3936a4f870c672a635ac66d0ccde0a573b",
     "ctest_junit_sha256": "6b16368a52e8eff9eeb2ceb60de6e8e40501ec699c64a38cecd095d4f471281a"
   },
+  "windows_x64_release": {
+    "toolchain": "MSVC v143 14.44, static CRT, embedded debug information (/Z7)",
+    "source_delta_archive_sha256": "4949913c55825adb89e204b227a430686d170e19775838ac102d87b2409933e8",
+    "build": {"start_utc": "2026-11-14T16:56:04.0014228Z", "end_utc": "2026-11-14T16:56:31.5043101Z", "elapsed_seconds": 27.50, "steps": 5},
+    "build_receipt_sha256": "3c12975e43e4231c6a0fa3ef640840daabeb3baafafa6ab12e0edbf01af5b337",
+    "product_sha256": "bdb8f161ddc97363a973abb3e053428873defe14ea5f67bb1794b090fee978ae",
+    "test_sha256": "c0993a74105132ec26d684293df0b5ea959fb3681b19daafc391dcc367e61bd5",
+    "native_guid_regression_log_sha256": "2b016a7cc9de5270f0b98df6d15c992227ac87536ac9e31d8a72782550fd5417",
+    "verified": "The test independently enumerated the four GUID-only volumes and found each GUID in the Files inventory. Six additional focused cases passed. This run used an elevated workstation SSH session."
+  },
   "documentation": "The Files guide describes the volume GUID row. ckdocs check and strict site generation passed for all 27 pages. The utility-guide contract verified feature lists and embedded screenshots for all ten shipped utilities.",
-  "open": ["Run the Windows regression on the populated workstation and run ordinary-user Suite and Desktop acceptance", "Linux documentation capture"]
+  "open": ["Ordinary-user Windows suite and desktop acceptance", "Linux documentation capture"]
 }

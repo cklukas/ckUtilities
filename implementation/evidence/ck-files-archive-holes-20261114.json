@@ -57,5 +57,15 @@
     "stored_extent_count": 2,
     "verified": "The ordinary-user Files process selected a private tmpfs fixture in the left volume pane and prepared the archive in the right ext4 pane. The review reported one sparse file and 8192 stored extent bytes. Each listed non-hard loss was acknowledged before creation. The destination listed the resulting archive. An independent parser checked its manifest, verified the physical holes, and reconstructed the source contents byte for byte. The app exited successfully and terminal modes matched. Only fixture-mount setup used privilege, inside a private mount namespace."
   },
-  "open": ["Current Windows build and ordinary-user acceptance"]
+  "windows_x64_release": {
+    "toolchain": "MSVC v143 14.44, static CRT, embedded debug information (/Z7)",
+    "source_delta_archive_sha256": "327970ef9a27f5c6d8a1e98a875af6b5fb0f7dbe090b80baeaf5c53f12e7cdff",
+    "build": {"start_utc": "2026-11-14T16:44:35.6913329Z", "end_utc": "2026-11-14T16:55:54.3608238Z", "elapsed_seconds": 678.67, "steps": 95},
+    "build_review": "Two compiler processes stalled in the ProgramDatabase configuration. A confirmed compiler error named the program database. Reconfiguring with embedded debug information rebuilt the dependent libraries. The first embedded build then stopped in a different compiler wait. The retry retained completed objects, compiled the remaining 95 steps, verified the staged sources and resulting executable fingerprints, and ran the selected cases.",
+    "build_receipt_sha256": "cb3c59915ff03745aa7e91c9056cda7e594383238d157d676edb5a75589ad37c",
+    "product_sha256": "2e8dc18e8e64f531021cc7f13f49bbe8a5da233b84ef58420ad58c5b2eed2db4",
+    "test_sha256": "bd4d43b17972694a33d43693bc1a0e78c84c19f9a88fd51e04cabba8cf0a81d4",
+    "elevated_smoke_passed": ["Sparse review counts", "Unread Copy plan cancellation", "Blocked Move plan cancellation", "Folder review and cancellation with suppressed worker notification", "Volume Properties", "Right-to-accept"]
+  },
+  "open": ["Ordinary-user Windows suite and desktop acceptance"]
 }
