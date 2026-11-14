@@ -28,6 +28,17 @@
     "ctest_elapsed_seconds": 72.87,
     "ctest_log_sha256": "bb15339228743fbbaf9a1d1afeec50e82c81f650b607b57f0e1ec4b27264ea3e"
   },
+  "macos_arm64_matched_sdk_thread": {
+    "configuration": "Instrumented Debug frontend, backend and ckVision SDK with halt-on-error ThreadSanitizer",
+    "tested_frontend_manifest_sha256": "aea70e1f2ccf8a453aa215c9bb7aeb951ceed7c525c6fc6817cf5e5f12861b90",
+    "build_start_utc": "2026-11-14T15:05:43Z",
+    "build_end_utc": "2026-11-14T15:06:31Z",
+    "build_elapsed_seconds": 47.93,
+    "test_executable_sha256": "1db883c7df4dd21630203105a516bfd620d6fa8794f124e86cbabdf0a64dbb05",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 552.04,
+    "ctest_log_sha256": "61d0792866712c66acd2613450764459472acb925915256e3016b94234c927b4"
+  },
   "windows_x64_release": {
     "configuration": "MSVC v143 14.44, static CRT, ReFS V: development drive",
     "build_steps": 14,
@@ -49,5 +60,5 @@
     "ordinary_admission": "Launcher and helper matched staged bytes on readback. The SSH session is elevated, noninteractive and in session 0. The launcher stopped before either ordinary-user mode ran."
   },
   "previous_timeout_followup": "The matched ASan/UBSan and ThreadSanitizer preview builds passed all 307 application cases in disjoint shards. The full unsharded attempts remain recorded as timed out.",
-  "open": ["Latest matching ThreadSanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+  "open": ["Linux qualification, Windows ordinary-user and interactive desktop acceptance"]
 }
