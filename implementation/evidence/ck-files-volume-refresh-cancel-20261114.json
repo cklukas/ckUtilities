@@ -46,6 +46,24 @@
     ],
     "terminal_exit": 0
   },
+  "macos_arm64_asan_ubsan": {
+    "frontend": "83395d8d0b470f4c0df125b1504d320d6526fdc8",
+    "scope": "Clang 23.1.4 instrumented frontend, backend and exact matching ckVision SDK. Stock runtime and container annotations, with no suppressions.",
+    "instrumented_sdk_sha256": "d354205879c7f4b71f8aa2fab8fb5ef9d7d2cb6353470e74969613cef7346bfc",
+    "test_binary_sha256": "5296a26e95906fa4b683324c32a422db7baf6ee6bfa00bdc7b13cc12e3a03290",
+    "product_binary_sha256": "e0c56ffcd5404ff82bcbffa50973041c655531c222343326fa6ca13e9e03f1ba",
+    "build_start_utc": "2026-11-14T14:00:09Z",
+    "build_end_utc": "2026-11-14T14:15:07Z",
+    "build_elapsed_seconds": 897.74,
+    "build_steps": 306,
+    "comparable_prior_build_seconds": 464.29,
+    "duration_note": "The current build ran concurrently with other host workloads. The clean Ninja log shows all 306 scheduled compile/link steps and records 629.23 user CPU seconds and 47.09 system CPU seconds. Source manifests and output runtime linkages were checked after completion.",
+    "files_and_keymap_ctest_entries_passed": 111,
+    "application_cases_passed": 306,
+    "ctest_elapsed_seconds": 89.44,
+    "sanitizer_findings": 0,
+    "log": "/Volumes/S8T/tmp/ckfiles-current-sanitizers.ovWKObgF/asan/ctest.log"
+  },
   "verified": [
     "Esc during first-time volume enumeration cancels that scan and preserves the filesystem listing.",
     "Esc during a refresh discards the eventual reply, keeps the selected mount and its previous capacity visible, and reports that the retained information is stale.",
