@@ -90,8 +90,9 @@ clipboard.
   selection, select all, invert, clear selection, and an always-visible exact
   source count for operations.
 - Bounded read-only text and hexadecimal preview, properties, and path copy.
-  Preview never runs a file, hydrates provider-managed content implicitly, or
-  treats a display name as a rewritten native path.
+  **Enter** or **F3** reads up to 64 KiB from the selected regular file.
+  A valid UTF-8 preview opens as text with **Show hex** available. Binary or
+  unsafe text opens as hex. The footer identifies a partial preview.
   **Location → Copy path** copies the focused entry's absolute path. A native
   name that cannot be expressed as ordinary path text uses the reversible
   **Exact Names** format from the location editor. Files reports whether the

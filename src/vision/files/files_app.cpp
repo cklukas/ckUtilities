@@ -6,7 +6,9 @@
 #include "files_volume_source.hpp"
 #include "ck/vision/keymap.hpp"
 #include "name_mapping.hpp"
+#include "unicode_scalar.hpp"
 #include <cvision/core/text.hpp>
+#include <cvision/ui/layout.hpp>
 #include <cvision/widgets/common_components.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/splitter.hpp>
@@ -143,7 +145,40 @@ const char *archive_recovery_state(ck::files::OperationJournalState state) noexc
     }
     return "unknown state";
 }
-std::string preview_text(const FilesPanePreview &preview) {
+std::optional<std::string> preview_utf8(const FilesPanePreview &preview) {
+    std::string text;
+    if (preview.bytes.empty())
+        return text;
+    std::string_view bytes(reinterpret_cast<const char *>(preview.bytes.data()), preview.bytes.size());
+    if (bytes.starts_with("\xef\xbb\xbf"))
+        bytes.remove_prefix(3);
+    text.reserve(bytes.size());
+    while (!bytes.empty()) {
+        const auto scalar = ck::files::detail::decode_utf8_scalar(bytes);
+        if (scalar.units == 0)
+            return std::nullopt;
+        const auto encoded = bytes.substr(0, scalar.units);
+        bytes.remove_prefix(scalar.units);
+        if (scalar.value == '\r') {
+            if (bytes.starts_with('\n'))
+                bytes.remove_prefix(1);
+            text += '\n';
+        } else if (scalar.value == '\n') {
+            text += '\n';
+        } else if (scalar.value == '\t') {
+            text += "    ";
+        } else {
+            if (!ckv::text::is_sanitized_display_text(encoded) || scalar.value == 0x061c ||
+                scalar.value == 0x200e || scalar.value == 0x200f ||
+                (scalar.value >= 0x202a && scalar.value <= 0x202e) ||
+                (scalar.value >= 0x2066 && scalar.value <= 0x2069))
+                return std::nullopt;
+            text += encoded;
+        }
+    }
+    return text;
+}
+std::string preview_hex(const FilesPanePreview &preview) {
     static constexpr char digits[] = "0123456789abcdef";
     std::ostringstream out;
     out << std::hex << std::setfill('0');
@@ -166,8 +201,6 @@ std::string preview_text(const FilesPanePreview &preview) {
         }
         out << '\n';
     }
-    if (!preview.complete)
-        out << "[Preview limited to the configured byte bound.]\n";
     return out.str();
 }
 std::string link_text(const ck::files::LinkMetadata &link) {
@@ -330,7 +363,6 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> bookmark_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
-    std::optional<ckv::widgets::DescriptorDialogPresentation> preview_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_file_dialog;
@@ -764,7 +796,6 @@ struct FilesApp::State {
         bookmark_dialog.reset();
         bookmark_dialog_window = nullptr;
         properties_dialog.reset();
-        preview_dialog.reset();
         link_dialog.reset();
         link_dialog_window = nullptr;
         create_directory_dialog.reset();
@@ -897,7 +928,7 @@ struct FilesApp::State {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (bookmark_dialog && !bookmark_dialog->completed()) ||
                (properties_dialog && !properties_dialog->completed()) ||
-               (preview_dialog && !preview_dialog->completed()) ||
+               preview_open() ||
                (link_dialog && !link_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
                (create_file_dialog && !create_file_dialog->completed()) ||
@@ -2927,6 +2958,7 @@ struct FilesApp::State {
             return;
         }
         panes[pane].inspection = RowInspection{submitted.ticket, FilesPaneReplyKind::Preview};
+        watch();
         labels();
     }
     void show_inspect_link() {
@@ -2990,26 +3022,63 @@ struct FilesApp::State {
             labels();
             return;
         }
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Preview";
-        descriptor.resizable = true;
-        descriptor.fields = {
-            {.label = "Bounded hexadecimal preview; display only. No execution or write operation is available.",
-             .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Bytes", .initial_text = preview_text(*reply.preview), .kind = ckv::widgets::FieldKind::Memo},
+        if (modal_pending()) {
+            p.error = "Preview ready. Close the current dialog and open the file again.";
+            labels();
+            return;
+        }
+        using namespace ckv::widgets;
+        const auto preview = std::move(reply.preview);
+        auto text = preview_utf8(*preview);
+        auto owner = std::make_unique<Window>(text ? "Text preview" : "Hex preview");
+        auto *const view = owner.get();
+        const auto close = [view] { view->close(); };
+        const auto &roles = shell->roles();
+        owner->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame, roles.dialog_background);
+        owner->set_content_margin(1, 1);
+        const auto area = shell->desktop().content_area();
+        const int width = std::min(90, area.width);
+        const int height = std::min(22, area.height);
+        owner->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height});
+        owner->set_min_size({32, 8});
+        owner->set_footer(preview->complete ? "Read-only" :
+            "Read-only | First " + std::to_string(preview->bytes.size()) + " bytes");
+        owner->cancel_request = close;
+        owner->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+            if (weak.expired())
+                return;
+            preview_dialog_window = nullptr;
+            labels();
         };
-        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
-        preview_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
-        preview_dialog_window = shell->desktop().active_window();
-        preview_dialog_lifetime = preview_dialog_window->lifetime_token();
-        preview_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
-                if (!weak.expired())
-                    preview_dialog_window = nullptr;
-            });
+        auto content = std::make_unique<ckv::ui::Column>();
+        auto reader = std::make_unique<TextView>();
+        auto *const display = reader.get();
+        reader->set_text(text ? *text : preview_hex(*preview));
+        content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
+        auto buttons = std::make_unique<ckv::ui::Row>();
+        buttons->set_spacing(1);
+        if (text) {
+            auto toggle = std::make_unique<Button>("Show &hex");
+            auto *const mode = toggle.get();
+            toggle->on_press = [view, display, mode, decoded = std::move(*text), preview, hex = false]() mutable {
+                hex = !hex;
+                display->set_text(hex ? preview_hex(*preview) : decoded);
+                display->set_top_line(0);
+                mode->set_text(hex ? "Show &text" : "Show &hex");
+                view->set_title(hex ? "Hex preview" : "Text preview");
+            };
+            buttons->add_item(std::move(toggle));
+        }
+        auto dismiss = std::make_unique<Button>("&Close");
+        dismiss->on_press = close;
+        buttons->add_item(std::move(dismiss));
+        content->add_item(std::move(buttons));
+        owner->set_content(std::move(content));
+        preview_dialog_lifetime = view->lifetime_token();
+        preview_dialog_window = shell->desktop().present_modal(WindowHandle{std::move(owner), display}, application);
         labels();
     }
+    bool preview_open() const { return preview_dialog_window && !preview_dialog_lifetime.expired(); }
     void consume_link(std::size_t i, FilesPaneReply reply) {
         auto &p = panes[i];
         p.cancelling = false;
@@ -3990,9 +4059,8 @@ struct FilesApp::State {
                 properties_dialog_window->close();
             return;
         }
-        if (preview_dialog && !preview_dialog->completed()) {
-            if (preview_dialog_window && !preview_dialog_lifetime.expired())
-                preview_dialog_window->close();
+        if (preview_open()) {
+            preview_dialog_window->close();
             return;
         }
         if (link_dialog && !link_dialog->completed()) {
@@ -4227,7 +4295,7 @@ bool FilesApp::preview_pending() const {
     return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) {
                return pane.inspection && pane.inspection->kind != FilesPaneReplyKind::PathText;
            }) ||
-           (state_->preview_dialog && !state_->preview_dialog->completed());
+           state_->preview_open();
 }
 bool FilesApp::operation_review_pending() const {
     return (state_->operation_review_dialog && !state_->operation_review_dialog->completed()) ||

@@ -13,6 +13,8 @@
 #include <cvision/testing/cktest.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/label.hpp>
+#include <cvision/widgets/text_view.hpp>
+#include <algorithm>
 #include <chrono>
 #include <atomic>
 #include <condition_variable>
@@ -1749,9 +1751,64 @@ CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
     CK_CHECK(f.key(ckv::Key::Enter) && f.app->preview_pending());
     f.until([&] { return !f.app->pending(0) && f.app->preview_pending(); });
     CK_CHECK(f.app->location(0) == left && f.app->location(1) == right);
+    CK_CHECK(f.painted().find("Text preview") != std::string::npos);
+    CK_CHECK(dynamic_cast<ckv::widgets::TextView *>(f.application.focused()) != nullptr);
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), buttons);
+    auto toggle = std::find_if(buttons.begin(), buttons.end(), [](auto *button) {
+        return button->text() == "Show &hex";
+    });
+    if (toggle == buttons.end())
+        throw std::runtime_error("preview mode control missing");
+    CK_CHECK((*toggle)->activate_mnemonic("h"));
+    CK_CHECK(f.painted().find("Hex preview") != std::string::npos);
+    CK_CHECK(f.painted().find("00000000  30") != std::string::npos);
+    CK_CHECK((*toggle)->activate_mnemonic("t"));
+    CK_CHECK(f.painted().find("Text preview") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->preview_pending());
+}
+CK_TEST(files_app_preview_uses_hex_for_control_bytes_and_keeps_the_byte_limit) {
+    Fixture f;
+    f.loaded();
+    NativeFileSystem filesystem;
+    const auto base = filesystem.open_native_directory(address(f.scratch.path()));
+#ifdef _WIN32
+    const auto folder = NativeName::from_windows(u"binary-preview");
+    const auto name = NativeName::from_windows(u"terminal-escape");
+#else
+    const auto folder = NativeName::from_posix("binary-preview");
+    const auto name = NativeName::from_posix("terminal-escape");
+#endif
+    if (!base.value() || !folder || !name)
+        throw std::runtime_error("cannot open preview fixture root");
+    const auto directory = (*base.value())->create_child_directory(*folder);
+    if (!directory.value())
+        throw std::runtime_error("cannot create preview fixture directory");
+    {
+        const auto file = (*directory.value())->create_child_file(*name);
+        if (!file.value())
+            throw std::runtime_error("cannot create preview fixture file");
+        std::vector<std::byte> contents(FilesPanePreviewLimits{}.bytes + 1, std::byte{'x'});
+        contents[0] = std::byte{0x1b};
+        contents[1] = std::byte{']'};
+        const auto count = (*file.value())->write_content(0, contents);
+        const auto finished = (*file.value())->finish_content_writes();
+        if (!count.value() || *count.value() != contents.size() || !finished.value() || !*finished.value())
+            throw std::runtime_error("cannot write preview fixture file");
+    }
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "binary-preview")));
+    f.loaded();
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return !f.app->pending(0) && f.app->preview_pending(); });
+    const auto preview = f.painted();
+    CK_CHECK(preview.find("Hex preview") != preview.npos && preview.find("1b 5d 78") != preview.npos);
+    CK_CHECK(preview.find("First 65536 bytes") != preview.npos);
+    CK_CHECK(preview.find("Show text") == preview.npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->preview_pending() && f.application.focused() == f.app->grid(0));
 }
 CK_TEST(files_app_location_menu_copies_the_bound_row_and_cancellation_keeps_the_clipboard) {
     Fixture f;
