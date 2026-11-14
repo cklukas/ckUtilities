@@ -17,6 +17,23 @@
     "ctest_elapsed_seconds": 49.65,
     "ctest_log_sha256": "3e98ae636742d5f46c5ecdc78c7aa5c78bda0ad4a941523c2254887b1c0c33dd"
   },
+  "windows_x64_release": {
+    "configuration": "MSVC v143 14.44, static CRT, ReFS V: development drive",
+    "build": {"start_utc": "2026-11-14T15:22:24.1357193Z", "end_utc": "2026-11-14T15:25:50.7652260Z", "elapsed_seconds": 206.63, "steps": 18},
+    "build_receipt_sha256": "191a63de355302177ad2c52b6d5629244eb39d252efaf76c51f235fe87c695dc",
+    "source_delta_sha256": "083c9686f609382dd9cb937f79f0086163f56ae12dfa184c88ab9ebc3a5e9672",
+    "test_executable_sha256": "c5f70405147ad52bb0008c0c455a248c2b3906bf4bf31c4e02cff4fe2b11e35b",
+    "product_sha256": "adc4b92d6e914c7cc80442a60e61276d2c12368e33af5b8df5e5c855f86786f5",
+    "elevated_smoke_passed": ["Volume Properties exact mount and capacity in a narrow pane", "Retained volume details after refresh failure", "Mark and focus continuity", "Reviewed Move scope", "Right-to-accept"],
+    "ordinary_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-bc32855-ordinary.ps1",
+    "ordinary_launcher_sha256": "7edbf8acbd86a04b8572980a086b606bf1974acdc58c96c173452ed8c807a98d",
+    "ordinary_helper_sha256": "7a7c5df55617e4f27221e95ea96bf56ab86fa54b1959ac6835a5df96ebbdf0fb",
+    "ordinary_modes": {
+      "Suite": "Runs the four Files application shards and keymap in a regular Windows Terminal.",
+      "Desktop": "Exercises completion, previews, reviewed Copy scope, refresh and clipboard, volume navigation and exact capacity, and terminal restoration."
+    },
+    "ordinary_admission": "The launcher and helper matched staged bytes on readback. This build's ordinary run is pending. The earlier launcher uses superseded binary pins."
+  },
   "macos_native_pty": {
     "executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
     "executable_sha256": "d304838a8be1523826bcb7e4d5080bd2e22b5e0ae2bf96aba6e16008475c783c",
