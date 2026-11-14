@@ -61,5 +61,15 @@
     "repeat_log_sha256": "4f6a63ebac4959b587162d2a02afb8ce218f7e77b8e142ef6f6862d7342dd3c9",
     "result": "The application suite exceeded its 60-second CTest deadline twice. The stops occurred in different location and home cases. No sanitizer report appeared in either run. The application suite remains unqualified."
   },
+  "macos_arm64_matched_sdk_thread_attempt": {
+    "tested_frontend_manifest_sha256": "7cad070d0c65a298da7d0477dc003ccc3e0630cdd5233437756e011d00422d8c",
+    "build_start_utc": "2026-11-14T14:43:47Z",
+    "build_end_utc": "2026-11-14T14:44:26Z",
+    "build_elapsed_seconds": 39.30,
+    "test_executable_sha256": "b95e54641317343d299507a727bbe924a005dedc395f7a194bc920177358ea3e",
+    "files_and_keymap_ctest_entries_passed": 110,
+    "ctest_log_sha256": "d049822303178dc4fc171ef30fd1991b7af88c2f8ed21993cc9c1241c8823051",
+    "result": "The application suite exceeded its 60-second CTest deadline. No ThreadSanitizer report appeared. The application suite remains unqualified."
+  },
   "open": ["Linux, ordinary-user Windows runtime and desktop acceptance, and matched-SDK sanitizer qualification for this revision"]
 }
