@@ -1,0 +1,31 @@
+{
+  "frontend": "bc328555bf9ed140343a84776ac0eab2a3060fdc",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "tested_runtime_and_test_delta_sha256": "066fe59fbc318e5c48e84f3c8375c411d63aa0e88ca6771c8e4a254a5cdc7ae8",
+    "tested_frontend_manifest_sha256": "0d27c4ce363b3931b4076e20d2890bd0e3f404cf6364374740378433d7ae40cb",
+    "build": {"start_utc": "2026-11-14T15:13:36Z", "end_utc": "2026-11-14T15:18:00Z", "elapsed_seconds": 263.98, "steps": 20},
+    "final_rebuild": {"start_utc": "2026-11-14T15:18:43Z", "end_utc": "2026-11-14T15:19:22Z", "elapsed_seconds": 39.31, "steps": 7},
+    "build_review": "The initial build recompiled dependents of the volume record and ran on a heavily loaded host. The final build recompiled both changed translation units and relinked each expected target. Source and executable bytes and timestamps were checked.",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "5f766451b1796f6d1f006a028d1bdc017d763740824417cafe1404483b372747",
+    "focused_cases_passed": 4,
+    "focused_log_sha256": "e076cd1db456810efa79bf3dd8e427957caa577ebd4ef6ef4bdc739afd34ff4a",
+    "application_cases_passed": 310,
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 49.65,
+    "ctest_log_sha256": "3e98ae636742d5f46c5ecdc78c7aa5c78bda0ad4a941523c2254887b1c0c33dd"
+  },
+  "macos_native_pty": {
+    "executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "executable_sha256": "d304838a8be1523826bcb7e4d5080bd2e22b5e0ae2bf96aba6e16008475c783c",
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfiles-volume-properties.BrPhUixu/record.json",
+    "receipt_sha256": "3667591201813b810fa1526e287807fe413da1f841e71242d8c036de5e8df4d8",
+    "terminal_stream_sha256": "a7b6e253be217572cb07ef2dfe7c65ef620d8b32b4a099a951f930ca43a7006f",
+    "verified": "Backspace opens volumes above the left root. Location Properties presents the selected APFS mount, access, and exact available and total bytes. Escape restores the left volume list and the right pane stays on its original file. Exit restored the terminal modes.",
+    "first_attempt": "The Location menu used P for both Properties and Parent folder. The first PTY attempt invoked Parent folder. Properties now uses I and the new application regression drives that mnemonic."
+  },
+  "docs_pages_checked": 27,
+  "open": ["Latest matching sanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+}
