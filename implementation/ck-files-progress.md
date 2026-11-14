@@ -14,6 +14,31 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Original source names in move journals
+
+Backend `80a8eaf` records the exact original source leaf for copy-based
+moves in recovery evidence version 7. For tree moves the root name stays
+available after the worker releases live source owners. The receipt records
+native units alongside the source parent and object identities and retains
+read compatibility with versions 1–6. The field supports inspection.
+Source-side capture, fresh retirement authority, and writer/metadata
+stability remain separate CP-01 requirements.
+
+With frontend `e888aa4` and ckVision `b8d412a`, the macOS arm64 Release
+codec, Files application (299/299), and native operation-content (20/20)
+suites passed. The native test reopens the real tree-move journal and
+checks the source and destination leaves, including the retained evidence
+after macOS refuses unqualified publication. No native retirement success
+is inferred from this run.
+
+| Build evidence | Value |
+| --- | --- |
+| Incremental build interval (UTC) | 2026-11-14 12:01:47–12:03:30 |
+| Serial Release targets | 42 planned steps in 101.72 s |
+| Codec SHA-256 | `e0ac8695f04da9fdeeb7fa48ade529156a1472f38998c106baeb4616965a3e24` |
+| Files app tests SHA-256 | `645fdfa62f377a15b1b9db5deb21d1539c51ac4d0f07b8d8d2753da171c3ba74` |
+| Native Files tests SHA-256 | `1053fa8c1a016cb551952ea2199acf917b7b97ae9099e3846acc7d59ad66454f` |
+
 ## 2026-11-14 — Files move-batch completion
 
 The Files worker now advances flat and same-volume directory move batches
