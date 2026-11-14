@@ -1456,6 +1456,75 @@ CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_
     CK_CHECK(journal_names.state == DirectoryReadState::End && journal_names.names.empty());
 }
 
+CK_TEST(files_app_folder_review_refuses_a_destination_file_added_after_preview) {
+    Fixture f;
+    f.loaded();
+    NativeFileSystem filesystem;
+    const auto parent = filesystem.open_native_directory(address(f.scratch.path()));
+    const auto to = filesystem.open_native_directory(address(f.scratch.path() / "right"));
+    const auto leaf = [](const char* text, const char16_t* wide) {
+#ifdef _WIN32
+        (void)text;
+        return *NativeName::from_windows(wide);
+#else
+        (void)wide;
+        return *NativeName::from_posix(text);
+#endif
+    };
+    if (!parent.value() || !to.value())
+        throw std::runtime_error("cannot open fixture pane directories");
+    const auto from = (*parent.value())->create_child_directory(leaf("review-source", u"review-source"));
+    const auto name = leaf("merge", u"merge");
+    if (!from.value() || !(*from.value())->create_child_directory(name).value())
+        throw std::runtime_error("cannot create empty source folder");
+    const auto target = (*to.value())->create_child_directory(name);
+    if (!target.value())
+        throw std::runtime_error("cannot create existing folder-copy destination");
+    CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "review-source")));
+    f.loaded();
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] {
+        return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
+    });
+    if (!f.app->operation_review_pending())
+        throw std::runtime_error(f.app->status(0));
+    f.application.step(f.clock.now_nanos());
+    const auto stranger = leaf("added-later", u"added-later");
+    {
+        const auto added = (*target.value())->create_child_file(stranger);
+        if (!added.value() || !(*added.value())->finish_content_writes().value())
+            throw std::runtime_error("cannot add a file after folder review");
+    }
+    std::vector<ckv::widgets::ComboBox *> choices;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), choices);
+    find_views(f.application.root(), buttons);
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply folder copy")
+            apply = button;
+    if (!apply || choices.size() != 1)
+        throw std::runtime_error("cannot apply the otherwise unchanged folder review");
+    choices.front()->set_selected_index(1);
+    CK_CHECK(apply->activate_mnemonic("a"));
+    f.until([&] { return f.app->status(0).find("Review the operation again") != std::string::npos ||
+                         f.app->status(0).find("Copy failed") != std::string::npos; });
+    CK_CHECK(f.app->status(0).find("Review the operation again") != std::string::npos);
+    const auto source = (*from.value())->open_directory_child(name);
+    if (!source.value())
+        throw std::runtime_error("source folder was removed");
+    const auto entries = (*source.value())->read(1);
+    CK_CHECK(entries.state == DirectoryReadState::End && entries.names.empty());
+    CK_CHECK((*target.value())->open_child(stranger).value());
+    const auto journals = filesystem.open_native_directory(address(f.scratch.path() / "operation-journals"));
+    if (!journals.value())
+        throw std::runtime_error("cannot check folder-copy fixture journals");
+    const auto records = (*journals.value())->read(1);
+    CK_CHECK(records.state == DirectoryReadState::End && records.names.empty());
+}
+
 #if defined(__APPLE__)
 CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)
 #else

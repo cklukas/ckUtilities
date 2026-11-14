@@ -112,6 +112,7 @@ clipboard.
   their contents. The merge preserves destination-only files. The worker
   offers **Use source** and **Use newest** for regular-file conflicts when it
   can verify target retention. **Use newest** keeps the target when times tie.
+  Set one decision for the folder and override it for individual conflicts.
   Previous versions appear in **Operation recovery**.
 - Cancellable worker-owned jobs with honest progress, per-item outcomes,
   source/destination identity revalidation, durable journal boundaries, and

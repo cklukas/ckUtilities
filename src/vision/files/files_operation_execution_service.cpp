@@ -16,6 +16,19 @@
 namespace ck::vision {
 namespace {
 
+using ck::files::ConflictChoice;
+
+bool replacement_choice(ConflictChoice choice) noexcept {
+    return choice == ConflictChoice::UseSource || choice == ConflictChoice::Newest;
+}
+
+bool row_can_replace(const ck::files::ReviewedTreeItem& item) noexcept {
+    using namespace ck::files;
+    return item.facts.conflict_class == ConflictClass::ExistingRegular &&
+        item.facts.retained_target_available && item.facts.source_preservation_qualified &&
+        item.row.relation != ComparisonRelation::Unknown && item.row.relation != ComparisonRelation::Protected;
+}
+
 std::optional<ck::files::UnavailableObservation> first_batch_failure(
     const ck::files::OperationBatchResult &result) {
     for (const auto &item : result.items)
@@ -153,6 +166,10 @@ bool files_transfer_action_supported(const FilesOperationReviewEvidence& evidenc
 }
 
 struct FilesOperationExecutionService::State final {
+    struct TreeChoice final {
+        ConflictChoice default_choice;
+        std::vector<FilesTreeConflictDecision> overrides;
+    };
     struct Handoff final {
         std::mutex mutex;
         std::condition_variable condition;
@@ -207,7 +224,7 @@ struct FilesOperationExecutionService::State final {
     std::optional<FilesOperationExecutionReply> reply;
     std::optional<FilesTreeCopyReview> tree_review;
     ck::files::ComparisonPlanIdentity tree_review_plan;
-    std::optional<ck::files::ConflictChoice> tree_choice;
+    std::optional<TreeChoice> tree_choice;
     bool tree_can_use_source = false;
     bool tree_can_apply = false;
     FilesOperationExecutionTicket latest, cancelled;
@@ -251,12 +268,12 @@ struct FilesOperationExecutionService::State final {
         signal();
     }
 
-    ck::files::Observation<ck::files::ConflictChoice> wait_for_tree_choice(
+    ck::files::Observation<TreeChoice> wait_for_tree_choice(
         FilesTreeCopyReview review, std::stop_token stop_token) {
         using namespace ck::files;
-        using Result = Observation<ConflictChoice>;
+        using Result = Observation<TreeChoice>;
         std::unique_lock lock(mutex);
-        tree_review_plan = review.page.identity;
+        tree_review_plan = review.plan;
         tree_can_use_source = review.can_use_source;
         tree_can_apply = review.can_apply;
         tree_review = std::move(review);
@@ -264,9 +281,9 @@ struct FilesOperationExecutionService::State final {
         condition.wait(lock, [&] { return stopping || stop_token.stop_requested() || tree_choice.has_value(); });
         tree_review.reset();
         tree_review_plan = {};
-        const auto choice = std::exchange(tree_choice, std::nullopt);
+        auto choice = std::exchange(tree_choice, std::nullopt);
         if (choice && !stopping && !stop_token.stop_requested())
-            return Result::available(*choice);
+            return Result::available(std::move(*choice));
         const auto detail = error(AdapterError::InterruptedRead, "files_execution.tree_cancelled", ObservationState::Unknown);
         return Result::unavailable(detail.state, detail.error);
     }
@@ -345,10 +362,16 @@ struct FilesOperationExecutionService::State final {
             }
             auto page = std::move(assessment).take_value();
             const auto plan = page.identity;
-            std::map<ConflictClass, std::vector<std::uint64_t>> conflicts;
+            struct ConflictRow final {
+                ConflictClass kind;
+                bool can_replace;
+            };
+            std::map<std::uint64_t, ConflictRow> conflicts;
             bool can_use_source = true, can_apply = true;
             std::size_t conflict_count = 0;
-            for (const auto& item : page.items) {
+            std::vector<FilesTreeCopyReview::Row> review_rows;
+            review_rows.reserve(page.items.size());
+            for (auto& item : page.items) {
                 if (item.row.source_index && !item.facts.source_preservation_qualified &&
                     (item.action == ReviewedTreeAction::Copy || item.action == ReviewedTreeAction::CreateDirectory))
                     can_apply = false;
@@ -357,17 +380,17 @@ struct FilesOperationExecutionService::State final {
                     can_apply = false;
                 if (item.row.source_index && item.row.relation == ComparisonRelation::Unknown && !item.facts.destination_present)
                     can_apply = false;
-                if (!item.row.requires_review && item.action != ReviewedTreeAction::MergeDirectory)
-                    continue;
-                conflicts[item.facts.conflict_class].push_back(item.row.id);
-                if (item.row.requires_review)
-                    ++conflict_count;
-                if (item.action != ReviewedTreeAction::MergeDirectory &&
-                    (item.facts.conflict_class != ConflictClass::ExistingRegular ||
-                     !item.facts.retained_target_available || !item.facts.source_preservation_qualified))
-                    can_use_source = false;
+                const bool can_replace = item.row.requires_review && row_can_replace(item);
+                if (item.row.requires_review || item.action == ReviewedTreeAction::MergeDirectory) {
+                    conflicts.emplace(item.row.id, ConflictRow{item.facts.conflict_class, can_replace});
+                    if (item.row.requires_review) {
+                        ++conflict_count;
+                        can_use_source = can_use_source && can_replace;
+                    }
+                }
+                review_rows.push_back({std::move(item), can_replace});
             }
-            const auto choice = wait_for_tree_choice({result.request, std::move(page),
+            const auto choice = wait_for_tree_choice({result.request, plan, std::move(review_rows),
                 conflict_count != 0 && can_use_source, can_apply, conflict_count}, stop_token);
             if (const auto* failure = choice.unavailable_detail()) {
                 job->advance(stop_token);
@@ -380,12 +403,30 @@ struct FilesOperationExecutionService::State final {
                 stale();
                 return;
             }
+            std::map<std::uint64_t, ConflictChoice> overrides;
+            for (const auto& entry : choice.value()->overrides) {
+                const auto row = conflicts.find(entry.row_id);
+                if (row == conflicts.end() || row->second.kind == ConflictClass::DirectoryPair ||
+                    (entry.choice != ConflictChoice::KeepTarget &&
+                     (!replacement_choice(entry.choice) || !row->second.can_replace)) ||
+                    !overrides.emplace(entry.row_id, entry.choice).second) {
+                    fail(error(AdapterError::PlanInvalid, "files_execution.tree_override"));
+                    return;
+                }
+            }
+            std::map<std::pair<ConflictClass, ConflictChoice>, std::vector<std::uint64_t>> grouped;
+            for (const auto& [id, row] : conflicts) {
+                const auto override = overrides.find(id);
+                const auto selected = row.kind == ConflictClass::DirectoryPair ? ConflictChoice::MergeFolders :
+                    override == overrides.end() ? choice.value()->default_choice : override->second;
+                grouped[{row.kind, selected}].push_back(id);
+            }
             std::vector<ConflictRule> rules;
-            for (auto& [kind, rows] : conflicts) {
+            for (auto& [selection, rows] : grouped) {
                 ConflictRule rule;
                 rule.plan = plan;
-                rule.kind = kind;
-                rule.choice = kind == ConflictClass::DirectoryPair ? ConflictChoice::MergeFolders : *choice.value();
+                rule.kind = selection.first;
+                rule.choice = selection.second;
                 rule.tie = ConflictChoice::KeepTarget;
                 rule.scope = ConflictScope::Selected;
                 rule.selected_rows = std::move(rows);
@@ -923,15 +964,17 @@ std::optional<FilesTreeCopyReview> FilesOperationExecutionService::take_tree_rev
     return std::exchange(state_->tree_review, std::nullopt);
 }
 bool FilesOperationExecutionService::apply_tree_review(const FilesOperationExecutionTicket& request,
-    ck::files::ComparisonPlanIdentity plan, ck::files::ConflictChoice choice) {
+    ck::files::ComparisonPlanIdentity plan, ck::files::ConflictChoice choice,
+    std::vector<FilesTreeConflictDecision> overrides) {
     using ck::files::ConflictChoice;
     std::lock_guard lock(state_->mutex);
     if (state_->stopping || state_->stop.stop_requested() || state_->latest != request ||
         !plan.is_valid() || state_->tree_review_plan != plan || state_->tree_choice || !state_->tree_can_apply ||
+        overrides.size() > ck::files::ComparisonLimits::hard_max_page_rows ||
         (choice != ConflictChoice::KeepTarget &&
-         (!state_->tree_can_use_source || (choice != ConflictChoice::UseSource && choice != ConflictChoice::Newest))))
+         (!state_->tree_can_use_source || !replacement_choice(choice))))
         return false;
-    state_->tree_choice = choice;
+    state_->tree_choice = State::TreeChoice{choice, std::move(overrides)};
     state_->condition.notify_one();
     return true;
 }

@@ -3609,7 +3609,13 @@ struct FilesApp::State {
         descriptor.fields.push_back({.label = "Merge the two folders and keep files that exist only at the destination.",
                                      .kind = FieldKind::Note});
         const auto conflicts = review.conflicts;
-        for (const auto& item : review.page.items) {
+        struct RowField final {
+            std::uint64_t row;
+            std::size_t field;
+        };
+        std::vector<RowField> row_fields;
+        for (const auto& row : review.rows) {
+            const auto& item = row.item;
             std::string name;
             for (const auto& component : item.relative_components) {
                 if (!name.empty())
@@ -3624,7 +3630,18 @@ struct FilesApp::State {
             if (item.row.requires_review && item.facts.source_size && item.facts.destination_size)
                 label += "  (" + std::to_string(*item.facts.source_size) + " → " +
                     std::to_string(*item.facts.destination_size) + " bytes)";
-            descriptor.fields.push_back({.label = std::move(label), .kind = FieldKind::Note});
+            if (review.can_apply && item.row.requires_review) {
+                std::vector<std::string> options{"Use folder decision", "Keep existing"};
+                if (row.can_replace) {
+                    options.push_back("Use source and retain target");
+                    options.push_back("Use newest and retain target");
+                }
+                row_fields.push_back({item.row.id, descriptor.fields.size()});
+                descriptor.fields.push_back({.label = std::move(label), .kind = FieldKind::Combo,
+                                             .options = std::move(options), .initial_selection = 0});
+            } else {
+                descriptor.fields.push_back({.label = std::move(label), .kind = FieldKind::Note});
+            }
         }
         std::vector<std::string> choices{"Cancel"};
         if (review.can_apply) {
@@ -3633,14 +3650,14 @@ struct FilesApp::State {
                 choices.push_back("Use source and retain the previous target");
                 choices.push_back("Use newest and retain replaced targets");
             } else if (conflicts) {
-                descriptor.fields.push_back({.label = "Replacing these targets requires verified version retention.",
+                descriptor.fields.push_back({.label = "Replacement choices appear on rows with verified retention.",
                                              .kind = FieldKind::Note});
             }
         } else {
             descriptor.fields.push_back({.label = "Folder copy unavailable: the worker could not verify required preservation.",
                                          .kind = FieldKind::Note});
         }
-        if (choices.size() > 3)
+        if (review.can_apply && std::any_of(review.rows.begin(), review.rows.end(), [](const auto& row) { return row.can_replace; }))
             descriptor.fields.push_back({.label = "Use newest keeps the existing file when modification times tie.",
                                          .kind = FieldKind::Note});
         const auto choice_field = descriptor.fields.size();
@@ -3654,15 +3671,31 @@ struct FilesApp::State {
         if (tree_copy_window)
             tree_copy_window_lifetime = tree_copy_window->lifetime_token();
         tree_copy_dialog->set_completion_handler([this, weak = std::weak_ptr<void>(lifetime), ticket = review.request,
-                                                  plan = review.page.identity, choice_field](const DialogResult& answer) {
+                                                  plan = review.plan, choice_field, fields = std::move(row_fields)](
+                                                     const DialogResult& answer) {
             if (weak.expired())
                 return;
             tree_copy_window = nullptr;
             tree_copy_dialog.reset();
-            const auto selected = answer.accepted && choice_field < answer.selected.size() ? answer.selected[choice_field] : 0;
-            const auto choice = selected == 1 ? ConflictChoice::KeepTarget : selected == 2 ? ConflictChoice::UseSource
-                : selected == 3 ? ConflictChoice::Newest : ConflictChoice::Cancel;
-            if (choice == ConflictChoice::Cancel || !execution_service->apply_tree_review(ticket, plan, choice))
+            const auto choice_at = [&](std::size_t field) {
+                const auto selected = answer.accepted && field < answer.selected.size() ? answer.selected[field] : 0;
+                switch (selected) {
+                case 1: return ConflictChoice::KeepTarget;
+                case 2: return ConflictChoice::UseSource;
+                case 3: return ConflictChoice::Newest;
+                default: return ConflictChoice::Cancel;
+                }
+            };
+            const auto choice = choice_at(choice_field);
+            std::vector<FilesTreeConflictDecision> overrides;
+            if (choice != ConflictChoice::Cancel)
+                for (const auto& row : fields) {
+                    const auto selected = choice_at(row.field);
+                    if (selected != ConflictChoice::Cancel)
+                        overrides.push_back({row.row, selected});
+                }
+            if (choice == ConflictChoice::Cancel ||
+                !execution_service->apply_tree_review(ticket, plan, choice, std::move(overrides)))
                 execution_service->cancel(ticket);
             labels();
         });

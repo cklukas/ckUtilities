@@ -81,11 +81,22 @@ struct FilesOperationExecutionReply final {
 // Includes display facts and opaque plan identity. The job, native roots and
 // executable receipt stay within the execution worker.
 struct FilesTreeCopyReview final {
+    struct Row final {
+        ck::files::ReviewedTreeItem item;
+        bool can_replace;
+    };
+
     FilesOperationExecutionTicket request;
-    ck::files::ReviewedTreePage page;
+    ck::files::ComparisonPlanIdentity plan;
+    std::vector<Row> rows;
     bool can_use_source = false;
     bool can_apply = false;
     std::size_t conflicts = 0;
+};
+
+struct FilesTreeConflictDecision final {
+    std::uint64_t row_id;
+    ck::files::ConflictChoice choice;
 };
 
 class FilesOperationExecutionService final {
@@ -100,7 +111,7 @@ public:
     std::optional<FilesOperationExecutionReply> take();
     std::optional<FilesTreeCopyReview> take_tree_review();
     bool apply_tree_review(const FilesOperationExecutionTicket&, ck::files::ComparisonPlanIdentity,
-                           ck::files::ConflictChoice);
+                           ck::files::ConflictChoice, std::vector<FilesTreeConflictDecision> overrides = {});
     void request_stop() noexcept;
     void join();
     bool running() const noexcept;
