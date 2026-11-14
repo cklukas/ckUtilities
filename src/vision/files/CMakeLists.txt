@@ -27,8 +27,15 @@ if(BUILD_TESTING)
   target_link_libraries(ck_vision_files_tests PRIVATE ck_vision_files ck_vision_shell ck_files_platform ck_vision_cktest_main)
   target_compile_definitions(ck_vision_files_tests PRIVATE CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT="${CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT}")
   cktools_strict(ck_vision_files_tests)
-  add_test(NAME ck_vision_files_tests COMMAND ck_vision_files_tests)
-  set_tests_properties(ck_vision_files_tests PROPERTIES LABELS "files;ckvision-migration" TIMEOUT 60)
+  # Keep a 60-second deadline per shard as the native application suite
+  # grows. Serialize the shards because sibling fixture creation can change
+  # ancestor metadata during the journal guard's revalidation.
+  foreach(shard RANGE 0 3)
+    set(test_name ck_vision_files_tests_${shard})
+    add_test(NAME ${test_name} COMMAND ck_vision_files_tests --shard ${shard}/4)
+    set_tests_properties(${test_name} PROPERTIES
+      ENVIRONMENT "CKTEST_FILTER=" LABELS "files;ckvision-migration" RUN_SERIAL TRUE TIMEOUT 60)
+  endforeach()
   add_executable(ck_vision_files_settings_allocation_bound_tests
     tests/files_settings_allocation_bound_tests.cpp
     tests/files_settings_allocation_bound_allocator.cpp)
