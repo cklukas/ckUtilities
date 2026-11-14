@@ -14,6 +14,38 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Preserve sources after recursive move publication
+
+The legacy recursive move worker previously retired entries on Windows
+after identity and kind checks. Those checks could not detect an in-place
+edit between copy and retirement. Backend `ac0bb81` now records
+`RetainedSource` after successful destination publication and leaves the
+entire source tree in place. A journal failure still yields
+reconciliation. This closes the identity-only retirement path and leaves
+the CP-01 source-stability and retirement protocol open.
+
+Frontend `64b4536` presents the retained result without calling it a
+completed move. The read-only recovery dialog shows recorded source and
+destination leaves, including terminal retained moves, using escaped native
+names. The dialog bounds the number of rendered records.
+
+macOS arm64 Release passed the 299-case Files app suite, the 20-case native
+operation-content suite, the journal codec test, and the utility guide
+contract. The initial app run caught a dialog layout issue because a
+single ckVision Note rendered only its first line. The final run verified
+both journal names and the retained state in the painted dialog. The native
+macOS run verifies refusal before publication on that provider. Windows
+v143 on V: passed the platform-library build and in-memory codec test.
+
+| Build evidence | Value |
+| --- | --- |
+| macOS Release build | 20 steps, 12:15:07–12:16:34 UTC, 86.60 s |
+| macOS dialog rebuild | 4 steps, 12:17:58–12:18:19 UTC, 20.87 s |
+| macOS Files app tests SHA-256 | `c58847a5ea58dfbe6a89398020f0ad65836dd9ef3f4523a180018a3fd663fab4` |
+| macOS native Files tests SHA-256 | `b6792e990e90beec7eaafa71b2ed3593ef56e09fc2b2a8389919d994ea21a9e9` |
+| Windows Release build | 6 steps, 12:16:09–12:16:22 UTC, 13.05 s |
+| Windows platform library SHA-256 | `7d834730e37a202fc83c7d5d31755d1595cd23a83669b08e74dccd78cbc05209` |
+
 ## 2026-11-14 — Original source names in move journals
 
 Backend `80a8eaf` records the exact original source leaf for copy-based
