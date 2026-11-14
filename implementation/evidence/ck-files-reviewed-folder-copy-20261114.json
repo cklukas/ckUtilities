@@ -1,0 +1,28 @@
+{
+  "frontend": "a137c5dcdc131ce2ef62807b407f4e20b33ff23b",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "build_root": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build",
+    "fixture": "Ownership-enabled APFS",
+    "dependency_rebuild": {"seconds": 33.76, "steps": 10},
+    "final_rebuild": {"start_utc": "2026-11-14T13:28:00Z", "end_utc": "2026-11-14T13:28:16Z", "seconds": 15.58, "steps": 2},
+    "frontend_patch_sha256": "a64219f56579bb5d81f8c9bc984f0841c015f53d56fc2cea2e7549114b1cc714",
+    "files_test_executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/src/vision/files/ck_vision_files_tests",
+    "files_test_executable_sha256": "edb093ee1d642b4a19cb1b05cedb589660c4c512dfef46e561f739e33aee951a",
+    "files_ctest_entries_passed": 110,
+    "files_application_cases_passed": 305,
+    "test_seconds": 25.54,
+    "documentation_contract": "passed",
+    "earlier_result": "The first full run caught a fixture creating an occupied target while the initial right-pane listing was in progress. The two direct-file conflict fixtures now wait for both initial listings before creating the external target. The native directory-change guard is unchanged."
+  },
+  "verified": [
+    "An existing same-named destination folder enters the backend ReviewedTreePlanJob through the normal Files Copy command. Its review shows a descendant's name, and cancelling preserves source, destination, and the empty journal root.",
+    "The worker holds the backend plan while the UI displays immutable rows. It rejects foreign plan identities and keeps the native execution receipt on the worker."
+  ],
+  "open": [
+    "Positive app qualification of merge, Use source, and Use newest on supported providers, including crash recovery and retention limits",
+    "Recursive Move and scoped/per-row conflict decisions",
+    "Current Linux, Windows, and sanitizer gates"
+  ]
+}
