@@ -1475,19 +1475,34 @@ struct FilesApp::State {
             !operation_recovery_scan || modal_pending())
             return;
         std::ostringstream summary;
-        summary << "Read-only inspection. No operation is resumed, deleted, replaced, retried, or retired.\n\n";
+        summary << "Read-only inspection\n\n";
         constexpr std::size_t max_items = 64;
         const auto &journals = operation_recovery_scan->journals;
         const auto count = std::min(max_items, journals.size());
+        auto remaining_items = max_items;
         for (std::size_t index = 0; index != count; ++index) {
             const auto &item = journals[index];
             summary << "Journal: " << item.display_name << '\n';
             if (item.report) {
                 const auto &inspection = item.report->inspection;
                 summary << "Items: " << inspection.report.items.size() << '\n';
-                for (const auto &recovery : inspection.report.items)
+                const auto shown = std::min(remaining_items, inspection.report.items.size());
+                auto artifact = inspection.artifacts.begin();
+                for (std::size_t row = 0; row != shown; ++row) {
+                    const auto &recovery = inspection.report.items[row];
                     summary << "State: " << archive_recovery_state(recovery.state)
                             << "; action: " << archive_recovery_action(recovery.action) << '\n';
+                    while (artifact != inspection.artifacts.end() && artifact->item < recovery.item)
+                        ++artifact;
+                    if (artifact != inspection.artifacts.end() && artifact->item == recovery.item &&
+                        artifact->evidence && artifact->evidence->source_name)
+                        summary << "Source: " << artifact->evidence->source_name->display_name()
+                                << '\n' << "Destination: "
+                                << artifact->evidence->destination_name.display_name() << '\n';
+                }
+                remaining_items -= shown;
+                if (shown != inspection.report.items.size())
+                    summary << "Additional items: " << inspection.report.items.size() - shown << '\n';
                 if (inspection.report.has_untrusted_tail)
                     summary << "Journal tail: untrusted\n";
                 if (inspection.has_untrusted_evidence)
@@ -1503,8 +1518,9 @@ struct FilesApp::State {
         ckv::widgets::DialogDescriptor descriptor;
         descriptor.title = "Operation recovery review";
         descriptor.resizable = true;
-        descriptor.fields = {ckv::widgets::FieldDescriptor{.label = summary.str(),
-                                                            .kind = ckv::widgets::FieldKind::Note}};
+        std::istringstream lines(summary.str());
+        for (std::string line; std::getline(lines, line);)
+            descriptor.fields.push_back({.label = std::move(line), .kind = ckv::widgets::FieldKind::Note});
         descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
         operation_recovery_dialog.emplace(
             ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
@@ -3401,6 +3417,17 @@ struct FilesApp::State {
         const auto operation = operation_execution_kind.value_or(ck::files::FileOperation::Copy);
         if (reply.state == FilesOperationExecutionState::Complete ||
             reply.state == FilesOperationExecutionState::RetainedSource) {
+            const auto retention_message = [&] {
+                std::string detail = operation == ck::files::FileOperation::Move ? "Move" : "Copy";
+                detail += ": destination published, source retained";
+                if (reply.error) {
+                    if (reply.error->error.operation == "native_operation_copy_tree.source_stability")
+                        detail += "; source stability could not be verified";
+                    else
+                        detail += ": " + reply.error->error.operation;
+                }
+                return detail;
+            };
             const auto source = active;
             panes[source].refresh_failed = true;
             if (operation != ck::files::FileOperation::Delete)
@@ -3408,23 +3435,16 @@ struct FilesApp::State {
             const bool source_refreshed = refresh(source);
             const bool destination_refreshed = operation == ck::files::FileOperation::Delete || refresh(1 - source);
             if (!source_refreshed || !destination_refreshed) {
-                std::string detail = std::string(operation == ck::files::FileOperation::Move ? "Move" :
-                                                  operation == ck::files::FileOperation::Delete ? "Delete" : "Copy") +
-                    (reply.state == FilesOperationExecutionState::RetainedSource
-                         ? " completed; destination published, source retained"
-                         : " completed; refresh could not be started");
-                if (reply.state == FilesOperationExecutionState::RetainedSource && reply.error)
-                    detail += ": " + reply.error->error.operation;
-                if (reply.state == FilesOperationExecutionState::RetainedSource)
-                    detail += "; refresh could not be started";
+                const auto label = operation == ck::files::FileOperation::Move ? "Move" :
+                    operation == ck::files::FileOperation::Delete ? "Delete" : "Copy";
+                auto detail = reply.state == FilesOperationExecutionState::RetainedSource
+                    ? retention_message() : std::string(label) + " completed";
+                detail += "; refresh could not be started";
                 panes[source].error = std::move(detail);
                 if (operation != ck::files::FileOperation::Delete)
                     panes[1 - active].error = panes[source].error;
             } else if (reply.state == FilesOperationExecutionState::RetainedSource) {
-                std::string detail = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
-                    " completed; destination published, source retained";
-                if (reply.error)
-                    detail += ": " + reply.error->error.operation;
+                const auto detail = retention_message();
                 panes[source].error = detail;
                 panes[1 - source].error = detail;
             }

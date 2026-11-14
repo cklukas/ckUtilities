@@ -348,11 +348,40 @@ struct Fixture {
                 throw std::runtime_error("cannot create app recovery fixture");
         }
         if (operation_recovery_journal) {
-            std::ofstream journal(operation_root / ".ck-copy-journal-00000000000000000000000000000032",
-                                  std::ios::binary);
-            journal << "malformed operation recovery journal";
-            if (!journal)
-                throw std::runtime_error("cannot create operation recovery fixture");
+            const auto host_name = [](const char *spelling) {
+#if defined(_WIN32)
+                return *NativeName::from_windows(std::filesystem::path(spelling).u16string());
+#else
+                return *NativeName::from_posix(spelling);
+#endif
+            };
+            const NativeDurableIdentity identity{
+#if defined(_WIN32)
+                IdentityScheme::WindowsFileId128,
+#else
+                IdentityScheme::PosixDeviceInode,
+#endif
+                NativeIdentifier::from_u64(1), NativeIdentifier::from_u64(2), {}};
+            NativeOperationRecoveryEvidence receipt{
+                host_name("staging"), host_name("moved-tree"), identity, identity, identity, {}, {}, {}, {}};
+            receipt.source_name = host_name("original-tree");
+            const auto evidence = encode_native_operation_recovery_evidence(receipt);
+            OperationJournalId id;
+            id.bytes[0] = std::byte{0x32};
+            auto journal = OperationJournal::create(FileOperation::Move, id);
+            auto file = open_native_operation_journal_file(operation_root_address,
+                host_name(".ck-tree-journal-32000000000000000000000000000000-0"), true);
+            if (!journal.value() || !file.value() || !evidence.value())
+                throw std::runtime_error("cannot create move recovery fixture");
+            std::uint64_t sequence = 0;
+            for (const auto state : {OperationJournalState::Planned, OperationJournalState::Prepared,
+                    OperationJournalState::Copied, OperationJournalState::Verified,
+                    OperationJournalState::CommitIntended, OperationJournalState::DestinationCommitted,
+                    OperationJournalState::RetainedSource}) {
+                if (!append_operation_journal_file(**file.value(), **journal.value(),
+                        {++sequence, 0, state, *evidence.value()}).value())
+                    throw std::runtime_error("cannot append move recovery fixture");
+            }
         }
         if (eligible_operation_recovery) {
             const auto destination = scratch.path() / "operation-destination";
@@ -2165,11 +2194,13 @@ CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
     Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, true);
     f.loaded();
     f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
-    CK_CHECK(f.app->status(0).find("Inspect operation recovery: review is required") != std::string::npos);
     CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
     f.until([&] { return f.painted().find("Operation recovery review") != std::string::npos; });
     const auto text = f.painted();
     CK_CHECK(text.find("Read-only inspection") != std::string::npos);
+    CK_CHECK(text.find("source retained") != std::string::npos);
+    CK_CHECK(text.find("Source: original-tree") != std::string::npos);
+    CK_CHECK(text.find("Destination: moved-tree") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Operation recovery review") == std::string::npos; });
 }

@@ -106,15 +106,17 @@ clipboard.
 - Same-filesystem moves use identity-bound native rename when qualified.
   Cross-filesystem moves use copy, independent stream verification, durable
   destination publication, and only then qualified source retirement.
-  Recursive trees use the same safety model and never follow links or silently
-  include children that appeared after planning.
+  Where a recursive move can publish a verified destination tree, Files
+  retains the original until the filesystem can prove source stability.
+  Tree operations never follow links or silently include new children.
 - A separate **Move to Trash / Recycle Bin** action and confirmation. It uses
   the native platform boundary where qualified, including identity-checked
   directory trees on the native filesystem; unsupported or uncertain behavior
   retains the source and reports the reason instead of falling back.
 - A separate **Inspect operation recovery** review scans ordinary copy, tree
   copy, move, and recursive-delete journals after startup. It is read-only:
-  malformed, truncated, legacy, ambiguous, or untrusted records remain
+  interrupted moves with exact name receipts show their source and destination
+  names. Malformed, truncated, legacy, ambiguous, or untrusted records remain
   visible as reconciliation items. **Clean up operation staging** is disabled
   for recovered journals: cleanup requires the originating copy worker's live
   ownership of the created staging object. Reopened journal IDs and names do

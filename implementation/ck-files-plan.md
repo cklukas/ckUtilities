@@ -530,7 +530,9 @@ crash-after-commit and journal persistence failure. Recovery never guesses.
   semantics and independently verified source-removal predicates. Same-volume
   moves are implemented. Windows has qualified writer-open refusal, and its
   current regular-file move adapter still requires a source-stability proof
-  covering the reviewed metadata. POSIX cross-volume source retirement
+  covering the reviewed metadata. A published recursive move retains its
+  source tree until a qualified stability protocol is available.
+  POSIX cross-volume source retirement
   requires a journaled capture protocol and a source-stability proof.
 - [x] Implement case-only rename, folder creation, native Trash/Recycle Bin and
   explicit permanent deletion with no link traversal or hidden fallback.

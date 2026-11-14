@@ -969,7 +969,7 @@ CK_TEST(native_operation_copy_tree_stages_exact_inventory_and_publishes_root_no_
 #if defined(__APPLE__)
 CK_TEST(native_operation_move_tree_refuses_mac_publication_before_source_retirement)
 #else
-CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retirement)
+CK_TEST(native_operation_move_tree_publishes_then_retains_source_without_stability_proof)
 #endif
 {
     const ck::testing::ScratchDirectory scratch("files-native-operation-move-tree",
@@ -1045,16 +1045,12 @@ CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retir
 #else
     CK_CHECK(fs::is_regular_file(destination_path / "source-move" / "root.bin"));
     CK_CHECK(fs::is_regular_file(destination_path / "source-move" / "nested" / "child.bin"));
-#if defined(_WIN32)
-    CK_CHECK(job->state() == OperationExecutionState::Complete);
-    job.reset();
-    const auto source_status = filesystem.inspect_basic(source_path);
-    CK_CHECK(!source_status.value());
-#else
     CK_CHECK(job->state() == OperationExecutionState::RetainedSource);
+    CK_CHECK(job->result().failure &&
+             job->result().failure->error.operation == "native_operation_copy_tree.source_stability");
+    CK_CHECK(job->advance() == OperationExecutionState::RetainedSource);
     CK_CHECK(fs::is_regular_file(source_path / "root.bin"));
     CK_CHECK(fs::is_regular_file(source_path / "nested" / "child.bin"));
-#endif
 #endif
     job.reset();
     CK_CHECK(tree_journal_name.has_value());
@@ -1063,14 +1059,23 @@ CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retir
     auto journal_file = take(open_native_operation_journal_file(journal_root, *tree_journal_name, false));
     const auto loaded = take(load_operation_journal(*journal_file));
     bool found = false;
+    bool committed = false;
     for (const auto& record : loaded.journal->records()) {
         if (record.state == OperationJournalState::Planned) continue;
         const auto receipt = take(decode_native_operation_recovery_evidence(record.evidence));
         CK_CHECK(receipt.source_name == name("source"));
         CK_CHECK(receipt.destination_name == name("source-move"));
+        CK_CHECK(record.state != OperationJournalState::SourceRemovalIntended);
+        CK_CHECK(record.state != OperationJournalState::SourceRetired);
+        committed = committed || record.state == OperationJournalState::DestinationCommitted;
         found = true;
     }
     CK_CHECK(found && !loaded.tail);
+#if defined(__APPLE__)
+    CK_CHECK(!committed);
+#else
+    CK_CHECK(committed && loaded.journal->state(0) == OperationJournalState::RetainedSource);
+#endif
 }
 
 #if defined(__APPLE__)
