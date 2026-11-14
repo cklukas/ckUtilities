@@ -64,6 +64,23 @@
     "sanitizer_findings": 0,
     "log": "/Volumes/S8T/tmp/ckfiles-current-sanitizers.ovWKObgF/asan/ctest.log"
   },
+  "macos_arm64_tsan": {
+    "frontend": "83395d8d0b470f4c0df125b1504d320d6526fdc8",
+    "scope": "Clang 23.1.4 instrumented frontend, backend, and matching ckVision SDK. Runtime and positive/negative control receipts verified against the previous qualified runtime.",
+    "runtime_sha256": "ba79ff2e55b670221abbcd28d5becef30eae9b56b9f77d9a6a9673f4e356eae2",
+    "instrumented_sdk_sha256": "67a85ec02e2e4326614ad0b9fd418185f53d7db71012ee6e47ebe61fe9a1ea1e",
+    "test_binary_sha256": "287093793cb7ff833881b42cba7e341c198a341a8fe92aad06352a675501cc06",
+    "product_binary_sha256": "d08aa85c3a32d9aa3845eaee96e96c91ee5c6c19068108bc05fc18fa11740c6c",
+    "build_start_utc": "2026-11-14T14:17:08Z",
+    "build_end_utc": "2026-11-14T14:22:47Z",
+    "build_elapsed_seconds": 338.65,
+    "build_steps": 306,
+    "files_and_keymap_ctest_entries_passed": 111,
+    "application_cases_passed": 306,
+    "ctest_elapsed_seconds": 230.41,
+    "ctest_log_sha256": "f8b77eb1bbf5c6a96481e602baf3772169910f6aadf31b1bb81d371e9591c696",
+    "sanitizer_findings": 0
+  },
   "verified": [
     "Esc during first-time volume enumeration cancels that scan and preserves the filesystem listing.",
     "Esc during a refresh discards the eventual reply, keeps the selected mount and its previous capacity visible, and reports that the retained information is stale.",

@@ -54,12 +54,27 @@
     },
     "scope": "Elevated SSH compile and focused test execution. Ordinary-user, full aggregate and desktop runtime remain pending."
   },
+  "linux_arm64_release": {
+    "frontend": "f7e5842cc3e818c37f97381ebc1bb65d5ca9f6ff",
+    "scope": "Clang 19 Release Files application CTest under ordinary UID 501",
+    "build_start_utc": "2026-11-14T13:38:18Z",
+    "build_end_utc": "2026-11-14T14:25:02Z",
+    "build_elapsed_seconds": 2804.56,
+    "build_steps": 189,
+    "test_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "4f0dbd3534fb19a250f3215db474778b1d72db4e4475fd94124eafad33e929c7",
+    "frontend_manifest_sha256": "662465d161246f5e49b74f7db59faf91cd6eaf5bb8394146e759111bf10dcb08",
+    "backend_manifest_sha256": "1e983bca0337c7531ea7ce747e43ee50decfc192f0c3ae5d9175efe75a1490a0",
+    "test_log_sha256": "f094f424d364df5a8076edeb50f58b578c9d2ee71fdedfaf9beb423f312bd46f",
+    "application_cases_passed": 305,
+    "ctest_elapsed_seconds": 10.90
+  },
   "verified": [
     "The worker accepts a folder-wide conflict choice and typed row overrides, validates them against its sealed review, and constructs selected-row backend rules with mandatory retention for replacements.",
     "The application regression adds an external file to a previously empty destination after review. Apply requires a fresh review and preserves the late file without opening a journal."
   ],
   "open": [
     "Positive insertion and retained replacement on supported providers",
-    "Linux, Windows, and sanitizer qualification for this revision"
+    "Complete Linux, ordinary-user Windows, and sanitizer qualification for the newest frontend"
   ]
 }
