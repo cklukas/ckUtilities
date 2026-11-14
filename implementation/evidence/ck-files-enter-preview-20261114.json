@@ -1,0 +1,28 @@
+{
+  "frontend": "cd271ff7d408ea56cc9361c70616cca5655a1911",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "source_delta_sha256": "c8f15badc2efd8a29e9ce079076f5098f8fa28a070c3aa4f219c1cc61ee180cf",
+    "tested_frontend_manifest_sha256": "39b85b19eedf0a3ed15816153fcd9bc4bebe9503d81683dbca173a2cbc4ee44f",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "99e03c8d8cb68010f3580edeb16481159cb992800c3f11f9f7cde0241d5c904d",
+    "runtime_build": {"start_utc": "2026-11-14T14:05:55Z", "end_utc": "2026-11-14T14:06:46Z", "steps": 10, "elapsed_seconds": 50.98},
+    "test_rebuild": {"start_utc": "2026-11-14T14:08:04Z", "end_utc": "2026-11-14T14:08:27Z", "steps": 2, "elapsed_seconds": 22.95},
+    "files_and_keymap_ctest_entries_passed": 111,
+    "ctest_elapsed_seconds": 32.75,
+    "ctest_log_sha256": "e10a8bc174d521682cc802ac3e1f4568fda282a97500b03c93c2e4e40771a3ba",
+    "test_rebuild_reason": "Updated the existing Location menu test to use the Open mnemonic after the command label changed."
+  },
+  "macos_native_pty": {
+    "runtime_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "runtime_sha256": "dd352bb24729e93861925a84c74954e81b3462301b37177b47c752e510b723e4",
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfiles-open-pty.WQSq2nga/record.json",
+    "receipt_sha256": "ed65c85f4b2bb77020b02192d45fde3c527c4061f8689c34514c0a3642ceab4a",
+    "terminal_stream_sha256": "8e23f112abc05504059897fc7d0caf66a8fe6463b4e94b5260d61ff4432148c4",
+    "verified": "Enter opens the exact selected folder or shows the bounded hexadecimal bytes of the selected regular file. Escape returns to both pane listings. Also exercised Right-to-accept, mark and focus retention after reorder, resize, and Alt+X clean exit with terminal restoration.",
+    "scope": "Real controlling terminal with the exact product process and bundled asset bytes. macOS test used keyboard input.",
+    "terminal_exit": 0
+  },
+  "open": ["Current Windows and Linux runtime, sanitizers, and regenerating the guide screenshots on CI"]
+}
