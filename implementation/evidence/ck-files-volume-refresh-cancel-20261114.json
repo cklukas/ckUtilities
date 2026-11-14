@@ -24,6 +24,28 @@
     "files_ctest_log_sha256": "10401dc21929de7171bd07a77d0fc414ecd8f30732288df305ad84251796baf8",
     "documentation_contract": "passed"
   },
+  "macos_native_pty": {
+    "frontend_runtime_source": "83395d8d0b470f4c0df125b1504d320d6526fdc8",
+    "scope": "Real macOS controlling terminal with keyboard input to the verified product process",
+    "build_start_utc": "2026-11-14T14:00:33Z",
+    "build_end_utc": "2026-11-14T14:00:42Z",
+    "build_elapsed_seconds": 8.69,
+    "build_steps_including_keymap": 4,
+    "keymap_ctest": "passed",
+    "executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "executable_sha256": "be486c5603b5feb58804097863899db541489939442aff01e4719484d4ed9be4",
+    "executable_mtime_epoch_seconds": 1794664842,
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfiles-current-pty.ft3tm6DR/record.json",
+    "receipt_sha256": "e1b48eda826bb7c2d30bfe9d8c57d46b90daf8c7a0404c59fb3f596ae610ff55",
+    "terminal_stream_sha256": "576e3c25d900728625b45a8fa21656a8b91260d58e0a4c8a3037cbc535388cbb",
+    "checks": [
+      "Right accepts a displayed completion in the location editor; Enter navigates exactly to the proposed directory.",
+      "F4 switches working panes, and Insert marks an entry independently in each pane.",
+      "A new file inserts above the left mark; Ctrl+R keeps the mark and green focus on the unchanged original file, and the right-pane mark stays selected.",
+      "Resize retains both marks. Alt+X exits cleanly, restores termios and terminal private modes, and leaves no Files process."
+    ],
+    "terminal_exit": 0
+  },
   "verified": [
     "Esc during first-time volume enumeration cancels that scan and preserves the filesystem listing.",
     "Esc during a refresh discards the eventual reply, keeps the selected mount and its previous capacity visible, and reports that the retained information is stale.",
