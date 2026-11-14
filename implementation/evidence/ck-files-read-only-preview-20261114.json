@@ -1,0 +1,33 @@
+{
+  "frontend": "b46f0f4292e1d84aaf10225339f3c5608ebd0ce1",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "source_delta_sha256": "4a4463ac819cedae542751a921bb77d6ba1fbadfef9716544860a4bbd6e4ec21",
+    "tested_frontend_manifest_sha256": "e7a07771bd9c993cb8c339704acfc0543e4ba356b5dae3b994b8c77b03f04daa",
+    "build_start_utc": "2026-11-14T14:24:22Z",
+    "build_end_utc": "2026-11-14T14:25:07Z",
+    "build_elapsed_seconds": 44.27,
+    "build_steps": 7,
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "1f095468718be94fe0e3fd897b9d8661cf8215124b770bcfb670136fbfaf1f57",
+    "files_and_keymap_ctest_entries_passed": 111,
+    "application_cases_passed": 307,
+    "ctest_elapsed_seconds": 33.48,
+    "ctest_log_sha256": "dcfc91bee3121c51fc71a9047393818f488cf819748399f67c084f8b1d5557f5",
+    "earlier_run": "The first aggregate run failed closed in the existing stale-folder-review fixture with journal_scope.ancestor_changed while a sanitizer suite was using the shared fixture parent. The focused stale-folder case and all 111 entries passed after the overlapping run completed. No revalidation check or fixture expectation changed."
+  },
+  "macos_native_pty": {
+    "executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "executable_sha256": "9127fe51d2316b3e3242a2fdbe7351625498d02c4f8e61f178589649ccff148e",
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfiles-reader-pty.bR28EgtP/record.json",
+    "receipt_sha256": "0f35b9f9002dc180b208cc9bef44be05f882044e83b358109f008c9e645fe82b",
+    "terminal_stream_sha256": "2cc72eb38705b776f572c16be599aa16417e5700ac1c6904c04581626d10c786",
+    "verified": "Enter previews UTF-8 text. Tab and Enter switch to exact hex bytes and back to text. Escape returns to the same two directories. The product exits normally and restores terminal modes."
+  },
+  "verified": [
+    "Preview uses the existing bounded worker read and starts in TextView for display-safe UTF-8, with a hex switch for the same bytes.",
+    "A file beginning with an escape sequence takes the hex route with no text option. The 64 KiB read limit is visible in the preview footer."
+  ],
+  "open": ["Linux, Windows and matched-SDK sanitizer qualification for this revision"]
+}
