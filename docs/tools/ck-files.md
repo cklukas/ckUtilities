@@ -123,10 +123,10 @@ clipboard.
   Where a recursive move can publish a verified destination tree, Files
   retains the original until the filesystem can prove source stability.
   Tree operations never follow links or silently include new children.
-- A separate **Move to Trash / Recycle Bin** action and confirmation. It uses
-  the native platform boundary where qualified, including identity-checked
-  directory trees on the native filesystem; unsupported or uncertain behavior
-  retains the source and reports the reason instead of falling back.
+- **Move to Trash / Recycle Bin** confirms the selected entry and revalidates
+  its identity on the worker. Directory Trash is currently disabled in Files.
+  An unsupported entry stays in place, and an uncertain outcome is reported
+  for review.
 - **Inspect operation recovery** shows a read-only scan of copy, move, and
   recursive-delete journals. The scan runs at startup and after file operations.
   Interrupted moves with exact name receipts show their source and destination
@@ -145,9 +145,11 @@ clipboard.
   independently rebind the destination parent and check the published object
   identity, length, and content digest; it does not expose a mutation or
   recovery command.
-- A separate irreversible **Delete permanently** action with explicit scope
-  confirmation and identity-bound checks. It does not follow links, recurse
-  through non-empty directories, or claim secure erasure.
+- **Delete permanently** requires an explicit confirmation. On the qualified
+  Windows path, directory deletion reviews a frozen inventory and revalidates
+  each entry before removal. The worker preserves links as boundaries and
+  keeps children that appeared after review. Directory deletion is disabled
+  on macOS and Linux.
 - Preservation and capability reporting for data streams, extended
   attributes, permissions and ACLs, ownership, timestamps, flags, links,
   sparse/compressed storage, names, provider-managed objects, and filesystem
@@ -169,14 +171,18 @@ closes. Startup reading uses the same opened file for its bytes and revision.
 
 | Key | Action |
 |---|---|
-| Enter | Enter a directory or preview a file |
-| Space | Mark or unmark the focused entry |
-| Backspace | Go to the parent directory |
+| Enter | Enter the selected directory |
+| Insert | Mark or unmark the focused entry |
+| Backspace | Go to the parent directory, show volumes at a namespace root, or leave the volume view |
 | Ctrl+L | Edit the location |
+| Right | Accept the location editor's current completion proposal |
+| Ctrl+F | Open view options |
 | F3 | Preview |
+| F4 | Switch panes |
 | F5 | Copy |
 | F6 | Move |
 | F7 | Create folder |
+| Esc | Cancel the current activity or dismiss the dialog |
 | Operations menu | Create empty file |
 | Operations menu | Create hard link |
 | Operations menu | Create symbolic link (qualified POSIX adapters) |
@@ -192,7 +198,7 @@ pane's location and **Open bookmark** to choose one of that pane's saved
 locations. Highlight an unavailable menu command or click its disabled
 footer action to see the reason in the active pane. **View > Commands** opens
 the command palette, where you can also highlight a disabled match to see
-its reason. Enter Folder on the volume list directs you back to the
+its reason. In the volume view, press **Backspace** to return to the
 filesystem listing.
 
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
@@ -217,11 +223,11 @@ the previous warning; a successful proposal can still be accepted with Right.
 
 The Files implementation is cross-platform and refuses unsupported operations
 explicitly. Current qualification records document the exact platform matrix:
-Windows has qualified Recycle Bin moves for regular files and directory trees;
-macOS and Linux qualify same-device native Trash transactions with restore
-metadata, and the mount-specific paths are qualified on macOS against a
-write/search-only `.Trashes` root and on Linux against a foreign `/dev/shm`
-volume. POSIX permanent source-retirement remains explicitly unsupported. The
+The backend has qualified Windows Recycle Bin moves for regular files and
+directory trees. Backend macOS and Linux qualification includes same-device
+native Trash transactions with restore metadata, plus a write/search-only
+`.Trashes` root on macOS and a foreign `/dev/shm` mount on Linux. Files offers
+Trash for supported individual entries and has no in-app Restore action. The
 current macOS terminal verifier has
 qualified `Alt+X`, resize, and terminal-mode restoration for xterm-256color,
 xterm, and vt100; the Windows ConPTY contract has qualified launch, drawing,
