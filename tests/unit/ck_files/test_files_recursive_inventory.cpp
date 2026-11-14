@@ -27,6 +27,7 @@ struct Node final {
     std::uint64_t mount;
     std::uint64_t size;
     std::vector<std::pair<NativeName, std::shared_ptr<Node>>> children;
+    unsigned open_entries = 0;
 };
 
 BasicMetadata metadata(const Node& node) {
@@ -46,7 +47,8 @@ std::shared_ptr<Node> node(const AdapterScope& scope, std::uint64_t object, Obje
 
 class Entry final : public OpenedEntry {
 public:
-    explicit Entry(std::shared_ptr<Node> node) : node_(std::move(node)) {}
+    explicit Entry(std::shared_ptr<Node> node) : node_(std::move(node)) { ++node_->open_entries; }
+    ~Entry() override { --node_->open_entries; }
     Observation<BasicMetadata> inspect_basic() const override {
         return Observation<BasicMetadata>::available(metadata(*node_));
     }
@@ -155,6 +157,47 @@ CK_TEST(recursive_inventory_refuses_followed_links_without_target_evidence) {
     CK_CHECK(job.failure() && job.failure()->state == ObservationState::Unsupported &&
         job.failure()->error.code == static_cast<std::int64_t>(AdapterError::FinalLinkRejected));
     CK_CHECK(!job.completed().value());
+}
+
+CK_TEST(recursive_inventory_observes_each_entry_without_retaining_prior_leaf_handles) {
+    auto root = fixture();
+    auto file = root->children[1].second;
+    std::vector<NativeAbsolutePath> paths;
+    RecursiveInventoryJob job([&](const NativeAbsolutePath& address, const HeldChild& observed, std::stop_token)
+            -> std::optional<UnavailableObservation> {
+        // The two aliases of this file must each have a live handle only
+        // while that one row is being observed.
+        const bool alias = observed.name() == *NativeName::from_posix("file") ||
+            observed.name() == *NativeName::from_posix("alias");
+        CK_CHECK(file->open_entries == (alias ? 1u : 0u));
+        CK_CHECK(observed.inspect_basic().value());
+        paths.push_back(address);
+        return {};
+    }, std::make_shared<Cursor>(root), path("/root"), InventoryMountPolicy::StayOnRootMount,
+       InventoryLinkPolicy::PreserveLinks, {}, system_monotonic_clock());
+    const auto result = finish(job);
+    CK_CHECK(paths.size() + 1 == result->entries().size());
+    for (std::size_t i = 0; i < paths.size(); ++i)
+        CK_CHECK(paths[i] == result->entries()[i + 1].source_path);
+    CK_CHECK(!job.completed_sources().value() && file->open_entries == 0);
+}
+
+CK_TEST(recursive_inventory_discards_partial_results_when_a_leaf_observer_fails) {
+    auto root = fixture();
+    unsigned visits = 0;
+    RecursiveInventoryJob job([&](const NativeAbsolutePath&, const HeldChild&, std::stop_token)
+            -> std::optional<UnavailableObservation> {
+        if (++visits == 2)
+            return UnavailableObservation{ObservationState::Changed,
+                {ErrorDomain::Adapter, static_cast<std::int64_t>(AdapterError::MetadataChanged), "fixture.changed"}};
+        return {};
+    }, std::make_shared<Cursor>(root), path("/root"), InventoryMountPolicy::StayOnRootMount,
+       InventoryLinkPolicy::PreserveLinks, {}, system_monotonic_clock());
+    for (int step = 0; step < 100 && job.state() == RecursiveInventoryState::Collecting; ++step)
+        job.advance();
+    CK_CHECK(visits == 2 && job.state() == RecursiveInventoryState::Failed);
+    CK_CHECK(!job.completed().value() && !job.completed_sources().value());
+    CK_CHECK(job.failure() && job.failure()->error.operation == "fixture.changed");
 }
 
 CK_TEST(recursive_inventory_rejects_mount_crossing_depth_overflow_and_directory_cycles) {

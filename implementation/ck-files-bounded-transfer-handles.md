@@ -7,6 +7,11 @@ process may reach its open-file limit sooner because each native handle
 counts, including Linux metadata-only descriptors, traversal cursors,
 and handles used by the rest of the process.
 
+Backend `9be7205` adds worker-side observation of one descendant at a time
+through the live leaf handle. The borrowed-handle walk issues a read-only
+inventory. Copy and Move still use the existing retained-handle path until
+provider-specific continuity and row execution qualify.
+
 ## Backend and Files integration
 
 1. Separate inventory size from live native handle use. Traverse with a

@@ -78,6 +78,34 @@ CK_TEST(native_operation_staging_file_is_created_relative_to_held_directory_and_
     CK_CHECK(!directory->create_child_file(name("staging.bin")).value());
 }
 
+CK_TEST(native_recursive_inventory_observer_walks_a_wide_directory_under_a_handle_budget) {
+    const ck::testing::ScratchDirectory scratch("files-recursive-observer", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    NativeFileSystem filesystem;
+    const auto absolute = take(NativeAbsolutePath::from_host(scratch.path()));
+    auto root = std::shared_ptr<DirectoryCursor>(take(filesystem.open_native_directory(absolute)));
+    constexpr std::size_t leaves = 1152;
+    for (std::size_t i = 0; i < leaves; ++i) {
+        const auto leaf = name(("entry-" + std::to_string(i)).c_str());
+        take(root->create_child_file(leaf));
+    }
+    std::size_t observed = 0;
+    RecursiveInventoryLimits limits;
+    limits.inventory.max_entries = leaves + 1;
+    RecursiveInventoryJob job([&](const NativeAbsolutePath&, const HeldChild& child, std::stop_token)
+            -> std::optional<UnavailableObservation> {
+        const auto current = take(child.inspect_basic());
+        CK_CHECK(current.kind.value() && *current.kind.value() == ObjectKind::RegularFile);
+        ++observed;
+        return {};
+    }, std::move(root), absolute, InventoryMountPolicy::StayOnRootMount,
+       InventoryLinkPolicy::PreserveLinks, limits, system_monotonic_clock());
+    for (std::size_t step = 0; step < leaves * 2 && job.state() == RecursiveInventoryState::Collecting; ++step)
+        job.advance();
+    const auto sealed = take(job.completed());
+    CK_CHECK(sealed->entries().size() == leaves + 1 && observed == leaves);
+    CK_CHECK(!job.completed_sources().value());
+}
+
 CK_TEST(native_operation_staging_applies_platform_portable_basic_metadata) {
     const ck::testing::ScratchDirectory scratch("files-operation-metadata-boundary",
                                                 CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
