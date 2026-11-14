@@ -4220,11 +4220,11 @@ struct FilesApp::State {
         exit_selected = false;
         ckv::widgets::DialogDescriptor descriptor;
         descriptor.title = "Close Files";
-        descriptor.fields = {ckv::widgets::FieldDescriptor{
-            .label = operation_active
-                ? "A file operation is still running. Completed changes remain. Stopping may wait for storage to respond."
-                : "File reads or checks are still running. Stopping may wait for storage to respond.",
-            .kind = ckv::widgets::FieldKind::Note}};
+        descriptor.fields.push_back({.label = operation_active ? "A file operation is pending."
+                : "Files is still reading or checking.", .kind = ckv::widgets::FieldKind::Note});
+        if (operation_active)
+            descriptor.fields.push_back({.label = "Completed changes remain.", .kind = ckv::widgets::FieldKind::Note});
+        descriptor.fields.push_back({.label = "Stopping may wait for storage.", .kind = ckv::widgets::FieldKind::Note});
         descriptor.buttons = {
             {"&Stay", ckv::widgets::ButtonRole::Accept, {}},
             {"Stop activity and e&xit", ckv::widgets::ButtonRole::Dismiss, [this] { exit_selected = true; }}};

@@ -1615,6 +1615,12 @@ CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_
     f.until([&] { return f.app->status(0).find("Copying to the other pane") != std::string::npos; });
     f.app->request_close();
     CK_CHECK(f.app->close_confirmation_pending() && f.exits == 0);
+    f.terminal.resize({80, 24});
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.painted().find("Completed changes remain.") != std::string::npos);
+    CK_CHECK(f.painted().find("Stopping may wait for storage.") != std::string::npos);
+    f.terminal.resize({120, 34});
+    f.application.step(f.clock.now_nanos());
     f.clock.advance(250'000'000);
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->operation_review_pending());
