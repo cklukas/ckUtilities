@@ -2150,6 +2150,7 @@ struct FilesApp::State {
             operation_execution_request = submitted.ticket;
             operation_execution_origin = OperationExecutionOrigin{ck::files::FileOperation::Delete, i, p.navigation, {}};
             p.error.clear();
+            watch();
             labels();
             return true;
         }
@@ -2516,6 +2517,7 @@ struct FilesApp::State {
         operation_execution_origin = origin;
         panes[source].error.clear();
         panes[destination].error.clear();
+        watch();
         labels();
         return true;
     }
@@ -3038,6 +3040,7 @@ struct FilesApp::State {
     }
     void watch() {
         const bool pending = settings_waiting || operation_planning_request.has_value() || volume_request ||
+            operation_execution_request.has_value() ||
             volume_archive_recovery_request ||
             volume_archive_planning_request.has_value() || volume_archive_execution_request.has_value() ||
             std::any_of(panes.begin(), panes.end(), [](const Pane &p) {

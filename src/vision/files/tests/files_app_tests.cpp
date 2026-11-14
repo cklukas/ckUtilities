@@ -1586,6 +1586,8 @@ CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_
 #endif
     if (!source.value() || !target.value() || !name || !child || !(*target.value())->create_child_directory(*name).value())
         throw std::runtime_error("cannot create existing destination for reviewed folder copy");
+    // A missed execution wake must not strand either the review or its terminal cancellation.
+    f.hold_execution_wakeup = true;
     CK_CHECK(f.command("ck.files.copy"));
     f.until([&] {
         return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
