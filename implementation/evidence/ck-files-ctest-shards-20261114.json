@@ -17,6 +17,17 @@
     "ctest_registration_sha256": "d43a376bb56f5033b398f422aae1e307d468b4d54953de60e52610c1dd7c5bd0",
     "verification": "Compared the executed case names for the four CTest shards against the executable's full registration list. Every case ran exactly once."
   },
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "configuration": "Instrumented Debug frontend, backend and ckVision SDK with fail-fast ASan and UBSan",
+    "tested_frontend_manifest_sha256": "aea70e1f2ccf8a453aa215c9bb7aeb951ceed7c525c6fc6817cf5e5f12861b90",
+    "build_start_utc": "2026-11-14T15:03:11Z",
+    "build_end_utc": "2026-11-14T15:04:23Z",
+    "build_elapsed_seconds": 72.01,
+    "test_executable_sha256": "09827b606e6e63d1039c971242e03aafca959fd9a675be963794e87a70f38bc8",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 72.87,
+    "ctest_log_sha256": "bb15339228743fbbaf9a1d1afeec50e82c81f650b607b57f0e1ec4b27264ea3e"
+  },
   "previous_timeout_followup": "The matched ASan/UBSan and ThreadSanitizer preview builds passed all 307 application cases in disjoint shards. The full unsharded attempts remain recorded as timed out.",
-  "open": ["Latest matching sanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+  "open": ["Latest matching ThreadSanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
 }
