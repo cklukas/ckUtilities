@@ -1,0 +1,47 @@
+{
+  "scope": "First-seen hard-link group lookup preserves adapter scope, native identity scheme, volume, native object identifier and optional generation.",
+  "backend": "1f426ce52357d57347cb119ff700cba421c52410",
+  "frontend": "01b13af1d81ed8cb2938aa72afe88ae15968fe91",
+  "benchmark": {
+    "scope": "Mac ARM64 process, Apple clang O2. Synthetic unique identities and constant path through FrozenInventoryBuilder. The measurement includes building and sealing the inventory. It excludes filesystem I/O and transfer execution.",
+    "before_backend": "9be720521c186000940b69ff47dd46a04c46c862",
+    "input_sha256": "6e7f42330f687de383f214fc97c0f323f716abbfdfee932ad02fec8bfc5c4d54",
+    "elapsed_seconds": {
+      "before": {
+        "10000": 0.769595,
+        "20000": 4.32156,
+        "40000": 37.2319
+      },
+      "after": {
+        "10000": 0.00502129,
+        "20000": 0.0129504,
+        "40000": 0.0229971
+      }
+    }
+  },
+  "previous_leaf_observer_matched_sdk_checks": {
+    "backend": "9be720521c186000940b69ff47dd46a04c46c862",
+    "frontend": "3764b51f4a1ddb4fe9b436003a2583c9ca8150b0",
+    "asan": {
+      "entries_passed": 114,
+      "test_log_sha256": "1691f3b000f52ce26f495984c7978417b67d42d0b60fb7826f69acc9af58770a"
+    },
+    "tsan": {
+      "entries_passed": 114,
+      "test_log_sha256": "db2464a1ba34b2d9dc1d8c1375f43e4903a3e5f76bec5fb2eba98f24b2447439"
+    }
+  },
+  "open": "Large-transfer rebinding and execution still require a qualified continuity proof. The native index change does not authorize reopens or mutations.",
+  "macos_arm64_release": {
+    "build_start_utc": "2026-11-14T18:10:26Z",
+    "build_end_utc": "2026-11-14T18:13:42Z",
+    "build_wall_seconds": 196.0,
+    "steps": 45,
+    "backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+    "frontend_manifest_sha256": "fc87157b3800b28b812eec2894c30e8f27080984f2aa0fd21f7f7b7dba3371e3",
+    "binary_receipt_sha256": "8969981458249900b39dfabf0d6b7f7b8f4f34e4640d905fa0d97b0aadccb0ba",
+    "focused_ctest_entries": 4,
+    "full_ctest_entries": 114,
+    "ctest_junit_sha256": "17f7c948d1f59bcf8f24e2b117289f7fc2df0f56ad02c8696c4f3eb22ba9ee05"
+  }
+}
