@@ -1,0 +1,60 @@
+{
+  "frontend": "9597b17",
+  "backend": "82264fe16d39434f62b236175d65a8f044842758",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "behavior": [
+    "Copy and Move require a receipt from the exact operation plan. The execution worker rebuilds the plan through the same native evidence jobs, compares preservation issues, conflicts, exact source paths and identities, timestamps and the destination parent identity, and uses the held sources from that revalidation.",
+    "A new descendant during review requires a new decision. The application regression verifies that the descendant remains, the destination root is absent and the journal directory stays empty.",
+    "Per-conflict replacement and merge do not enter this execution route. Same-volume rename and native copy retain their provider-specific mutation guards. Revalidation observations do not provide a changed-content snapshot or a source retirement barrier."
+  ],
+  "macos_arm64_release": {
+    "profile": "Release, normal ckVision SDK, ownership-enabled APFS fixture",
+    "core_and_worker_build": {
+      "start_utc": "2026-11-14T12:45:05Z",
+      "end_utc": "2026-11-14T12:47:31Z",
+      "elapsed_seconds": 145.35,
+      "steps": 73,
+      "scope": "Rebuilt the execution worker and linked the full core test executable. The dry run identified 70 steps for the previously unbuilt core test target."
+    },
+    "final_rebuild": {
+      "start_utc": "2026-11-14T12:48:08Z",
+      "end_utc": "2026-11-14T12:48:18Z",
+      "elapsed_seconds": 9.56,
+      "steps": 2,
+      "scope": "Recompiled the native child-creation fixture and relinked the Files app tests. Source timestamp and Ninja dry run confirmed the other two test outputs were current."
+    },
+    "frontend_patch_sha256": "57308850ac87c906547d97bcbc1d38cbd094ac247a523e69fe065db0b1694bef",
+    "backend_patch_sha256": "740b7552e87be13cde733c1a74e82292947ecc5c774c9067c75840ae3e3d9e9a",
+    "tests": [
+      {
+        "suite": "ck_vision_files_tests",
+        "passed": 300,
+        "sha256": "e274bb4cf247354ab6b6ba483b085147003a34d141a125f89f41ba6302e0c569",
+        "executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/src/vision/files/ck_vision_files_tests"
+      },
+      {
+        "suite": "test_files_operation_evidence",
+        "passed": 6,
+        "sha256": "6268032e5092ab2603d7ed8587c94bc43e7fc36b7d5db20fd3590cc66182e2f4",
+        "executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/tests/unit/ck_files/ck_files_core_tests"
+      },
+      {
+        "suite": "test_files_operation_consent",
+        "passed": 8,
+        "sha256": "6268032e5092ab2603d7ed8587c94bc43e7fc36b7d5db20fd3590cc66182e2f4",
+        "executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/tests/unit/ck_files/ck_files_core_tests"
+      },
+      {
+        "suite": "test_files_operation_content_native",
+        "passed": 20,
+        "sha256": "b6792e990e90beec7eaafa71b2ed3593ef56e09fc2b2a8389919d994ea21a9e9",
+        "executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/tests/unit/ck_files/ck_files_native_tests"
+      }
+    ]
+  },
+  "remaining_qualification": [
+    "Current-source Linux and Windows application suites and sanitizer runs",
+    "Production per-conflict execution and retained replacement",
+    "Positive macOS strong publication, source stability and restart recovery"
+  ]
+}
