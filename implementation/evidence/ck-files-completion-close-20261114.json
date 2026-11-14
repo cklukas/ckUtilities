@@ -210,5 +210,93 @@
     "archive_verification_sha256": "3c1d7307e2d307bae7b78b3863ebaffa29409b5be37f734235e849e5455b6197",
     "process_exit": 0,
     "terminal_mode_restored": true
+  },
+  "macos_native_pty": {
+    "scope": "Ordinary user with an isolated macOS controlling PTY. Verified pane-local APFS volume navigation, exact capacity fields, retained opposite pane, and the archive publication availability hint.",
+    "fixture_note": "A fixture profile placed on S8T, an APFS volume with ownership disabled, was refused during private journal preparation. The successful verification used an isolated profile on PRO-BLADE, APFS with ownership enabled. The same verified app binary ran in both attempts.",
+    "initial_log_sha256": "a6e0972eb1270b819dfe7d56825a43a1153f4176a57de3c85e9e8d54053c3f26",
+    "receipt_sha256": "f129a67b0ffc521df59f9f879cc36b796dd02b32b6122fe1e344b4f37992a7fc",
+    "result": "PASS",
+    "started_utc": "2026-11-14T18:42:03.168525+00:00",
+    "ended_utc": "2026-11-14T18:42:04.966535+00:00",
+    "identity": {
+      "pid": 74255,
+      "image": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+      "sha256": "7e62e6b62be962cff275f91a6cf88e67ede8164c9110fc6c839453d2aa0219c7",
+      "uid": 501,
+      "tty": "/dev/ttys001",
+      "session_owner": 74254,
+      "foreground_pgrp": 74254
+    },
+    "exit": 0,
+    "termios_restored": true,
+    "protocol_restored": true,
+    "raw_sha256": "94360359a08c99a95bd7fb8eac7a9d887faec4f4c9a5e3786d2c328912e7eef4",
+    "actions": [
+      {
+        "label": "Alt+L opens Location",
+        "hex": "1b6c"
+      },
+      {
+        "label": "R opens the namespace root",
+        "hex": "72"
+      },
+      {
+        "label": "Backspace opens volumes in the left pane",
+        "hex": "7f"
+      },
+      {
+        "label": "Alt+L opens Location for volumes",
+        "hex": "1b6c"
+      },
+      {
+        "label": "I opens Properties",
+        "hex": "69"
+      },
+      {
+        "label": "Escape closes Properties",
+        "hex": "1b"
+      },
+      {
+        "label": "F5 explains why Copy is unavailable for this volume",
+        "hex": "1b5b31357e"
+      },
+      {
+        "label": "Alt+X exits Files",
+        "hex": "1b78"
+      }
+    ],
+    "frames": [
+      {
+        "name": "01-initial",
+        "sha256": "6f5b2587fe9019920550a5e54980b3368dffe5160438693acfb2efb317fc3394",
+        "rows": 40,
+        "columns": 160
+      },
+      {
+        "name": "02-volumes",
+        "sha256": "7d8bb9706e5d1951e448b4319ef77de07f795921f51ef31daf105b4dfcbf3ed0",
+        "rows": 40,
+        "columns": 160
+      },
+      {
+        "name": "03-volume-properties",
+        "sha256": "4b687ab85237aae4e936a4887125aefcefec8dff6d71a767a0fcd0a011b96eb6",
+        "rows": 40,
+        "columns": 160
+      },
+      {
+        "name": "04-return",
+        "sha256": "543af5b741c6cd50007354c143cf48cb7b79a2da3bae2c914f4720f9f5de4e45",
+        "rows": 40,
+        "columns": 160
+      },
+      {
+        "name": "05-archive-availability",
+        "sha256": "6a5e0806a860ad93eded1005fda7761030f525877c45d69a34ca42242ded0ba7",
+        "rows": 40,
+        "columns": 160
+      }
+    ]
   }
 }
