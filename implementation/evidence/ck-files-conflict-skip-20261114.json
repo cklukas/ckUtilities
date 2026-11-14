@@ -1,0 +1,49 @@
+{
+  "frontend": "b796bdd4763c474f96906732050efe2a837ad5e5",
+  "backend": "cef565025da78a8c9192de50a4e45441f7ca8956",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "fixture": "Ownership-enabled APFS",
+    "build_root": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build",
+    "header_dependency_rebuild": {
+      "start_utc": "2026-11-14T12:56:28Z",
+      "end_utc": "2026-11-14T12:59:37Z",
+      "seconds": 188.65,
+      "steps": 100
+    },
+    "final_dependency_rebuild": {
+      "start_utc": "2026-11-14T13:00:29Z",
+      "end_utc": "2026-11-14T13:01:41Z",
+      "seconds": 71.22,
+      "steps": 40
+    },
+    "consent_fixture_rebuild": {
+      "start_utc": "2026-11-14T13:02:09Z",
+      "end_utc": "2026-11-14T13:02:12Z",
+      "seconds": 2.77,
+      "steps": 2
+    },
+    "test_executable_sha256": {
+      "src/vision/files/ck_vision_files_tests": "7a536154a1f80ae8169478d37942c435df52edc90ec30667e7d534e255279475",
+      "tests/unit/ck_files/ck_files_core_tests": "8fb2bcd4e1acda576f8ba78b8ffef6356e53f09cfd4a712fb9483b23ac82f6a7",
+      "tests/unit/ck_files/ck_files_native_tests": "b6792e990e90beec7eaafa71b2ed3593ef56e09fc2b2a8389919d994ea21a9e9"
+    },
+    "test_results": {
+      "files_label_passed": 110,
+      "files_app_suite_cases_passed": 302,
+      "operation_consent_cases_passed": 9,
+      "elapsed_seconds": 22.78
+    },
+    "initial_failure": "109/110 entries passed. The new consent fixture assigned three different adapter scopes to files in one native batch. Using one scope made the fixture reach the intended receipt assertions. The native protocol and test assertions were retained."
+  },
+  "verified": [
+    "The Files dialog shows the conflicting source name. One acknowledgement covers the listed losses.",
+    "A marked same-volume move skips an occupied target, preserves both colliding files, moves the unoccupied item, and reports one skipped conflict.",
+    "Choosing another destination opens the receiving pane's location editor. Editing the destination preserves the source pane and performs no transfer.",
+    "The consent test refuses insufficient, partial and duplicate review indices, but does not require unavailable preservation evidence on skipped items."
+  ],
+  "open": [
+    "Matching Linux and Windows CI and sanitizer runs",
+    "Recursive conflict execution, keep-both naming, retained replacement and worker-held conflict policies"
+  ]
+}
