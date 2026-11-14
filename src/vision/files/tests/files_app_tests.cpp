@@ -1480,6 +1480,21 @@ CK_TEST(files_app_folder_review_refuses_a_destination_file_added_after_preview) 
     const auto target = (*to.value())->create_child_directory(name);
     if (!target.value())
         throw std::runtime_error("cannot create existing folder-copy destination");
+    const auto source = (*from.value())->open_directory_child(name);
+    if (!source.value())
+        throw std::runtime_error("cannot hold existing folder-copy source");
+    const auto conflict = leaf("conflict.txt", u"conflict.txt");
+    const auto create_file = [&](const DirectoryCursor& directory, const NativeName& file_name, char content) {
+        const auto file = directory.create_child_file(file_name);
+        if (!file.value())
+            throw std::runtime_error("cannot create folder-review fixture file");
+        const auto count = (*file.value())->write_content(0, std::as_bytes(std::span(&content, 1)));
+        const auto finished = (*file.value())->finish_content_writes();
+        if (!count.value() || *count.value() != 1 || !finished.value() || !*finished.value())
+            throw std::runtime_error("cannot write folder-review fixture file");
+    };
+    create_file(**source.value(), conflict, 'S');
+    create_file(**target.value(), conflict, 'T');
     CK_CHECK(f.app->navigate(0, address(f.scratch.path() / "review-source")));
     f.loaded();
     CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
@@ -1492,11 +1507,7 @@ CK_TEST(files_app_folder_review_refuses_a_destination_file_added_after_preview) 
         throw std::runtime_error(f.app->status(0));
     f.application.step(f.clock.now_nanos());
     const auto stranger = leaf("added-later", u"added-later");
-    {
-        const auto added = (*target.value())->create_child_file(stranger);
-        if (!added.value() || !(*added.value())->finish_content_writes().value())
-            throw std::runtime_error("cannot add a file after folder review");
-    }
+    create_file(**target.value(), stranger, 'N');
     std::vector<ckv::widgets::ComboBox *> choices;
     std::vector<ckv::widgets::Button *> buttons;
     find_views(f.application.root(), choices);
@@ -1505,19 +1516,24 @@ CK_TEST(files_app_folder_review_refuses_a_destination_file_added_after_preview) 
     for (auto *button : buttons)
         if (button->text() == "&Apply folder copy")
             apply = button;
-    if (!apply || choices.size() != 1)
+    if (!apply || choices.size() != 2)
         throw std::runtime_error("cannot apply the otherwise unchanged folder review");
-    choices.front()->set_selected_index(1);
+    choices.front()->set_selected_index(1); // Keep this row.
+    choices.back()->set_selected_index(1); // Default policy for other conflicts.
     CK_CHECK(apply->activate_mnemonic("a"));
     f.until([&] { return f.app->status(0).find("Review the operation again") != std::string::npos ||
                          f.app->status(0).find("Copy failed") != std::string::npos; });
     CK_CHECK(f.app->status(0).find("Review the operation again") != std::string::npos);
-    const auto source = (*from.value())->open_directory_child(name);
-    if (!source.value())
-        throw std::runtime_error("source folder was removed");
-    const auto entries = (*source.value())->read(1);
-    CK_CHECK(entries.state == DirectoryReadState::End && entries.names.empty());
-    CK_CHECK((*target.value())->open_child(stranger).value());
+    const auto check_file = [&](const DirectoryCursor& directory, const NativeName& file_name, std::byte expected) {
+        const auto file = directory.open_child(file_name, EntryAccess::ContentRead);
+        if (!file.value())
+            throw std::runtime_error("folder review removed a file");
+        const auto bytes = (*file.value())->read_content({1});
+        CK_CHECK(bytes.value() && bytes.value()->bytes == std::vector<std::byte>{expected});
+    };
+    check_file(**source.value(), conflict, std::byte{'S'});
+    check_file(**target.value(), conflict, std::byte{'T'});
+    check_file(**target.value(), stranger, std::byte{'N'});
     const auto journals = filesystem.open_native_directory(address(f.scratch.path() / "operation-journals"));
     if (!journals.value())
         throw std::runtime_error("cannot check folder-copy fixture journals");
