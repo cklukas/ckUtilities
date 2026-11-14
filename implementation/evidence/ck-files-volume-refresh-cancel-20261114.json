@@ -1,0 +1,28 @@
+{
+  "frontend": "c763b0a37ea2f8b2279eb72d4f0ddc5c70f7911b",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "tested_source": "Pinned f7e5842 plus the committed folder-conflict regression and volume-refresh source changes; changed source bytes matched the repository and both source manifests were verified after building",
+    "volume_source_patch_sha256": "754be025f93de5eabe3ae4d2a04b0c0eeb15ac282696984ca41a220cf2693772",
+    "frontend_manifest_sha256": "43fe9d8074ddcf9f7e644b7a9f6a17a7ad454eb65df3075b986e239e39f09945",
+    "backend_manifest_sha256": "1ae3f61c0d646adaa1392b7495250ff49255568b58f27afc6de7d7031d9fa799",
+    "first_incremental_rebuild": {"steps": 4, "elapsed_seconds": 11.66},
+    "final_build_start_utc": "2026-11-14T13:53:30Z",
+    "final_build_end_utc": "2026-11-14T13:53:55Z",
+    "final_build_elapsed_seconds": 25.19,
+    "final_build_steps": 2,
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "96507f74bbe0ca341e2639a4d2b8b3ac95114abb063f59a51e534cfa5c9fec2a",
+    "fixture": "Ownership-enabled APFS",
+    "focused_regression": "passed",
+    "application_cases_passed": 306,
+    "application_ctest_elapsed_seconds": 14.14,
+    "documentation_contract": "passed"
+  },
+  "verified": [
+    "Esc during first-time volume enumeration cancels that scan and preserves the filesystem listing.",
+    "Esc during a refresh discards the eventual reply, keeps the selected mount and its previous capacity visible, and reports that the retained information is stale.",
+    "Leaving the volume view through Parent still reopens the namespace root in the same pane."
+  ]
+}
