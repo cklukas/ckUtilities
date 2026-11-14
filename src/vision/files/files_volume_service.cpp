@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <charconv>
 #include <condition_variable>
-#include <cwchar>
 #include <iterator>
 #include <limits>
 #include <mutex>
@@ -95,7 +94,7 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
     record.filesystem = info && filesystem[0] ? utf8(filesystem) : "Unknown";
     record.identity = utf8(volume);
     const auto native_mount = mount.empty() ? volume : mount;
-    record.native_mount_units.assign(reinterpret_cast<const char16_t *>(native_mount.data()), native_mount.size());
+    record.native_mount_units.assign(native_mount.begin(), native_mount.end());
     if (space) {
         record.total_bytes = total_bytes.QuadPart;
         record.free_bytes = available_bytes.QuadPart;
@@ -137,8 +136,8 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
                 record.archive.support = FilesVolumeArchiveSupport::Unknown;
                 record.archive.diagnostic = "Archive capability probe could not qualify the mount identity";
             } else {
-                const auto volume_address = ck::files::NativeAbsolutePath::from_windows(
-                    std::u16string_view(reinterpret_cast<const char16_t *>(volume.data()), volume.size()));
+                const std::u16string volume_units(volume.begin(), volume.end());
+                const auto volume_address = ck::files::NativeAbsolutePath::from_windows(volume_units);
                 if (volume_address.value()) {
                     const auto volume_root = filesystem_adapter.open_native_directory(*volume_address.value());
                     if (volume_root.value() && (*volume_root.value())->identity().value() &&
@@ -163,35 +162,43 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_windows() {
     // FindFirstVolumeW returns a volume GUID name, including its trailing
     // separator. This buffer holds that format, independently of path limits.
     wchar_t volume_name[64]{};
-    HANDLE handle = FindFirstVolumeW(volume_name, static_cast<DWORD>(std::size(volume_name)));
+    const HANDLE handle = FindFirstVolumeW(volume_name, static_cast<DWORD>(std::size(volume_name)));
     if (handle == INVALID_HANDLE_VALUE)
         return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Failed,
                                                                           failure("volumes.windows.first", ErrorDomain::Win32,
                                                                                   static_cast<int>(GetLastError()))
                                                                               .error);
+    const auto close_search = [](void *search) { FindVolumeClose(search); };
+    const std::unique_ptr<void, decltype(close_search)> search(handle, close_search);
     do {
         DWORD required = 0;
         std::vector<wchar_t> paths(512);
-        if (GetVolumePathNamesForVolumeNameW(volume_name, paths.data(), static_cast<DWORD>(paths.size()), &required)) {
-            const wchar_t *current = paths.data();
-            while (*current) {
-                append_windows_volume(result, volume_name, current);
-                current += std::wcslen(current) + 1;
-            }
-        } else if (GetLastError() == ERROR_MORE_DATA && required > paths.size()) {
-            paths.resize(required);
-            if (GetVolumePathNamesForVolumeNameW(volume_name, paths.data(), static_cast<DWORD>(paths.size()), &required)) {
-                const wchar_t *current = paths.data();
-                while (*current) {
-                    append_windows_volume(result, volume_name, current);
-                    current += std::wcslen(current) + 1;
-                }
-            }
-        } else {
-            append_windows_volume(result, volume_name, {});
+        auto listed = GetVolumePathNamesForVolumeNameW(volume_name, paths.data(),
+                                                      static_cast<DWORD>(paths.size()), &required);
+        if (!listed && GetLastError() == ERROR_MORE_DATA && required > paths.size()) {
+            paths.assign(required, L'\0');
+            listed = GetVolumePathNamesForVolumeNameW(volume_name, paths.data(),
+                                                     static_cast<DWORD>(paths.size()), &required);
         }
-    } while (FindNextVolumeW(handle, volume_name, static_cast<DWORD>(std::size(volume_name))));
-    FindVolumeClose(handle);
+        const auto previous_size = result.size();
+        if (listed && required <= paths.size()) {
+            std::wstring_view remaining(paths.data(), required);
+            while (!remaining.empty() && remaining.front()) {
+                const auto end = remaining.find(L'\0');
+                if (end == remaining.npos)
+                    break;
+                append_windows_volume(result, volume_name, remaining.substr(0, end));
+                remaining.remove_prefix(end + 1);
+            }
+        }
+        // A successful lookup can contain no mount paths. The GUID still
+        // identifies the volume and is also the fallback for a failed query.
+        if (result.size() == previous_size)
+            append_windows_volume(result, volume_name, {});
+    } while (FindNextVolumeW(search.get(), volume_name, static_cast<DWORD>(std::size(volume_name))));
+    if (const auto error = GetLastError(); error != ERROR_NO_MORE_FILES)
+        return Observation<std::vector<FilesVolumeRecord>>::unavailable(ObservationState::Failed,
+            failure("volumes.windows.next", ErrorDomain::Win32, static_cast<int>(error)).error);
     std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
         return left.mount_point < right.mount_point;
     });

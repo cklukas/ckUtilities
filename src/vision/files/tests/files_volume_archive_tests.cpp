@@ -7,15 +7,18 @@
 
 #include <cvision/testing/cktest.hpp>
 
-#include <chrono>
+#include <algorithm>
 #include <atomic>
-#include <filesystem>
-#include <fstream>
+#include <chrono>
 #include <condition_variable>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 
 #if defined(_WIN32)
@@ -448,6 +451,37 @@ CK_TEST(volume_enumerator_reports_native_archive_capability) {
     // capability reporting itself must still be complete and non-silent.
     CK_CHECK(live_source || !volumes.value()->empty());
 }
+
+#if defined(_WIN32)
+CK_TEST(volume_enumerator_keeps_volumes_without_mount_paths) {
+    wchar_t name[64]{};
+    const auto close_search = [](void *search) { FindVolumeClose(search); };
+    const auto handle = FindFirstVolumeW(name, static_cast<DWORD>(std::size(name)));
+    CK_CHECK(handle != INVALID_HANDLE_VALUE);
+    if (handle == INVALID_HANDLE_VALUE)
+        return;
+    const std::unique_ptr<void, decltype(close_search)> search(handle, close_search);
+    std::vector<std::u16string> unmounted;
+    do {
+        // A successful query into this two-unit buffer can only be empty.
+        wchar_t paths[2]{};
+        DWORD used = 0;
+        if (GetVolumePathNamesForVolumeNameW(name, paths, static_cast<DWORD>(std::size(paths)), &used) && !paths[0]) {
+            const std::wstring_view guid(name);
+            unmounted.emplace_back(guid.begin(), guid.end());
+        }
+    } while (FindNextVolumeW(search.get(), name, static_cast<DWORD>(std::size(name))));
+    CK_CHECK(GetLastError() == ERROR_NO_MORE_FILES);
+
+    const auto volumes = enumerate_native_volumes();
+    CK_CHECK(volumes.value());
+    if (volumes.value())
+        for (const auto &guid : unmounted)
+            CK_CHECK(std::any_of(volumes.value()->begin(), volumes.value()->end(), [&](const auto &volume) {
+                return volume.native_mount_units == guid;
+            }));
+}
+#endif
 
 CK_TEST(volume_archive_writer_preserves_sparse_extents_and_publishes_without_replacement) {
     ck::testing::ScratchDirectory scratch("files-volume-archive", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);

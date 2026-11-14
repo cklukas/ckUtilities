@@ -47,6 +47,7 @@ clipboard.
   from the last successful scan if a refresh fails.
   The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
+  Windows lists volumes without a drive letter or folder mount by volume GUID.
   **Refresh** updates that pane's volume list and checks for archive recovery
   records. It keeps the selected mount when it can match it after refresh.
   **Esc** cancels a pending scan. During a refresh, the previous volume rows
