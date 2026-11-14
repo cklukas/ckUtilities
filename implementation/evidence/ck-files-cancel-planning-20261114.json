@@ -56,7 +56,14 @@
     "test_executable_sha256": "d19a1854fc1b71422c1a84b8797ba939c595f3d46265853a7973f84f013a50da",
     "files_and_keymap_ctest_entries_passed": 114,
     "ctest_elapsed_seconds": 23.00,
-    "ctest_log_sha256": "5e7d946bfb25cc3756912eb62690055367410c651b6669620e6e41d577aade27"
+    "ctest_log_sha256": "5e7d946bfb25cc3756912eb62690055367410c651b6669620e6e41d577aade27",
+    "matched_sanitizer_frontend_manifest_sha256": "12c54f62b82ed02ff7356aa64ac38156253ba658ba4aea2b9bda81b768599066",
+    "matched_sanitizer_focused_cases_passed_per_profile": 3,
+    "matched_sanitizer_builds": {
+      "address_and_undefined": {"start_utc": "2026-11-14T16:01:12Z", "end_utc": "2026-11-14T16:02:11Z", "elapsed_seconds": 58.87, "steps": 2, "test_sha256": "1d5aebb3fa6ce272732857fabbe8e449b2cb637fd25ca9891bb33b68b526987e"},
+      "thread": {"start_utc": "2026-11-14T16:02:15Z", "end_utc": "2026-11-14T16:02:47Z", "elapsed_seconds": 32.37, "steps": 2, "test_sha256": "a44be4d8a8d5498e8b4b387ae1de638b435eaca1c9f0bb099ad65fa0e140c9b5"}
+    },
+    "matched_sanitizer_focused_log_sha256_both_profiles": ["5905894f14b5d1c3504a4578b2886b1611a27f77230cc46298d06befa63bd2be", "0cee68d103602061023f7579a3d93b91bfadb7c8409ad815789475f5296b7f10"]
   },
   "windows_x64_release": {
     "frontend": "6cfa3b427429a520a8df723266262dc3afe9b7e4",
