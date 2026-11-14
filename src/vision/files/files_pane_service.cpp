@@ -1134,6 +1134,11 @@ struct FilesPaneService::State {
                     busy = false;
                     active_stop.reset();
                 }
+                // Transfer handoffs have no pane reply. Repaint command
+                // availability when the worker becomes idle, even after cancel.
+                if (wake && (std::holds_alternative<OperationSources>(*op) ||
+                             std::holds_alternative<OperationDestination>(*op)))
+                    wake();
             } else {
                 FilesPaneReply result;
                 result.request = page->ticket;

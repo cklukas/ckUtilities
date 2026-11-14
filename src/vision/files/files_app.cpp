@@ -379,6 +379,7 @@ struct FilesApp::State {
     ckv::widgets::Window *tree_copy_window = nullptr;
     std::weak_ptr<void> tree_copy_window_lifetime;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
+    bool operation_planning_cancelling = false;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
     std::optional<FilesVolumeArchivePlanningTicket> volume_archive_planning_request;
     std::optional<FilesVolumeArchiveTicket> volume_archive_execution_request;
@@ -1004,6 +1005,9 @@ struct FilesApp::State {
             return modal_pending() ? unavailable("Switch pane unavailable: a dialog is open")
                                    : FilesCommandAvailability::available();
         if (command == "ck.files.cancel_read") {
+            if (operation_planning_request && planning_service)
+                return operation_planning_cancelling ? unavailable("Cancellation already requested")
+                                                     : FilesCommandAvailability::available();
             if (volume_archive_planning_request && volume_archive_service)
                 return FilesCommandAvailability::available();
             if (modal_pending())
@@ -1271,6 +1275,8 @@ struct FilesApp::State {
             if (!ready(active) || !ready(1 - active))
                 return unavailable(std::string(move ? "Move" : "Copy") +
                                    " unavailable: both panes must be ready");
+            if (services[active]->working() || services[1 - active]->working())
+                return unavailable(std::string(move ? "Move" : "Copy") + " unavailable: a pane worker is busy");
             const auto &selection = panes[active].selection;
             if (selection.invalidated_refresh_marks)
                 return unavailable(std::string(move ? "Move" : "Copy") +
@@ -1351,7 +1357,15 @@ struct FilesApp::State {
             text = "Planning volume archive...";
         else if (volume_archive_execution_request)
             text = "Creating volume archive...";
-        else if (operation_execution_request)
+        else if (operation_planning_request) {
+            if (operation_planning_cancelling)
+                text = "Cancelling operation planning...";
+            else if (operation_planning_transfer)
+                text = operation_planning_transfer->second.operation == ck::files::FileOperation::Move
+                    ? "Planning move... Esc cancels" : "Planning copy... Esc cancels";
+            else
+                text = "Planning operation... Esc cancels";
+        } else if (operation_execution_request)
             text = operation_execution_origin->kind == ck::files::FileOperation::Move
                 ? "Moving to the other pane..."
                 : operation_execution_origin->kind == ck::files::FileOperation::Delete
@@ -1695,6 +1709,8 @@ struct FilesApp::State {
         std::string activity;
         if (volume_archive_execution_request)
             activity = "Archiving volume";
+        else if (operation_planning_request)
+            activity = operation_planning_cancelling ? "Cancelling plan" : "Planning operation";
         else if (operation_execution_request)
             activity = operation_execution_origin->kind == ck::files::FileOperation::Move
                 ? "Moving"
@@ -3526,9 +3542,16 @@ struct FilesApp::State {
         auto completion = std::move(operation_planning_completion);
         const auto transfer = std::exchange(operation_planning_transfer, std::nullopt);
         operation_planning_request.reset();
+        operation_planning_cancelling = false;
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
+        if (transfer && reply.state == FilesOperationPlanningReplyState::Cancelled) {
+            const auto &[source, planning] = *transfer;
+            panes[source].error = planning.operation == ck::files::FileOperation::Move
+                ? "Move planning cancelled" : "Copy planning cancelled";
+            return;
+        }
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
             if (transfer && reply.evidence && reply.plan->operation() == ck::files::FileOperation::Copy &&
                 reply.evidence->inventory->mount_policy() != ck::files::InventoryMountPolicy::DirectObjects &&
@@ -3577,7 +3600,8 @@ struct FilesApp::State {
             ck::files::ObservationState::Failed,
             {ck::files::ErrorDomain::Adapter,
                 static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
-                "files_app.operation_planning"}});
+                reply.state == FilesOperationPlanningReplyState::Cancelled
+                    ? "files_app.operation_planning_cancelled" : "files_app.operation_planning"}});
         completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error), {});
     }
     bool scan_operation_recovery() {
@@ -3826,6 +3850,7 @@ struct FilesApp::State {
                 if (operation_planning_request && !planning_service->running()) {
                     auto completion = std::move(operation_planning_completion);
                     operation_planning_request.reset();
+                    operation_planning_cancelling = false;
                     operation_planning_encoding.reset();
                     operation_planning_revalidation = {};
                     operation_planning_completion = {};
@@ -4004,6 +4029,12 @@ struct FilesApp::State {
         wake.request();
     }
     void cancel_read() {
+        if (!closing && operation_planning_request && planning_service) {
+            if (!operation_planning_cancelling && planning_service->cancel(*operation_planning_request))
+                operation_planning_cancelling = true;
+            labels();
+            return;
+        }
         if (!closing && volume_archive_planning_request && volume_archive_service) {
             volume_archive_service->cancel_plan(*volume_archive_planning_request);
             labels();
@@ -4237,6 +4268,7 @@ struct FilesApp::State {
         operation_planning_revalidation = std::move(revalidate);
         operation_planning_completion = std::move(completion);
         operation_planning_transfer = std::move(transfer_request);
+        watch();
         labels();
         return true;
     }

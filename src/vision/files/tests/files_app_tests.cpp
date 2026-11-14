@@ -191,6 +191,8 @@ struct Fixture {
     std::array<std::unique_ptr<FilesPaneService>, 2> services;
     std::array<std::unique_ptr<FilesCompletionService>, 2> completion_services;
     std::unique_ptr<FilesOperationPlanningService> planning_service;
+    Gate planning_wakeup_gate;
+    std::atomic<bool> hold_planning_wakeup{false};
     std::unique_ptr<FilesOperationExecutionService> execution_service;
     std::atomic<bool> hold_execution_wakeup{false};
     std::unique_ptr<FilesVolumeService> volume_service;
@@ -272,6 +274,10 @@ struct Fixture {
                 };
             }
             auto notify = wake.callback();
+            notify = [this, signal = std::move(notify)] {
+                if (!hold_planning_wakeup.load())
+                    signal();
+            };
             if (i == 0 && fail_notification)
                 notify = [signal = std::move(notify), fault = fail_notification] {
                     if (fault->exchange(false))
@@ -476,7 +482,12 @@ struct Fixture {
             if (!hold_execution_wakeup.load())
                 wake.request();
         });
-        planning_service = std::make_unique<FilesOperationPlanningService>(wake.callback());
+        planning_service = std::make_unique<FilesOperationPlanningService>([this] {
+            if (hold_planning_wakeup.load())
+                planning_wakeup_gate.block();
+            else
+                wake.request();
+        });
         if (qualified_volume || recovery_journal || eligible_archive_recovery) {
             volume_archive_service = std::make_unique<FilesVolumeArchiveService>(wake.callback());
             volume_archive_recovery_service = std::make_unique<FilesVolumeArchiveRecoveryService>(wake.callback());
@@ -530,6 +541,7 @@ struct Fixture {
             gate->release();
         directory_gate->release();
         home_gate->release();
+        planning_wakeup_gate.release();
         for (auto &service : services)
             service->join();
         for (auto &service : completion_services)
@@ -1200,6 +1212,50 @@ CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->operation_review_pending());
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+}
+CK_TEST(files_app_escape_cancels_unread_copy_plan_before_review) {
+    Fixture f;
+    f.loaded();
+    f.hold_planning_wakeup = true;
+    CK_CHECK(f.key(ckv::Key::F5));
+    f.planning_wakeup_gate.wait();
+    CK_CHECK(f.app->status(0).find("Planning copy... Esc cancels") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(f.app->status(0).find("Cancelling operation planning") != std::string::npos);
+    CK_CHECK(!f.app->availability("ck.files.cancel_read").enabled);
+    f.planning_wakeup_gate.release();
+
+    // Suppress the worker post and let the app's watchdog consume the cancelled ticket.
+    f.clock.advance(250'000'000);
+    f.until([&] { return f.app->status(0).find("Copy planning cancelled") != std::string::npos; });
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(f.command("ck.files.switch_pane") && f.app->active_pane() == 1);
+}
+CK_TEST(files_app_escape_cancels_move_while_source_worker_is_blocked) {
+    Fixture f;
+    f.loaded();
+    *f.block_directory = true;
+    CK_CHECK(f.key(ckv::Key::F6));
+    f.directory_gate->wait();
+    CK_CHECK(f.app->status(0).find("Planning move... Esc cancels") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.app->status(0).find("Move planning cancelled") != std::string::npos; });
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(f.app->availability("ck.files.move").reason == "Move unavailable: a pane worker is busy");
+    f.directory_gate->release();
+    f.until([&] { return f.app->availability("ck.files.move").enabled; });
+
+    NativeFileSystem filesystem;
+    const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left"));
+    const auto destination = filesystem.open_native_directory(address(f.scratch.path() / "right"));
+#ifdef _WIN32
+    const auto name = NativeName::from_windows(u"left-item-0");
+#else
+    const auto name = NativeName::from_posix("left-item-0");
+#endif
+    CK_CHECK(source.value() && destination.value() && name);
+    CK_CHECK((*source.value())->open_child(*name).value());
+    CK_CHECK((*destination.value())->open_child(*name).state() == ObservationState::Gone);
 }
 CK_TEST(files_app_move_review_lists_every_marked_name_and_the_full_paths) {
     Fixture f;

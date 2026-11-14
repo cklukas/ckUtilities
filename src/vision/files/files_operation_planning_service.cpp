@@ -487,8 +487,11 @@ struct FilesOperationPlanningService::State final {
                     review_limits = pane_input->request.review_limits;
                     if (!pane_input->handoff->wait(stop.get_token())) {
                         std::lock_guard lock(pane_input->handoff->mutex);
-                        if (pane_input->handoff->failure) {
-                            result.error = *pane_input->handoff->failure;
+                        const auto &failure = pane_input->handoff->failure;
+                        const bool handoff_interrupted = failure && failure->error.domain == ck::files::ErrorDomain::Adapter &&
+                            failure->error.code == static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead);
+                        if (failure && !(stop.stop_requested() && handoff_interrupted)) {
+                            result.error = *failure;
                             result.state = limit_error(*result.error)
                                 ? FilesOperationPlanningReplyState::LimitExceeded
                                 : FilesOperationPlanningReplyState::Failed;
@@ -596,6 +599,7 @@ bool FilesOperationPlanningService::cancel(const FilesOperationPlanningTicket& r
             state_->reply->state = FilesOperationPlanningReplyState::Cancelled;
             state_->reply->plan.reset();
             state_->reply->review.reset();
+            state_->reply->evidence.reset();
             state_->reply->error.reset();
             notify = !std::exchange(state_->signalled, true);
         }

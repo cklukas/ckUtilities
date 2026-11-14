@@ -109,7 +109,8 @@ clipboard.
 - Rename, create-folder, create-empty-file, hard-link, and qualified symbolic-link actions with strict name validation. New files are created exclusively relative to the held pane directory, flushed before success, and followed by an acknowledged listing refresh; duplicate names are refused as a changed destination. Hard links are regular-file-only, identity-bound, no-replace mutations, flushed before success, and currently target the selected file's pane. POSIX symbolic links store an opaque target without normalization or traversal; Windows keeps this command disabled until handle-relative reparse publication is qualified. **Inspect link target** reads bounded POSIX link or Windows reparse metadata from the held object without following or executing it; opaque Windows payloads remain explicitly opaque. Case-only
   renames and platform-specific name rules are capability-checked rather than
   silently normalized.
-- Copy and move review shows **From**, **To**, and the selected entry count.
+- Press **Esc** to cancel while Files prepares a copy or move plan. The review
+  shows **From**, **To**, and the selected entry count once planning finishes.
   Open **Paths and names** to scroll through the full paths and every selected
   name. The review identifies the source files affected by conflicts or
   preservation losses. For a batch of individual files, **Keep existing
