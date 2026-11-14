@@ -9,9 +9,12 @@
   "windows": {
     "frontend": "5dc1433d46ee8b10dbf91e3cd648f7c863f3ad44",
     "initial_recheck": "The verified Release image passed the transfer bound regression, then exited 0xC0000409 in the pre-existing folder-review regression.",
-    "repeat": "A Windows recheck of the exact image stayed in Session 0 beyond 120 seconds with empty output. Exact PID 27452 was still present after Windows refused termination. Ordinary desktop qualification and the new observer remain open on Windows.",
+    "repeat": "The exact-image recheck waited beyond 120 seconds in Session 0. PID 27452 later exited after Windows initially refused termination. The final stdout contains only the test entry line and there is no passing receipt. Ordinary desktop qualification and the new observer remain open on Windows.",
     "initial_folder_test_log_sha256": "83db695598bc0dc2d65807e707f45e3b2265f6d13d0d439a0df6c28ea5e2402d",
-    "repeat_driver_log_sha256": "d1eb1bc71c7059c1bc560a295bb2c2c28e98675596da468aba27b8415da69050"
+    "repeat_driver_log_sha256": "d1eb1bc71c7059c1bc560a295bb2c2c28e98675596da468aba27b8415da69050",
+    "repeat_stdout_sha256": "f1fd4717b5d6749b78b64563ca2fd2091270576fbf33d9d7c9b608fc1e793ec8",
+    "ordinary_launcher": "V:\\tmp\\ckfq107e70c-ySy9\\run-5dc1433-ordinary.ps1",
+    "launcher_sha256": "091dfbf7edf93334b57aab62be77ee8845642718e2b8202515dbd075885ed5c5"
   },
   "docs": {
     "ckUtilities_pages": 27,
