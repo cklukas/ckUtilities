@@ -173,7 +173,7 @@ closes. Startup reading uses the same opened file for its bytes and revision.
 
 | Key | Action |
 |---|---|
-| Enter | Enter the selected directory |
+| Enter | Enter the selected directory or preview the selected file |
 | Insert | Mark or unmark the focused entry |
 | Backspace | Go to the parent directory, show volumes at a namespace root, or leave the volume view |
 | Ctrl+L | Edit the location |

@@ -711,7 +711,7 @@ CK_TEST(files_app_status_reports_contextual_reason_for_empty_listing) {
     std::filesystem::create_directory(empty);
     CK_CHECK(f.app->navigate(0, address(empty)));
     f.loaded();
-    CK_CHECK(f.app->status(0).find("Hint: Enter folder unavailable: select a folder") != std::string::npos);
+    CK_CHECK(f.app->status(0).find("Hint: Open unavailable: select a file or folder") != std::string::npos);
     CK_CHECK(!f.application.commands().is_enabled(f.id("ck.files.enter_directory")));
 }
 CK_TEST(files_app_status_reports_operation_reason_for_selected_row_when_other_pane_is_busy) {
@@ -1744,6 +1744,14 @@ CK_TEST(files_app_preview_reads_only_a_bounded_exact_row_and_returns_to_idle) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->preview_pending());
+    const auto left = f.app->location(0);
+    const auto right = f.app->location(1);
+    CK_CHECK(f.key(ckv::Key::Enter) && f.app->preview_pending());
+    f.until([&] { return !f.app->pending(0) && f.app->preview_pending(); });
+    CK_CHECK(f.app->location(0) == left && f.app->location(1) == right);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->preview_pending());
 }
 CK_TEST(files_app_location_menu_copies_the_bound_row_and_cancellation_keeps_the_clipboard) {
     Fixture f;
@@ -2101,7 +2109,7 @@ CK_TEST(files_app_folder_menu_and_scope_do_not_enter_files_or_run_from_dialogs_a
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
     f.loaded();
     CK_CHECK(f.key(ckv::Key::Down));
-    CK_CHECK(!f.command("ck.files.enter_directory") && !f.app->enter_directory(0));
+    CK_CHECK(!f.app->enter_directory(0));
     CK_CHECK(f.key(ckv::Key::Home));
     auto input = std::make_unique<ckv::widgets::InputLine>();
     input->set_bounds({0, 0, 20, 1});
@@ -2115,7 +2123,7 @@ CK_TEST(files_app_folder_menu_and_scope_do_not_enter_files_or_run_from_dialogs_a
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "l"}}));
-    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "e"}}));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "o"}}));
     f.loaded();
     CK_CHECK(f.app->location(0)->components().size() == 1);
 }
@@ -2351,7 +2359,7 @@ CK_TEST(files_app_root_menu_opens_pane_local_volume_view_above_namespace_root) {
         .action = ckv::MouseAction::Down, .button = ckv::MouseButton::Left, .cell = footer_enter}));
     CK_CHECK(f.application.dispatch(ckv::MouseEvent{
         .action = ckv::MouseAction::Up, .button = ckv::MouseButton::Left, .cell = footer_enter}));
-    CK_CHECK(f.painted().find("Enter folder unavailable: return to the filesystem listing") != std::string::npos);
+    CK_CHECK(f.painted().find("Open unavailable: return to the filesystem listing") != std::string::npos);
     CK_CHECK(f.app->model(0).cursor().row == 1);
     CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::Alt, "o"}}));
     CK_CHECK(f.key(ckv::Key::End));

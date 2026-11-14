@@ -80,7 +80,7 @@ const std::array kFilesCommands{
     CommandDefinition{"ck.files.copy_path", "Cop&y path", "Files", ""},
     CommandDefinition{"ck.files.preview", "Pre&view", "Files", "F3"},
     CommandDefinition{"ck.files.inspect_link", "Inspect link target", "Files", ""},
-    CommandDefinition{"ck.files.enter_directory", "&Enter folder", "Files", "Enter"},
+    CommandDefinition{"ck.files.enter_directory", "&Open selected entry", "Files", "Enter"},
     CommandDefinition{"ck.files.rename", "&Rename...", "Files", "F2"},
     CommandDefinition{"ck.files.create_file", "New &file...", "Files", ""},
     CommandDefinition{"ck.files.create_hard_link", "New &hard link...", "Files", ""},

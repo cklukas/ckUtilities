@@ -526,7 +526,12 @@ struct FilesApp::State {
             inspect_link_id = own("ck.files.inspect_link", [this] { show_inspect_link(); },
                                   [this] { return availability("ck.files.inspect_link").enabled; });
             enter_id = own(
-                "ck.files.enter_directory", [this] { enter_directory(active); },
+                "ck.files.enter_directory", [this] {
+                    if (panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory)
+                        enter_directory(active);
+                    else
+                        show_preview();
+                },
                 [this] { return availability("ck.files.enter_directory").enabled; });
             create_directory_id = own("ck.files.create_directory", [this] { show_create_directory(); },
                                       [this] { return availability("ck.files.create_directory").enabled; });
@@ -609,7 +614,7 @@ struct FilesApp::State {
             options.application_menus = {
                 ckv::widgets::MenuBarItem{
                     "&Location",
-                    {item(location_id, "&Go to location..."), item(enter_id, "&Enter folder"),
+                    {item(location_id, "&Go to location..."), item(enter_id, "&Open selected entry"),
                      item(parent_id, "&Parent folder"), item(root_id, "Location &root"),
                      item(home_id, "&Home location"), item(history_back_id, "Go &back"),
                      item(history_forward_id, "Go &forward"), item(bookmark_open_id, "Open boo&kmark..."),
@@ -643,7 +648,7 @@ struct FilesApp::State {
                     "&View", {item(options_id, "View &options..."),
                               item(application.commands().standard().command_palette, "&Commands...")}}};
             options.application_status_items = {
-                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{enter_id, "&Enter folder"}, 35},
+                ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{enter_id, "&Open"}, 35},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{parent_id, "&Parent folder"}, 32},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{switch_id, "&Switch pane"}, 30},
                 ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{toggle, "&Mark"}, 28},
@@ -852,7 +857,7 @@ struct FilesApp::State {
         for (std::size_t i = 0; i < surfaces.size(); ++i) {
             auto *surface = surfaces[i];
             surface->grid->on_activate = [this, i] {
-                if (active == i)
+                if (active == i && panes[i].model.cursor_kind() == ck::files::ObjectKind::Directory)
                     application.execute_command(enter_id);
             };
             surface->grid->on_changed = [this] {
@@ -1122,10 +1127,11 @@ struct FilesApp::State {
         }
         if (command == "ck.files.enter_directory") {
             if (panes[active].volume_view)
-                return unavailable("Enter folder unavailable: return to the filesystem listing");
-            return ready(active) && panes[active].model.cursor_kind() == ck::files::ObjectKind::Directory
+                return unavailable("Open unavailable: return to the filesystem listing");
+            const auto kind = panes[active].model.cursor_kind();
+            return ready(active) && (kind == ck::files::ObjectKind::Directory || kind == ck::files::ObjectKind::RegularFile)
                        ? FilesCommandAvailability::available()
-                       : unavailable("Enter folder unavailable: select a folder");
+                       : unavailable("Open unavailable: select a file or folder");
         }
         if (command == "ck.files.create_directory")
             return ready(active) ? FilesCommandAvailability::available()
