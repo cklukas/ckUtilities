@@ -449,6 +449,35 @@
         "Suite",
         "Desktop"
       ]
+    },
+    "retirement_diagnosis_and_fix": {
+      "diagnosis": "The diagnostic entry point caught std::filesystem::exists access-denied exceptions after the worker's successful mutation reply. Both fixtures became empty on process exit. The old disposition deferred removing the name while the pane retained object handles.",
+      "fix": "Use FileDispositionInfoEx with DELETE and POSIX_SEMANTICS. Acquire the held parent write handle before disposition, check the delete-handle close and flush the parent after namespace removal.",
+      "backend": "5578e8710265fb27979c239eef27c0e6c62c4cf2",
+      "fix_source_patch_sha256": "97094f47e4d6e4ba1b5c7f84ab3b082453305b35e8c744d5ba733a8aec4e32e4",
+      "prior_diagnostic_hash": "1748b3b9ae5b618853608c94a64fd6180df73966abb05c037655882087d9306e",
+      "fixed_diagnostic_hash": "5f8b2a5f563216f1b3f1f373c560f15ae6e0c5721772980eab6958081820cdb4",
+      "fixed_diagnostic_image_sha256": "cff5d2498c518bfe58c6a5eda687eb22ecfe6427d0f62ea496f3155ff7b88861",
+      "fixed_focused_cases": 2,
+      "scope": "Original Release test objects linked with the changed Windows native adapter object and an exception-reporting test entry point. Normal CMake build and full application qualification of the fix remain pending."
     }
+  },
+  "linux_arm64_matched_sdk_thread_sanitizer": {
+    "compiler": "GCC 14",
+    "configuration": "Debug, -O1 -g0, fail-fast TSan",
+    "start_utc": "2026-11-14T18:38:33Z",
+    "end_utc": "2026-11-14T18:51:34Z",
+    "elapsed_build_seconds": 780.494,
+    "build_steps": 315,
+    "frontend_manifest_sha256": "b15310abdb48a696d93305cbd3cda201a87f4edb64c90a46d9e9b2384d657c23",
+    "backend_manifest_sha256": "5e14b747a6fd5da75a27ef4877858dbdc56af4d7db0af567f5548c4a4a6a56db",
+    "sdk_manifest_and_toolchain_sha256": "cff3ff09affd878452e4a5bc24044ca5188f72594858caf56dbe90ae8dbb49ae",
+    "sdk_check": "297 SDK files verified 0ebfb4d736c519520e502a9691215de6ef9c1b01170eb4bbfe8dfcf69b875759",
+    "soft_open_descriptor_limit": 1024,
+    "executable_receipt_sha256": "08d6040c88655ab6e5ce37d530cb9d6e5b80398d1e8bf924d27229ae97b2ecea",
+    "focus_log_sha256": "ac1245ac49b3023264bfd8002af9abf2ae03b7bebe10baab855127a99211d377",
+    "ctest_entries_passed": 158,
+    "ctest_junit_sha256": "0d42f6814361f5c649c3020692ca1c10a69ab41e5c645e2e083053ea4f5064ca",
+    "ctest_log_sha256": "6acc405bfe6a185d0e5559cd2b464300f658602002ad7ce885febbe1f0d102ac"
   }
 }
