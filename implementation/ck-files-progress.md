@@ -14,6 +14,19 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — CP-01 Linux lease coverage
+
+On Linux arm64 `6.12.116+deb13-cloud-arm64` and local ext4, an ordinary
+UID 501 process tried to take a read lease (`fcntl(F_SETLEASE, F_RDLCK)`)
+on a temporary file. An open writer caused `EAGAIN`. A shared writable
+mapping still caused `EAGAIN` after its originating descriptor closed.
+Once the mapping closed, the lease succeeded. A separate process then
+changed the mode and a user xattr by name, and both changes were visible
+through the leased descriptor while `F_GETLEASE` still reported `F_RDLCK`.
+This leaves metadata stability unproved for CP-01. Source retirement
+requires proof for the preservation categories accepted by the operation,
+along with identity-bound namespace retirement.
+
 ## 2026-11-14 — Interactive xterm mouse check
 
 The user tested the verified Linux Release build `f70acbc` with ckVision
