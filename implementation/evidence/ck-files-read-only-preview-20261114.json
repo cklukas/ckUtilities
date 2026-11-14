@@ -71,5 +71,29 @@
     "ctest_log_sha256": "d049822303178dc4fc171ef30fd1991b7af88c2f8ed21993cc9c1241c8823051",
     "result": "The application suite exceeded its 60-second CTest deadline. No ThreadSanitizer report appeared. The application suite remains unqualified."
   },
-  "open": ["Linux, ordinary-user Windows runtime and desktop acceptance, and matched-SDK sanitizer qualification for this revision"]
+  "macos_arm64_matched_sdk_application_retest": {
+    "method": "Run the original pinned ASan/UBSan and ThreadSanitizer executables in four disjoint cktest shards. Compare the union of the executed suite and case names with each executable's complete registration list.",
+    "cases_passed_per_profile": 307,
+    "shard_counts": [77, 77, 77, 76],
+    "case_census_sha256": "1e667f9c18ba1a38693c66f4423a23659b3aa6a32adaea7ee3cde3c7066daf44",
+    "address_and_undefined": {
+      "elapsed_seconds_by_shard": [16.42, 13.64, 22.66, 11.25],
+      "log_sha256": [
+        "0165454384223b3cc01729cb530e0c51da04e41086e9909c0d410c2e100c96e4",
+        "7f9de10152348fad3d5f4ac2e5e3a8afeac0d3a50584ac2bd3882df297a6e5a1",
+        "96808199161defee4cb28ef7af4b899627ad9db7fc9d5baf1519c5ba68397b8d",
+        "1f66d94f07b2bf734a7a23dd35704a6579827ccc40321dcb0f434b1fee8af837"
+      ]
+    },
+    "thread": {
+      "elapsed_seconds_by_shard": [22.38, 18.72, 22.53, 16.04],
+      "log_sha256": [
+        "362b19475dc2523f17ea3f397ce5427b7d8d41fa811e2dfe8c9e517447e8bb04",
+        "4ac6abb5bcc66193844651433d127a452ab95e80beadc1dfc50ac2ce0c5e3638",
+        "45363514b5b5fcceeb6a82d3c071b3f7576f22a5cc33c4be30e20d8f039f2327",
+        "2ca81aa0357bd718201de5beed2577c3f661cd9c314b4192b60568324bd23377"
+      ]
+    }
+  },
+  "open": ["Linux and ordinary-user Windows runtime and desktop acceptance for this revision"]
 }
