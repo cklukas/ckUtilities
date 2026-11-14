@@ -1,0 +1,24 @@
+{
+  "frontend": "80a8cbc2d8531e4e726e5de2daa1594a6f173803",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "contract": "Publish a GUID row when the mount-path query supplies no usable paths. Keep native UTF-16 units, close the search on every exit, and surface enumeration failures so the UI can retain its previous volume view and block stale volume actions.",
+  "windows_fixture_admission": {
+    "method": "Independently count volumes and successful empty mount-path lists through the native wide-character APIs on workstation.",
+    "volumes": 8,
+    "volumes_without_drive_letter_or_folder_mount": 4,
+    "inventory_sha256": "833ac78a4f12ad3cae32234cdf24e871829e1e53d8d6d7733bdd5fd093d13bce"
+  },
+  "macos_arm64_release": {
+    "tested_frontend_manifest_sha256": "2931560e0389519dca41337bd90550d4c19838e2c3511bbd14123f03056a5f90",
+    "build": {"start_utc": "2026-11-14T16:44:03Z", "end_utc": "2026-11-14T16:44:05Z", "elapsed_seconds": 2.45, "steps": 6},
+    "build_review": "The last increment recompiled the volume service and relinked after a Windows-only UTF-16 conversion edit. The product and test digests matched the preceding Mac build because the compiled platform code did not change. Changed source bytes and rebuilt image timestamps were verified, and the full Mac suite was rerun.",
+    "product_sha256": "d1e8d26e4362b2faf31c2bc9fefd3cd3e9c6417e0ea0b886f3d2c35d8b99b12d",
+    "test_sha256": "d0de9610342c0552fb668da9911e05cf0ca4dfcee9514e6a3e7d64b73b86ad28",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 25.27,
+    "ctest_log_sha256": "553c2d7a975228ca27703d2074bef7b853701ea6b0c19a76835c8aeb35c3e0ff"
+  },
+  "documentation": "The Files guide describes the volume GUID row. ckdocs checked all 27 pages.",
+  "open": ["Run the Windows regression on the populated workstation and run ordinary-user Suite and Desktop acceptance", "Current Linux qualification and Linux documentation capture"]
+}
