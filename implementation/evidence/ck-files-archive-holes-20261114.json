@@ -23,5 +23,30 @@
     "ctest_elapsed_seconds": 119.25,
     "ctest_log_sha256": "e16c8de97294272728fcc2169ebca7851aedb2fea4bada4fa70fffdc8598dd07"
   },
-  "open": ["Current Linux suite and xterm archive creation and readback, matching macOS ThreadSanitizer, current Windows build and ordinary-user acceptance"]
+  "linux_arm64_release": {
+    "source_delta_archive_sha256": "0493601d0795718f10823f40332f8ae32459e73c21f9c79deb1bc35382bfdd36",
+    "tested_frontend_manifest_sha256": "f55065627210931e27c1726672139e5485e97cac0d85b432284797c7ffbbde38",
+    "build": {"start_utc": "2026-11-14T16:32:39Z", "end_utc": "2026-11-14T16:35:07Z", "elapsed_seconds": 147.72, "steps": 10},
+    "product_sha256": "3f3746a732880838afe3c02b7a197f9dcf087d9387701c5f8406a6a12815152c",
+    "test_sha256": "0cffb4cbe010b9e114dfba69fea9581813b1fec5b9bd3c3a8ed9dc9a17bcdd49",
+    "files_and_keymap_ctest_entries_passed": 158,
+    "application_cases_passed": 312,
+    "ctest_elapsed_seconds": 49.61,
+    "ctest_log_sha256": "f9569b2e35ab64df0381e811d3624ff40f993049d99e0acea046e1350e8f7c1d",
+    "ctest_junit_sha256": "81642e0411abd295e30d2a55296032a9370abea84630a3853d54d1710227910a"
+  },
+  "linux_xterm_398_sparse_archive": {
+    "receipt": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/desktop-f8e227/receipt.json",
+    "receipt_sha256": "283a470ce0152a260055f65b9ecd7b91422e47dfc80faf42777a43ff2a069e71",
+    "terminal_log_sha256": "3a15a9f23a8aab8c81669d6d4195321c7cb06c656047e5f0fbccd51eaa4c2b8a",
+    "review_screenshot_sha256": "64f7a25fce926c8c18bcf3a5048f1c10287ea738f3dfc7097ea263b0b8e07350",
+    "created_screenshot_sha256": "f70868b56a3f6be6691d9ac07288291dd433ed76506127e336cc3a47714f7eac",
+    "source_and_reconstructed_sha256": "760336e557d8e5ffcc33dcf018639dc95f10010dd8aeb235f1ee174c00e66b31",
+    "archive_sha256": "cf49abdf2b8e3f9a1538c64d120f7f72f03674581cd54645969667ab6953d4a6",
+    "archive_logical_bytes": 4195403,
+    "archive_allocated_bytes": 16384,
+    "stored_extent_count": 2,
+    "verified": "The ordinary-user Files process selected a private tmpfs fixture in the left volume pane and prepared the archive in the right ext4 pane. The review reported one sparse file and 8192 stored extent bytes. Each listed non-hard loss was acknowledged before creation. The destination listed the resulting archive. An independent parser checked its manifest, verified the physical holes, and reconstructed the source contents byte for byte. The app exited successfully and terminal modes matched. Only fixture-mount setup used privilege, inside a private mount namespace."
+  },
+  "open": ["Matching macOS ThreadSanitizer, current Windows build and ordinary-user acceptance"]
 }
