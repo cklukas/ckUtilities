@@ -47,6 +47,28 @@ CK_TEST(frozen_inventory_seals_worker_records_and_retains_hard_link_groups) {
     CK_CHECK(!builder.add(entry(scope, "/root/late", 2)));
 }
 
+CK_TEST(frozen_inventory_groups_only_matching_native_identity_generations) {
+    const AdapterScope scope;
+    FrozenInventoryBuilder builder(InventoryMountPolicy::AllowCrossMounts, InventoryLinkPolicy::PreserveLinks);
+    auto original = entry(scope, "/root/a", 1);
+    auto current = entry(scope, "/root/b", 1);
+    current.identity.generation = 1;
+    auto recycled = entry(scope, "/root/c", 1);
+    recycled.identity.generation = 2;
+    auto foreign_volume = entry(scope, "/root/d", 1);
+    foreign_volume.identity.volume = NativeIdentifier::from_u64(88);
+    auto foreign_scheme = entry(scope, "/root/e", 1);
+    foreign_scheme.identity.scheme = IdentityScheme::WindowsFileId128;
+    auto alias = entry(scope, "/root/alias", 1);
+    alias.identity.generation = 1;
+    for (const auto& row : {original, current, recycled, foreign_volume, foreign_scheme, alias})
+        CK_CHECK(builder.add(row));
+    CK_CHECK(builder.seal());
+    const auto result = take(builder);
+    const std::vector<std::size_t> expected{0, 1, 2, 3, 4, 1};
+    CK_CHECK(result->hard_link_groups() == expected);
+}
+
 CK_TEST(frozen_inventory_mount_policy_refuses_crossing_or_unknown_mounts) {
     const AdapterScope scope;
     FrozenInventoryBuilder stay(InventoryMountPolicy::StayOnRootMount, InventoryLinkPolicy::PreserveLinks);
