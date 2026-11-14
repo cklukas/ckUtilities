@@ -1013,7 +1013,9 @@ CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retir
     request.policy.copy_limits.chunk_bytes = 4;
     request.policy.copy_limits.max_bytes = 1024;
     request.operation = FileOperation::Move;
-    request.open_journal = [](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+    std::optional<NativeName> tree_journal_name;
+    request.open_journal = [&](const NativeAbsolutePath& root, const NativeName& basename, bool create_new) {
+        if (!tree_journal_name) tree_journal_name = basename;
         return open_native_operation_journal_file(root, basename, create_new);
     };
 #if defined(__APPLE__)
@@ -1054,6 +1056,21 @@ CK_TEST(native_operation_move_tree_publishes_then_qualifies_reverse_source_retir
     CK_CHECK(fs::is_regular_file(source_path / "nested" / "child.bin"));
 #endif
 #endif
+    job.reset();
+    CK_CHECK(tree_journal_name.has_value());
+    if (!tree_journal_name) return;
+    const auto journal_root = take(NativeAbsolutePath::from_host(scratch.path()));
+    auto journal_file = take(open_native_operation_journal_file(journal_root, *tree_journal_name, false));
+    const auto loaded = take(load_operation_journal(*journal_file));
+    bool found = false;
+    for (const auto& record : loaded.journal->records()) {
+        if (record.state == OperationJournalState::Planned) continue;
+        const auto receipt = take(decode_native_operation_recovery_evidence(record.evidence));
+        CK_CHECK(receipt.source_name == name("source"));
+        CK_CHECK(receipt.destination_name == name("source-move"));
+        found = true;
+    }
+    CK_CHECK(found && !loaded.tail);
 }
 
 #if defined(__APPLE__)
