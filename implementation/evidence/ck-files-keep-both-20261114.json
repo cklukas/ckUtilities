@@ -1,0 +1,35 @@
+{
+  "frontend": "32126a9cea98718e9a533681c0611e154a9957ca",
+  "backend": "1a33fbc2842190fbf8cfcbb6f49ad4045697a87c",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "fixture": "Ownership-enabled APFS",
+    "build_root": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build",
+    "build_start_utc": "2026-11-14T13:06:56Z",
+    "build_end_utc": "2026-11-14T13:10:23Z",
+    "build_seconds": 206.86,
+    "build_steps": 106,
+    "build_scope": "Five Files targets, with shared operation_consent.hpp dependency closure. Prior comparable rebuild took 188.65 s for 100 steps.",
+    "frontend_code_patch_sha256": "47c1eb976a477f0c229f686f0e8fe75fceae838d2ab0568f9e7af576aa268d4f",
+    "backend_patch_sha256": "70fc8c0bf5495c72a7667b4413738a3b4ca44e396f924906b0fe9cf6a9a5ffe4",
+    "test_executable_sha256": {
+      "src/vision/files/ck_vision_files_tests": "e133541fed6c3cee1a9a6f835b3e694fa17579b159bb707efea9d376c1713b85",
+      "tests/unit/ck_files/ck_files_core_tests": "ed48235f11c5e581c287fe1a98555fe0458a10f116d7d364e79898269f5780cf",
+      "tests/unit/ck_files/ck_files_native_tests": "b6792e990e90beec7eaafa71b2ed3593ef56e09fc2b2a8389919d994ea21a9e9"
+    },
+    "files_ctest_entries_passed": 110,
+    "files_application_cases_passed": 303,
+    "test_seconds": 27.05,
+    "documentation_contract": "passed"
+  },
+  "verified": [
+    "The reviewed Keep Both name and acknowledgements are present together in the plan-bound receipt.",
+    "A same-volume move publishes under the chosen name and leaves the occupied original target untouched.",
+    "An object occupying the chosen name during review prevents the job from opening a journal. Both original files and the newly occupied target survive.",
+    "Existing native no-replace tests protect the target at the actual mutation boundary."
+  ],
+  "open": [
+    "Current Linux and Windows Files suites and sanitizer runs",
+    "Keep Both for recursive trees, native preflight equivalence for distinct absent aliases, and retained replacement"
+  ]
+}
