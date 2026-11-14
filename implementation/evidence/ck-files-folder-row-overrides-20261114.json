@@ -34,6 +34,26 @@
     "application_ctest_elapsed_seconds": 14.88,
     "result": "After an explicit per-file Keep existing decision, a new external destination entry invalidates the review. Both conflicting files and the late file retain their exact bytes, and the journal directory stays empty."
   },
+  "windows_x64_release_elevated_smoke": {
+    "filesystem": "ReFS",
+    "toolchain": "MSVC v143 14.44, static CRT",
+    "build_start_utc": "2026-11-14T13:45:06.320Z",
+    "build_end_utc": "2026-11-14T14:02:30.848Z",
+    "build_elapsed_seconds_including_configure": 1044.53,
+    "build_steps": 188,
+    "binary": "V:\\tmp\\ckfr-ebbe580e9e\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "binary_sha256": "110c6e508860695e069e0468d0ebeb084c6dc78bb8afaa2f706699c982e69725",
+    "ckvision_static_library_sha256": "9b7f09840542c607c04e10f04bbbb75f825d1749e12df41337d393fd1ae9c153",
+    "frontend_source_archive_sha256": "12a4f4ad14905a1dcf6eb664f3c06eb019d33b69ebeaea27809da3b827910d05",
+    "backend_source_archive_sha256": "34cd64d02f3894cd41f1453ae466a1791c16ba94b69f90257fb0a76d932402e0",
+    "smoke_passed": {
+      "destination_changed_after_review": 1,
+      "right_to_accept_native_folder": 1,
+      "mark_and_focus_after_refresh": 1,
+      "settings_worker": 10
+    },
+    "scope": "Elevated SSH compile and focused test execution. Ordinary-user, full aggregate and desktop runtime remain pending."
+  },
   "verified": [
     "The worker accepts a folder-wide conflict choice and typed row overrides, validates them against its sealed review, and constructs selected-row backend rules with mandatory retention for replacements.",
     "The application regression adds an external file to a previously empty destination after review. Apply requires a fresh review and preserves the late file without opening a journal."
