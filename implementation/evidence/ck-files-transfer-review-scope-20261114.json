@@ -1,0 +1,31 @@
+{
+  "frontend": "6875c999a25c542c79a65a02cfbc24691304f9a6",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "tested_runtime_and_test_delta_sha256": "7349ff517fd31c798e512ad7666b0b564181fe38d372a1bed0a22ab318684d03",
+    "tested_frontend_manifest_sha256": "d5803ce7e04bc5fbe7a4b3108404c0d8fbbddd6f0df4b11df3569c965d7b720c",
+    "runtime_build": {"start_utc": "2026-11-14T14:51:59Z", "end_utc": "2026-11-14T14:52:49Z", "elapsed_seconds": 49.10, "steps": 16},
+    "test_rebuild": {"start_utc": "2026-11-14T14:53:44Z", "end_utc": "2026-11-14T14:54:07Z", "elapsed_seconds": 23.69, "steps": 2},
+    "test_rebuild_reason": "Compare the full selection list in both orders. Native indexed source enumeration does not promise display order.",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "830c29ed4a1328eb1cc15830ebcde7e14cffbfe87f03c1c568a4131eb04236b6",
+    "focused_cases_passed": 3,
+    "focused_log_sha256": "a96d83f46f096a70212eac01b9ec6cc5e6747e2cd642ffca3886162884cd52c3",
+    "application_cases_passed": 309,
+    "files_and_keymap_ctest_entries_passed": 111,
+    "ctest_elapsed_seconds": 47.0,
+    "ctest_log_sha256": "bbb80d10167575dd37145e3ed7169e54a3e153b5c62fd54e0877d288eee08982"
+  },
+  "macos_native_pty": {
+    "executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "executable_sha256": "9cf647397290a34609d5b6575ca962cb8d274cd7a2e27c3c3da44c0615839033",
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfiles-transfer-review.ADi3XCvm/record.json",
+    "receipt_sha256": "447d838951a356194d286fae26c1aca7a594cb79439fde349b39e5db8522609c",
+    "terminal_stream_sha256": "553b2160cc0e48755f95b21f6349bc7c457792f0d5cc8688c520a5f3ec1fec2b",
+    "verified": "F5 displays From, To and the selected regular file. Alt+P opens the read-only details. Escape closes the details and then cancels the same review. The source stays present, the destination stays empty, and Files exits with the terminal modes restored.",
+    "earlier_attempts": "The first run selected a folder when the harness expected a regular file. A follow-up showed the correct review and details but the harness attempted to reap an already exited child. A later run sent quit during the review dismissal and needed a second quit. The recorded pass used a single regular-file source and let the dismissal settle before sending quit."
+  },
+  "docs_pages_checked": 27,
+  "open": ["Linux and Windows aggregate suites, ordinary-user Windows desktop and matching sanitizer qualification for this revision"]
+}
