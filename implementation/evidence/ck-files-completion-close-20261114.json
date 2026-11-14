@@ -134,5 +134,81 @@
     "utility_guides_with_feature_lists_and_embedded_screenshots": 10,
     "strict_build_log_sha256": "5519068cafa40886fa6d231faab131a45cfb4044a469bf1aaf2399ca21b0e7fc",
     "guide_verifier_sha256": "bf2694da12ffd4c32bf91778a1f4225bda6195e51dfe47db4c77fb1184d606f7"
+  },
+  "linux_xterm_sparse_volume_archive": {
+    "scope": "Ordinary-user Files on Debian xterm 398. The left volume pane selected a private tmpfs fixture. The right ext4 pane received the reviewed archive. Fixture setup used a private mount namespace and all archive operations used the ordinary token.",
+    "fixture_note": "The first attempt selected the correct row but expected the full mount path in the clipped pane footer. The rerun used a shorter mount path inside the same owned workspace so the footer could verify the full mount and filesystem.",
+    "result": "pass",
+    "ended_utc": "2026-11-14T18:39:17.720972+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "c856eb09ed325773364c39026e7df443d8f1317dacb298513993db4a332add00",
+    "pid": 1304285,
+    "window": "2097164",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-panes",
+        "sha256": "96a5542d72512bd7ca48a018876ddc689ffa29d8e4f377b917bb8b6acd26c90e"
+      },
+      {
+        "label": "02-volumes",
+        "sha256": "f078716f48375c348864235b7efe6a15b7bd1abf5c7ece41301e63bda8260c4d"
+      },
+      {
+        "label": "03-fixture-selected",
+        "sha256": "9f107052b00f7e74d833dfb52b18c85efebf52d76a885aed308ad155d58771ba"
+      },
+      {
+        "label": "04-archive-review",
+        "sha256": "f974122ddfae94daeb9627d8649ea0fa3b0b52d425ca476e5138b2cc2f6530ed"
+      },
+      {
+        "label": "04b-archive-consent",
+        "sha256": "00e17a75bae74290cd55ff29fdbc466cf3f49a2b92fce8ff60584110db1989f5"
+      },
+      {
+        "label": "05-archive-created",
+        "sha256": "cdfb2d67dbc66cfa37c3c25d71f074c94c1377d6b592a2ddc3633eda5900329c"
+      }
+    ],
+    "actions": [
+      "Open location editor for the filesystem root",
+      "Select location input for root",
+      "Open filesystem root",
+      "Show volumes above the root",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Select next volume",
+      "Review the fixture archive",
+      "Create the reviewed fixture archive",
+      "Quit Files"
+    ],
+    "terminal_log_sha256": "731fe844d05ddc98f28de29b031c5d946c8de65ac660bdf68b55ce90a5a4a420",
+    "receipt_sha256": "563ffcfdd157600b3ed5ef802c9a7f1fdaba4f783d7e3ff59df1de45a2f0b51e",
+    "review": {
+      "logical_bytes": 4194304,
+      "stored_extent_bytes": 8192,
+      "sparse_files": 1
+    },
+    "archive_verification": {
+      "size": 4195390,
+      "allocated_bytes": 16384,
+      "logical_source_bytes": 4194304,
+      "source_sha256": "760336e557d8e5ffcc33dcf018639dc95f10010dd8aeb235f1ee174c00e66b31",
+      "restored_sha256": "760336e557d8e5ffcc33dcf018639dc95f10010dd8aeb235f1ee174c00e66b31",
+      "archive_sha256": "ab4141cb559f810abdb79fa2204ba8ffeed903025e582e66fa3f790a06456fb1",
+      "extent_count": 2
+    },
+    "archive_verification_sha256": "3c1d7307e2d307bae7b78b3863ebaffa29409b5be37f734235e849e5455b6197",
+    "process_exit": 0,
+    "terminal_mode_restored": true
   }
 }
