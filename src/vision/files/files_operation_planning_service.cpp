@@ -75,6 +75,7 @@ bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {
 bool FilesOperationReviewEvidence::same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept {
     using namespace ck::files;
     if (!inventory || !fresh.inventory || compare_identity(destination, fresh.destination) != IdentityComparison::Same ||
+        destination_address != fresh.destination_address ||
         destination_names != fresh.destination_names || inventory->mount_policy() != fresh.inventory->mount_policy() ||
         inventory->link_policy() != fresh.inventory->link_policy() ||
         source_times.size() != inventory->entries().size() || fresh.source_times.size() != fresh.inventory->entries().size())
@@ -173,7 +174,8 @@ ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_oper
     }
     auto result = std::make_shared<const FilesOperationReviewEvidence>(FilesOperationReviewEvidence{
         std::move(plan).take_value(), facts.inventory(), *destination.value(), std::move(names), std::move(times),
-        mount_policy, link_policy, evidence_limits, request.projection_policy, request.limits});
+        mount_policy, link_policy, evidence_limits, request.projection_policy, request.limits,
+        std::move(request.destination_address)});
     if (sealed_sources)
         *sealed_sources = std::move(sources);
     return Observation<Result>::available(std::move(result));
@@ -514,6 +516,7 @@ struct FilesOperationPlanningService::State final {
                             native.evidence.limits = pane_input->request.evidence_limits;
                             native.projection_policy = pane_input->request.projection_policy;
                             native.limits = pane_input->request.limits;
+                            native.destination_address = std::move(destination.address);
                             compose_native(std::move(native), stop.get_token(), result, plan);
                         }
                     }

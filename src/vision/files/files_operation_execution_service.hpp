@@ -88,6 +88,8 @@ struct FilesTreeCopyReview final {
 
     FilesOperationExecutionTicket request;
     ck::files::ComparisonPlanIdentity plan;
+    ck::files::NativeAbsolutePath source, destination;
+    ck::files::NativeName selected_name;
     std::vector<Row> rows;
     bool can_use_source = false;
     bool can_apply = false;

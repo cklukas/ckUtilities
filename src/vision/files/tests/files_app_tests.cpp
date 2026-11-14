@@ -1187,12 +1187,62 @@ CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     CK_CHECK(f.command("ck.files.copy"));
     f.until([&] { return f.app->operation_review_pending(); });
     CK_CHECK(f.app->operation_review_pending());
+    const auto review = f.painted();
+    CK_CHECK(review.find("From: " + address(f.scratch.path() / "left").display_text()) != std::string::npos);
+    CK_CHECK(review.find("To: " + address(f.scratch.path() / "right").display_text()) != std::string::npos);
+    CK_CHECK(review.find("1 selected entry · left-item-0") != std::string::npos);
     CK_CHECK(!f.command("ck.files.rename") && !f.command("ck.files.create_directory"));
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->operation_review_pending());
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+}
+CK_TEST(files_app_move_review_lists_every_marked_name_and_the_full_paths) {
+    Fixture f;
+    f.loaded();
+    NativeFileSystem filesystem;
+    const auto from = address(f.scratch.path() / "left");
+    const auto to = address(f.scratch.path() / "right");
+    const auto source = filesystem.open_native_directory(from);
+#ifdef _WIN32
+    const auto name = NativeName::from_windows(u"left-item-0 & another");
+#else
+    const auto name = NativeName::from_posix("left-item-0 & another");
+#endif
+    if (!source.value() || !name)
+        throw std::runtime_error("cannot open transfer scope fixture");
+    {
+        auto added = (*source.value())->create_child_file(*name);
+        if (!added.value() || !(*added.value())->finish_content_writes().value())
+            throw std::runtime_error("cannot create transfer scope fixture");
+    }
+    CK_CHECK(f.command("ck.files.refresh"));
+    f.loaded();
+    auto view = f.app->view(0);
+    view.display_substring = "left-item-0";
+    CK_CHECK(f.app->change_view(0, view));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.mark_visible"));
+    f.loaded();
+    CK_CHECK(f.app->selection(0).marks->total == 2);
+    CK_CHECK(f.command("ck.files.move"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    CK_CHECK(f.painted().find("2 selected entries") != std::string::npos);
+    CK_CHECK(f.alt("p"));
+    CK_CHECK(f.painted().find("Transfer paths and names") != std::string::npos);
+    std::vector<ckv::widgets::TextView *> readers;
+    find_views(f.application.root(), readers);
+    const auto prefix = "From: " + from.display_text() + "\nTo: " + to.display_text() + "\n\n2 selected entries\n";
+    CK_CHECK(std::any_of(readers.begin(), readers.end(), [&](const auto *reader) {
+        const auto &text = reader->text();
+        return text == prefix + "left-item-0\nleft-item-0 & another" ||
+               text == prefix + "left-item-0 & another\nleft-item-0";
+    }));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(f.app->operation_review_pending() && f.painted().find("Transfer paths and names") == std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->operation_review_pending(); });
 }
 #if defined(__APPLE__)
 CK_TEST(files_app_copy_acceptance_reports_unqualified_mac_publication_after_review)
@@ -1484,8 +1534,11 @@ CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_
     if (!f.app->operation_review_pending())
         throw std::runtime_error(f.app->status(0));
     f.application.step(f.clock.now_nanos());
-    CK_CHECK(f.painted().find("Review folder copy") != std::string::npos);
-    CK_CHECK(f.painted().find("inside.txt") != std::string::npos);
+    const auto review = f.painted();
+    CK_CHECK(review.find("Review folder copy") != std::string::npos);
+    CK_CHECK(review.find("inside.txt") != std::string::npos);
+    CK_CHECK(review.find("From: " + address(f.scratch.path() / "left" / "left-item-0").display_text()) != std::string::npos);
+    CK_CHECK(review.find("To: " + address(f.scratch.path() / "right" / "left-item-0").display_text()) != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.app->status(0).find("Copy cancelled") != std::string::npos; });
     const auto existing = (*target.value())->open_directory_child(*name);

@@ -303,7 +303,8 @@ struct FilesOperationExecutionService::State final {
         };
         const auto parent = destination.directory->identity();
         const auto& entries = request.reviewed->inventory->entries();
-        if (!current() || !parent.value() ||
+        if (!current() || !parent.value() || !destination.address ||
+            destination.address != request.reviewed->destination_address ||
             entries.empty() ||
             compare_identity(*parent.value(), request.reviewed->destination) != IdentityComparison::Same ||
             !sources.root_source || !sources.root_source->metadata().identity.value() ||
@@ -326,14 +327,13 @@ struct FilesOperationExecutionService::State final {
         ReviewedTreePlanRequest tree;
         tree.source_root = sources.root_source;
         tree.destination_root = std::move(target).take_value();
-        if (destination.address) {
-            auto address = destination.address->child_address(name);
-            if (const auto* failure = address.unavailable_detail()) {
-                fail(*failure);
-                return;
-            }
-            tree.destination_address = std::move(address).take_value();
+        auto address = destination.address->child_address(name);
+        if (const auto* failure = address.unavailable_detail()) {
+            fail(*failure);
+            return;
         }
+        auto destination_folder = std::move(address).take_value();
+        tree.destination_address = destination_folder;
         tree.comparison.profile = ComparisonProfile::Copy;
         tree.comparison.mode = ComparisonMode::CompleteDigest;
         tree.copy_policy = request.policy;
@@ -390,7 +390,8 @@ struct FilesOperationExecutionService::State final {
                 }
                 review_rows.push_back({std::move(item), can_replace});
             }
-            const auto choice = wait_for_tree_choice({result.request, plan, std::move(review_rows),
+            const auto choice = wait_for_tree_choice({result.request, plan, entries.front().source_path,
+                std::move(destination_folder), name, std::move(review_rows),
                 conflict_count != 0 && can_use_source, can_apply, conflict_count}, stop_token);
             if (const auto* failure = choice.unavailable_detail()) {
                 job->advance(stop_token);
@@ -649,6 +650,7 @@ struct FilesOperationExecutionService::State final {
         fresh_request.evidence.limits = value.reviewed->evidence_limits;
         fresh_request.projection_policy = value.reviewed->projection_policy;
         fresh_request.limits = value.reviewed->limits;
+        fresh_request.destination_address = handoff->destination_result->address;
         std::shared_ptr<const ck::files::CompletedRecursiveInventory> sources;
         auto collected = collect_files_operation_evidence(std::move(fresh_request), stop_token, &sources);
         if (const auto* failure = collected.unavailable_detail()) {

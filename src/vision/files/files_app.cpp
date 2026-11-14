@@ -3522,6 +3522,14 @@ struct FilesApp::State {
             }
             const auto fallback = completion;
             const auto inventory = reply.evidence ? reply.evidence->inventory : nullptr;
+            std::optional<FilesTransferReviewScope> scope;
+            if (transfer && reply.evidence && reply.evidence->destination_address && inventory &&
+                !inventory->entries().empty()) {
+                auto source = inventory->entries().front().source_path.parent_address();
+                if (source.value())
+                    scope.emplace(FilesTransferReviewScope{std::move(source).take_value(),
+                        *reply.evidence->destination_address, reply.evidence->destination_names});
+            }
             std::function<bool(ck::files::ConsentAction)> supports_action;
             if (transfer && reply.evidence)
                 supports_action = [evidence = reply.evidence](auto action) {
@@ -3531,8 +3539,9 @@ struct FilesApp::State {
                                ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
                 deliver_result(std::move(result), std::move(evidence));
             };
-            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(deliver),
-                                  inventory, std::move(supports_action)))
+            if ((transfer && !scope) ||
+                !review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(deliver),
+                                  inventory, std::move(supports_action), std::move(scope)))
                 fallback(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
                     ck::files::ObservationState::Failed,
                     {ck::files::ErrorDomain::Adapter,
@@ -3684,6 +3693,8 @@ struct FilesApp::State {
         DialogDescriptor descriptor;
         descriptor.title = "Review folder copy";
         descriptor.resizable = true;
+        add_files_transfer_scope(descriptor, {std::move(review.source), std::move(review.destination),
+                                 {std::move(review.selected_name)}}, application, shell->desktop(), shell->roles());
         descriptor.fields.push_back({.label = "Merge the two folders and keep files that exist only at the destination.",
                                      .kind = FieldKind::Note});
         const auto conflicts = review.conflicts;
@@ -3704,7 +3715,7 @@ struct FilesApp::State {
                 item.action == ReviewedTreeAction::MergeDirectory ? "Merge folder" :
                 item.action == ReviewedTreeAction::CreateDirectory ? "Create folder" :
                 item.action == ReviewedTreeAction::Copy ? "Copy" : "Keep";
-            auto label = std::string(action) + "  " + name;
+            auto label = std::string(action) + "  " + files_review_literal(name);
             if (item.row.requires_review && item.facts.source_size && item.facts.destination_size)
                 label += "  (" + std::to_string(*item.facts.source_size) + " → " +
                     std::to_string(*item.facts.destination_size) + " bytes)";
@@ -4157,7 +4168,8 @@ struct FilesApp::State {
     bool review_operation(ck::files::OperationReviewModel::Pointer model,
         ck::files::NameEncoding destination_encoding, FilesApp::OperationRevalidation revalidate,
         FilesOperationReviewDialog::Completion completion, ck::files::FrozenInventory::Pointer inventory = {},
-        std::function<bool(ck::files::ConsentAction)> supports_action = {}) {
+        std::function<bool(ck::files::ConsentAction)> supports_action = {},
+        std::optional<FilesTransferReviewScope> scope = {}) {
         if (closing || modal_pending() || !model || !revalidate || !completion)
             return false;
         const auto weak = std::weak_ptr<void>(lifetime);
@@ -4181,7 +4193,7 @@ struct FilesApp::State {
                     }
                 }
                 delivered_completion(std::move(result));
-            }, std::move(inventory), std::move(supports_action));
+            }, std::move(inventory), std::move(supports_action), std::move(scope));
         return true;
     }
     template<class Request>

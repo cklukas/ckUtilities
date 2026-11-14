@@ -6,7 +6,9 @@
 #include "name_mapping.hpp"
 #include "windows_name.hpp"
 
+#include <cvision/ui/layout.hpp>
 #include <cvision/widgets/dialog.hpp>
+#include <cvision/widgets/text_view.hpp>
 
 #include <algorithm>
 #include <stdexcept>
@@ -101,6 +103,60 @@ std::optional<NativeName> parse_name(std::string text, NameEncoding encoding) {
 
 } // namespace
 
+std::string files_review_literal(std::string_view text) {
+    std::string label;
+    label.reserve(text.size());
+    for (const char c : text) {
+        if (c == '&')
+            label += '&';
+        label += c;
+    }
+    return label;
+}
+
+void add_files_transfer_scope(DialogDescriptor &descriptor, const FilesTransferReviewScope &scope,
+    ckv::ui::Application &application, Desktop &desktop, const ckv::ui::StandardRoles &roles) {
+    const auto from = "From: " + scope.source.display_text();
+    const auto to = "To: " + scope.destination.display_text();
+    const auto count = std::to_string(scope.names.size()) +
+        (scope.names.size() == 1 ? " selected entry" : " selected entries");
+    descriptor.fields.push_back({.label = files_review_literal(from), .kind = FieldKind::Note});
+    descriptor.fields.push_back({.label = files_review_literal(to), .kind = FieldKind::Note});
+    auto selected = count;
+    if (scope.names.size() == 1)
+        selected += " · " + scope.names.front().display_name();
+    descriptor.fields.push_back({.label = files_review_literal(selected), .kind = FieldKind::Note});
+    descriptor.buttons.push_back({"&Paths and names", ButtonRole::Neutral,
+        [from, to, count, names = scope.names, &application, &desktop, &roles] {
+            std::string text = from + "\n" + to + "\n\n" + count;
+            for (const auto &name : names)
+                text += "\n" + name.display_name();
+            auto window = std::make_unique<Window>("Transfer paths and names");
+            window->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame,
+                                      roles.dialog_background);
+            window->set_content_margin(1, 1);
+            const auto area = desktop.content_area();
+            const int width = std::min(90, area.width), height = std::min(22, area.height);
+            window->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2,
+                                width, height});
+            window->set_min_size({24, 6});
+            window->set_resizable(true);
+            const auto close = [view = window.get()] { view->close(); };
+            window->cancel_request = close;
+            auto content = std::make_unique<ckv::ui::Column>();
+            auto reader = std::make_unique<TextView>();
+            reader->set_wrap_mode(WrapMode::Character);
+            reader->set_text(std::move(text));
+            auto *initial = reader.get();
+            content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
+            auto dismiss = std::make_unique<Button>("&Close");
+            dismiss->on_press = close;
+            content->add_item(std::move(dismiss), {.policy = ckv::ui::SizePolicy::Fixed, .weight = 1});
+            window->set_content(std::move(content));
+            desktop.present_modal(WindowHandle{std::move(window), initial}, application);
+        }});
+}
+
 struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<State> {
     ckv::ui::Application &application;
     ckv::widgets::Desktop &desktop;
@@ -110,6 +166,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
     Completion completion;
     ck::files::FrozenInventory::Pointer inventory;
     std::function<bool(ck::files::ConsentAction)> supports_action;
+    std::optional<FilesTransferReviewScope> scope;
     DialogDescriptor descriptor;
     std::optional<DescriptorDialogPresentation> presentation;
     ckv::widgets::Window *window = nullptr;
@@ -126,10 +183,11 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
 
     State(ckv::ui::Application &app, ckv::widgets::Desktop &desk, const ckv::ui::StandardRoles &standard_roles,
         ck::files::OperationReviewModel::Pointer review, ck::files::NameEncoding encoding, Completion handler,
-        ck::files::FrozenInventory::Pointer review_inventory, std::function<bool(ConsentAction)> supported)
+        ck::files::FrozenInventory::Pointer review_inventory, std::function<bool(ConsentAction)> supported,
+        std::optional<FilesTransferReviewScope> transfer_scope)
         : application(app), desktop(desk), roles(standard_roles), model(std::move(review)),
           destination_encoding(encoding), completion(std::move(handler)), inventory(std::move(review_inventory)),
-          supports_action(std::move(supported)) {
+          supports_action(std::move(supported)), scope(std::move(transfer_scope)) {
         if (!model || (destination_encoding != ck::files::NameEncoding::PosixBytes &&
                        destination_encoding != ck::files::NameEncoding::WindowsUtf16))
             throw std::invalid_argument("invalid Files operation review dialog");
@@ -221,6 +279,8 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         descriptor.title = "Review file operation";
         descriptor.resizable = true;
         descriptor.field_description_rows = 2;
+        if (scope)
+            add_files_transfer_scope(descriptor, *scope, application, desktop, roles);
         descriptor.fields.push_back({.label = summary_text(model->summary()), .kind = FieldKind::Note});
         const bool keep_both = std::find(actions.begin(), actions.end(), ConsentAction::KeepBoth) != actions.end();
         if (supports_action && !model->conflict_rows().empty()) {
@@ -235,7 +295,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         for (const auto &row : model->issue_rows()) {
             issue_fields.push_back(descriptor.fields.size());
             const auto &issue = row.issue;
-            descriptor.fields.push_back({.label = item_label(issue.item) + " · " +
+            descriptor.fields.push_back({.label = files_review_literal(item_label(issue.item)) + " · " +
                                              consequence(issue.consequence) + " — " + feature(issue.feature) +
                                              " (" + issue_state(issue.state) + ")" +
                                              (issue.hard_failure ? " [cannot be continued]" : ""),
@@ -247,13 +307,13 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
             descriptor.fields.push_back({.label = "I reviewed all listed preservation losses", .kind = FieldKind::Check});
         }
         for (const auto &row : model->conflict_rows()) {
-            descriptor.fields.push_back({.label = item_label(row.conflict.item) + " · " +
+            descriptor.fields.push_back({.label = files_review_literal(item_label(row.conflict.item)) + " · " +
                                              conflict_kind(row.conflict.kind),
                 .kind = FieldKind::Note});
             if (!keep_both)
                 continue;
             FieldDescriptor name;
-            name.label = "New name for " + item_label(row.conflict.item);
+            name.label = "New name for " + files_review_literal(item_label(row.conflict.item));
             name.validate = [](const std::string &value) { return value.size() <= 64 * 1024; };
             name.description = "Used only with Keep both. Enter one native basename, never a path.";
             descriptor.fields.push_back(std::move(name));
@@ -267,7 +327,8 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         descriptor.fields.push_back({.label = "&Decision", .kind = FieldKind::Combo,
             .options = std::move(options), .initial_selection = 0});
         field_count = descriptor.fields.size();
-        descriptor.buttons = {{"&Apply decision", ButtonRole::Accept, {}}, {"&Cancel", ButtonRole::Dismiss, {}}};
+        descriptor.buttons.push_back({"&Apply decision", ButtonRole::Accept, {}});
+        descriptor.buttons.push_back({"&Cancel", ButtonRole::Dismiss, {}});
         const auto weak = weak_from_this();
         descriptor.check = [weak](const DialogResult &result) -> std::optional<DialogVeto> {
             const auto self = weak.lock();
@@ -354,9 +415,11 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
 FilesOperationReviewDialog::FilesOperationReviewDialog(ckv::ui::Application &application, ckv::widgets::Desktop &desktop,
     const ckv::ui::StandardRoles &roles, ck::files::OperationReviewModel::Pointer model,
     ck::files::NameEncoding destination_encoding, Completion completion,
-    ck::files::FrozenInventory::Pointer inventory, std::function<bool(ConsentAction)> supports_action)
+    ck::files::FrozenInventory::Pointer inventory, std::function<bool(ConsentAction)> supports_action,
+    std::optional<FilesTransferReviewScope> scope)
     : state_(std::make_shared<State>(application, desktop, roles, std::move(model), destination_encoding,
-                                     std::move(completion), std::move(inventory), std::move(supports_action))) {
+                                     std::move(completion), std::move(inventory), std::move(supports_action),
+                                     std::move(scope))) {
     state_->present();
 }
 

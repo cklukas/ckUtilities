@@ -39,6 +39,7 @@ struct FilesOperationNativePlanningRequest final {
     ck::files::SourceCapabilityProjectionPolicy projection_policy;
     ck::files::OperationPlanningCoordinatorLimits limits;
     ck::files::OperationReviewLimits review_limits;
+    std::optional<ck::files::NativeAbsolutePath> destination_address;
 };
 
 // Composition-root request for the real pane operation path. The two pane
@@ -77,6 +78,7 @@ struct FilesOperationReviewEvidence final {
     ck::files::OperationEvidenceJobLimits evidence_limits;
     ck::files::SourceCapabilityProjectionPolicy projection_policy;
     ck::files::OperationPlanningCoordinatorLimits limits;
+    std::optional<ck::files::NativeAbsolutePath> destination_address;
 
     bool same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept;
 };

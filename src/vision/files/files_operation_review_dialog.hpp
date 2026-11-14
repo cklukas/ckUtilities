@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "native_path.hpp"
 #include "operation_review.hpp"
 
 #include <cvision/ui/application.hpp>
@@ -10,9 +11,19 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace ck::vision {
+
+struct FilesTransferReviewScope final {
+    ck::files::NativeAbsolutePath source, destination;
+    std::vector<ck::files::NativeName> names;
+};
+
+void add_files_transfer_scope(ckv::widgets::DialogDescriptor &descriptor, const FilesTransferReviewScope &scope,
+    ckv::ui::Application &application, ckv::widgets::Desktop &desktop, const ckv::ui::StandardRoles &roles);
+std::string files_review_literal(std::string_view text);
 
 // UI-only presentation of an immutable operation review. It never opens a
 // native object or executes an operation; the completion carries only the
@@ -25,7 +36,8 @@ class FilesOperationReviewDialog final {
         const ckv::ui::StandardRoles &roles, ck::files::OperationReviewModel::Pointer model,
         ck::files::NameEncoding destination_encoding, Completion completion,
         std::shared_ptr<const ck::files::FrozenInventory> inventory = {},
-        std::function<bool(ck::files::ConsentAction)> supports_action = {});
+        std::function<bool(ck::files::ConsentAction)> supports_action = {},
+        std::optional<FilesTransferReviewScope> scope = {});
     ~FilesOperationReviewDialog();
     FilesOperationReviewDialog(const FilesOperationReviewDialog &) = delete;
     FilesOperationReviewDialog &operator=(const FilesOperationReviewDialog &) = delete;
