@@ -28,6 +28,26 @@
     "ctest_elapsed_seconds": 72.87,
     "ctest_log_sha256": "bb15339228743fbbaf9a1d1afeec50e82c81f650b607b57f0e1ec4b27264ea3e"
   },
+  "windows_x64_release": {
+    "configuration": "MSVC v143 14.44, static CRT, ReFS V: development drive",
+    "build_steps": 14,
+    "build_start_utc": "2026-11-14T15:04:18.5378850Z",
+    "build_end_utc": "2026-11-14T15:07:12.2809325Z",
+    "build_elapsed_seconds": 173.74,
+    "source_delta_sha256": "7e4713790d68e836710bd99b9445dd207bfc33a1968d5054ad434dc529ca499a",
+    "build_receipt_sha256": "ce8b8dcd6b4609ca5647e2aec6e733c395dc9b230c427d214c32ab1f421b435f",
+    "test_executable_sha256": "701b378f59c28adb70963101cdc67088a712eaa0e26e1da3597a9cdbbc1b03b8",
+    "product_sha256": "65e1ed5ddba8cf5049e562930a3920a2f887e9fcd3c5529caf098f2bff698783",
+    "elevated_smoke_passed": ["Right-to-accept", "Hidden marks", "Copy scope", "Marked Move paths and names", "Existing-folder Copy review and cancellation"],
+    "ordinary_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-9b17c24-ordinary.ps1",
+    "ordinary_launcher_sha256": "875d9ea41c45fdff7af67d85fefcd94879e5c861e8b53d16fa38cb2d50a31c2a",
+    "ordinary_helper_sha256": "6c76dedc0b56984b9f1118cbe8e20e4ade8b3b74929929f3b25a955b35aa892c",
+    "ordinary_modes": {
+      "Suite": "The pinned registration contains all four Files shards and the keymap entry.",
+      "Desktop": "Interactive Windows Terminal checks include Right-to-accept, text and hex preview, Copy scope, selection refresh, clipboard, volume rows and terminal restoration."
+    },
+    "ordinary_admission": "Launcher and helper matched staged bytes on readback. The SSH session is elevated, noninteractive and in session 0. The launcher stopped before either ordinary-user mode ran."
+  },
   "previous_timeout_followup": "The matched ASan/UBSan and ThreadSanitizer preview builds passed all 307 application cases in disjoint shards. The full unsharded attempts remain recorded as timed out.",
   "open": ["Latest matching ThreadSanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
 }
