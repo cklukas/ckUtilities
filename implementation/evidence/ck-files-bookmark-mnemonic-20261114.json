@@ -1,0 +1,17 @@
+{
+  "frontend": "79d70df544f152b0e47bd1a684e80d02142d33b0",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "defect": "The Linux xterm run found that the Location menu assigned B to both Go back and Add bookmark. The keyboard invoked Go back and did not save a bookmark.",
+  "fix": "The Location menu and command catalog assign D to Add bookmark. The application regression sends Alt+L, D and verifies the second bookmark in the left-pane picker, reopens it through the dialog and checks that the right pane is unchanged.",
+  "macos_arm64_release": {
+    "tested_frontend_manifest_sha256": "2d272325e8e9e9413768941a93dff6e2a34151a5efa9edae45ec2aa4fe4ddaf1",
+    "build": {"start_utc": "2026-11-14T16:50:32Z", "end_utc": "2026-11-14T16:51:26Z", "elapsed_seconds": 54.29, "steps": 10},
+    "product_sha256": "03ad30da567bac523e2c90c2787d84a9cbdda6a845f2c5b0150ae14a7bd270da",
+    "test_sha256": "04af8f1c1758ab4d6521b38538b41a1ed7cea9d58b4538a4a608b9e8da26a17e",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 21.48,
+    "ctest_log_sha256": "bc1b4136cb875204b4c81525fea0180c3b6443b11866a2780fab9ae9e789c6d5"
+  },
+  "open": ["Current Linux suite and two-process xterm bookmark persistence", "Matching macOS sanitizers", "Current Windows build and ordinary-user acceptance"]
+}
