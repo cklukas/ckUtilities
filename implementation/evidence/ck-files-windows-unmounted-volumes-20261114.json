@@ -19,6 +19,26 @@
     "ctest_elapsed_seconds": 25.27,
     "ctest_log_sha256": "553c2d7a975228ca27703d2074bef7b853701ea6b0c19a76835c8aeb35c3e0ff"
   },
-  "documentation": "The Files guide describes the volume GUID row. ckdocs checked all 27 pages.",
-  "open": ["Run the Windows regression on the populated workstation and run ordinary-user Suite and Desktop acceptance", "Current Linux qualification and Linux documentation capture"]
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "tested_frontend_manifest_sha256": "ecbfd704af3322c59ae39caaf32d9d7ca8f5c3f18c6ddafa13e9b0324b0d921a",
+    "build": {"start_utc": "2026-11-14T16:48:02Z", "end_utc": "2026-11-14T16:48:10Z", "elapsed_seconds": 8.63, "steps": 7},
+    "test_sha256": "97a18df5f97d44eecfdb279d73d9743c9f52003ccb3b4f82eda2579d69eaf9b6",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 63.34,
+    "ctest_log_sha256": "fdf44c078f1121d9e173001693ad5040ef685aac7f7b171b5cdac1dead0b03d2"
+  },
+  "linux_arm64_release": {
+    "source_delta_archive_sha256": "4949913c55825adb89e204b227a430686d170e19775838ac102d87b2409933e8",
+    "tested_frontend_manifest_sha256": "16b96d4ee555f2865bc09d593576ae07bcde447f76e0a422660f1b642c4938e0",
+    "build": {"start_utc": "2026-11-14T16:44:48Z", "end_utc": "2026-11-14T16:46:34Z", "elapsed_seconds": 106.03, "steps": 8},
+    "product_sha256": "3f3746a732880838afe3c02b7a197f9dcf087d9387701c5f8406a6a12815152c",
+    "test_sha256": "23ad4e9d9a522f100718c7c2e8dbb7998f8f3604e080947f91acde7b532ffa31",
+    "files_and_keymap_ctest_entries_passed": 158,
+    "application_cases_passed": 312,
+    "ctest_elapsed_seconds": 87.53,
+    "ctest_log_sha256": "d9a9cb8917e97ae313e75a1570f03e3936a4f870c672a635ac66d0ccde0a573b",
+    "ctest_junit_sha256": "6b16368a52e8eff9eeb2ceb60de6e8e40501ec699c64a38cecd095d4f471281a"
+  },
+  "documentation": "The Files guide describes the volume GUID row. ckdocs check and strict site generation passed for all 27 pages. The utility-guide contract verified feature lists and embedded screenshots for all ten shipped utilities.",
+  "open": ["Run the Windows regression on the populated workstation and run ordinary-user Suite and Desktop acceptance", "Linux documentation capture"]
 }
