@@ -44,5 +44,21 @@
     "modes": ["Suite", "Desktop"],
     "scope": "Pinned Files and keymap CTest registrations, or the verified ck-files executable in an existing ordinary Windows Terminal. The staged launchers matched local bytes on readback. The elevated SSH connection failed token admission before tests or desktop launch."
   },
-  "open": ["Current Windows ordinary-user and Linux runtime, sanitizers, and regenerating the guide screenshots on CI"]
+  "macos_documentation_capture": {
+    "publication_commit": "6b735d561f5edb4fe11ec3027f950619bb1d3391",
+    "build_start_utc": "2026-11-14T14:07:47Z",
+    "build_end_utc": "2026-11-14T14:17:38Z",
+    "elapsed_seconds": 590.91,
+    "ninja_steps": 312,
+    "repeat_elapsed_seconds": 4.19,
+    "repeat_identical_assets": 52,
+    "visual_review": "Both Files scenes display the Open footer label. It is enabled for ordinary folders and disabled while the volume pane is active.",
+    "changed_sha256": {
+      "ck-files.svg": "540b54b74ce48da4cd5de226282b9eb5db201a3a80885ca3104f795bcdb8f72c",
+      "ck-files-volumes.svg": "8f1ce189d04d7a963460a95c451fecf1639ed0400f46cc0a1f5e9e71a438c1d6"
+    },
+    "ckdocs_strict_pages": 27,
+    "utility_guide_contract": "passed for all 10 guides"
+  },
+  "open": ["Current Windows ordinary-user and Linux runtime, sanitizers, and Linux/CI regeneration of the guide screenshots"]
 }
