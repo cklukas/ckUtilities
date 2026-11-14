@@ -14,6 +14,21 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Keep operation results with the originating panes
+
+Frontend `16e09d0` records the source pane and both navigation tickets
+when the worker accepts a copy, move or recursive delete. Switching focus
+does not redirect the completion diagnostic or cause the app to refresh a
+newly opened location. The source-retained warning survives the automatic
+refresh when both original locations are still displayed.
+
+The macOS arm64 Files app and native operation suites passed 299/299 and
+20/20. The app regression holds the completion notification, switches
+panes, and checks where the backend publication refusal is reported.
+The three-step Release rebuild ran from 12:31:30 to 12:31:40 UTC in
+9.44 s. The Files app test executable SHA-256 was
+`cbcb8bcddf82a5b9bf2015280dfea154f69528637c91ba4c1ad68de6b0cd350e`.
+
 ## 2026-11-14 — Refresh operation recovery after execution
 
 Frontend `b483f9e` starts a fresh journal scan when a Files operation
