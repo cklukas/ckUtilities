@@ -3528,6 +3528,12 @@ struct FilesApp::State {
                 if (reply.error->state == ck::files::ObservationState::Unsupported &&
                     reply.error->error.operation == "create_staging_file.fd_publication_unqualified")
                     detail += ": verified file publication is unavailable on this platform";
+                else if (reply.error->error.operation == "files_execution.keep_both_occupied")
+                    detail += ": the new name already exists. Review the operation again";
+                else if (reply.error->error.operation == "files_execution.keep_both_duplicate")
+                    detail += ": the new name conflicts with another transfer name";
+                else if (reply.error->error.operation == "files_execution.keep_both_name")
+                    detail += ": the destination cannot use the new name";
                 else if (reply.error->error.domain == ck::files::ErrorDomain::Adapter &&
                          reply.error->error.code == static_cast<std::int64_t>(ck::files::AdapterError::PlanDecisionStale))
                     detail += ": source or destination changed since review. Review the operation again";

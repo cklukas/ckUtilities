@@ -172,6 +172,21 @@ CK_TEST(operation_consent_skip_conflicts_requires_consent_only_for_transferred_i
     CK_CHECK(!operation->receipt_matches(unchecked));
 }
 
+CK_TEST(operation_consent_keep_both_binds_names_and_requires_every_reviewable_loss) {
+    const auto operation = plan({item(24)}, {
+        {0, PreservationFeature::ExtendedAttributes, PreservationIssueState::Missing,
+            PreservationConsequence::MetadataLoss, false}
+    }, {{0, DestinationConflictKind::ExistingFile}});
+    const auto name = *NativeName::from_posix("incoming");
+    CK_CHECK(!operation->bind(ConsentAction::KeepBoth, {}, {0}, {name}).value());
+    const auto receipt = take(operation->bind(ConsentAction::KeepBoth, {0}, {0}, {name}));
+    CK_CHECK(operation->receipt_matches(receipt));
+    CK_CHECK(receipt.keep_both_names == std::vector<NativeName>{name});
+    auto unchecked = receipt;
+    unchecked.reviewed_issues.clear();
+    CK_CHECK(!operation->receipt_matches(unchecked));
+}
+
 CK_TEST(operation_plan_from_frozen_inventory_rejects_incomplete_topology_evidence) {
     const auto inventory = inventory_with_hard_link_aliases();
     auto groups = inventory->hard_link_groups();

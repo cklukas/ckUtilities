@@ -102,6 +102,10 @@ clipboard.
   targets and skip conflicts** leaves the occupied targets and their sources
   in place. Files transfers the other items once you acknowledge their listed
   losses. You can acknowledge all listed losses with one checkbox.
+  **Keep both with reviewed names** gives each incoming file a new name in
+  the receiving pane and keeps the existing target. Files checks the new
+  names against the destination before writing. Publication uses the
+  filesystem's no-replace operation if a name becomes occupied during transfer.
   **Choose another destination** opens the location editor for the receiving
   pane. Files asks for a fresh review if the approved transfer changes.
 - Cancellable worker-owned jobs with honest progress, per-item outcomes,

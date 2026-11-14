@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <numeric>
+#include <set>
 #include <stdexcept>
 
 namespace ck::vision {
@@ -27,6 +28,54 @@ ck::files::UnavailableObservation error(ck::files::AdapterError code, const char
     return {state, {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation}};
 }
 
+bool keep_both_supported(const FilesOperationReviewEvidence& evidence) noexcept {
+    using namespace ck::files;
+    if (evidence.inventory->mount_policy() != InventoryMountPolicy::DirectObjects ||
+        evidence.plan->conflicts().empty() || !evidence.plan->all_losses_reviewable())
+        return false;
+    for (const auto& item : evidence.plan->items())
+        if (item.kind != ObjectKind::RegularFile)
+            return false;
+    for (const auto& conflict : evidence.plan->conflicts())
+        if (conflict.kind != DestinationConflictKind::ExistingFile &&
+            conflict.kind != DestinationConflictKind::TypeMismatch)
+            return false;
+    return true;
+}
+
+std::optional<ck::files::UnavailableObservation> prepare_keep_both_names(
+    const FilesOperationReviewEvidence& evidence, const ck::files::ConsentReceipt& receipt,
+    const std::shared_ptr<const ck::files::DirectoryCursor>& destination,
+    std::vector<ck::files::NativeName>& names, std::stop_token stop) {
+    using namespace ck::files;
+    // Validate all edited names before handing any item to a journal-writing job.
+    // Native no-replace still arbitrates aliases and races at publication.
+    std::set<NativeName, NativeNameLess> used(names.begin(), names.end());
+    std::set<std::size_t> renamed;
+    for (std::size_t i = 0; i < receipt.keep_both_names.size(); ++i) {
+        const auto item = evidence.plan->conflicts()[receipt.resolved_conflicts[i]].item;
+        const auto& name = receipt.keep_both_names[i];
+        if (name.encoding() != names[item].encoding() ||
+            (name.windows_units() && !check_win32_component(*name.windows_units()).ordinary_component()))
+            return error(AdapterError::UnrepresentableName, "files_execution.keep_both_name");
+        if (!renamed.insert(item).second || !used.insert(name).second)
+            return error(AdapterError::InvalidIdentifier, "files_execution.keep_both_duplicate");
+        const auto probe = DirectoryEntryProbe::inspect(destination, name, ChildLookupMode::NativeDefault,
+            {evidence.evidence_limits.destination_batch.component_bytes}, stop);
+        if (const auto* failure = probe.unavailable_detail())
+            return *failure;
+        if (const auto& length = (*probe.value())->length(); length.value() && length.value()->exceeds_reported_maximum())
+            return error(AdapterError::UnrepresentableName, "files_execution.keep_both_name");
+        const auto& lookup = (*probe.value())->lookup();
+        if (const auto* failure = lookup.unavailable_detail())
+            return *failure;
+        if (lookup.value()->state() != ChildLookupState::Missing)
+            return error(AdapterError::PlanDecisionStale, "files_execution.keep_both_occupied", ObservationState::Changed);
+        names[item] = name;
+    }
+    return {};
+}
+
 bool valid(const FilesOperationExecutionRequest& request) noexcept {
     const bool deletion = request.operation == ck::files::FileOperation::Delete;
     const bool copy_or_move = request.operation == ck::files::FileOperation::Copy ||
@@ -42,6 +91,9 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
                            request.receipt && request.reviewed->plan->receipt_matches(*request.receipt) &&
                            (request.receipt->action == ck::files::ConsentAction::Proceed ||
                             request.receipt->action == ck::files::ConsentAction::ContinueWithListedLosses ||
+                            (request.receipt->action == ck::files::ConsentAction::KeepBoth &&
+                             keep_both_supported(*request.reviewed) &&
+                             request.receipt->resolved_conflicts.size() == request.reviewed->plan->conflicts().size()) ||
                             (request.receipt->action == ck::files::ConsentAction::SkipConflict &&
                              request.reviewed->inventory->mount_policy() == ck::files::InventoryMountPolicy::DirectObjects &&
                              request.reviewed->plan->skips_conflicts_with_reviewed_losses(
@@ -77,7 +129,11 @@ bool files_transfer_action_supported(const FilesOperationReviewEvidence& evidenc
     if (action == ConsentAction::Cancel || action == ConsentAction::ChooseAnotherDestination ||
         action == ConsentAction::Proceed || action == ConsentAction::ContinueWithListedLosses)
         return true;
-    if (action != ConsentAction::SkipConflict || !evidence.plan || !evidence.inventory ||
+    if (!evidence.plan || !evidence.inventory)
+        return false;
+    if (action == ConsentAction::KeepBoth)
+        return keep_both_supported(evidence);
+    if (action != ConsentAction::SkipConflict ||
         evidence.inventory->mount_policy() != InventoryMountPolicy::DirectObjects)
         return false;
     // Ask the same plan validator used by admission, with all rows
@@ -375,6 +431,24 @@ struct FilesOperationExecutionService::State final {
         std::vector<ck::files::NativeName> direct_names;
         std::vector<std::size_t> direct_items;
         if (!recursive) {
+            auto destination_names = fresh.destination_names;
+            if (revalidated.value()->action == ck::files::ConsentAction::KeepBoth) {
+                if (const auto failure = prepare_keep_both_names(fresh, *revalidated.value(),
+                        handoff->destination_result->directory, destination_names, stop_token)) {
+                    fail(*failure);
+                    return;
+                }
+                if (!value.source_stamp.current() || !value.destination_stamp.current()) {
+                    fail(error(ck::files::AdapterError::PlanDecisionStale, "files_execution.review_evidence_changed",
+                               ck::files::ObservationState::Changed));
+                    return;
+                }
+                if (stop_token.stop_requested()) {
+                    fail(error(ck::files::AdapterError::InterruptedRead, "files_execution.cancelled",
+                               ck::files::ObservationState::Unknown));
+                    return;
+                }
+            }
             std::vector<bool> skipped(sources->sources().size());
             if (revalidated.value()->action == ck::files::ConsentAction::SkipConflict)
                 for (const auto& conflict : fresh.plan->conflicts())
@@ -390,7 +464,7 @@ struct FilesOperationExecutionService::State final {
                     result.skipped_items.push_back(i);
                 } else {
                     direct_sources.push_back(sources->sources()[i]);
-                    direct_names.push_back(fresh.destination_names[i]);
+                    direct_names.push_back(std::move(destination_names[i]));
                     direct_items.push_back(i);
                 }
             }

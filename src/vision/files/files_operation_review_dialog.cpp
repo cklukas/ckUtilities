@@ -4,6 +4,7 @@
 
 #include "frozen_inventory.hpp"
 #include "name_mapping.hpp"
+#include "windows_name.hpp"
 
 #include <cvision/widgets/dialog.hpp>
 
@@ -175,6 +176,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
                 actions.push_back(ConsentAction::MergeDirectories);
         } else if (supports_action && conflicts) {
             actions.push_back(ConsentAction::SkipConflict);
+            actions.push_back(ConsentAction::KeepBoth);
         }
         if (supports_action)
             std::erase_if(actions, [this](const auto action) { return !supports_action(action); });
@@ -220,9 +222,12 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
         descriptor.resizable = true;
         descriptor.field_description_rows = 2;
         descriptor.fields.push_back({.label = summary_text(model->summary()), .kind = FieldKind::Note});
+        const bool keep_both = std::find(actions.begin(), actions.end(), ConsentAction::KeepBoth) != actions.end();
         if (supports_action && !model->conflict_rows().empty()) {
             const bool skip_supported = std::find(actions.begin(), actions.end(), ConsentAction::SkipConflict) != actions.end();
-            descriptor.fields.push_back({.label = skip_supported
+            descriptor.fields.push_back({.label = keep_both
+                ? "To keep both, enter a new name for each incoming file and review the losses."
+                : skip_supported
                 ? "Conflicting items stay where they are. Review losses for the other items."
                 : "Choose another destination to continue this transfer.",
                 .kind = FieldKind::Note});
@@ -245,10 +250,10 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
             descriptor.fields.push_back({.label = item_label(row.conflict.item) + " · " +
                                              conflict_kind(row.conflict.kind),
                 .kind = FieldKind::Note});
-            if (std::find(actions.begin(), actions.end(), ConsentAction::KeepBoth) == actions.end())
+            if (!keep_both)
                 continue;
             FieldDescriptor name;
-            name.label = "Keep both name " + std::to_string(row.ordinal + 1);
+            name.label = "New name for " + item_label(row.conflict.item);
             name.validate = [](const std::string &value) { return value.size() <= 64 * 1024; };
             name.description = "Used only with Keep both. Enter one native basename, never a path.";
             descriptor.fields.push_back(std::move(name));
@@ -290,8 +295,11 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
             if (action == ConsentAction::KeepBoth) {
                 for (const auto field : self->name_fields) {
                     auto parsed = parse_name(result.values[field], self->destination_encoding);
-                    if (!parsed)
+                    if (!parsed || (parsed->windows_units() &&
+                                    !check_win32_component(*parsed->windows_units()).ordinary_component()))
                         return DialogVeto{"Keep both requires a valid native basename for every conflict.", field};
+                    if (std::find(names.begin(), names.end(), *parsed) != names.end())
+                        return DialogVeto{"Use a different name for each incoming file.", field};
                     names.push_back(std::move(*parsed));
                 }
             }

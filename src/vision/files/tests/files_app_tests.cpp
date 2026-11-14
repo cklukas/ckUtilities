@@ -1304,6 +1304,87 @@ CK_TEST(files_app_choose_another_destination_opens_the_other_pane_location_edito
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
 }
 
+CK_TEST(files_app_keep_both_uses_the_reviewed_name_and_refuses_an_occupied_alternate) {
+    for (const bool occupy_alternate : {false, true}) {
+        Fixture f;
+        NativeFileSystem filesystem;
+        const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left"));
+        const auto destination = filesystem.open_native_directory(address(f.scratch.path() / "right"));
+#ifdef _WIN32
+        const auto original = NativeName::from_windows(u"left-item-0");
+        const auto alternate = NativeName::from_windows(u"new-incoming");
+#else
+        const auto original = NativeName::from_posix("left-item-0");
+        const auto alternate = NativeName::from_posix("new-incoming");
+#endif
+        if (!source.value() || !destination.value() || !original || !alternate)
+            throw std::runtime_error("cannot open keep-both fixture directories");
+        const auto create = [&](const NativeName& name) {
+            const auto file = (*destination.value())->create_child_file(name);
+            if (!file.value())
+                throw std::runtime_error("cannot occupy keep-both fixture name");
+            const auto finished = (*file.value())->finish_content_writes();
+            CK_CHECK(finished.value() && *finished.value());
+        };
+        create(*original);
+        f.loaded();
+        CK_CHECK(f.command("ck.files.move"));
+        f.until([&] { return f.app->operation_review_pending(); });
+        f.application.step(f.clock.now_nanos());
+        if (occupy_alternate)
+            create(*alternate);
+
+        std::vector<ckv::widgets::ComboBox *> combos;
+        std::vector<ckv::widgets::CheckGroup *> checks;
+        std::vector<ckv::widgets::InputLine *> inputs;
+        std::vector<ckv::widgets::Button *> buttons;
+        find_views(f.application.root(), combos);
+        find_views(f.application.root(), checks);
+        find_views(f.application.root(), inputs);
+        find_views(f.application.root(), buttons);
+        ckv::widgets::InputLine *name_field = nullptr;
+        for (auto *input : inputs) {
+            bool in_combo = false;
+            for (auto *parent = input->parent(); parent; parent = parent->parent())
+                in_combo = in_combo || dynamic_cast<ckv::widgets::ComboBox *>(parent) != nullptr;
+            if (!in_combo)
+                name_field = input;
+        }
+        ckv::widgets::Button *apply = nullptr;
+        for (auto *button : buttons)
+            if (button->text() == "&Apply decision")
+                apply = button;
+        if (!name_field || !apply || combos.size() != 1 || checks.empty())
+            throw std::runtime_error("keep-both fixture review controls unavailable");
+        name_field->set_text("new-incoming");
+        for (auto *check : checks)
+            check->set_checked(0, true);
+        combos.front()->set_selected_index(3);
+        CK_CHECK(apply->activate_mnemonic("a"));
+
+        if (occupy_alternate) {
+            f.until([&] { return f.app->status(0).find("the new name already exists") != std::string::npos; });
+            CK_CHECK(std::filesystem::is_empty(f.scratch.path() / "operation-journals"));
+        } else {
+            f.until([&] {
+                return !f.app->pending(0) && !f.app->pending(1) &&
+                    !std::filesystem::exists(f.scratch.path() / "left" / "left-item-0");
+            });
+        }
+        const auto check_size = [&](const NativeName& name, std::uint64_t expected) {
+            const auto file = (*destination.value())->open_child(name);
+            if (!file.value())
+                throw std::runtime_error("keep-both fixture destination missing");
+            const auto facts = (*file.value())->inspect_basic();
+            CK_CHECK(facts.value() && facts.value()->logical_size.value() &&
+                *facts.value()->logical_size.value() == expected);
+        };
+        check_size(*original, 0);
+        check_size(*alternate, occupy_alternate ? 0 : 1);
+        CK_CHECK(static_cast<bool>((*source.value())->open_child(*original).value()) == occupy_alternate);
+    }
+}
+
 #if defined(__APPLE__)
 CK_TEST(files_app_recursive_copy_acceptance_reports_unqualified_mac_publication)
 #else
