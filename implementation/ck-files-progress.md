@@ -14,6 +14,27 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
+## 2026-11-14 — Files move-batch completion
+
+The Files worker now advances flat and same-volume directory move batches
+while they are Ready or Running. A flat batch that reaches RetainedSource
+now delivers its existing result and diagnostic instead of polling a
+terminal state indefinitely. Source retirement policy is unaffected.
+
+The macOS arm64 Release Files app suite passed **299/299** with frontend
+`ce0cdfc`, backend `89f21c9`, and installed ckVision `b8d412a`. The suite
+covers the current worker and related execution paths. It did not exercise
+a successful native cross-volume source retirement.
+
+| Build evidence | Value |
+| --- | --- |
+| Configure and build interval (UTC) | 2026-11-14 11:46:58–11:54:24 |
+| Clean serial build | 187 steps in 427.97 s, consistent with the recorded plan and compiler/link logs |
+| Test executable | `/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/src/vision/files/ck_vision_files_tests` |
+| Test executable SHA-256 | `c893413644f11ed1a5da79bffe23e4a5be18a38631545cc16c683904f2f48a3c` |
+| Execution service source SHA-256 | `24fc201ec58344e10468bcca69f815c2ffa7a8f9d145a85376d0a355a8c29cd4` |
+| CTest detailed log SHA-256 | `19fcc4c000a4c6aab54963a259cec0352466bf4bb685c8a8c5c0efc1636d4c8d` |
+
 ## 2026-11-14 — CP-01 native lease coverage
 
 On Linux arm64 `6.12.116+deb13-cloud-arm64` and local ext4, an ordinary
