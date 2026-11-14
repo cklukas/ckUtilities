@@ -362,7 +362,6 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> confirmation;
     std::optional<ckv::widgets::DescriptorDialogPresentation> view_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> bookmark_dialog;
-    std::optional<ckv::widgets::DescriptorDialogPresentation> properties_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> link_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_directory_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> create_file_dialog;
@@ -652,7 +651,7 @@ struct FilesApp::State {
                      item(history_forward_id, "Go &forward"), item(bookmark_open_id, "Open boo&kmark..."),
                      item(bookmark_add_id, "Add &bookmark"),
                      item(bookmark_remove_id, "Remove bookmark"), item(refresh_id, "&Refresh listing"),
-                     item(properties_id, "&Properties..."), item(preview_id, "Pre&view"),
+                     item(properties_id, "Propert&ies..."), item(preview_id, "Pre&view"),
                      item(copy_path_id, "Cop&y path"),
                      item(switch_id, "S&witch pane"), item(cancel_id, "&Cancel activity")}},
                 ckv::widgets::MenuBarItem{"&Operations", {item(rename_id, "&Rename..."),
@@ -795,7 +794,6 @@ struct FilesApp::State {
         view_dialog.reset();
         bookmark_dialog.reset();
         bookmark_dialog_window = nullptr;
-        properties_dialog.reset();
         link_dialog.reset();
         link_dialog_window = nullptr;
         create_directory_dialog.reset();
@@ -927,7 +925,7 @@ struct FilesApp::State {
     bool modal_pending() const {
         return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
                (bookmark_dialog && !bookmark_dialog->completed()) ||
-               (properties_dialog && !properties_dialog->completed()) ||
+               properties_open() ||
                preview_open() ||
                (link_dialog && !link_dialog->completed()) ||
                (create_directory_dialog && !create_directory_dialog->completed()) ||
@@ -1128,10 +1126,18 @@ struct FilesApp::State {
         }
         if (command == "ck.files.refresh")
             return refresh_availability(active);
-        if (command == "ck.files.properties")
+        if (command == "ck.files.properties") {
+            const auto &pane = panes[active];
+            if (pane.volume_view) {
+                if (modal_pending() || pending(pane) || volume_pending(active))
+                    return unavailable("Properties unavailable: volume information is busy");
+                return pane.model.volume_cursor() ? FilesCommandAvailability::available()
+                    : unavailable("Properties unavailable: select a volume");
+            }
             return ready(active) && panes[active].model.cursor_row()
                        ? FilesCommandAvailability::available()
                        : unavailable("Properties unavailable: no current entry is selected");
+        }
         if (command == "ck.files.copy_path") {
             if (std::any_of(panes.begin(), panes.end(), [](const Pane &pane) {
                     return pane.inspection && pane.inspection->kind == FilesPaneReplyKind::PathText;
@@ -1362,9 +1368,9 @@ struct FilesApp::State {
             if (!p.error.empty())
                 text = p.navigation_error ? "Volume view kept. " + p.error : p.error;
             else if (volume)
-                text = (volume->read_only ? "RO" : "RW") + std::string(" | ") +
-                       (volume->mount_point.empty() ? volume->name : volume->mount_point) + " | " +
-                       (volume->filesystem.empty() ? "Unknown" : volume->filesystem) + " | " +
+                text = (!volume->read_only ? "Access unknown" : *volume->read_only ? "RO" : "RW") +
+                       std::string(" | ") + volume->display_mount() + " | " +
+                       (volume->filesystem.empty() ? "Unknown" : ck::files::display_native_text(volume->filesystem)) + " | " +
                        volume_bytes(volume->free_bytes) + " free / " + volume_bytes(volume->total_bytes);
             else
                 text = "No visible volumes";
@@ -2889,10 +2895,46 @@ struct FilesApp::State {
                 }
             });
     }
+    bool properties_open() const {
+        return properties_dialog_window && !properties_dialog_lifetime.expired();
+    }
     void show_properties() {
-        if (!ready(active))
+        if (!availability("ck.files.properties").enabled)
             return;
+        const auto present = [this](std::string title, std::string text) {
+            properties_dialog_window = present_files_read_only_text(std::move(title), std::move(text),
+                application, shell->desktop(), shell->roles());
+            if (properties_dialog_window) {
+                properties_dialog_lifetime = properties_dialog_window->lifetime_token();
+                properties_dialog_window->on_detached = [this, weak = std::weak_ptr<void>(lifetime)] {
+                    if (!weak.expired()) {
+                        properties_dialog_window = nullptr;
+                        labels();
+                    }
+                };
+                labels();
+            }
+        };
         const auto pane = active;
+        if (panes[pane].volume_view) {
+            const auto volume = panes[pane].model.volume_cursor();
+            if (!volume)
+                return;
+            const auto exact = [](const auto &value) {
+                return value ? std::to_string(*value) + " bytes" : std::string("Unknown");
+            };
+            std::string text;
+            if (panes[pane].volume_inventory_stale)
+                text = "Last successful scan. Refresh to update these values.\n\n";
+            if (!volume->name.empty())
+                text += "Volume: " + ck::files::display_native_text(volume->name) + '\n';
+            text += "Mount: " + volume->display_mount() + "\nFilesystem: " +
+                (volume->filesystem.empty() ? "Unknown" : ck::files::display_native_text(volume->filesystem)) +
+                "\nAccess: " + (!volume->read_only ? "Unknown" : *volume->read_only ? "Read-only" : "Read/write") +
+                "\nAvailable: " + exact(volume->free_bytes) + "\nTotal: " + exact(volume->total_bytes);
+            present("Volume properties", std::move(text));
+            return;
+        }
         const auto *row = panes[pane].model.cursor_row();
         if (!row)
             return;
@@ -2924,28 +2966,10 @@ struct FilesApp::State {
             return std::to_string(value.value()->seconds()) + "." +
                    std::to_string(value.value()->nanoseconds()) + " UTC seconds";
         };
-        ckv::widgets::DialogDescriptor descriptor;
-        descriptor.title = "Properties";
-        descriptor.fields = {
-            {.label = "Name: " + display_name, .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Location: " + location, .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Type: " + kind, .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Logical bytes: " + number(row->metadata.logical_size), .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Allocated bytes: " + number(row->metadata.allocated_size), .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Links: " + number(row->metadata.link_count), .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Modified: " + timestamp(row->metadata.modified), .kind = ckv::widgets::FieldKind::Note},
-            {.label = "Observation is from the acknowledged listing; refresh to recheck native metadata.",
-             .kind = ckv::widgets::FieldKind::Note}};
-        descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
-        properties_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
-        properties_dialog_window = shell->desktop().active_window();
-        properties_dialog_lifetime = properties_dialog_window->lifetime_token();
-        properties_dialog->set_completion_handler(
-            [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
-            if (!weak.expired())
-                properties_dialog_window = nullptr;
-            });
+        present("Properties", "Name: " + display_name + "\nLocation: " + location + "\nType: " + kind +
+            "\nLogical bytes: " + number(row->metadata.logical_size) +
+            "\nAllocated bytes: " + number(row->metadata.allocated_size) +
+            "\nLinks: " + number(row->metadata.link_count) + "\nModified: " + timestamp(row->metadata.modified));
     }
     void show_preview() {
         if (!ready(active) || panes[active].model.cursor_kind() != ck::files::ObjectKind::RegularFile)
@@ -4068,9 +4092,8 @@ struct FilesApp::State {
                 bookmark_dialog_window->close();
             return;
         }
-        if (properties_dialog && !properties_dialog->completed()) {
-            if (properties_dialog_window && !properties_dialog_lifetime.expired())
-                properties_dialog_window->close();
+        if (properties_open()) {
+            properties_dialog_window->close();
             return;
         }
         if (preview_open()) {
@@ -4304,7 +4327,7 @@ void FilesApp::request_close() { state_->request_close(); }
 bool FilesApp::close_confirmation_pending() const { return state_->confirmation && !state_->confirmation->completed(); }
 bool FilesApp::view_options_pending() const { return state_->view_dialog && !state_->view_dialog->completed(); }
 bool FilesApp::properties_pending() const {
-    return state_->properties_dialog && !state_->properties_dialog->completed();
+    return state_->properties_open();
 }
 bool FilesApp::preview_pending() const {
     return std::any_of(state_->panes.begin(), state_->panes.end(), [](const auto &pane) {

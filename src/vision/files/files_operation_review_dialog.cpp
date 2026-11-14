@@ -114,6 +114,31 @@ std::string files_review_literal(std::string_view text) {
     return label;
 }
 
+Window *present_files_read_only_text(std::string title, std::string text, ckv::ui::Application &application,
+    Desktop &desktop, const ckv::ui::StandardRoles &roles) {
+    auto window = std::make_unique<Window>(std::move(title));
+    window->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame, roles.dialog_background);
+    window->set_content_margin(1, 1);
+    const auto area = desktop.content_area();
+    const int width = std::min(90, area.width), height = std::min(22, area.height);
+    window->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height});
+    window->set_min_size({24, 6});
+    window->set_resizable(true);
+    const auto close = [view = window.get()] { view->close(); };
+    window->cancel_request = close;
+    auto content = std::make_unique<ckv::ui::Column>();
+    auto reader = std::make_unique<TextView>();
+    reader->set_wrap_mode(WrapMode::Character);
+    reader->set_text(std::move(text));
+    auto *initial = reader.get();
+    content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
+    auto dismiss = std::make_unique<Button>("&Close");
+    dismiss->on_press = close;
+    content->add_item(std::move(dismiss), {.policy = ckv::ui::SizePolicy::Fixed, .weight = 1});
+    window->set_content(std::move(content));
+    return desktop.present_modal(WindowHandle{std::move(window), initial}, application);
+}
+
 void add_files_transfer_scope(DialogDescriptor &descriptor, const FilesTransferReviewScope &scope,
     ckv::ui::Application &application, Desktop &desktop, const ckv::ui::StandardRoles &roles) {
     const auto from = "From: " + scope.source.display_text();
@@ -131,29 +156,7 @@ void add_files_transfer_scope(DialogDescriptor &descriptor, const FilesTransferR
             std::string text = from + "\n" + to + "\n\n" + count;
             for (const auto &name : names)
                 text += "\n" + name.display_name();
-            auto window = std::make_unique<Window>("Transfer paths and names");
-            window->set_role_override(roles.dialog_frame, roles.dialog_background, roles.dialog_frame,
-                                      roles.dialog_background);
-            window->set_content_margin(1, 1);
-            const auto area = desktop.content_area();
-            const int width = std::min(90, area.width), height = std::min(22, area.height);
-            window->set_bounds({area.x + (area.width - width) / 2, area.y + (area.height - height) / 2,
-                                width, height});
-            window->set_min_size({24, 6});
-            window->set_resizable(true);
-            const auto close = [view = window.get()] { view->close(); };
-            window->cancel_request = close;
-            auto content = std::make_unique<ckv::ui::Column>();
-            auto reader = std::make_unique<TextView>();
-            reader->set_wrap_mode(WrapMode::Character);
-            reader->set_text(std::move(text));
-            auto *initial = reader.get();
-            content->add_item(std::move(reader), {.policy = ckv::ui::SizePolicy::Expanding});
-            auto dismiss = std::make_unique<Button>("&Close");
-            dismiss->on_press = close;
-            content->add_item(std::move(dismiss), {.policy = ckv::ui::SizePolicy::Fixed, .weight = 1});
-            window->set_content(std::move(content));
-            desktop.present_modal(WindowHandle{std::move(window), initial}, application);
+            present_files_read_only_text("Transfer paths and names", std::move(text), application, desktop, roles);
         }});
 }
 

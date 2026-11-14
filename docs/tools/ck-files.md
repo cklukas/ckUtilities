@@ -38,6 +38,9 @@ clipboard.
   Space shows free and total capacity together. The selected row's footer adds
   its mount, filesystem, space, and read-only state. Long labels end in an
   ellipsis. In narrow panes, Space and then Type give way to the Mount column.
+  **Location → Properties** shows the full selected mount, filesystem, access
+  state, and exact available and total bytes. It identifies values retained
+  from the last successful scan if a refresh fails.
   The view uses
   ordinary read permissions and never exposes volume rows as operation targets.
   **Refresh** updates that pane's volume list and checks for archive recovery

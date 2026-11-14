@@ -1004,6 +1004,9 @@ CK_TEST(files_app_refresh_preserves_the_bound_mark_and_focus_after_rows_move) {
     CK_CHECK(f.app->model(0).cursor_marked() == true && f.app->selection(0).marks->total == 1);
     CK_CHECK(f.app->target(1)->row.row == other);
     CK_CHECK(f.command("ck.files.properties") && f.app->properties_pending());
+    const auto properties = f.painted();
+    CK_CHECK(properties.find("Name: " + label) != std::string::npos);
+    CK_CHECK(properties.find("Logical bytes: ") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     CK_CHECK(!f.app->properties_pending());
@@ -2566,6 +2569,37 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
 }
+CK_TEST(files_app_volume_properties_keep_the_full_mount_and_exact_capacity_in_a_narrow_pane) {
+    const auto mount = std::string("/Volumes/") + std::string(100, 'x') + "&tail\nleaf";
+    Fixture f(ThemeScheme::Classic, {}, {}, {58, 21}, {}, false, false, false, {},
+              false, false, false, false, false, {}, [mount] {
+        return Observation<std::vector<FilesVolumeRecord>>::available({
+            {"Research & archive", mount, "fixturefs", 24'000'000'000'001ULL, 0, {}, "mount-id", {}, {}}});
+    });
+    f.loaded();
+    const auto other = f.app->location(1);
+    CK_CHECK(f.app->navigate_root(0));
+    f.loaded();
+    CK_CHECK(f.command("ck.files.parent"));
+    f.until([&] { return f.app->model(0).volume_cursor().has_value(); });
+    CK_CHECK(f.app->status(0).starts_with("Access unknown"));
+    CK_CHECK(f.app->model(0).cell(0, 1).text.ends_with("…"));
+    CK_CHECK(f.alt("l"));
+    CK_CHECK(f.application.dispatch(ckv::KeyEvent{{ckv::Key::Char, ckv::Modifier::None, "i"}}));
+    CK_CHECK(f.app->properties_pending());
+    CK_CHECK(!f.command("ck.files.switch_pane"));
+    const auto *reader = dynamic_cast<ckv::widgets::TextView *>(f.application.focused());
+    if (!reader)
+        throw std::runtime_error("missing volume properties reader");
+    CK_CHECK(reader->text().find("Volume: Research & archive") != std::string::npos);
+    CK_CHECK(reader->text().find("Mount: " + ck::files::display_native_text(mount)) != std::string::npos);
+    CK_CHECK(reader->text().find("Access: Unknown\nAvailable: 0 bytes\nTotal: 24000000000001 bytes") != std::string::npos);
+    CK_CHECK(reader->text().find("&tail\\u{000A}leaf") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->properties_pending(); });
+    CK_CHECK(f.application.focused() == f.app->grid(0) && f.app->model(0).volume_cursor()->mount_point == mount);
+    CK_CHECK(f.app->location(1) == other);
+}
 CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_after_failure) {
     using VolumeInventory = Observation<std::vector<FilesVolumeRecord>>;
     auto scans = std::make_shared<std::atomic<unsigned>>(0);
@@ -2601,6 +2635,10 @@ CK_TEST(files_app_volume_refresh_retains_the_mount_selection_and_blocks_copy_aft
     CK_CHECK(f.app->status(0).find("previous volume information retained") != std::string::npos);
     CK_CHECK(f.app->availability("ck.files.copy").reason.find("refresh the volume information") != std::string::npos);
     CK_CHECK(f.app->model(0).volume_cursor()->free_bytes == 20);
+    CK_CHECK(f.command("ck.files.properties"));
+    CK_CHECK(f.painted().find("Last successful scan") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->properties_pending(); });
     CK_CHECK(f.command("ck.files.refresh"));
 #if defined(__APPLE__)
     constexpr std::string_view unavailable_copy_reason = "archive writes unsupported";

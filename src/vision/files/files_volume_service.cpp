@@ -37,6 +37,12 @@
 #endif
 
 namespace ck::vision {
+std::string FilesVolumeRecord::display_mount() const {
+    if (!native_mount_units.empty())
+        return ck::files::display_native_text(native_mount_units);
+    return ck::files::display_native_text(mount_point.empty() ? name : mount_point);
+}
+
 namespace {
 using ck::files::AdapterError;
 using ck::files::ErrorDomain;
@@ -94,7 +100,8 @@ void append_windows_volume(std::vector<FilesVolumeRecord> &result, std::wstring_
         record.total_bytes = total_bytes.QuadPart;
         record.free_bytes = available_bytes.QuadPart;
     }
-    record.read_only = info && (flags & FILE_READ_ONLY_VOLUME) != 0;
+    if (info)
+        record.read_only = (flags & FILE_READ_ONLY_VOLUME) != 0;
     // The inventory uses UTF-8 only for display. Archive traversal retains
     // exact UTF-16 units and qualifies them with a native read-only probe.
     auto address = ck::files::NativeAbsolutePath::from_windows(record.native_mount_units);

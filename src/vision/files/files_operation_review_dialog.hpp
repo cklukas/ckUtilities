@@ -24,6 +24,8 @@ struct FilesTransferReviewScope final {
 void add_files_transfer_scope(ckv::widgets::DialogDescriptor &descriptor, const FilesTransferReviewScope &scope,
     ckv::ui::Application &application, ckv::widgets::Desktop &desktop, const ckv::ui::StandardRoles &roles);
 std::string files_review_literal(std::string_view text);
+ckv::widgets::Window *present_files_read_only_text(std::string title, std::string text,
+    ckv::ui::Application &application, ckv::widgets::Desktop &desktop, const ckv::ui::StandardRoles &roles);
 
 // UI-only presentation of an immutable operation review. It never opens a
 // native object or executes an operation; the completion carries only the

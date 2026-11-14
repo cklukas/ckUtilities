@@ -306,11 +306,12 @@ ckv::widgets::GridCell FilesPaneGridModel::cell(ckv::widgets::GridIndex at, ckv:
         const auto &volume = volumes_[at];
         switch (column) {
         case 1:
-            result.text = ckv::text::elide_to_width(volume.mount_point.empty() ? volume.name : volume.mount_point,
+            result.text = ckv::text::elide_to_width(volume.display_mount(),
                 column_width(1) - (width_ >= volume_type_threshold ? 1 : 0));
             break;
         case 2:
-            result.text = ckv::text::elide_to_width(volume.filesystem.empty() ? "Unknown" : volume.filesystem,
+            result.text = ckv::text::elide_to_width(volume.filesystem.empty() ? "Unknown" :
+                ck::files::display_native_text(volume.filesystem),
                 filesystem_width - (width_ >= volume_space_threshold ? 1 : 0));
             break;
         case 3:

@@ -40,7 +40,7 @@ struct FilesVolumeRecord {
     std::string filesystem;
     std::optional<std::uint64_t> total_bytes;
     std::optional<std::uint64_t> free_bytes;
-    bool read_only = false;
+    std::optional<bool> read_only;
     // Native volume/device identity, not a display label or a path. It is
     // opaque to the UI and must be revalidated before an archive worker uses it.
     std::string identity;
@@ -49,6 +49,8 @@ struct FilesVolumeRecord {
     // the display string. POSIX records leave this empty; Windows records use
     // the volume/mount UTF-16 units without a UTF-8 round trip.
     std::u16string native_mount_units;
+
+    std::string display_mount() const;
 };
 
 enum class FilesVolumeReplyState { Ready, Failed, Cancelled, WorkerFault };
