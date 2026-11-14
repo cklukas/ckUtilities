@@ -1,0 +1,179 @@
+{
+  "frontend": "57ebaa85e230438d67f412f60fa79efe5d1781eb",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "source_delta_sha256": "21a0259263b564c494ca049c8102b9322b34f6d3927838f3204a0fee8e8940e8",
+  "scope": "The quit dialog uses short, stacked lines to keep the completed-change and storage warnings visible in a compact terminal. The folder-copy regression resizes to 80 columns with the quit modal open, checks both lines and preserves the pending review after Stay.",
+  "macos_arm64_release": {
+    "manifest_sha256": "6f093d51b5742d7379f29172d18807b1e4cf51714629c41447731bb0738e5fb7",
+    "start_utc": "2026-11-14T17:24:31Z",
+    "end_utc": "2026-11-14T17:25:03Z",
+    "elapsed_seconds": 32.632,
+    "steps": 7,
+    "product_sha256": "d3169000d1d559e946700dae52b3e2a9c64db1ba2760eefb0564d3e23bf698f1",
+    "test_image_sha256": "d801f53ba60551e6a64aed88ba7fee57115b8f0dfac775b131e6915a203ecb04",
+    "ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 27.23,
+    "ctest_log_sha256": "2d0af9c0e8b65780eefdd47277618a26a8321c131841fedb428197eefe77244b"
+  },
+  "macos_arm64_matched_sdk_sanitizers": {
+    "manifest_sha256": "32b34f19344ede5f778346b54697319a5e617d319b9f006281a8fc43c4c49423",
+    "address_undefined": {
+      "start_utc": "2026-11-14T17:24:49Z",
+      "end_utc": "2026-11-14T17:25:18Z",
+      "steps": 7,
+      "elapsed_seconds": 29.23,
+      "test_image_sha256": "da081c9b2e1670da4f08657720d3ffb0167ec738afb6269096a7ad62f8d404ca",
+      "product_sha256": "b7987146ead559f1b688aa2fcd86f9d64d3dd56ae7b9ce769e2a0c61dc4dc8b0",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 97.1,
+      "ctest_log_sha256": "a7cae188d1801ffdf67cc59ee6124965b6f1cafdae828176b9a6d8317c88e3f5"
+    },
+    "thread": {
+      "start_utc": "2026-11-14T17:27:20Z",
+      "end_utc": "2026-11-14T17:27:34Z",
+      "steps": 7,
+      "elapsed_seconds": 14.36,
+      "test_image_sha256": "93bcee8ce952249d0ce072a7089bab5dc39680e3a7a39d511a75a75b1fe5344d",
+      "product_sha256": "47978278ba157c7f607e9297c540eb0e2dbfc42660ba3d1eb2e8315c25bc0798",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 208.99,
+      "ctest_log_sha256": "3c9742da7fef552e04ed9d343a43092d5fcc49cb01edd0f1e5b973ac1aa269c4"
+    }
+  },
+  "linux_arm64_release": {
+    "manifest_sha256": "a595a00877b648bfddb2a4f2ae8bffdafdb04f5eef35e95821e1dbc55183305e",
+    "start_utc": "2026-11-14T17:24:27Z",
+    "end_utc": "2026-11-14T17:30:26Z",
+    "elapsed_seconds": 359.345,
+    "steps": 8,
+    "product_sha256": "e6730717bb38b5e795841547a90e0b75f257b859fc8fba308ad9309fc5270a7d",
+    "test_image_sha256": "5fb8aa2dc4f3bc41171dea04787953b3d256f34806266a19c9b94db80eefc41e",
+    "registered_application_cases": 313,
+    "junit_sha256": "2902a9d5a590baceaf5a387d5e203946e1c2812357243eb928bfca0a2e4e62a9",
+    "ctest_entries_passed": 158,
+    "ctest_elapsed_seconds": 100.73,
+    "ctest_log_sha256": "8e3c8bb8188f6df510d34922f37332fb5a713b4954a07e71d088073be8148002"
+  },
+  "linux_xterm_80x24": {
+    "receipt_sha256": "daacc5aa86d8c70170d6019d80ca8f92917e60b1999ebae68215a57425f7d879",
+    "terminal_mode_restored": true,
+    "process_exit": 0,
+    "result": "pass",
+    "ended_utc": "2026-11-14T17:33:07.802701+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "e6730717bb38b5e795841547a90e0b75f257b859fc8fba308ad9309fc5270a7d",
+    "pid": 1038063,
+    "window": "4194316",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-panes",
+        "sha256": "75ca856d0936d7e0158a6edb19a507cfa67843beb411992569ac77e6c143a092"
+      },
+      {
+        "label": "02-close-files",
+        "sha256": "6de079b282e48d1cb9b86135f861e25edd53af527fbd72974a8bcfd0560138ca"
+      }
+    ],
+    "actions": [
+      "Select source folder",
+      "Start transfer planning then request Quit",
+      "Stop activity and exit"
+    ],
+    "terminal_log_sha256": "96f6d9485dbc9a097e88aecdf9373d467776c00e6d395ba237abb4b52905a95a",
+    "displayed": "The complete storage warning and both actions are visible with pending transfer planning."
+  },
+  "previous_behavior_validation": "ck-files-quit-activity-20261114.json",
+  "build_comparison": {
+    "macos_prior_seconds": {
+      "release": 31.413,
+      "address_undefined": 22.49,
+      "thread": 12.98
+    },
+    "linux_prior_release_seconds": 366.943
+  },
+  "ordinary_windows": "Ordinary-user Windows suite and desktop acceptance remain open. The sealed 79d70df desktop handoff is preserved on V:.",
+  "windows_x64_release": {
+    "frontend": "57ebaa85e230438d67f412f60fa79efe5d1781eb",
+    "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+    "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+    "start_utc": "2026-11-14T17:29:48.2019812Z",
+    "end_utc": "2026-11-14T17:31:00.6300117Z",
+    "elapsed_seconds": 72.42803049999999,
+    "source_delta_sha256": "991ccff7b4ce01e94a2a823206fc290d230a0935d25bd1ed3dcebe36ce7f8985",
+    "sdk_manifest_sha256": "0e34f2886ce4468eacbf944d7b2bc9d16f00360b14fbe75ede7cbb33e711c7d9",
+    "executables": [
+      {
+        "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+        "mtime_utc": "2026-11-14T17:31:00.4980025Z",
+        "sha256": "f53b1f539ea6c8fc65cd51b37fd9fb89f43f45aef9d92a8fc28014822a762757"
+      },
+      {
+        "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\bin\\ck-files.exe",
+        "mtime_utc": "2026-11-14T17:30:59.1526198Z",
+        "sha256": "8fd35663dd3be2b8a11e8136943ced1a44b9902cb28307a9e9365cf57d8ad88f"
+      },
+      {
+        "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\src\\vision\\keymap\\ck_vision_keymap_tests.exe",
+        "mtime_utc": "2026-11-14T17:29:18.1474145Z",
+        "sha256": "f7aad6ee0ab00f9f3be6261547ecee8985c05a2ac171f4080c42b3040b7d915b"
+      }
+    ],
+    "configuration": "Release MSVC v143 14.44 static CRT, /Z7",
+    "elevated_smoke_cases_passed": 5,
+    "build_log_sha256": "7c2ba99ae2fdbfa1d838ea22e8a878b706418e597e990e56652d2966e36bc176",
+    "initial_clean_build": {
+      "frontend": "107e70c91d71838672778b0114b14694f6be0e57",
+      "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+      "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+      "start_utc": "2026-11-14T17:12:22.7674456Z",
+      "end_utc": "2026-11-14T17:29:21.4820987Z",
+      "elapsed_seconds": 1018.7146531,
+      "source_sha256": "856c4fb1f27b0e3e2ffa4158805341e03bce6508f54f82a685f121b5038fdc81",
+      "sdk_manifest_sha256": "0e34f2886ce4468eacbf944d7b2bc9d16f00360b14fbe75ede7cbb33e711c7d9",
+      "executables": [
+        {
+          "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+          "mtime_utc": "2026-11-14T17:29:21.3553185Z",
+          "sha256": "827a6b2b780aa1a9e20351e49ec4dbe9d9c28aa5dbf60d25c9cdf00475db1a53"
+        },
+        {
+          "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\bin\\ck-files.exe",
+          "mtime_utc": "2026-11-14T17:29:19.9980121Z",
+          "sha256": "1500984088317ced1d91c3c4b721ad392d22b12717307c8c5ef4d2293f686ca5"
+        },
+        {
+          "path": "V:\\tmp\\ckfq107e70c-ySy9\\b\\src\\vision\\keymap\\ck_vision_keymap_tests.exe",
+          "mtime_utc": "2026-11-14T17:29:18.1474145Z",
+          "sha256": "f7aad6ee0ab00f9f3be6261547ecee8985c05a2ac171f4080c42b3040b7d915b"
+        }
+      ],
+      "configuration": "Release MSVC v143 14.44 static CRT, /Z7",
+      "planned_actions": 192
+    },
+    "planned_actions": 5,
+    "previous_incremental_seconds": 72.057584,
+    "timing_scope": "The fresh Windows directory kept the prior ordinary-user handoff usable. Its first run compiled 192 actions from scratch. The final narrow-dialog delta compiled two translation units and relinked both changed images on V:."
+  },
+  "linux_documentation_capture": {
+    "source_archive_sha256": "228d0d17084debf47ccba99255f4449604f670022482431aae739ef330ed93bf",
+    "capture_delta_sha256": "2e045ed4156a013242e967f4609292e22786defd1aa54de6a2afa7d1b0bab5ca",
+    "guide_publication_commit": "b2ab355bae788fa1a9390be8e44e1c2882d39ada",
+    "capture_executable_sha256": "701b7fc01a2597b50752289d42aa9977dca883efbe3f641fa6cea167533e6f42",
+    "actions": 302,
+    "timing_utc": {
+      "first_start": "2026-11-14T16:09:45Z",
+      "first_end": "2026-11-14T17:32:40Z",
+      "second_start": "2026-11-14T17:32:40Z",
+      "second_end": "2026-11-14T17:32:55Z"
+    },
+    "initial_build_and_capture_seconds": 4975.0,
+    "repeat_capture_seconds": 15.0,
+    "repeat_identical_assets": 53,
+    "asset_manifest_sha256": "180d20f20ac8f5b349f1640496b93093747728e6e9c01322621dce636b274912",
+    "new_svg_sha256": "18592d719c8d0e8531974f2606917b7bdf5510c7e60534e0c51caae0690797e6",
+    "scope": "Runs use the earlier Volume Properties screenshot source snapshot. Both reproduced the published macOS manifest byte for byte."
+  }
+}
