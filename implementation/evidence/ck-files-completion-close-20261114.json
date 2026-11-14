@@ -395,5 +395,60 @@
       "exit": 0,
       "settings_sha256": "dd57b6dd68c037130e5607ff139aee95babced739f5c78c47d0790426430169a"
     }
+  },
+  "windows_x64_release": {
+    "workspace": "V:\\tmp\\ckc-6fe56174",
+    "build_actions": 198,
+    "build_receipt_sha256": "b5c8983f2b9066fe7d969b987585700db7081f04ab22c0d68747fd4df318f1f9",
+    "frontend": "1304a5f471c0eb0625c1f624efab970985c46724",
+    "backend": "1f426ce52357d57347cb119ff700cba421c52410",
+    "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+    "sdk_manifest_sha256": "0e34f2886ce4468eacbf944d7b2bc9d16f00360b14fbe75ede7cbb33e711c7d9",
+    "frontend_manifest_sha256": "97946e7406f9e8e7417c530d5b317d58e4ddd1b801f9eb146de26c1850169919",
+    "backend_manifest_sha256": "0736d4217588d74d4c8816067413e30a3b26bfa0f59d29431b932950be7ab5e5",
+    "start_utc": "2026-11-14T18:27:36.3239902Z",
+    "end_utc": "2026-11-14T18:44:40.6932080Z",
+    "elapsed_seconds": 1024.3692178,
+    "configuration": "Release MSVC v143 14.44 static CRT /Z7",
+    "executables": [
+      {
+        "path": "V:\\tmp\\ckc-6fe56174\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+        "mtime_utc": "2026-11-14T18:44:39.9050652Z",
+        "sha256": "8705b1cc14653e7a79f5d8187e71fd9b64fd38cf635da8bf5ccb18a8d8053702"
+      },
+      {
+        "path": "V:\\tmp\\ckc-6fe56174\\b\\bin\\ck-files.exe",
+        "mtime_utc": "2026-11-14T18:44:38.4623330Z",
+        "sha256": "d32da6527a20e59856e02c6f27181af938452add1229755459d22d8f2ac37f59"
+      },
+      {
+        "path": "V:\\tmp\\ckc-6fe56174\\b\\src\\vision\\keymap\\ck_vision_keymap_tests.exe",
+        "mtime_utc": "2026-11-14T18:44:37.0184242Z",
+        "sha256": "29adf68d4dcbcd4645625eab18497370c35d2e12ede8a1f39b75e9a5e1e298ea"
+      }
+    ],
+    "focused_session0_cases": [
+      "files_app_quit_during_blocked_location_completion_offers_stay_and_exit",
+      "files_app_location_editor_uses_worker_completion_and_right_accepts_the_exact_directory_proposal",
+      "files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_both_folders"
+    ],
+    "focused_log_sha256": "2a11c5afd691d812c76dd12f11d4c33c155c5aad267d5de373db6d3216ea1cc3",
+    "aggregate_session0": {
+      "passed": 5,
+      "failed": 2,
+      "log_sha256": "debe42e48ddb292c67e1ed4db1970a1fa6a241a61f0aab9267b26f00b5d001aa",
+      "status": "Application shards 0 and 3 exited 0xC0000409. Both last-run permanent-delete cases also reproduce in isolation.",
+      "isolated_delete_log_sha256": "bbe6b6a56cbf8249f6ad1b5854d9f5d946694174c3c7fce8291f663122f7e76d"
+    },
+    "ordinary_user": {
+      "state": "Awaiting a regular Windows Terminal session. Launcher and helper matched their staged bytes on readback.",
+      "launcher": "V:\\tmp\\ckc-6fe56174\\run-1304a5f-ordinary.ps1",
+      "launcher_sha256": "a26a2c3da23035c4c55eeff407ae0805981154d0ca4f9d7f59ce000937d7e3f4",
+      "helper_sha256": "c63c8ba216c9beba30c9a31620976a23bd61c3fcc51e0fe67225d882445ee9a1",
+      "modes": [
+        "Suite",
+        "Desktop"
+      ]
+    }
   }
 }
