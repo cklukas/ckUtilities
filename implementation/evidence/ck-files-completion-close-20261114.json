@@ -298,5 +298,102 @@
         "columns": 160
       }
     ]
+  },
+  "linux_xterm_settings_restart": {
+    "scope": "Two serial ordinary-user launches of the verified Linux build in Debian xterm 398. Added the left root bookmark through Location, quit, reopened the same settings location and opened the bookmark from the picker. The right pane stayed on its original location.",
+    "create": {
+      "pid": 1313280,
+      "window": "4194316",
+      "actions": [
+        "Open location editor",
+        "Select location input",
+        "Right accepts location completion",
+        "Enter opens completed directory",
+        "Read selected file",
+        "Close preview",
+        "Mark focused row",
+        "Refresh preserves selected identity",
+        "Open location editor for the filesystem root",
+        "Select location input for root",
+        "Open filesystem root",
+        "Show volumes above the root",
+        "Open Location menu from the volume pane",
+        "Show properties for the active volume",
+        "Return from Properties",
+        "Return to the filesystem pane",
+        "Open Location menu to add the root bookmark",
+        "Add the root to left bookmarks",
+        "Open Location menu to verify bookmark was added",
+        "Open the left bookmark picker",
+        "Dismiss the bookmark picker",
+        "Quit Files and drain accepted settings"
+      ],
+      "screenshots": [
+        {
+          "label": "01-panes",
+          "sha256": "d1baac73e4233f53e23f4b54c1195bcae42ebcde2621929c37c04b4747840362"
+        },
+        {
+          "label": "01b-location-proposal",
+          "sha256": "432a84f23079794e070ca4f077f7fdd804b848ef1a57aec8aa67f4014684c7c0"
+        },
+        {
+          "label": "02-preview",
+          "sha256": "e7a865f1f18205ad462af11617f346b39e26a453bc8d41f7b39a631ab574e8a8"
+        },
+        {
+          "label": "03-refresh",
+          "sha256": "fafe69cf9d9c2e40a83dbe1c2740f313b985fd969790cf03fc8c644feffdb5b9"
+        },
+        {
+          "label": "04-volumes",
+          "sha256": "b8c66fed722d3545a43072717ad6a45b9aee168efd7f50e7ed2779cc40bc8e49"
+        },
+        {
+          "label": "05-volume-properties",
+          "sha256": "590d91842730032e4f50b9ba1831d64ee84b900ce883f0cfe650bbb865ba2a2d"
+        },
+        {
+          "label": "06-before-bookmark",
+          "sha256": "f8b3b7cb41fac66b3d79d032bf5a4b5a38b32dc65a7b13d5dfe71ec4b8ecfe2d"
+        },
+        {
+          "label": "07-bookmark-added",
+          "sha256": "0568479eab69caf7e7682af70795759d04a149df59d541191c38bcdf1a161850"
+        }
+      ],
+      "receipt_sha256": "5256ab10d73d20b596daf27f051fb214131af0fe62435a39aec2cbddbad06c06",
+      "terminal_modes_restored": true,
+      "exit": 0,
+      "settings_sha256": "dd57b6dd68c037130e5607ff139aee95babced739f5c78c47d0790426430169a"
+    },
+    "reopen": {
+      "pid": 1313623,
+      "window": "4194316",
+      "actions": [
+        "Open the Location menu after restarting Files",
+        "Open the persisted left bookmark picker",
+        "Open the bookmarked filesystem root",
+        "Quit Files"
+      ],
+      "screenshots": [
+        {
+          "label": "01-panes",
+          "sha256": "70e6df45078988b8e8a67ceb58dc3ed9151f8df41ee294a122a78da2e02d8d65"
+        },
+        {
+          "label": "02-bookmark-reloaded",
+          "sha256": "afc8a05a5f4d7399e7c02c67213c4718a97c8d92923751d63cce0fe88452afea"
+        },
+        {
+          "label": "03-root-reopened",
+          "sha256": "938c5a55d7ec1d127951a525155cf64a5369b7f429572f01b8728b4ae1e543fb"
+        }
+      ],
+      "receipt_sha256": "db656c01a4f541fdfb23dc4327113056c1cd158985483282c465048077cfbf4d",
+      "terminal_modes_restored": true,
+      "exit": 0,
+      "settings_sha256": "dd57b6dd68c037130e5607ff139aee95babced739f5c78c47d0790426430169a"
+    }
   }
 }
