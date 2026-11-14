@@ -1,0 +1,19 @@
+{
+  "frontend": "2be3e485c73c429d9f45d5719acd5b24b2758f00",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "defect": "An ordinary Linux xterm run inventoried a 4 MiB file with a hole between its two extents. The review showed 8 KiB of stored extents and zero sparse files because the second extent ended at EOF.",
+  "fix": "Compare the total validated stored extent bytes with each file's logical size. The regression covers a file with an interior hole ending at EOF, a file with only a hole, a leading hole, adjacent dense extents, and an empty file.",
+  "macos_arm64_release": {
+    "tested_frontend_manifest_sha256": "d6e8880091cfd59631ce71b45f168014a50dbeb80b6221be4ccca0b418a42b5e",
+    "build": {"start_utc": "2026-11-14T16:30:59Z", "end_utc": "2026-11-14T16:31:17Z", "elapsed_seconds": 17.47, "steps": 7},
+    "product_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "product_sha256": "d1e8d26e4362b2faf31c2bc9fefd3cd3e9c6417e0ea0b886f3d2c35d8b99b12d",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_sha256": "dcf9d050504c419c765b5fc4aafbb65f8e1af2c07ebedc3273d82d5404edc560",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 30.66,
+    "ctest_log_sha256": "a58b9f591e80b2591439c33c40b5c9c8f9b333dec62ad8eda99de8ebfe118ae3"
+  },
+  "open": ["Current Linux suite and xterm archive creation and readback, matching macOS sanitizers, current Windows build and ordinary-user acceptance"]
+}
