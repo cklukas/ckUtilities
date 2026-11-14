@@ -1231,6 +1231,29 @@ CK_TEST(files_app_escape_cancels_unread_copy_plan_before_review) {
     CK_CHECK(!f.app->operation_review_pending());
     CK_CHECK(f.command("ck.files.switch_pane") && f.app->active_pane() == 1);
 }
+CK_TEST(files_app_quit_during_unread_transfer_planning_keeps_review_until_stay) {
+    Fixture f;
+    f.loaded();
+    f.hold_planning_wakeup = true;
+    CK_CHECK(f.key(ckv::Key::F5));
+    f.planning_wakeup_gate.wait();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while ((f.services[0]->working() || f.services[1]->working()) &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    CK_CHECK(!f.services[0]->working() && !f.services[1]->working());
+    f.app->request_close();
+    CK_CHECK(f.app->close_confirmation_pending() && f.exits == 0);
+    f.clock.advance(250'000'000);
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.app->close_confirmation_pending() && !f.app->operation_review_pending());
+    CK_CHECK(f.key(ckv::Key::Enter));
+    f.until([&] { return f.app->operation_review_pending(); });
+    CK_CHECK(f.exits == 0);
+    f.planning_wakeup_gate.release();
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->operation_review_pending(); });
+}
 CK_TEST(files_app_escape_cancels_move_while_source_worker_is_blocked) {
     Fixture f;
     f.loaded();
@@ -1589,11 +1612,19 @@ CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_
     // A missed execution wake must not strand either the review or its terminal cancellation.
     f.hold_execution_wakeup = true;
     CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->status(0).find("Copying to the other pane") != std::string::npos; });
+    f.app->request_close();
+    CK_CHECK(f.app->close_confirmation_pending() && f.exits == 0);
+    f.clock.advance(250'000'000);
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(f.key(ckv::Key::Enter));
     f.until([&] {
         return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
     });
     if (!f.app->operation_review_pending())
         throw std::runtime_error(f.app->status(0));
+    CK_CHECK(f.exits == 0);
     f.application.step(f.clock.now_nanos());
     const auto review = f.painted();
     CK_CHECK(review.find("Review folder copy") != std::string::npos);

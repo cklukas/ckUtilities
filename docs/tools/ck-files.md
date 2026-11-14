@@ -217,6 +217,9 @@ the command palette, where you can also highlight a disabled match to see
 its reason. In the volume view, press **Backspace** to return to the
 filesystem listing.
 
+When work is pending, **Quit** offers **Stay** or **Stop activity and exit**.
+Completed changes remain in place. Stopping may wait for storage to respond.
+
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching
 journals. `Operations > Clean up archive staging` and `Operations > Clean up

@@ -924,7 +924,7 @@ struct FilesApp::State {
             wake.request();
     }
     bool modal_pending() const {
-        return (confirmation && !confirmation->completed()) || (view_dialog && !view_dialog->completed()) ||
+        return confirmation.has_value() || (view_dialog && !view_dialog->completed()) ||
                (bookmark_dialog && !bookmark_dialog->completed()) ||
                properties_open() ||
                preview_open() ||
@@ -3842,7 +3842,9 @@ struct FilesApp::State {
         labels();
     }
     void pump() {
-        if (closing || pumping)
+        // Leave replies in their worker mailboxes while the user decides.
+        // Consuming a review under the quit modal could reject or cancel it.
+        if (closing || pumping || confirmation)
             return;
         pumping = true;
         try {
@@ -4104,10 +4106,14 @@ struct FilesApp::State {
             volume_archive_recovery_service->request_stop();
         if (volume_archive_recovery_cleanup_service)
             volume_archive_recovery_cleanup_service->request_stop();
+        if (operation_recovery_service)
+            operation_recovery_service->request_stop();
+        if (operation_recovery_cleanup_service)
+            operation_recovery_cleanup_service->request_stop();
         host_quit(); // No join in dispatch; the composition owner joins afterwards.
     }
     void request_close() {
-        if (closing)
+        if (closing || confirmation)
             return;
         if (location_dialog && !location_dialog->completed()) {
             close_after_location = true;
@@ -4193,14 +4199,21 @@ struct FilesApp::State {
             operation_review_dialog->close();
             return;
         }
+        if (volume_archive_review_dialog && !volume_archive_review_dialog->completed()) {
+            volume_archive_review_dialog->close();
+            return;
+        }
         if (tree_copy_dialog && !tree_copy_dialog->completed()) {
             if (tree_copy_window && !tree_copy_window_lifetime.expired())
                 tree_copy_window->close();
             return;
         }
-        if (confirmation && !confirmation->completed())
-            return;
-        if (!services[0]->working() && !services[1]->working() && !volume_request) {
+        const bool operation_active = operation_execution_request || volume_archive_execution_request ||
+            volume_archive_recovery_cleanup_request || operation_recovery_cleanup_request ||
+            panes[0].mutating || panes[1].mutating;
+        const bool planning_active = operation_planning_request || volume_archive_planning_request;
+        if (!operation_active && !planning_active && !services[0]->working() && !services[1]->working() &&
+            !volume_request && !volume_archive_recovery_request && !operation_recovery_request) {
             finish_exit();
             return;
         }
@@ -4208,7 +4221,9 @@ struct FilesApp::State {
         ckv::widgets::DialogDescriptor descriptor;
         descriptor.title = "Close Files";
         descriptor.fields = {ckv::widgets::FieldDescriptor{
-            .label = "File reads or pane updates are still running. Stopping may wait for blocked storage to respond.",
+            .label = operation_active
+                ? "A file operation is still running. Completed changes remain. Stopping may wait for storage to respond."
+                : "File reads or checks are still running. Stopping may wait for storage to respond.",
             .kind = ckv::widgets::FieldKind::Note}};
         descriptor.buttons = {
             {"&Stay", ckv::widgets::ButtonRole::Accept, {}},
@@ -4217,8 +4232,13 @@ struct FilesApp::State {
             ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
         confirmation->set_completion_handler(
             [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
-                if (!weak.expired() && exit_selected)
+                if (weak.expired())
+                    return;
+                confirmation.reset();
+                if (exit_selected)
                     finish_exit();
+                else
+                    wake.request();
             });
     }
 
