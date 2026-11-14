@@ -383,6 +383,31 @@ struct Fixture {
                         {++sequence, 0, state, *evidence.value()}).value())
                     throw std::runtime_error("cannot append move recovery fixture");
             }
+            OperationJournalId retained_id;
+            retained_id.bytes[0] = std::byte{0x33};
+            auto retention = OperationJournal::create(FileOperation::Move, retained_id);
+            auto retention_file = open_native_operation_journal_file(operation_root_address,
+                host_name(".ck-retention-33000000000000000000000000000000.journal"), true);
+            if (!retention.value() || !retention_file.value())
+                throw std::runtime_error("cannot create app retention fixture");
+            NativeOperationRecoveryEvidence old_target{
+                host_name("original-target.txt"), host_name("previous-target.txt"),
+                identity, identity, identity, identity, {}, std::array<std::byte, 32>{}, {}};
+            sequence = 0;
+            for (const auto state : {OperationJournalState::Planned, OperationJournalState::Prepared,
+                    OperationJournalState::CommitIntended, OperationJournalState::DestinationCommitted,
+                    OperationJournalState::SourceRemovalIntended, OperationJournalState::SourceRetired,
+                    OperationJournalState::Complete}) {
+                if (state == OperationJournalState::DestinationCommitted)
+                    old_target.published_identity = identity;
+                const auto bytes = encode_native_operation_recovery_evidence(old_target);
+                if (!bytes.value() || !append_operation_journal_file(**retention_file.value(), **retention.value(),
+                        {++sequence, 0, state, *bytes.value()}).value())
+                    throw std::runtime_error("cannot append app retention fixture");
+            }
+            const auto finished = (*retention_file.value())->finish_io();
+            if (!finished.value() || !*finished.value())
+                throw std::runtime_error("cannot finish app retention fixture");
         }
         if (eligible_operation_recovery) {
             const auto destination = scratch.path() / "operation-destination";
@@ -2431,7 +2456,7 @@ CK_TEST(files_app_operation_recovery_without_service_reports_status_reason) {
                  "operation recovery scan is not ready") != std::string::npos);
 }
 CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
-    Fixture f(ThemeScheme::Classic, {}, {}, {80, 24}, {}, false, false, false, {}, false, false, true);
+    Fixture f(ThemeScheme::Classic, {}, {}, {100, 36}, {}, false, false, false, {}, false, false, true);
     f.loaded();
     f.until([&] { return f.app->availability("ck.files.inspect_operation_recovery").enabled; });
     CK_CHECK(f.command("ck.files.inspect_operation_recovery"));
@@ -2441,6 +2466,9 @@ CK_TEST(files_app_operation_recovery_review_is_read_only_and_modal) {
     CK_CHECK(text.find("source retained") != std::string::npos);
     CK_CHECK(text.find("Source: original-tree") != std::string::npos);
     CK_CHECK(text.find("Destination: moved-tree") != std::string::npos);
+    CK_CHECK(text.find("Previous target version") != std::string::npos);
+    CK_CHECK(text.find("Original target: original-target.txt") != std::string::npos);
+    CK_CHECK(text.find("Recorded retained name: previous-target.txt") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Operation recovery review") == std::string::npos; });
 }

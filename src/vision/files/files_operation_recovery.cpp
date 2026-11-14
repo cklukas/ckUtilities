@@ -21,19 +21,23 @@ ck::files::Observation<T> error(ck::files::AdapterError code, const char *operat
         {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
 }
 
-bool is_operation_journal_name(const ck::files::NativeName &name) {
-    constexpr std::string_view prefixes[]{".ck-copy-journal-", ".ck-tree-journal-",
-                                          ".ck-move-journal-", ".ck-delete-tree-journal-"};
-    for (const auto prefix : prefixes) {
-        if (const auto *bytes = name.posix_bytes(); bytes && bytes->starts_with(prefix))
-            return true;
-        if (const auto *units = name.windows_units(); units && units->size() >= prefix.size() &&
+std::optional<FilesOperationJournalKind> journal_kind(const ck::files::NativeName &name) {
+    const auto starts_with = [&](std::string_view prefix) {
+        if (const auto *bytes = name.posix_bytes())
+            return bytes->starts_with(prefix);
+        const auto *units = name.windows_units();
+        return units && units->size() >= prefix.size() &&
             std::equal(prefix.begin(), prefix.end(), units->begin(), [](char byte, char16_t unit) {
                 return static_cast<unsigned char>(byte) == unit;
-            }))
-            return true;
-    }
-    return false;
+            });
+    };
+    if (starts_with(".ck-retention-"))
+        return FilesOperationJournalKind::RetainedTarget;
+    constexpr std::string_view prefixes[]{".ck-copy-journal-", ".ck-tree-journal-", ".ck-move-journal-",
+                                          ".ck-delete-tree-journal-", ".ck-reviewed-journal-"};
+    if (std::any_of(std::begin(prefixes), std::end(prefixes), starts_with))
+        return FilesOperationJournalKind::Transfer;
+    return std::nullopt;
 }
 
 bool valid_limits(const FilesOperationRecoveryLimits &limits) {
@@ -74,7 +78,8 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                     return ck::files::Observation<FilesOperationRecoveryScan>::unavailable(
                         batch.error->state, batch.error->error);
                 for (const auto &name : batch.names) {
-                    if (!is_operation_journal_name(name))
+                    const auto kind = journal_kind(name);
+                    if (!kind)
                         continue;
                     if (result.journals.size() >= limits.max_journals)
                         return error<FilesOperationRecoveryScan>(ck::files::AdapterError::InventoryLimit,
@@ -83,14 +88,20 @@ ck::files::Observation<FilesOperationRecoveryScan> discover_operation_recovery(
                     FilesOperationRecoveryItem item;
                     item.native_name = name;
                     item.display_name = name.display_name();
+                    item.kind = *kind;
                     auto file = ck::files::open_held_operation_journal_file(*cursor, name);
                     if (!file.value()) {
                         item.error = *file.unavailable_detail();
                         result.requires_reconciliation = true;
                     } else {
                         auto inspection = detail::finish_recovery_observation<ck::files::NativeOperationRecoveryInspection>(
-                            [&] { return ck::files::inspect_native_operation_recovery_evidence(
-                                **file.value(), limits.journal, limits.codec, limits.evidence); },
+                            [&] {
+                                if (item.kind == FilesOperationJournalKind::RetainedTarget)
+                                    return ck::files::inspect_native_retention_recovery(
+                                        **file.value(), limits.journal, limits.codec, limits.evidence);
+                                return ck::files::inspect_native_operation_recovery_evidence(
+                                    **file.value(), limits.journal, limits.codec, limits.evidence);
+                            },
                             [&] { return (*file.value())->finish_io(); }, "operation_recovery.finish_io");
                         if (!inspection.value()) {
                             item.error = *inspection.unavailable_detail();

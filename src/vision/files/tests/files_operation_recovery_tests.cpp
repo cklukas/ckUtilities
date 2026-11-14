@@ -282,6 +282,101 @@ CK_TEST(files_operation_recovery_reopens_the_same_durable_journal_after_worker_r
                  second.value()->journals.front().report->inspection.report.requires_reconciliation);
 }
 
+CK_TEST(files_operation_recovery_discovers_completed_and_interrupted_target_retention_after_restart) {
+    const ck::testing::ScratchDirectory scratch("files-retention-recovery", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto root = address(scratch.path());
+    CK_CHECK(prepare_native_operation_journal_root(root).value());
+    const auto native_name = [](std::string spelling) {
+#ifdef _WIN32
+        return *NativeName::from_windows(std::u16string(spelling.begin(), spelling.end()));
+#else
+        return *NativeName::from_posix(std::move(spelling));
+#endif
+    };
+    const auto identity = [](std::uint64_t number) {
+        return NativeDurableIdentity{
+#ifdef _WIN32
+            IdentityScheme::WindowsFileId128,
+#else
+            IdentityScheme::PosixDeviceInode,
+#endif
+            NativeIdentifier::from_u64(17), NativeIdentifier::from_u64(number), {}};
+    };
+    const auto parent = identity(20);
+    const auto old = identity(21);
+    const auto original_name = native_name("old-target.txt");
+    const auto retained_name = native_name("old-target.previous.txt");
+    const auto write_journal = [&](const NativeName &filename, bool complete, bool malformed) {
+        const auto journal = OperationJournal::create(FileOperation::Move, journal_id());
+        auto opened = open_native_operation_journal_file(root, filename, true);
+        if (!journal.value() || !opened.value())
+            throw std::runtime_error("cannot create retention journal fixture");
+        auto file = std::move(opened).take_value();
+        NativeOperationRecoveryEvidence entry{original_name, retained_name, parent, old,
+            malformed ? identity(22) : parent, old, root, std::array<std::byte, 32>{}, {}};
+        if (!complete)
+            entry.source_name = original_name;
+        std::uint64_t sequence = 0;
+        const auto append = [&](OperationJournalState state) {
+            const auto encoded = encode_native_operation_recovery_evidence(entry);
+            if (!encoded.value() || !append_operation_journal_file(*file, **journal.value(),
+                    {++sequence, 0, state, *encoded.value()}).value())
+                throw std::runtime_error("cannot append retention journal fixture");
+        };
+        append(OperationJournalState::Planned);
+        append(OperationJournalState::Prepared);
+        append(OperationJournalState::CommitIntended);
+        if (complete) {
+            entry.published_identity = old;
+            append(OperationJournalState::DestinationCommitted);
+            append(OperationJournalState::SourceRemovalIntended);
+            append(OperationJournalState::SourceRetired);
+            append(OperationJournalState::Complete);
+        }
+        const auto finished = file->finish_io();
+        CK_CHECK(finished.value() && *finished.value());
+    };
+    const auto completed = native_name(".ck-retention-01000000000000000000000000000000.journal");
+    const auto interrupted = native_name(".ck-retention-02000000000000000000000000000000.journal");
+    const auto malformed = native_name(".ck-retention-03000000000000000000000000000000.journal");
+    const auto incoming = native_name(".ck-reviewed-journal-04000000000000000000000000000000");
+    write_journal(completed, true, false);
+    write_journal(interrupted, false, false);
+    write_journal(malformed, true, true);
+    if (!write_fixture_journal_bytes(root, incoming, "torn incoming journal"))
+        throw std::runtime_error("cannot create incoming journal fixture");
+
+    const auto scan = discover_operation_recovery(root);
+    CK_CHECK(scan.value() && scan.value()->journals.size() == 4 && scan.value()->requires_reconciliation);
+    if (!scan.value())
+        return;
+    const auto find = [&](const NativeName &name) -> const FilesOperationRecoveryItem& {
+        const auto found = std::find_if(scan.value()->journals.begin(), scan.value()->journals.end(),
+            [&](const auto &item) { return item.native_name == name; });
+        if (found == scan.value()->journals.end())
+            throw std::runtime_error("retention journal was omitted from discovery");
+        return *found;
+    };
+    const auto &done = find(completed);
+    CK_CHECK(done.kind == FilesOperationJournalKind::RetainedTarget && done.report);
+    if (!done.report || done.report->inspection.artifacts.size() != 1)
+        throw std::runtime_error("completed retention journal omitted its evidence");
+    const auto &receipt = done.report->inspection.artifacts.front();
+    CK_CHECK(receipt.state == OperationJournalState::Complete && receipt.evidence);
+    CK_CHECK(receipt.evidence && !receipt.evidence->source_name && receipt.evidence->staging_name == original_name &&
+        receipt.evidence->destination_name == retained_name && receipt.evidence->destination_address == root);
+    CK_CHECK(!done.report->inspection.report.requires_reconciliation);
+    const auto &pending = find(interrupted);
+    CK_CHECK(pending.report && pending.report->inspection.report.requires_reconciliation &&
+        pending.report->inspection.report.items.front().action == OperationRecoveryAction::RequireReview &&
+        pending.report->inspection.artifacts.size() == 1 &&
+        pending.report->inspection.artifacts.front().state == OperationJournalState::CommitIntended);
+    const auto &bad = find(malformed);
+    CK_CHECK(bad.report && bad.report->inspection.has_untrusted_evidence &&
+        bad.report->inspection.report.requires_reconciliation && bad.report->inspection.artifacts.empty());
+    CK_CHECK(find(incoming).kind == FilesOperationJournalKind::Transfer && find(incoming).error);
+}
+
 CK_TEST(files_operation_recovery_cleanup_requires_live_ownership_and_preserves_evidence) {
     const ck::testing::ScratchDirectory scratch("files-operation-recovery-cleanup", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     const auto destination_path = scratch.path() / "destination";

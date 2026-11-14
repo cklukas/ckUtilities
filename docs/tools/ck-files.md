@@ -124,7 +124,10 @@ clipboard.
 - **Inspect operation recovery** shows a read-only scan of copy, move, and
   recursive-delete journals. The scan runs at startup and after file operations.
   Interrupted moves with exact name receipts show their source and destination
-  names. Malformed, truncated, legacy, ambiguous, or untrusted records remain
+  names. The review also reads replacement-retention journals in that folder
+  and shows the original target name, the recorded or proposed retained name,
+  and the recorded destination folder when available. Malformed, truncated,
+  legacy, ambiguous, or untrusted records remain
   visible as reconciliation items. **Clean up operation staging** is disabled
   for recovered journals: cleanup requires the originating copy worker's live
   ownership of the created staging object. Reopened journal IDs and names do

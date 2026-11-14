@@ -29,6 +29,8 @@ struct FilesOperationRecoveryReport final {
     ck::files::NativeOperationRecoveryInspection inspection;
 };
 
+enum class FilesOperationJournalKind { Transfer, RetainedTarget };
+
 struct FilesOperationRecoveryItem final {
     // The native name is retained for a future worker action. display_name is
     // diagnostic text only and must never be reparsed as authority.
@@ -36,6 +38,7 @@ struct FilesOperationRecoveryItem final {
     std::string display_name;
     std::optional<FilesOperationRecoveryReport> report;
     std::optional<ck::files::UnavailableObservation> error;
+    FilesOperationJournalKind kind = FilesOperationJournalKind::Transfer;
 };
 
 struct FilesOperationRecoveryScan final {

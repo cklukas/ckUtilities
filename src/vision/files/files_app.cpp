@@ -932,7 +932,7 @@ struct FilesApp::State {
         if (!operation_recovery_scan || operation_recovery_scan->journals.size() != 1)
             return nullptr;
         const auto &item = operation_recovery_scan->journals.front();
-        if (!item.native_name || !item.report)
+        if (item.kind != FilesOperationJournalKind::Transfer || !item.native_name || !item.report)
             return nullptr;
         const auto &inspection = item.report->inspection;
         if (inspection.report.items.size() != 1 || inspection.artifacts.size() != 1 ||
@@ -1487,6 +1487,9 @@ struct FilesApp::State {
         for (std::size_t index = 0; index != count; ++index) {
             const auto &item = journals[index];
             summary << "Journal: " << item.display_name << '\n';
+            const bool retention = item.kind == FilesOperationJournalKind::RetainedTarget;
+            if (retention)
+                summary << "Previous target version\n";
             if (item.report) {
                 const auto &inspection = item.report->inspection;
                 summary << "Items: " << inspection.report.items.size() << '\n';
@@ -1498,11 +1501,21 @@ struct FilesApp::State {
                             << "; action: " << archive_recovery_action(recovery.action) << '\n';
                     while (artifact != inspection.artifacts.end() && artifact->item < recovery.item)
                         ++artifact;
-                    if (artifact != inspection.artifacts.end() && artifact->item == recovery.item &&
-                        artifact->evidence && artifact->evidence->source_name)
-                        summary << "Source: " << artifact->evidence->source_name->display_name()
-                                << '\n' << "Destination: "
-                                << artifact->evidence->destination_name.display_name() << '\n';
+                    if (artifact != inspection.artifacts.end() && artifact->item == recovery.item && artifact->evidence) {
+                        const auto &entry = *artifact->evidence;
+                        if (retention) {
+                            const bool recorded = recovery.state == ck::files::OperationJournalState::Complete &&
+                                !inspection.has_untrusted_evidence;
+                            summary << "Original target: " << entry.source_name.value_or(entry.staging_name).display_name()
+                                    << '\n' << (recorded ? "Recorded retained name: " : "Proposed retained name: ")
+                                    << entry.destination_name.display_name() << '\n';
+                            if (entry.destination_address)
+                                summary << "Recorded folder: " << entry.destination_address->display_text() << '\n';
+                        } else if (entry.source_name) {
+                            summary << "Source: " << entry.source_name->display_name() << '\n'
+                                    << "Destination: " << entry.destination_name.display_name() << '\n';
+                        }
+                    }
                 }
                 remaining_items -= shown;
                 if (shown != inspection.report.items.size())
