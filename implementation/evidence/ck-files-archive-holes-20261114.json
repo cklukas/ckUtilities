@@ -15,5 +15,13 @@
     "ctest_elapsed_seconds": 30.66,
     "ctest_log_sha256": "a58b9f591e80b2591439c33c40b5c9c8f9b333dec62ad8eda99de8ebfe118ae3"
   },
-  "open": ["Current Linux suite and xterm archive creation and readback, matching macOS sanitizers, current Windows build and ordinary-user acceptance"]
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "tested_frontend_manifest_sha256": "3363dbdb8b79fa052603fa82b40163fea25c73f4f118d91f738015e82a839ea8",
+    "build": {"start_utc": "2026-11-14T16:32:17Z", "end_utc": "2026-11-14T16:32:48Z", "elapsed_seconds": 30.54, "steps": 7},
+    "test_sha256": "488dc730dc1f55434cac1739d260ea4bbc1f65814a2dffb65e7e39faabc4b767",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 119.25,
+    "ctest_log_sha256": "e16c8de97294272728fcc2169ebca7851aedb2fea4bada4fa70fffdc8598dd07"
+  },
+  "open": ["Current Linux suite and xterm archive creation and readback, matching macOS ThreadSanitizer, current Windows build and ordinary-user acceptance"]
 }
