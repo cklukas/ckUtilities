@@ -1,0 +1,28 @@
+{
+  "frontend": "f7e5842cc3e818c37f97381ebc1bb65d5ca9f6ff",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "build_start_utc": "2026-11-14T13:34:12Z",
+    "build_end_utc": "2026-11-14T13:34:40Z",
+    "build_elapsed_seconds": 27.37,
+    "build_steps": 9,
+    "source_patch_sha256": "21ba2fc0524353a33b4b6f77f2e47148259de62f2b64389f59de5a90139e6748",
+    "ckvision_static_library_sha256": "3f154eb45e1340290d0a77d6b90650dd3526d11503057e876a944ea26b56eda3",
+    "fixture": "Ownership-enabled APFS",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-move-terminal.DcmenTme/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "f07461a09214c32ed715169ddb15e5f2def7a0692207bd0730fe8354d4290e2c",
+    "files_ctest_entries_passed": 110,
+    "files_ctest_elapsed_seconds": 18.82,
+    "documentation_contract": "passed"
+  },
+  "verified": [
+    "The worker accepts a folder-wide conflict choice and typed row overrides, validates them against its sealed review, and constructs selected-row backend rules with mandatory retention for replacements.",
+    "The application regression adds an external file to a previously empty destination after review. Apply requires a fresh review and preserves the late file without opening a journal."
+  ],
+  "open": [
+    "Source-matched execution coverage for a real conflicting file with an explicit row override",
+    "Positive insertion and retained replacement on supported providers",
+    "Linux, Windows, and sanitizer qualification for this revision"
+  ]
+}
