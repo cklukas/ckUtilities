@@ -18,6 +18,10 @@
     "focused_regression": "passed",
     "application_cases_passed": 306,
     "application_ctest_elapsed_seconds": 14.14,
+    "remaining_test_build": {"start_utc": "2026-11-14T13:54:43Z", "end_utc": "2026-11-14T13:59:07Z", "elapsed_seconds": 263.85, "steps": 115},
+    "files_ctest_entries_passed": 110,
+    "files_ctest_elapsed_seconds": 38.59,
+    "files_ctest_log_sha256": "10401dc21929de7171bd07a77d0fc414ecd8f30732288df305ad84251796baf8",
     "documentation_contract": "passed"
   },
   "verified": [
