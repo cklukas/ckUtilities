@@ -86,6 +86,24 @@
     "ordinary_helper_sha256": "dffb47462373aed0e54ce0d4b166361f3a3e21cccd30b2d192a36ff51af1e089",
     "ordinary_admission": "The Suite and Desktop launcher and helper matched the local staged bytes on readback. Run in an existing ordinary Windows Terminal. This build supersedes the previous executable pins."
   },
+  "linux_arm64_release": {
+    "frontend": "6cfa3b427429a520a8df723266262dc3afe9b7e4",
+    "source_delta_archive_sha256": "2bc67f9c1a4fcf65711a14be358be59fa29c6e6dcb985de1fcb64f0e6accda58",
+    "tested_frontend_manifest_sha256": "dc91efd41bf1b9a961ed10ef47702ba0dafbb2fcda9ad50019e6e5535a344b20",
+    "build_start_utc": "2026-11-14T15:59:07Z",
+    "build_end_utc": "2026-11-14T16:08:11Z",
+    "build_elapsed_seconds": 543.52,
+    "build_steps": 27,
+    "product_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "product_sha256": "aeec853c9f25993cdc459a25f8ce1a3a10737b0582c074e574463b369904ac63",
+    "test_executable": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "54a50f3c342012187c32c3ed80f65a2499b8eaf18dd60389ec64d656e65c30d3",
+    "files_and_keymap_ctest_entries_passed": 158,
+    "application_cases_passed": 311,
+    "ctest_elapsed_seconds": 67.46,
+    "ctest_log_sha256": "c478cf8bcd7f94040777598d4b13c6274031698ed1d341e63b857b9a51813bbb",
+    "ctest_junit_sha256": "aaed19a46c3bbcc294619d1c4c782411beca162660fcd5c1937af9c1f8919337"
+  },
   "documentation": "ckdocs check and strict build passed for 27 pages. The Files guide documents Escape during transfer planning.",
-  "open": ["Current Linux Release suite and ordinary-user Windows Suite and Desktop for this revision"]
+  "open": ["Ordinary-user Windows Suite and Desktop for this revision"]
 }

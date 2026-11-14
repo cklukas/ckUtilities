@@ -1,0 +1,34 @@
+{
+  "frontend": "28d9d3fee5d7513cff88424bc948989422f43441",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "regression": "Suppress all execution-worker notifications in the folder merge test. The app's watchdog delivers the review and the terminal cancellation. The test verifies the exact paths, the retained source, the empty existing destination folder, and the absence of an operation journal.",
+  "macos_arm64_release": {
+    "tested_frontend_manifest_sha256": "65d9794ad395457f24172cabb78edcd5be9c6c9f55a849e34aea3b32fe33fefa",
+    "build": {"start_utc": "2026-11-14T16:05:56Z", "end_utc": "2026-11-14T16:06:08Z", "elapsed_seconds": 12.12, "steps": 7},
+    "build_review": "The dry run and build both show two recompiled units and five link steps. Changed files and executable hashes and timestamps were checked. The comparable final transfer-planning build compiled four units and linked the same targets under concurrent build load.",
+    "product_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "product_sha256": "c55a2d5e8ace57941d3cb8d4af603e141f4a0b5edc76ff896e2d9e373a67eaf8",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_sha256": "680af47e3cef1dc612472aba40eef467e1e03805f8d1c5bcc4c52e73e0dedfd0",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 19.40,
+    "ctest_log_sha256": "6b0e8770e12b5ea519abfec5f15820618cf7d8cf7e39924217e6e8dbccd64a2b"
+  },
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "tested_frontend_manifest_sha256": "c82d49f0c8b6a1bfc2da6c49593c2c8fc428332ad80d685c67c8a1acd511d514",
+    "build": {"start_utc": "2026-11-14T16:07:16Z", "end_utc": "2026-11-14T16:08:32Z", "elapsed_seconds": 75.42, "steps": 7},
+    "test_sha256": "b642aad4db93d9952adefb1b42b44012fec1ad31ea9eed3e4f7ddb67b0a8bb60",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 129.83,
+    "ctest_log_sha256": "d575e46c86e352856a3eb47bbff42ae06cd5014bd0c2dbf4377b95ef72c920b7"
+  },
+  "macos_native_pty": {
+    "terminal_exit": 0,
+    "program_controlled_terminal_modes_restored": true,
+    "receipt": "/Volumes/PRO-BLADE/tmp/ckfw.5mFzKQb5/record.json",
+    "receipt_sha256": "3ceb926db7f8ca97beece6fb784a049216d8410f1ce9528904e1811d61fee6b1",
+    "terminal_stream_sha256": "fb00ea28513d75b50ef18f8ffb284b6561b6428c0e8787e9d9518d4580b75a7b",
+    "verified": "F5 opened the folder review. Alt+P opened the full paths. Escape closed the path details, and the next Escape cancelled the folder copy. The destination stayed empty and the source contents were unchanged. Alt+X exited the verified product and restored the terminal. This run used normal worker notifications."
+  }
+}
