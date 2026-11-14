@@ -14,7 +14,7 @@ three checks covered default lookup, a missing prefix, and an outside
 redirect. Receipt SHA-256
 `697cc49d99e1ae59a535f79239065f2c8569ebef9e96507274dd99832bc72f5d`.
 
-## 2026-11-14 — CP-01 Linux lease coverage
+## 2026-11-14 — CP-01 native lease coverage
 
 On Linux arm64 `6.12.116+deb13-cloud-arm64` and local ext4, an ordinary
 UID 501 process tried to take a read lease (`fcntl(F_SETLEASE, F_RDLCK)`)
@@ -26,6 +26,14 @@ through the leased descriptor while `F_GETLEASE` still reported `F_RDLCK`.
 This leaves metadata stability unproved for CP-01. Source retirement
 requires proof for the preservation categories accepted by the operation,
 along with identity-bound namespace retirement.
+
+On macOS 27.2.1 arm64 and ownership-enabled APFS, an ordinary UID 501
+process received `EPERM` for the same lease request. Apple's XNU
+implementation checks a private entitlement for file leases. A clone can
+preserve a point-in-time source view, while retirement still needs an
+independent proof that the live source is the version that was copied.
+[XNU lease implementation](https://github.com/apple-oss-distributions/xnu/blob/xnu-12377.121.6/bsd/vfs/vfs_subr.c#L12744-L13003) ·
+[XNU clone semantics](https://github.com/apple-oss-distributions/xnu/blob/xnu-12377.121.6/bsd/man/man2/clonefile.2)
 
 ## 2026-11-14 — Interactive xterm mouse check
 
