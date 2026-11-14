@@ -1,0 +1,42 @@
+{
+  "frontend": "3764b51f4a1ddb4fe9b436003a2583c9ca8150b0",
+  "backend": "9be720521c186000940b69ff47dd46a04c46c862",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "backend_source_patch_sha256": "39748cc6771ebcf6d7f0eb9c5c08b1df07662999b2547c6eab68603168c6d67c",
+  "frontend_test_patch_sha256": "bd565b45e55ab5868593a744804ca9932386aeee2fd7b2f4607b75e2a8c5d887",
+  "native_fixture_correction_sha256": "5649485ff79e4b0ea10a8d45c94855c4db2a1bbdefe5570bccd5a32987666623",
+  "scope": "Evidence collection through a borrowed leaf handle. The observer releases leaf handles while retaining its current chain of directory cursors. It cannot issue sealed live source owners or authorize execution after release.",
+  "windows": {
+    "frontend": "5dc1433d46ee8b10dbf91e3cd648f7c863f3ad44",
+    "initial_recheck": "The verified Release image passed the transfer bound regression, then exited 0xC0000409 in the pre-existing folder-review regression.",
+    "repeat": "A Windows recheck of the exact image stayed in Session 0 beyond 120 seconds with empty output. Exact PID 27452 was still present after Windows refused termination. Ordinary desktop qualification and the new observer remain open on Windows.",
+    "initial_folder_test_log_sha256": "83db695598bc0dc2d65807e707f45e3b2265f6d13d0d439a0df6c28ea5e2402d",
+    "repeat_driver_log_sha256": "d1eb1bc71c7059c1bc560a295bb2c2c28e98675596da468aba27b8415da69050"
+  },
+  "docs": {
+    "ckUtilities_pages": 27,
+    "ck_core_fs_lib_pages": 19
+  },
+  "macos_arm64_release": {
+    "build_start_utc": "2026-11-14T18:04:53Z",
+    "build_end_utc": "2026-11-14T18:05:09Z",
+    "build_actions": 2,
+    "build_log_sha256": "0ca2bbcbad64478b7ae5a540f8cb259d8f012b4a63b4dc5e29c0b2862f286440",
+    "frontend_manifest_sha256": "f72352f414655241fdb11d14ca0f419c72a29b9a990dd498f52d5a5d274a4355",
+    "backend_manifest_sha256": "42d17abee1cdf064dfe4066e00e1c99648a0e66ad15e4d6b4ca72477f0726722",
+    "executable_receipt_sha256": "4180f66df17f69eb42d75879a507851ed2c6aa1599160de714f6feb67b359a9b",
+    "ctest_entries_passed": 114,
+    "ctest_seconds": 53.81,
+    "test_log_sha256": "e43c6005ed9284cd40ac163bca1dfe7515451215fabf5aa5ba31f4461fc8cc8a",
+    "fixture_entries_including_root": 1153,
+    "full_dependency_build": {
+      "start_utc": "2026-11-14T18:00:51Z",
+      "end_utc": "2026-11-14T18:04:00Z",
+      "elapsed_seconds": 189.05,
+      "build_log_sha256": "b0ea0f9bb5310d95dbec67d88e4c7f3544220100de05de056bcdb10ebdc09629",
+      "outcome": "First native fixture opened its enumeration cursor before the fixture was populated. Reopening after setup fixed the test and the full corrected suite passed."
+    },
+    "prior_same_header_dependency_seconds": 110.57,
+    "incremental_test_fixture_build_seconds": 15.22
+  }
+}
