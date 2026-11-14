@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "files_pane_service.hpp"
+#include "files_operation_planning_service.hpp"
 #include "native_operation_copy_job.hpp"
 #include "native_operation_move_job.hpp"
 
@@ -31,6 +31,8 @@ struct FilesOperationExecutionRequest final {
     ck::files::NativeOperationCopyBatchPolicy policy{};
     std::function<ck::files::Observation<std::unique_ptr<ck::files::OperationJournalFile>>(
         const ck::files::NativeAbsolutePath&, const ck::files::NativeName&, bool)> open_journal;
+    FilesOperationReviewEvidence::Pointer reviewed;
+    std::optional<ck::files::ConsentReceipt> receipt;
 };
 
 enum class FilesOperationExecutionSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };

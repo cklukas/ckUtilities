@@ -33,10 +33,14 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
     return (deletion || copy_or_move) && request.source_service && request.source_navigation.valid() &&
            request.source_stamp.current() && request.source_limits.held_entries != 0 &&
            request.journal_root.is_valid() && request.open_journal && request.policy.journal_limits.max_items != 0 &&
-           (deletion ? !request.destination_service
+           (deletion ? !request.destination_service && !request.reviewed && !request.receipt
                      : request.destination_service && request.destination_service != request.source_service &&
                            request.destination_navigation.valid() && request.destination_stamp.current() &&
-                           request.policy.copy_limits.valid());
+                           request.policy.copy_limits.valid() && request.reviewed && request.reviewed->plan &&
+                           request.reviewed->plan->operation() == request.operation && request.receipt &&
+                           (request.receipt->action == ck::files::ConsentAction::Proceed ||
+                            request.receipt->action == ck::files::ConsentAction::ContinueWithListedLosses) &&
+                           request.reviewed->plan->receipt_matches(*request.receipt));
 }
 
 FilesOperationExecutionState execution_state(ck::files::OperationBatchState state,
@@ -207,8 +211,13 @@ struct FilesOperationExecutionService::State final {
             value.source_service->cancel(source_submission.ticket);
             if (!deletion)
                 value.destination_service->cancel(destination_submission.ticket);
-            if (handoff->failure)
-                fail(*handoff->failure);
+            std::optional<ck::files::UnavailableObservation> failure;
+            {
+                std::lock_guard lock(handoff->mutex);
+                failure = std::move(handoff->failure);
+            }
+            if (failure)
+                fail(std::move(*failure));
             else
                 fail(error(ck::files::AdapterError::InterruptedRead, "files_execution.handoff_cancelled",
                            ck::files::ObservationState::Unknown));
@@ -223,14 +232,6 @@ struct FilesOperationExecutionService::State final {
         const bool recursive = handoff->sources->root_source && handoff->sources->source_root &&
             handoff->sources->source_path && handoff->sources->source_path->is_valid() &&
             handoff->sources->sources.empty() && handoff->sources->paths.empty();
-        const bool flat = !handoff->sources->root_source && !handoff->sources->source_root &&
-            !handoff->sources->source_path && !handoff->sources->sources.empty() &&
-            handoff->sources->sources.size() == handoff->sources->names.size();
-        if (!recursive && !flat) {
-            fail(error(ck::files::AdapterError::PlanInvalid,
-                       "files_execution.source_handoff_shape"));
-            return;
-        }
         if (deletion) {
             if (!recursive) {
                 fail(error(ck::files::AdapterError::UnsupportedQuery,
@@ -309,25 +310,52 @@ struct FilesOperationExecutionService::State final {
             emit(std::move(result));
             return;
         }
-        if (value.operation == ck::files::FileOperation::Move && flat) {
-            std::vector<ck::files::HeldChild::Pointer> sources;
-            std::vector<ck::files::NativeName> names;
-            if (handoff->sources->root_source) {
-                sources.push_back(std::move(handoff->sources->root_source));
-                names.push_back(sources.front()->name());
-            } else {
-                sources = std::move(handoff->sources->sources);
-                names = std::move(handoff->sources->names);
-            }
-            if (sources.empty() || sources.size() != names.size()) {
-                fail(error(ck::files::AdapterError::PlanInvalid,
-                           "files_execution.move_source_shape"));
-                return;
-            }
+        auto evidence = files_operation_evidence_request(
+            value.operation, std::move(*handoff->sources), *handoff->destination_result);
+        if (const auto* failure = evidence.unavailable_detail()) {
+            fail(*failure);
+            return;
+        }
+        FilesOperationNativePlanningRequest fresh_request;
+        fresh_request.evidence = std::move(evidence).take_value();
+        fresh_request.evidence.mount_policy = value.reviewed->mount_policy;
+        fresh_request.evidence.link_policy = value.reviewed->link_policy;
+        fresh_request.evidence.limits = value.reviewed->evidence_limits;
+        fresh_request.projection_policy = value.reviewed->projection_policy;
+        fresh_request.limits = value.reviewed->limits;
+        std::shared_ptr<const ck::files::CompletedRecursiveInventory> sources;
+        auto collected = collect_files_operation_evidence(std::move(fresh_request), stop_token, &sources);
+        if (const auto* failure = collected.unavailable_detail()) {
+            fail(*failure);
+            return;
+        }
+        const auto& fresh = **collected.value();
+        const auto revalidated = value.reviewed->plan->revalidate(*value.receipt, fresh.plan->items(),
+            fresh.plan->issues(), fresh.plan->conflicts());
+        if (const auto* failure = revalidated.unavailable_detail()) {
+            fail(*failure);
+            return;
+        }
+        if (!value.source_stamp.current() || !value.destination_stamp.current() ||
+            !value.reviewed->same_namespace_and_sources(fresh)) {
+            fail(error(ck::files::AdapterError::PlanDecisionStale, "files_execution.review_evidence_changed",
+                       ck::files::ObservationState::Changed));
+            return;
+        }
+        if (stop_token.stop_requested()) {
+            fail(error(ck::files::AdapterError::InterruptedRead, "files_execution.cancelled",
+                       ck::files::ObservationState::Unknown));
+            return;
+        }
+        value.policy.allow_unhandled_metadata_loss =
+            revalidated.value()->action == ck::files::ConsentAction::ContinueWithListedLosses;
+
+        if (value.operation == ck::files::FileOperation::Move && !recursive) {
             ck::files::NativeOperationMoveBatchRequest move;
-            move.sources = std::move(sources);
+            move.sources = sources->sources();
+            sources.reset();
             move.destination = std::move(handoff->destination_result->directory);
-            move.destination_names = std::move(names);
+            move.destination_names = fresh.destination_names;
             move.journal_root = std::move(value.journal_root);
             move.journal_id = value.journal_id;
             move.journal_limits = value.policy.journal_limits;
@@ -352,7 +380,7 @@ struct FilesOperationExecutionService::State final {
         }
         if (recursive) {
             if (value.operation == ck::files::FileOperation::Move) {
-                const auto source_parent = handoff->sources->root_source->parent_identity();
+                const auto source_parent = sources->sources().front()->parent_identity();
                 const auto destination_identity = handoff->destination_result->directory->identity();
                 if (!source_parent.value() || !destination_identity.value()) {
                     fail(error(ck::files::AdapterError::UnqualifiedIdentity,
@@ -366,17 +394,12 @@ struct FilesOperationExecutionService::State final {
                     source_volume.scheme == destination_volume.scheme &&
                     source_volume.volume == destination_volume.volume;
                 if (same_filesystem) {
-                    // A directory rename is already atomic and identity-bound;
-                    // release the traversal cursor before Windows is asked to
-                    // rename the held directory.
-                    handoff->sources->source_root.reset();
-                    std::vector<ck::files::HeldChild::Pointer> sources;
-                    sources.push_back(std::move(handoff->sources->root_source));
-                    std::vector<ck::files::NativeName> names{sources.front()->name()};
+                    // Retire the descendant handles before Windows renames the held directory.
                     ck::files::NativeOperationMoveBatchRequest move;
-                    move.sources = std::move(sources);
+                    move.sources.push_back(sources->sources().front());
+                    sources.reset();
                     move.destination = std::move(handoff->destination_result->directory);
-                    move.destination_names = std::move(names);
+                    move.destination_names = fresh.destination_names;
                     move.journal_root = std::move(value.journal_root);
                     move.journal_id = value.journal_id;
                     move.journal_limits = value.policy.journal_limits;
@@ -400,41 +423,8 @@ struct FilesOperationExecutionService::State final {
                     return;
                 }
             }
-            ck::files::RecursiveInventoryLimits limits;
-            limits.inventory.max_entries = value.source_limits.held_entries;
-            auto inventory_job = std::make_unique<ck::files::RecursiveInventoryJob>(
-                std::move(handoff->sources->source_root),
-                std::move(*handoff->sources->source_path),
-                ck::files::InventoryMountPolicy::StayOnRootMount,
-                ck::files::InventoryLinkPolicy::PreserveLinks,
-                limits, ck::files::system_monotonic_clock(),
-                std::move(handoff->sources->root_source));
-            while (inventory_job->state() != ck::files::RecursiveInventoryState::Complete &&
-                   inventory_job->state() != ck::files::RecursiveInventoryState::Failed) {
-                if (stop_token.stop_requested()) {
-                    fail(error(ck::files::AdapterError::InterruptedRead,
-                               "files_execution.recursive_inventory_cancelled",
-                               ck::files::ObservationState::Unknown));
-                    return;
-                }
-                inventory_job->advance(stop_token);
-            }
-            if (inventory_job->state() != ck::files::RecursiveInventoryState::Complete) {
-                if (inventory_job->failure()) fail(*inventory_job->failure());
-                else fail(error(ck::files::AdapterError::InvalidNativeResult,
-                                "files_execution.recursive_inventory"));
-                return;
-            }
-            auto completed = inventory_job->completed_sources();
-            if (!completed.value()) {
-                fail(completed.unavailable_detail() ? *completed.unavailable_detail() :
-                     error(ck::files::AdapterError::InvalidNativeResult,
-                           "files_execution.recursive_inventory_result"));
-                return;
-            }
-            ck::files::NativeOperationCopyTreeRequest tree_request(
-                (*completed.value())->sources().front()->name());
-            tree_request.inventory = std::move(completed).take_value();
+            ck::files::NativeOperationCopyTreeRequest tree_request(fresh.destination_names.front());
+            tree_request.inventory = std::move(sources);
             tree_request.destination = std::move(handoff->destination_result->directory);
             tree_request.journal_root = std::move(value.journal_root);
             tree_request.journal_id = value.journal_id;
@@ -480,10 +470,11 @@ struct FilesOperationExecutionService::State final {
             return;
         }
         ck::files::NativeOperationCopyBatchRequest copy;
-        copy.sources = std::move(handoff->sources->sources);
+        copy.sources = sources->sources();
+        sources.reset();
         copy.destination = std::move(handoff->destination_result->directory);
         copy.destination_address = handoff->destination_result->address;
-        copy.destination_names = std::move(handoff->sources->names);
+        copy.destination_names = fresh.destination_names;
         copy.journal_root = std::move(value.journal_root);
         copy.journal_id = value.journal_id;
         copy.policy = value.policy;

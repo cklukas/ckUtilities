@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "files_operation_planning_service.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -14,6 +15,21 @@
 
 namespace ck::vision {
 namespace {
+
+template<class T>
+ck::files::Observation<T> evidence_error(ck::files::AdapterError code, const char* operation,
+    ck::files::ObservationState state = ck::files::ObservationState::Failed) {
+    return ck::files::Observation<T>::unavailable(state,
+        {ck::files::ErrorDomain::Adapter, static_cast<std::int64_t>(code), operation});
+}
+
+template<class T>
+bool same_observation(const ck::files::Observation<T>& left, const ck::files::Observation<T>& right) noexcept {
+    if (left.value() && right.value())
+        return *left.value() == *right.value();
+    return left.unavailable_detail() && right.unavailable_detail() && left.state() == right.state() &&
+        left.unavailable_detail()->error == right.unavailable_detail()->error;
+}
 
 bool valid(const FilesOperationPlanningRequest& request) noexcept {
     return request.inventory && request.destination_batch &&
@@ -55,6 +71,113 @@ bool limit_error(const ck::files::UnavailableObservation& detail) noexcept {
 }
 
 } // namespace
+
+bool FilesOperationReviewEvidence::same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept {
+    using namespace ck::files;
+    if (!inventory || !fresh.inventory || compare_identity(destination, fresh.destination) != IdentityComparison::Same ||
+        destination_names != fresh.destination_names || inventory->mount_policy() != fresh.inventory->mount_policy() ||
+        inventory->link_policy() != fresh.inventory->link_policy() ||
+        source_times.size() != inventory->entries().size() || fresh.source_times.size() != fresh.inventory->entries().size())
+        return false;
+    const bool same_entries = std::equal(inventory->entries().begin(), inventory->entries().end(),
+        fresh.inventory->entries().begin(), fresh.inventory->entries().end(), [](const auto& left, const auto& right) {
+            const bool same_target = left.link_target && right.link_target
+                ? compare_identity(*left.link_target, *right.link_target) == IdentityComparison::Same
+                : !left.link_target && !right.link_target;
+            return left.source_path == right.source_path && left.relative_components == right.relative_components &&
+                compare_identity(left.identity, right.identity) == IdentityComparison::Same && left.kind == right.kind &&
+                left.logical_size == right.logical_size && left.link == right.link && same_target &&
+                same_observation(left.mount_id, right.mount_id);
+        });
+    return same_entries && std::equal(source_times.begin(), source_times.end(), fresh.source_times.begin(),
+        [](const auto& left, const auto& right) {
+            return same_observation(left.modified, right.modified) && same_observation(left.changed, right.changed);
+        });
+}
+
+ck::files::Observation<ck::files::OperationEvidenceJobRequest> files_operation_evidence_request(
+    ck::files::FileOperation operation, FilesPaneOperationSources sources,
+    const FilesPaneOperationDestination& destination) {
+    using namespace ck::files;
+    const bool recursive = sources.root_source && sources.source_root && sources.source_path &&
+        sources.source_path->is_valid() && sources.sources.empty() && sources.paths.empty() && sources.names.size() == 1;
+    const bool flat = !sources.root_source && !sources.source_root && !sources.source_path &&
+        !sources.sources.empty() && sources.sources.size() == sources.paths.size() &&
+        sources.sources.size() == sources.names.size();
+    if (!destination.directory || !destination.provider_root || (!recursive && !flat))
+        return evidence_error<OperationEvidenceJobRequest>(AdapterError::PlanInvalid, "files_planning.pane_handoff_shape");
+    const auto encoding = sources.names.front().encoding();
+    for (const auto& name : sources.names)
+        if (name.encoding() != encoding)
+            return evidence_error<OperationEvidenceJobRequest>(AdapterError::InvalidIdentifier, "files_planning.pane_name_encoding");
+    OperationEvidenceJobRequest request;
+    request.operation = operation;
+    request.root_source = std::move(sources.root_source);
+    request.source_root = std::move(sources.source_root);
+    request.source_path = std::move(sources.source_path);
+    request.direct_sources = std::move(sources.sources);
+    request.direct_source_paths = std::move(sources.paths);
+    request.destination = destination.directory;
+    if (recursive)
+        request.provider_root = destination.provider_root;
+    request.destination_names = std::move(sources.names);
+    request.destination_encoding = encoding;
+    return Observation<OperationEvidenceJobRequest>::available(std::move(request));
+}
+
+ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_operation_evidence(
+    FilesOperationNativePlanningRequest request, std::stop_token stop,
+    std::shared_ptr<const ck::files::CompletedRecursiveInventory>* sealed_sources) {
+    using namespace ck::files;
+    using Result = FilesOperationReviewEvidence::Pointer;
+    if (sealed_sources)
+        sealed_sources->reset();
+    if (!valid(request))
+        return evidence_error<Result>(AdapterError::PlanInvalid, "files_planning.native_request");
+    const auto destination = request.evidence.destination->identity();
+    if (!destination.value())
+        return Observation<Result>::unavailable(destination.state(), destination.unavailable_detail()->error);
+    if (compare_identity(*destination.value(), *destination.value()) != IdentityComparison::Same)
+        return evidence_error<Result>(AdapterError::UnqualifiedIdentity, "files_planning.destination_identity", ObservationState::Unknown);
+    auto names = request.evidence.destination_names;
+    const auto mount_policy = request.evidence.mount_policy;
+    const auto link_policy = request.evidence.link_policy;
+    const auto evidence_limits = request.evidence.limits;
+    std::shared_ptr<const CompletedRecursiveInventory> sources;
+    OperationEvidenceJob evidence(std::move(request.evidence));
+    for (;;) {
+        const auto state = evidence.advance(stop, sealed_sources ? &sources : nullptr);
+        if (state == OperationEvidenceJobState::Paused || stop.stop_requested())
+            return evidence_error<Result>(AdapterError::InterruptedRead, "files_planning.native_cancelled", ObservationState::Unknown);
+        if (state == OperationEvidenceJobState::Failed)
+            return Observation<Result>::unavailable(evidence.failure()->state, evidence.failure()->error);
+        if (state == OperationEvidenceJobState::Complete)
+            break;
+    }
+    const auto completed = evidence.completed();
+    if (!completed.value())
+        return Observation<Result>::unavailable(completed.state(), completed.unavailable_detail()->error);
+    const auto& facts = **completed.value();
+    auto plan = OperationPlanningCoordinator::assemble(facts.operation(), facts.inventory(), facts.source_target(),
+        facts.ancestry(), facts.source_objects(), *facts.destination_batch(), facts.destination_capabilities(),
+        request.projection_policy, request.limits);
+    if (!plan.value())
+        return Observation<Result>::unavailable(plan.state(), plan.unavailable_detail()->error);
+    std::vector<FilesOperationReviewEvidence::SourceTimes> times;
+    times.reserve(facts.source_objects().size());
+    for (const auto& object : facts.source_objects()) {
+        if (!object.after.value())
+            return Observation<Result>::unavailable(object.after.state(), object.after.unavailable_detail()->error);
+        const auto& after = *object.after.value();
+        times.push_back({after.modified, after.changed});
+    }
+    auto result = std::make_shared<const FilesOperationReviewEvidence>(FilesOperationReviewEvidence{
+        std::move(plan).take_value(), facts.inventory(), *destination.value(), std::move(names), std::move(times),
+        mount_policy, link_policy, evidence_limits, request.projection_policy, request.limits});
+    if (sealed_sources)
+        *sealed_sources = std::move(sources);
+    return Observation<Result>::available(std::move(result));
+}
 
 struct FilesOperationPlanningService::State final {
     struct PaneHandoff final {
@@ -154,6 +277,7 @@ struct FilesOperationPlanningService::State final {
                 result.state = FilesOperationPlanningReplyState::Cancelled;
                 result.plan.reset();
                 result.review.reset();
+                result.evidence.reset();
             }
             reply = std::move(result);
             needed = !std::exchange(signalled, true);
@@ -296,41 +420,16 @@ struct FilesOperationPlanningService::State final {
                         FilesOperationPlanningReply &result,
                         ck::files::Observation<ck::files::OperationPlan::Pointer> &plan) {
         try {
-            ck::files::OperationEvidenceJob evidence(std::move(native.evidence));
-            for (;;) {
-                const auto state = evidence.advance(stop);
-                if (state == ck::files::OperationEvidenceJobState::Paused || stop.stop_requested()) {
-                    result.state = FilesOperationPlanningReplyState::Cancelled;
-                    break;
-                }
-                if (state == ck::files::OperationEvidenceJobState::Failed) {
-                    if (evidence.failure())
-                        result.error = *evidence.failure();
-                    result.state = result.error && limit_error(*result.error)
-                        ? FilesOperationPlanningReplyState::LimitExceeded
-                        : FilesOperationPlanningReplyState::Failed;
-                    break;
-                }
-                if (state == ck::files::OperationEvidenceJobState::Complete) {
-                    auto completed = evidence.completed();
-                    if (!completed.value()) {
-                        result.error = completed.unavailable_detail()
-                            ? *completed.unavailable_detail()
-                            : ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
-                                {ck::files::ErrorDomain::Adapter,
-                                    static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
-                                    "files_planning.native_result"}};
-                        result.state = FilesOperationPlanningReplyState::Failed;
-                        break;
-                    }
-                    const auto &native_result = *completed.value();
-                    plan = ck::files::OperationPlanningCoordinator::assemble(
-                        native_result->operation(), native_result->inventory(), native_result->source_target(),
-                        native_result->ancestry(), native_result->source_objects(),
-                        *native_result->destination_batch(), native_result->destination_capabilities(),
-                        native.projection_policy, native.limits);
-                    break;
-                }
+            auto collected = collect_files_operation_evidence(std::move(native), stop);
+            if (stop.stop_requested()) {
+                result.state = FilesOperationPlanningReplyState::Cancelled;
+            } else if (const auto* failure = collected.unavailable_detail()) {
+                result.error = *failure;
+                result.state = limit_error(*failure) ? FilesOperationPlanningReplyState::LimitExceeded
+                                                     : FilesOperationPlanningReplyState::Failed;
+            } else {
+                result.evidence = std::move(collected).take_value();
+                plan = ck::files::Observation<ck::files::OperationPlan::Pointer>::available(result.evidence->plan);
             }
         } catch (const std::invalid_argument &) {
             result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
@@ -402,56 +501,20 @@ struct FilesOperationPlanningService::State final {
                             sources = std::move(*pane_input->handoff->sources);
                             destination = std::move(*pane_input->handoff->destination_result);
                         }
-                        const bool recursive = sources.root_source && sources.source_root && sources.source_path &&
-                            sources.source_path->is_valid() && sources.sources.empty() && sources.paths.empty() &&
-                            sources.names.size() == 1;
-                        const bool flat = !sources.root_source && !sources.source_root && !sources.source_path &&
-                            !sources.sources.empty() && sources.sources.size() == sources.paths.size() &&
-                            sources.sources.size() == sources.names.size();
-                        if (!destination.directory || !destination.provider_root || (!recursive && !flat)) {
-                            result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
-                                {ck::files::ErrorDomain::Adapter,
-                                 static_cast<std::int64_t>(ck::files::AdapterError::PlanInvalid),
-                                 "files_planning.pane_handoff_shape"}};
+                        auto evidence = files_operation_evidence_request(
+                            pane_input->request.operation, std::move(sources), destination);
+                        if (const auto* failure = evidence.unavailable_detail()) {
+                            result.error = *failure;
                             result.state = FilesOperationPlanningReplyState::Failed;
                         } else {
-                            const auto destination_encoding = sources.names.front().encoding();
-                            bool names_valid = true;
-                            for (const auto &name : sources.names) {
-                                if (name.encoding() != destination_encoding) {
-                                    result.error = ck::files::UnavailableObservation{ck::files::ObservationState::Failed,
-                                        {ck::files::ErrorDomain::Adapter,
-                                         static_cast<std::int64_t>(ck::files::AdapterError::InvalidIdentifier),
-                                         "files_planning.pane_name_encoding"}};
-                                    result.state = FilesOperationPlanningReplyState::Failed;
-                                    names_valid = false;
-                                    break;
-                                }
-                            }
-                            if (names_valid) {
-                                FilesOperationNativePlanningRequest native;
-                                native.evidence.operation = pane_input->request.operation;
-                                if (recursive) {
-                                    native.evidence.root_source = std::move(sources.root_source);
-                                    native.evidence.source_root = std::move(sources.source_root);
-                                    native.evidence.source_path = std::move(sources.source_path);
-                                    native.evidence.provider_root = std::move(destination.provider_root);
-                                } else {
-                                    native.evidence.direct_sources = std::move(sources.sources);
-                                    native.evidence.direct_source_paths = std::move(sources.paths);
-                                }
-                                native.evidence.destination = std::move(destination.directory);
-                                native.evidence.destination_names = std::move(sources.names);
-                                native.evidence.destination_encoding = destination_encoding;
-                                native.evidence.mount_policy = pane_input->request.mount_policy;
-                                native.evidence.link_policy = pane_input->request.link_policy;
-                                native.evidence.limits = pane_input->request.evidence_limits;
-                                native.evidence.clock = ck::files::system_monotonic_clock();
-                                native.projection_policy = pane_input->request.projection_policy;
-                                native.limits = pane_input->request.limits;
-                                native.review_limits = pane_input->request.review_limits;
-                                compose_native(std::move(native), stop.get_token(), result, plan);
-                            }
+                            FilesOperationNativePlanningRequest native;
+                            native.evidence = std::move(evidence).take_value();
+                            native.evidence.mount_policy = pane_input->request.mount_policy;
+                            native.evidence.link_policy = pane_input->request.link_policy;
+                            native.evidence.limits = pane_input->request.evidence_limits;
+                            native.projection_policy = pane_input->request.projection_policy;
+                            native.limits = pane_input->request.limits;
+                            compose_native(std::move(native), stop.get_token(), result, plan);
                         }
                     }
                 } else {
@@ -482,6 +545,8 @@ struct FilesOperationPlanningService::State final {
                     }
                 }
             }
+            if (result.state != FilesOperationPlanningReplyState::Ready)
+                result.evidence.reset();
             emit(std::move(result));
         }
     }

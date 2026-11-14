@@ -22,9 +22,10 @@ NativeName name(const char* value) { return *NativeName::from_posix(value); }
 
 NativeAbsolutePath path(const char* value) { return take(NativeAbsolutePath::from_posix(value)); }
 
-OperationEvidenceJob::Result finish(OperationEvidenceJob& job) {
+OperationEvidenceJob::Result finish(OperationEvidenceJob& job,
+    std::shared_ptr<const CompletedRecursiveInventory>* sealed_sources = nullptr) {
     for (int attempt = 0; attempt != 400; ++attempt) {
-        const auto state = job.advance();
+        const auto state = sealed_sources ? job.advance({}, sealed_sources) : job.advance();
         if (state == OperationEvidenceJobState::Complete) return take(job.completed());
         if (state == OperationEvidenceJobState::Failed)
             throw std::runtime_error("operation evidence job failed " +
@@ -67,8 +68,12 @@ CK_TEST(operation_evidence_job_composes_recursive_objects_destination_and_topolo
     request.limits.source_target.rows = 2;
 
     OperationEvidenceJob job(std::move(request));
-    const auto result = finish(job);
+    std::shared_ptr<const CompletedRecursiveInventory> sealed_sources;
+    const auto result = finish(job, &sealed_sources);
     CK_CHECK(result->inventory() && result->inventory()->entries().size() == 2);
+    CK_CHECK(sealed_sources && sealed_sources->inventory() == result->inventory());
+    CK_CHECK(sealed_sources && sealed_sources->sources().size() == 2);
+    CK_CHECK(sealed_sources && sealed_sources->sources()[1]->name() == name("file"));
     CK_CHECK(result->source_objects().size() == 2);
     CK_CHECK(result->destination_batch() && result->destination_batch()->entries().size() == 2);
     CK_CHECK(result->destination_batch()->parent_directories().size() == 2);

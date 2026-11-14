@@ -364,7 +364,9 @@ struct FilesApp::State {
     std::optional<OperationExecutionOrigin> operation_execution_origin;
     std::optional<ck::files::NameEncoding> operation_planning_encoding;
     FilesApp::OperationRevalidation operation_planning_revalidation;
-    FilesOperationReviewDialog::Completion operation_planning_completion;
+    using PlanningCompletion = std::function<void(ck::files::Observation<ck::files::ConsentReceipt>,
+        FilesOperationReviewEvidence::Pointer)>;
+    PlanningCompletion operation_planning_completion;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -2040,7 +2042,7 @@ struct FilesApp::State {
             }
             FilesOperationExecutionRequest execution{
                 ck::files::FileOperation::Delete, services[i], nullptr,
-                p.navigation, {}, p.stamp, {}, {}, *operation_journal_root, {}, {}, {}};
+                p.navigation, {}, p.stamp, {}, {}, *operation_journal_root, {}, {}, {}, {}, {}};
             execution.source_limits.held_entries = 1024;
             execution.source_limits.access = ck::files::EntryAccess::MetadataOnly;
             execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
@@ -2459,8 +2461,9 @@ struct FilesApp::State {
             return ck::files::Observation<ck::files::ConsentReceipt>::available(receipt);
         };
         const auto completion = [this, operation, source_pane, destination_pane, source_navigation, destination_navigation,
-                                 source_stamp, destination_stamp](
-                                    ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
+                                 source_stamp, destination_stamp, source_limits = planning.source_limits](
+                                    ck::files::Observation<ck::files::ConsentReceipt> result,
+                                    FilesOperationReviewEvidence::Pointer evidence) {
             if (!result.value()) {
                 panes[source_pane].error = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
                     " was not authorized: " +
@@ -2468,13 +2471,15 @@ struct FilesApp::State {
                 labels();
                 return;
             }
+            if (result.value()->action == ck::files::ConsentAction::Cancel ||
+                result.value()->action == ck::files::ConsentAction::ChooseAnotherDestination) {
+                labels();
+                return;
+            }
             FilesOperationExecutionRequest execution{
                 operation, services[source_pane], services[destination_pane], source_navigation, destination_navigation,
-                source_stamp, destination_stamp, {}, *operation_journal_root, {}, {}, {}};
-            execution.source_limits.held_entries = 1024;
-            execution.source_limits.access = ck::files::EntryAccess::ContentRead;
-            execution.policy.allow_unhandled_metadata_loss =
-                result.value()->action == ck::files::ConsentAction::ContinueWithListedLosses;
+                source_stamp, destination_stamp, source_limits, *operation_journal_root, {}, {}, {},
+                std::move(evidence), std::move(result).take_value()};
             execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
                                         const ck::files::NativeName &basename, bool create_new) {
                 return ck::files::open_native_operation_journal_file(root, basename, create_new);
@@ -2493,8 +2498,8 @@ struct FilesApp::State {
             panes[destination_pane].error.clear();
             labels();
         };
-        if (!prepare_operation(std::move(planning), panes[destination_pane].encoding,
-                               revalidate, completion)) {
+        if (!submit_operation_planning(std::move(planning), panes[destination_pane].encoding,
+                                      revalidate, completion)) {
             panes[source_pane].error = operation == ck::files::FileOperation::Move
                 ? "Move planning is unavailable" : "Copy planning is unavailable";
             labels();
@@ -3397,12 +3402,16 @@ struct FilesApp::State {
         operation_planning_completion = {};
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
             const auto fallback = completion;
-            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(completion)))
+            auto deliver = [deliver_result = std::move(completion), evidence = std::move(reply.evidence)](
+                               ck::files::Observation<ck::files::ConsentReceipt> result) mutable {
+                deliver_result(std::move(result), std::move(evidence));
+            };
+            if (!review_operation(std::move(reply.review), encoding, std::move(revalidate), std::move(deliver)))
                 fallback(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
                     ck::files::ObservationState::Failed,
                     {ck::files::ErrorDomain::Adapter,
                         static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
-                        "files_app.operation_review_start"}));
+                        "files_app.operation_review_start"}), {});
             return;
         }
         const auto detail = reply.error.value_or(ck::files::UnavailableObservation{
@@ -3410,7 +3419,7 @@ struct FilesApp::State {
             {ck::files::ErrorDomain::Adapter,
                 static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
                 "files_app.operation_planning"}});
-        completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error));
+        completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(detail.state, detail.error), {});
     }
     bool scan_operation_recovery() {
         if (!operation_recovery_service)
@@ -3499,6 +3508,9 @@ struct FilesApp::State {
                 if (reply.error->state == ck::files::ObservationState::Unsupported &&
                     reply.error->error.operation == "create_staging_file.fd_publication_unqualified")
                     detail += ": verified file publication is unavailable on this platform";
+                else if (reply.error->error.domain == ck::files::ErrorDomain::Adapter &&
+                         reply.error->error.code == static_cast<std::int64_t>(ck::files::AdapterError::PlanDecisionStale))
+                    detail += ": source or destination changed since review. Review the operation again";
                 else
                     detail += ": " + reply.error->error.operation;
             }
@@ -3527,7 +3539,7 @@ struct FilesApp::State {
                         ck::files::ObservationState::Failed,
                         {ck::files::ErrorDomain::Adapter,
                             static_cast<std::int64_t>(ck::files::AdapterError::InterruptedRead),
-                            "files_app.operation_planning_worker"}));
+                            "files_app.operation_planning_worker"}), {});
                 }
             }
             if (volume_archive_service) {
@@ -3905,8 +3917,9 @@ struct FilesApp::State {
             });
         return true;
     }
-    bool prepare_operation(FilesOperationPlanningRequest request, ck::files::NameEncoding destination_encoding,
-        FilesApp::OperationRevalidation revalidate, FilesOperationReviewDialog::Completion completion) {
+    template<class Request>
+    bool submit_operation_planning(Request request, ck::files::NameEncoding destination_encoding,
+        FilesApp::OperationRevalidation revalidate, PlanningCompletion completion) {
         if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
             !planning_service->running())
             return false;
@@ -3920,21 +3933,14 @@ struct FilesApp::State {
         labels();
         return true;
     }
-    bool prepare_operation(FilesOperationPanePlanningRequest request,
+    template<class Request>
+    bool prepare_operation(Request request,
         ck::files::NameEncoding destination_encoding, FilesApp::OperationRevalidation revalidate,
         FilesOperationReviewDialog::Completion completion) {
-        if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
-            !planning_service->running())
+        if (!completion)
             return false;
-        const auto submitted = planning_service->request(std::move(request));
-        if (submitted.state != FilesOperationPlanningSubmission::Accepted)
-            return false;
-        operation_planning_request = submitted.ticket;
-        operation_planning_encoding = destination_encoding;
-        operation_planning_revalidation = std::move(revalidate);
-        operation_planning_completion = std::move(completion);
-        labels();
-        return true;
+        return submit_operation_planning(std::move(request), destination_encoding, std::move(revalidate),
+            [deliver = std::move(completion)](auto result, auto) { deliver(std::move(result)); });
     }
 };
 FilesApp::FilesApp(ckv::ui::Application &application, std::array<FilesPaneService *, 2> services, FilesAppWake &wake,

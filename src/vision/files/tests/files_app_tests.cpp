@@ -1274,6 +1274,60 @@ CK_TEST(files_app_copy_acceptance_executes_recursive_directory_after_review)
     CK_CHECK(f.app->status(1).find("Last scan:") != std::string::npos);
 #endif
 }
+CK_TEST(files_app_copy_requires_review_again_when_a_child_is_added_during_review) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    for (std::size_t row = 0; row != f.app->model(0).row_count() &&
+         f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.loaded();
+    }
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] { return f.app->operation_review_pending(); });
+    f.application.step(f.clock.now_nanos());
+
+    const auto source_root = f.scratch.path() / "left" / "left-item-0";
+    NativeFileSystem filesystem;
+    const auto held_root = filesystem.open_native_directory(address(source_root));
+#ifdef _WIN32
+    const auto new_name = NativeName::from_windows(u"new-child");
+#else
+    const auto new_name = NativeName::from_posix("new-child");
+#endif
+    if (!held_root.value() || !new_name)
+        throw std::runtime_error("cannot open stale review fixture source");
+    {
+        const auto created = (*held_root.value())->create_child_file(*new_name);
+        if (!created.value())
+            throw std::runtime_error("cannot add a child to the stale review fixture");
+        const auto finished = (*created.value())->finish_content_writes();
+        CK_CHECK(finished.value() && *finished.value());
+    }
+    std::vector<ckv::widgets::ComboBox *> combos;
+    std::vector<ckv::widgets::CheckGroup *> checks;
+    std::vector<ckv::widgets::Button *> buttons;
+    find_views(f.application.root(), combos);
+    find_views(f.application.root(), checks);
+    find_views(f.application.root(), buttons);
+    CK_CHECK(combos.size() == 1 && !checks.empty());
+    for (auto *check : checks) {
+        const auto rows = static_cast<std::size_t>(check->vertical_size_hint().preferred);
+        for (std::size_t index = 0; index != rows; ++index)
+            check->set_checked(index, true);
+    }
+    ckv::widgets::Button *apply = nullptr;
+    for (auto *button : buttons)
+        if (button->text() == "&Apply decision")
+            apply = button;
+    combos.front()->set_selected_index(2);
+    CK_CHECK(apply != nullptr && apply->activate_mnemonic("a"));
+    f.until([&] { return f.app->status(0).find("Review the operation again") != std::string::npos; });
+    const auto retained = (*held_root.value())->open_child(*new_name, EntryAccess::MetadataOnly);
+    CK_CHECK(retained.value());
+    CK_CHECK(!std::filesystem::exists(f.scratch.path() / "right" / "left-item-0"));
+    CK_CHECK(std::filesystem::is_empty(f.scratch.path() / "operation-journals"));
+}
 #if defined(__APPLE__)
 CK_TEST(files_app_marked_copy_acceptance_preserves_inputs_after_mac_reconciliation)
 #else

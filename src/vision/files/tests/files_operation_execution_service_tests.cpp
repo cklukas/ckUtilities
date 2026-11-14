@@ -4,7 +4,9 @@
 #include <cvision/testing/cktest.hpp>
 
 #include <filesystem>
+#include <chrono>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace {
@@ -35,6 +37,8 @@ CK_TEST(operation_execution_service_rejects_missing_worker_handoffs_without_star
         address(scratch.path()),
         {},
         {},
+        {},
+        {},
         {}};
     const auto submitted = service.request(std::move(request));
     CK_CHECK(submitted.state == FilesOperationExecutionSubmission::Invalid);
@@ -43,9 +47,7 @@ CK_TEST(operation_execution_service_rejects_missing_worker_handoffs_without_star
 
 #if defined(__APPLE__)
 #include "files_native_fixture_snapshot.hpp"
-#include <chrono>
 #include <fstream>
-#include <thread>
 CK_TEST(operation_execution_service_retains_first_mac_refusal_when_last_marked_item_is_unstarted) {
     const ck::testing::ScratchDirectory scratch("files-operation-first-failure", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     for (const auto* component : {"source", "target", "source-index", "target-index", "journals"}) {
@@ -86,16 +88,45 @@ CK_TEST(operation_execution_service_retains_first_mac_refusal_when_last_marked_i
     CK_CHECK(marked.state == FilesPaneReplyState::Ready);
     const auto source_before = ck::testing::observe_files_fixture_tree(scratch.path() / "source");
     const auto target_before = ck::testing::observe_files_fixture_tree(scratch.path() / "target");
+
+    FilesOperationPlanningService planning;
+    FilesOperationPanePlanningRequest input;
+    input.source_service = &source;
+    input.destination_service = &target;
+    input.source_navigation = source_navigation.ticket;
+    input.destination_navigation = target_navigation.ticket;
+    input.source_stamp = marked.stamp;
+    input.destination_stamp = initial_target.stamp;
+    input.source_limits.access = EntryAccess::ContentRead;
+    input.evidence_limits.max_items = input.source_limits.held_entries;
+    input.projection_policy.require_unhandled_metadata_consent = true;
+    CK_CHECK(planning.request(input).state == FilesOperationPlanningSubmission::Accepted);
+    std::optional<FilesOperationPlanningReply> reviewed;
+    const auto review_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!reviewed && std::chrono::steady_clock::now() < review_deadline) {
+        reviewed = planning.take();
+        if (!reviewed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!reviewed || !reviewed->evidence)
+        throw std::runtime_error("native execution fixture plan missing");
+    std::vector<std::size_t> issues;
+    for (std::size_t row = 0; row < reviewed->plan->issues().size(); ++row)
+        issues.push_back(row);
+    auto receipt = reviewed->plan->bind(ConsentAction::ContinueWithListedLosses, std::move(issues));
+    if (!receipt.value())
+        throw std::runtime_error("native execution fixture receipt unavailable");
+
     FilesOperationExecutionService execution;
     FilesOperationExecutionRequest request{FileOperation::Copy, &source, &target,
         source_navigation.ticket, target_navigation.ticket, marked.stamp, initial_target.stamp,
-        {}, address(scratch.path() / "journals"), {}, {}, {}};
+        input.source_limits, address(scratch.path() / "journals"), {}, {}, {}, {}, {}};
     request.journal_id.bytes[0] = std::byte{0x6a};
-    request.source_limits.access = EntryAccess::ContentRead;
-    request.policy.allow_unhandled_metadata_loss = true;
     request.open_journal = [](const NativeAbsolutePath& root, const NativeName& name, bool create_new) {
         return open_native_operation_journal_file(root, name, create_new);
     };
+    CK_CHECK(execution.request(request).state == FilesOperationExecutionSubmission::Invalid);
+    request.reviewed = reviewed->evidence;
+    request.receipt = std::move(receipt).take_value();
     const auto submitted = execution.request(std::move(request));
     CK_CHECK(submitted.state == FilesOperationExecutionSubmission::Accepted);
     std::optional<FilesOperationExecutionReply> reply;

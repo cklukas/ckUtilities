@@ -59,6 +59,36 @@ struct FilesOperationPanePlanningRequest final {
     ck::files::OperationReviewLimits review_limits;
 };
 
+// Value evidence accompanies a native review. No cursor, probe or source
+// handle crosses the UI boundary. The execution worker collects it again.
+struct FilesOperationReviewEvidence final {
+    using Pointer = std::shared_ptr<const FilesOperationReviewEvidence>;
+    struct SourceTimes final {
+        ck::files::Observation<ck::files::FileTimestamp> modified, changed;
+    };
+
+    ck::files::OperationPlan::Pointer plan;
+    ck::files::FrozenInventory::Pointer inventory;
+    ck::files::ObjectIdentity destination;
+    std::vector<ck::files::NativeName> destination_names;
+    std::vector<SourceTimes> source_times;
+    ck::files::InventoryMountPolicy mount_policy;
+    ck::files::InventoryLinkPolicy link_policy;
+    ck::files::OperationEvidenceJobLimits evidence_limits;
+    ck::files::SourceCapabilityProjectionPolicy projection_policy;
+    ck::files::OperationPlanningCoordinatorLimits limits;
+
+    bool same_namespace_and_sources(const FilesOperationReviewEvidence& fresh) const noexcept;
+};
+
+ck::files::Observation<ck::files::OperationEvidenceJobRequest> files_operation_evidence_request(
+    ck::files::FileOperation operation, FilesPaneOperationSources sources,
+    const FilesPaneOperationDestination& destination);
+
+ck::files::Observation<FilesOperationReviewEvidence::Pointer> collect_files_operation_evidence(
+    FilesOperationNativePlanningRequest request, std::stop_token stop,
+    std::shared_ptr<const ck::files::CompletedRecursiveInventory>* sealed_sources = nullptr);
+
 enum class FilesOperationPlanningSubmission { Accepted, Busy, Stopped, Invalid, Exhausted };
 enum class FilesOperationPlanningReplyState { Ready, Failed, Cancelled, LimitExceeded, WorkerFault };
 
@@ -87,6 +117,7 @@ struct FilesOperationPlanningReply final {
     ck::files::OperationReviewModel::Pointer review;
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
+    FilesOperationReviewEvidence::Pointer evidence;
 };
 
 // One serialized, value-only planning worker. The request owns every copied
