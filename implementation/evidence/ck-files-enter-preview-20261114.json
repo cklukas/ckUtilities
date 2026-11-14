@@ -37,5 +37,12 @@
     "runtime_executable_sha256": "2a109f74aebf9e7437aad8998ff4caebbcf80fad588e8ded0d7b093965088287",
     "passed": ["Enter previews a regular file", "Escape keeps the volume view during cancellation", "Per-file folder review refuses a late destination addition"]
   },
+  "windows_ordinary_handoff": {
+    "launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-cd271ff-ordinary.ps1",
+    "launcher_sha256": "e84a8d2c6e62e79964df59f5e4870410066c99e12fffcac7e73e33d3cc5af271",
+    "helper_sha256": "39334ac6bd13caec34b749e9d835cb20f6c7dc43e760da445acf9634b725cad8",
+    "modes": ["Suite", "Desktop"],
+    "scope": "Pinned Files and keymap CTest registrations, or the verified ck-files executable in an existing ordinary Windows Terminal. The staged launchers matched local bytes on readback. The elevated SSH connection failed token admission before tests or desktop launch."
+  },
   "open": ["Current Windows ordinary-user and Linux runtime, sanitizers, and regenerating the guide screenshots on CI"]
 }
