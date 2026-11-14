@@ -1,0 +1,117 @@
+{
+  "frontend": "5dc1433d46ee8b10dbf91e3cd648f7c863f3ad44",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "source_delta_sha256": "52f6c1c2edf12dc1b00e3b9671f644799eff698ab612d5dc2a4d83dd1761b3e6",
+  "scope": "Copy and Move apply the pane source bound to recursive traversal and both evidence stages. The worker reuses the limits when revalidating a reviewed plan. The regression opens review beyond 256 items and refuses a 1,025-entry directory without a destination change or journal. Linux native descriptor exhaustion has its own status and leaves both panes intact.",
+  "macos_arm64_release": {
+    "manifest_sha256": "58d06c900240e910a3e56725580f3e2f65e173f188235e5365dc3060bfd4b5c1",
+    "start_utc": "2026-11-14T17:44:01Z",
+    "end_utc": "2026-11-14T17:44:25Z",
+    "elapsed_seconds": 23.888,
+    "steps": 7,
+    "product_sha256": "f34c6a901746a9b56a0a099d2c56d89b68d23e9b31612c1442f83bd47e6d1477",
+    "test_image_sha256": "b43d1d4461d816659c1c63c6e7447824b55c9750931657e65d28f95550dbd5d4",
+    "ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 26.26,
+    "ctest_log_sha256": "40ccfcf038f50fb618bf4802abb700a059527d1b1976ca3871e627cb0ad6de65"
+  },
+  "macos_arm64_matched_sdk_sanitizers": {
+    "manifest_sha256": "c34fc04227ec691c4aeb31d077ca64b0bcf0f0b9c61ef438c874b2cfa977aa41",
+    "address_undefined": {
+      "start_utc": "2026-11-14T17:44:22Z",
+      "end_utc": "2026-11-14T17:44:39Z",
+      "steps": 7,
+      "elapsed_seconds": 17.85,
+      "test_image_sha256": "d2584c32acda8f0eee8d5b26ea14c3d1093612bc5428ef774908402b5f85b1ae",
+      "product_sha256": "30d0d8f9fdbae2d947743ab1d6956c440eae1d362bc9dad374f4c1f8baa29286",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 86.22,
+      "ctest_log_sha256": "78a2ba4a2c3bb06ffe47a52198eef4361a0425a585301726d6a9b551f98af5a5"
+    },
+    "thread": {
+      "start_utc": "2026-11-14T17:46:29Z",
+      "end_utc": "2026-11-14T17:46:43Z",
+      "steps": 7,
+      "elapsed_seconds": 13.54,
+      "test_image_sha256": "22a0048742e8b9bb9ff3234dfcf6221dd1aae35dd395c90c237ca4a7a0e933cd",
+      "product_sha256": "202df2fdef4d2881bea4ca27c75e6c4ab4cc0227030b1b56d550217cc704061d",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 181.17,
+      "ctest_log_sha256": "dc2fe98a291d813b6a2a07326e06bee610cf63c5478ca8af29fa9b9678595442"
+    }
+  },
+  "linux_arm64_release": {
+    "manifest_sha256": "1aafe5004d20c6afd3b236acb07eef5b2d308052fa6f77e5cceaa9a1b9283d64",
+    "start_utc": "2026-11-14T17:44:10Z",
+    "end_utc": "2026-11-14T17:47:24Z",
+    "elapsed_seconds": 194.222,
+    "steps": 8,
+    "product_sha256": "0a79bf1265a22cf6132a6f7a499908bdb5ce2a32bb7533fbdc71705a82d6dae5",
+    "test_image_sha256": "1d36b45643f58115e4fbcc068b37805915759746c207bc90d5c6d65821f19c74",
+    "registered_application_cases": 314,
+    "junit_sha256": "7ba011e577b3ded258abd7b85b8a0534153aeeea15adc7261b2a577c87404fe2",
+    "ctest_entries_passed": 158,
+    "ctest_elapsed_seconds": 143.15,
+    "ctest_log_sha256": "c0354fdc06b67d370fd1a220a0ee3510e573a2c6d3070269a83fd456070c1e5a"
+  },
+  "linux_xterm": {
+    "receipt_sha256": "c63e052768f2743c938b6db5876b538cd42b7ecdada2a4b1137072d4d3cac443",
+    "terminal_mode_restored": true,
+    "process_exit": 0,
+    "result": "pass",
+    "ended_utc": "2026-11-14T17:50:11.167038+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "0a79bf1265a22cf6132a6f7a499908bdb5ce2a32bb7533fbdc71705a82d6dae5",
+    "pid": 1097695,
+    "window": "4194316",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-folder-scope",
+        "sha256": "9576d73533506e80f41e1fc723e0002dd667e64b23a631367f48df5864fecdef"
+      },
+      {
+        "label": "02-limit-reached",
+        "sha256": "2afc745cbe23300499c3b6a382150d4b34cae235141f98e1705ddf26a6577378"
+      }
+    ],
+    "actions": [
+      "Select folder with 384 children",
+      "Request copy plan",
+      "Cancel the planned transfer",
+      "Request move plan for one entry over the limit",
+      "Quit Files"
+    ],
+    "terminal_log_sha256": "ca7010ef1d23e1126f1f5d719dc042197958147d6d4d4d08cfad4bd4b61aed6e",
+    "displayed": "The ordinary-user process displayed review for a folder with 384 children, then reported the host open-file limit under the default Linux descriptor ceiling. The destination remained unchanged."
+  },
+  "build_comparison": {
+    "macos_prior_seconds": {
+      "release": 32.632,
+      "address_undefined": 29.23,
+      "thread": 14.36
+    },
+    "linux_prior_release_seconds": 359.345,
+    "windows_prior_release_seconds": 72.42803,
+    "explanation": "The current run rebuilt the same Files controller and test translation units. The planned and actual compilation and linked output receipts establish freshness."
+  },
+  "docs_strict_pages_checked": 27,
+  "ordinary_windows": {
+    "status": "Open. The previous sealed 79d70df build remains available for interactive testing.",
+    "previous_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-79d70df-ordinary.ps1"
+  },
+  "windows_current_attempt": {
+    "stage": "smoke",
+    "pid": 18400,
+    "workspace": "V:\\tmp\\ckfq107e70c-ySy9",
+    "observation": "CMake paused during generation and subsequently resumed. The Release product and application test linked. The new folder-scope regression passed under the elevated SSH token. The remaining smoke cases and ordinary interactive run lack completion receipts."
+  },
+  "linux_preceding_failure": {
+    "frontend": "40ea35a2b39569f9a596ae8e9380a5c7df00c3a6",
+    "descriptor_limit": 1024,
+    "confirmed_errno": "EMFILE",
+    "diagnostic_sha256": "db9a1f060a234507e3605e44f75c72612a29b31a7de915c2e119a0123d9a16db"
+  }
+}
