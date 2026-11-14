@@ -42,6 +42,8 @@ clipboard.
   ordinary read permissions and never exposes volume rows as operation targets.
   **Refresh** updates that pane's volume list and checks for archive recovery
   records. It keeps the selected mount when it can match it after refresh.
+  **Esc** cancels a pending scan. During a refresh, the previous volume rows
+  stay visible until a later refresh succeeds.
   You can keep browsing in the other pane while the volume list loads.
   If reopening the filesystem root fails or you cancel it, the selected
   volume stays visible.

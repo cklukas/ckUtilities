@@ -3906,16 +3906,16 @@ struct FilesApp::State {
             labels();
             return;
         }
-        if (!closing && !modal_pending() && panes[active].volume_view && !panes[active].navigating) {
-            (void)navigate_relative(active, false);
-            return;
-        }
         if (!closing && !modal_pending() && volume_pending(active)) {
             // Native enumeration may still be waiting for storage. Keep its
             // worker slot occupied until it returns and discard that reply.
             volume_request->retired = true;
             panes[active].error = "Volume scan cancelled";
             labels();
+            return;
+        }
+        if (!closing && !modal_pending() && panes[active].volume_view && !panes[active].navigating) {
+            (void)navigate_relative(active, false);
             return;
         }
         if (!closing && !modal_pending() && pending(panes[active])) {

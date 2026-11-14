@@ -2463,21 +2463,29 @@ CK_TEST(files_app_pending_volume_reads_preserve_pane_navigation_and_dialog_focus
     auto initial = std::make_shared<Gate>();
     auto refresh = std::make_shared<Gate>();
     auto cancelled = std::make_shared<Gate>();
+    auto cancelled_refresh = std::make_shared<Gate>();
     auto scans = std::make_shared<std::atomic<unsigned>>(0);
     Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, false, false, false, {},
-              false, false, false, false, false, {}, [initial, refresh, cancelled, scans] {
+              false, false, false, false, false, {}, [initial, refresh, cancelled, cancelled_refresh, scans] {
         const auto scan = ++*scans;
-        (scan == 1 ? initial : scan == 2 ? refresh : cancelled)->block();
+        if (scan == 1)
+            initial->block();
+        else if (scan == 2)
+            refresh->block();
+        else if (scan == 3)
+            cancelled->block();
+        else if (scan == 5)
+            cancelled_refresh->block();
         return Observation<std::vector<FilesVolumeRecord>>::available(
-            {{"Fixture volume", "/fixture", "fixturefs", 100, 20, false, "fixture-id", {}, {}}});
+            {{"Fixture volume", "/fixture", "fixturefs", 100, scan == 4 ? 30u : 20u, false, "fixture-id", {}, {}}});
     });
     struct ReleaseScans {
-        std::array<std::shared_ptr<Gate>, 3> gates;
+        std::array<std::shared_ptr<Gate>, 4> gates;
         ~ReleaseScans() {
             for (const auto &gate : gates)
                 gate->release();
         }
-    } release_scans{{initial, refresh, cancelled}};
+    } release_scans{{initial, refresh, cancelled, cancelled_refresh}};
     f.loaded();
     CK_CHECK(f.app->navigate_root(0));
     f.loaded();
@@ -2520,6 +2528,27 @@ CK_TEST(files_app_pending_volume_reads_preserve_pane_navigation_and_dialog_focus
     CK_CHECK(f.app->status(0).find("Volume scan cancelled") != std::string::npos);
     cancelled->release();
     f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(!f.app->model(0).volume_cursor() && *f.app->location(0) == *root && f.app->location(1) == other);
+
+    CK_CHECK(f.command("ck.files.parent"));
+    f.until([&] { return !f.app->volume_info_pending() && f.app->model(0).volume_cursor().has_value(); });
+    const auto selected_volume_kept = [&] {
+        const auto selected = f.app->model(0).volume_cursor();
+        return selected && selected->identity == "fixture-id" && selected->free_bytes == 30;
+    };
+    CK_CHECK(selected_volume_kept());
+    CK_CHECK(f.command("ck.files.refresh"));
+    cancelled_refresh->wait();
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(!f.app->pending(0) && f.app->volume_info_pending());
+    CK_CHECK(f.app->status(0).find("Volume scan cancelled") != std::string::npos);
+    CK_CHECK(selected_volume_kept() && f.app->location(1) == other);
+    cancelled_refresh->release();
+    f.until([&] { return !f.app->volume_info_pending(); });
+    CK_CHECK(selected_volume_kept());
+    CK_CHECK(f.app->status(0).find("previous volume information retained") != std::string::npos);
+    CK_CHECK(f.command("ck.files.parent"));
+    f.loaded();
     CK_CHECK(!f.app->model(0).volume_cursor() && *f.app->location(0) == *root && f.app->location(1) == other);
 }
 CK_TEST(files_app_failed_or_cancelled_root_reopen_retains_the_selected_volume) {
