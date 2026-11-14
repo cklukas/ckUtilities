@@ -31,6 +31,12 @@ checks the source and destination leaves, including the retained evidence
 after macOS refuses unqualified publication. No native retirement success
 is inferred from this run.
 
+The backend codec also passed on Linux arm64 Clang 19 and Windows x64
+v143 on the workstation's ReFS development drive. Both builds compiled
+the native platform target. The Windows test ran over SSH and only
+exercised the in-memory codec. Ordinary-user Windows application and
+desktop acceptance remain open.
+
 | Build evidence | Value |
 | --- | --- |
 | Incremental build interval (UTC) | 2026-11-14 12:01:47–12:03:30 |
@@ -38,6 +44,10 @@ is inferred from this run.
 | Codec SHA-256 | `e0ac8695f04da9fdeeb7fa48ade529156a1472f38998c106baeb4616965a3e24` |
 | Files app tests SHA-256 | `645fdfa62f377a15b1b9db5deb21d1539c51ac4d0f07b8d8d2753da171c3ba74` |
 | Native Files tests SHA-256 | `1053fa8c1a016cb551952ea2199acf917b7b97ae9099e3846acc7d59ad66454f` |
+| Linux clean Release build | 104 steps, 12:01:47–12:09:17 UTC, 450.40 s |
+| Linux codec SHA-256 | `477cce12dbd4ee342719ab72c782c286a9cca15ba89cc1223860505c780558dd` |
+| Windows clean Release build | 103 steps, 12:06:43–12:10:33 UTC, 229.58 s |
+| Windows codec SHA-256 | `37df53c91f59dd02a662475605759a17d696ad436920ceb2ab3740f58a295901` |
 
 ## 2026-11-14 — Files move-batch completion
 
