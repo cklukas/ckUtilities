@@ -17,6 +17,16 @@
     "ctest_elapsed_seconds": 49.65,
     "ctest_log_sha256": "3e98ae636742d5f46c5ecdc78c7aa5c78bda0ad4a941523c2254887b1c0c33dd"
   },
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "configuration": "Debug frontend, backend and ckVision SDK with fail-fast ASan and UBSan",
+    "tested_frontend_manifest_sha256": "e357107f03f062ece89a6499912fdaf597e866816261e72eabc55fcc324a235a",
+    "build": {"start_utc": "2026-11-14T15:22:06Z", "end_utc": "2026-11-14T15:25:50Z", "elapsed_seconds": 223.67, "steps": 20},
+    "test_executable_sha256": "306c21f6f3a1e52240dfb32448dc573d675742ee8a524b90c58e59e78175a60a",
+    "application_cases_passed": 310,
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 209.76,
+    "ctest_log_sha256": "5e00ae0c86742c7adf7061c20b33da5c266b582660b15eea4aba42ef8a62c2f1"
+  },
   "windows_x64_release": {
     "configuration": "MSVC v143 14.44, static CRT, ReFS V: development drive",
     "build": {"start_utc": "2026-11-14T15:22:24.1357193Z", "end_utc": "2026-11-14T15:25:50.7652260Z", "elapsed_seconds": 206.63, "steps": 18},
@@ -44,5 +54,5 @@
     "first_attempt": "The Location menu used P for both Properties and Parent folder. The first PTY attempt invoked Parent folder. Properties now uses I and the new application regression drives that mnemonic."
   },
   "docs_pages_checked": 27,
-  "open": ["Latest matching sanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
+  "open": ["Latest matching ThreadSanitizer and Linux suites, Windows ordinary-user and interactive desktop acceptance"]
 }
