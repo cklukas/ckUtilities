@@ -670,6 +670,24 @@ CK_TEST(volume_archive_review_reports_sparse_shape_and_binds_default_name) {
     CK_CHECK(approval.value()->review() == model);
 }
 
+CK_TEST(volume_archive_review_counts_internal_all_file_and_leading_holes) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-review-holes", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    auto input = document();
+    input.entries[1].extents.back().offset = 15; // The last extent reaches EOF.
+    input.entries.push_back({"all-hole", FilesVolumeArchiveEntryKind::RegularFile, 16, {}, {}, 0});
+    input.entries.push_back({"leading-hole", FilesVolumeArchiveEntryKind::RegularFile, 16,
+                            {{15, {std::byte{'z'}}}}, {}, 0});
+    input.entries.push_back({"dense", FilesVolumeArchiveEntryKind::RegularFile, 2,
+                            {{0, {std::byte{'a'}}}, {1, {std::byte{'b'}}}}, {}, 0});
+    input.entries.push_back({"empty", FilesVolumeArchiveEntryKind::RegularFile, 0, {}, {}, 0});
+    const auto review = FilesVolumeArchiveReview::create(std::move(input), address(scratch.path()), {},
+                                                          FilesVolumeArchiveDestinationState::Ready);
+    CK_CHECK(review.value());
+    const auto &summary = (*review.value())->summary();
+    CK_CHECK(summary.regular_files == 5 && summary.sparse_files == 3);
+    CK_CHECK(summary.logical_bytes == 50 && summary.data_bytes == 7);
+}
+
 CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_unreviewed_losses) {
     ck::testing::ScratchDirectory scratch("files-volume-archive-review-loss", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
     auto reviewed_document = document();

@@ -22,6 +22,7 @@
 #include <cerrno>
 #include <limits>
 #include <mutex>
+#include <numeric>
 #include <set>
 #include <stdexcept>
 #include <thread>
@@ -1286,12 +1287,13 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
         case FilesVolumeArchiveEntryKind::Directory: ++summary.directories; break;
         case FilesVolumeArchiveEntryKind::RegularFile:
             ++summary.regular_files;
-            if (!entry.extents.empty()) {
-                const auto &last = entry.extents.back();
-                std::uint64_t end = last.offset + last.bytes.size();
-                if (end < entry.logical_size)
-                    ++summary.sparse_files;
-            }
+            // Validation bounds each extent and prevents overlaps. The sum
+            // exposes leading, interior and trailing holes, including a
+            // logical file whose entire contents are a hole.
+            if (std::accumulate(entry.extents.begin(), entry.extents.end(), std::uint64_t{0},
+                    [](std::uint64_t bytes, const auto &extent) { return bytes + extent.bytes.size(); }) <
+                entry.logical_size)
+                ++summary.sparse_files;
             break;
         case FilesVolumeArchiveEntryKind::Symlink: ++summary.links; break;
         case FilesVolumeArchiveEntryKind::HardLink: ++summary.hard_links; break;
