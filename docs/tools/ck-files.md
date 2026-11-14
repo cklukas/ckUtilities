@@ -113,8 +113,9 @@ clipboard.
 - Press **Esc** to cancel while Files prepares a copy or move plan. The review
   shows **From**, **To**, and the selected entry count once planning finishes.
   A plan is capped at 1,024 entries, counting the selected folder and its
-  descendants. The operating system can limit how many entries Files can
-  hold open for review.
+  descendants. The operating system may reach its open-file limit sooner
+  because the review holds an identity handle for each source and shares the
+  process's open-file allowance with directory scans and both panes.
   Open **Paths and names** to scroll through the full paths and every selected
   name. The review identifies the source files affected by conflicts or
   preservation losses. For a batch of individual files, **Keep existing
@@ -220,8 +221,9 @@ the command palette, where you can also highlight a disabled match to see
 its reason. In the volume view, press **Backspace** to return to the
 filesystem listing.
 
-When work is pending, **Quit** offers **Stay** or **Stop activity and exit**.
-Completed changes remain in place. Stopping may wait for storage to respond.
+While Files is reading or checking storage, including for location completion,
+**Quit** offers **Stay** or **Stop activity and exit**. Completed changes remain
+in place. Stopping may wait for storage to respond.
 
 `Operations > Inspect archive recovery` and `Operations > Inspect operation
 recovery` open bounded read-only reviews when their startup scans find matching
