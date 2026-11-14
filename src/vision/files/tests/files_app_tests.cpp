@@ -1246,6 +1246,7 @@ CK_TEST(files_app_move_acceptance_executes_after_review_and_refreshes_both_panes
 }
 CK_TEST(files_app_keep_existing_moves_only_the_nonconflicting_marked_file) {
     Fixture f;
+    f.loaded();
     const auto root = f.scratch.path() / "right";
     NativeFileSystem filesystem;
     const auto destination = filesystem.open_native_directory(address(root));
@@ -1332,6 +1333,7 @@ CK_TEST(files_app_choose_another_destination_opens_the_other_pane_location_edito
 CK_TEST(files_app_keep_both_uses_the_reviewed_name_and_refuses_an_occupied_alternate) {
     for (const bool occupy_alternate : {false, true}) {
         Fixture f;
+        f.loaded();
         NativeFileSystem filesystem;
         const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left"));
         const auto destination = filesystem.open_native_directory(address(f.scratch.path() / "right"));
@@ -1408,6 +1410,50 @@ CK_TEST(files_app_keep_both_uses_the_reviewed_name_and_refuses_an_occupied_alter
         check_size(*alternate, occupy_alternate ? 0 : 1);
         CK_CHECK(static_cast<bool>((*source.value())->open_child(*original).value()) == occupy_alternate);
     }
+}
+
+CK_TEST(files_app_existing_folder_copy_opens_worker_review_and_cancel_preserves_both_folders) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    for (std::size_t row = 0; row != f.app->model(0).row_count() &&
+         f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.loaded();
+    }
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    NativeFileSystem filesystem;
+    const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left"));
+    const auto target = filesystem.open_native_directory(address(f.scratch.path() / "right"));
+#ifdef _WIN32
+    const auto name = NativeName::from_windows(u"left-item-0");
+    const auto child = NativeName::from_windows(u"inside.txt");
+#else
+    const auto name = NativeName::from_posix("left-item-0");
+    const auto child = NativeName::from_posix("inside.txt");
+#endif
+    if (!source.value() || !target.value() || !name || !child || !(*target.value())->create_child_directory(*name).value())
+        throw std::runtime_error("cannot create existing destination for reviewed folder copy");
+    CK_CHECK(f.command("ck.files.copy"));
+    f.until([&] {
+        return f.app->operation_review_pending() || f.app->status(0).find("Copy failed") != std::string::npos;
+    });
+    if (!f.app->operation_review_pending())
+        throw std::runtime_error(f.app->status(0));
+    f.application.step(f.clock.now_nanos());
+    CK_CHECK(f.painted().find("Review folder copy") != std::string::npos);
+    CK_CHECK(f.painted().find("inside.txt") != std::string::npos);
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return f.app->status(0).find("Copy cancelled") != std::string::npos; });
+    const auto existing = (*target.value())->open_directory_child(*name);
+    const auto original = (*source.value())->open_directory_child(*name);
+    const auto journals = filesystem.open_native_directory(address(f.scratch.path() / "operation-journals"));
+    if (!existing.value() || !original.value() || !journals.value())
+        throw std::runtime_error("reviewed folder copy removed a fixture directory");
+    const auto contents = (*existing.value())->read(1);
+    CK_CHECK(contents.state == DirectoryReadState::End && contents.names.empty());
+    CK_CHECK((*original.value())->open_child(*child).value());
+    const auto journal_names = (*journals.value())->read(1);
+    CK_CHECK(journal_names.state == DirectoryReadState::End && journal_names.names.empty());
 }
 
 #if defined(__APPLE__)

@@ -344,6 +344,9 @@ struct FilesApp::State {
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_dialog;
     std::optional<ckv::widgets::DescriptorDialogPresentation> operation_recovery_cleanup_dialog;
     std::unique_ptr<FilesOperationReviewDialog> operation_review_dialog;
+    std::optional<ckv::widgets::DescriptorDialogPresentation> tree_copy_dialog;
+    ckv::widgets::Window *tree_copy_window = nullptr;
+    std::weak_ptr<void> tree_copy_window_lifetime;
     std::optional<FilesOperationPlanningTicket> operation_planning_request;
     std::optional<FilesOperationExecutionTicket> operation_execution_request;
     std::optional<FilesVolumeArchivePlanningTicket> volume_archive_planning_request;
@@ -367,7 +370,7 @@ struct FilesApp::State {
     using PlanningCompletion = std::function<void(ck::files::Observation<ck::files::ConsentReceipt>,
         FilesOperationReviewEvidence::Pointer)>;
     PlanningCompletion operation_planning_completion;
-    bool operation_planning_is_transfer = false;
+    std::optional<std::pair<std::size_t, FilesOperationPanePlanningRequest>> operation_planning_transfer;
     std::unique_ptr<FilesLocationDialog> location_dialog;
     bool close_after_location = false;
     ckv::widgets::Window *view_dialog_window = nullptr;
@@ -783,12 +786,15 @@ struct FilesApp::State {
         operation_recovery_window = nullptr;
         volume_request.reset();
         operation_review_dialog.reset();
+        tree_copy_dialog.reset();
+        tree_copy_window = nullptr;
         operation_planning_request.reset();
         operation_execution_request.reset();
         operation_execution_origin.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
+        operation_planning_transfer.reset();
         volume_archive_review_dialog.reset();
         volume_archive_planning_request.reset();
         volume_archive_execution_request.reset();
@@ -902,6 +908,7 @@ struct FilesApp::State {
                (volume_archive_review_dialog && !volume_archive_review_dialog->completed()) ||
                volume_archive_planning_request.has_value() ||
                (operation_review_dialog && !operation_review_dialog->completed()) ||
+               (tree_copy_dialog && !tree_copy_dialog->completed()) ||
                (location_dialog && !location_dialog->completed()) || operation_planning_request.has_value();
     }
     const FilesVolumeArchiveRecoveryItem *archive_cleanup_item() const noexcept {
@@ -2431,6 +2438,28 @@ struct FilesApp::State {
         const auto kind = panes[active].model.cursor_kind();
         return kind == ck::files::ObjectKind::RegularFile || kind == ck::files::ObjectKind::Directory;
     }
+    bool start_transfer(FilesOperationExecutionRequest execution, std::size_t source, std::size_t destination) {
+        const OperationExecutionOrigin origin{execution.operation, source,
+            execution.source_navigation, execution.destination_navigation};
+        execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
+                                    const ck::files::NativeName &basename, bool create_new) {
+            return ck::files::open_native_operation_journal_file(root, basename, create_new);
+        };
+        const auto submitted = execution_service->request(std::move(execution));
+        if (submitted.state != FilesOperationExecutionSubmission::Accepted) {
+            panes[source].error = origin.kind == ck::files::FileOperation::Move
+                ? "Move worker is unavailable" : "Copy worker is unavailable";
+            labels();
+            return false;
+        }
+        operation_execution_request = submitted.ticket;
+        operation_execution_origin = origin;
+        panes[source].error.clear();
+        panes[destination].error.clear();
+        labels();
+        return true;
+    }
+
     void prepare_copy(ck::files::FileOperation operation) {
         if (operation == ck::files::FileOperation::Copy && panes[active].volume_view) {
             prepare_volume_archive();
@@ -2491,23 +2520,7 @@ struct FilesApp::State {
                 operation, services[source_pane], services[destination_pane], source_navigation, destination_navigation,
                 source_stamp, destination_stamp, source_limits, *operation_journal_root, {}, {}, {},
                 std::move(evidence), std::move(result).take_value()};
-            execution.open_journal = [](const ck::files::NativeAbsolutePath &root,
-                                        const ck::files::NativeName &basename, bool create_new) {
-                return ck::files::open_native_operation_journal_file(root, basename, create_new);
-            };
-            const auto submitted = execution_service->request(std::move(execution));
-            if (submitted.state != FilesOperationExecutionSubmission::Accepted) {
-                panes[source_pane].error = std::string(operation == ck::files::FileOperation::Move ? "Move" : "Copy") +
-                    " worker is unavailable";
-                labels();
-                return;
-            }
-            operation_execution_request = submitted.ticket;
-            operation_execution_origin = OperationExecutionOrigin{
-                operation, source_pane, source_navigation, destination_navigation};
-            panes[source_pane].error.clear();
-            panes[destination_pane].error.clear();
-            labels();
+            start_transfer(std::move(execution), source_pane, destination_pane);
         };
         if (!submit_operation_planning(std::move(planning), panes[destination_pane].encoding,
                                       revalidate, completion, true)) {
@@ -3409,12 +3422,26 @@ struct FilesApp::State {
         const auto encoding = *operation_planning_encoding;
         auto revalidate = std::move(operation_planning_revalidation);
         auto completion = std::move(operation_planning_completion);
-        const bool transfer = std::exchange(operation_planning_is_transfer, false);
+        const auto transfer = std::exchange(operation_planning_transfer, std::nullopt);
         operation_planning_request.reset();
         operation_planning_encoding.reset();
         operation_planning_revalidation = {};
         operation_planning_completion = {};
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {
+            if (transfer && reply.evidence && reply.plan->operation() == ck::files::FileOperation::Copy &&
+                reply.evidence->inventory->mount_policy() != ck::files::InventoryMountPolicy::DirectObjects &&
+                std::any_of(reply.plan->conflicts().begin(), reply.plan->conflicts().end(), [](const auto& conflict) {
+                    return conflict.item == 0 && conflict.kind == ck::files::DestinationConflictKind::ExistingDirectory;
+                })) {
+                const auto &[source, planning] = *transfer;
+                FilesOperationExecutionRequest execution{
+                    ck::files::FileOperation::Copy, planning.source_service, planning.destination_service,
+                    planning.source_navigation, planning.destination_navigation,
+                    planning.source_stamp, planning.destination_stamp, planning.source_limits, *operation_journal_root, {}, {}, {},
+                    std::move(reply.evidence), {}, true};
+                start_transfer(std::move(execution), source, 1 - source);
+                return;
+            }
             const auto fallback = completion;
             const auto inventory = reply.evidence ? reply.evidence->inventory : nullptr;
             std::function<bool(ck::files::ConsentAction)> supports_action;
@@ -3481,6 +3508,11 @@ struct FilesApp::State {
         const auto skipped = reply.skipped_items.empty() ? std::string{} :
             std::to_string(reply.skipped_items.size()) +
                 (reply.skipped_items.size() == 1 ? " conflict skipped" : " conflicts skipped");
+        const auto retained = reply.retained_targets == 0 ? std::string{} :
+            std::to_string(reply.retained_targets) +
+                (reply.retained_targets == 1 ? " previous target in Operation recovery" : " previous targets in Operation recovery");
+        const auto operation_notice = skipped.empty() ? retained :
+            retained.empty() ? skipped : skipped + ". " + retained;
         if (reply.state == FilesOperationExecutionState::Complete && reply.result.items.empty() && !skipped.empty()) {
             if (source_current)
                 panes[source].error = skipped;
@@ -3512,14 +3544,14 @@ struct FilesApp::State {
                 auto detail = reply.state == FilesOperationExecutionState::RetainedSource
                     ? retention_message() : std::string(label) + " completed";
                 detail += "; refresh could not be started";
-                if (!skipped.empty())
-                    detail += ". " + skipped;
+                if (!operation_notice.empty())
+                    detail += ". " + operation_notice;
                 panes[source].error = std::move(detail);
                 if (destination_current)
                     panes[destination].error = panes[source].error;
-            } else if (reply.state == FilesOperationExecutionState::RetainedSource || !skipped.empty()) {
+            } else if (reply.state == FilesOperationExecutionState::RetainedSource || !operation_notice.empty()) {
                 const auto detail = reply.state == FilesOperationExecutionState::RetainedSource
-                    ? retention_message() + (skipped.empty() ? "" : ". " + skipped) : skipped;
+                    ? retention_message() + (operation_notice.empty() ? "" : ". " + operation_notice) : operation_notice;
                 panes[source].error = detail;
                 panes[source].change_error = true; // Keep the outcome through the queued refresh.
                 if (destination_current) {
@@ -3555,10 +3587,85 @@ struct FilesApp::State {
             }
             else if (reply.worker_fault != FilesPaneWorkerFault::None)
                 detail += ": worker stopped";
-            if (!skipped.empty())
-                detail += ". " + skipped;
+            if (!operation_notice.empty())
+                detail += ". " + operation_notice;
             panes[source].error = std::move(detail);
         }
+        labels();
+    }
+
+    void show_tree_copy_review(FilesTreeCopyReview review) {
+        using namespace ck::files;
+        using namespace ckv::widgets;
+        if (!operation_execution_request || *operation_execution_request != review.request)
+            return;
+        if (modal_pending()) {
+            execution_service->cancel(review.request);
+            return;
+        }
+        DialogDescriptor descriptor;
+        descriptor.title = "Review folder copy";
+        descriptor.resizable = true;
+        descriptor.fields.push_back({.label = "Merge the two folders and keep files that exist only at the destination.",
+                                     .kind = FieldKind::Note});
+        const auto conflicts = review.conflicts;
+        for (const auto& item : review.page.items) {
+            std::string name;
+            for (const auto& component : item.relative_components) {
+                if (!name.empty())
+                    name += '/';
+                name += component.display_name();
+            }
+            const auto action = item.row.requires_review ? "Conflict" :
+                item.action == ReviewedTreeAction::MergeDirectory ? "Merge folder" :
+                item.action == ReviewedTreeAction::CreateDirectory ? "Create folder" :
+                item.action == ReviewedTreeAction::Copy ? "Copy" : "Keep";
+            auto label = std::string(action) + "  " + name;
+            if (item.row.requires_review && item.facts.source_size && item.facts.destination_size)
+                label += "  (" + std::to_string(*item.facts.source_size) + " → " +
+                    std::to_string(*item.facts.destination_size) + " bytes)";
+            descriptor.fields.push_back({.label = std::move(label), .kind = FieldKind::Note});
+        }
+        std::vector<std::string> choices{"Cancel"};
+        if (review.can_apply) {
+            choices.push_back(conflicts ? "Keep existing on conflicts" : "Copy missing items and merge folders");
+            if (conflicts && review.can_use_source) {
+                choices.push_back("Use source and retain the previous target");
+                choices.push_back("Use newest and retain replaced targets");
+            } else if (conflicts) {
+                descriptor.fields.push_back({.label = "Replacing these targets requires verified version retention.",
+                                             .kind = FieldKind::Note});
+            }
+        } else {
+            descriptor.fields.push_back({.label = "Folder copy unavailable: the worker could not verify required preservation.",
+                                         .kind = FieldKind::Note});
+        }
+        if (choices.size() > 3)
+            descriptor.fields.push_back({.label = "Use newest keeps the existing file when modification times tie.",
+                                         .kind = FieldKind::Note});
+        const auto choice_field = descriptor.fields.size();
+        descriptor.fields.push_back({.label = "&Conflict resolution", .kind = FieldKind::Combo,
+                                     .options = std::move(choices), .initial_selection = 0});
+        if (review.can_apply)
+            descriptor.buttons.push_back({"&Apply folder copy", ButtonRole::Accept, {}});
+        descriptor.buttons.push_back({"&Cancel", ButtonRole::Dismiss, {}});
+        tree_copy_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        tree_copy_window = shell->desktop().active_window();
+        if (tree_copy_window)
+            tree_copy_window_lifetime = tree_copy_window->lifetime_token();
+        tree_copy_dialog->set_completion_handler([this, weak = std::weak_ptr<void>(lifetime), ticket = review.request,
+                                                  plan = review.page.identity, choice_field](const DialogResult& answer) {
+            if (weak.expired())
+                return;
+            tree_copy_window = nullptr;
+            tree_copy_dialog.reset();
+            const auto selected = answer.accepted && choice_field < answer.selected.size() ? answer.selected[choice_field] : 0;
+            const auto choice = selected == 1 ? ConflictChoice::KeepTarget : selected == 2 ? ConflictChoice::UseSource
+                : selected == 3 ? ConflictChoice::Newest : ConflictChoice::Cancel;
+            if (choice == ConflictChoice::Cancel || !execution_service->apply_tree_review(ticket, plan, choice))
+                execution_service->cancel(ticket);
+            labels();
+        });
         labels();
     }
     void pump() {
@@ -3576,6 +3683,7 @@ struct FilesApp::State {
                     operation_planning_encoding.reset();
                     operation_planning_revalidation = {};
                     operation_planning_completion = {};
+                    operation_planning_transfer.reset();
                     completion(ck::files::Observation<ck::files::ConsentReceipt>::unavailable(
                         ck::files::ObservationState::Failed,
                         {ck::files::ErrorDomain::Adapter,
@@ -3700,6 +3808,8 @@ struct FilesApp::State {
             if (execution_service) {
                 if (auto reply = execution_service->take())
                     consume_execution(std::move(*reply));
+                if (auto review = execution_service->take_tree_review())
+                    show_tree_copy_review(std::move(*review));
                 if (operation_execution_request && !execution_service->running()) {
                     operation_execution_request.reset();
                     scan_operation_recovery();
@@ -3905,6 +4015,11 @@ struct FilesApp::State {
             operation_review_dialog->close();
             return;
         }
+        if (tree_copy_dialog && !tree_copy_dialog->completed()) {
+            if (tree_copy_window && !tree_copy_window_lifetime.expired())
+                tree_copy_window->close();
+            return;
+        }
         if (confirmation && !confirmation->completed())
             return;
         if (!services[0]->working() && !services[1]->working() && !volume_request) {
@@ -3965,6 +4080,10 @@ struct FilesApp::State {
         if (closing || modal_pending() || !planning_service || !revalidate || !completion ||
             !planning_service->running())
             return false;
+        std::optional<std::pair<std::size_t, FilesOperationPanePlanningRequest>> transfer_request;
+        if constexpr (std::is_same_v<Request, FilesOperationPanePlanningRequest>)
+            if (transfer)
+                transfer_request.emplace(active, request);
         const auto submitted = planning_service->request(std::move(request));
         if (submitted.state != FilesOperationPlanningSubmission::Accepted)
             return false;
@@ -3972,7 +4091,7 @@ struct FilesApp::State {
         operation_planning_encoding = destination_encoding;
         operation_planning_revalidation = std::move(revalidate);
         operation_planning_completion = std::move(completion);
-        operation_planning_is_transfer = transfer;
+        operation_planning_transfer = std::move(transfer_request);
         labels();
         return true;
     }
@@ -4072,7 +4191,8 @@ bool FilesApp::preview_pending() const {
            (state_->preview_dialog && !state_->preview_dialog->completed());
 }
 bool FilesApp::operation_review_pending() const {
-    return state_->operation_review_dialog && !state_->operation_review_dialog->completed();
+    return (state_->operation_review_dialog && !state_->operation_review_dialog->completed()) ||
+        (state_->tree_copy_dialog && !state_->tree_copy_dialog->completed());
 }
 bool FilesApp::location_editor_pending() const {
     return state_->location_dialog && !state_->location_dialog->completed();

@@ -108,6 +108,11 @@ clipboard.
   filesystem's no-replace operation if a name becomes occupied during transfer.
   **Choose another destination** opens the location editor for the receiving
   pane. Files asks for a fresh review if the approved transfer changes.
+  Copying a folder onto an existing folder of the same name opens a review of
+  their contents. The merge preserves destination-only files. The worker
+  offers **Use source** and **Use newest** for regular-file conflicts when it
+  can verify target retention. **Use newest** keeps the target when times tie.
+  Previous versions appear in **Operation recovery**.
 - Cancellable worker-owned jobs with honest progress, per-item outcomes,
   source/destination identity revalidation, durable journal boundaries, and
   explicit committed, retained, skipped, failed, and indeterminate results.

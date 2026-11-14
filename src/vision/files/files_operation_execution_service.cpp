@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <map>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -80,6 +81,12 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
     const bool deletion = request.operation == ck::files::FileOperation::Delete;
     const bool copy_or_move = request.operation == ck::files::FileOperation::Copy ||
         request.operation == ck::files::FileOperation::Move;
+    if (request.review_existing_tree &&
+        (request.operation != ck::files::FileOperation::Copy || request.receipt || !request.reviewed ||
+         !request.reviewed->plan || !request.reviewed->inventory ||
+         request.reviewed->inventory->mount_policy() == ck::files::InventoryMountPolicy::DirectObjects ||
+         request.reviewed->destination_names.size() != 1))
+        return false;
     return (deletion || copy_or_move) && request.source_service && request.source_navigation.valid() &&
            request.source_stamp.current() && request.source_limits.held_entries != 0 &&
            request.journal_root.is_valid() && request.open_journal && request.policy.journal_limits.max_items != 0 &&
@@ -88,7 +95,8 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
                            request.destination_navigation.valid() && request.destination_stamp.current() &&
                            request.policy.copy_limits.valid() && request.reviewed && request.reviewed->inventory &&
                            request.reviewed->plan && request.reviewed->plan->operation() == request.operation &&
-                           request.receipt && request.reviewed->plan->receipt_matches(*request.receipt) &&
+                           (request.review_existing_tree ||
+                           (request.receipt && request.reviewed->plan->receipt_matches(*request.receipt) &&
                            (request.receipt->action == ck::files::ConsentAction::Proceed ||
                             request.receipt->action == ck::files::ConsentAction::ContinueWithListedLosses ||
                             (request.receipt->action == ck::files::ConsentAction::KeepBoth &&
@@ -97,7 +105,7 @@ bool valid(const FilesOperationExecutionRequest& request) noexcept {
                             (request.receipt->action == ck::files::ConsentAction::SkipConflict &&
                              request.reviewed->inventory->mount_policy() == ck::files::InventoryMountPolicy::DirectObjects &&
                              request.reviewed->plan->skips_conflicts_with_reviewed_losses(
-                                 request.receipt->reviewed_issues, request.receipt->resolved_conflicts))));
+                                 request.receipt->reviewed_issues, request.receipt->resolved_conflicts))))));
 }
 
 FilesOperationExecutionState execution_state(ck::files::OperationBatchState state,
@@ -197,6 +205,11 @@ struct FilesOperationExecutionService::State final {
     std::condition_variable condition;
     std::optional<std::pair<FilesOperationExecutionTicket, FilesOperationExecutionRequest>> pending;
     std::optional<FilesOperationExecutionReply> reply;
+    std::optional<FilesTreeCopyReview> tree_review;
+    ck::files::ComparisonPlanIdentity tree_review_plan;
+    std::optional<ck::files::ConflictChoice> tree_choice;
+    bool tree_can_use_source = false;
+    bool tree_can_apply = false;
     FilesOperationExecutionTicket latest, cancelled;
     std::uint64_t next = 1;
     std::stop_source stop;
@@ -230,9 +243,199 @@ struct FilesOperationExecutionService::State final {
         std::lock_guard lock(mutex);
         if (value.request != latest || stopping)
             return;
+        tree_review.reset();
+        tree_review_plan = {};
+        tree_choice.reset();
         reply = std::move(value);
         busy = false;
         signal();
+    }
+
+    ck::files::Observation<ck::files::ConflictChoice> wait_for_tree_choice(
+        FilesTreeCopyReview review, std::stop_token stop_token) {
+        using namespace ck::files;
+        using Result = Observation<ConflictChoice>;
+        std::unique_lock lock(mutex);
+        tree_review_plan = review.page.identity;
+        tree_can_use_source = review.can_use_source;
+        tree_can_apply = review.can_apply;
+        tree_review = std::move(review);
+        signal();
+        condition.wait(lock, [&] { return stopping || stop_token.stop_requested() || tree_choice.has_value(); });
+        tree_review.reset();
+        tree_review_plan = {};
+        const auto choice = std::exchange(tree_choice, std::nullopt);
+        if (choice && !stopping && !stop_token.stop_requested())
+            return Result::available(*choice);
+        const auto detail = error(AdapterError::InterruptedRead, "files_execution.tree_cancelled", ObservationState::Unknown);
+        return Result::unavailable(detail.state, detail.error);
+    }
+
+    void run_tree_copy(FilesOperationExecutionReply& result, const FilesOperationExecutionRequest& request,
+        const FilesPaneOperationSources& sources, const FilesPaneOperationDestination& destination,
+        std::stop_token stop_token) {
+        using namespace ck::files;
+        const auto fail = [&](const UnavailableObservation& detail) {
+            result.state = stop_token.stop_requested() ? FilesOperationExecutionState::Cancelled
+                                                       : FilesOperationExecutionState::Failed;
+            result.error = detail;
+        };
+        const auto current = [&] { return request.source_stamp.current() && request.destination_stamp.current(); };
+        const auto stale = [&] {
+            fail(error(AdapterError::PlanDecisionStale, "files_execution.tree_roots_changed", ObservationState::Changed));
+        };
+        const auto parent = destination.directory->identity();
+        const auto& entries = request.reviewed->inventory->entries();
+        if (!current() || !parent.value() ||
+            entries.empty() ||
+            compare_identity(*parent.value(), request.reviewed->destination) != IdentityComparison::Same ||
+            !sources.root_source || !sources.root_source->metadata().identity.value() ||
+            compare_identity(*sources.root_source->metadata().identity.value(), entries.front().identity) != IdentityComparison::Same ||
+            sources.names != request.reviewed->destination_names) {
+            stale();
+            return;
+        }
+        const auto& name = sources.names.front();
+        auto target = HeldChild::observe(destination.directory, name);
+        if (const auto* failure = target.unavailable_detail()) {
+            fail(*failure);
+            return;
+        }
+        if (!(*target.value())->metadata().kind.value() ||
+            *(*target.value())->metadata().kind.value() != ObjectKind::Directory) {
+            stale();
+            return;
+        }
+        ReviewedTreePlanRequest tree;
+        tree.source_root = sources.root_source;
+        tree.destination_root = std::move(target).take_value();
+        if (destination.address) {
+            auto address = destination.address->child_address(name);
+            if (const auto* failure = address.unavailable_detail()) {
+                fail(*failure);
+                return;
+            }
+            tree.destination_address = std::move(address).take_value();
+        }
+        tree.comparison.profile = ComparisonProfile::Copy;
+        tree.comparison.mode = ComparisonMode::CompleteDigest;
+        tree.copy_policy = request.policy;
+        tree.copy_policy.allow_unhandled_metadata_loss = false;
+        tree.journal_root = request.journal_root;
+        tree.journal_id = request.journal_id;
+        tree.limits.max_entries = request.source_limits.held_entries;
+        tree.limits.max_page_rows = request.source_limits.held_entries;
+        auto created = ReviewedTreePlanJob::create(std::move(tree));
+        if (const auto* failure = created.unavailable_detail()) {
+            fail(*failure);
+            return;
+        }
+        auto job = std::move(created).take_value();
+        while (job->state() == ReviewedTreeState::Inventory)
+            job->advance(stop_token);
+        if (job->state() == ReviewedTreeState::AwaitingReview) {
+            if (!current()) {
+                stale();
+                return;
+            }
+            auto assessment = job->assess_rules({}, 0, request.source_limits.held_entries);
+            if (const auto* failure = assessment.unavailable_detail()) {
+                fail(*failure);
+                return;
+            }
+            auto page = std::move(assessment).take_value();
+            const auto plan = page.identity;
+            std::map<ConflictClass, std::vector<std::uint64_t>> conflicts;
+            bool can_use_source = true, can_apply = true;
+            std::size_t conflict_count = 0;
+            for (const auto& item : page.items) {
+                if (item.row.source_index && !item.facts.source_preservation_qualified &&
+                    (item.action == ReviewedTreeAction::Copy || item.action == ReviewedTreeAction::CreateDirectory))
+                    can_apply = false;
+                if (item.action == ReviewedTreeAction::MergeDirectory &&
+                    !(item.facts.allowed_choices & (std::uint64_t{1} << static_cast<unsigned>(ConflictChoice::MergeFolders))))
+                    can_apply = false;
+                if (item.row.source_index && item.row.relation == ComparisonRelation::Unknown && !item.facts.destination_present)
+                    can_apply = false;
+                if (!item.row.requires_review && item.action != ReviewedTreeAction::MergeDirectory)
+                    continue;
+                conflicts[item.facts.conflict_class].push_back(item.row.id);
+                if (item.row.requires_review)
+                    ++conflict_count;
+                if (item.action != ReviewedTreeAction::MergeDirectory &&
+                    (item.facts.conflict_class != ConflictClass::ExistingRegular ||
+                     !item.facts.retained_target_available || !item.facts.source_preservation_qualified))
+                    can_use_source = false;
+            }
+            const auto choice = wait_for_tree_choice({result.request, std::move(page),
+                conflict_count != 0 && can_use_source, can_apply, conflict_count}, stop_token);
+            if (const auto* failure = choice.unavailable_detail()) {
+                job->advance(stop_token);
+                fail(*failure);
+                return;
+            }
+            if (!current() || stop_token.stop_requested()) {
+                if (stop_token.stop_requested())
+                    job->advance(stop_token);
+                stale();
+                return;
+            }
+            std::vector<ConflictRule> rules;
+            for (auto& [kind, rows] : conflicts) {
+                ConflictRule rule;
+                rule.plan = plan;
+                rule.kind = kind;
+                rule.choice = kind == ConflictClass::DirectoryPair ? ConflictChoice::MergeFolders : *choice.value();
+                rule.tie = ConflictChoice::KeepTarget;
+                rule.scope = ConflictScope::Selected;
+                rule.selected_rows = std::move(rows);
+                rule.retain_replaced = true;
+                rules.push_back(std::move(rule));
+            }
+            const auto receipt = job->review(rules);
+            if (const auto* failure = receipt.unavailable_detail()) {
+                fail(*failure);
+                return;
+            }
+            if (!current() || stop_token.stop_requested()) {
+                if (stop_token.stop_requested())
+                    job->advance(stop_token);
+                stale();
+                return;
+            }
+            const auto started = job->begin_execution(*receipt.value());
+            if (const auto* failure = started.unavailable_detail()) {
+                fail(*failure);
+                return;
+            }
+            while (job->state() == ReviewedTreeState::Revalidating || job->state() == ReviewedTreeState::Executing)
+                job->advance(stop_token);
+        }
+        const auto progress = job->progress();
+        result.error = progress.failure;
+        if (job->preview()) {
+            const auto final_page = job->page(0, request.source_limits.held_entries);
+            if (final_page.value()) {
+                for (const auto& item : final_page.value()->items) {
+                    if (item.target_retained)
+                        ++result.retained_targets;
+                    if (item.state == ReviewedTreeItemState::Skipped && item.row.requires_review)
+                        result.skipped_items.push_back(static_cast<std::size_t>(item.row.id - 1));
+                    if (item.state == ReviewedTreeItemState::Complete &&
+                        (item.action == ReviewedTreeAction::Copy || item.action == ReviewedTreeAction::Replace ||
+                         item.action == ReviewedTreeAction::CreateDirectory || item.action == ReviewedTreeAction::MergeDirectory))
+                        result.result.items.push_back({static_cast<std::size_t>(item.row.id - 1), OperationItemOutcome::Complete, {}});
+                }
+            }
+        }
+        if (progress.state == ReviewedTreeState::Complete) {
+            result.state = FilesOperationExecutionState::Complete;
+            result.result.state = OperationBatchState::Complete;
+        } else if (progress.state == ReviewedTreeState::Partial || progress.state == ReviewedTreeState::NeedsReconciliation) {
+            result.state = FilesOperationExecutionState::NeedsReconciliation;
+        } else if (progress.state == ReviewedTreeState::Cancelled) {
+            result.state = FilesOperationExecutionState::Cancelled;
+        }
     }
 
     void run_one(FilesOperationExecutionTicket request, FilesOperationExecutionRequest value,
@@ -309,6 +512,11 @@ struct FilesOperationExecutionService::State final {
         const bool recursive = handoff->sources->root_source && handoff->sources->source_root &&
             handoff->sources->source_path && handoff->sources->source_path->is_valid() &&
             handoff->sources->sources.empty() && handoff->sources->paths.empty();
+        if (value.review_existing_tree) {
+            run_tree_copy(result, value, *handoff->sources, *handoff->destination_result, stop_token);
+            emit(std::move(result));
+            return;
+        }
         if (deletion) {
             if (!recursive) {
                 fail(error(ck::files::AdapterError::UnsupportedQuery,
@@ -641,7 +849,6 @@ struct FilesOperationExecutionService::State final {
                     item.emplace(std::move(*pending));
                     pending.reset();
                     busy = true;
-                    stop = std::stop_source{};
                 }
                 run_one(item->first, std::move(item->second), stop.get_token());
             }
@@ -675,6 +882,7 @@ struct FilesOperationExecutionService::State final {
             return {FilesOperationExecutionSubmission::Exhausted, {}};
         const auto request = latest = FilesOperationExecutionService::ticket(next++);
         cancelled = {};
+        stop = std::stop_source{};
         signalled = false;
         pending.emplace(request, std::move(value));
         condition.notify_one();
@@ -706,6 +914,26 @@ std::optional<FilesOperationExecutionReply> FilesOperationExecutionService::take
     auto result = std::move(state_->reply);
     state_->reply.reset();
     return result;
+}
+std::optional<FilesTreeCopyReview> FilesOperationExecutionService::take_tree_review() {
+    std::lock_guard lock(state_->mutex);
+    if (!state_->tree_review)
+        return {};
+    state_->signalled = false;
+    return std::exchange(state_->tree_review, std::nullopt);
+}
+bool FilesOperationExecutionService::apply_tree_review(const FilesOperationExecutionTicket& request,
+    ck::files::ComparisonPlanIdentity plan, ck::files::ConflictChoice choice) {
+    using ck::files::ConflictChoice;
+    std::lock_guard lock(state_->mutex);
+    if (state_->stopping || state_->stop.stop_requested() || state_->latest != request ||
+        !plan.is_valid() || state_->tree_review_plan != plan || state_->tree_choice || !state_->tree_can_apply ||
+        (choice != ConflictChoice::KeepTarget &&
+         (!state_->tree_can_use_source || (choice != ConflictChoice::UseSource && choice != ConflictChoice::Newest))))
+        return false;
+    state_->tree_choice = choice;
+    state_->condition.notify_one();
+    return true;
 }
 void FilesOperationExecutionService::request_stop() noexcept {
     std::lock_guard lock(state_->mutex);

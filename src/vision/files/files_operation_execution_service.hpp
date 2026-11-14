@@ -5,6 +5,7 @@
 #include "files_operation_planning_service.hpp"
 #include "native_operation_copy_job.hpp"
 #include "native_operation_move_job.hpp"
+#include "reviewed_tree_plan.hpp"
 
 #include <condition_variable>
 #include <functional>
@@ -33,6 +34,7 @@ struct FilesOperationExecutionRequest final {
         const ck::files::NativeAbsolutePath&, const ck::files::NativeName&, bool)> open_journal;
     FilesOperationReviewEvidence::Pointer reviewed;
     std::optional<ck::files::ConsentReceipt> receipt;
+    bool review_existing_tree = false;
 };
 
 // Actions implemented by the current Files transfer worker for this evidence.
@@ -73,6 +75,17 @@ struct FilesOperationExecutionReply final {
     std::optional<ck::files::UnavailableObservation> error;
     FilesPaneWorkerFault worker_fault = FilesPaneWorkerFault::None;
     std::vector<std::size_t> skipped_items;
+    std::size_t retained_targets = 0;
+};
+
+// Includes display facts and opaque plan identity. The job, native roots and
+// executable receipt stay within the execution worker.
+struct FilesTreeCopyReview final {
+    FilesOperationExecutionTicket request;
+    ck::files::ReviewedTreePage page;
+    bool can_use_source = false;
+    bool can_apply = false;
+    std::size_t conflicts = 0;
 };
 
 class FilesOperationExecutionService final {
@@ -85,6 +98,9 @@ public:
     FilesOperationExecutionSubmitted request(FilesOperationExecutionRequest request);
     bool cancel(const FilesOperationExecutionTicket& request);
     std::optional<FilesOperationExecutionReply> take();
+    std::optional<FilesTreeCopyReview> take_tree_review();
+    bool apply_tree_review(const FilesOperationExecutionTicket&, ck::files::ComparisonPlanIdentity,
+                           ck::files::ConflictChoice);
     void request_stop() noexcept;
     void join();
     bool running() const noexcept;
