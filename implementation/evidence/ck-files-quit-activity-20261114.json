@@ -1,0 +1,140 @@
+{
+  "frontend": "107e70c91d71838672778b0114b14694f6be0e57",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "source_delta_sha256": "57747c323ce41e03b76de6be7473efe7270fba0113e57c3153490494d262b0a7",
+  "scope": "Quit accounts for pending planning, execution, mutations and recovery work. Stay preserves undelivered worker replies, including transfer reviews. Confirming exit requests cooperative stops and the composition owner joins outside dispatch.",
+  "macos_arm64_release": {
+    "manifest_sha256": "be4ea14e7a50c60213b05b597f7f2da43e0f4c887350adb78bd7f70361c550b7",
+    "start_utc": "2026-11-14T17:05:25Z",
+    "end_utc": "2026-11-14T17:05:57Z",
+    "elapsed_seconds": 31.413,
+    "steps": 7,
+    "product_sha256": "0c3f852fcf7b911112fd610f6447ab718560d46dec138e142d6fb40336446d99",
+    "test_image_sha256": "305fc26086f45c53c2444730a1d58e37569a35db5af23ea7a42b97e90bb0ece9",
+    "ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 29.44,
+    "ctest_log_sha256": "dda537c83734ccb86a2d8a70098c18d18fbcb005231a86af2bff16f63d955f6d"
+  },
+  "macos_arm64_matched_sdk_sanitizers": {
+    "manifest_sha256": "ecd3f2e6fd701f0dc58afda12addbbadda59ed92ed65dbf78ca3a69ca3a18d2c",
+    "address_undefined": {
+      "start_utc": "2026-11-14T17:06:30Z",
+      "end_utc": "2026-11-14T17:06:53Z",
+      "steps": 7,
+      "elapsed_seconds": 22.49,
+      "test_image_sha256": "d19e931604957bcc008f4db4248b38d61367e191af4c17d71aa9a94c0a2660f3",
+      "product_sha256": "e5ada8bb12b4121a5e67c09334fe2a7cdb5b59a196d081aeda9ff6677f8d30c5",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 80.79,
+      "ctest_log_sha256": "0a89def7a701a657daa1b321ccf2b5b1a8d82a9bf2825007fad317acaa483192"
+    },
+    "thread": {
+      "start_utc": "2026-11-14T17:08:21Z",
+      "end_utc": "2026-11-14T17:08:34Z",
+      "steps": 7,
+      "elapsed_seconds": 12.98,
+      "test_image_sha256": "1efb27adbcacc944ed366c6ae8d2bf9f0f6b2c0e31a9b0123fcabce7fe98348e",
+      "product_sha256": "2dbbc50bbdad1ff9dea1a2009c43fb4dbd5077b2c73715e35cff9670d110cfbe",
+      "ctest_entries_passed": 114,
+      "ctest_elapsed_seconds": 189.47,
+      "ctest_log_sha256": "015b1a2c8b2dab13baa78e930d8c40b89d7b9f14fab32b3d7798b1f12acd5aab"
+    }
+  },
+  "linux_arm64_release": {
+    "manifest_sha256": "1bad0dc02ab531ea9df68a1f4769be003ac1ee0d29e1f40e7b734de2e3876a19",
+    "start_utc": "2026-11-14T17:05:55Z",
+    "end_utc": "2026-11-14T17:12:02Z",
+    "elapsed_seconds": 366.943,
+    "steps": 8,
+    "product_sha256": "39c1fe6f73420931d3c8627992c4a28d2828d02409798ec03e34e20250464665",
+    "test_image_sha256": "75627fe302b53d20e26718cc3c4c9ecd0fea468a870659fa0bb4b8b18af08f4a",
+    "registered_application_cases": 313,
+    "junit_sha256": "3c59ce4cb11052e2eb1e0f65574c678d085f8c100c2eb9fda6cc8dfdb3c0a3eb",
+    "ctest_entries_passed": 158,
+    "ctest_elapsed_seconds": 82.04,
+    "ctest_log_sha256": "58de638c77af4c3e3db8cbd21796fb802ed49dffda4a9b9a222fded4022ec5a3"
+  },
+  "linux_xterm_stay": {
+    "receipt_sha256": "7618da0ab85a1cff4c6d18d9f71c41d862c8bce052475d0e0b9980ea8fbb7097",
+    "terminal_mode_restored": true,
+    "process_exit": 0,
+    "result": "pass",
+    "ended_utc": "2026-11-14T17:16:30.745197+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "39c1fe6f73420931d3c8627992c4a28d2828d02409798ec03e34e20250464665",
+    "pid": 991594,
+    "window": "2097164",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-panes",
+        "sha256": "4d7b7ec1b907f1fda0c09267ddccb1db7489ef3b754c9e37e32aa840bb080daa"
+      },
+      {
+        "label": "02-close-files",
+        "sha256": "0ceffa8ed436dddd8ca55da067b653dd399c7cca43f1a934f77e14a81c0ec4d3"
+      },
+      {
+        "label": "03-transfer-review-after-stay",
+        "sha256": "51660eea47ab0537cd007812ef11207c433667a1347bb25bbdfc75ea1672c13f"
+      }
+    ],
+    "actions": [
+      "Select source folder",
+      "Start transfer planning then request Quit",
+      "Stay",
+      "Cancel transfer",
+      "Quit Files"
+    ],
+    "terminal_log_sha256": "d0f00ab974c0ead2073737848452434ab2310d132b185e841d78cde37e633a9b"
+  },
+  "linux_xterm_stop": {
+    "receipt_sha256": "ed218497e0d98035cd15f476552f8d80490afb95262ac065fbae48d6a6b55357",
+    "terminal_mode_restored": true,
+    "process_exit": 0,
+    "result": "pass",
+    "ended_utc": "2026-11-14T17:18:21.197583+00:00",
+    "image": "/home/klukas.guest/tmp/ckfiles-row-review-linux.5XcfAfX6/build/bin/ck-files",
+    "image_sha256": "39c1fe6f73420931d3c8627992c4a28d2828d02409798ec03e34e20250464665",
+    "pid": 993930,
+    "window": "4194316",
+    "xterm": "/home/klukas.guest/tmp/ckf-desktop.kAPbzGS6/package/usr/bin/xterm",
+    "xterm_sha256": "017aff831b38449818188ad7ebe54939d1fca6e49f05bf18c698cbeb99a4c440",
+    "screenshots": [
+      {
+        "label": "01-panes",
+        "sha256": "cde2f76210c12b650e6b996b8113259e1b7abd5e6cca872e9e37be84b2956ef3"
+      },
+      {
+        "label": "02-close-files",
+        "sha256": "d9fe11b38171fe113cb97dadab5d50438c6f8f3b33d54b7b3034a43508a81915"
+      }
+    ],
+    "actions": [
+      "Select source folder",
+      "Start transfer planning then request Quit",
+      "Stop activity and exit"
+    ],
+    "terminal_log_sha256": "6d410f02497035c9cae92c22d32f998e9f525439b59b189f323622b357a9c648"
+  },
+  "desktop_fixture_notes": [
+    "A preliminary 384-child fixture hit the existing transfer evidence row limit. The worker refused the entire operation before review or writes.",
+    "The 24-child fixture reached review before the initial quit chord could be delivered.",
+    "An 80-child fixture and adjacent F5 and Alt+X events exercised both quit choices in separate runs.",
+    "Both the quit dialog and the preserved transfer review were checked in screenshots from the exact running xterm process."
+  ],
+  "docs_strict_pages_checked": 27,
+  "utility_guides_with_tracked_screenshots": 10,
+  "build_comparison": {
+    "macos_prior_seconds": {
+      "release": 54.29,
+      "address_undefined": 25.98,
+      "thread": 11.49
+    },
+    "linux_prior_release_seconds": 306.432,
+    "interpretation": "The prior bookmark change compiled the Files units and the keymap; this change compiled the two Files units and relinked their dependents. Each current planned action and the resulting product and test identities were checked."
+  },
+  "ordinary_windows": "Ordinary-user Windows suite and desktop acceptance remain open. The sealed 79d70df desktop handoff is preserved on V:."
+}
