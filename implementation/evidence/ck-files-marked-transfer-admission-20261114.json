@@ -1,0 +1,30 @@
+{
+  "frontend": "06d3a71358f1f7cfec9bc0646d50b2b3d1a577c7",
+  "backend": "f329b3cb3b90d078079eb8084f03471e811ad232",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "macos_arm64_release": {
+    "tested_runtime_delta_sha256": "10e6088e5490c887b5257cf9e31048fc90f4b1a9dbbe3b32d0af2fe008bf886d",
+    "tested_frontend_manifest_sha256": "cde8040a186143d935d5f39566adb2a6e72e468af7a2218a17df4e2875d8c324",
+    "build_start_utc": "2026-11-14T14:37:09Z",
+    "build_end_utc": "2026-11-14T14:38:17Z",
+    "build_elapsed_seconds": 68.15,
+    "build_steps": 7,
+    "build_review": "The prior comparable seven-step preview build took 44.27 seconds. This build compiled both changed translation units and relinked the product and three test executables. The two changed source files matched the commit byte-for-byte, and the snapshot manifest was rechecked after the build.",
+    "test_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/src/vision/files/ck_vision_files_tests",
+    "test_executable_sha256": "618d0d172898f0346b840194fe70b74aa1c6a33fff9e89edbe56ff7a9e369c75",
+    "product_executable": "/Volumes/S8T/tmp/ckfiles-folder-row-regression.qCScCw9Q/build/bin/ck-files",
+    "product_sha256": "edf2d6a88a15b707b966afae362b237f8b8b9dd1b496b00ec0d3047aaa725ce9",
+    "focused_cases_passed": 2,
+    "focused_log_sha256": "e8c9384264941868277b95827474d8f33a5622f3b8820d35ffec9f74bc7885a9",
+    "files_and_keymap_ctest_entries_passed": 111,
+    "application_cases_passed": 308,
+    "ctest_elapsed_seconds": 41.70,
+    "ctest_log_sha256": "4d37af8685413834afb7ef13b250df72ea2129717f8d622ec87a552d363d6caa"
+  },
+  "verified": [
+    "Menu, footer and keyboard command availability share the active pane's worker-published source state. If marks are hidden by a filter, the status gives the reason even when the listing has no visible rows.",
+    "When the cursor is on a symbolic link, Copy and Move remain available for a marked regular file. The production Copy planning flow shows that file in the review. Clearing the marks disables the cursor-only transfer."
+  ],
+  "docs_pages_checked": 27,
+  "open": ["Linux and Windows aggregate suites and matching sanitizer qualification for this revision"]
+}
