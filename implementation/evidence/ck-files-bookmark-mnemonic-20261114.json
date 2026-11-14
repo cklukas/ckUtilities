@@ -13,5 +13,53 @@
     "ctest_elapsed_seconds": 21.48,
     "ctest_log_sha256": "bc1b4136cb875204b4c81525fea0180c3b6443b11866a2780fab9ae9e789c6d5"
   },
-  "open": ["Current Linux suite and two-process xterm bookmark persistence", "Matching macOS sanitizers", "Current Windows build and ordinary-user acceptance"]
+  "macos_arm64_matched_sdk_address_and_undefined": {
+    "tested_frontend_manifest_sha256": "54d3d731a9fa20f46a4eba615305e7138bced8d4aa761c902fa15f9761672434",
+    "build": {"start_utc": "2026-11-14T16:54:26Z", "end_utc": "2026-11-14T16:54:52Z", "elapsed_seconds": 25.98, "steps": 10},
+    "test_sha256": "b80b705e3ca0389f324a3147b17616b40567ab6c923afa114720a4948054c719",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 68.04,
+    "ctest_log_sha256": "723d6f3ff93c7008f08059a369052df12a0775793bede8e8296cbefe5493c220"
+  },
+  "macos_arm64_matched_sdk_thread": {
+    "tested_frontend_manifest_sha256": "54d3d731a9fa20f46a4eba615305e7138bced8d4aa761c902fa15f9761672434",
+    "build": {"start_utc": "2026-11-14T16:56:07Z", "end_utc": "2026-11-14T16:56:19Z", "elapsed_seconds": 11.49, "steps": 10},
+    "test_sha256": "3affc6cb58c276b6c8eebfd6861b13787216335f06e9ef422d7ecf1011366f18",
+    "files_and_keymap_ctest_entries_passed": 114,
+    "ctest_elapsed_seconds": 173.54,
+    "ctest_log_sha256": "85f98607d7b300b99b0d8b1cd9a5177250ca8a2bfb1a9c69f99bfd95b4595b1d"
+  },
+  "linux_arm64_release": {
+    "source_delta_archive_sha256": "306e6d69bb6aaa8070a2d04dff36a9b2ddd25e3f75420b146c0c42d7220929ee",
+    "tested_frontend_manifest_sha256": "0b2176f62bf1b35eea2fb90b6438dbf9cc48ebde0f101bd4698f48a1fd13fcc9",
+    "build": {"start_utc": "2026-11-14T16:51:47Z", "end_utc": "2026-11-14T16:56:53Z", "elapsed_seconds": 306.43, "steps": 11},
+    "product_sha256": "ee321eeb5099a5e14133a021859df95c1109aa5876e265afbf36553c3f8b4a85",
+    "test_sha256": "433d86afcec739c587c68f463aebefb05329c7b8f25132e3bdd3f3684234c99c",
+    "files_and_keymap_ctest_entries_passed": 158,
+    "application_cases_passed": 312,
+    "ctest_elapsed_seconds": 57.92,
+    "ctest_log_sha256": "71ec3cdd2e62a787cb4da9f19257d7c1ae378f054a70ff004df37ee633f88e5e",
+    "ctest_junit_sha256": "61f278c804c7f02e107f8765da9fad368ee0804079a9e788d8e1d741c0cab482"
+  },
+  "linux_xterm_398_desktop": {
+    "verified": "The ordinary-user process navigated with Right-to-accept, previewed text, preserved a mark across refresh and displayed the root volume properties. Alt+L, D added the root bookmark. Quit wrote the exact left-pane route to the private settings file. A second single-instance process opened the same saved bookmark and kept its own right pane visible. Both exits returned zero and restored the terminal modes. The settings bytes matched before and after the second process.",
+    "settings_sha256": "dd57b6dd68c037130e5607ff139aee95babced739f5c78c47d0790426430169a",
+    "save_receipt_sha256": "498f9346cd41617c0e77106727155a12c0f2f2168f40fb26464b20abf5c043a9",
+    "reopen_receipt_sha256": "0b2aefd1f5284a1ebffc6373e18d65446c99e115591a64907296ee5f43f464aa",
+    "reopen_screenshot_sha256": "89fc6b26b13bba1c4d57dacc4391a9b47f168528f5654fd228826cfe67748fc1"
+  },
+  "windows_x64_release": {
+    "toolchain": "MSVC v143 14.44, static CRT, embedded debug information (/Z7)",
+    "source_delta_archive_sha256": "306e6d69bb6aaa8070a2d04dff36a9b2ddd25e3f75420b146c0c42d7220929ee",
+    "build": {"start_utc": "2026-11-14T16:56:44.3530182Z", "end_utc": "2026-11-14T16:57:56.4106022Z", "elapsed_seconds": 72.06, "steps": 8},
+    "build_receipt_sha256": "40cb5f0837ca61bd80ca7b53262a02f6eef80c6ac399ec225ec7fef77eed79cb",
+    "product_sha256": "6d42742493d7a7248596216c3210047b1bdf36b25b528b075dc7576424f3b0d1",
+    "test_sha256": "481ab763227ecc6f07899ecdb029e8b6cf6332e9e3e8058573735bbc82636704",
+    "elevated_smoke_passed": 8,
+    "verified": "Bookmark shortcut and reopening, GUID-only volumes, sparse count, Copy and Move planning cancellation, folder review and cancellation, Volume Properties, and Right-to-accept passed under the workstation SSH token.",
+    "ordinary_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-79d70df-ordinary.ps1",
+    "ordinary_launcher_sha256": "7793206ab59eca9195da2447580528616dd3620ed1e288fcac8ab68ced41f852",
+    "ordinary_helper_sha256": "3462d9d3d452038ca13ccc2dcb31ef9598df252d43e23b0730925b6bb4cabc0e"
+  },
+  "open": ["Ordinary-user Windows suite and desktop acceptance"]
 }
