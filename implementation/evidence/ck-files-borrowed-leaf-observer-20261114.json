@@ -41,5 +41,21 @@
     },
     "prior_same_header_dependency_seconds": 110.57,
     "incremental_test_fixture_build_seconds": 15.22
+  },
+  "linux_arm64_release": {
+    "scope": "Native fixture on the pre-correction test snapshot. This Linux run populated its directory before advancing the already-open cursor. The corrected test opens the cursor after setup and is queued on the same backend.",
+    "soft_open_descriptor_limit": 1024,
+    "fixture_entries_including_root": 1153,
+    "ctest_entries_passed": 158,
+    "build_actions": 34,
+    "elapsed_build_seconds": 832.471,
+    "build_start_utc": "2026-11-14T18:00:28Z",
+    "build_end_utc": "2026-11-14T18:14:21Z",
+    "frontend_manifest_sha256": "18f6ccbadd5669aa11fdc8cf7918f2445c5258cb9b72efdf999dae01d827a7e0",
+    "backend_manifest_sha256": "42d17abee1cdf064dfe4066e00e1c99648a0e66ad15e4d6b4ca72477f0726722",
+    "build_log_sha256": "4d75a29f51e7e348fdb96198cd67113d07a5d2d76a923a57a37f48649505f7ab",
+    "binaries_sha256_receipt": "d20694abfdbd6e10d84fc64efa3d21b624722f6e268871b24bf2cd33ab4914b4",
+    "native_case_log_sha256": "a95b3fdf6450891ba60333ece510bf411804499a51e785ad3e3723a3518983bb",
+    "ctest_junit_sha256": "c896e68c26dad1d34a6905f03df27fe73cc7f2ebd39de8932d4b5fd60dba4456"
   }
 }
