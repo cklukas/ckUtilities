@@ -58,6 +58,27 @@
     "ctest_elapsed_seconds": 23.00,
     "ctest_log_sha256": "5e7d946bfb25cc3756912eb62690055367410c651b6669620e6e41d577aade27"
   },
+  "windows_x64_release": {
+    "frontend": "6cfa3b427429a520a8df723266262dc3afe9b7e4",
+    "toolchain": "MSVC v143 14.44, static CRT",
+    "filesystem": "ReFS",
+    "source_delta_archive_sha256": "f47b83e92605a96fb840a7803c3357fdf238558531c812d8dbdd38b3bf8110d1",
+    "build_start_utc": "2026-11-14T15:59:55.8182628Z",
+    "build_end_utc": "2026-11-14T16:01:33.4896377Z",
+    "build_elapsed_seconds": 97.67,
+    "build_steps": 7,
+    "build_review": "Four modified translation units and three relinks matched the dry run. The last volume-properties pass had 18 steps. Source unit and executable hashes and output timestamp ordering were verified.",
+    "build_receipt_sha256": "aa765d525c79ee6e25158dcc8d5431f3f00ec2a988b58dc6542ebf1bf46f6324",
+    "product_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\bin\\ck-files.exe",
+    "product_sha256": "b01b3a41a3b4144975661c21725b7302c6aa663405e72894487c4850e39ae6a7",
+    "test_executable": "V:\\tmp\\ckfr-ebbe580e9e\\b\\src\\vision\\files\\ck_vision_files_tests.exe",
+    "test_executable_sha256": "2b3a75382dd029dd9c1ca1b9dd7c9a80dad8b8ba4b8cbf4283eac12bc7200e6e",
+    "elevated_smoke_passed": ["Unread Copy plan cancellation", "Blocked Move plan cancellation", "Exact folder review paths and cancellation", "Volume Properties", "Right-to-accept location completion"],
+    "ordinary_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-6cfa3b4-ordinary.ps1",
+    "ordinary_launcher_sha256": "3810fd2af6cd0abd8bc4b7c2fc519b751f76ad7a0bcc5379e2e68aa81412935b",
+    "ordinary_helper_sha256": "dffb47462373aed0e54ce0d4b166361f3a3e21cccd30b2d192a36ff51af1e089",
+    "ordinary_admission": "The Suite and Desktop launcher and helper matched the local staged bytes on readback. Run in an existing ordinary Windows Terminal. This build supersedes the previous executable pins."
+  },
   "documentation": "ckdocs check and strict build passed for 27 pages. The Files guide documents Escape during transfer planning.",
-  "open": ["Linux and Windows qualification for this revision"]
+  "open": ["Current Linux Release suite and ordinary-user Windows Suite and Desktop for this revision"]
 }
