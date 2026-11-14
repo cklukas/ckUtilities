@@ -35,6 +35,8 @@
     "test_executable_sha256": "c5f70405147ad52bb0008c0c455a248c2b3906bf4bf31c4e02cff4fe2b11e35b",
     "product_sha256": "adc4b92d6e914c7cc80442a60e61276d2c12368e33af5b8df5e5c855f86786f5",
     "elevated_smoke_passed": ["Volume Properties exact mount and capacity in a narrow pane", "Retained volume details after refresh failure", "Mark and focus continuity", "Reviewed Move scope", "Right-to-accept"],
+    "elevated_native_volume_cases_passed": ["Mount inventory publishes revalidation identities", "Mount inventory reports native archive capability"],
+    "native_volume_log_sha256": "0d5315775d00e322ae74036b2c01c384f749a6ab0968a1b885edee15defd0489",
     "ordinary_launcher": "V:\\tmp\\ckfr-ebbe580e9e\\run-bc32855-ordinary.ps1",
     "ordinary_launcher_sha256": "7edbf8acbd86a04b8572980a086b606bf1974acdc58c96c173452ed8c807a98d",
     "ordinary_helper_sha256": "7a7c5df55617e4f27221e95ea96bf56ab86fa54b1959ac6835a5df96ebbdf0fb",
