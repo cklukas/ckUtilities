@@ -2547,7 +2547,13 @@ struct FilesApp::State {
         planning.source_stamp = source_stamp;
         planning.destination_stamp = destination_stamp;
         planning.source_limits.access = ck::files::EntryAccess::ContentRead;
-        planning.evidence_limits.max_items = planning.source_limits.held_entries;
+        // Bound retained handles during traversal and size the downstream
+        // evidence stages for the same scope. Execution reuses these limits.
+        const auto max_items = planning.source_limits.held_entries;
+        planning.evidence_limits.max_items = max_items;
+        planning.evidence_limits.recursive.inventory.max_entries = max_items;
+        planning.evidence_limits.destination_batch.rows = max_items;
+        planning.evidence_limits.source_target.rows = max_items;
         planning.projection_policy.require_unhandled_metadata_consent = true;
         const auto revalidate = [this, source_pane, destination_pane, source_navigation, destination_navigation](
                                     const ck::files::ConsentReceipt &receipt) {
@@ -3553,6 +3559,15 @@ struct FilesApp::State {
             const auto &[source, planning] = *transfer;
             panes[source].error = planning.operation == ck::files::FileOperation::Move
                 ? "Move planning cancelled" : "Copy planning cancelled";
+            return;
+        }
+        if (transfer && reply.state == FilesOperationPlanningReplyState::LimitExceeded) {
+            const auto &[source, planning] = *transfer;
+            const char *operation = planning.operation == ck::files::FileOperation::Move ? "Move" : "Copy";
+            const bool too_many_entries = reply.error && reply.error->error.operation == "frozen_inventory.entries";
+            panes[source].error = std::string(operation) + (too_many_entries
+                ? " exceeds the " + std::to_string(planning.evidence_limits.max_items) + "-entry review limit"
+                : " exceeds a planning limit");
             return;
         }
         if (reply.state == FilesOperationPlanningReplyState::Ready && reply.review) {

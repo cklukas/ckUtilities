@@ -1280,6 +1280,63 @@ CK_TEST(files_app_escape_cancels_move_while_source_worker_is_blocked) {
     CK_CHECK((*source.value())->open_child(*name).value());
     CK_CHECK((*destination.value())->open_child(*name).state() == ObservationState::Gone);
 }
+CK_TEST(files_app_folder_transfer_uses_one_bounded_scope_for_all_planning_stages) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {120, 34}, {}, true);
+    f.loaded();
+    for (std::size_t row = 0; row != f.app->model(0).row_count() &&
+         f.app->model(0).cursor_kind() != ObjectKind::Directory; ++row) {
+        CK_CHECK(f.key(ckv::Key::Down));
+        f.loaded();
+    }
+    CK_CHECK(f.app->model(0).cursor_kind() == ObjectKind::Directory);
+    NativeFileSystem filesystem;
+    const auto source = filesystem.open_native_directory(address(f.scratch.path() / "left" / "left-item-0"));
+    const auto destination = filesystem.open_native_directory(address(f.scratch.path() / "right"));
+    const auto journals = filesystem.open_native_directory(address(f.scratch.path() / "operation-journals"));
+#ifdef _WIN32
+    const auto folder = NativeName::from_windows(u"left-item-0");
+#else
+    const auto folder = NativeName::from_posix("left-item-0");
+#endif
+    if (!source.value() || !destination.value() || !journals.value() || !folder)
+        throw std::runtime_error("cannot open folder planning fixture");
+
+    const auto add_files = [&](std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; ++i) {
+            const auto ascii = "planned-" + std::to_string(i);
+#ifdef _WIN32
+            const auto name = NativeName::from_windows(std::u16string(ascii.begin(), ascii.end()));
+#else
+            const auto name = NativeName::from_posix(ascii);
+#endif
+            if (!name || !(*source.value())->create_child_file(*name).value())
+                throw std::runtime_error("cannot create folder planning fixture entry");
+        }
+    };
+    constexpr std::size_t former_stage_limit = 256;
+    const auto max_items = IndexedSourceLimits{}.held_entries;
+    // The fixture already contains the root, its nested directory and two files.
+    add_files(0, former_stage_limit);
+    CK_CHECK(f.key(ckv::Key::F5));
+    f.until([&] {
+        return f.app->operation_review_pending() ||
+            f.app->status(0).find("Planning copy") == std::string::npos;
+    });
+    if (!f.app->operation_review_pending())
+        throw std::runtime_error(f.app->status(0));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    f.until([&] { return !f.app->operation_review_pending() && f.app->availability("ck.files.move").enabled; });
+
+    add_files(former_stage_limit, max_items - 3);
+    CK_CHECK(f.key(ckv::Key::F6));
+    f.until([&] { return f.app->status(0).find("Planning move") == std::string::npos; });
+    CK_CHECK(!f.app->operation_review_pending());
+    CK_CHECK(f.app->status(0).find("Move exceeds the " + std::to_string(max_items) + "-entry review limit") !=
+             std::string::npos);
+    CK_CHECK((*destination.value())->open_child(*folder).state() == ObservationState::Gone);
+    const auto journal_entries = (*journals.value())->read(1);
+    CK_CHECK(journal_entries.state == DirectoryReadState::End && journal_entries.names.empty());
+}
 CK_TEST(files_app_move_review_lists_every_marked_name_and_the_full_paths) {
     Fixture f;
     f.loaded();
