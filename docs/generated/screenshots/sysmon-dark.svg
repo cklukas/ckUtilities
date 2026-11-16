@@ -17,61 +17,18 @@
 <rect x="99" y="252" width="108" height="18" fill="#87d787"/>
 <rect x="630" y="252" width="108" height="18" fill="#87d787"/>
 <text x="18" y="14" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="27" y="14" xml:space="preserve" fill="#dadada">i</text>
-<text x="36" y="14" xml:space="preserve" fill="#dadada">l</text>
-<text x="45" y="14" xml:space="preserve" fill="#dadada">e</text>
+<text x="27" y="14" xml:space="preserve" fill="#dadada">ile</text>
 <text x="72" y="14" xml:space="preserve" fill="#d7d75f" font-weight="bold">V</text>
-<text x="81" y="14" xml:space="preserve" fill="#dadada">i</text>
-<text x="90" y="14" xml:space="preserve" fill="#dadada">e</text>
-<text x="99" y="14" xml:space="preserve" fill="#dadada">w</text>
+<text x="81" y="14" xml:space="preserve" fill="#dadada">iew</text>
 <text x="126" y="14" xml:space="preserve" fill="#d7d75f" font-weight="bold">H</text>
-<text x="135" y="14" xml:space="preserve" fill="#dadada">e</text>
-<text x="144" y="14" xml:space="preserve" fill="#dadada">l</text>
-<text x="153" y="14" xml:space="preserve" fill="#dadada">p</text>
-<text x="693" y="14" xml:space="preserve" fill="#dadada">c</text>
-<text x="702" y="14" xml:space="preserve" fill="#dadada">k</text>
-<text x="711" y="14" xml:space="preserve" fill="#dadada">-</text>
-<text x="720" y="14" xml:space="preserve" fill="#dadada">s</text>
-<text x="729" y="14" xml:space="preserve" fill="#dadada">y</text>
-<text x="738" y="14" xml:space="preserve" fill="#dadada">s</text>
-<text x="747" y="14" xml:space="preserve" fill="#dadada">m</text>
-<text x="756" y="14" xml:space="preserve" fill="#dadada">o</text>
-<text x="765" y="14" xml:space="preserve" fill="#dadada">n</text>
-<text x="783" y="14" xml:space="preserve" fill="#dadada">/</text>
-<text x="801" y="14" xml:space="preserve" fill="#dadada">2</text>
-<text x="819" y="14" xml:space="preserve" fill="#dadada">h</text>
-<text x="828" y="14" xml:space="preserve" fill="#dadada">o</text>
-<text x="837" y="14" xml:space="preserve" fill="#dadada">s</text>
-<text x="846" y="14" xml:space="preserve" fill="#dadada">t</text>
-<text x="855" y="14" xml:space="preserve" fill="#dadada">s</text>
-<text x="873" y="14" xml:space="preserve" fill="#dadada">/</text>
-<text x="891" y="14" xml:space="preserve" fill="#dadada">1</text>
-<text x="909" y="14" xml:space="preserve" fill="#dadada">o</text>
-<text x="918" y="14" xml:space="preserve" fill="#dadada">f</text>
-<text x="927" y="14" xml:space="preserve" fill="#dadada">f</text>
-<text x="936" y="14" xml:space="preserve" fill="#dadada">l</text>
-<text x="945" y="14" xml:space="preserve" fill="#dadada">i</text>
-<text x="954" y="14" xml:space="preserve" fill="#dadada">n</text>
-<text x="963" y="14" xml:space="preserve" fill="#dadada">e</text>
-<text x="999" y="14" xml:space="preserve" fill="#dadada">1</text>
-<text x="1008" y="14" xml:space="preserve" fill="#dadada">8</text>
-<text x="1017" y="14" xml:space="preserve" fill="#dadada">:</text>
-<text x="1026" y="14" xml:space="preserve" fill="#dadada">4</text>
-<text x="1035" y="14" xml:space="preserve" fill="#dadada">0</text>
-<text x="1044" y="14" xml:space="preserve" fill="#dadada">:</text>
-<text x="1053" y="14" xml:space="preserve" fill="#dadada">1</text>
-<text x="1062" y="14" xml:space="preserve" fill="#dadada">2</text>
+<text x="135" y="14" xml:space="preserve" fill="#dadada">elp                                                           ck-sysmon / 2 hosts / 1 offline   18:40:12</text>
 <g data-box-drawing="single">
 <path d="M 13.5 36.5 L 13.5 27 L 18.5 27" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 17.5 27 L 22.5 27 L 27.5 27" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="36" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">L</text>
-<text x="45" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">O</text>
-<text x="54" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">C</text>
-<text x="63" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="72" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">L</text>
+<text x="36" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">LOCAL</text>
 <g data-box-drawing="single">
 <path d="M 89.5 27 L 94.5 27 L 99.5 27" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -225,17 +182,7 @@
 <g data-box-drawing="single">
 <path d="M 548.5 27 L 553.5 27 L 558.5 27" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="567" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="576" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="585" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="594" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">d</text>
-<text x="603" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="612" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="621" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="630" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="639" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">o</text>
-<text x="648" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">d</text>
-<text x="657" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
+<text x="567" y="32" xml:space="preserve" fill="#5fd7d7" font-weight="bold">render-node</text>
 <g data-box-drawing="single">
 <path d="M 674.5 27 L 679.5 27 L 684.5 27" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -368,93 +315,24 @@
 <g data-box-drawing="single">
 <path d="M 13.5 35.5 L 13.5 45 L 13.5 54.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="50" xml:space="preserve" fill="#8787af">L</text>
-<text x="36" y="50" xml:space="preserve" fill="#8787af">i</text>
-<text x="45" y="50" xml:space="preserve" fill="#8787af">n</text>
-<text x="54" y="50" xml:space="preserve" fill="#8787af">u</text>
-<text x="63" y="50" xml:space="preserve" fill="#8787af">x</text>
-<text x="81" y="50" xml:space="preserve" fill="#8787af">/</text>
-<text x="99" y="50" xml:space="preserve" fill="#8787af">x</text>
-<text x="108" y="50" xml:space="preserve" fill="#8787af">8</text>
-<text x="117" y="50" xml:space="preserve" fill="#8787af">6</text>
-<text x="126" y="50" xml:space="preserve" fill="#8787af">_</text>
-<text x="135" y="50" xml:space="preserve" fill="#8787af">6</text>
-<text x="144" y="50" xml:space="preserve" fill="#8787af">4</text>
-<text x="162" y="50" xml:space="preserve" fill="#8787af">/</text>
-<text x="180" y="50" xml:space="preserve" fill="#8787af">1</text>
-<text x="189" y="50" xml:space="preserve" fill="#8787af">2</text>
-<text x="207" y="50" xml:space="preserve" fill="#8787af">t</text>
-<text x="216" y="50" xml:space="preserve" fill="#8787af">h</text>
-<text x="225" y="50" xml:space="preserve" fill="#8787af">r</text>
-<text x="234" y="50" xml:space="preserve" fill="#8787af">e</text>
-<text x="243" y="50" xml:space="preserve" fill="#8787af">a</text>
-<text x="252" y="50" xml:space="preserve" fill="#8787af">d</text>
-<text x="261" y="50" xml:space="preserve" fill="#8787af">s</text>
+<text x="27" y="50" xml:space="preserve" fill="#8787af">Linux / x86_64 / 12 threads</text>
 <g data-box-drawing="single">
 <path d="M 526.5 35.5 L 526.5 45 L 526.5 54.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 35.5 L 544.5 45 L 544.5 54.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="50" xml:space="preserve" fill="#8787af">L</text>
-<text x="567" y="50" xml:space="preserve" fill="#8787af">i</text>
-<text x="576" y="50" xml:space="preserve" fill="#8787af">n</text>
-<text x="585" y="50" xml:space="preserve" fill="#8787af">u</text>
-<text x="594" y="50" xml:space="preserve" fill="#8787af">x</text>
-<text x="612" y="50" xml:space="preserve" fill="#8787af">/</text>
-<text x="630" y="50" xml:space="preserve" fill="#8787af">x</text>
-<text x="639" y="50" xml:space="preserve" fill="#8787af">8</text>
-<text x="648" y="50" xml:space="preserve" fill="#8787af">6</text>
-<text x="657" y="50" xml:space="preserve" fill="#8787af">_</text>
-<text x="666" y="50" xml:space="preserve" fill="#8787af">6</text>
-<text x="675" y="50" xml:space="preserve" fill="#8787af">4</text>
-<text x="693" y="50" xml:space="preserve" fill="#8787af">/</text>
-<text x="711" y="50" xml:space="preserve" fill="#8787af">1</text>
-<text x="720" y="50" xml:space="preserve" fill="#8787af">2</text>
-<text x="738" y="50" xml:space="preserve" fill="#8787af">t</text>
-<text x="747" y="50" xml:space="preserve" fill="#8787af">h</text>
-<text x="756" y="50" xml:space="preserve" fill="#8787af">r</text>
-<text x="765" y="50" xml:space="preserve" fill="#8787af">e</text>
-<text x="774" y="50" xml:space="preserve" fill="#8787af">a</text>
-<text x="783" y="50" xml:space="preserve" fill="#8787af">d</text>
-<text x="792" y="50" xml:space="preserve" fill="#8787af">s</text>
+<text x="558" y="50" xml:space="preserve" fill="#8787af">Linux / x86_64 / 12 threads</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 35.5 L 1057.5 45 L 1057.5 54.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 53.5 L 13.5 63 L 13.5 72.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">C</text>
-<text x="36" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="45" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
+<text x="27" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">CPU</text>
 <text x="90" y="68" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="126" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="135" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="144" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="153" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="162" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="171" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="180" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="189" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="198" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="207" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="216" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="68" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="68" xml:space="preserve" fill="#87d787">1</text>
-<text x="342" y="68" xml:space="preserve" fill="#87d787">6</text>
-<text x="351" y="68" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="68" xml:space="preserve" fill="#87d787">3</text>
-<text x="369" y="68" xml:space="preserve" fill="#87d787">%</text>
+<text x="126" y="68" xml:space="preserve" fill="#5f5f87">·····················]</text>
+<text x="333" y="68" xml:space="preserve" fill="#87d787">16.3%</text>
 <rect x="504" y="70" width="9" height="2" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 53.5 L 526.5 63 L 526.5 72.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -462,37 +340,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 53.5 L 544.5 63 L 544.5 72.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">C</text>
-<text x="567" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="576" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
+<text x="558" y="68" xml:space="preserve" fill="#5fd7d7" font-weight="bold">CPU</text>
 <text x="621" y="68" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="657" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="666" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="675" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="684" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="693" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="702" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="711" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="720" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="729" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="738" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="747" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="68" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="68" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="68" xml:space="preserve" fill="#87d787">1</text>
-<text x="873" y="68" xml:space="preserve" fill="#87d787">6</text>
-<text x="882" y="68" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="68" xml:space="preserve" fill="#87d787">3</text>
-<text x="900" y="68" xml:space="preserve" fill="#87d787">%</text>
+<text x="657" y="68" xml:space="preserve" fill="#5f5f87">·····················]</text>
+<text x="864" y="68" xml:space="preserve" fill="#87d787">16.3%</text>
 <rect x="1035" y="70" width="9" height="2" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 53.5 L 1057.5 63 L 1057.5 72.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -500,33 +351,10 @@
 <g data-box-drawing="single">
 <path d="M 13.5 71.5 L 13.5 81 L 13.5 90.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">R</text>
-<text x="36" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="45" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">M</text>
+<text x="27" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">RAM</text>
 <text x="90" y="86" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="162" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="171" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="180" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="189" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="198" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="207" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="216" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="86" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="86" xml:space="preserve" fill="#87d787">3</text>
-<text x="342" y="86" xml:space="preserve" fill="#87d787">1</text>
-<text x="351" y="86" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="86" xml:space="preserve" fill="#87d787">2</text>
-<text x="369" y="86" xml:space="preserve" fill="#87d787">%</text>
+<text x="162" y="86" xml:space="preserve" fill="#5f5f87">·················]</text>
+<text x="333" y="86" xml:space="preserve" fill="#87d787">31.2%</text>
 <rect x="504" y="86" width="9" height="4" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 71.5 L 526.5 81 L 526.5 90.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -534,33 +362,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 71.5 L 544.5 81 L 544.5 90.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">R</text>
-<text x="567" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="576" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">M</text>
+<text x="558" y="86" xml:space="preserve" fill="#5fd7d7" font-weight="bold">RAM</text>
 <text x="621" y="86" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="693" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="702" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="711" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="720" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="729" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="738" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="747" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="86" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="86" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="86" xml:space="preserve" fill="#87d787">3</text>
-<text x="873" y="86" xml:space="preserve" fill="#87d787">1</text>
-<text x="882" y="86" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="86" xml:space="preserve" fill="#87d787">2</text>
-<text x="900" y="86" xml:space="preserve" fill="#87d787">%</text>
+<text x="693" y="86" xml:space="preserve" fill="#5f5f87">·················]</text>
+<text x="864" y="86" xml:space="preserve" fill="#87d787">31.2%</text>
 <rect x="1035" y="86" width="9" height="4" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 71.5 L 1057.5 81 L 1057.5 90.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -568,117 +373,38 @@
 <g data-box-drawing="single">
 <path d="M 13.5 89.5 L 13.5 99 L 13.5 108.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="104" xml:space="preserve" fill="#8787af">2</text>
-<text x="90" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="99" y="104" xml:space="preserve" fill="#8787af">.</text>
-<text x="108" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="126" y="104" xml:space="preserve" fill="#8787af">/</text>
-<text x="144" y="104" xml:space="preserve" fill="#8787af">6</text>
-<text x="153" y="104" xml:space="preserve" fill="#8787af">4</text>
-<text x="162" y="104" xml:space="preserve" fill="#8787af">.</text>
-<text x="171" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="189" y="104" xml:space="preserve" fill="#8787af">G</text>
-<text x="198" y="104" xml:space="preserve" fill="#8787af">i</text>
-<text x="207" y="104" xml:space="preserve" fill="#8787af">B</text>
+<text x="81" y="104" xml:space="preserve" fill="#8787af">20.0 / 64.0 GiB</text>
 <g data-box-drawing="single">
 <path d="M 526.5 89.5 L 526.5 99 L 526.5 108.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 89.5 L 544.5 99 L 544.5 108.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="612" y="104" xml:space="preserve" fill="#8787af">2</text>
-<text x="621" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="630" y="104" xml:space="preserve" fill="#8787af">.</text>
-<text x="639" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="657" y="104" xml:space="preserve" fill="#8787af">/</text>
-<text x="675" y="104" xml:space="preserve" fill="#8787af">6</text>
-<text x="684" y="104" xml:space="preserve" fill="#8787af">4</text>
-<text x="693" y="104" xml:space="preserve" fill="#8787af">.</text>
-<text x="702" y="104" xml:space="preserve" fill="#8787af">0</text>
-<text x="720" y="104" xml:space="preserve" fill="#8787af">G</text>
-<text x="729" y="104" xml:space="preserve" fill="#8787af">i</text>
-<text x="738" y="104" xml:space="preserve" fill="#8787af">B</text>
+<text x="612" y="104" xml:space="preserve" fill="#8787af">20.0 / 64.0 GiB</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 89.5 L 1057.5 99 L 1057.5 108.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 107.5 L 13.5 117 L 13.5 126.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="45" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
-<text x="63" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="90" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">N</text>
-<text x="99" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">V</text>
-<text x="108" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="117" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">D</text>
-<text x="126" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="135" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="153" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="162" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="171" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">X</text>
-<text x="189" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="198" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="207" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="216" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="234" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="243" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
+<text x="27" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">GPU 0  NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 526.5 107.5 L 526.5 117 L 526.5 126.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 107.5 L 544.5 117 L 544.5 126.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="576" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
-<text x="594" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="621" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">N</text>
-<text x="630" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">V</text>
-<text x="639" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="648" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">D</text>
-<text x="657" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="666" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="684" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="693" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="702" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">X</text>
-<text x="720" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="729" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="738" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="747" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="765" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="774" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
+<text x="558" y="122" xml:space="preserve" fill="#5fd7d7" font-weight="bold">GPU 0  NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 107.5 L 1057.5 117 L 1057.5 126.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 125.5 L 13.5 135 L 13.5 144.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="54" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="63" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="72" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
+<text x="27" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G0 use</text>
 <text x="90" y="140" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="198" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="207" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="216" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="140" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="140" xml:space="preserve" fill="#87d787">4</text>
-<text x="342" y="140" xml:space="preserve" fill="#87d787">7</text>
-<text x="351" y="140" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="140" xml:space="preserve" fill="#87d787">0</text>
-<text x="369" y="140" xml:space="preserve" fill="#87d787">%</text>
+<text x="198" y="140" xml:space="preserve" fill="#5f5f87">·············]</text>
+<text x="333" y="140" xml:space="preserve" fill="#87d787">47.0%</text>
 <rect x="504" y="137" width="9" height="7" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 125.5 L 526.5 135 L 526.5 144.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -686,31 +412,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 125.5 L 544.5 135 L 544.5 144.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="585" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="594" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="603" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
+<text x="558" y="140" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G0 use</text>
 <text x="621" y="140" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="729" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="738" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="747" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="140" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="140" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="140" xml:space="preserve" fill="#87d787">4</text>
-<text x="873" y="140" xml:space="preserve" fill="#87d787">7</text>
-<text x="882" y="140" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="140" xml:space="preserve" fill="#87d787">0</text>
-<text x="900" y="140" xml:space="preserve" fill="#87d787">%</text>
+<text x="729" y="140" xml:space="preserve" fill="#5f5f87">·············]</text>
+<text x="864" y="140" xml:space="preserve" fill="#87d787">47.0%</text>
 <rect x="1035" y="137" width="9" height="7" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 125.5 L 1057.5 135 L 1057.5 144.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -718,65 +423,24 @@
 <g data-box-drawing="single">
 <path d="M 13.5 143.5 L 13.5 153 L 13.5 162.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="158" xml:space="preserve" fill="#8787af">7</text>
-<text x="90" y="158" xml:space="preserve" fill="#8787af">3</text>
-<text x="99" y="158" xml:space="preserve" fill="#8787af">.</text>
-<text x="108" y="158" xml:space="preserve" fill="#8787af">0</text>
-<text x="126" y="158" xml:space="preserve" fill="#8787af">°</text>
-<text x="135" y="158" xml:space="preserve" fill="#8787af">C</text>
-<text x="162" y="158" xml:space="preserve" fill="#8787af">1</text>
-<text x="171" y="158" xml:space="preserve" fill="#8787af">8</text>
-<text x="180" y="158" xml:space="preserve" fill="#8787af">7</text>
-<text x="189" y="158" xml:space="preserve" fill="#8787af">.</text>
-<text x="198" y="158" xml:space="preserve" fill="#8787af">0</text>
-<text x="216" y="158" xml:space="preserve" fill="#8787af">W</text>
+<text x="81" y="158" xml:space="preserve" fill="#8787af">73.0 °C  187.0 W</text>
 <g data-box-drawing="single">
 <path d="M 526.5 143.5 L 526.5 153 L 526.5 162.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 143.5 L 544.5 153 L 544.5 162.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="612" y="158" xml:space="preserve" fill="#8787af">7</text>
-<text x="621" y="158" xml:space="preserve" fill="#8787af">3</text>
-<text x="630" y="158" xml:space="preserve" fill="#8787af">.</text>
-<text x="639" y="158" xml:space="preserve" fill="#8787af">0</text>
-<text x="657" y="158" xml:space="preserve" fill="#8787af">°</text>
-<text x="666" y="158" xml:space="preserve" fill="#8787af">C</text>
-<text x="693" y="158" xml:space="preserve" fill="#8787af">1</text>
-<text x="702" y="158" xml:space="preserve" fill="#8787af">8</text>
-<text x="711" y="158" xml:space="preserve" fill="#8787af">7</text>
-<text x="720" y="158" xml:space="preserve" fill="#8787af">.</text>
-<text x="729" y="158" xml:space="preserve" fill="#8787af">0</text>
-<text x="747" y="158" xml:space="preserve" fill="#8787af">W</text>
+<text x="612" y="158" xml:space="preserve" fill="#8787af">73.0 °C  187.0 W</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 143.5 L 1057.5 153 L 1057.5 162.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 161.5 L 13.5 171 L 13.5 180.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="54" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="63" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="72" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
+<text x="27" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G0 mem</text>
 <text x="90" y="176" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="216" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="176" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="176" xml:space="preserve" fill="#87d787">5</text>
-<text x="342" y="176" xml:space="preserve" fill="#87d787">4</text>
-<text x="351" y="176" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="176" xml:space="preserve" fill="#87d787">5</text>
-<text x="369" y="176" xml:space="preserve" fill="#87d787">%</text>
+<text x="216" y="176" xml:space="preserve" fill="#5f5f87">···········]</text>
+<text x="333" y="176" xml:space="preserve" fill="#87d787">54.5%</text>
 <rect x="504" y="171" width="9" height="9" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 161.5 L 526.5 171 L 526.5 180.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -784,29 +448,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 161.5 L 544.5 171 L 544.5 180.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="585" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="594" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="603" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
+<text x="558" y="176" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G0 mem</text>
 <text x="621" y="176" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="747" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="176" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="176" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="176" xml:space="preserve" fill="#87d787">5</text>
-<text x="873" y="176" xml:space="preserve" fill="#87d787">4</text>
-<text x="882" y="176" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="176" xml:space="preserve" fill="#87d787">5</text>
-<text x="900" y="176" xml:space="preserve" fill="#87d787">%</text>
+<text x="747" y="176" xml:space="preserve" fill="#5f5f87">···········]</text>
+<text x="864" y="176" xml:space="preserve" fill="#87d787">54.5%</text>
 <rect x="1035" y="171" width="9" height="9" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 161.5 L 1057.5 171 L 1057.5 180.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -814,147 +459,38 @@
 <g data-box-drawing="single">
 <path d="M 13.5 179.5 L 13.5 189 L 13.5 198.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="194" xml:space="preserve" fill="#8787af">6</text>
-<text x="90" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="99" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="117" y="194" xml:space="preserve" fill="#8787af">/</text>
-<text x="135" y="194" xml:space="preserve" fill="#8787af">1</text>
-<text x="144" y="194" xml:space="preserve" fill="#8787af">1</text>
-<text x="153" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="162" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="180" y="194" xml:space="preserve" fill="#8787af">G</text>
-<text x="189" y="194" xml:space="preserve" fill="#8787af">i</text>
-<text x="198" y="194" xml:space="preserve" fill="#8787af">B</text>
-<text x="225" y="194" xml:space="preserve" fill="#8787af">+</text>
-<text x="234" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="243" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="252" y="194" xml:space="preserve" fill="#8787af">8</text>
-<text x="270" y="194" xml:space="preserve" fill="#8787af">G</text>
-<text x="279" y="194" xml:space="preserve" fill="#8787af">i</text>
-<text x="288" y="194" xml:space="preserve" fill="#8787af">B</text>
-<text x="306" y="194" xml:space="preserve" fill="#8787af">s</text>
-<text x="315" y="194" xml:space="preserve" fill="#8787af">h</text>
-<text x="324" y="194" xml:space="preserve" fill="#8787af">a</text>
-<text x="333" y="194" xml:space="preserve" fill="#8787af">r</text>
-<text x="342" y="194" xml:space="preserve" fill="#8787af">e</text>
-<text x="351" y="194" xml:space="preserve" fill="#8787af">d</text>
-<text x="369" y="194" xml:space="preserve" fill="#8787af">R</text>
-<text x="378" y="194" xml:space="preserve" fill="#8787af">A</text>
-<text x="387" y="194" xml:space="preserve" fill="#8787af">M</text>
+<text x="81" y="194" xml:space="preserve" fill="#8787af">6.0 / 11.0 GiB  +0.8 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 526.5 179.5 L 526.5 189 L 526.5 198.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 179.5 L 544.5 189 L 544.5 198.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="612" y="194" xml:space="preserve" fill="#8787af">6</text>
-<text x="621" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="630" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="648" y="194" xml:space="preserve" fill="#8787af">/</text>
-<text x="666" y="194" xml:space="preserve" fill="#8787af">1</text>
-<text x="675" y="194" xml:space="preserve" fill="#8787af">1</text>
-<text x="684" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="693" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="711" y="194" xml:space="preserve" fill="#8787af">G</text>
-<text x="720" y="194" xml:space="preserve" fill="#8787af">i</text>
-<text x="729" y="194" xml:space="preserve" fill="#8787af">B</text>
-<text x="756" y="194" xml:space="preserve" fill="#8787af">+</text>
-<text x="765" y="194" xml:space="preserve" fill="#8787af">0</text>
-<text x="774" y="194" xml:space="preserve" fill="#8787af">.</text>
-<text x="783" y="194" xml:space="preserve" fill="#8787af">8</text>
-<text x="801" y="194" xml:space="preserve" fill="#8787af">G</text>
-<text x="810" y="194" xml:space="preserve" fill="#8787af">i</text>
-<text x="819" y="194" xml:space="preserve" fill="#8787af">B</text>
-<text x="837" y="194" xml:space="preserve" fill="#8787af">s</text>
-<text x="846" y="194" xml:space="preserve" fill="#8787af">h</text>
-<text x="855" y="194" xml:space="preserve" fill="#8787af">a</text>
-<text x="864" y="194" xml:space="preserve" fill="#8787af">r</text>
-<text x="873" y="194" xml:space="preserve" fill="#8787af">e</text>
-<text x="882" y="194" xml:space="preserve" fill="#8787af">d</text>
-<text x="900" y="194" xml:space="preserve" fill="#8787af">R</text>
-<text x="909" y="194" xml:space="preserve" fill="#8787af">A</text>
-<text x="918" y="194" xml:space="preserve" fill="#8787af">M</text>
+<text x="612" y="194" xml:space="preserve" fill="#8787af">6.0 / 11.0 GiB  +0.8 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 179.5 L 1057.5 189 L 1057.5 198.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 197.5 L 13.5 207 L 13.5 216.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="45" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
-<text x="63" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="90" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">N</text>
-<text x="99" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">V</text>
-<text x="108" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="117" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">D</text>
-<text x="126" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="135" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="153" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="162" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="171" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">X</text>
-<text x="189" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="198" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="207" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="216" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="234" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="243" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
+<text x="27" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">GPU 1  NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 526.5 197.5 L 526.5 207 L 526.5 216.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 197.5 L 544.5 207 L 544.5 216.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">P</text>
-<text x="576" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">U</text>
-<text x="594" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="621" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">N</text>
-<text x="630" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">V</text>
-<text x="639" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="648" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">D</text>
-<text x="657" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">I</text>
-<text x="666" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">A</text>
-<text x="684" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="693" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="702" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">X</text>
-<text x="720" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="729" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="738" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="747" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="765" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">T</text>
-<text x="774" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
+<text x="558" y="212" xml:space="preserve" fill="#5fd7d7" font-weight="bold">GPU 1  NVIDIA GTX 1080 Ti</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 197.5 L 1057.5 207 L 1057.5 216.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 215.5 L 13.5 225 L 13.5 234.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="54" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="63" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="72" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
+<text x="27" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G1 use</text>
 <text x="90" y="230" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="198" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="207" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="216" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="230" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="230" xml:space="preserve" fill="#87d787">4</text>
-<text x="342" y="230" xml:space="preserve" fill="#87d787">6</text>
-<text x="351" y="230" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="230" xml:space="preserve" fill="#87d787">0</text>
-<text x="369" y="230" xml:space="preserve" fill="#87d787">%</text>
+<text x="198" y="230" xml:space="preserve" fill="#5f5f87">·············]</text>
+<text x="333" y="230" xml:space="preserve" fill="#87d787">46.0%</text>
 <rect x="504" y="227" width="9" height="7" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 215.5 L 526.5 225 L 526.5 234.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -962,31 +498,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 215.5 L 544.5 225 L 544.5 234.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="585" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="594" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="603" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
+<text x="558" y="230" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G1 use</text>
 <text x="621" y="230" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="729" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="738" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="747" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="230" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="230" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="230" xml:space="preserve" fill="#87d787">4</text>
-<text x="873" y="230" xml:space="preserve" fill="#87d787">6</text>
-<text x="882" y="230" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="230" xml:space="preserve" fill="#87d787">0</text>
-<text x="900" y="230" xml:space="preserve" fill="#87d787">%</text>
+<text x="729" y="230" xml:space="preserve" fill="#5f5f87">·············]</text>
+<text x="864" y="230" xml:space="preserve" fill="#87d787">46.0%</text>
 <rect x="1035" y="227" width="9" height="7" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 215.5 L 1057.5 225 L 1057.5 234.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -994,66 +509,24 @@
 <g data-box-drawing="single">
 <path d="M 13.5 233.5 L 13.5 243 L 13.5 252.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="248" xml:space="preserve" fill="#8787af">7</text>
-<text x="90" y="248" xml:space="preserve" fill="#8787af">3</text>
-<text x="99" y="248" xml:space="preserve" fill="#8787af">.</text>
-<text x="108" y="248" xml:space="preserve" fill="#8787af">0</text>
-<text x="126" y="248" xml:space="preserve" fill="#8787af">°</text>
-<text x="135" y="248" xml:space="preserve" fill="#8787af">C</text>
-<text x="162" y="248" xml:space="preserve" fill="#8787af">1</text>
-<text x="171" y="248" xml:space="preserve" fill="#8787af">5</text>
-<text x="180" y="248" xml:space="preserve" fill="#8787af">8</text>
-<text x="189" y="248" xml:space="preserve" fill="#8787af">.</text>
-<text x="198" y="248" xml:space="preserve" fill="#8787af">0</text>
-<text x="216" y="248" xml:space="preserve" fill="#8787af">W</text>
+<text x="81" y="248" xml:space="preserve" fill="#8787af">73.0 °C  158.0 W</text>
 <g data-box-drawing="single">
 <path d="M 526.5 233.5 L 526.5 243 L 526.5 252.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 233.5 L 544.5 243 L 544.5 252.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="612" y="248" xml:space="preserve" fill="#8787af">7</text>
-<text x="621" y="248" xml:space="preserve" fill="#8787af">3</text>
-<text x="630" y="248" xml:space="preserve" fill="#8787af">.</text>
-<text x="639" y="248" xml:space="preserve" fill="#8787af">0</text>
-<text x="657" y="248" xml:space="preserve" fill="#8787af">°</text>
-<text x="666" y="248" xml:space="preserve" fill="#8787af">C</text>
-<text x="693" y="248" xml:space="preserve" fill="#8787af">1</text>
-<text x="702" y="248" xml:space="preserve" fill="#8787af">5</text>
-<text x="711" y="248" xml:space="preserve" fill="#8787af">8</text>
-<text x="720" y="248" xml:space="preserve" fill="#8787af">.</text>
-<text x="729" y="248" xml:space="preserve" fill="#8787af">0</text>
-<text x="747" y="248" xml:space="preserve" fill="#8787af">W</text>
+<text x="612" y="248" xml:space="preserve" fill="#8787af">73.0 °C  158.0 W</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 233.5 L 1057.5 243 L 1057.5 252.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 251.5 L 13.5 261 L 13.5 270.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="36" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="54" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="63" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="72" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
+<text x="27" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G1 mem</text>
 <text x="90" y="266" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="207" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="216" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="225" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="234" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="243" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="252" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="261" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="270" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="279" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="288" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="297" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="306" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="315" y="266" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="333" y="266" xml:space="preserve" fill="#87d787">5</text>
-<text x="342" y="266" xml:space="preserve" fill="#87d787">3</text>
-<text x="351" y="266" xml:space="preserve" fill="#87d787">.</text>
-<text x="360" y="266" xml:space="preserve" fill="#87d787">6</text>
-<text x="369" y="266" xml:space="preserve" fill="#87d787">%</text>
+<text x="207" y="266" xml:space="preserve" fill="#5f5f87">············]</text>
+<text x="333" y="266" xml:space="preserve" fill="#87d787">53.6%</text>
 <rect x="504" y="261" width="9" height="9" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 526.5 251.5 L 526.5 261 L 526.5 270.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -1061,30 +534,10 @@
 <g data-box-drawing="single">
 <path d="M 544.5 251.5 L 544.5 261 L 544.5 270.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G</text>
-<text x="567" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">1</text>
-<text x="585" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="594" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="603" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
+<text x="558" y="266" xml:space="preserve" fill="#5fd7d7" font-weight="bold">G1 mem</text>
 <text x="621" y="266" xml:space="preserve" fill="#5f5f87">[</text>
-<text x="738" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="747" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="756" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="765" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="774" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="783" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="792" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="801" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="810" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="819" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="828" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="837" y="266" xml:space="preserve" fill="#5f5f87">·</text>
-<text x="846" y="266" xml:space="preserve" fill="#5f5f87">]</text>
-<text x="864" y="266" xml:space="preserve" fill="#87d787">5</text>
-<text x="873" y="266" xml:space="preserve" fill="#87d787">3</text>
-<text x="882" y="266" xml:space="preserve" fill="#87d787">.</text>
-<text x="891" y="266" xml:space="preserve" fill="#87d787">6</text>
-<text x="900" y="266" xml:space="preserve" fill="#87d787">%</text>
+<text x="738" y="266" xml:space="preserve" fill="#5f5f87">············]</text>
+<text x="864" y="266" xml:space="preserve" fill="#87d787">53.6%</text>
 <rect x="1035" y="261" width="9" height="9" fill="#87d787"/>
 <g data-box-drawing="single">
 <path d="M 1057.5 251.5 L 1057.5 261 L 1057.5 270.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -1092,198 +545,44 @@
 <g data-box-drawing="single">
 <path d="M 13.5 269.5 L 13.5 279 L 13.5 288.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="81" y="284" xml:space="preserve" fill="#8787af">5</text>
-<text x="90" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="99" y="284" xml:space="preserve" fill="#8787af">9</text>
-<text x="117" y="284" xml:space="preserve" fill="#8787af">/</text>
-<text x="135" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="144" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="153" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="162" y="284" xml:space="preserve" fill="#8787af">0</text>
-<text x="180" y="284" xml:space="preserve" fill="#8787af">G</text>
-<text x="189" y="284" xml:space="preserve" fill="#8787af">i</text>
-<text x="198" y="284" xml:space="preserve" fill="#8787af">B</text>
-<text x="225" y="284" xml:space="preserve" fill="#8787af">+</text>
-<text x="234" y="284" xml:space="preserve" fill="#8787af">0</text>
-<text x="243" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="252" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="270" y="284" xml:space="preserve" fill="#8787af">G</text>
-<text x="279" y="284" xml:space="preserve" fill="#8787af">i</text>
-<text x="288" y="284" xml:space="preserve" fill="#8787af">B</text>
-<text x="306" y="284" xml:space="preserve" fill="#8787af">s</text>
-<text x="315" y="284" xml:space="preserve" fill="#8787af">h</text>
-<text x="324" y="284" xml:space="preserve" fill="#8787af">a</text>
-<text x="333" y="284" xml:space="preserve" fill="#8787af">r</text>
-<text x="342" y="284" xml:space="preserve" fill="#8787af">e</text>
-<text x="351" y="284" xml:space="preserve" fill="#8787af">d</text>
-<text x="369" y="284" xml:space="preserve" fill="#8787af">R</text>
-<text x="378" y="284" xml:space="preserve" fill="#8787af">A</text>
-<text x="387" y="284" xml:space="preserve" fill="#8787af">M</text>
+<text x="81" y="284" xml:space="preserve" fill="#8787af">5.9 / 11.0 GiB  +0.1 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 526.5 269.5 L 526.5 279 L 526.5 288.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 269.5 L 544.5 279 L 544.5 288.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="612" y="284" xml:space="preserve" fill="#8787af">5</text>
-<text x="621" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="630" y="284" xml:space="preserve" fill="#8787af">9</text>
-<text x="648" y="284" xml:space="preserve" fill="#8787af">/</text>
-<text x="666" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="675" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="684" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="693" y="284" xml:space="preserve" fill="#8787af">0</text>
-<text x="711" y="284" xml:space="preserve" fill="#8787af">G</text>
-<text x="720" y="284" xml:space="preserve" fill="#8787af">i</text>
-<text x="729" y="284" xml:space="preserve" fill="#8787af">B</text>
-<text x="756" y="284" xml:space="preserve" fill="#8787af">+</text>
-<text x="765" y="284" xml:space="preserve" fill="#8787af">0</text>
-<text x="774" y="284" xml:space="preserve" fill="#8787af">.</text>
-<text x="783" y="284" xml:space="preserve" fill="#8787af">1</text>
-<text x="801" y="284" xml:space="preserve" fill="#8787af">G</text>
-<text x="810" y="284" xml:space="preserve" fill="#8787af">i</text>
-<text x="819" y="284" xml:space="preserve" fill="#8787af">B</text>
-<text x="837" y="284" xml:space="preserve" fill="#8787af">s</text>
-<text x="846" y="284" xml:space="preserve" fill="#8787af">h</text>
-<text x="855" y="284" xml:space="preserve" fill="#8787af">a</text>
-<text x="864" y="284" xml:space="preserve" fill="#8787af">r</text>
-<text x="873" y="284" xml:space="preserve" fill="#8787af">e</text>
-<text x="882" y="284" xml:space="preserve" fill="#8787af">d</text>
-<text x="900" y="284" xml:space="preserve" fill="#8787af">R</text>
-<text x="909" y="284" xml:space="preserve" fill="#8787af">A</text>
-<text x="918" y="284" xml:space="preserve" fill="#8787af">M</text>
+<text x="612" y="284" xml:space="preserve" fill="#8787af">5.9 / 11.0 GiB  +0.1 GiB shared RAM</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 269.5 L 1057.5 279 L 1057.5 288.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 287.5 L 13.5 297 L 13.5 306.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">O</text>
-<text x="36" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">l</text>
-<text x="45" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">l</text>
-<text x="54" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="63" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="72" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="81" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">:</text>
-<text x="99" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="108" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="117" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="126" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="135" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
-<text x="144" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="153" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">g</text>
+<text x="27" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">Ollama: running</text>
 <g data-box-drawing="single">
 <path d="M 526.5 287.5 L 526.5 297 L 526.5 306.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 287.5 L 544.5 297 L 544.5 306.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">O</text>
-<text x="567" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">l</text>
-<text x="576" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">l</text>
-<text x="585" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="594" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="603" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="612" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">:</text>
-<text x="630" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="639" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="648" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="657" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="666" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
-<text x="675" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="684" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">g</text>
+<text x="558" y="302" xml:space="preserve" fill="#5fd7d7" font-weight="bold">Ollama: running</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 287.5 L 1057.5 297 L 1057.5 306.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 13.5 305.5 L 13.5 315 L 13.5 324.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="36" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">p</text>
-<text x="45" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="54" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="63" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="72" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="81" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="90" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">:</text>
-<text x="99" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="108" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">b</text>
-<text x="117" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="126" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
-<text x="135" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="144" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="153" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="162" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="171" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="180" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">c</text>
-<text x="189" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="198" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="207" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">2</text>
-<text x="216" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">5</text>
-<text x="225" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="234" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">9</text>
-<text x="243" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="252" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">q</text>
-<text x="261" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">4</text>
-<text x="270" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">_</text>
-<text x="279" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">k</text>
-<text x="288" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">_</text>
-<text x="297" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="414" y="320" xml:space="preserve" fill="#8787af">9</text>
-<text x="423" y="320" xml:space="preserve" fill="#8787af">.</text>
-<text x="432" y="320" xml:space="preserve" fill="#8787af">4</text>
-<text x="450" y="320" xml:space="preserve" fill="#8787af">G</text>
-<text x="459" y="320" xml:space="preserve" fill="#8787af">i</text>
-<text x="468" y="320" xml:space="preserve" fill="#8787af">B</text>
-<text x="486" y="320" xml:space="preserve" fill="#8787af">G</text>
-<text x="495" y="320" xml:space="preserve" fill="#8787af">P</text>
-<text x="504" y="320" xml:space="preserve" fill="#8787af">U</text>
+<text x="27" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">apertus:8b-instruct-2509-q4_k_m</text>
+<text x="414" y="320" xml:space="preserve" fill="#8787af">9.4 GiB GPU</text>
 <g data-box-drawing="single">
 <path d="M 526.5 305.5 L 526.5 315 L 526.5 324.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <g data-box-drawing="single">
 <path d="M 544.5 305.5 L 544.5 315 L 544.5 324.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="558" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">a</text>
-<text x="567" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">p</text>
-<text x="576" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">e</text>
-<text x="585" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="594" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="603" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="612" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="621" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">:</text>
-<text x="630" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">8</text>
-<text x="639" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">b</text>
-<text x="648" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="657" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">i</text>
-<text x="666" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">n</text>
-<text x="675" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">s</text>
-<text x="684" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="693" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">r</text>
-<text x="702" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">u</text>
-<text x="711" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">c</text>
-<text x="720" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">t</text>
-<text x="729" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="738" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">2</text>
-<text x="747" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">5</text>
-<text x="756" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">0</text>
-<text x="765" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">9</text>
-<text x="774" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">-</text>
-<text x="783" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">q</text>
-<text x="792" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">4</text>
-<text x="801" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">_</text>
-<text x="810" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">k</text>
-<text x="819" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">_</text>
-<text x="828" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">m</text>
-<text x="945" y="320" xml:space="preserve" fill="#8787af">9</text>
-<text x="954" y="320" xml:space="preserve" fill="#8787af">.</text>
-<text x="963" y="320" xml:space="preserve" fill="#8787af">4</text>
-<text x="981" y="320" xml:space="preserve" fill="#8787af">G</text>
-<text x="990" y="320" xml:space="preserve" fill="#8787af">i</text>
-<text x="999" y="320" xml:space="preserve" fill="#8787af">B</text>
-<text x="1017" y="320" xml:space="preserve" fill="#8787af">G</text>
-<text x="1026" y="320" xml:space="preserve" fill="#8787af">P</text>
-<text x="1035" y="320" xml:space="preserve" fill="#8787af">U</text>
+<text x="558" y="320" xml:space="preserve" fill="#5fd7d7" font-weight="bold">apertus:8b-instruct-2509-q4_k_m</text>
+<text x="945" y="320" xml:space="preserve" fill="#8787af">9.4 GiB GPU</text>
 <g data-box-drawing="single">
 <path d="M 1057.5 305.5 L 1057.5 315 L 1057.5 324.5" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -1803,80 +1102,22 @@
 <g data-box-drawing="single">
 <path d="M 1057.5 575.5 L 1057.5 585 L 1052.5 585" fill="none" stroke="#5f5f87" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="18" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">2</text>
-<text x="36" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="45" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="54" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="72" y="608" xml:space="preserve" fill="#dadada">C</text>
-<text x="81" y="608" xml:space="preserve" fill="#dadada">P</text>
-<text x="90" y="608" xml:space="preserve" fill="#dadada">U</text>
-<text x="117" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="126" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">3</text>
-<text x="144" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="153" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="162" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="180" y="608" xml:space="preserve" fill="#dadada">R</text>
-<text x="189" y="608" xml:space="preserve" fill="#dadada">A</text>
-<text x="198" y="608" xml:space="preserve" fill="#dadada">M</text>
-<text x="225" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="234" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">4</text>
-<text x="252" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="261" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="270" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="288" y="608" xml:space="preserve" fill="#dadada">G</text>
-<text x="297" y="608" xml:space="preserve" fill="#dadada">P</text>
-<text x="306" y="608" xml:space="preserve" fill="#dadada">U</text>
-<text x="333" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="342" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">5</text>
-<text x="360" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="369" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="378" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="396" y="608" xml:space="preserve" fill="#dadada">G</text>
-<text x="405" y="608" xml:space="preserve" fill="#dadada">P</text>
-<text x="414" y="608" xml:space="preserve" fill="#dadada">U</text>
-<text x="432" y="608" xml:space="preserve" fill="#dadada">m</text>
-<text x="441" y="608" xml:space="preserve" fill="#dadada">e</text>
-<text x="450" y="608" xml:space="preserve" fill="#dadada">m</text>
-<text x="477" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="486" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">6</text>
-<text x="504" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="513" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="522" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="540" y="608" xml:space="preserve" fill="#dadada">H</text>
-<text x="549" y="608" xml:space="preserve" fill="#dadada">i</text>
-<text x="558" y="608" xml:space="preserve" fill="#dadada">s</text>
-<text x="567" y="608" xml:space="preserve" fill="#dadada">t</text>
-<text x="576" y="608" xml:space="preserve" fill="#dadada">o</text>
-<text x="585" y="608" xml:space="preserve" fill="#dadada">r</text>
-<text x="594" y="608" xml:space="preserve" fill="#dadada">y</text>
-<text x="621" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="630" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">7</text>
-<text x="648" y="608" xml:space="preserve" fill="#dadada">[</text>
-<text x="657" y="608" xml:space="preserve" fill="#dadada">x</text>
-<text x="666" y="608" xml:space="preserve" fill="#dadada">]</text>
-<text x="684" y="608" xml:space="preserve" fill="#dadada">O</text>
-<text x="693" y="608" xml:space="preserve" fill="#dadada">l</text>
-<text x="702" y="608" xml:space="preserve" fill="#dadada">l</text>
-<text x="711" y="608" xml:space="preserve" fill="#dadada">a</text>
-<text x="720" y="608" xml:space="preserve" fill="#dadada">m</text>
-<text x="729" y="608" xml:space="preserve" fill="#dadada">a</text>
-<text x="756" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="765" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">8</text>
-<text x="783" y="608" xml:space="preserve" fill="#dadada">H</text>
-<text x="792" y="608" xml:space="preserve" fill="#dadada">o</text>
-<text x="801" y="608" xml:space="preserve" fill="#dadada">s</text>
-<text x="810" y="608" xml:space="preserve" fill="#dadada">t</text>
-<text x="819" y="608" xml:space="preserve" fill="#dadada">s</text>
-<text x="846" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F</text>
-<text x="855" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">9</text>
-<text x="873" y="608" xml:space="preserve" fill="#dadada">D</text>
-<text x="882" y="608" xml:space="preserve" fill="#dadada">e</text>
-<text x="891" y="608" xml:space="preserve" fill="#dadada">t</text>
-<text x="900" y="608" xml:space="preserve" fill="#dadada">a</text>
-<text x="909" y="608" xml:space="preserve" fill="#dadada">i</text>
-<text x="918" y="608" xml:space="preserve" fill="#dadada">l</text>
-<text x="927" y="608" xml:space="preserve" fill="#dadada">s</text>
+<text x="9" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F2</text>
+<text x="36" y="608" xml:space="preserve" fill="#dadada">[x] CPU</text>
+<text x="117" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F3</text>
+<text x="144" y="608" xml:space="preserve" fill="#dadada">[x] RAM</text>
+<text x="225" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F4</text>
+<text x="252" y="608" xml:space="preserve" fill="#dadada">[x] GPU</text>
+<text x="333" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F5</text>
+<text x="360" y="608" xml:space="preserve" fill="#dadada">[x] GPU mem</text>
+<text x="477" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F6</text>
+<text x="504" y="608" xml:space="preserve" fill="#dadada">[x] History</text>
+<text x="621" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F7</text>
+<text x="648" y="608" xml:space="preserve" fill="#dadada">[x] Ollama</text>
+<text x="756" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F8</text>
+<text x="783" y="608" xml:space="preserve" fill="#dadada">Hosts</text>
+<text x="846" y="608" xml:space="preserve" fill="#d7d75f" font-weight="bold">F9</text>
+<text x="873" y="608" xml:space="preserve" fill="#dadada">Details</text>
 <g id="raster-plane">
 </g>
 </svg>

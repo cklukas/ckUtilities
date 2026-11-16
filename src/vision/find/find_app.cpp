@@ -155,7 +155,7 @@ void FindApp::show_guided_search_dialog()
                              .kind = ckv::widgets::FieldKind::Note});
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop()));
     search_dialog_->set_completion_handler([this, existing_custom_command](ckv::widgets::DialogResult result) {
         constexpr std::size_t kFieldCount = 30;
         if (!result.accepted || result.values.size() != kFieldCount || result.checked.size() != kFieldCount ||
@@ -227,7 +227,7 @@ void FindApp::show_save_dialog()
                              }});
     dialog.buttons.push_back({"&Save", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop()));
     search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 1)
             return;
@@ -271,7 +271,7 @@ void FindApp::show_load_dialog()
                              }});
     dialog.buttons.push_back({"&Load", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+    search_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop()));
     search_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.size() != 1)
             return;
@@ -356,7 +356,7 @@ void FindApp::request_execution()
             preview << '[' << argument << "] ";
         custom_command_confirmation_.reset();
         custom_command_confirmation_.emplace(ckv::widgets::present_modal_message_box(
-            application_, shell_->desktop(), shell_->roles(),
+            application_, shell_->desktop(),
             {ckv::widgets::MessageBoxKind::Warning,
              "Run sandboxed custom command",
              "Run the fixed, non-interactive command for matching paths? It has a five-second per-path limit, a 16 KiB output limit, and stops after 64 paths.\n\n"
@@ -373,7 +373,7 @@ void FindApp::request_execution()
     {
         destructive_confirmation_.reset();
         destructive_confirmation_.emplace(ckv::widgets::present_modal_message_box(
-            application_, shell_->desktop(), shell_->roles(),
+            application_, shell_->desktop(),
             {ckv::widgets::MessageBoxKind::Warning,
              "Delete matched files",
              "Delete matching regular files and symbolic links under '" +

@@ -13,7 +13,7 @@
 
 #include "cvision/core/text.hpp"
 #include "cvision/core/version.hpp"
-#include "cvision/widgets/common_components.hpp"
+#include "cvision/widgets/date_time.hpp"
 #include "cvision/widgets/desktop.hpp"
 #include "cvision/widgets/editor_document.hpp"
 #include "cvision/widgets/menu.hpp"
@@ -124,7 +124,7 @@ bool same_status_items(const std::vector<ckv::widgets::StatusLineItem>& left,
     for (std::size_t index = 0; index < left.size(); ++index) {
         const auto& a = left[index];
         const auto& b = right[index];
-        if (a.label != b.label || a.command != b.command || a.priority != b.priority ||
+        if (a.label != b.label || a.priority != b.priority ||
             a.presentation.command != b.presentation.command ||
             a.presentation.label != b.presentation.label ||
             a.presentation.chord != b.presentation.chord)
@@ -670,13 +670,13 @@ void TodoApp::add_help_topics() {
 
 void TodoApp::show_help_topic(std::string key) {
     add_help_topics();
-    help_viewer_ = ckv::widgets::present_modeless_help_viewer(help_, std::move(key), app_, *desktop_, roles_);
+    help_viewer_ = ckv::widgets::present_modeless_help_viewer(help_, std::move(key), app_, *desktop_);
 }
 
 void TodoApp::show_about() {
     const std::string help = app_.commands().chord_text(app_.commands().standard().help);
     about_box_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Info, "About ck-todo",
          ck::host::about_text(
              "ck-todo \u2014 boards, lanes and tasks\n" +
@@ -699,7 +699,7 @@ void TodoApp::present_welcome() {
     descriptor.fields.push_back(std::move(choice));
     descriptor.buttons.push_back({"&Start", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Quit", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    welcome_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    welcome_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     welcome_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted) {
             request_quit();
@@ -840,7 +840,7 @@ void TodoApp::present_task_dialog(bool editing) {
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     const std::optional<TaskId> task_id = task ? std::optional<TaskId>(task->id) : std::nullopt;
     const std::string note = initial.note;
-    task_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    task_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     task_dialog_->set_completion_handler([this, editing, task_id, note](ckv::widgets::DialogResult result) {
         if (result.accepted) accept_task_dialog(editing, task_id, note, result);
     });
@@ -928,7 +928,7 @@ void TodoApp::present_archive_confirmation() {
     const TaskId task_id = task->id;
     const Task original = *task;
     archive_confirmation_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Confirm, "Archive task", "Archive ‘" + task->title + "’?",
          ckv::widgets::MessageBoxButtons::YesNo});
     archive_confirmation_->set_completion_handler([this, task_id, original](ckv::widgets::MessageBoxResult result) {
@@ -963,7 +963,7 @@ void TodoApp::present_delete_confirmation() {
     const TaskId task_id = task->id;
     const Task original = *task;
     delete_confirmation_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Warning, "Delete task permanently",
          "Permanently delete ‘" + task->title + "’? This does not create an archive.",
          ckv::widgets::MessageBoxButtons::YesNo});
@@ -1249,7 +1249,7 @@ void TodoApp::present_lane_actions() {
     descriptor.fields.push_back(radio_field("&Action", std::move(labels), 0));
     descriptor.buttons.push_back({"&Continue", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_actions_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_actions_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_actions_dialog_->set_completion_handler(
         [this, captured_actions = std::move(actions)](ckv::widgets::DialogResult result) {
             if (!result.accepted || result.selected.empty() || result.selected[0] < 0 ||
@@ -1280,7 +1280,7 @@ void TodoApp::present_lane_rename() {
         [](const std::string& value) { return !value.empty() && value.size() <= TodoLimits::max_name_bytes; }});
     descriptor.buttons.push_back({"&Rename", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_edit_dialog_->set_completion_handler([this, lane_id, original](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.empty()) return;
         const std::string name = result.values[0];
@@ -1319,7 +1319,7 @@ void TodoApp::present_lane_color() {
     descriptor.fields.push_back(combo_field("&Color:", strings(kColorNames), color_selection(lane->color)));
     descriptor.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_edit_dialog_->set_completion_handler([this, lane_id, original](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.empty()) return;
         const std::optional<TodoColor> color = color_from_selection(result.selected[0]);
@@ -1356,7 +1356,7 @@ void TodoApp::present_lane_sort() {
     descriptor.fields.push_back(combo_field("&Sort by:", strings(kSortNames), static_cast<int>(lane->sort)));
     descriptor.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_edit_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.empty() || result.selected[0] < 0 || result.selected[0] > 5) return;
         set_lane_sort(static_cast<SortMode>(result.selected[0]));
@@ -1384,7 +1384,7 @@ void TodoApp::present_lane_insert(bool before_active) {
         [](const std::string& value) { return !value.empty() && value.size() <= TodoLimits::max_name_bytes; }});
     descriptor.buttons.push_back({"&Insert", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_edit_dialog_->set_completion_handler([this, board_id, before](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.empty()) return;
         const std::string name = result.values[0];
@@ -1433,7 +1433,7 @@ void TodoApp::present_lane_merge() {
     descriptor.fields.push_back(combo_field("Merge &into:", std::move(labels), 0));
     descriptor.buttons.push_back({"&Merge", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    lane_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     lane_edit_dialog_->set_completion_handler(
         [this, captured_source_id = *source_id, source_original,
          captured_targets = std::move(targets)](ckv::widgets::DialogResult result) {
@@ -1478,7 +1478,7 @@ void TodoApp::present_lane_archive() {
     const LaneId lane_id = lane->id;
     const Lane original = *lane;
     lane_confirmation_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Warning, "Archive lane",
          "Archive all " + std::to_string(lane->task_ids.size()) + " task(s) in ‘" + lane->title +
              "’ and remove the lane?",
@@ -1573,7 +1573,7 @@ void TodoApp::present_board_manager() {
     descriptor.fields.push_back(radio_field("&Action", std::move(action_labels), 0));
     descriptor.buttons.push_back({"&Continue", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    board_manager_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    board_manager_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     board_manager_dialog_->set_completion_handler(
         [this, captured_boards = std::move(boards),
          captured_actions = std::move(actions)](ckv::widgets::DialogResult result) {
@@ -1611,7 +1611,7 @@ void TodoApp::present_board_action_source(bool rename, bool merge) {
     descriptor.fields.push_back(combo_field("&Board:", std::move(labels), 0));
     descriptor.buttons.push_back({"&Continue", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    board_action_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    board_action_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     board_action_dialog_->set_completion_handler(
         [this, rename, merge, captured_boards = std::move(boards)](ckv::widgets::DialogResult result) {
             if (!result.accepted || result.selected.empty() || result.selected[0] < 0 ||
@@ -1633,7 +1633,7 @@ void TodoApp::present_new_board() {
         [](const std::string& value) { return !value.empty() && value.size() <= TodoLimits::max_name_bytes; }});
     descriptor.buttons.push_back({"&Create", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     board_edit_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.empty()) return;
         const std::string name = result.values[0];
@@ -1674,7 +1674,7 @@ void TodoApp::present_board_rename(BoardId board_id) {
         [](const std::string& value) { return !value.empty() && value.size() <= TodoLimits::max_name_bytes; }});
     descriptor.buttons.push_back({"&Rename", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     board_edit_dialog_->set_completion_handler([this, board_id, original](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.values.empty()) return;
         const std::string name = result.values[0];
@@ -1721,7 +1721,7 @@ void TodoApp::present_board_merge(BoardId source_id) {
     descriptor.fields.push_back(combo_field("Merge &into:", std::move(labels), 0));
     descriptor.buttons.push_back({"&Merge", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    board_edit_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     board_edit_dialog_->set_completion_handler(
         [this, source_id, source_original, captured_targets = std::move(targets)](ckv::widgets::DialogResult result) {
             if (!result.accepted || result.selected.empty() || result.selected[0] < 0 ||
@@ -1765,7 +1765,7 @@ void TodoApp::present_board_archive(BoardId board_id) {
     std::size_t task_count = 0;
     for (const Lane& lane : board->lanes) task_count += lane.task_ids.size();
     board_confirmation_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Warning, "Archive Board",
          "Archive all " + std::to_string(task_count) + " task(s) in ‘" + board->name + "’ and remove the board?",
          ckv::widgets::MessageBoxButtons::YesNo});
@@ -2029,11 +2029,11 @@ void TodoApp::refresh_status_items() {
         ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{archive_task_command_}, 50},
         ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{move_task_command_}, 90},
         ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{lane_actions_command_}, 80},
-        ckv::widgets::StatusLineItem{std::move(board_label), board_manager_command_, 95},
+        ckv::widgets::StatusLineItem{ckv::widgets::CommandPresentation{board_manager_command_, std::move(board_label)}, 95},
     };
     if (pending_conflict_)
         items.emplace_back(ckv::widgets::CommandPresentation{resolve_conflict_command_}, 110);
-    if (!calendar_label.empty()) items.emplace_back(std::move(calendar_label), ckv::ui::kInvalidCommand, 5);
+    if (!calendar_label.empty()) items.emplace_back(std::move(calendar_label), 5);
     items.emplace_back(ckv::widgets::CommandPresentation{app_.commands().standard().quit}, 100);
     if (!same_status_items(status_line_->items(), items)) status_line_->set_items(std::move(items));
 }
@@ -2041,7 +2041,7 @@ void TodoApp::refresh_status_items() {
 void TodoApp::show_error(std::string title, const ControllerError& error) {
     set_status(error.diagnostic);
     message_box_ = ckv::widgets::present_modal_message_box(
-        app_, *desktop_, roles_,
+        app_, *desktop_,
         {ckv::widgets::MessageBoxKind::Error, std::move(title), error.diagnostic, ckv::widgets::MessageBoxButtons::Ok});
     message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
 }
@@ -2091,7 +2091,7 @@ void TodoApp::present_conflict_resolution() {
         radio_field("&Resolution", {"Retry my change over the latest workspace", "Use the external version"}, 0));
     descriptor.buttons.push_back({"&Resolve", ckv::widgets::ButtonRole::Accept, nullptr});
     descriptor.buttons.push_back({"&Later", ckv::widgets::ButtonRole::Dismiss, nullptr});
-    conflict_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_, roles_);
+    conflict_dialog_ = ckv::widgets::present_modal_dialog(std::move(descriptor), app_, *desktop_);
     conflict_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.size() < 3 || result.selected[2] < 0) {
             set_status("Conflict kept pending; use File → Resolve conflict when ready.");

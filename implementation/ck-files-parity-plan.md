@@ -1,6 +1,7 @@
 # Files — Commander parity work packages
 
 Date: 2026-11-01. Status: planned; no package below is accepted yet.
+Reviewed: 2026-11-14 for interrupted/repeated transfers and native Mac gaps.
 Owner: the `file manager` implementation chat. This document adds the next
 roadmap; it does not mark existing WP-07/WP-08 or archive gates complete.
 
@@ -11,6 +12,17 @@ then complete the Commander productivity workflow. Preserve the guarantees in
 [contracts](ck-files-contracts.md), the existing
 [release plan](ck-files-plan.md), and the
 [volume archive plan](ck-files-volume-archive-plan.md).
+
+The [shared transfer-recovery plan](ck-files-transfer-recovery-plan.md) adds concrete
+backend packages B-00–06 and acceptance cases R-01–12. Its recovery contract is
+shared by Files: an interrupted move followed by the same request must preserve
+already transferred files, remaining originals and destination-only content.
+Generic cancellation/journal tests do not establish that workflow. A narrower
+consumer release does not qualify these cross-platform parity packages. Current
+backend preflight/admission catches known policy/publication blockers before new
+operation journals and row effects. It does not close CP-01 retirement, CP-03
+repeat/recovery or CP-04 native qualification; preliminary source eligibility
+and explicit loss consent are never destination-preservation proof.
 
 Baseline comparison: Norton Commander 5.x DOS workflows and GNU Midnight
 Commander's documented commands. The [MC manual](https://source.midnight-commander.org/man/mc.html)
@@ -106,6 +118,14 @@ approved metadata losses, durable destination publication and a proven source
 stability predicate. Remove planned directories bottom-up; retain new children,
 unverified sources and unsupported objects with exact per-item outcomes.
 
+2026-11-14 gap: positive Darwin strong copy publication remains unqualified;
+the held-descriptor clone probe is not an integrated publication/retirement
+protocol. The recursive copy-based move worker now retains the complete source
+tree after publication without a stability proof. Qualify content and metadata
+stability, hard-link/mmap/open-writer behavior, source capture and fresh restart
+authority before enabling retirement. A source snapshot alone does not prove
+that subsequent live-source changes may be deleted. See B-01/B-04.
+
 Acceptance: native tests on all three OSes cover replacement races, open writers,
 hard links, symlinks/reparse points, identity reuse, disconnects and crashes
 before/after source capture. No source retirement before verified destination
@@ -144,11 +164,12 @@ object; every outcome and interrupted tree is reviewable after restart.
 ## CP-03 — Recovery as a usable workflow
 
 Unify operation and archive recovery presentation while keeping their protocols
-distinct. Provide inspect, identity-proven cleanup, revalidated retry/resume and
-publication reconciliation only for states with sufficient native receipts.
-Extend the current Windows-only unpublished archive cleanup boundary to
-macOS/Linux before exposing it there. Legacy/corrupt/ambiguous records remain
-inspect-only. No automatic source deletion or pathname-based cleanup.
+distinct. Provide inspect, qualified cleanup, revalidated retry/resume and
+publication reconciliation only for states with sufficient native evidence
+and freshly acquired authority. Establish that restart protocol on each
+platform; the historical Windows live-owner discard adapter is not a restart
+authorization boundary. Legacy/corrupt/ambiguous records remain inspect-only.
+No automatic source deletion or pathname-based cleanup.
 
 Acceptance: kill/restart at every intent/effect/receipt boundary, torn journals,
 missing mounts, replaced staging objects, old versions, repeated recovery and
@@ -156,7 +177,33 @@ post-publication flush failure. Repeated actions are safe; completed copies are
 not recopied or sources retired based on an uncertain receipt. UI explains
 remaining effects and manual reconciliation without promising global rollback.
 
-Current implementation checkpoint: a separate worker-facing ordinary-operation
+Required missing workflow (B-02/03/05):
+
+- Persist original inventory, reviewed policy and job/attempt lineage. Resume
+  reconciles that job; retry creates a linked reviewed attempt for unresolved
+  rows. Detect repeated/overlapping submissions before executing a fresh plan.
+- Preserve destination-only and previously committed entries. A source entry
+  missing after a partial move is never evidence that its destination should
+  be deleted. New or changed source children cannot silently expand the job.
+- For a Finder/foreign partial move or missing/untrusted journal, provide
+  conservative merge/copy comparison without claiming original-job resume or
+  historical deletion authority. Keep uncertain conflicts and unique data.
+- Qualify fresh native authority after restart; names, hashes, bookmarks and
+  serialized IDs are evidence, not permissions to clean, publish or retire.
+  Expose inspect, reconcile, resume, retry and cleanup as distinct capabilities.
+- Retain replaced destination versions across crashes; restoration over a
+  subsequent edit is a new conflict. Bound retention storage and require
+  explicit disposal; a full retention store must not silently discard versions.
+- Crash recovery itself at every mutation boundary, then repeat it at least
+  three times. Require idempotent effects or an explicit preserved/uncertain
+  outcome, never an optimistic success. File-level restart is mandatory;
+  verified mid-file prefix resume is a separately qualified optimization.
+
+Acceptance includes R-01–04/R-06–09/R-11 in the shared recovery plan, adapted to every
+advertised provider. The concrete A-transferred/B-partial/C-pending/D-existing
+case must preserve all four items through resume and repeated submission.
+
+Current checkpoint (corrected 2026-11-14): a separate worker-facing ordinary-operation
 recovery discovery service now scans the private root for copy/tree-copy/move/
 recursive-delete journals. It retains exact native journal names, keeps display
 text non-authoritative, decodes native evidence read-only, and reports malformed,
@@ -166,15 +213,15 @@ worker scan completes, with a dynamic status hint when reconciliation is
 required. The native unpublished-staging cleanup primitive has been qualified
 through the real operation-content matrix: Windows completes the
 identity-bound discard, while POSIX explicitly returns Unsupported and leaves
-the object intact. Files now exposes a guarded `Clean up archive staging`
-command only for one fully evidenced Copied/Verified unpublished archive item
-on the qualified Windows adapter; it confirms the action, dispatches the
-identity/digest-revalidating cleanup worker, and rescans the journal after
-success. macOS/Linux keep that command disabled with an explicit reason until
-their native discard protocols are qualified. Ordinary-operation cleanup is
-now exposed under the same Windows-only guard for one complete receipt-backed
-regular-file copy; retry/resume and publication reconciliation remain
-disabled until their identity-bound workers are wired and qualified. New
+the object intact. That historical native live-owner discard evidence does not
+qualify restart cleanup. Current Files archive and ordinary-operation cleanup
+commands are disabled for recovered journals on every platform: the original
+live creator owner is unavailable, and serialized receipts cannot recreate it.
+Read-only inspection remains available. Retry/resume and publication
+reconciliation remain unavailable in Files until fresh-authority workers are
+integrated and qualified. The shared backend has development recovery/session
+interfaces and focused evidence, which do not establish the composed Mac
+workflow. New
 regular-file copy composition now records an optional exact native destination
 address and the independently verified whole-file SHA-256 content receipt in
 versioned recovery evidence; legacy journals and copy paths without those
@@ -186,6 +233,13 @@ authority by themselves; no resume, retry, publication, cleanup, or source
 retirement command is enabled.
 
 ## CP-04 — Close the actual safety and release matrix
+
+Add the complete [repeat/recovery matrix R-01–12](ck-files-transfer-recovery-plan.md#acceptance-matrix)
+to native acceptance. Measure union preservation and retained versions with
+independent byte/metadata inspection after interruption, repeated submission
+and recovery crashes. Include no-journal partial folders and simultaneous
+consumers. Record positive execution separately from safe refusal; the current
+Mac publication gate cannot be closed by a negative Unsupported test.
 
 Carry forward all unclosed WP-07/WP-08 gates: native NTFS/APFS/ext4 plus
 Btrfs/XFS, FAT32/exFAT, SMB/NFS, removable/read-only/provider storage, feature

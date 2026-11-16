@@ -383,7 +383,7 @@ void DiskUsageApp::request_cloud_action(DiskUsageCloudAction action)
 
     cloud_confirmation_.reset();
     cloud_confirmation_.emplace(ckv::widgets::present_modal_message_box(
-        application_, shell_->desktop(), shell_->roles(),
+        application_, shell_->desktop(),
         {ckv::widgets::MessageBoxKind::Warning,
          "Free local copies",
          "Remove local copies of cloud content at '" + target.string() +
@@ -465,7 +465,7 @@ void DiskUsageApp::show_message(ckv::widgets::MessageBoxKind kind, std::string t
 {
     message_box_.reset();
     message_box_.emplace(ckv::widgets::present_modal_message_box(
-        application_, shell_->desktop(), shell_->roles(), {kind, std::move(title), std::move(message), ckv::widgets::MessageBoxButtons::Ok}));
+        application_, shell_->desktop(), {kind, std::move(title), std::move(message), ckv::widgets::MessageBoxButtons::Ok}));
     message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
 }
 

@@ -10,7 +10,7 @@
 
 #include "cvision/testing/cktest.hpp"
 #include "cvision/term/headless_terminal.hpp"
-#include "cvision/widgets/common_components.hpp"
+#include "cvision/widgets/date_time.hpp"
 #include "cvision/widgets/menu.hpp"
 #include "cvision/widgets/status_line.hpp"
 #include "cvision/widgets/text_editor.hpp"
@@ -170,8 +170,8 @@ CK_TEST(todo_app_builds_a_windowed_board_with_menu_status_and_focus) {
     bool found_board = false;
     bool found_calendar = false;
     for (const ckv::widgets::StatusLineItem& item : fixture.todo.status_line()->items()) {
-        if (item.label == "Board: main" &&
-            item.command == fixture.app.commands().id_for(TodoApp::kBoardManagerKey).value_or(ckv::ui::kInvalidCommand))
+        if (item.presentation.label == "Board: main" &&
+            item.presentation.command == fixture.app.commands().id_for(TodoApp::kBoardManagerKey).value_or(ckv::ui::kInvalidCommand))
             found_board = true;
         if (item.label == "2026-08-25 12:00Z") found_calendar = true;
     }
@@ -317,7 +317,7 @@ CK_TEST(todo_note_window_is_modeless_and_autosaves_after_150ms) {
     fixture.app.step(fixture.monotonic.now_nanos());
     CK_CHECK(fixture.todo.desktop().windows().size() == 1U);
     CK_CHECK(fixture.app.focused() == fixture.todo.board_view()->lane_view(LaneId{1}));
-    CK_CHECK(fixture.app.execute_command(fixture.app.commands().standard().next_window));
+    CK_CHECK(!fixture.app.execute_command(fixture.app.commands().standard().next_window));
 }
 
 CK_TEST(todo_note_editor_accepts_shifted_character_input_through_application_routing) {
@@ -568,7 +568,7 @@ CK_TEST(todo_board_creation_selects_and_persists_the_new_board) {
     CK_CHECK(fixture.todo.board_window()->title() == "TODO — Release");
     bool found_board = false;
     for (const ckv::widgets::StatusLineItem& item : fixture.todo.status_line()->items())
-        if (item.label == "Board: Release") found_board = true;
+        if (item.presentation.label == "Board: Release") found_board = true;
     CK_CHECK(found_board);
 }
 

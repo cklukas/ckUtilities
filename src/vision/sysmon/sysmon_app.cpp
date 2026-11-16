@@ -137,7 +137,7 @@ void SysmonApp::build_shell() {
     detail_command_ = command({.key = "next_details", .title = "Next &details", .chord = "F9", .handler = [this] { ++detail_page_; changed(); }});
     calendar_command_ = command({.key = "calendar", .title = "&Calendar", .chord = "Ctrl+D", .handler = [this] { open_calendar(); }});
     about_ = command({.key = "about", .title = "&About ck-sysmon...", .chord = "F1", .handler = [this] {
-        auto box = ckv::widgets::present_modal_message_box(app_, desktop(), roles_,
+        auto box = ckv::widgets::present_modal_message_box(app_, desktop(),
             {ckv::widgets::MessageBoxKind::Info, "About ck-sysmon", ck::host::about_text(
                 "ck-sysmon — desktop system monitor\n\nNative CPU, memory and GPU metrics; passwordless SSH hosts; loaded Ollama models.\n\nBars: 0–100%. History: oldest to newest, up to 60 samples.\n" + app_.commands().chord_text(page_command_) + " pages hosts; " + app_.commands().chord_text(detail_command_) + " pages resource details. Missing metrics are never shown as zero."), ckv::widgets::MessageBoxButtons::Ok});
         box.set_completion_handler([](ckv::widgets::MessageBoxResult) {});

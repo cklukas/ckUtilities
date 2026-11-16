@@ -9,7 +9,7 @@
 #include "unicode_scalar.hpp"
 #include <cvision/core/text.hpp>
 #include <cvision/ui/layout.hpp>
-#include <cvision/widgets/common_components.hpp>
+#include <cvision/widgets/command_palette.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
@@ -749,19 +749,10 @@ struct FilesApp::State {
     }
     ~State() { cleanup(); }
     void update_footer_hint(ckv::ui::Application::AttentionChange kind) {
-        auto next = ckv::ui::kInvalidCommand;
+        constexpr auto next = ckv::ui::kInvalidCommand;
         const auto *footer = shell->status_line();
         if (kind == ckv::ui::Application::AttentionChange::Input) {
-            const auto count = application.mouse_events_dispatched();
-            const auto &mouse = application.last_mouse_event();
-            if (count != last_input_mouse_count && mouse && mouse->action == ckv::MouseAction::Down &&
-                mouse->button == ckv::MouseButton::Left && footer && application.hovered_view() == footer &&
-                !application.input_capture()) {
-                const auto hit = footer->command_at(mouse->cell);
-                if (hit != ckv::ui::kInvalidCommand && !application.commands().is_enabled(hit))
-                    next = hit;
-            }
-            last_input_mouse_count = count;
+            last_input_mouse_count = application.mouse_events_dispatched();
         } else if (application.hovered_view() == footer) {
             return;
         }
@@ -1437,7 +1428,7 @@ struct FilesApp::State {
             ? highlighted_menu_command : pressed_footer_command;
         if (i == active && palette_focused) {
             if (const auto *palette = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused()))
-                inspected_command = palette->inspected_command().value_or(ckv::ui::kInvalidCommand);
+                inspected_command = palette->highlighted_command().value_or(ckv::ui::kInvalidCommand);
         }
         if (i == active && inspected_command != ckv::ui::kInvalidCommand) {
             if (const auto *command = application.commands().find(inspected_command))
@@ -1538,7 +1529,7 @@ struct FilesApp::State {
                                                             .kind = ckv::widgets::FieldKind::Note}};
         descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
         archive_recovery_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         archive_recovery_window = shell->desktop().active_window();
         archive_recovery_lifetime = archive_recovery_window->lifetime_token();
         archive_recovery_dialog->set_completion_handler([this](const ckv::widgets::DialogResult &) {
@@ -1617,7 +1608,7 @@ struct FilesApp::State {
             descriptor.fields.push_back({.label = std::move(line), .kind = ckv::widgets::FieldKind::Note});
         descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
         operation_recovery_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         operation_recovery_window = shell->desktop().active_window();
         operation_recovery_lifetime = operation_recovery_window->lifetime_token();
         operation_recovery_dialog->set_completion_handler([this](const ckv::widgets::DialogResult &) {
@@ -2272,7 +2263,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         create_directory_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         create_directory_window = shell->desktop().active_window();
         create_directory_lifetime = create_directory_window->lifetime_token();
         create_directory_dialog->set_completion_handler(
@@ -2321,7 +2312,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         create_file_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         create_file_window = shell->desktop().active_window();
         create_file_lifetime = create_file_window->lifetime_token();
         create_file_dialog->set_completion_handler(
@@ -2373,7 +2364,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         create_hard_link_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         create_hard_link_window = shell->desktop().active_window();
         create_hard_link_lifetime = create_hard_link_window->lifetime_token();
         create_hard_link_dialog->set_completion_handler(
@@ -2427,7 +2418,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Create", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         create_symbolic_link_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         create_symbolic_link_window = shell->desktop().active_window();
         create_symbolic_link_lifetime = create_symbolic_link_window->lifetime_token();
         create_symbolic_link_dialog->set_completion_handler(
@@ -2633,7 +2624,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Rename", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         rename_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         rename_window = shell->desktop().active_window();
         rename_lifetime = rename_window->lifetime_token();
         rename_dialog->set_completion_handler(
@@ -2681,7 +2672,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Move to Trash", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         trash_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         trash_window = shell->desktop().active_window();
         trash_lifetime = trash_window->lifetime_token();
         trash_dialog->set_completion_handler(
@@ -2728,7 +2719,7 @@ struct FilesApp::State {
         descriptor.buttons = {{"&Delete permanently", ckv::widgets::ButtonRole::Accept, {}},
                               {"&Cancel", ckv::widgets::ButtonRole::Dismiss, {}}};
         delete_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         delete_window = shell->desktop().active_window();
         delete_lifetime = delete_window->lifetime_token();
         delete_dialog->set_completion_handler(
@@ -2831,7 +2822,7 @@ struct FilesApp::State {
                               .options = std::move(names), .initial_selection = 0}};
         descriptor.buttons = {{"&Open", ButtonRole::Accept, {}}, {"&Cancel", ButtonRole::Dismiss, {}}};
         bookmark_dialog.emplace(
-            present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         bookmark_dialog_window = shell->desktop().active_window();
         bookmark_dialog_lifetime = bookmark_dialog_window->lifetime_token();
         bookmark_dialog->set_completion_handler(
@@ -2891,7 +2882,7 @@ struct FilesApp::State {
                 .label = "Filters match escaped display names. Case folding is ASCII-only. Hidden marks stay marked.",
                 .kind = FieldKind::Note}};
         descriptor.buttons = {{"&Apply", ButtonRole::Accept, {}}, {"&Cancel", ButtonRole::Dismiss, {}}};
-        view_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        view_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         view_dialog_window = shell->desktop().active_window();
         view_dialog_lifetime = view_dialog_window->lifetime_token();
         view_dialog->set_completion_handler(
@@ -3157,7 +3148,7 @@ struct FilesApp::State {
         };
         descriptor.buttons = {{"&Close", ckv::widgets::ButtonRole::Dismiss, {}}};
         link_dialog.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         link_dialog_window = shell->desktop().active_window();
         link_dialog_lifetime = link_dialog_window->lifetime_token();
         link_dialog->set_completion_handler(
@@ -3829,7 +3820,7 @@ struct FilesApp::State {
         if (review.can_apply)
             descriptor.buttons.push_back({"&Apply folder copy", ButtonRole::Accept, {}});
         descriptor.buttons.push_back({"&Cancel", ButtonRole::Dismiss, {}});
-        tree_copy_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+        tree_copy_dialog.emplace(present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         tree_copy_window = shell->desktop().active_window();
         if (tree_copy_window)
             tree_copy_window_lifetime = tree_copy_window->lifetime_token();
@@ -4255,7 +4246,7 @@ struct FilesApp::State {
             {"&Stay", ckv::widgets::ButtonRole::Accept, {}},
             {"Stop activity and e&xit", ckv::widgets::ButtonRole::Dismiss, [this] { exit_selected = true; }}};
         confirmation.emplace(
-            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop(), shell->roles()));
+            ckv::widgets::present_modal_dialog(std::move(descriptor), application, shell->desktop()));
         confirmation->set_completion_handler(
             [this, weak = std::weak_ptr<void>(lifetime)](const ckv::widgets::DialogResult &) {
                 if (weak.expired())

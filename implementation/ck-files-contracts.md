@@ -1,5 +1,19 @@
 # Files — WP-00 behavioral and adapter contracts
 
+## Preservation admission checkpoint — 2026-11-14
+
+Optional backend preflight V2 preserves the V1 ABI and reports requested policy,
+preliminary source eligibility, exclusions and Unknown destination replay.
+Achieved preservation is always zero. Consumer admission must finish before new
+operation journals, retained targets or row effects; journal-root preparation
+is also a side effect and follows admission. Existing caller-supplied journals,
+session leases and recovery evidence remain separate contracts. All actual
+capture/replay, identity, publication, retirement, close and recovery guards
+still run. Read-only preflight never reserves a name or authorizes mutation.
+See the [backend coverage table](../../ck-core-fs-lib/docs/transfer-preflight-and-publication-receipts.md#preservation-preflight-and-consumer-admission)
+and [remaining recovery gates](ck-files-transfer-recovery-plan.md).
+
+
 Status: implementation specification. All native capabilities remain unqualified
 until their adapter tests pass. This document refines [the work packages](ck-files-plan.md)
 without enabling file operations. Dated 2026-10-23.
@@ -768,6 +782,32 @@ content, namespace durability and crash reconciliation. Multi-step renames are
 not a global atomic transaction; state intermediate visibility accurately.
 Do not use remove-then-rename. Tree jobs commit item by item and return the
 complete outcome partition, never one boolean that hides partial changes.
+
+## Interrupted transfer and repeat submission addendum (2026-11-14)
+
+The [shared transfer-recovery plan](ck-files-transfer-recovery-plan.md#interruption-and-repeated-operation-contract)
+specifies a shared backend contract, not frontend-only policy. Resume retains
+the original job scope and reconciles its effects; retry creates a linked
+reviewed attempt. Repeated source/destination submission must detect unfinished
+overlapping work before admitting mutation. Missing originals after a partial
+move never authorize deletion of their already committed destinations.
+Destination-only objects remain protected under copy/merge/retry semantics.
+
+Rebind and independently revalidate evidence before using completed-work
+receipts. Persisted names, IDs, digests and access bookmarks do not recreate
+live ownership. Restart mutation requires a freshly qualified native authority
+protocol. When no trustworthy journal exists, including Finder-originated
+partial moves, only conservative new comparison/copy/merge is available; do
+not infer historical scope or source-retirement authority. Preserve uncertain
+objects and conflicts for review.
+
+Recoverable replacement includes retained-version accounting, reviewed restore
+and separately authorized disposal; storage pressure does not authorize loss
+of old versions. A snapshot or independent hash verifies copied content, not
+the absence of later changes to a live source. Retirement must cover content
+and promised metadata stability. Recovery itself must survive interruption
+and repeated invocation. R-01–12 in the shared recovery plan are additional acceptance
+cases; they do not claim currently implemented native recovery.
 
 ## Native API research and qualification targets
 

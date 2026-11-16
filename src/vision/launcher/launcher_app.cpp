@@ -13,7 +13,7 @@
 #include <cvision/core/diagnostics.hpp>
 #include <cvision/ui/grid.hpp>
 #include <cvision/widgets/button.hpp>
-#include <cvision/widgets/common_components.hpp>
+#include <cvision/widgets/date_time.hpp>
 #include <cvision/widgets/command_presentation.hpp>
 #include <cvision/widgets/input_line.hpp>
 #include <cvision/widgets/menu.hpp>
@@ -441,7 +441,7 @@ void UtilitiesLauncherApp::open_color_selector()
     dialog.buttons.push_back({"&Apply", ckv::widgets::ButtonRole::Accept, nullptr});
     dialog.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
     color_dialog_.emplace(
-        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop(), shell_->roles()));
+        ckv::widgets::present_modal_dialog(std::move(dialog), application_, shell_->desktop()));
     color_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (!result.accepted || result.selected.size() != 2 || result.selected[0] < 0 || result.selected[1] < 0)
             return;

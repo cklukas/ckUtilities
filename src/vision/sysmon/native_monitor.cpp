@@ -54,7 +54,8 @@ struct NativeMonitorSource::Impl {
         request.descendants = ckv::core::ProcessDescendantPolicy::TerminateOnCompletion;
         request.idle_budget_nanos = 10'000'000'000;
         request.max_stdout_bytes = 32768; request.max_stderr_bytes = 2048;
-        return runner.run(request, stop);
+        (void)stop;
+        return runner.run(request);
     }
     Sample remote(const std::string& endpoint, std::stop_token stop) {
         std::string command;

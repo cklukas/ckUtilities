@@ -143,6 +143,16 @@ verifies the refusal creates neither a staging file nor an archive journal.
 
 ## Current state
 
+2026-11-14 clarification: live-worker cleanup evidence below is not restart
+cleanup authority. Recovered archive staging remains inspect-only when the
+creator's live ownership is unavailable, including on Windows. Ordinary
+transfer resume and repeat submission are specified in the
+[shared transfer-recovery plan](ck-files-transfer-recovery-plan.md); archive recovery keeps
+its separate manifest/protocol and needs its own fresh-authority acceptance.
+An ordinary-file resume implementation cannot automatically enable archive
+resume, publication or cleanup. Complete CP-01–04 ordinary transfer gaps before
+expanding archive scope. Ordinary transfer qualification does not qualify archives.
+
 The versioned sparse writer, single-worker boundary, archive-specific review
 model, native source adapter, read-only live capability probe, durable archive
 journal transitions, archive-specific read-only recovery projection, bounded

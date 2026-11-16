@@ -3,7 +3,7 @@
 ckUtilities is a ckVision-native C++20 suite. Every build requires an
 installed `ckvision::cvision` CMake package; a neighbouring ckVision source
 checkout is never used as a dependency.
-[ckVision 1.5.0 SDK packages](https://github.com/cklukas/ckVision/releases/tag/v1.5.0)
+[ckVision 2.0.0 SDK packages](https://github.com/cklukas/ckVision/releases/tag/v2.0.0)
 
 The headless filesystem backend is a separate sibling project:
 [`ck-core-fs-lib`](https://github.com/cklukas/ck-core-fs-lib). A normal local
@@ -110,7 +110,7 @@ display. ck-todo's and ck-sysmon's golden frames, which their test suites
 compare against, are written by the same run.
 
 To regenerate them, point the script at the installed SDK and the matching
-ckVision 1.5.0 source checkout:
+ckVision 2.0.0 source checkout:
 
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \

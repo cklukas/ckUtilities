@@ -377,7 +377,7 @@ struct FilesOperationReviewDialog::State final : std::enable_shared_from_this<St
 
     void present() {
         build_descriptor();
-        presentation.emplace(present_modal_dialog(std::move(descriptor), application, desktop, roles));
+        presentation.emplace(present_modal_dialog(std::move(descriptor), application, desktop));
         window = desktop.active_window();
         if (!window)
             throw std::logic_error("Files operation review did not create a window");

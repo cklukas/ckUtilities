@@ -102,7 +102,7 @@ SuiteShell::SuiteShell(ckv::ui::Application &application, SuiteShellOptions opti
                                       : ckv::ui::kInvalidCommand),
       shell_(application_, make_shell_options())
 {
-    ckv::widgets::install_about_help(application_, desktop(), roles_, options_.application_name,
+    ckv::widgets::install_about_help(application_, desktop(), options_.application_name,
                                      options_.about_text);
     auto clock = std::make_unique<ckv::widgets::ClockView>();
     clock->set_time_provider(options_.clock_time_provider ? options_.clock_time_provider : local_time);
@@ -188,7 +188,7 @@ ckv::widgets::ApplicationShellOptions SuiteShell::make_shell_options() const
 void SuiteShell::show_about()
 {
     auto presentation = ckv::widgets::present_modal_message_box(
-        application_, desktop(), roles_,
+        application_, desktop(),
         {ckv::widgets::MessageBoxKind::Info, options_.application_name, options_.about_text,
          ckv::widgets::MessageBoxButtons::Ok});
     presentation.set_completion_handler([](ckv::widgets::MessageBoxResult) {});

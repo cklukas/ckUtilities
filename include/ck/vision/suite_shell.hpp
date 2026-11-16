@@ -9,7 +9,7 @@
 #include <cvision/ui/command.hpp>
 #include <cvision/ui/standard_roles.hpp>
 #include <cvision/widgets/application_shell.hpp>
-#include <cvision/widgets/common_components.hpp>
+#include <cvision/widgets/date_time.hpp>
 #include <cvision/widgets/menu.hpp>
 #include <cvision/widgets/status_line.hpp>
 

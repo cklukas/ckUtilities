@@ -7,7 +7,7 @@ checkout is not a build input.
 
 | Field | Value |
 | --- | --- |
-| ckVision version | `1.5.0` |
+| ckVision version | `2.0.0` |
 | Pinned source revision | `adf767deea9a3cc8dd9d4b397af444c5ad6c873f` |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |

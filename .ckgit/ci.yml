@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The self-hosted lane publishes the documentation site. ckdocs is
-# compiled from the ck-git-hosting sister project at its pinned 0.8.1 commit,
+# compiled from the ck-git-hosting sister project at its pinned 0.11.0 commit,
 # the release .github/workflows/pages.yml installs, so the LAN and GitHub Pages
 # publish the same site. `--strict` fails the run on a broken link, a heading
 # fragment, or a page the navigation does not list, before `pages:` ever sees
@@ -17,7 +17,7 @@ on:
   branches: [master]
 sisters:
   - name: ck-git-hosting
-    ref: ad6dc1de73cedef8eb64d53ab607043ae09845ee
+    ref: 3ab2bf8981d96b00b5f57ddbc63195c6df66d9fd
 jobs:
   - name: docs
     steps:

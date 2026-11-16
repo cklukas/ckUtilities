@@ -1,5 +1,110 @@
 # Files implementation evidence
 
+## 2026-11-14 — Preservation preflight and backend consumer admission
+
+The shared backend adds opt-in preservation preflight V2 without changing the
+V1 ABI or version query. It echoes requested scope, ownership, privilege and
+loss policy, reports preliminary source eligibility separately from Unknown
+destination replay, and reports exclusions with **zero achieved fields**.
+Known privilege-policy and Darwin complete-security blockers fail early;
+held query-view close failures remain failures and reach enclosing observers.
+Full capture/replay, source stability and execution revalidation remain required.
+
+Admission now precedes the first new operation journal/ledger and row effects
+for regular/tree batches, cross-volume move batches, reviewed tree execution,
+verified-prefix retries, native sync and named resolution. Each batch/tree checks
+all selected source rows before starting an earlier row. Same-volume rename
+keeps its separate native contract. The legacy C wrapper also defers journal-root
+mode/security preparation until admission succeeds. Archive writing already had
+a publication gate; generated archive bytes have no source replay policy.
+
+See the [backend coverage contract](../../ck-core-fs-lib/docs/transfer-preflight-and-publication-receipts.md#preservation-preflight-and-consumer-admission).
+Validation is recorded in the [preservation receipt](../../ck-core-fs-lib/qualification/preservation-preflight-20261114.json):
+13 selected Mac CTests passed across focused runs, installed C consumers 2/2,
+and installed Mac audit 6/6. Linux passed 48/49 CTests; the full tree suite
+exceeded 180 seconds, then its unchanged executable passed 796 checks in a
+serialized 240-second run. The timeout and an intervening root-witness refusal
+are preserved. No native Windows, sanitizer, power-loss or Mac positive-transfer
+claim is added.
+
+This closes the common admission integration task, not B-00/B-01 acceptance.
+Full source inventory, actual destination replay, free-space/stability checks,
+Darwin strong publication, repeated-request reconciliation and the native
+reliability matrix remain open. The Mac GUI stays separate, internal and
+deferred; no GUI target, public packaging or remote is introduced.
+
+## 2026-11-14 — B-00 preflight and B-01 typed publication receipts
+
+The backend adds asynchronous, read-only `ckfe_preflight_*` family version 1:
+held-source/name/destination observations, explicit unknown/unsupported
+capabilities, cached polling, cancellation and nonjoining worker drain. The
+legacy regular-copy batch refuses the known Mac publication blocker before
+creating a journal. This intentionally changes its terminal outcome from late
+RecoveryRequired to early Unsupported, with zero copied bytes and no new journal.
+
+Regular copy/archive publication now requires a typed same-object receipt.
+Read-only cloned-output observations cannot construct it. Post-effect failures,
+including verification-handle close errors without an outer observer, remain
+uncertain; existing native close, durability and source-retirement guards stay.
+The [contract](../../ck-core-fs-lib/docs/transfer-preflight-and-publication-receipts.md)
+records exact ABI lifetime rules and integration gaps.
+
+[Source-bound validation](../../ck-core-fs-lib/qualification/preflight-publication-receipts-20261114.json):
+7/7 Mac checks, 37/37 Linux checks, installed production C consumer 1/1,
+installed preflight C11 checks, and six installed Mac audit checks passed.
+Independent inspection confirmed preserved original/foreign sources and empty
+destination/journal directories. Linux covers positive publication, cancellation,
+flush/close/OOM and crash boundaries. No positive Mac publication, move, tree,
+interrupted-repeat recovery, Windows, sanitizer or GUI qualification is claimed.
+This historical checkpoint predates the preservation/admission increment above.
+
+
+## 2026-11-14 — B-00 installed API audit and B-01 Darwin publication proof
+
+The shared [backend audit](../../ck-core-fs-lib/docs/macos-publication-audit.md)
+maps the installed C interfaces to the transfer/recovery requirements and
+records remaining preflight, metadata, lifecycle and restart gaps. A clean
+Release SDK from backend `82264fe` compiled 124 translation units in 129 steps
+(172.18 s), with browser models/testing OFF, then passed the installed C
+consumer 1/1 and five additional installed-C native checks. Eight standalone
+Darwin checks confirm descriptor-based source cloning, metadata differences,
+no-clobber and held-parent behavior, and demonstrate two unsafe candidate
+algorithms: byte-identical replacement before clone reopen, and substituted
+private staging before exclusive rename. Independent fixture inspection and
+actual loaded-SDK verification also passed.
+
+These results do not qualify positive Mac publication, move, restart mutation,
+directory publication, other filesystem configurations or power-loss durability.
+The production guard remains unchanged. The next step is typed held-input
+preflight and a publication receipt contract distinguishing created-object
+ownership from later read-only content observations. See
+[source-bound backend evidence](../../ck-core-fs-lib/qualification/macos-publication-audit-20261114.json).
+No Files build or GUI acceptance is claimed by these backend-only probes.
+
+## 2026-11-14 — Shared transfer recovery and interrupted-repeat gaps
+
+Documentation review adds the [shared transfer-recovery plan](ck-files-transfer-recovery-plan.md):
+seven backend packages, explicit dependency gates,
+and twelve acceptance scenarios. The key missing acceptance case is an
+interrupted move followed by Resume or a repeated source/destination request:
+already transferred files, remaining originals and destination-only content
+must survive. Finder/foreign partial transfers without a trustworthy journal
+use conservative merge/copy review, never invented resume/deletion authority.
+
+WP-03–08 and CP-01/03/04 now include reconciliation, retained replacements,
+fresh restart authority, cross-frontend overlap and repeat/crash qualification.
+WP-04 broad completion checks are corrected to partial implementation; CP-03's
+historical Windows cleanup claim is corrected to the current inspect-only
+restart boundary. The contracts and archive plan cross-reference these limits.
+Current Mac strong publication, source stability/retirement and usable Files
+restart recovery remain open. Backend development interfaces and negative
+refusal tests are not positive Mac workflow qualification.
+
+This is a source/documentation assessment, not a new build, test execution or
+feature acceptance. Active application/backend implementation edits are outside
+this documentation change. The new plan's budgets are proposed acceptance
+targets, not measured performance results.
+
 ## 2026-11-14 — Honor the explicit ckVision SDK prefix
 
 Changing `CKTOOLS_CKVISION_PREFIX` in an existing build now selects the

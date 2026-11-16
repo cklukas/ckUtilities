@@ -229,7 +229,7 @@ void JsonViewApp::open_file_dialog()
     options.filters.push_back({"JSON files", {".json"}});
     open_dialog_.emplace(ckv::widgets::present_modal_file_dialog(
         ckv::widgets::FileDialogMode::Open, initial_directory(), files_, std::move(options),
-        application_, shell_->desktop(), shell_->roles()));
+        application_, shell_->desktop()));
     open_dialog_->set_completion_handler([this](ckv::widgets::FileDialogResult result) {
         if (result.accepted)
             load_file(result.path);
@@ -263,7 +263,7 @@ void JsonViewApp::show_find_dialog()
     descriptor.buttons.push_back({"&Cancel", ckv::widgets::ButtonRole::Dismiss, nullptr});
 
     find_dialog_.emplace(ckv::widgets::present_modal_dialog(std::move(descriptor), application_,
-                                                        shell_->desktop(), shell_->roles()));
+                                                        shell_->desktop()));
     find_dialog_->set_completion_handler([this](ckv::widgets::DialogResult result) {
         if (result.accepted && result.values.size() >= 3 && result.checked.size() >= 3)
             find(result.values[0], result.checked[1], result.checked[2]);
@@ -469,7 +469,7 @@ void JsonViewApp::show_message(ckv::widgets::MessageBoxKind kind, std::string ti
 {
     message_box_.reset();
     message_box_.emplace(ckv::widgets::present_modal_message_box(
-        application_, shell_->desktop(), shell_->roles(),
+        application_, shell_->desktop(),
         {kind, std::move(title), std::move(message), ckv::widgets::MessageBoxButtons::Ok}));
     message_box_->set_completion_handler([](ckv::widgets::MessageBoxResult) {});
 }

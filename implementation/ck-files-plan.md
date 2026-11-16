@@ -18,7 +18,8 @@ new changes. Real-window mouse and restricted-key acceptance, and the remaining
 sanitizer/runtime gates, are documented in the
 [implementation evidence](ck-files-progress.md). Windows v143 qualification
 uses the mandatory `V:` workstation development drive.
-Updated: 2026-11-10. Original baseline review:
+Updated: 2026-11-14 (transfer/restart gap review; no new execution qualification).
+Original baseline review:
 `81aaf009db23ca8558211722107bd2122351e565` (2026-10-23).
 
 Execution: continue WP-02 implementation and its acceptance gates before
@@ -27,6 +28,20 @@ claiming completion. See [implementation evidence](ck-files-progress.md),
 and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
 
 ## Product commitment
+
+The complementary [shared transfer-recovery plan](ck-files-transfer-recovery-plan.md)
+specifies backend prerequisites shared by filesystem consumers. Its B-00–06
+packages close backend gaps and its R-01–12 matrix makes interrupted moves and
+repeated submissions explicit. It does not change this application's ckVision
+frontend or close the cross-platform gates. Current Mac strong copy publication,
+source retirement, and usable restart reconciliation remain open. Historical
+checked implementation tasks below are not blanket native qualification or
+proof of an end-to-end recovery workflow. The current preservation preflight
+adds preliminary policy eligibility and early admission across backend consumers;
+it never reports achieved preservation. WP-03 still requires complete source and
+destination preservation review, WP-04 still requires restart/repeat
+reconciliation, and WP-05 still requires qualified retirement. See the shared
+plan and latest progress entry for exact coverage.
 
 Build a professional, keyboard-first, two-pane file manager for ckUtilities,
 using the current ckVision SDK and the suite's native application conventions.
@@ -201,6 +216,18 @@ the same reviewed conflict class. New preservation differences still interrupt.
 
 ### Execution, verification and recovery
 
+An interrupted move followed by the same move request is a required workflow,
+not merely a fresh plan of the remaining source. Preserve the union of already
+committed destination items and remaining originals. Missing source entries
+never authorize deletion of destination entries. Resume binds the original job
+and scope; retry reconciles unresolved items into a linked reviewed attempt.
+Detect overlapping unfinished jobs before admitting a repeated submission.
+Without a trustworthy journal (including Finder partial moves), offer a
+conservative copy/merge review and preserve destination-only data; do not infer
+the previous move's scope or deletion authority. The detailed
+[restart contract and matrix](ck-files-transfer-recovery-plan.md#interruption-and-repeated-operation-contract)
+are shared requirements, independent of frontend.
+
 Use native handle/descriptor-relative operations and object-identity checks to
 limit symlink/reparse and time-of-check/time-of-use races. Canonical path-string
 comparison alone is insufficient. Detect self-copy, hard-link aliases,
@@ -297,6 +324,8 @@ permissions do not confer file-manager mutation capabilities.
 Completed packages are checked below. Each completion record names its commit, tests,
 platform/filesystem evidence and remaining limitations. A failing acceptance
 criterion keeps the package open; do not replace it with a workaround.
+`[~]` marks partial implementation with explicit open gates; historical `[x]`
+subtasks do not override an open package or provider acceptance requirement.
 
 | WP | Deliverable | Depends on |
 | --- | --- | --- |
@@ -504,6 +533,10 @@ flows; their cross-platform release qualification remains in WP-07/WP-08.
 - [x] Implement review dialogs for preservation loss, uncertainty, collisions,
   destination replacement and explicit directory merges.
 - [x] Bind user decisions to plan identity and invalidate them on relevant change.
+- [ ] Add reconciliation-aware repeat planning: distinguish original-job resume,
+  linked retry and a new transfer; protect previously committed and
+  destination-only entries. Changed/new source children require explicit scope
+  review. Qualify foreign partial-folder merge with no trustworthy journal.
 
 Acceptance: tests demonstrate separate consent for missing ADS/resource forks,
 ACL/security changes, sparse expansion, timestamp precision, hard-link loss,
@@ -512,12 +545,20 @@ causes no mutation. Concurrent substitutions force revalidation/new decisions.
 
 ### WP-04 — copy, verification and recovery
 
-- [x] Implement native streaming/copy adapters, per-stream digest verification,
-  ordered metadata preservation, safe commit/replacement and durable journals.
-- [x] Implement bounded progress, conflicts during execution, cancellation,
-  per-item outcomes, startup inspection and recovery of owned artifacts.
-- [x] Add deterministic failure injection at each journal/commit boundary and
-  during read/write/flush/metadata operations; test process termination recovery.
+- [~] Native streaming/copy adapters, per-stream digest verification, metadata
+  stages and durable journals exist. Positive Darwin strong publication and
+  retained replacement remain provider qualification gates (B-01/02).
+- [~] Bounded progress, cancellation, per-item outcomes and startup inspection
+  exist. Files restart cleanup is disabled without live creator ownership;
+  usable resume/retry/reconciliation requires fresh qualified authority (B-03).
+- [~] Deterministic I/O/journal/commit failure tests exist. Complete the actual
+  app kill/relaunch, repeated recovery and interrupted-move resubmission matrix;
+  inspection or safe refusal does not qualify successful recovery.
+- [ ] Preserve old destination versions through replacement and restart; expose
+  reviewed restore and explicit disposal with bounded retention accounting.
+- [ ] Qualify file-level checkpoints, journal migration, missing-volume handling
+  and repeat submission against R-01–04/R-06–09. Mid-file resume is optional,
+  but safe restart of the overall job is not.
 
 Acceptance: failures never destroy the old target or expose an incomplete copy
 as complete. All unapproved feature losses block. Tests cover ENOSPC/quota,
@@ -538,6 +579,10 @@ crash-after-commit and journal persistence failure. Recovery never guesses.
   explicit permanent deletion with no link traversal or hidden fallback.
 - [x] Test nested partial failures, new children, read-only/immutable objects,
   mount-boundary changes, reused paths and handles, and unavailable Trash.
+- [ ] Close content and metadata stability/capture proof for Mac copy-based
+  source retirement. Snapshots of copied content alone do not prove the live
+  original is unchanged. Qualify interruption before/after capture and source
+  removal, including repeat submission; otherwise retain the original (B-04).
 
 Acceptance: cross-filesystem source removal is impossible before verified,
 durable destination commit and approved loss consent. Interrupted directory
@@ -554,6 +599,11 @@ always states its irreversibility; cancellation outcomes reflect actual effects.
   external processes. No unbounded job queue or concurrent conflicting writes.
 - [x] Ensure every progress/result message is derived from engine state.
   Keep Cancel, Skip and Retry distinct; retry creates a revalidated plan.
+- [ ] Expose Resume recorded job and Retry unresolved items only after backend
+  reconciliation; neither is an unqualified repeat of Copy/Move. Show confirmed
+  copies, remaining sources, retained versions and unknown outcomes separately.
+- [ ] Coordinate conflicting jobs across Files and other backend consumers;
+  in-process UI serialization is insufficient for a shared backend (B-05).
 
 Acceptance: full workflows work without function keys or mouse; focus returns
 correctly after dialogs, active jobs survive pane navigation, close is safe,
@@ -575,6 +625,11 @@ reported. All first-release features are present with no placeholder actions.
   memory, index size and responsiveness; establish thresholds before approval.
 - [ ] Test process crashes at every destructive transition; perform controlled
   VM/storage fault tests for any claimed power-loss guarantees.
+- [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
+  on each advertised provider, including foreign partial transfers, repeated
+  recovery crashes, retained replacement restore, competing frontends and
+  source writers. Positive Mac publication/move/restart requires native success
+  evidence; mocked transitions and Unsupported results do not close it.
 
 Acceptance: every matrix row has a result, exact OS/driver/mount/feature details,
 and evidence. No unresolved data-loss, incorrect-source-deletion, silent-loss,
@@ -587,6 +642,10 @@ access is a release blocker for that advertised capability, not a presumed pass.
   `--help`, `--version`, launcher launch/return and installed executable paths.
 - [ ] Document supported semantics and tested limits, loss dialogs, interrupted
   moves, Trash behavior, operational artifacts, and recovery procedures.
+- [ ] Reconcile capability claims across WPs, user help and shipped actions.
+  Document resume versus retry versus foreign partial-folder recovery, retained
+  version storage/disposal, and exact provider limits. Keep process-crash and
+  power-loss evidence distinct; do not advertise universal losslessness.
 - [ ] Capture screenshots from the actual app through the deterministic docgen
   pipeline; review goldens rather than blindly accepting regenerated output.
 - [ ] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
