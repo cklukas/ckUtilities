@@ -21,7 +21,6 @@ permissions:
 concurrency:
   group: ckutilities-native-serial
   cancel-in-progress: false
-  queue: max
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: '1'

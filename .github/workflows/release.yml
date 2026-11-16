@@ -7,7 +7,6 @@ permissions:
 concurrency:
   group: ckutilities-native-serial
   cancel-in-progress: false
-  queue: max
 jobs:
   qualify:
     uses: ./.github/workflows/qualify.yml

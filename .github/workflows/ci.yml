@@ -9,7 +9,6 @@ permissions:
 concurrency:
   group: ckutilities-native-serial
   cancel-in-progress: false
-  queue: max
 jobs:
   qualify:
     if: github.ref == 'refs/heads/master'
