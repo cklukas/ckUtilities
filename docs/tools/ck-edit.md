@@ -33,14 +33,14 @@ package metadata without opening the editor.
 
 ## Native workflow
 
-- **File:** open, save, save as, and close documents. Dirty documents require
-  an explicit Save, Discard, or Cancel choice.
-- **Edit:** undo, redo, toggle viewport-only word wrap, find, replace, and
-  replace all.
-- **Markdown:** normalize whitespace, reflow paragraphs, format selected text,
-  manage headings, tasks, quotes, and lists, and insert or remove links,
-  images, and footnotes. Create pipe tables and add or delete table rows and
-  columns through one-step, undoable Markdown transactions.
+- **File:** open, save, save as, normalize Markdown whitespace, and exit. Dirty
+  documents require an explicit Save, Discard, or Cancel choice.
+- **Edit:** undo, redo, and toggle viewport-only word wrap.
+- **Search:** find, find next, replace, and replace all.
+- **Format:** reflow paragraphs, format selected text, manage headings, tasks,
+  quotes, and lists, and insert or remove links, images, and footnotes. Create
+  pipe tables and add or delete table rows and columns through one-step,
+  undoable Markdown transactions.
 
 If an open file changes outside the editor while it has local unsaved edits,
 `ck-edit` preserves both versions and requires an explicit Save As,

@@ -146,12 +146,13 @@ SuiteShellOptions EditApp::make_shell_options() const
 {
     return {.application_name = "ck Edit",
             .about_text = "A native ckVision document editor with explicit injected file operations.",
-            .application_menus = {MenuBarItem{"&File", {
+            .file_items = {
                 MenuItem::command(CommandPresentation{open_command_, "&Open document..."}),
                 MenuItem::command(CommandPresentation{save_command_, "&Save"}),
                 MenuItem::command(CommandPresentation{save_as_command_, "Save &As..."}),
                 MenuItem::command(CommandPresentation{normalise_markdown_command_, "&Normalize Markdown whitespace"}),
-            }}, MenuBarItem{"&Edit", {
+            },
+            .application_menus = {MenuBarItem{"&Edit", {
                 MenuItem::command(CommandPresentation{undo_command_, "&Undo"}),
                 MenuItem::command(CommandPresentation{redo_command_, "&Redo"}),
                 MenuItem::separator(),

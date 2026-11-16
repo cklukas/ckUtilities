@@ -6,15 +6,16 @@
 <rect x="0" y="36" width="9" height="558" fill="#0000aa"/>
 <rect x="9" y="36" width="1062" height="54" fill="#c8c8c8"/>
 <rect x="1071" y="36" width="9" height="558" fill="#0000aa"/>
-<rect x="9" y="90" width="18" height="450" fill="#0000aa"/>
-<rect x="27" y="90" width="252" height="18" fill="#00aa00"/>
-<rect x="279" y="90" width="252" height="450" fill="#0000aa"/>
+<rect x="9" y="90" width="522" height="36" fill="#0000aa"/>
 <rect x="531" y="90" width="9" height="486" fill="#c8c8c8"/>
 <rect x="540" y="90" width="18" height="450" fill="#0000aa"/>
 <rect x="558" y="90" width="261" height="18" fill="#c8c8c8"/>
 <rect x="819" y="90" width="252" height="450" fill="#0000aa"/>
-<rect x="27" y="108" width="252" height="432" fill="#0000aa"/>
 <rect x="558" y="108" width="261" height="432" fill="#0000aa"/>
+<rect x="9" y="126" width="18" height="414" fill="#0000aa"/>
+<rect x="27" y="126" width="252" height="18" fill="#00aa00"/>
+<rect x="279" y="126" width="252" height="414" fill="#0000aa"/>
+<rect x="27" y="144" width="252" height="396" fill="#0000aa"/>
 <rect x="9" y="540" width="522" height="36" fill="#c8c8c8"/>
 <rect x="540" y="540" width="531" height="36" fill="#c8c8c8"/>
 <rect x="9" y="576" width="1062" height="18" fill="#0000aa"/>
@@ -499,8 +500,7 @@
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="104" xml:space="preserve" fill="#ffffff">Documents</text>
-<text x="279" y="104" xml:space="preserve" fill="#ffff55">Folder           Unknown</text>
+<text x="27" y="104" xml:space="preserve" fill="#ffff55">Documents                   Folder           Unknown</text>
 <g data-box-drawing="single">
 <path d="M 535.5 89.5 L 535.5 99 L 535.5 108.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -527,7 +527,8 @@
 <path d="M 4.5 125.5 L 4.5 135 L 4.5 144.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 125.5 L 4.5 135 L 4.5 144.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="27" y="140" xml:space="preserve" fill="#ffff55">README.md                   File                1842</text>
+<text x="27" y="140" xml:space="preserve" fill="#ffffff">README.md</text>
+<text x="279" y="140" xml:space="preserve" fill="#ffff55">File                1842</text>
 <g data-box-drawing="single">
 <path d="M 535.5 125.5 L 535.5 135 L 535.5 144.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
@@ -798,7 +799,6 @@
 <path d="M 4.5 557.5 L 4.5 567 L 4.5 576.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 557.5 L 4.5 567 L 4.5 576.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="9" y="572" xml:space="preserve" fill="#000000">Hint: Copy unavailable: operation worker is not configured</text>
 <g data-box-drawing="single">
 <path d="M 535.5 557.5 L 535.5 567 L 535.5 576.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

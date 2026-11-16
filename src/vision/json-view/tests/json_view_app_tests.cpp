@@ -83,6 +83,25 @@ int main()
                    R"({"name":"ckVision","nested":{"name":"ckUtilities"},"enabled":true})");
     ck::vision::JsonViewApp json_view(application, files);
 
+    if (!expect(json_view.menu_bar() != nullptr &&
+                    json_view.menu_bar()->menus().size() == 5 &&
+                    json_view.menu_bar()->menus()[0].label == "&File" &&
+                    json_view.menu_bar()->menus()[1].label == "&Edit" &&
+                    json_view.menu_bar()->menus()[2].label == "&Search" &&
+                    json_view.menu_bar()->menus()[3].label == "&View" &&
+                    json_view.menu_bar()->menus()[4].label == "&Help",
+                "JSON View did not build a single File menu in its menu bar"))
+        return 1;
+    const auto &file_items = json_view.menu_bar()->menus()[0].items;
+    if (!expect(file_items.size() == 5 &&
+                    file_items[0].command() == json_view.open_command() &&
+                    file_items[1].command() == json_view.reload_command() &&
+                    file_items[2].command() == json_view.close_command() &&
+                    file_items[3].is_separator() &&
+                    file_items[4].command() == application.commands().standard().quit,
+                "JSON View File menu did not combine Open, Reload, Close, and Exit"))
+        return 1;
+
     if (!expect(json_view.load_file("/fixture.json"),
                 "JSON document did not load"))
         return 1;

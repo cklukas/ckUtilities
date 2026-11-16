@@ -11,6 +11,7 @@
 #include <cvision/ui/layout.hpp>
 #include <cvision/widgets/command_palette.hpp>
 #include <cvision/widgets/dialog.hpp>
+#include <cvision/widgets/mnemonic.hpp>
 #include <cvision/widgets/splitter.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
@@ -748,11 +749,105 @@ struct FilesApp::State {
         }
     }
     ~State() { cleanup(); }
+    ckv::ui::CommandId footer_command_at(const ckv::widgets::StatusLine &footer, ckv::Point cell) const {
+        constexpr int item_padding = 1;
+        const ckv::Rect abs = footer.absolute_bounds();
+        if (!abs.contains(cell) || cell.y != abs.y)
+            return ckv::ui::kInvalidCommand;
+        const auto &items = footer.shown_items();
+        if (items.empty())
+            return ckv::ui::kInvalidCommand;
+        const auto item_width = [this](const ckv::widgets::StatusLineItem &item) {
+            const ckv::ui::CommandId command = item.presentation.command;
+            if (command == ckv::ui::kInvalidCommand)
+                return ckv::text::text_width(item.label);
+            const ckv::ui::CommandInfo *info = application.commands().find(command);
+            if (!info)
+                return ckv::text::text_width(item.presentation.label.empty() ? item.label : item.presentation.label);
+            const std::string text = ckv::widgets::parse_mnemonic(
+                item.presentation.label.empty() ? info->title : item.presentation.label).display;
+            if (!item.presentation.chord.empty())
+                return ckv::text::text_width(item.presentation.chord + " " + text);
+            const std::string shortcut = application.commands().chord_text(command);
+            return ckv::text::text_width(shortcut.empty() ? text : shortcut + " " + text);
+        };
+        const auto separator_width = [&](std::size_t before, std::size_t after) {
+            if (footer.presentation() == ckv::widgets::StatusLinePresentation::Grouped) {
+                for (std::size_t idx = before + 1; idx <= after; ++idx)
+                    if (items[idx].group_break_before)
+                        return 3;
+            }
+            return 2;
+        };
+        std::vector<int> widths(items.size());
+        std::vector<std::size_t> visible(items.size());
+        for (std::size_t idx = 0; idx < items.size(); ++idx) {
+            widths[idx] = item_width(items[idx]);
+            visible[idx] = idx;
+        }
+        const int available = std::max(0, abs.width - item_padding);
+        const auto total_width = [&] {
+            int width = 0;
+            for (std::size_t pos = 0; pos < visible.size(); ++pos) {
+                if (pos > 0)
+                    width += separator_width(visible[pos - 1], visible[pos]);
+                width += widths[visible[pos]];
+            }
+            return width;
+        };
+        const bool equal_priorities = std::all_of(
+            items.begin(), items.end(),
+            [priority = items.front().priority](const ckv::widgets::StatusLineItem &item) {
+                return item.priority == priority;
+            });
+        if (equal_priorities) {
+            int occupied = 0;
+            std::size_t count = 0;
+            for (const std::size_t idx : visible) {
+                const int start = occupied + (count == 0 ? 0 : separator_width(visible[count - 1], idx));
+                if (start >= available)
+                    break;
+                ++count;
+                occupied = start + widths[idx];
+            }
+            visible.resize(count);
+        } else {
+            while (!visible.empty() && total_width() > available) {
+                auto remove = visible.begin();
+                for (auto it = visible.begin(); it != visible.end(); ++it) {
+                    if (items[*it].priority < items[*remove].priority ||
+                        (items[*it].priority == items[*remove].priority && it > remove))
+                        remove = it;
+                }
+                visible.erase(remove);
+            }
+        }
+        const int local_x = cell.x - abs.x;
+        int x = item_padding;
+        for (std::size_t pos = 0; pos < visible.size(); ++pos) {
+            if (pos > 0)
+                x += separator_width(visible[pos - 1], visible[pos]);
+            const std::size_t idx = visible[pos];
+            if (local_x >= x - item_padding && local_x < x + widths[idx] + item_padding)
+                return items[idx].presentation.command;
+            x += widths[idx];
+        }
+        return ckv::ui::kInvalidCommand;
+    }
     void update_footer_hint(ckv::ui::Application::AttentionChange kind) {
-        constexpr auto next = ckv::ui::kInvalidCommand;
+        auto next = ckv::ui::kInvalidCommand;
         const auto *footer = shell->status_line();
         if (kind == ckv::ui::Application::AttentionChange::Input) {
-            last_input_mouse_count = application.mouse_events_dispatched();
+            const auto count = application.mouse_events_dispatched();
+            const auto &mouse = application.last_mouse_event();
+            if (count != last_input_mouse_count && mouse && mouse->action == ckv::MouseAction::Down &&
+                mouse->button == ckv::MouseButton::Left && footer && application.hovered_view() == footer &&
+                !application.input_capture()) {
+                const auto hit = footer_command_at(*footer, mouse->cell);
+                if (hit != ckv::ui::kInvalidCommand && !application.commands().is_enabled(hit))
+                    next = hit;
+            }
+            last_input_mouse_count = count;
         } else if (application.hovered_view() == footer) {
             return;
         }
@@ -1427,8 +1522,12 @@ struct FilesApp::State {
         auto inspected_command = highlighted_menu_command != ckv::ui::kInvalidCommand
             ? highlighted_menu_command : pressed_footer_command;
         if (i == active && palette_focused) {
-            if (const auto *palette = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused()))
-                inspected_command = palette->highlighted_command().value_or(ckv::ui::kInvalidCommand);
+            if (const auto *palette = dynamic_cast<ckv::widgets::CommandPalette *>(application.focused())) {
+                if (const auto highlighted = palette->highlighted_command())
+                    inspected_command = *highlighted;
+                else if (const auto filtered = palette->filtered_commands(); !filtered.empty())
+                    inspected_command = filtered.front().id;
+            }
         }
         if (i == active && inspected_command != ckv::ui::kInvalidCommand) {
             if (const auto *command = application.commands().find(inspected_command))

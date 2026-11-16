@@ -43,6 +43,10 @@ public:
     const Node *selected_json_node() const noexcept;
     const SearchState &search_state() const noexcept { return search_; }
     ckv::widgets::TreeView *tree() const noexcept { return tree_; }
+    ckv::widgets::MenuBar *menu_bar() const noexcept
+    {
+        return shell_ != nullptr ? shell_->menu_bar() : nullptr;
+    }
     // This bounded, snapshot-local count is intentionally exposed for
     // headless acceptance of materialized-tree refresh behavior.
     std::size_t tree_node_count() const noexcept { return node_ids_.size(); }

@@ -86,10 +86,12 @@ SuiteShellOptions JsonViewApp::make_shell_options() const
     return {
         .application_name = "ck JSON View",
         .about_text = "A native ckVision JSON browser. Open a document, navigate its tree, search keys or values, and copy a selected JSON value.",
+        .file_items = {
+            MenuItem::command(CommandPresentation{commands_.open, "&Open JSON..."}),
+            MenuItem::command(CommandPresentation{commands_.reload, "&Reload JSON"}),
+            MenuItem::command(CommandPresentation{commands_.close, "&Close JSON"}),
+        },
         .application_menus = {
-            MenuBarItem{"&File", {MenuItem::command(CommandPresentation{commands_.open, "&Open JSON..."}),
-                                   MenuItem::command(CommandPresentation{commands_.reload, "&Reload JSON"}),
-                                   MenuItem::command(CommandPresentation{commands_.close, "&Close JSON"})}},
             MenuBarItem{"&Edit", {MenuItem::command(CommandPresentation{commands_.copy, "&Copy selected JSON"})}},
             MenuBarItem{"&Search", std::move(search_items)},
             MenuBarItem{"&View", std::move(view_items)},

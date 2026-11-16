@@ -345,6 +345,10 @@ void capture_files(const std::filesystem::path &directory)
         documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
     auto right_service = std::make_unique<ck::vision::FilesPaneService>(
         documentation_backend(), ck::vision::FilesPaneServiceLimits{}, wake.callback());
+    auto planning_service = std::make_unique<ck::vision::FilesOperationPlanningService>(wake.callback());
+    auto execution_service = std::make_unique<ck::vision::FilesOperationExecutionService>(wake.callback());
+    auto journal_root = std::make_shared<const ck::files::NativeAbsolutePath>(
+        documentation_path("/capture/journals"));
     auto volume_service = std::make_unique<ck::vision::FilesVolumeService>(wake.callback(), [] {
         std::vector<ck::vision::FilesVolumeRecord> records;
         records.push_back({"Workspace", "/capture", "simulatedfs", 20ull * 1024 * 1024 * 1024,
@@ -364,14 +368,27 @@ void capture_files(const std::filesystem::path &directory)
         std::array<ck::files::NativeAbsolutePath, 2>{documentation_path("/capture/left"),
                                                      documentation_path("/capture/right")},
         [&application] { application.request_quit(); }, ck::vision::ThemeScheme::Classic,
-        std::array<ck::vision::FilesCompletionService *, 2>{}, nullptr, nullptr,
-        std::shared_ptr<const ck::files::NativeAbsolutePath>{}, ck::vision::FilesSettingsBinding{}, volume_service.get());
+        std::array<ck::vision::FilesCompletionService *, 2>{}, planning_service.get(), execution_service.get(),
+        journal_root, ck::vision::FilesSettingsBinding{}, volume_service.get());
     for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
         application.step(clock.now_nanos());
         clock.advance(1'000'000);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     application.step(clock.now_nanos());
+    // Select a regular file row so Copy, Move, Trash, and Delete are all active
+    // and ready in the main two-pane overview screenshot.
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Down, ckv::Modifier::None, ""}});
+    application.step(clock.now_nanos());
+    for (int step = 0; step != 500 && (app->pending(0) || app->pending(1)); ++step) {
+        application.step(clock.now_nanos());
+        clock.advance(1'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    application.step(clock.now_nanos());
+    if (app->status(0).find("unavailable") != std::string::npos)
+        throw std::runtime_error("unexpected unavailable hint in Files capture: " + app->status(0));
     write_svg(directory, "ck-files", terminal.display());
     if (!app->navigate(0, documentation_path("/")))
         throw std::runtime_error("could not navigate to the documentation Files root");
@@ -401,6 +418,8 @@ void capture_files(const std::filesystem::path &directory)
     app.reset();
     left_service->join();
     right_service->join();
+    planning_service->join();
+    execution_service->join();
     volume_service->join();
 }
 
@@ -422,12 +441,13 @@ void capture_json_view(const std::filesystem::path &directory)
     ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34}, ckv::term::headless_no_graphics_profile());
     ckv::ui::Application application(terminal, clock);
     ckv::MemoryFileSystem files;
-    files.add_file("/workspace/release-notes.json",
-                   R"({"product":"CK Utilities","framework":"ckVision 1.4.2","tools":["JSON View","Find","Disk Usage","Markdown Editor","Chat"],"release":{"platforms":["macOS","Linux"],"packages":["archive","deb","rpm"],"status":"ready"}})");
+    files.add_file(
+        "/workspace/release-notes.json",
+        R"({"product":"CK Utilities","framework":"ckVision 2.0.0","tools":["ck-json-view","ck-find","ck-du","ck-files","ck-edit","ck-chat","ck-todo","ck-sysmon","ck-config"],"release":{"platforms":["macOS","Linux","Windows"],"packages":["tar.gz","deb","rpm","zip","homebrew"],"status":"ready"}})");
     ck::vision::JsonViewApp json_view(application, files);
     if (!json_view.load_file("/workspace/release-notes.json"))
         throw std::runtime_error("could not load JSON capture fixture");
-    application.execute_command(json_view.level_command(2));
+    application.execute_command(json_view.level_command(3));
     application.step(0);
     write_svg(directory, "ck-json-view", terminal.display());
 }
@@ -533,12 +553,26 @@ void capture_markdown_editor(const std::filesystem::path &directory)
     ckv::MemoryFileSystem files;
     files.add_file("/workspace/notes.md",
                    "# CK Utilities\n\n"
-                   "A collection of focused terminal tools built with ckVision.\n\n"
-                   "## Release checklist\n\n"
-                   "- [x] Browse JSON\n"
-                   "- [x] Search files\n"
-                   "- [x] Inspect disk usage\n"
-                   "- [x] Edit Markdown\n");
+                   "Focused terminal applications built on **ckVision 2.0**, with *keyboard-first*\n"
+                   "menus, mouse support, and the [user guide](https://cklukas.github.io/ckUtilities/).\n"
+                   "Start `ck-utilities` or launch any tool directly.\n\n"
+                   "> Safe file workflows, shared shortcuts, and consistent themes across hosts.\n\n"
+                   "## Suite tools\n\n"
+                   "- [x] `ck-files` — Two-pane file manager with reviewed copy and move\n"
+                   "- [x] `ck-todo` — Kanban boards with lanes, due dates, notes, and archives\n"
+                   "- [x] `ck-sysmon` — CPU, memory, GPU, and Ollama model telemetry\n"
+                   "- [x] `ck-du` — Asynchronous directory size browser\n"
+                   "- [x] `ck-json-view` — Expandable JSON tree with incremental search\n"
+                   "- [x] `ck-edit` — Markdown editor with tables, links, and reflow\n"
+                   "- [x] `ck-find` — Guided file searches with filters and previews\n"
+                   "- [x] `ck-chat` — Local GGUF model conversations and prompts\n"
+                   "- [x] `ck-config` — Suite options and keyboard shortcut bindings\n\n"
+                   "## Release packages\n\n"
+                   "| Platform | Formats |\n"
+                   "| --- | --- |\n"
+                   "| macOS | `tar.gz`, Homebrew |\n"
+                   "| Linux | `.deb`, `.rpm`, `tar.gz` |\n"
+                   "| Windows | `.zip` |\n");
     ck::vision::EditApp editor(application, files);
     if (!editor.open_file("/workspace/notes.md"))
         throw std::runtime_error("could not load Markdown capture fixture");

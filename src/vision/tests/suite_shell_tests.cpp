@@ -169,6 +169,12 @@ int main()
     ckv::term::HeadlessTerminal terminal(ckv::Size{80, 24});
     ckv::ui::Application application(terminal, clock);
 
+    bool file_action_invoked = false;
+    const ckv::ui::CommandId file_action = application.commands().declare({
+        .key = "ck.vision.test.file_action",
+        .title = "&Open...",
+        .handler = [&file_action_invoked] { file_action_invoked = true; },
+    });
     bool returned_to_launcher = false;
     ck::vision::SuiteShell shell(
         application,
@@ -178,7 +184,24 @@ int main()
             .theme = ck::vision::ThemeScheme::Dark,
             .clock_time_provider = [] { return ckv::widgets::TimeValue{12, 34, 56}; },
             .on_return_to_launcher = [&returned_to_launcher] { returned_to_launcher = true; },
+            .file_items = {ckv::widgets::MenuItem::command(
+                ckv::widgets::CommandPresentation{file_action, "&Open..."})},
         });
+
+    require(shell.menu_bar() != nullptr && shell.menu_bar()->menus().size() == 2 &&
+                shell.menu_bar()->menus()[0].label == "&File" &&
+                shell.menu_bar()->menus()[1].label == "&Help",
+            "The shell must compose a single File menu and a single Help menu.");
+    const auto &file_menu_items = shell.menu_bar()->menus()[0].items;
+    require(file_menu_items.size() == 5 &&
+                file_menu_items[0].command() == file_action &&
+                file_menu_items[1].is_separator() &&
+                file_menu_items[2].command() == shell.return_to_launcher_command() &&
+                file_menu_items[3].is_separator() &&
+                file_menu_items[4].command() == application.commands().standard().quit,
+            "The shell must place application File items ahead of Return to Launcher and Exit.");
+    require(application.execute_command(file_action) && file_action_invoked,
+            "Application File items registered through SuiteShellOptions must remain executable.");
 
     require(application.commands().key_for(shell.about_command()) == ck::vision::kAboutCommandKey,
             "The shell must register its stable About command key.");

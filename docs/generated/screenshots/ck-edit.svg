@@ -10,16 +10,14 @@
 <rect x="0" y="594" width="1080" height="18" fill="#c8c8c8"/>
 <text x="18" y="14" xml:space="preserve" fill="#aa0000">F</text>
 <text x="27" y="14" xml:space="preserve" fill="#000000">ile</text>
-<text x="72" y="14" xml:space="preserve" fill="#aa0000">F</text>
-<text x="81" y="14" xml:space="preserve" fill="#000000">ile</text>
-<text x="126" y="14" xml:space="preserve" fill="#aa0000">E</text>
-<text x="135" y="14" xml:space="preserve" fill="#000000">dit</text>
-<text x="180" y="14" xml:space="preserve" fill="#aa0000">S</text>
-<text x="189" y="14" xml:space="preserve" fill="#000000">earch</text>
-<text x="252" y="14" xml:space="preserve" fill="#aa0000">F</text>
-<text x="261" y="14" xml:space="preserve" fill="#000000">ormat</text>
-<text x="324" y="14" xml:space="preserve" fill="#aa0000">H</text>
-<text x="333" y="14" xml:space="preserve" fill="#000000">elp                                                                          08:00</text>
+<text x="72" y="14" xml:space="preserve" fill="#aa0000">E</text>
+<text x="81" y="14" xml:space="preserve" fill="#000000">dit</text>
+<text x="126" y="14" xml:space="preserve" fill="#aa0000">S</text>
+<text x="135" y="14" xml:space="preserve" fill="#000000">earch</text>
+<text x="198" y="14" xml:space="preserve" fill="#aa0000">F</text>
+<text x="207" y="14" xml:space="preserve" fill="#000000">ormat</text>
+<text x="270" y="14" xml:space="preserve" fill="#aa0000">H</text>
+<text x="279" y="14" xml:space="preserve" fill="#000000">elp                                                                                08:00</text>
 <g data-box-drawing="double">
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 36.5 L 4.5 27 L 9.5 27" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -457,7 +455,10 @@
 <path d="M 4.5 71.5 L 4.5 81 L 4.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="86" xml:space="preserve" fill="#555555">3</text>
-<text x="36" y="86" xml:space="preserve" fill="#000000">A collection of focused terminal tools built with ckVision.</text>
+<text x="36" y="86" xml:space="preserve" fill="#000000">Focused terminal applications built on</text>
+<text x="387" y="86" xml:space="preserve" fill="#a00000">**ckVision 2.0**</text>
+<text x="531" y="86" xml:space="preserve" fill="#000000">, with</text>
+<text x="594" y="86" xml:space="preserve" fill="#0000aa">*keyboard-first*</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 71.5 L 1075.5 81 L 1075.5 90.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -467,6 +468,10 @@
 <path d="M 4.5 89.5 L 4.5 99 L 4.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="104" xml:space="preserve" fill="#555555">4</text>
+<text x="36" y="104" xml:space="preserve" fill="#000000">menus, mouse support, and the</text>
+<text x="306" y="104" xml:space="preserve" fill="#a00000">[user guide]</text>
+<text x="414" y="104" xml:space="preserve" fill="#007300">(https://cklukas.github.io/ckUtilities/)</text>
+<text x="774" y="104" xml:space="preserve" fill="#000000">.</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 89.5 L 1075.5 99 L 1075.5 108.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -476,7 +481,9 @@
 <path d="M 4.5 107.5 L 4.5 117 L 4.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="122" xml:space="preserve" fill="#555555">5</text>
-<text x="36" y="122" xml:space="preserve" fill="#a00000">## Release checklist</text>
+<text x="36" y="122" xml:space="preserve" fill="#000000">Start</text>
+<text x="90" y="122" xml:space="preserve" fill="#007300">`ck-utilities`</text>
+<text x="225" y="122" xml:space="preserve" fill="#000000">or launch any tool directly.</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 107.5 L 1075.5 117 L 1075.5 126.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -495,7 +502,8 @@
 <path d="M 4.5 143.5 L 4.5 153 L 4.5 162.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="158" xml:space="preserve" fill="#555555">7</text>
-<text x="36" y="158" xml:space="preserve" fill="#000000">- [x] Browse JSON</text>
+<text x="36" y="158" xml:space="preserve" fill="#000000">&gt;</text>
+<text x="54" y="158" xml:space="preserve" fill="#555555">Safe file workflows, shared shortcuts, and consistent themes across hosts.</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 143.5 L 1075.5 153 L 1075.5 162.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 143.5 L 1075.5 153 L 1075.5 162.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -505,7 +513,6 @@
 <path d="M 4.5 161.5 L 4.5 171 L 4.5 180.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="176" xml:space="preserve" fill="#555555">8</text>
-<text x="36" y="176" xml:space="preserve" fill="#000000">- [x] Search files</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 161.5 L 1075.5 171 L 1075.5 180.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 161.5 L 1075.5 171 L 1075.5 180.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -515,7 +522,7 @@
 <path d="M 4.5 179.5 L 4.5 189 L 4.5 198.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="18" y="194" xml:space="preserve" fill="#555555">9</text>
-<text x="36" y="194" xml:space="preserve" fill="#000000">- [x] Inspect disk usage</text>
+<text x="36" y="194" xml:space="preserve" fill="#a00000">## Suite tools</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 179.5 L 1075.5 189 L 1075.5 198.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 179.5 L 1075.5 189 L 1075.5 198.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -525,7 +532,6 @@
 <path d="M 4.5 197.5 L 4.5 207 L 4.5 216.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="9" y="212" xml:space="preserve" fill="#555555">10</text>
-<text x="36" y="212" xml:space="preserve" fill="#000000">- [x] Edit Markdown</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 197.5 L 1075.5 207 L 1075.5 216.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 197.5 L 1075.5 207 L 1075.5 216.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -535,6 +541,9 @@
 <path d="M 4.5 215.5 L 4.5 225 L 4.5 234.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
 <text x="9" y="230" xml:space="preserve" fill="#555555">11</text>
+<text x="36" y="230" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="230" xml:space="preserve" fill="#007300">`ck-files`</text>
+<text x="189" y="230" xml:space="preserve" fill="#000000">— Two-pane file manager with reviewed copy and move</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 215.5 L 1075.5 225 L 1075.5 234.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 215.5 L 1075.5 225 L 1075.5 234.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -543,6 +552,10 @@
 <path d="M 4.5 233.5 L 4.5 243 L 4.5 252.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 233.5 L 4.5 243 L 4.5 252.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="248" xml:space="preserve" fill="#555555">12</text>
+<text x="36" y="248" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="248" xml:space="preserve" fill="#007300">`ck-todo`</text>
+<text x="180" y="248" xml:space="preserve" fill="#000000">— Kanban boards with lanes, due dates, notes, and archives</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 233.5 L 1075.5 243 L 1075.5 252.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 233.5 L 1075.5 243 L 1075.5 252.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -551,6 +564,10 @@
 <path d="M 4.5 251.5 L 4.5 261 L 4.5 270.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 251.5 L 4.5 261 L 4.5 270.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="266" xml:space="preserve" fill="#555555">13</text>
+<text x="36" y="266" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="266" xml:space="preserve" fill="#007300">`ck-sysmon`</text>
+<text x="198" y="266" xml:space="preserve" fill="#000000">— CPU, memory, GPU, and Ollama model telemetry</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 251.5 L 1075.5 261 L 1075.5 270.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 251.5 L 1075.5 261 L 1075.5 270.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -559,6 +576,10 @@
 <path d="M 4.5 269.5 L 4.5 279 L 4.5 288.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 269.5 L 4.5 279 L 4.5 288.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="284" xml:space="preserve" fill="#555555">14</text>
+<text x="36" y="284" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="284" xml:space="preserve" fill="#007300">`ck-du`</text>
+<text x="162" y="284" xml:space="preserve" fill="#000000">— Asynchronous directory size browser</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 269.5 L 1075.5 279 L 1075.5 288.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 269.5 L 1075.5 279 L 1075.5 288.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -567,6 +588,10 @@
 <path d="M 4.5 287.5 L 4.5 297 L 4.5 306.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 287.5 L 4.5 297 L 4.5 306.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="302" xml:space="preserve" fill="#555555">15</text>
+<text x="36" y="302" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="302" xml:space="preserve" fill="#007300">`ck-json-view`</text>
+<text x="225" y="302" xml:space="preserve" fill="#000000">— Expandable JSON tree with incremental search</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 287.5 L 1075.5 297 L 1075.5 306.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 287.5 L 1075.5 297 L 1075.5 306.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -575,6 +600,10 @@
 <path d="M 4.5 305.5 L 4.5 315 L 4.5 324.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 305.5 L 4.5 315 L 4.5 324.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="320" xml:space="preserve" fill="#555555">16</text>
+<text x="36" y="320" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="320" xml:space="preserve" fill="#007300">`ck-edit`</text>
+<text x="180" y="320" xml:space="preserve" fill="#000000">— Markdown editor with tables, links, and reflow</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 305.5 L 1075.5 315 L 1075.5 324.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 305.5 L 1075.5 315 L 1075.5 324.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -583,6 +612,10 @@
 <path d="M 4.5 323.5 L 4.5 333 L 4.5 342.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 323.5 L 4.5 333 L 4.5 342.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="338" xml:space="preserve" fill="#555555">17</text>
+<text x="36" y="338" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="338" xml:space="preserve" fill="#007300">`ck-find`</text>
+<text x="180" y="338" xml:space="preserve" fill="#000000">— Guided file searches with filters and previews</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 323.5 L 1075.5 333 L 1075.5 342.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 323.5 L 1075.5 333 L 1075.5 342.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -591,6 +624,10 @@
 <path d="M 4.5 341.5 L 4.5 351 L 4.5 360.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 341.5 L 4.5 351 L 4.5 360.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="356" xml:space="preserve" fill="#555555">18</text>
+<text x="36" y="356" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="356" xml:space="preserve" fill="#007300">`ck-chat`</text>
+<text x="180" y="356" xml:space="preserve" fill="#000000">— Local GGUF model conversations and prompts</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 341.5 L 1075.5 351 L 1075.5 360.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 341.5 L 1075.5 351 L 1075.5 360.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -599,6 +636,10 @@
 <path d="M 4.5 359.5 L 4.5 369 L 4.5 378.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 359.5 L 4.5 369 L 4.5 378.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="374" xml:space="preserve" fill="#555555">19</text>
+<text x="36" y="374" xml:space="preserve" fill="#000000">- [x]</text>
+<text x="90" y="374" xml:space="preserve" fill="#007300">`ck-config`</text>
+<text x="198" y="374" xml:space="preserve" fill="#000000">— Suite options and keyboard shortcut bindings</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 359.5 L 1075.5 369 L 1075.5 378.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 359.5 L 1075.5 369 L 1075.5 378.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -607,6 +648,7 @@
 <path d="M 4.5 377.5 L 4.5 387 L 4.5 396.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 377.5 L 4.5 387 L 4.5 396.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="392" xml:space="preserve" fill="#555555">20</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 377.5 L 1075.5 387 L 1075.5 396.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 377.5 L 1075.5 387 L 1075.5 396.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -615,6 +657,8 @@
 <path d="M 4.5 395.5 L 4.5 405 L 4.5 414.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 395.5 L 4.5 405 L 4.5 414.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="410" xml:space="preserve" fill="#555555">21</text>
+<text x="36" y="410" xml:space="preserve" fill="#a00000">## Release packages</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 395.5 L 1075.5 405 L 1075.5 414.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 395.5 L 1075.5 405 L 1075.5 414.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -623,6 +667,7 @@
 <path d="M 4.5 413.5 L 4.5 423 L 4.5 432.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 413.5 L 4.5 423 L 4.5 432.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="428" xml:space="preserve" fill="#555555">22</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 413.5 L 1075.5 423 L 1075.5 432.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 413.5 L 1075.5 423 L 1075.5 432.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -631,6 +676,8 @@
 <path d="M 4.5 431.5 L 4.5 441 L 4.5 450.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 431.5 L 4.5 441 L 4.5 450.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="446" xml:space="preserve" fill="#555555">23</text>
+<text x="36" y="446" xml:space="preserve" fill="#000000">| Platform | Formats |</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 431.5 L 1075.5 441 L 1075.5 450.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 431.5 L 1075.5 441 L 1075.5 450.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -639,6 +686,8 @@
 <path d="M 4.5 449.5 L 4.5 459 L 4.5 468.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 449.5 L 4.5 459 L 4.5 468.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="464" xml:space="preserve" fill="#555555">24</text>
+<text x="36" y="464" xml:space="preserve" fill="#000000">| --- | --- |</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 449.5 L 1075.5 459 L 1075.5 468.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 449.5 L 1075.5 459 L 1075.5 468.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -647,6 +696,10 @@
 <path d="M 4.5 467.5 L 4.5 477 L 4.5 486.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 467.5 L 4.5 477 L 4.5 486.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="482" xml:space="preserve" fill="#555555">25</text>
+<text x="36" y="482" xml:space="preserve" fill="#000000">| macOS |</text>
+<text x="126" y="482" xml:space="preserve" fill="#007300">`tar.gz`</text>
+<text x="198" y="482" xml:space="preserve" fill="#000000">, Homebrew |</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 467.5 L 1075.5 477 L 1075.5 486.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 467.5 L 1075.5 477 L 1075.5 486.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -655,6 +708,14 @@
 <path d="M 4.5 485.5 L 4.5 495 L 4.5 504.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 485.5 L 4.5 495 L 4.5 504.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="500" xml:space="preserve" fill="#555555">26</text>
+<text x="36" y="500" xml:space="preserve" fill="#000000">| Linux |</text>
+<text x="126" y="500" xml:space="preserve" fill="#007300">`.deb`</text>
+<text x="180" y="500" xml:space="preserve" fill="#000000">,</text>
+<text x="198" y="500" xml:space="preserve" fill="#007300">`.rpm`</text>
+<text x="252" y="500" xml:space="preserve" fill="#000000">,</text>
+<text x="270" y="500" xml:space="preserve" fill="#007300">`tar.gz`</text>
+<text x="351" y="500" xml:space="preserve" fill="#000000">|</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 485.5 L 1075.5 495 L 1075.5 504.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 485.5 L 1075.5 495 L 1075.5 504.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -663,6 +724,10 @@
 <path d="M 4.5 503.5 L 4.5 513 L 4.5 522.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 503.5 L 4.5 513 L 4.5 522.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="518" xml:space="preserve" fill="#555555">27</text>
+<text x="36" y="518" xml:space="preserve" fill="#000000">| Windows |</text>
+<text x="144" y="518" xml:space="preserve" fill="#007300">`.zip`</text>
+<text x="207" y="518" xml:space="preserve" fill="#000000">|</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 503.5 L 1075.5 513 L 1075.5 522.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 503.5 L 1075.5 513 L 1075.5 522.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -671,6 +736,7 @@
 <path d="M 4.5 521.5 L 4.5 531 L 4.5 540.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 4.5 521.5 L 4.5 531 L 4.5 540.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
+<text x="9" y="536" xml:space="preserve" fill="#555555">28</text>
 <g data-box-drawing="double">
 <path d="M 1075.5 521.5 L 1075.5 531 L 1075.5 540.5" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 1075.5 521.5 L 1075.5 531 L 1075.5 540.5" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
@@ -1091,7 +1157,7 @@
 <path d="M 890.5 585 L 895.5 585 L 900.5 585" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
 <path d="M 890.5 585 L 895.5 585 L 900.5 585" fill="none" stroke="#0000aa" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>
-<text x="909" y="590" xml:space="preserve" fill="#ffffff" font-weight="bold">Ln 11, Col 1 INS</text>
+<text x="909" y="590" xml:space="preserve" fill="#ffffff" font-weight="bold">Ln 28, Col 1 INS</text>
 <g data-box-drawing="single">
 <path d="M 1061.5 585 L 1066.5 585 L 1071.5 585" fill="none" stroke="#00aa00" stroke-width="3" stroke-linecap="butt" stroke-linejoin="miter"/>
 </g>

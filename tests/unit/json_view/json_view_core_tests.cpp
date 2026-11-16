@@ -67,7 +67,7 @@ TEST(JsonViewCore, RootLabelUsesDocumentOwnedSourceSize)
     auto root = buildTree(&data, "fixture.json", nullptr, true);
     root->sourceSize = 1536;
 
-    EXPECT_NE(getContentLabel(root.get()).find("1.5 KB"), std::string::npos);
+    EXPECT_EQ(getContentLabel(root.get()), "fixture.json (dictionary, 3 keys, 1.5 KB)");
 }
 
 TEST(JsonViewCore, ParsesSpecialFloatingPointLiterals)

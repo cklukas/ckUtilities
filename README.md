@@ -2,19 +2,26 @@
 
 **Documentation:** <https://cklukas.github.io/ckUtilities/>
 
-![CK Utilities launcher](docs/generated/screenshots/ck-utilities-launcher.svg)
-![JSON View](docs/generated/screenshots/ck-json-view.svg)
-![Markdown editor](docs/generated/screenshots/ck-edit.svg)
-![Files](docs/generated/screenshots/ck-files.svg)
-
 CK Utilities is a collection of focused terminal applications for everyday
-work: finding files, inspecting JSON, understanding disk usage, editing
-Markdown, organizing tasks, watching system load, managing settings, and
-working with local AI models.
+work: browsing and managing files, organizing tasks, watching system load,
+understanding disk usage, inspecting JSON, editing Markdown, finding files,
+managing settings, and working with local AI models.
 
 Use `ck-utilities` as a launcher, or start any tool directly:
-`ck-json-view`, `ck-find`, `ck-du`, `ck-edit`, `ck-chat`, `ck-todo`,
-`ck-sysmon`, `ck-config`, and `ck-files`.
+`ck-files`, `ck-todo`, `ck-sysmon`, `ck-du`, `ck-json-view`, `ck-edit`,
+`ck-find`, `ck-chat`, and `ck-config`.
+
+![CK Utilities launcher](docs/generated/screenshots/ck-utilities-launcher.svg)
+
+| Files (`ck-files`) | Todo (`ck-todo`) |
+|:---:|:---:|
+| ![Two-pane file manager with reviewed safe file operations](docs/generated/screenshots/ck-files.svg) | ![Kanban task board with lanes, priorities, due dates, and notes](docs/generated/screenshots/todo-guided.svg) |
+| **System Monitor (`ck-sysmon`)** | **Disk Usage (`ck-du`)** |
+| ![Live CPU, memory, GPU, and Ollama model monitor](docs/generated/screenshots/sysmon-standard.svg) | ![Interactive directory tree with size breakdown](docs/generated/screenshots/ck-du.svg) |
+| **JSON View (`ck-json-view`)** | **Markdown Editor (`ck-edit`)** |
+| ![Expandable JSON document tree browser](docs/generated/screenshots/ck-json-view.svg) | ![Syntax-highlighted Markdown editor](docs/generated/screenshots/ck-edit.svg) |
+| **Find (`ck-find`)** | **Chat (`ck-chat`)** |
+| ![Guided file search with filters and results](docs/generated/screenshots/ck-find.svg) | ![Local GGUF model chat interface](docs/generated/screenshots/ck-chat.svg) |
 
 ## Free software; no user support or warranty
 

@@ -39,6 +39,10 @@ public:
     {
         return window_ == nullptr ? nullptr : &window_->editor();
     }
+    ckv::widgets::MenuBar *menu_bar() const noexcept
+    {
+        return shell_ != nullptr ? shell_->menu_bar() : nullptr;
+    }
     ckv::ui::CommandId open_command() const noexcept { return open_command_; }
     ckv::ui::CommandId save_command() const noexcept { return save_command_; }
     ckv::ui::CommandId save_as_command() const noexcept { return save_as_command_; }

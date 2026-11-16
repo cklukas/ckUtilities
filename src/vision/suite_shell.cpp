@@ -152,10 +152,14 @@ ckv::ui::Theme SuiteShell::make_theme(ckv::ui::RoleRegistry &registry,
 
 ckv::widgets::ApplicationShellOptions SuiteShell::make_shell_options() const
 {
-    std::vector<MenuItem> file_items;
+    std::vector<MenuItem> file_items = options_.file_items;
     if (return_to_launcher_command_ != ckv::ui::kInvalidCommand)
+    {
+        if (!file_items.empty())
+            file_items.push_back(MenuItem::separator());
         file_items.push_back(MenuItem::command(
             CommandPresentation{return_to_launcher_command_, "Return to &Launcher"}));
+    }
 
     if (!file_items.empty())
         file_items.push_back(MenuItem::separator());

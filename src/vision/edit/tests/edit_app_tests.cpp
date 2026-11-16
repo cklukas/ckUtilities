@@ -48,6 +48,23 @@ int main()
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
     ckv::ui::Application application(terminal, clock);
     ck::vision::EditApp editor(application, files);
+    require(editor.menu_bar() != nullptr &&
+                editor.menu_bar()->menus().size() == 5 &&
+                editor.menu_bar()->menus()[0].label == "&File" &&
+                editor.menu_bar()->menus()[1].label == "&Edit" &&
+                editor.menu_bar()->menus()[2].label == "&Search" &&
+                editor.menu_bar()->menus()[3].label == "&Format" &&
+                editor.menu_bar()->menus()[4].label == "&Help",
+            "ck Edit must expose a single File menu followed by Edit, Search, Format, and Help.");
+    const auto &file_items = editor.menu_bar()->menus()[0].items;
+    require(file_items.size() == 6 &&
+                file_items[0].command() == editor.open_command() &&
+                file_items[1].command() == editor.save_command() &&
+                file_items[2].command() == editor.save_as_command() &&
+                file_items[3].command() == editor.normalise_markdown_command() &&
+                file_items[4].is_separator() &&
+                file_items[5].command() == application.commands().standard().quit,
+            "ck Edit File menu must combine Open, Save, Save As, Normalize, and Exit.");
     require(editor.open_file("/notes.md"), "The native editor must open through its injected file service.");
     require(editor.path() == "/notes.md" && editor.document().text().find("Native editor") != std::string::npos,
             "The native editor must retain the loaded document and its path.");

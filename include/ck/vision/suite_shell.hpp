@@ -38,6 +38,7 @@ struct SuiteShellOptions
     // platform-local default when this is empty.
     std::function<ckv::widgets::TimeValue()> clock_time_provider;
     std::function<void()> on_return_to_launcher;
+    std::vector<ckv::widgets::MenuItem> file_items;
     std::vector<ckv::widgets::MenuBarItem> application_menus;
     std::vector<ckv::widgets::StatusLineItem> application_status_items;
 };

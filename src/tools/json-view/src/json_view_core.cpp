@@ -241,23 +241,23 @@ std::string getContentLabel(const Node *node, int maxWidth)
         if (v->is_object())
         {
             size_t count = v->size();
-            type = "📦 dictionary, " + std::to_string(count) + (count == 1 ? " key" : " keys");
+            type = "dictionary, " + std::to_string(count) + (count == 1 ? " key" : " keys");
         }
         else if (v->is_array())
         {
             size_t count = v->size();
-            type = "🗂️ list, " + std::to_string(count) + (count == 1 ? " item" : " items");
+            type = "list, " + std::to_string(count) + (count == 1 ? " item" : " items");
         }
         else if (v->is_string())
-            type = "℀ string";
+            type = "string";
         else if (v->is_number())
-            type = "⅑ number";
+            type = "number";
         else if (v->is_boolean())
-            type = "☒ boolean";
+            type = "boolean";
         else if (v->is_null())
-            type = "⊘ null";
+            type = "null";
         else
-            type = "📄 value";
+            type = "value";
 
         if (node->sourceSize)
             type += ", " + formatFileSize(*node->sourceSize);

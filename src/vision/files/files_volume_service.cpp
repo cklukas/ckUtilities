@@ -333,6 +333,12 @@ Observation<std::vector<FilesVolumeRecord>> enumerate_macos() {
             std::string(entry.f_mntfromname);
         FilesVolumeRecord record{entry.f_mntfromname, mount, entry.f_fstypename, {}, {},
                                  (entry.f_flags & MNT_RDONLY) != 0, std::move(identity), {}, {}};
+        if (std::string_view(entry.f_fstypename) == "autofs" || (entry.f_flags & MNT_AUTOMOUNTED) != 0) {
+            record.archive.support = FilesVolumeArchiveSupport::Unsupported;
+            record.archive.diagnostic = "Automount map is not a volume archive source";
+            result.push_back(std::move(record));
+            continue;
+        }
         // Darwin statvfs can truncate the APFS total block count above UINT32_MAX.
         struct statfs stats{};
         if (statfs(mount.c_str(), &stats) == 0 && mount == stats.f_mntonname &&
