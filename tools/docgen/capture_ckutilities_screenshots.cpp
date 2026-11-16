@@ -72,10 +72,29 @@ public:
         if (on_complete)
         {
             ck::find::SearchExecutionResult result;
+            result.scannedEntries = 412;
+            result.scannedDirectories = 28;
             result.matchCount = 3;
-            result.matches = {"/workspace/src/vision/find/find_app.cpp",
-                              "/workspace/docs/tools/ck-find.md",
-                              "/workspace/tests/find_app_tests.cpp"};
+            result.matches = {"/workspace/docs/tools/ck-find.md",
+                              "/workspace/README.md",
+                              "/workspace/src/vision/find/find_app.cpp"};
+            result.matchEntries = {
+                {.path = "/workspace/docs/tools/ck-find.md",
+                 .sizeBytes = 2480,
+                 .modifiedUnixSeconds = 1763280000,
+                 .sizeKnown = true,
+                 .modifiedKnown = true},
+                {.path = "/workspace/README.md",
+                 .sizeBytes = 5708,
+                 .modifiedUnixSeconds = 1763280000,
+                 .sizeKnown = true,
+                 .modifiedKnown = true},
+                {.path = "/workspace/src/vision/find/find_app.cpp",
+                 .sizeBytes = 41280,
+                 .modifiedUnixSeconds = 1763280000,
+                 .sizeKnown = true,
+                 .modifiedKnown = true},
+            };
             on_complete(std::move(result));
         }
     }
@@ -457,11 +476,19 @@ void capture_find(const std::filesystem::path &directory)
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34}, ckv::term::headless_no_graphics_profile());
     ckv::ui::Application application(terminal, clock);
+    ckv::MemoryFileSystem files;
+    files.add_directory("/workspace");
+    files.add_file("/workspace/docs/tools/ck-find.md",
+                   "# ck-find\n\nInteractive file search with live progress, multiple Found Files windows,\n"
+                   "exportable result lists, and integrated Text, JSON, and Hex viewers/editors.\n");
+    files.add_file("/workspace/README.md", "# CK Utilities\n\nNative ckVision desktop utilities.\n");
+    files.add_file("/workspace/src/vision/find/find_app.cpp", "// ck-find workspace implementation\n");
     DocumentationFindStore specifications;
     DocumentationFindExecutionService execution;
-    ck::vision::FindApp find(application, specifications, execution);
-    if (!application.execute_command(find.execute_command()))
-        throw std::runtime_error("could not start the Find capture search");
+    ck::vision::FindApp find(application, specifications, execution, files, "/workspace");
+    application.step(0);
+    terminal.inject_event(ckv::TextEvent{"*find*", false});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
     application.step(0);
     application.step(0);
     write_svg(directory, "ck-find", terminal.display());

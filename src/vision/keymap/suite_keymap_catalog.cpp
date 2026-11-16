@@ -58,11 +58,23 @@ const std::array kLauncherCommands{
 
 const std::array kFindCommands{
     CommandDefinition{"ck.find.new_search", "&New search...", "Find", "Ctrl+N"},
-    CommandDefinition{"ck.find.preview_command", "&Preview command", "Find", "F5"},
     CommandDefinition{"ck.find.save_search", "&Save search...", "Find", "Ctrl+S"},
     CommandDefinition{"ck.find.load_search", "&Load saved search...", "Find", "Ctrl+O"},
+    CommandDefinition{"ck.find.export_results", "&Export results to text file...", "Find", "Ctrl+E"},
     CommandDefinition{"ck.find.execute_search", "&Run search", "Find", "F9"},
     CommandDefinition{"ck.find.cancel_search", "&Cancel search", "Find", "Ctrl+C"},
+    CommandDefinition{"ck.find.advanced_filters", "&Advanced filters...", "Find", "F7"},
+    CommandDefinition{"ck.find.presets", "Search &presets...", "Find", ""},
+    CommandDefinition{"ck.find.view_file", "&View selected file", "Find", "F3"},
+    CommandDefinition{"ck.find.view_text", "View as &text", "Find", ""},
+    CommandDefinition{"ck.find.view_json", "View as &JSON tree", "Find", ""},
+    CommandDefinition{"ck.find.view_hex", "View as &hex", "Find", ""},
+    CommandDefinition{"ck.find.edit_text", "&Edit text / JSON...", "Find", "F4"},
+    CommandDefinition{"ck.find.edit_hex", "Edit &hex...", "Find", "F8"},
+    CommandDefinition{"ck.find.copy_path", "Cop&y selected path", "Find", "Ctrl+Y"},
+    CommandDefinition{"ck.find.delete_selected", "&Delete selected file...", "Find", ""},
+    CommandDefinition{"ck.find.preview_command", "POSIX &find command...", "Find", "Ctrl+G"},
+    CommandDefinition{"ck.find.bulk_action", "Run &bulk specification action...", "Find", ""},
 };
 
 const std::array kFilesCommands{

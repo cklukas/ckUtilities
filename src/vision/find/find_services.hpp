@@ -1,3 +1,5 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include <atomic>
@@ -5,7 +7,9 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "ck/find/search_backend.hpp"
@@ -24,6 +28,11 @@ public:
     virtual std::vector<ck::find::SavedSpecification> list() const = 0;
     virtual std::optional<ck::find::SearchSpecification> load(const std::string &name) const = 0;
     virtual bool save(const ck::find::SearchSpecification &specification, const std::string &name) = 0;
+    virtual bool remove(const std::string &name)
+    {
+        (void)name;
+        return false;
+    }
 };
 
 // The production adapter retains the established, JSON-backed storage format.
@@ -34,6 +43,7 @@ public:
     std::vector<ck::find::SavedSpecification> list() const override;
     std::optional<ck::find::SearchSpecification> load(const std::string &name) const override;
     bool save(const ck::find::SearchSpecification &specification, const std::string &name) override;
+    bool remove(const std::string &name) override;
 };
 
 // Execution is an application service rather than a widget behavior.  It may
@@ -43,6 +53,7 @@ class FindExecutionService
 {
 public:
     using CompletionHandler = std::function<void(ck::find::SearchExecutionResult)>;
+    using ProgressHandler = std::function<void(ck::find::SearchProgressSnapshot)>;
 
     virtual ~FindExecutionService() = default;
 
@@ -51,7 +62,20 @@ public:
     // separately queried capability below; all other actions remain disabled.
     virtual void start(ck::find::SearchSpecification specification, bool delete_matched_files,
                        CompletionHandler on_complete) = 0;
+    virtual void start_with_progress(ck::find::SearchSpecification specification,
+                                     bool delete_matched_files,
+                                     ProgressHandler on_progress,
+                                     CompletionHandler on_complete)
+    {
+        (void)on_progress;
+        start(std::move(specification), delete_matched_files, std::move(on_complete));
+    }
     virtual FindCustomCommandCapability custom_command_capability(const ck::find::SearchSpecification &specification) const = 0;
+    virtual bool delete_single_file(const std::string &path)
+    {
+        (void)path;
+        return false;
+    }
     virtual void cancel() noexcept = 0;
     virtual bool running() const noexcept = 0;
 };
@@ -68,7 +92,12 @@ public:
 
     void start(ck::find::SearchSpecification specification, bool delete_matched_files,
                CompletionHandler on_complete) override;
+    void start_with_progress(ck::find::SearchSpecification specification,
+                             bool delete_matched_files,
+                             ProgressHandler on_progress,
+                             CompletionHandler on_complete) override;
     FindCustomCommandCapability custom_command_capability(const ck::find::SearchSpecification &specification) const override;
+    bool delete_single_file(const std::string &path) override;
     void cancel() noexcept override;
     bool running() const noexcept override;
 

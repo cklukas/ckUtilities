@@ -1,8 +1,10 @@
+// Copyright (c) 2026 C. Klukas. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "find_app.hpp"
 
-#include <cstdlib>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -11,6 +13,7 @@
 #include <vector>
 
 #include <cvision/core/clock.hpp>
+#include <cvision/core/filesystem.hpp>
 #include <cvision/term/headless_terminal.hpp>
 
 #include "ck/find/cli_buffer_utils.hpp"
@@ -36,11 +39,21 @@ public:
 class ManualExecution final : public ck::vision::FindExecutionService
 {
 public:
-    void start(ck::find::SearchSpecification, bool delete_matched_files, CompletionHandler on_complete) override
+    void start(ck::find::SearchSpecification spec, bool delete_matched_files, CompletionHandler on_complete) override
+    {
+        start_with_progress(std::move(spec), delete_matched_files, {}, std::move(on_complete));
+    }
+
+    void start_with_progress(ck::find::SearchSpecification spec,
+                             bool delete_matched_files,
+                             ProgressHandler on_progress,
+                             CompletionHandler on_complete) override
     {
         running_ = true;
         cancelled_ = false;
         delete_matched_files_ = delete_matched_files;
+        last_spec_ = std::move(spec);
+        on_progress_ = std::move(on_progress);
         on_complete_ = std::move(on_complete);
     }
 
@@ -57,6 +70,12 @@ public:
                                  plan.executable_argv[0], plan.executable_argv[1], plan.executable_argv[2], plan.executable_argv[3]}};
     }
 
+    void emit_progress(ck::find::SearchProgressSnapshot snapshot)
+    {
+        if (on_progress_)
+            on_progress_(std::move(snapshot));
+    }
+
     void finish(ck::find::SearchExecutionResult result)
     {
         running_ = false;
@@ -65,11 +84,14 @@ public:
 
     bool cancelled() const noexcept { return cancelled_; }
     bool delete_matched_files() const noexcept { return delete_matched_files_; }
+    const ck::find::SearchSpecification &last_spec() const noexcept { return last_spec_; }
 
 private:
     bool running_ = false;
     bool cancelled_ = false;
     bool delete_matched_files_ = false;
+    ck::find::SearchSpecification last_spec_ = ck::find::makeDefaultSpecification();
+    ProgressHandler on_progress_;
     CompletionHandler on_complete_;
 };
 
@@ -137,11 +159,138 @@ void verify_late_execution_delivery_is_lifetime_safe()
     require(application.current_frame().size() == ckv::Size{100, 30},
             "Late Find execution delivery after destruction must be safely ignored.");
 }
+
+void verify_immediate_startup_search_multiple_windows_export_and_editors()
+{
+    ckv::ManualClock clock;
+    ckv::term::HeadlessTerminal terminal(ckv::Size{120, 34});
+    ckv::ui::Application application(terminal, clock);
+    ckv::MemoryFileSystem files;
+    files.add_directory("/workspace");
+    files.add_file("/workspace/notes.txt", "First line of notes\nSecond line\n");
+    files.add_file("/workspace/summary.txt", "Project summary\n");
+    files.add_file("/workspace/config.json", R"({"name":"ck-find","version":2,"enabled":true})");
+    files.add_file("/workspace/blob.bin", std::string("\x00\x01\x02\xFE\xFF", 5));
+
+    MemoryStore specifications;
+    ManualExecution execution;
+    ck::vision::FindApp find(application, specifications, execution, files, "/workspace");
+    application.step(0);
+
+    // User immediately types "*.txt" on startup and presses Enter without opening
+    // any menu or clicking any button.
+    terminal.inject_event(ckv::TextEvent{"*.txt", false});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+
+    require(find.execution_running(),
+            "Typing a pattern on startup and pressing Enter must immediately start a recursive search.");
+    require(find.progress_dialog_open(),
+            "Starting a search must display the live Search Progress Dialog.");
+    require(ck::find::bufferToString(execution.last_spec().includePatterns) == "*.txt" &&
+                execution.last_spec().includeSubdirectories &&
+                ck::find::bufferToString(execution.last_spec().startLocation) == "/workspace",
+            "Startup Enter must configure recursive '*.txt' matching in the starting directory.");
+
+    execution.emit_progress({.scannedEntries = 42,
+                             .scannedDirectories = 5,
+                             .matchCount = 2,
+                             .currentDirectory = "/workspace/docs"});
+    application.step(0);
+    require(find.progress_dialog_open(), "Progress updates must keep the progress dialog visible while running.");
+
+    ck::find::SearchExecutionResult first_result;
+    first_result.scannedEntries = 50;
+    first_result.matchCount = 2;
+    first_result.matches = {"/workspace/notes.txt", "/workspace/summary.txt"};
+    first_result.matchEntries = {
+        {.path = "/workspace/notes.txt", .sizeBytes = 32, .modifiedUnixSeconds = 1763280000, .sizeKnown = true, .modifiedKnown = true},
+        {.path = "/workspace/summary.txt", .sizeBytes = 16, .modifiedUnixSeconds = 1763280060, .sizeKnown = true, .modifiedKnown = true},
+    };
+    execution.finish(std::move(first_result));
+    application.step(0);
+
+    require(!find.progress_dialog_open(), "Completing a search must close the progress dialog.");
+    require(find.results_window_count() == 1, "Completing a search must open a Found Files window.");
+    require(find.selected_result_path() == std::optional<std::string>("/workspace/notes.txt"),
+            "The new Found Files window must select the first matched file.");
+
+    // Export the Found Files list to a text file.
+    require(find.export_active_results("/workspace/exported.txt"),
+            "Exporting an active Found Files window must write a text file.");
+    const auto exported = files.read_file("/workspace/exported.txt");
+    require(exported.has_value() &&
+                exported->contents == "/workspace/notes.txt\n/workspace/summary.txt\n",
+            "Exported text file must list every found path one per line.");
+
+    // Open a second search via Ctrl+N / new_search_command -> "*.json" + Enter,
+    // verifying multiple Found Files windows coexist on the MDI desktop.
+    require(application.execute_command(find.new_search_command()), "New search command must open Quick Search.");
+    application.step(0);
+    terminal.inject_event(ckv::TextEvent{"*.json", false});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(find.execution_running(), "Second search must start on Enter.");
+
+    ck::find::SearchExecutionResult second_result;
+    second_result.matchCount = 2;
+    second_result.matches = {"/workspace/config.json", "/workspace/blob.bin"};
+    second_result.matchEntries = {
+        {.path = "/workspace/config.json", .sizeBytes = 44, .sizeKnown = true},
+        {.path = "/workspace/blob.bin", .sizeBytes = 5, .sizeKnown = true},
+    };
+    execution.finish(std::move(second_result));
+    application.step(0);
+
+    require(find.results_window_count() == 2,
+            "Running a second search must retain the first Found Files window and open a second one.");
+    require(find.selected_result_path() == std::optional<std::string>("/workspace/config.json"),
+            "The newly opened Found Files window must become the active results list.");
+
+    // JSON Tree View on config.json
+    require(application.execute_command(find.view_file_command()),
+            "Viewing a .json result must succeed.");
+    application.step(0);
+    require(find.viewers().open_json_viewer_count() == 1,
+            "Auto-viewing a .json file must open the structured JSON Tree viewer.");
+
+    // Text Editor on notes.txt (via direct viewer call or active result) and save via Ctrl+S command
+    require(find.viewers().open_text_editor("/workspace/notes.txt") &&
+                find.viewers().open_editor_count() == 1,
+            "Text editor must open matched UTF-8 files in a ckVision EditorWindow.");
+    terminal.inject_event(ckv::TextEvent{"Added prefix: ", false});
+    application.step(0);
+    require(application.execute_command(find.save_command()),
+            "Save command while an EditorWindow is active must save the edited file.");
+    const auto saved_notes = files.read_file("/workspace/notes.txt");
+    require(saved_notes.has_value() && saved_notes->contents.find("Added prefix: ") == 0,
+            "Saving an active EditorWindow must persist edits through FileSystem.");
+
+    // Hex Editor on blob.bin: navigate to byte 0 column (col 1), edit to "AA", commit, and save
+    require(find.viewers().open_hex_editor("/workspace/blob.bin") &&
+                find.viewers().open_hex_editor_count() == 1,
+            "Hex editor must open binary files in a virtualized 16-column byte grid.");
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Right, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::F2, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Backspace, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Backspace, ckv::Modifier::None, ""}});
+    terminal.inject_event(ckv::TextEvent{"AA", false});
+    terminal.inject_event(ckv::KeyEvent{ckv::KeyChord{ckv::Key::Enter, ckv::Modifier::None, ""}});
+    application.step(0);
+    require(application.execute_command(find.save_command()),
+            "Save command while a HexEditorWindow is active must persist modified bytes.");
+    const auto saved_blob = files.read_file("/workspace/blob.bin");
+    require(saved_blob.has_value() && saved_blob->contents.size() == 5 &&
+                static_cast<unsigned char>(saved_blob->contents[0]) == 0xAAU &&
+                static_cast<unsigned char>(saved_blob->contents[4]) == 0xFFU,
+            "Saving an active HexEditorWindow must write the edited byte values atomically.");
 }
+} // namespace
 
 int main()
 {
     verify_late_execution_delivery_is_lifetime_safe();
+    verify_immediate_startup_search_multiple_windows_export_and_editors();
 
     ckv::ManualClock clock;
     ckv::term::HeadlessTerminal terminal(ckv::Size{100, 30});
@@ -164,7 +313,8 @@ int main()
     require(application.current_frame().size() == ckv::Size{100, 30}, "Find must render headlessly.");
 
     namespace fs = std::filesystem;
-    const fs::path directory = fs::temp_directory_path() / "ck-vision-find-execution-service-test";
+    const fs::path scratch_root = fs::path(CKTOOLS_TEST_TEMP_ROOT);
+    const fs::path directory = scratch_root / "ck-vision-find-execution-service-test";
     fs::remove_all(directory);
     fs::create_directories(directory);
     {
@@ -229,6 +379,7 @@ int main()
 
     auto specification = ck::find::makeDefaultSpecification();
     ck::find::copyToArray(specification.startLocation, directory.string().c_str());
+    specification.enableTextSearch = false;
     ck::vision::ThreadedFindExecutionService threaded_execution;
     std::mutex completion_mutex;
     std::condition_variable completion_ready;
@@ -245,8 +396,8 @@ int main()
         require(completion_ready.wait_for(lock, std::chrono::seconds(2), [&] { return threaded_result.has_value(); }),
                 "The threaded execution service must complete a filesystem search.");
     }
-    require(threaded_result->exitCode == 0 && threaded_result->matchCount >= 1,
-            "The threaded execution service must return the search-core result.");
+    require(threaded_result->exitCode == 0 && threaded_result->matchCount == 1,
+            "The threaded execution service must return the exact matched file without matching the root folder itself.");
 
     const fs::path spaced_match = directory / "match with spaces.txt";
     {
@@ -255,6 +406,7 @@ int main()
     }
     auto custom_specification = ck::find::makeDefaultSpecification();
     ck::find::copyToArray(custom_specification.startLocation, directory.string().c_str());
+    custom_specification.enableTextSearch = false;
     custom_specification.enableActionOptions = true;
     custom_specification.actionOptions.execEnabled = true;
     ck::find::copyToArray(custom_specification.actionOptions.execCommand, "ckvision.file-info");
@@ -315,10 +467,12 @@ int main()
                 "The sandboxed custom-command service must complete its bounded search workflow.");
     }
     require(custom_result->exitCode == 0 && custom_result->customCommandInvocationCount >= 1 &&
-                custom_result->failedCustomCommandInvocationCount == 0 && recording_executor_view->invocations() >= 1 &&
+                custom_result->failedCustomCommandInvocationCount == 0 &&
+                custom_result->customCommandOutput.find("read-only metadata") != std::string::npos &&
+                recording_executor_view->invocations() >= 1 &&
                 recording_executor_view->plan().executable_argv.front() == "/usr/bin/stat" &&
                 recording_executor_view->matched_path().parent_path() == directory,
-            "Custom command execution must pass a matched filesystem path as one literal direct argv value.");
+            "Custom command execution must pass a matched filesystem path as one literal direct argv value and retain its output.");
 
     auto bounded_executor = std::make_unique<RecordingCustomCommandExecutor>();
     bounded_executor->set_outcome({.invoked = true,

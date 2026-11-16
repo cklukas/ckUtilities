@@ -5,6 +5,8 @@
 #include "ck/options.hpp"
 #if defined(_WIN32)
 #include "native_directory_walk.hpp"
+#else
+#include <sys/stat.h>
 #endif
 
 #include <nlohmann/json.hpp>
@@ -14,6 +16,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <optional>
 #include <sstream>
@@ -123,7 +126,6 @@ nlohmann::json toJson(const TimeFilterOptions &options);
 
 bool matchContains(const std::string &haystack, const std::vector<std::string> &needles, bool caseInsensitive);
 bool matchWholeWord(const std::string &haystack, const std::vector<std::string> &needles, bool caseInsensitive);
-bool matchRegex(const std::string &haystack, const std::string &pattern, bool caseInsensitive);
 nlohmann::json toJson(const SizeFilterOptions &options);
 nlohmann::json toJson(const TypeFilterOptions &options);
 nlohmann::json toJson(const PermissionOwnershipOptions &options);
@@ -1127,14 +1129,15 @@ PreparedSpecification prepareSpecification(const SearchSpecification &spec)
     prepared.followSymlinks = spec.followSymlinks;
     prepared.stayOnSameFilesystem = spec.stayOnSameFilesystem;
 
+    const bool wildcardCaseInsensitive = !spec.textOptions.matchCase;
     auto includePatterns = splitExtensions(arrayToString(spec.includePatterns));
     for (const auto &pattern : includePatterns)
-        if (auto compiled = compileWildcardPattern(pattern, false))
+        if (auto compiled = compileWildcardPattern(pattern, wildcardCaseInsensitive))
             prepared.includePatterns.push_back(*compiled);
 
     auto excludePatterns = splitExtensions(arrayToString(spec.excludePatterns));
     for (const auto &pattern : excludePatterns)
-        if (auto compiled = compileWildcardPattern(pattern, false))
+        if (auto compiled = compileWildcardPattern(pattern, wildcardCaseInsensitive))
             prepared.excludePatterns.push_back(*compiled);
 
     prepared.nameTestsEnabled = spec.enableNamePathTests;
@@ -1366,7 +1369,9 @@ bool matchesTextInName(const PreparedSpecification &prepared, const std::string 
     switch (prepared.textOptions.mode)
     {
     case TextSearchOptions::Mode::RegularExpression:
-        return matchRegex(name, prepared.rawSearchText, !prepared.textOptions.matchCase);
+        if (!prepared.textRegex)
+            return false;
+        return std::regex_search(name, *prepared.textRegex);
     case TextSearchOptions::Mode::WholeWord:
         return matchWholeWord(name, prepared.textTerms, !prepared.textOptions.matchCase);
     case TextSearchOptions::Mode::Contains:
@@ -1612,14 +1617,62 @@ int presetDays(TimeFilterOptions::Preset preset)
     }
 }
 
+std::optional<std::chrono::system_clock::time_point> parseCustomDateBound(const std::string &rawValue, bool endOfDay)
+{
+    const std::string trimmed = trimCopy(rawValue);
+    if (trimmed.empty())
+        return std::nullopt;
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    char trailing = '\0';
+    if (std::sscanf(trimmed.c_str(), "%d-%d-%d%c", &year, &month, &day, &trailing) != 3)
+        return std::nullopt;
+    if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31)
+        return std::nullopt;
+    std::tm cal{};
+    cal.tm_year = year - 1900;
+    cal.tm_mon = month - 1;
+    cal.tm_mday = day;
+    cal.tm_hour = endOfDay ? 23 : 0;
+    cal.tm_min = endOfDay ? 59 : 0;
+    cal.tm_sec = endOfDay ? 59 : 0;
+    cal.tm_isdst = -1;
+    const std::time_t epoch = std::mktime(&cal);
+    if (epoch == static_cast<std::time_t>(-1))
+        return std::nullopt;
+    return std::chrono::system_clock::from_time_t(epoch);
+}
+
+bool matchesTimestampFilter(const TimeFilterOptions &options, std::chrono::system_clock::time_point timestamp)
+{
+    if (options.preset == TimeFilterOptions::Preset::CustomRange)
+    {
+        const auto from = parseCustomDateBound(arrayToString(options.customFrom), false);
+        const auto to = parseCustomDateBound(arrayToString(options.customTo), true);
+        if (from && timestamp < *from)
+            return false;
+        if (to && timestamp > *to)
+            return false;
+        return true;
+    }
+
+    int days = presetDays(options.preset);
+    if (days <= 0)
+        return true;
+
+    auto now = std::chrono::system_clock::now();
+    auto threshold = now - std::chrono::hours(24 * days);
+    return timestamp >= threshold;
+}
+
 bool matchesTimeFilters(const PreparedSpecification &prepared, const std::filesystem::directory_entry &entry)
 {
     if (!prepared.timeFiltersEnabled)
         return true;
 
     const auto &options = prepared.timeOptions;
-    int days = presetDays(options.preset);
-    if (days <= 0)
+    if (options.preset == TimeFilterOptions::Preset::AnyTime)
         return true;
 
     std::error_code ec;
@@ -1631,14 +1684,7 @@ bool matchesTimeFilters(const PreparedSpecification &prepared, const std::filesy
     auto now = std::chrono::system_clock::now();
     auto systemTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
         now + (fileTime - fileClockNow));
-    auto threshold = now - std::chrono::hours(24 * days);
-
-    bool considerModified = options.includeModified || (!options.includeCreated && !options.includeAccessed);
-    if (considerModified)
-        return systemTime >= threshold;
-
-    // If only created/accessed requested, approximate using modification time.
-    return systemTime >= threshold;
+    return matchesTimestampFilter(options, systemTime);
 }
 
 bool shouldPruneEntry(const PreparedSpecification &prepared,
@@ -1752,16 +1798,15 @@ bool matchesPermissionFilters(const PreparedSpecification &prepared, const ck::f
 
 bool matchesTimeFilters(const PreparedSpecification &prepared, const ck::files::NativeWalkEntry &entry)
 {
-    if (!prepared.timeFiltersEnabled || !entry.metadata.modified.value())
-        return !prepared.timeFiltersEnabled;
-    const int days = presetDays(prepared.timeOptions.preset);
-    if (days <= 0)
+    if (!prepared.timeFiltersEnabled || prepared.timeOptions.preset == TimeFilterOptions::Preset::AnyTime)
         return true;
+    if (!entry.metadata.modified.value())
+        return false;
     const auto duration = std::chrono::seconds(entry.metadata.modified.value()->seconds()) +
                           std::chrono::nanoseconds(entry.metadata.modified.value()->nanoseconds());
     const auto timestamp = std::chrono::system_clock::time_point(
         std::chrono::duration_cast<std::chrono::system_clock::duration>(duration));
-    return timestamp >= std::chrono::system_clock::now() - std::chrono::hours(24 * days);
+    return matchesTimestampFilter(prepared.timeOptions, timestamp);
 }
 
 bool shouldPruneEntry(const PreparedSpecification &prepared,
@@ -2386,26 +2431,10 @@ bool matchWholeWord(const std::string &haystack, const std::vector<std::string> 
     return true;
 }
 
-bool matchRegex(const std::string &haystack, const std::string &pattern, bool caseInsensitive)
-{
-    try
-    {
-        std::regex::flag_type flags = std::regex::ECMAScript;
-        if (caseInsensitive)
-            flags = static_cast<std::regex::flag_type>(flags | std::regex::icase);
-        std::regex re(pattern, flags);
-        return std::regex_search(haystack, re);
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
 bool fileMatchesContent(const std::filesystem::path &path,
                         const TextSearchOptions &options,
                         const std::vector<std::string> &terms,
-                        const std::string &rawPattern)
+                        const std::optional<std::regex> &compiledRegex)
 {
     if (!options.treatBinaryAsText && isBinaryFile(path))
         return false;
@@ -2417,7 +2446,7 @@ bool fileMatchesContent(const std::filesystem::path &path,
     switch (options.mode)
     {
     case TextSearchOptions::Mode::RegularExpression:
-        return matchRegex(content, rawPattern, !options.matchCase);
+        return compiledRegex.has_value() && std::regex_search(content, *compiledRegex);
     case TextSearchOptions::Mode::WholeWord:
         return matchWholeWord(content, terms, !options.matchCase);
     case TextSearchOptions::Mode::Contains:
@@ -2645,15 +2674,68 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
     if (prepared.hasUnsupportedPermissionFilters && forwardStderr)
         (*forwardStderr) << "ck-find: owner/group permission filters are not yet supported in the builtin engine.\n";
 
-    auto recordMatch = [&](const std::filesystem::path &path) {
+    const bool explicitDirectoryTypeRequested =
+        prepared.typeFiltersEnabled && prepared.typeEnabled &&
+        std::find(prepared.typeLetters.begin(), prepared.typeLetters.end(), 'd') != prepared.typeLetters.end();
+
+    std::filesystem::path activeDirectory;
+    auto notifyProgress = [&](bool force) {
+        if (!options.on_progress)
+            return;
+        if (!force && (result.scannedEntries % 64u) != 0u)
+            return;
+        SearchProgressSnapshot snapshot;
+        snapshot.scannedEntries = result.scannedEntries;
+        snapshot.scannedDirectories = result.scannedDirectories;
+        snapshot.matchCount = result.matchCount;
+        snapshot.currentDirectory = activeDirectory;
+        options.on_progress(snapshot);
+    };
+
+    auto recordMatch = [&](SearchMatchEntry matchEntry) {
         ++result.matchCount;
+        const std::filesystem::path path = matchEntry.path;
         if (options.captureMatches &&
             (options.maxCapturedMatches == 0 || result.matches.size() < options.maxCapturedMatches))
+        {
             result.matches.push_back(path);
+            result.matchEntries.push_back(std::move(matchEntry));
+        }
         if (options.on_match)
             options.on_match(path);
         if (forwardStdout)
             (*forwardStdout) << path.string() << '\n';
+    };
+
+#if !defined(_WIN32)
+    auto buildPosixMatchEntry = [](const std::filesystem::directory_entry &entry) {
+        SearchMatchEntry info;
+        info.path = entry.path();
+        std::error_code ec;
+        info.isDirectory = entry.is_directory(ec) && !ec;
+        if (!info.isDirectory)
+        {
+            ec.clear();
+            const auto sz = entry.file_size(ec);
+            if (!ec)
+            {
+                info.sizeBytes = static_cast<std::uint64_t>(sz);
+                info.sizeKnown = true;
+            }
+        }
+        ec.clear();
+        const auto mtime = entry.last_write_time(ec);
+        if (!ec)
+        {
+            const auto fileNow = decltype(mtime)::clock::now();
+            const auto sysNow = std::chrono::system_clock::now();
+            const auto sysTime = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                sysNow + (mtime - fileNow));
+            info.modifiedUnixSeconds =
+                std::chrono::duration_cast<std::chrono::seconds>(sysTime.time_since_epoch()).count();
+            info.modifiedKnown = true;
+        }
+        return info;
     };
 
     auto evaluateEntry = [&](const std::filesystem::directory_entry &entry,
@@ -2662,6 +2744,22 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                              bool isRoot) {
         if (cancellationRequested())
             return false;
+        ++result.scannedEntries;
+        std::error_code dirEc;
+        const bool isDir = entry.is_directory(dirEc) && !dirEc;
+        if (isDir)
+        {
+            ++result.scannedDirectories;
+            activeDirectory = entry.path();
+            notifyProgress(true);
+            if (isRoot && !explicitDirectoryTypeRequested && !(prepared.minDepthEnabled && prepared.minDepth == 0))
+                return true;
+        }
+        else
+        {
+            notifyProgress(false);
+        }
+
         if (!prepared.includeHidden && !isRoot && isHiddenPath(entry.path()))
             return true;
 
@@ -2679,9 +2777,6 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
         if (!withinDepthLimits(prepared, depth))
             return true;
 
-        if (!matchesTextInName(prepared, name))
-            return true;
-
         if (!matchesTypeFilters(prepared, entry))
             return true;
 
@@ -2694,18 +2789,30 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
         if (!matchesTimeFilters(prepared, entry))
             return true;
 
-        if (prepared.textSearchEnabled && prepared.textSearchContents && options.filterContent)
+        if (prepared.textSearchEnabled && !prepared.rawSearchText.empty())
         {
-            std::error_code ec;
-            if (!entry.is_regular_file(ec) || ec)
-                return true;
-            if (!fileMatchesContent(entry.path(), prepared.textOptions, prepared.textTerms, prepared.rawSearchText))
-                return true;
+            const bool nameWanted = prepared.textSearchNames;
+            const bool contentWanted = prepared.textSearchContents && options.filterContent;
+            if (nameWanted || contentWanted)
+            {
+                const bool nameOk = nameWanted && matchesTextInName(prepared, name);
+                if (!nameOk)
+                {
+                    if (!contentWanted)
+                        return true;
+                    std::error_code ec;
+                    if (!entry.is_regular_file(ec) || ec)
+                        return true;
+                    if (!fileMatchesContent(entry.path(), prepared.textOptions, prepared.textTerms, prepared.textRegex))
+                        return true;
+                }
+            }
         }
 
-        recordMatch(entry.path());
+        recordMatch(buildPosixMatchEntry(entry));
         return !cancellationRequested();
     };
+#endif
 
     bool hadError = false;
 #if defined(_WIN32)
@@ -2722,11 +2829,26 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             result.cancelled = true;
             break;
         }
+        activeDirectory = start;
+        notifyProgress(true);
         const auto walk = ck::files::walk_native_directories(
             start, prepared.includeSubdirectories, prepared.followSymlinks, prepared.followSymlinks,
             [&](const ck::files::NativeWalkEntry &entry) {
                 if (cancellationRequested())
                     return ck::files::NativeWalkAction::Stop;
+                ++result.scannedEntries;
+                const bool isDir = entry.metadata.kind.value() &&
+                                   *entry.metadata.kind.value() == ck::files::ObjectKind::Directory;
+                if (isDir)
+                {
+                    ++result.scannedDirectories;
+                    activeDirectory = entry.path;
+                    notifyProgress(true);
+                }
+                else
+                {
+                    notifyProgress(false);
+                }
                 const std::string name = entry.path.filename().string().empty() ?
                     entry.path.string() : entry.path.filename().string();
                 const std::string relative = relativePathString(start, entry.path);
@@ -2736,24 +2858,45 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                     return ck::files::NativeWalkAction::SkipSubtree;
                 if (!prepared.includeHidden && !entry.root && isHiddenPath(entry.path))
                     return ck::files::NativeWalkAction::SkipSubtree;
-                if (entry.root) {
-                    // The root is still a match candidate, as in the legacy
-                    // engine. Its native metadata has already been observed.
+                if (entry.root && isDir && !explicitDirectoryTypeRequested &&
+                    !(prepared.minDepthEnabled && prepared.minDepth == 0))
+                {
+                    return ck::files::NativeWalkAction::Continue;
                 }
                 if (!matchesIncludeExclude(prepared, name))
                     return ck::files::NativeWalkAction::Continue;
                 if (!matchesNameFilters(prepared, entry.path, name, relative) ||
-                    !withinDepthLimits(prepared, entry.depth) || !matchesTextInName(prepared, name) ||
+                    !withinDepthLimits(prepared, entry.depth) ||
                     !matchesTypeFilters(prepared, entry) || !matchesSizeFilters(prepared, entry) ||
                     !matchesPermissionFilters(prepared, entry) || !matchesTimeFilters(prepared, entry))
                     return ck::files::NativeWalkAction::Continue;
-                if (prepared.textSearchEnabled && prepared.textSearchContents && options.filterContent) {
-                    if (!entry.metadata.kind.value() ||
-                        *entry.metadata.kind.value() != ck::files::ObjectKind::RegularFile ||
-                        !fileMatchesContent(entry.path, prepared.textOptions, prepared.textTerms, prepared.rawSearchText))
-                        return ck::files::NativeWalkAction::Continue;
+                if (prepared.textSearchEnabled && !prepared.rawSearchText.empty()) {
+                    const bool nameWanted = prepared.textSearchNames;
+                    const bool contentWanted = prepared.textSearchContents && options.filterContent;
+                    if (nameWanted || contentWanted) {
+                        const bool nameOk = nameWanted && matchesTextInName(prepared, name);
+                        if (!nameOk) {
+                            if (!contentWanted || !entry.metadata.kind.value() ||
+                                *entry.metadata.kind.value() != ck::files::ObjectKind::RegularFile ||
+                                !fileMatchesContent(entry.path, prepared.textOptions, prepared.textTerms, prepared.textRegex))
+                                return ck::files::NativeWalkAction::Continue;
+                        }
+                    }
                 }
-                recordMatch(entry.path);
+                SearchMatchEntry info;
+                info.path = entry.path;
+                info.isDirectory = isDir;
+                if (!isDir && entry.metadata.logical_size.value())
+                {
+                    info.sizeBytes = *entry.metadata.logical_size.value();
+                    info.sizeKnown = true;
+                }
+                if (entry.metadata.modified.value())
+                {
+                    info.modifiedUnixSeconds = entry.metadata.modified.value()->seconds();
+                    info.modifiedKnown = true;
+                }
+                recordMatch(std::move(info));
                 return cancellationRequested() ? ck::files::NativeWalkAction::Stop : ck::files::NativeWalkAction::Continue;
             },
             [&](const std::filesystem::path &path, const std::error_code &ec) { handleError(path, ec); },
@@ -2772,8 +2915,18 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
         hadError = true;
     };
 
+    auto sameDevice = [&](const std::filesystem::path &candidate, std::optional<dev_t> expectedDev) {
+        if (!expectedDev)
+            return true;
+        struct stat st{};
+        const int rc = prepared.followSymlinks ? ::stat(candidate.c_str(), &st)
+                                               : ::lstat(candidate.c_str(), &st);
+        return rc == 0 && st.st_dev == *expectedDev;
+    };
+
     auto traverseDirectory = [&](const std::filesystem::directory_entry &dirEntry,
-                                 const std::filesystem::path &root) {
+                                 const std::filesystem::path &root,
+                                 std::optional<dev_t> rootDev) {
         std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied;
         if (prepared.followSymlinks)
             opts |= std::filesystem::directory_options::follow_directory_symlink;
@@ -2796,6 +2949,12 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                 int depth = it.depth() + 1;
                 std::string name = entry.path().filename().string();
                 std::string relative = relativePathString(root, entry.path());
+
+                if (!sameDevice(entry.path(), rootDev))
+                {
+                    it.disable_recursion_pending();
+                    continue;
+                }
 
                 if (prepared.maxDepthEnabled && depth > prepared.maxDepth)
                 {
@@ -2840,6 +2999,9 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
                 std::string name = entry.path().filename().string();
                 std::string relative = relativePathString(root, entry.path());
 
+                if (!sameDevice(entry.path(), rootDev))
+                    continue;
+
                 if (shouldPruneEntry(prepared, entry, name, relative))
                     continue;
 
@@ -2869,6 +3031,17 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
             continue;
         }
 
+        std::optional<dev_t> rootDev;
+        if (prepared.stayOnSameFilesystem)
+        {
+            struct stat rootStat{};
+            if ((prepared.followSymlinks ? ::stat(start.c_str(), &rootStat)
+                                         : ::lstat(start.c_str(), &rootStat)) == 0)
+            {
+                rootDev = rootStat.st_dev;
+            }
+        }
+
         if (!evaluateEntry(entry, entry.path(), 0, true))
         {
             result.cancelled = true;
@@ -2876,13 +3049,15 @@ SearchExecutionResult executeSpecification(const SearchSpecification &spec,
         }
 
         ec.clear();
-        if (entry.is_directory(ec) && !ec && !traverseDirectory(entry, entry.path()))
+        if (entry.is_directory(ec) && !ec && !traverseDirectory(entry, entry.path(), rootDev))
         {
             result.cancelled = true;
             break;
         }
     }
 #endif
+
+    notifyProgress(true);
 
     if (forwardStdout)
         forwardStdout->flush();

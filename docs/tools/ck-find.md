@@ -1,53 +1,55 @@
 # ck-find
 
-`ck-find` is the native ckVision search workflow. It provides one guided,
-scrolling form for a named search, start location, text matching, include and
-exclude patterns, traversal policy, file types, date range, size range,
-permission audit, and safe result actions. The generated command plan is
-available for preview, while the search itself runs through a cancellable
-background service and returns results to the interface.
+`ck-find` is the interactive ckVision file-search desktop utility. Launching
+`ck-find` opens directly on the **Find Files** search prompt with focus in the
+filename/pattern field: typing a pattern such as `*.txt` and pressing `Enter`
+immediately starts a recursive search from the current directory, displays a
+cancellable live **Search Progress** dialog, and opens a sortable **Found
+Files** window on the MDI desktop.
 
 ![Find results](../generated/screenshots/ck-find.svg)
 
 ## Usage
 
 ```bash
-ck-find
+ck-find [DIRECTORY] [PATTERN]
 ```
 
-Use `ck-find --help` for the command-line synopsis. Search creation, loading,
-saving, previewing, running, and cancellation are available from the native
-menus and status line. Use `ck-find --version` for package metadata without
-opening the search interface.
+Use `ck-find --help` for the command-line synopsis and `ck-find --version` for
+package metadata. Optional positional arguments pre-populate the starting
+directory and file pattern.
 
 ## Features
 
-- Guided fields for search name, start location, filename and content
-  matching, include/exclude patterns, traversal policy, file type, date and
-  size ranges, and permission auditing.
-- Save and load reusable specifications, validate them, and preview the direct
-  execution plan before starting a search.
-- Cancellable background traversal with bounded results, progress/status
-  feedback, and a valid visible result while a replacement operation runs.
-- Result selection, path inspection, and deliberate actions with explicit
-  scope and confirmation; directory deletion is never implied by a match.
-- Fixed, read-only macOS metadata and SHA-256 command templates only when the
-  tested sandbox capability is available; no saved command is interpreted by a
-  shell, and custom commands cannot be combined with deletion.
+- **Zero-click launch to search**: Opens directly on `File name or pattern:` so
+  typing `*.txt` (or a filename substring) and pressing `Enter` starts a
+  recursive search immediately without extra setup dialogs.
+- **Live search progress dialog**: Displays an animated progress bar, scanned
+  entry and folder counters, live match count, active directory, and instant
+  `Esc` / `Cancel` support.
+- **Multiple Found Files windows**: Each completed search opens its own
+  sortable MDI result window (`Name`, `Folder`, `Size`, `Modified`) with a live
+  split-pane preview; tile, cascade, or switch across multiple searches from
+  the `Window` menu.
+- **Export result lists**: Export any Found Files window's sorted file list to
+  a `.txt` file (`Ctrl+E` or `File → Export found files to text...`).
+- **Integrated viewers & editors**: Preview and edit matched files directly on
+  the `ck-find` desktop using ckVision and CK Utilities components — Text/Hex
+  preview (`F3`), structured JSON Tree view & node editor, syntax-highlighted
+  Text/Markdown/JSON editor (`F4`), and a 16-column virtualized Hex editor
+  (`F8`) with fingerprint-checked atomic saves (`Ctrl+S`).
+- **Advanced filters, presets & saved searches**: Filter by exclude globs, file
+  type presets, modification date ranges, size bounds, symlink policy, and
+  maximum folder depth (`F7`), or save/load reusable search specifications.
+- **Power-user `Tools` menu**: Inspect and copy the equivalent POSIX `find(1)`
+  command (`Ctrl+G`) or run explicitly confirmed bulk actions.
 
 ## Safe actions
 
-Deleting matches requires an explicit confirmation and is limited to matching
-regular files and symbolic links; directories are never removed. Existing
-saved custom-command settings are retained for compatibility, but they are
-never interpreted by a shell. On macOS, the guided form can select one of two
-fixed read-only templates: `ckvision.file-info` (file metadata) or
-`ckvision.sha256` (a SHA-256 digest). Every other saved value is refused.
-
-The native executor previews its direct argv and requires a second explicit
-confirmation. It runs from the selected search root through the macOS sandbox,
-with network and file writes denied. Matched paths are passed as literal argv
-values. Each invocation has a five-second limit and 16 KiB output limit; a
-run stops after 64 matched paths and reports its bounded audit outcome. Custom
-commands cannot be combined with deletion. The capability remains explicitly
-unavailable on platforms without the tested macOS sandbox executor.
+Deleting an individual file from a Found Files window or running a bulk
+specification action requires explicit confirmation and never deletes
+directories. On macOS, `Tools → Bulk specification actions...` also supports
+two fixed read-only sandboxed templates (`ckvision.file-info` and
+`ckvision.sha256`) executed with direct `argv` under `/usr/bin/sandbox-exec`
+(network and file writes denied, five-second timeout, 16 KiB per-file limit,
+64-path cap) and displays the captured output in an audit report window.

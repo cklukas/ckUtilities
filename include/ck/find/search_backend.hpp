@@ -3,6 +3,7 @@
 #include "ck/find/search_model.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -18,6 +19,24 @@ struct SavedSpecification
     std::string name;
     std::string slug;
     std::filesystem::path path;
+};
+
+struct SearchMatchEntry
+{
+    std::filesystem::path path;
+    std::uint64_t sizeBytes = 0;
+    std::int64_t modifiedUnixSeconds = 0;
+    bool isDirectory = false;
+    bool sizeKnown = false;
+    bool modifiedKnown = false;
+};
+
+struct SearchProgressSnapshot
+{
+    std::size_t scannedEntries = 0;
+    std::size_t scannedDirectories = 0;
+    std::size_t matchCount = 0;
+    std::filesystem::path currentDirectory;
 };
 
 struct SearchExecutionOptions
@@ -38,12 +57,17 @@ struct SearchExecutionOptions
     // Called for every accepted path on the executing thread.  UI adapters
     // must marshal this callback before updating a view.
     std::function<void(const std::filesystem::path &)> on_match;
+
+    // Periodic traversal progress reported on the executing thread.
+    std::function<void(const SearchProgressSnapshot &)> on_progress;
 };
 
 struct SearchExecutionResult
 {
     int exitCode = 0;
     bool cancelled = false;
+    std::size_t scannedEntries = 0;
+    std::size_t scannedDirectories = 0;
     std::size_t matchCount = 0;
     // Application adapters that apply an explicitly authorized file action
     // report its outcome separately from matching and traversal errors.
@@ -57,7 +81,9 @@ struct SearchExecutionResult
     bool customCommandTimedOut = false;
     bool customCommandOutputTruncated = false;
     std::string customCommandAudit;
+    std::string customCommandOutput;
     std::vector<std::filesystem::path> matches;
+    std::vector<SearchMatchEntry> matchEntries;
     std::vector<std::string> command;
 };
 

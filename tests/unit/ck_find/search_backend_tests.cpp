@@ -107,3 +107,87 @@ TEST(SearchBackend, ReportsCancellationAtTraversalBoundaries)
 
     fs::remove_all(tempDir);
 }
+
+TEST(SearchBackend, FilenameOrContentMatchesEitherWhenBothTargetsEnabled)
+{
+    namespace fs = std::filesystem;
+    fs::path tempDir = fs::temp_directory_path() /
+                       fs::path("ck-find-or-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(tempDir);
+
+    fs::path byContent = tempDir / "unrelated_name.cpp";
+    {
+        std::ofstream stream(byContent);
+        stream << "int special_token = 42;\n";
+    }
+
+    fs::path byName = tempDir / "special_token_helper.cpp";
+    {
+        std::ofstream stream(byName);
+        stream << "// empty\n";
+    }
+
+    fs::path neither = tempDir / "other.cpp";
+    {
+        std::ofstream stream(neither);
+        stream << "int x = 0;\n";
+    }
+
+    auto spec = ck::find::makeDefaultSpecification();
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.string().c_str());
+    std::snprintf(spec.searchText.data(), spec.searchText.size(), "%s", "special_token");
+    spec.enableTextSearch = true;
+    spec.textOptions.searchInContents = true;
+    spec.textOptions.searchInFileNames = true;
+
+    ck::find::SearchExecutionOptions options;
+    options.includeActions = false;
+    options.captureMatches = true;
+    options.filterContent = true;
+    std::size_t progressCalls = 0;
+    options.on_progress = [&progressCalls](const ck::find::SearchProgressSnapshot &) { ++progressCalls; };
+
+    auto result = ck::find::executeSpecification(spec, options, nullptr, nullptr);
+    EXPECT_EQ(result.exitCode, 0);
+    EXPECT_EQ(result.matchCount, 2u);
+    EXPECT_EQ(result.matchEntries.size(), 2u);
+    EXPECT_GT(progressCalls, 0u);
+    EXPECT_NE(std::find(result.matches.begin(), result.matches.end(), byContent), result.matches.end());
+    EXPECT_NE(std::find(result.matches.begin(), result.matches.end(), byName), result.matches.end());
+
+    fs::remove_all(tempDir);
+}
+
+TEST(SearchBackend, CustomDateRangeFiltersEntries)
+{
+    namespace fs = std::filesystem;
+    fs::path tempDir = fs::temp_directory_path() /
+                       fs::path("ck-find-date-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(tempDir);
+
+    fs::path todayFile = tempDir / "today.txt";
+    {
+        std::ofstream stream(todayFile);
+        stream << "recent\n";
+    }
+
+    auto spec = ck::find::makeDefaultSpecification();
+    std::snprintf(spec.startLocation.data(), spec.startLocation.size(), "%s", tempDir.string().c_str());
+    spec.enableTextSearch = false;
+    spec.enableTimeFilters = true;
+    spec.timeOptions.preset = ck::find::TimeFilterOptions::Preset::CustomRange;
+    std::snprintf(spec.timeOptions.customFrom.data(), spec.timeOptions.customFrom.size(), "2000-01-01");
+    std::snprintf(spec.timeOptions.customTo.data(), spec.timeOptions.customTo.size(), "2000-12-31");
+
+    ck::find::SearchExecutionOptions options;
+    options.includeActions = false;
+    options.captureMatches = true;
+    auto excluded = ck::find::executeSpecification(spec, options, nullptr, nullptr);
+    EXPECT_EQ(excluded.matchCount, 0u);
+
+    std::snprintf(spec.timeOptions.customTo.data(), spec.timeOptions.customTo.size(), "2099-12-31");
+    auto included = ck::find::executeSpecification(spec, options, nullptr, nullptr);
+    EXPECT_EQ(included.matchCount, 1u);
+
+    fs::remove_all(tempDir);
+}
