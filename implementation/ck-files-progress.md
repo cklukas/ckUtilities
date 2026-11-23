@@ -1,5 +1,22 @@
 # Files implementation evidence
 
+## 2026-11-24 — Native menu shortcuts and volume Properties
+
+Loading the default suite keymap removed ckVision's runtime menu accelerators.
+The keymap now preserves these bindings and remembers an accelerator's
+original chord when a shortcut override replaces it. Resetting that override
+restores the accelerator. The regression fails on the old controller and
+passes with the fix.
+
+The rebuilt Files executable passed all eight focused macOS CTest entries.
+A native PTY opened the left-pane volume list from the filesystem root and
+verified its Mount, Type and Space columns. Alt+L followed by I opened
+**Volume properties** with the selected filesystem and exact available and
+total bytes. F4 switched between the volume pane and the file pane, and
+Backspace returned the volume pane to its root listing. The other pane kept
+its directory throughout. Right-to-accept and mark continuity also passed
+in the rebuilt process.
+
 ## 2026-11-23 — ckVision 2.1 release SDK and macOS terminal
 
 The macOS ARM64 Release build linked Files against the published ckVision

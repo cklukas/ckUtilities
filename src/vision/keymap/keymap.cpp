@@ -288,16 +288,12 @@ KeymapUpdate KeymapController::update(std::string_view command_key,
             const std::string occupied_key(commands_.key_for(*occupied));
             if (!replace_conflict)
                 return {KeymapUpdateStatus::Conflict, KeymapConflict{occupied_key, *chord}};
-            commands_.unbind_key(*chord);
             if (shared_command(command_key) || !shared_command(occupied_key))
                 overrides_for(occupied_key)[occupied_key] = std::nullopt;
         }
     }
 
-    if (const auto previous = commands_.chord_for_command(*target))
-        commands_.unbind_key(*previous);
-    if (chord)
-        commands_.bind_key(*chord, *target);
+    apply_binding(*target, chord);
     overrides_for(command_key)[std::string(command_key)] = chord;
     return {KeymapUpdateStatus::Applied, std::nullopt};
 }
@@ -333,31 +329,49 @@ void KeymapController::restore_defaults()
 {
     for (const ckv::ui::CommandInfo &command : commands_.all())
     {
+        auto default_chord = command.default_chord;
+        if (!default_chord)
+        {
+            const auto runtime = runtime_defaults_.find(command.key);
+            if (runtime == runtime_defaults_.end())
+                continue;
+            default_chord = runtime->second;
+        }
         if (const auto active = commands_.chord_for_command(command.id))
             commands_.unbind_key(*active);
-        if (command.default_chord)
-            commands_.bind_key(*command.default_chord, command.id);
+        if (default_chord)
+            commands_.bind_key(*default_chord, command.id);
     }
 }
 
 void KeymapController::apply_overrides(const KeymapOverrides &overrides)
 {
     for (const auto &[command_key, chord] : overrides)
-        apply_binding(command_key, chord);
+        if (const auto target = commands_.id_for(command_key))
+            apply_binding(*target, chord);
 }
 
-void KeymapController::apply_binding(std::string_view command_key, const std::optional<ckv::KeyChord> &chord)
+void KeymapController::apply_binding(ckv::ui::CommandId target, const std::optional<ckv::KeyChord> &chord)
 {
-    const auto target = commands_.id_for(command_key);
-    if (!target)
-        return;
-    if (const auto previous = commands_.chord_for_command(*target))
+    const auto occupied = chord ? commands_.command_for_key(*chord) : std::nullopt;
+    remember_runtime_default(target);
+    if (occupied && *occupied != target)
+        remember_runtime_default(*occupied);
+    if (const auto previous = commands_.chord_for_command(target))
         commands_.unbind_key(*previous);
     if (!chord)
         return;
-    if (const auto occupied = commands_.command_for_key(*chord); occupied && *occupied != *target)
+    if (occupied && *occupied != target)
         commands_.unbind_key(*chord);
-    commands_.bind_key(*chord, *target);
+    commands_.bind_key(*chord, target);
+}
+
+void KeymapController::remember_runtime_default(ckv::ui::CommandId command)
+{
+    // Menu bars and other surfaces can bind their own accelerator at runtime.
+    // Remember it when an override first takes ownership of that binding.
+    if (const auto *entry = commands_.find(command); entry && !entry->default_chord)
+        runtime_defaults_.try_emplace(entry->key, commands_.chord_for_command(command));
 }
 
 } // namespace ck::vision

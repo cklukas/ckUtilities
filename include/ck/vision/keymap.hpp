@@ -123,13 +123,15 @@ private:
     const KeymapOverrides &overrides_for(std::string_view command_key) const noexcept;
     void restore_defaults();
     void apply_overrides(const KeymapOverrides &overrides);
-    void apply_binding(std::string_view command_key, const std::optional<ckv::KeyChord> &chord);
+    void apply_binding(ckv::ui::CommandId target, const std::optional<ckv::KeyChord> &chord);
+    void remember_runtime_default(ckv::ui::CommandId command);
 
     std::string application_id_;
     ckv::ui::CommandRegistry &commands_;
     KeymapPersistence &persistence_;
     KeymapOverrides global_overrides_;
     KeymapOverrides application_overrides_;
+    KeymapOverrides runtime_defaults_;
 };
 
 // A suite-wide command catalog used only by the configuration application.

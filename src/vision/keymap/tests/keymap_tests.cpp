@@ -65,10 +65,24 @@ int main()
 
     ckv::ui::CommandRegistry files_registry;
     const auto cancel = ck::vision::declare_suite_command(files_registry, "ck-files", "ck.files.cancel_read", [] {});
+    const auto properties = ck::vision::declare_suite_command(files_registry, "ck-files", "ck.files.properties", [] {});
+    const auto location_menu = files_registry.declare({.key = "ckv.menu-bar.accelerator.l",
+        .title = "Location", .category = "Menu", .visibility = ckv::ui::CommandVisibility::Hidden});
+    files_registry.bind_key(chord("Alt+L"), location_menu);
     ck::vision::KeymapController files_keymap("ck-files", files_registry, persistence);
     require(cancel != ckv::ui::kInvalidCommand && files_keymap.load() &&
                 files_registry.command_for_key(chord("Esc")) == cancel,
             "Loading the Files keymap must retain the Escape default for cancelling activity.");
+    require(files_registry.command_for_key(chord("Alt+L")) == location_menu,
+            "Loading the Files keymap must retain the Location menu's runtime binding.");
+    require(files_keymap.update("ck.files.properties", chord("Alt+L"), true).status ==
+                ck::vision::KeymapUpdateStatus::Applied &&
+                files_registry.command_for_key(chord("Alt+L")) == properties,
+            "An explicit override may replace the Location accelerator.");
+    require(files_keymap.reset("ck.files.properties") &&
+                files_registry.command_for_key(chord("Alt+L")) == location_menu &&
+                !files_registry.chord_for_command(properties),
+            "Resetting the override must restore the Location accelerator and unbind Properties.");
 
     const auto rejected = first.update("ck.test.save", chord("Ctrl+O"));
     require(rejected.status == ck::vision::KeymapUpdateStatus::Conflict && rejected.conflict &&
