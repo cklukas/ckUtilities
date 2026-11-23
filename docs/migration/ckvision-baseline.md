@@ -8,19 +8,25 @@ checkout is not a build input.
 | Field | Value |
 | --- | --- |
 | ckVision version | `2.0.0` |
-| Pinned source revision | `adf767deea9a3cc8dd9d4b397af444c5ad6c873f` |
+| Pinned source revision | [`424e834c01596650720e45ebf0fe3632dd5196de`](https://github.com/cklukas/ckVision/commit/424e834c01596650720e45ebf0fe3632dd5196de) |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |
 | Previous SDK evidence | [1.4.2 integration record](../../implementation/evidence/ckvision-1.4.2-integration-20261102.json) and [1.4.1 integration record](../../implementation/evidence/ckvision-1.4.1-integration-20261102.json) |
 
-CI checks out this exact revision and builds an installed SDK on every
-Linux and macOS runner before it configures ckUtilities. This keeps the
-application’s dependency boundary identical to a user build while eliminating
-manual SDK-archive configuration.
+Native qualification builds and installs an SDK from this revision on Linux,
+macOS and Windows before configuring ckUtilities. Use the same revision to
+reproduce the SDK input locally.
 
 ## Local verification
 
 ```sh
+cmake -S /path/to/pinned-ckvision -B /path/to/ckvision-build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCKVISION_BUILD_TESTING=OFF -DCKVISION_BUILD_EXAMPLES=OFF \
+  -DCMAKE_INSTALL_PREFIX=/path/to/ckvision-sdk
+cmake --build /path/to/ckvision-build --config Release --parallel 1
+cmake --install /path/to/ckvision-build --config Release
+
 cmake --preset dev \
   -DCMAKE_PREFIX_PATH=/path/to/ckvision-sdk \
   -DCKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \
@@ -39,7 +45,8 @@ prefix.
 
 ## CI input
 
-The source revision is recorded directly in both GitHub Actions workflows.
+The source revision is recorded in the shared GitHub qualification workflow,
+the CMake package check and `scripts/ci/dependency-pins.json`.
 Change it only after accepting the upstream specification, tests,
 documentation, release artifact, and provenance evidence, then run the normal,
 package-consumer, archive, and terminal checks from GitHub Actions.

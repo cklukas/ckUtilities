@@ -1,9 +1,9 @@
 # Building from source
 
 ckUtilities is a ckVision-native C++20 suite. Every build requires an
-installed `ckvision::cvision` CMake package; a neighbouring ckVision source
-checkout is never used as a dependency.
-[ckVision 2.0.0 SDK packages](https://github.com/cklukas/ckVision/releases/tag/v2.0.0)
+installed `ckvision::cvision` CMake package. Build and install the SDK from the
+[pinned ckVision source revision](migration/ckvision-baseline.md) before
+configuring ckUtilities.
 
 The headless filesystem backend is a separate sibling project:
 [`ck-core-fs-lib`](https://github.com/cklukas/ck-core-fs-lib). A normal local

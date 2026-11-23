@@ -1,0 +1,27 @@
+{
+  "recorded_date": "2026-11-23",
+  "frontend": "d115f5a67af0fb019850a9d5390f35172db6a3ce",
+  "backend": "5578e8710265fb27979c239eef27c0e6c62c4cf2",
+  "ckvision": "b8d412aa5a4f35b8609767bf18eccc3f6e9f8216",
+  "configuration": "Release, MSVC v143 14.44, static CRT, /Z7",
+  "scope": "Elevated workstation SSH session. The driver gated the test run on source and installed SDK manifest checks and executable timestamps. Ordinary-token desktop validation is still open.",
+  "build_directory": "V:/tmp/ckc-a64249c6/b",
+  "frontend_archive_sha256": "f67cd824c2cfc7d567a13241cf9c63d3393ec3b4ce9752fac9a1efd03b59eea2",
+  "backend_archive_sha256": "f2910869ce2e2e20b0e46e2db63111d8ee62abca6d4d9d12e85660f4aa97faa2",
+  "build_details": "Per-image hashes and build start, end and elapsed time are in build-result.json on the workstation. SSH timed out during evidence review.",
+  "ctest_elapsed_seconds": 45.84,
+  "passed_entries": [
+    "ck_vision_keymap_tests",
+    "ck_vision_files_tests_0",
+    "ck_vision_files_tests_1",
+    "ck_vision_files_tests_2",
+    "ck_vision_files_tests_3",
+    "ck_vision_files_settings_allocation_bound_tests",
+    "ck_vision_files_operation_recovery_oom_tests"
+  ],
+  "ctest_log_sha256": "74f06baa8364d3568e2f1778ca85d0ec6a8432a3247f2c1956ae63df9f2850e6",
+  "native_retirement_test": {
+    "result": "Build exit 2. Exact DOS, long UTF-16, UNC and reparse retirement coverage remains open for this run.",
+    "log_sha256": "8adc6fe9b10567b197198268282158b80f5349f3ba4da4c2eaa9433feed379e3"
+  }
+}

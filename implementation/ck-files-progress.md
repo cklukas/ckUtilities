@@ -1,5 +1,14 @@
 # Files implementation evidence
 
+## 2026-11-23 — Windows Release retirement-fix rerun
+
+The queued Windows workstation run passed all seven Files and keymap CTest
+entries on frontend `d115f5a`, backend `5578e87` and ckVision `b8d412a`.
+The two previously failing Files shards passed with the held-child retirement
+fix. The separate native retirement test failed at build time. The ordinary
+Windows Terminal session and ckVision 2.0 qualification remain open.
+[Run record](evidence/ck-files-windows-retirement-rerun-20261123.json).
+
 ## 2026-11-14 — Preservation preflight and backend consumer admission
 
 The shared backend adds opt-in preservation preflight V2 without changing the
