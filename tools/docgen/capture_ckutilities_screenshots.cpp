@@ -22,6 +22,7 @@
 #include <cvision/core/clock.hpp>
 #include <cvision/core/event.hpp>
 #include <cvision/core/filesystem.hpp>
+#include <cvision/core/version.hpp>
 #include <cvision/term/headless_terminal.hpp>
 #include <cvision/ui/application.hpp>
 
@@ -462,7 +463,8 @@ void capture_json_view(const std::filesystem::path &directory)
     ckv::MemoryFileSystem files;
     files.add_file(
         "/workspace/release-notes.json",
-        R"({"product":"CK Utilities","framework":"ckVision 2.0.0","tools":["ck-json-view","ck-find","ck-du","ck-files","ck-edit","ck-chat","ck-todo","ck-sysmon","ck-config"],"release":{"platforms":["macOS","Linux","Windows"],"packages":["tar.gz","deb","rpm","zip","homebrew"],"status":"ready"}})");
+        std::string{R"({"product":"CK Utilities","framework":"ckVision )"} +
+        std::string{ckv::version_string()} + R"(","tools":["ck-json-view","ck-find","ck-du","ck-files","ck-edit","ck-chat","ck-todo","ck-sysmon","ck-config"],"release":{"platforms":["macOS","Linux","Windows"],"packages":["tar.gz","deb","rpm","zip","homebrew"],"status":"ready"}})");
     ck::vision::JsonViewApp json_view(application, files);
     if (!json_view.load_file("/workspace/release-notes.json"))
         throw std::runtime_error("could not load JSON capture fixture");

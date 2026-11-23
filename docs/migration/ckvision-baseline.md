@@ -7,8 +7,9 @@ checkout is not a build input.
 
 | Field | Value |
 | --- | --- |
-| ckVision version | `2.0.0` |
-| Pinned source revision | [`424e834c01596650720e45ebf0fe3632dd5196de`](https://github.com/cklukas/ckVision/commit/424e834c01596650720e45ebf0fe3632dd5196de) |
+| ckVision version | `2.1.0` |
+| Pinned source revision | [`3d018210de4f8ad724678aa97b0d0b0ddee69a43`](https://github.com/cklukas/ckVision/commit/3d018210de4f8ad724678aa97b0d0b0ddee69a43) |
+| Published SDK | [ckVision 2.1.0](https://github.com/cklukas/ckVision/releases/tag/v2.1.0) |
 | CMake target | `ckvision::cvision` |
 | Client language level | C++20 |
 | Previous SDK evidence | [1.4.2 integration record](../../implementation/evidence/ckvision-1.4.2-integration-20261102.json) and [1.4.1 integration record](../../implementation/evidence/ckvision-1.4.1-integration-20261102.json) |
@@ -22,7 +23,7 @@ reproduce the SDK input locally.
 ```sh
 cmake -S /path/to/pinned-ckvision -B /path/to/ckvision-build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCKVISION_BUILD_TESTING=OFF -DCKVISION_BUILD_EXAMPLES=OFF \
+  -DBUILD_TESTING=OFF -DCKVISION_BUILD_EXAMPLES=OFF \
   -DCMAKE_INSTALL_PREFIX=/path/to/ckvision-sdk
 cmake --build /path/to/ckvision-build --config Release --parallel 1
 cmake --install /path/to/ckvision-build --config Release

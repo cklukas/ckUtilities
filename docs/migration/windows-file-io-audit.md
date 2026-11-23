@@ -7,6 +7,15 @@ boundaries must use wide Win32/native-handle APIs with validated extended
 length paths, or handle-relative native APIs. Narrow Win32 calls and legacy
 `MAX_PATH` assumptions are not acceptable for product I/O.
 
+## ckVision 2.1 upgrade — 2026-11-23
+
+The Windows filesystem changes in ckVision 2.1 keep bounded settings reads on
+the existing held wide Win32 file handle. The reader checks the byte budget
+inside the `ReadFile` loop before appending data, including growth after the
+initial length check. Windows file addressing continues to use the native
+extended-length DOS and UNC boundary. The tagged x64 and ARM64 package jobs
+passed the native filesystem suites and the independent installed SDK check.
+
 ## Recovery discovery correction — 2026-11-10
 
 The former scanner used `std::filesystem` for Windows root status, enumeration

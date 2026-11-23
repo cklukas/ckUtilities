@@ -370,7 +370,7 @@ void UtilitiesLauncherApp::open_calculator_window()
     auto input = std::make_unique<ckv::widgets::InputLine>();
     state->input = static_cast<ckv::widgets::InputLine *>(
         grid->add_item(std::move(input), ckv::ui::GridSpec{.row = 0, .column = 0, .column_span = 4}));
-    state->input->on_accept = [state] { state->evaluate(); };
+    state->input->on_activate = [state] { state->evaluate(); };
 
     static constexpr std::array<std::string_view, 20> keys = {
         "C", "<", "%", "/",

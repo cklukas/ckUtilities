@@ -250,7 +250,7 @@ struct FilesLocationDialog::State : std::enable_shared_from_this<State> {
             held->accepting = false;
         };
         owner->on_detached = [self] { self->detached(); };
-        field->on_edited = [weak] {
+        field->on_change = [weak] {
             if (auto held = weak.lock(); held && !held->finished) {
                 held->candidate.reset();
                 held->field->set_valid(true);

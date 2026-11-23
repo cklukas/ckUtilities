@@ -110,7 +110,7 @@ display. ck-todo's and ck-sysmon's golden frames, which their test suites
 compare against, are written by the same run.
 
 To regenerate them, point the script at the installed SDK and the matching
-ckVision 2.0.0 source checkout:
+ckVision 2.1.0 source checkout:
 
 ```sh
 CKTOOLS_CKVISION_PREFIX=/path/to/ckvision-sdk \

@@ -924,7 +924,7 @@ struct FilesApp::State {
         for (auto *surface : surfaces)
             if (surface) {
                 surface->grid->clear_model();
-                surface->grid->on_changed = {};
+                surface->grid->on_change = {};
                 surface->grid->on_activate = {};
                 surface->grid->on_bounds_changed = {};
             }
@@ -977,7 +977,7 @@ struct FilesApp::State {
                 if (active == i && panes[i].model.cursor_kind() == ck::files::ObjectKind::Directory)
                     application.execute_command(enter_id);
             };
-            surface->grid->on_changed = [this] {
+            surface->grid->on_change = [this] {
                 labels();
                 wake.request();
             };

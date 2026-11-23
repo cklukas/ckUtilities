@@ -4,7 +4,7 @@ include_guard(GLOBAL)
 # Consumers find the installed package through CMAKE_PREFIX_PATH or the
 # normal CMake package search paths.
 set(CKTOOLS_CKVISION_BASELINE_COMMIT
-    "424e834c01596650720e45ebf0fe3632dd5196de"
+    "3d018210de4f8ad724678aa97b0d0b0ddee69a43"
     CACHE STRING
     "ckVision commit required by the current ckUtilities migration targets")
 
@@ -41,7 +41,7 @@ function(cktools_require_ckvision)
     # The explicit prefix takes precedence over a previously cached package
     # directory, including when switching between sanitizer SDKs.
     set(ckvision_DIR "")
-    find_package(ckvision 2.0.0 CONFIG REQUIRED
+    find_package(ckvision 2.1.0 CONFIG REQUIRED
                  PATHS "${_ckvision_prefix}" NO_DEFAULT_PATH)
     file(REAL_PATH "${ckvision_CONFIG}" _ckvision_config)
     cmake_path(IS_PREFIX _ckvision_prefix "${_ckvision_config}" NORMALIZE _ckvision_in_prefix)
@@ -50,7 +50,7 @@ function(cktools_require_ckvision)
               "Requested ckVision SDK at '${_ckvision_prefix}', but CMake loaded '${_ckvision_config}'.")
     endif()
   else()
-    find_package(ckvision 2.0.0 CONFIG REQUIRED)
+    find_package(ckvision 2.1.0 CONFIG REQUIRED)
   endif()
 
   if(NOT TARGET ckvision::cvision)

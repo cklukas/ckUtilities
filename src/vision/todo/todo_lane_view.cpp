@@ -49,7 +49,7 @@ TodoLaneView::TodoLaneView() : ckv::ui::View({}, ckv::ui::FocusPolicy::TabStop) 
     set_help_context_key("todo.board");
     scrollbar_ = make<ckv::widgets::Scrollbar>(ckv::widgets::Orientation::Vertical);
     scrollbar_->set_policy(ckv::widgets::ScrollbarPolicy::Auto);
-    scrollbar_->on_position_changed = [this](int) { invalidate(); };
+    scrollbar_->on_change = [this](int) { invalidate(); };
 }
 
 void TodoLaneView::set_today(std::optional<IsoDate> today) {

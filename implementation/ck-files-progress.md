@@ -1,5 +1,23 @@
 # Files implementation evidence
 
+## 2026-11-23 — ckVision 2.1 release SDK and macOS terminal
+
+The macOS ARM64 Release build linked Files against the published ckVision
+`v2.1.0` SDK at `3d018210` and the pinned filesystem backend at `5578e87`.
+The independent SDK consumer and all eight selected Files, worker, keymap
+and shell CTest entries passed. The verified Files executable SHA-256 was
+`3ba71b5f95722642cd0dbd8137e735de4c4cf7e400dabd9aefca3e44519c0a7d`.
+
+In a native 120×34 macOS PTY, Ctrl+L opened the location editor, Right accepted
+the worker's proposed directory, and Enter opened it in the active pane while
+the other pane kept its location. Insert marked a file. Ctrl+R retained its
+mark after a different file sorted ahead of it, then cleared the mark and
+reported the loss after a same-name replacement. Alt+X closed the verified
+process cleanly.
+
+Current-source Linux qualification remains open. Windows workstation tests
+are postponed while the machine is powered off.
+
 ## 2026-11-23 — Windows Release retirement-fix rerun
 
 The queued Windows workstation run passed all seven Files and keymap CTest
