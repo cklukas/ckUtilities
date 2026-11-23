@@ -23,7 +23,7 @@ reproduce the SDK input locally.
 ```sh
 cmake -S /path/to/pinned-ckvision -B /path/to/ckvision-build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_TESTING=OFF -DCKVISION_BUILD_EXAMPLES=OFF \
+  -DCKVISION_BUILD_TESTING=OFF -DCKVISION_BUILD_EXAMPLES=OFF \
   -DCMAKE_INSTALL_PREFIX=/path/to/ckvision-sdk
 cmake --build /path/to/ckvision-build --config Release --parallel 1
 cmake --install /path/to/ckvision-build --config Release
