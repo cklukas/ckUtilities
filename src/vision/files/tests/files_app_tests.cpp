@@ -1202,11 +1202,20 @@ CK_TEST(files_app_copy_command_plans_through_review_before_execution) {
     CK_CHECK(f.command("ck.files.copy"));
     f.until([&] { return f.app->operation_review_pending(); });
     CK_CHECK(f.app->operation_review_pending());
+    f.terminal.resize({80, 24});
     const auto review = f.painted();
-    CK_CHECK(review.find("From: " + address(f.scratch.path() / "left").display_text()) != std::string::npos);
-    CK_CHECK(review.find("To: " + address(f.scratch.path() / "right").display_text()) != std::string::npos);
+    CK_CHECK(review.find("From: ") != std::string::npos && review.find("To: ") != std::string::npos);
     CK_CHECK(review.find("1 selected entry · left-item-0") != std::string::npos);
     CK_CHECK(!f.command("ck.files.rename") && !f.command("ck.files.create_directory"));
+    CK_CHECK(f.alt("p"));
+    CK_CHECK(f.painted().find("Transfer paths and names") != std::string::npos);
+    std::vector<ckv::widgets::TextView *> readers;
+    find_views(f.application.root(), readers);
+    const auto scope = "From: " + address(f.scratch.path() / "left").display_text() +
+        "\nTo: " + address(f.scratch.path() / "right").display_text() + "\n\n1 selected entry\nleft-item-0";
+    CK_CHECK(std::any_of(readers.begin(), readers.end(), [&](const auto *reader) { return reader->text() == scope; }));
+    CK_CHECK(f.key(ckv::Key::Escape));
+    CK_CHECK(f.app->operation_review_pending() && f.painted().find("Transfer paths and names") == std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.application.step(f.clock.now_nanos());
     f.application.step(f.clock.now_nanos());
