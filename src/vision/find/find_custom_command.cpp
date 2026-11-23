@@ -25,10 +25,6 @@ namespace ck::vision
 namespace
 {
 
-constexpr std::size_t kMaximumOutputBytes = 16 * 1024;
-constexpr auto kCommandTimeout = std::chrono::seconds(5);
-constexpr std::string_view kSandboxExecutable = "/usr/bin/sandbox-exec";
-
 struct CommandTemplate
 {
     std::string_view identifier;
@@ -49,6 +45,17 @@ const CommandTemplate *find_template(std::string_view identifier)
     });
     return found == kCommandTemplates.end() ? nullptr : &*found;
 }
+
+FindCustomCommandCapability unavailable(std::string reason)
+{
+    return {.available = false, .reason = std::move(reason), .argv_preview = {}};
+}
+
+#if defined(__APPLE__)
+
+constexpr std::size_t kMaximumOutputBytes = 16 * 1024;
+constexpr auto kCommandTimeout = std::chrono::seconds(5);
+constexpr std::string_view kSandboxExecutable = "/usr/bin/sandbox-exec";
 
 bool contains_profile_unsafe_character(const std::string &value)
 {
@@ -82,35 +89,6 @@ std::string sandbox_profile(const FindCustomCommandPlan &plan)
            "(allow file-read* (subpath \"" + canonical_root_string + "\"))\n"
            "(allow file-read* (literal \"" + executable + "\"))\n";
 }
-
-FindCustomCommandCapability unavailable(std::string reason)
-{
-    return {.available = false, .reason = std::move(reason), .argv_preview = {}};
-}
-
-class UnsupportedFindCustomCommandExecutor final : public FindCustomCommandExecutor
-{
-public:
-    FindCustomCommandCapability capability(const ck::find::SearchSpecification &) const override
-    {
-        return unavailable("Custom commands require the tested macOS sandbox executor and are unavailable on this platform.");
-    }
-
-    FindCustomCommandOutcome execute(const FindCustomCommandPlan &,
-                                     const std::filesystem::path &,
-                                     const std::atomic_bool &) override
-    {
-        return {.invoked = false,
-                .cancelled = false,
-                .timed_out = false,
-                .output_truncated = false,
-                .exit_code = -1,
-                .output = {},
-                .message = "Custom commands are unavailable on this platform."};
-    }
-};
-
-#if defined(__APPLE__)
 
 class MacSandboxedFindCustomCommandExecutor final : public FindCustomCommandExecutor
 {
@@ -323,6 +301,30 @@ private:
         const int result = posix_spawn_file_actions_addchdir_np(actions, working_directory.c_str());
 #pragma clang diagnostic pop
         return result;
+    }
+};
+
+#else
+
+class UnsupportedFindCustomCommandExecutor final : public FindCustomCommandExecutor
+{
+public:
+    FindCustomCommandCapability capability(const ck::find::SearchSpecification &) const override
+    {
+        return unavailable("Custom commands require the tested macOS sandbox executor and are unavailable on this platform.");
+    }
+
+    FindCustomCommandOutcome execute(const FindCustomCommandPlan &,
+                                     const std::filesystem::path &,
+                                     const std::atomic_bool &) override
+    {
+        return {.invoked = false,
+                .cancelled = false,
+                .timed_out = false,
+                .output_truncated = false,
+                .exit_code = -1,
+                .output = {},
+                .message = "Custom commands are unavailable on this platform."};
     }
 };
 
