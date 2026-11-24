@@ -25,7 +25,16 @@ and blocked Create. Cancelling preserved the source bytes and xattr and
 left the destination and archive journal namespace untouched. The first
 desktop check timed out because its text assertion expected the native
 operation on one line. The rerun accepted the wrapped display and passed.
-Matching sanitizer qualification of this source change remains open.
+
+Matching sanitizer qualification on `ddda8d9` (containing `4f51c32`) passed with
+matching instrumented ckVision 2.1.0 SDKs and pinned `ck-core-fs-lib` `d51e5a0`.
+Linux ARM64 Clang 19.1.7 ASan/UBSan (leak detection enabled) and GCC 14.2.0
+ThreadSanitizer each passed both new metadata-failure native regressions, all
+29 `ck_files_archive_native_*` cases, all four `ck_vision_files_tests` shards,
+and the independent ckVision SDK consumer. macOS ARM64 AppleClang ASan/UBSan
+and Homebrew LLVM ThreadSanitizer (verified repaired runtime) each passed the
+ordinary-user APFS sparse source capture test, all four `ck_vision_files_tests`
+shards, and the independent ckVision SDK consumer.
 
 | Evidence | SHA-256 |
 | --- | --- |
@@ -33,6 +42,10 @@ Matching sanitizer qualification of this source change remains open.
 | Linux ARM64 pre-fix fault controls | `82a8f342452c7214a9486c55c25e5a3b168f368513fd8cf43d868f5946c7ab5b` |
 | Linux ARM64 Release | `fc5a95d338846de9978774dfc7779dbfcb3fcf24eead64e1059a294db56c4c5c` |
 | Linux ARM64 xterm hard-loss receipt | `56f4a22d8260ad6e9374756f62b2f3f527ab4dd571c8b9c8a56a2bc74ea39ae0` |
+| Linux ARM64 ASan/UBSan (`ddda8d9`) | `d9e768f99942caebb444c8743280d69e2a4016fe12156aacd6f40aba7faf1f41` |
+| Linux ARM64 ThreadSanitizer (`ddda8d9`) | `6cf82354f7c00939b1fe9d7553fcd7eba3941e1d599c0f79d7159cfa83ae65bc` |
+| macOS ARM64 ASan/UBSan (`ddda8d9`) | `198229cafcf112b4fde553be56088aa5209be3d884d53e28bb9000c2af827640` |
+| macOS ARM64 ThreadSanitizer (`ddda8d9`) | `fcf7281e8d4d979a488b6f25f1bc7666d6dd3a83842735b8d91053e96c903e2e` |
 
 ## 2026-11-24 — Native APFS archive source capture
 

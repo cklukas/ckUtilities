@@ -556,7 +556,8 @@ authority and does not close the application or release requirements below.
   verifies live sparse capture, link representation, preservation-loss
   reporting, and denied reads on case-sensitive APFS.
   The [metadata failure checkpoint](ck-files-progress.md#2026-11-24--archive-metadata-read-failures-block-creation)
-  verifies that failed xattr enumeration and value reads block archive approval.
+  verifies that failed xattr enumeration and value reads block archive approval
+  across Release, ASan/UBSan, and ThreadSanitizer with matching ckVision 2.1 SDKs.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
