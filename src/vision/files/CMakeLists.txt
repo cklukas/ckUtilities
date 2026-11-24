@@ -53,6 +53,11 @@ if(BUILD_TESTING)
   cktools_strict(ck_vision_files_operation_recovery_oom_tests)
   add_test(NAME ck_vision_files_operation_recovery_oom_tests COMMAND ck_vision_files_operation_recovery_oom_tests)
   set_tests_properties(ck_vision_files_operation_recovery_oom_tests PROPERTIES LABELS "files;recovery;allocation" TIMEOUT 15)
+  add_executable(ck_vision_files_decoder_fuzz_tests tests/files_decoder_fuzz_tests.cpp)
+  target_link_libraries(ck_vision_files_decoder_fuzz_tests PRIVATE ck_vision_files ck_vision_cktest_main)
+  cktools_strict(ck_vision_files_decoder_fuzz_tests)
+  add_test(NAME ck_vision_files_decoder_fuzz_tests COMMAND ck_vision_files_decoder_fuzz_tests)
+  set_tests_properties(ck_vision_files_decoder_fuzz_tests PROPERTIES LABELS "files;fuzz" TIMEOUT 60)
 endif()
 
 # Native ownership/finalization contracts use genuine Linux staging providers.

@@ -21,3 +21,20 @@ if(BUILD_TESTING)
   set_tests_properties(todo_benchmark_smoke PROPERTIES
     LABELS "benchmark;budget;todo" TIMEOUT ${_cktools_bench_timeout})
 endif()
+
+# ck-files WP-07 100,000-entry directory, indexed-pane, rendering, and
+# recovery-overlap scale benchmark.
+add_executable(files_bench bench_files.cpp)
+target_link_libraries(files_bench PRIVATE ck_vision_files)
+if(WIN32)
+  target_link_libraries(files_bench PRIVATE psapi)
+endif()
+target_include_directories(files_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+cktools_strict(files_bench)
+
+add_custom_target(files_bench_run COMMAND files_bench COMMENT "ck-files 100k-entry scale benchmarks")
+if(BUILD_TESTING)
+  add_test(NAME files_benchmark_smoke COMMAND files_bench --gate)
+  set_tests_properties(files_benchmark_smoke PROPERTIES
+    LABELS "benchmark;budget;files" TIMEOUT ${_cktools_bench_timeout})
+endif()
