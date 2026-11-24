@@ -3603,6 +3603,10 @@ struct FilesApp::State {
                 report_archive_error("Archive exceeds the supported manifest or image size.");
                 return;
             }
+            if (reply.error && reply.error->error.operation == "volume_archive.source_evidence_limit") {
+                report_archive_error("Volume identity or mount path is too long to record in the archive journal.");
+                return;
+            }
             if (reply.error && reply.error->error.operation == "volume_archive.source.version_unavailable") {
                 report_archive_error("Archive source change information is unavailable.");
                 return;

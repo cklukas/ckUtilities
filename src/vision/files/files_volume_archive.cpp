@@ -93,6 +93,13 @@ using ck::files::UnavailableObservation;
 constexpr std::array<char, 8> kMagic{'C', 'K', 'A', 'R', 'V', '0', '1', '\0'};
 constexpr std::uint32_t kVersion = 2;
 constexpr auto kHeaderSize = FilesVolumeArchiveManifestBudget::header_size;
+constexpr auto kArchiveEvidencePathBytes = ck::files::NativePathLimits{}.max_native_bytes;
+constexpr std::size_t kArchiveEvidenceNameBytes = 4096;
+
+bool source_evidence_fits(const FilesVolumeRecord &source) noexcept {
+    return source.identity.size() <= kArchiveEvidencePathBytes &&
+           source.mount_point.size() <= kArchiveEvidencePathBytes;
+}
 
 struct ArchiveDiagnostic final {
     ObservationState state = ObservationState::Failed;
@@ -226,10 +233,10 @@ bool read_le(std::span<const std::byte> bytes, std::size_t &offset, T &value) {
     return true;
 }
 
-bool read_string(std::span<const std::byte> bytes, std::size_t &offset, std::string &value) {
+bool read_string(std::span<const std::byte> bytes, std::size_t &offset, std::string &value,
+                 std::size_t max_bytes) {
     std::uint64_t size = 0;
-    constexpr std::uint64_t max_evidence_string = 4096;
-    if (!read_le(bytes, offset, size) || size > max_evidence_string || size > bytes.size() - offset)
+    if (!read_le(bytes, offset, size) || size > max_bytes || size > bytes.size() - offset)
         return false;
     value.assign(reinterpret_cast<const char *>(bytes.data() + offset), static_cast<std::size_t>(size));
     offset += static_cast<std::size_t>(size);
@@ -264,7 +271,7 @@ bool read_native_absolute_path(std::span<const std::byte> bytes, std::size_t &of
     if (!read_le(bytes, offset, value) ||
         (value != static_cast<std::uint8_t>(ck::files::NameEncoding::PosixBytes) &&
          value != static_cast<std::uint8_t>(ck::files::NameEncoding::WindowsUtf16)) ||
-        !read_string(bytes, offset, path) || path.empty())
+        !read_string(bytes, offset, path, kArchiveEvidencePathBytes) || path.empty())
         return false;
     encoding = static_cast<ck::files::NameEncoding>(value);
     return decode_native_absolute_path(*encoding, path).value();
@@ -275,9 +282,12 @@ Observation<FilesVolumeArchiveJournalEvidence> decode_legacy_archive_journal_evi
     FilesVolumeArchiveJournalEvidence result;
     std::size_t offset = 0;
     if (!read_le(bytes, offset, result.transaction_id) || result.transaction_id == 0 ||
-        !read_string(bytes, offset, result.source_identity) || result.source_identity.empty() ||
-        !read_string(bytes, offset, result.source_mount_point) || result.source_mount_point.empty() ||
-        !read_string(bytes, offset, result.archive_name) || !safe_archive_name(result.archive_name))
+        !read_string(bytes, offset, result.source_identity, kArchiveEvidencePathBytes) ||
+        result.source_identity.empty() ||
+        !read_string(bytes, offset, result.source_mount_point, kArchiveEvidencePathBytes) ||
+        result.source_mount_point.empty() ||
+        !read_string(bytes, offset, result.archive_name, kArchiveEvidenceNameBytes) ||
+        !safe_archive_name(result.archive_name))
         return Observation<FilesVolumeArchiveJournalEvidence>::unavailable(
             ObservationState::Unknown, error(AdapterError::PlanInvalid, "volume_archive.recovery_evidence"));
     if (offset != bytes.size()) {
@@ -408,7 +418,8 @@ bool safe_relative_path(std::string_view path, ck::files::NameEncoding encoding,
 }
 
 bool safe_archive_name(std::string_view name) {
-    return !name.empty() && name.find_first_of("/\\") == std::string_view::npos &&
+    return !name.empty() && name.size() <= kArchiveEvidenceNameBytes &&
+           name.find_first_of("/\\") == std::string_view::npos &&
            name != "." && name != ".." && name.find('\0') == std::string_view::npos &&
            name.size() >= std::string_view{".ckarchive"}.size() &&
            name.ends_with(".ckarchive");
@@ -1149,6 +1160,9 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     const std::function<void(FilesVolumeArchiveProgress)> &report_progress = {}) {
     using R=Observation<FilesVolumeArchiveWriteResult>;
     if(!valid_request(request))return R::unavailable(ObservationState::Unsupported,error(AdapterError::PlanInvalid,"volume_archive.request"));
+    if (!source_evidence_fits(request.document.source))
+        return R::unavailable(ObservationState::Unknown,
+            error(AdapterError::InventoryLimit, "volume_archive.source_evidence_limit"));
     if(!request.destination_owner||!request.prepared_journal_root||!request.native_journal_name||request.append_journal||request.append_journal_evidence)
         return R::unavailable(ObservationState::Unsupported,error(AdapterError::UnqualifiedIdentity,"volume_archive.native_owner_and_journal_required"));
     if(!request.document.losses.empty()&&!request.document.losses_reviewed)
@@ -1356,6 +1370,9 @@ Observation<FilesVolumeArchiveReview::Pointer> FilesVolumeArchiveReview::create(
         return review_rejected<Pointer>(ObservationState::Unknown, AdapterError::UnqualifiedIdentity,
                                         "volume_archive.review.source_identity");
     }
+    if (!source_evidence_fits(document.source))
+        return review_rejected<Pointer>(ObservationState::Unknown, AdapterError::InventoryLimit,
+                                       "volume_archive.source_evidence_limit");
     if (!destination_directory.is_valid())
         return review_rejected<Pointer>(ObservationState::Failed, AdapterError::InvalidPath,
                                         "volume_archive.review.destination");

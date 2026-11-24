@@ -1000,6 +1000,90 @@ CK_TEST(volume_archive_recovery_requires_review_for_unfinished_or_untrusted_jour
     CK_CHECK(tailed.value() && tailed.value()->operation.has_untrusted_tail);
 }
 
+CK_TEST(volume_archive_recovery_preserves_long_native_paths_and_bounds_fields) {
+    constexpr auto archive = "recovery.ckarchive";
+    std::string mount = "/fixture";
+    std::u16string windows_tail;
+    for (unsigned segment = 0; segment < 65; ++segment) {
+        mount += '/' + std::string(80, 'p');
+        windows_tail += u'\\' + std::u16string(80, u'w');
+    }
+    mount += "/\xff";
+    windows_tail += u'\\';
+    windows_tail += char16_t{0xd800};
+    const auto identity = "mounted:" + mount;
+    for (const auto &address : {
+             NativeAbsolutePath::from_posix(mount),
+             NativeAbsolutePath::from_windows(u"C:" + windows_tail),
+             NativeAbsolutePath::from_windows(uR"(\\?\UNC\server\share)" + windows_tail)}) {
+        CK_CHECK(address.value());
+        if (!address.value())
+            continue;
+        const auto &path = *address.value();
+        std::vector<std::byte> path_record;
+        append_native_path(path_record, path);
+        constexpr auto path_offset = sizeof(std::uint8_t) + sizeof(std::uint64_t);
+        const std::string expected_bytes(reinterpret_cast<const char *>(path_record.data() + path_offset),
+                                         path_record.size() - path_offset);
+        CK_CHECK(expected_bytes.size() > 4096);
+
+        auto application = journal_evidence(27, identity, mount, archive);
+        application.insert(application.end(), path_record.begin(), path_record.end());
+        std::vector<std::byte> native{std::byte{'A'}, std::byte{'R'}, std::byte{'W'}, std::byte{2}};
+        append_le<std::uint8_t>(native, static_cast<std::uint8_t>(path.encoding()));
+        if (path.encoding() == NameEncoding::PosixBytes) {
+            append_string(native, archive);
+        } else {
+            std::string utf16_bytes;
+            for (const char character : std::string_view(archive)) {
+                utf16_bytes.push_back(character);
+                utf16_bytes.push_back('\0');
+            }
+            append_string(native, utf16_bytes);
+        }
+        append_le<std::uint8_t>(native, static_cast<std::uint8_t>(StagingNamespace::Anonymous));
+        append_le<std::uint8_t>(native, 0); // no named staging component
+        append_le<std::uint64_t>(native, 1024);
+        append_le<std::uint8_t>(native, 0); // no verification digest yet
+        native.insert(native.end(), 32, std::byte{});
+        append_le<std::uint64_t>(native, application.size());
+        native.insert(native.end(), application.begin(), application.end());
+
+        auto journal = OperationJournal::create(FileOperation::Copy, journal_id(27));
+        CK_CHECK(journal.value());
+        if (!journal.value())
+            continue;
+        CK_CHECK((*journal.value())->append({1, 0, OperationJournalState::Planned, application}).value());
+        CK_CHECK((*journal.value())->append({2, 0, OperationJournalState::Prepared, native}).value());
+        auto recovered = inspect_volume_archive_recovery(**journal.value());
+        CK_CHECK(recovered.value());
+        if (recovered.value()) {
+            CK_CHECK(recovered.value()->evidence.source_identity == identity);
+            CK_CHECK(recovered.value()->evidence.source_mount_point == mount);
+            CK_CHECK(recovered.value()->evidence.destination_encoding == path.encoding());
+            CK_CHECK(recovered.value()->evidence.destination_native_path == expected_bytes);
+        }
+    }
+
+    auto oversized = journal_evidence(28, "fixture-volume", "/fixture", archive);
+    append_le<std::uint8_t>(oversized, static_cast<std::uint8_t>(NameEncoding::PosixBytes));
+    append_string(oversized, "/" + std::string(NativePathLimits{}.max_native_bytes, 'x'));
+    auto journal = OperationJournal::create(FileOperation::Copy, journal_id(28));
+    CK_CHECK(journal.value());
+    if (journal.value()) {
+        CK_CHECK((*journal.value())->append({1, 0, OperationJournalState::Planned, oversized}).value());
+        const auto refused = inspect_volume_archive_recovery(**journal.value());
+        CK_CHECK(!refused.value() && refused.unavailable_detail()->error.operation ==
+                                      "volume_archive.recovery_destination");
+    }
+
+    auto over_limit = document();
+    over_limit.source.mount_point = "/" + std::string(NativePathLimits{}.max_native_bytes, 'x');
+    const auto review = FilesVolumeArchiveReview::create(over_limit, address(std::filesystem::current_path()),
+        archive, FilesVolumeArchiveDestinationState::Ready);
+    CK_CHECK(!review.value() && review.unavailable_detail()->error.operation == "volume_archive.source_evidence_limit");
+}
+
 CK_TEST(volume_archive_recovery_rejects_malformed_or_changed_identity_evidence) {
     auto malformed = OperationJournal::create(FileOperation::Copy, journal_id(22));
     CK_CHECK(malformed.value());
