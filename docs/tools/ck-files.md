@@ -67,7 +67,11 @@ clipboard.
   The archive worker checks the mount again before writing. Approval creates a
   versioned sparse filesystem archive with a manifest and file data. The
   review shows consistency, logical/data bytes, sparse shape, links, and
-  explicit preservation losses. Changing focus during planning keeps the
+  explicit preservation losses, including ACLs and extended attributes.
+  Live archive creation has passed native Linux ext4, XFS, and Btrfs
+  fixtures. On macOS, volume browsing is available and archive Copy stays
+  disabled pending support for exact archive publication.
+  Changing focus during planning keeps the
   reviewed source and destination panes. The worker keeps the source mount
   root and destination directory open through approval. If either was
   replaced or the archive name was taken, Files asks for a new review.
@@ -88,8 +92,8 @@ clipboard.
   available as a bounded, read-only review of matching journals. A separate
   worker boundary refuses restart cleanup because the original archive
   creator's live ownership is unavailable. **Clean up archive staging** stays
-  disabled with that reason; journal names and matching content cannot grant
-  deletion authority. Resume/retry/publication remain unavailable. See the [volume archive
+  disabled with that reason. Restart records are available for inspection
+  only. See the [volume archive
   plan](https://github.com/cklukas/ckUtilities/blob/master/implementation/ck-files-volume-archive-plan.md).
 - Asynchronous directory loading with completion, bounded results, refresh,
   folders-first display, sorting by name/type/size/date, hidden-item toggle,

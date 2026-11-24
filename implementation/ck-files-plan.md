@@ -3,7 +3,8 @@
 The WP-00 and WP-01 checkpoints are complete. WP-02 remains open.
 Files uses ckVision 2.1.0. Native Linux xterm checks cover Right-to-accept,
 pane-local bookmarks and refresh recovery, volume browsing, read-only command
-availability, and a sparse archive round trip. A macOS PTY confirmed the
+availability, and sparse archive round trips on ext4, XFS, and Btrfs.
+A macOS PTY confirmed the
 read-only command behavior and the archive-publication refusal on a native APFS
 fixture. A real macOS terminal window verified two-pane navigation,
 Right-to-accept, previews, and volume navigation. Safe APFS archive publication
@@ -522,6 +523,10 @@ authority and does not close the application or release requirements below.
   The current macOS terminal window passed pane-local volume navigation
   and showed the APFS publication refusal before any archive was written.
   See the [macOS window qualification](ck-files-progress.md#2026-11-24--macos-desktop-terminal).
+  Native Linux xterm also passed publication in both directions between XFS
+  and Btrfs, including sparse data, links, and review of ACL and xattr losses.
+  A detached source and a newly occupied destination each rejected the stale
+  review. See the [Linux provider qualification](ck-files-progress.md#2026-11-24--native-xfs-and-btrfs-volume-archives).
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

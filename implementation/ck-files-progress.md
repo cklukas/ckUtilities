@@ -1,5 +1,41 @@
 # Files implementation evidence
 
+## 2026-11-24 — Native XFS and Btrfs volume archives
+
+The Linux ARM64 Release executable at `c789f30b61499f6355da143357ef07e4e553f18a`
+ran in Debian xterm as an ordinary user on disposable native XFS and Btrfs
+mounts. It passed live archive publication in both directions. Volume
+Properties identified each filesystem and matched its available and total
+bytes to the native fixture. The Btrfs metadata fixture was flushed before
+the capacity check so the two observations used stable allocation counts.
+
+An independent reader reconstructed each 4 MiB payload from the archive's
+two recorded extents and matched its SHA-256 to the source. The archive on
+each destination allocated 16 KiB. The fixtures with extra metadata also
+verified the hard-link group and literal symlink target in the manifest. The
+review recorded ACL and xattr losses for the affected entries. An initial
+attempt that acknowledged only the visible rows left the review open.
+Publication succeeded after all 27 losses were reviewed.
+
+Detaching the reviewed XFS source caused Files to request a new review
+before it wrote an archive or journal. In the reverse direction a competing
+file that took the archive name kept its bytes and inode. Both scenarios
+left the other pane's fixture file and the archive journal directory unchanged.
+
+| xterm receipt | SHA-256 |
+| --- | --- |
+| Sparse archive from XFS to Btrfs | `dcc86fd1f61d40e0cb224d2363892babc1ba3bd8127e9132aea99675b7c806e1` |
+| Sparse archive from Btrfs to XFS | `02108d1bce54c0614c60078ccd76fc23c3cfc1ceafa5097a2ed818a41e58ef98` |
+| Links and metadata from XFS to Btrfs | `367a35634d621e6dba8e8f6de585060bd17359a129551701fd00d0cb6a714259` |
+| Links and metadata from Btrfs to XFS | `5bdaee32dfa3fb6fbf37a5bfe081ffbbd7475eea8297112503d301bd16827b0e` |
+| Source detached after review | `fb441f4e13004f250ce2aaf2a41e9c9333ee14ad8e58b67578dc6001f10753ad` |
+| Destination name taken after review | `e41af927e5e0d99d45480b6320ed8b3d1c66c5368f08b96d41c3fbe423ac8c1c` |
+
+Hosted Linux x86-64 passed 475 development and 475 Release entries, both
+installed SDK consumers, and the TGZ, DEB, and RPM terminal checks at
+`b4f0f10`, which has the same compiled application sources.
+[Hosted Linux job](https://github.com/cklukas/ckUtilities/actions/runs/45315081834/job/138187135857)
+
 ## 2026-11-24 — macOS desktop terminal
 
 The `c789f30b61499f6355da143357ef07e4e553f18a` macOS ARM64 Release

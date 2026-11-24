@@ -177,7 +177,11 @@ permission to resume, publish, or delete through a pathname. The cleanup
 command remains disabled for restart records when the creator's live
 ownership is unavailable. The Linux terminal run archived a private ext4
 mount, verified sparse allocation, and matched the reconstructed data to the
-source digest. Real-volume acceptance on macOS and Windows remains open.
+source digest. Native Linux XFS and Btrfs fixtures passed the same check in
+both directions and verified hard-link groups, symlink targets, ACL and xattr
+loss review, source-mount detachment, and destination-name conflicts.
+[Linux provider qualification](ck-files-progress.md#2026-11-24--native-xfs-and-btrfs-volume-archives)
+Positive native archive publication on macOS and Windows remains open.
 An earlier macOS broad app ASan run reported a libc++ container-overflow in
 `DirectoryCursor::read`. Frontend `60a835a` passed the matching macOS
 ASan/UBSan Files and keymap suite with default container annotations.
@@ -185,5 +189,7 @@ ASan/UBSan Files and keymap suite with default container annotations.
 baseline covering truncation, corruption, reordered frames, invalid semantic
 fields, identity changes and oversized lengths; it passed 18/18 on macOS and
 Linux. Linux ARM64 address/undefined sanitizer qualification of the
-archive and Files app suites passed 15/15 and 68/68 respectively; TSan and the
-full filesystem/fault matrix remain open WP-07 work.
+archive and Files app suites passed 15/15 and 68/68 respectively. The
+current Linux ARM64 ThreadSanitizer cohort passed 159 Files, keymap, and
+shell entries, including 44 archive entries. The full filesystem and fault
+matrix remains open in WP-07.
