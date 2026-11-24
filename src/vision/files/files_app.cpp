@@ -21,8 +21,27 @@
 #include <utility>
 #include <vector>
 #include <stdexcept>
+#if defined(_WIN32)
+#include <winerror.h>
+#endif
 namespace ck::vision {
 namespace {
+bool archive_storage_exhausted(ck::files::ErrorDomain domain, std::int64_t code) noexcept {
+    if (domain == ck::files::ErrorDomain::Posix) {
+        return code == ENOSPC
+#if defined(EDQUOT)
+            || code == EDQUOT
+#endif
+            ;
+    }
+#if defined(_WIN32)
+    return domain == ck::files::ErrorDomain::Win32 &&
+           (code == ERROR_DISK_FULL || code == ERROR_HANDLE_DISK_FULL || code == ERROR_DISK_QUOTA_EXCEEDED);
+#else
+    return false;
+#endif
+}
+
 // Keyboard activation belongs to the suite command/keymap layer. Keep the
 // SDK's native double-click hit testing and activation callback, while passing
 // Enter and F2 to command routing (F2 is reserved for Rename).
@@ -3652,7 +3671,12 @@ struct FilesApp::State {
         } else {
             std::string message = reply.state == FilesVolumeArchiveState::Cancelled
                 ? "Volume archive cancelled" : "Volume archive failed";
-            if (reply.failure_pod) {
+            const bool storage_exhausted = reply.failure_pod
+                ? archive_storage_exhausted(reply.failure_pod->domain, reply.failure_pod->code)
+                : reply.error && archive_storage_exhausted(reply.error->error.domain, reply.error->error.code);
+            if (storage_exhausted) {
+                message = "Volume archive failed: storage or quota limit reached.";
+            } else if (reply.failure_pod) {
                 message += ": " + std::string(reply.failure_pod->operation.data());
             } else if (reply.error) {
                 const auto &operation = reply.error->error.operation;
