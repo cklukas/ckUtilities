@@ -514,6 +514,9 @@ authority and does not close the application or release requirements below.
   those layout findings and passes matching Linux ASan/UBSan and TSan
   checks. See the [current qualification record](ck-files-progress.md#2026-11-11--volume-layout-and-current-sanitizer-checks)
   for exact scope and the remaining APFS, Windows, and desktop gates.
+  The later read-only checkpoint passed 159 Files, keymap, and shell test
+  entries under Linux ARM64 ThreadSanitizer, including all 44 archive
+  entries. See the [Linux race qualification](ck-files-progress.md#2026-11-24--linux-arm64-files-race-qualification).
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates

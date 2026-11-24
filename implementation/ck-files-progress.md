@@ -9,6 +9,10 @@ passed all 113 Files test entries, including the rendered recovery command
 at 80 columns and the refreshed source and destination listings after Move.
 The test log SHA-256 is
 `afe914d6504d71321d4a41ab8da29626546835c35d4b17ac542fccd45da3f94d`.
+An ordinary-user macOS PTY confirmed Right-to-accept and verified that the
+refresh recovery command stayed readable at 80 columns.
+The PTY log SHA-256 is
+`5f798e664bcc11d1ef7651159b1f5c9e2166bd419d74571d5769e5761f4d4db0`.
 
 The Linux ARM64 Release executable was exercised as an ordinary user on
 native ext4 through a Debian xterm window. A newly inserted row reordered
@@ -33,6 +37,23 @@ behavior, clean exit, and restoration of terminal settings.
 
 Windows workstation validation remains postponed. macOS desktop-window
 acceptance remains open.
+
+## 2026-11-24 — Linux ARM64 Files race qualification
+
+The read-only command checkpoint `d8f49bdeee9a47a9f5ae416e9484e2b8d621a17c`
+passed all 159 Files, keymap, and shell CTest entries under GCC 14
+ThreadSanitizer, including all 44 archive entries. The independent consumer
+passed with the same instrumented ckVision 2.1.0 SDK. The suite ran as an
+ordinary user on native ext4 and produced no sanitizer reports. A synchronized
+runtime control passed, and the corresponding test with an intentional race
+reported it as expected. The refresh footer changes described above were
+tested in Release after this sanitizer snapshot was taken.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| Qualification log | `0a85f56e9b4c43f52f5285e5725f49bcbdbb3d05f4a1ef10b06dd00bc460621d` |
+| CTest detail log | `c9c1fcdc73266702d454b56a969377dad831ac429844528b9268a5adcc6b7466` |
+| Runtime control log | `aa0c678f9f2e8553a3d3a05ccf8edc487e91bd4e2d203915d22bd4e5260850aa` |
 
 ## 2026-11-24 — Read-only file commands and native APFS refusal
 
@@ -106,6 +127,9 @@ the target and journal directory untouched. The current Release executable
 SHA-256 is `1b39138103a5af01d76413b075cc2bcc3fe53b04da868838420d2bedac6b2049`.
 The xterm remount receipt SHA-256 is
 `49ef199119f6b3c37ae7a82622ba760a038ef37d5b9d66e4ef10d531bf52b92e`.
+Hosted Linux x86-64 also passed 475 development and 475 Release tests, both
+installed SDK consumers, and the packaged PTY checks for TGZ, DEB and RPM.
+[Hosted Linux job](https://github.com/cklukas/ckUtilities/actions/runs/45307877541/job/138164762763)
 
 ## 2026-11-24 — ckVision 2.1 qualification checkpoint
 
