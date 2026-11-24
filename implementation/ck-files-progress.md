@@ -1,5 +1,28 @@
 # Files implementation evidence
 
+## 2026-11-24 — ckVision 2.1 qualification checkpoint
+
+Frontend `6e1607e19992628c76c5d3433ac522cdd68838b4` uses ckVision
+[`v2.1.0`](https://github.com/cklukas/ckVision/releases/tag/v2.1.0) at
+`3d018210de4f8ad724678aa97b0d0b0ddee69a43` and filesystem backend
+`5578e8710265fb27979c239eef27c0e6c62c4cf2`.
+
+- Hosted Linux x86-64 passed all 475 development tests and all 475 Release
+  tests, both installed SDK consumer checks, the documentation screenshot
+  comparison, and TGZ, DEB and RPM terminal verification. [Hosted job](https://github.com/cklukas/ckUtilities/actions/runs/45293164062/job/138106855376)
+- macOS ARM64 Release passed 113 Files test entries. The matching
+  ASan/UBSan build passed 115 Files, keymap and shell entries and the
+  independent installed SDK consumer. The sanitizer log SHA-256 is
+  `85371eb5c4880a172f3d2bcf1dc9104dd74f2a03ac5779f13075614a37df85cd`.
+- Linux ARM64 passed eight Files, keymap and shell entries and the independent
+  installed SDK consumer under ThreadSanitizer. Tests ran as an ordinary
+  user on ext4 after the recovery journal prerequisite refused the initial
+  tmpfs fixture. The ext4 run log SHA-256 is
+  `7a73c370e7de32d2292b07d244168e44cafdb06c9713e04b48c36361de70f26d`.
+
+Windows workstation testing is postponed while the machine is powered off.
+The native macOS PTY checks passed, and desktop-window acceptance remains open.
+
 ## 2026-11-24 — Native menu shortcuts and volume Properties
 
 Loading the default suite keymap removed ckVision's runtime menu accelerators.
