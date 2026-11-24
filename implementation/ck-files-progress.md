@@ -1,5 +1,30 @@
 # Files implementation evidence
 
+## 2026-11-24 — Read-only file commands and native APFS refusal
+
+Frontend `578ef0c1ff6167943e93d43a511cb58c9823d623` uses the pane
+worker's mount observation to disable ordinary write commands. A read-only
+destination disables Copy and Move. A read-only source disables Move, while
+Copy from that source can still enter normal review.
+
+Linux ARM64 Release and Debian xterm exercised all affected menu entries
+against a native read-only ext4 mount. The previous build opened Create
+folder on the same kind of mount. The fixed build showed the specific reason
+for each disabled command and refused activation. Preview and Copy review
+remained available from the read-only source. After a writable remount,
+refresh re-enabled New folder. The verified run left both fixture files and
+the journal directory untouched. The xterm receipt SHA-256 is
+`37e4872519d13c1e2af5d07a03d3dc4c6605a4135a1a1b1cf7a27e099bcb2e41`.
+
+macOS ARM64 Release passed 113 Files entries. An ordinary-user PTY verified
+destination Copy refusal, source Move and Rename refusal, and text preview
+using a native read-only APFS image. A second run selected the APFS image
+from the left volume pane and verified that archive Copy refused even with
+both volumes writable. Both fixture files and the journal directory were
+unchanged. The corresponding PTY logs have SHA-256
+`1d47d54d58180c15e27a7c30eb531ea249891f559af0ba301eb47cfe60e9849a`
+and `8bcc63969126299b3fa599953cc4549a0499e1e96164c5947280b7d3e37897c7`.
+
 ## 2026-11-24 — Read-only volume archive destinations
 
 Frontend `2d6433275c2e9d7d8919262075b8444b762b34ee` publishes the held

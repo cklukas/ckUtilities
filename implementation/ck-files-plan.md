@@ -1,31 +1,23 @@
 # Files (`ck-files`) — implementation work packages
 
-Status: implementation active; WP-00 and WP-01 checkpoints are complete.
-WP-02 remains open. Worker-owned settings persistence now replaces the
-synchronous UI writes found on 2026-11-10. Current Mac normal and matching
-ThreadSanitizer Files suites pass, including blocked-save responsiveness,
-revision conflicts and shutdown draining. A PTY check confirms that a final
-save warning follows terminal restoration. Hosted Linux for `9635373` passes
-463 development and 463 release CTests, plus both installed SDK consumers.
-The matching Linux ARM64 Clang 19 ASan/UBSan run passes 149 Files CTests and
-both installed consumers. A macOS PTY run for the same frontend confirms
-Right-to-accept and mouse routing in both panes. Windows and desktop-window
-acceptance remain open.
-The held-creator archive integration also needs its full application and
-cross-platform qualification. Earlier POSIX-PTY and Windows-ConPTY results
-remain evidence for their recorded source cohorts; they do not qualify these
-new changes. Real-window mouse and restricted-key acceptance, and the remaining
-sanitizer/runtime gates, are documented in the
-[implementation evidence](ck-files-progress.md). Windows v143 qualification
-uses the mandatory `V:` workstation development drive.
-Updated: 2026-11-14 (transfer/restart gap review; no new execution qualification).
+The WP-00 and WP-01 checkpoints are complete. WP-02 remains open.
+Files uses ckVision 2.1.0. Native Linux xterm checks cover Right-to-accept,
+pane-local volume browsing, read-only command availability, and a sparse
+archive round trip. A macOS PTY confirmed the read-only command behavior
+and the archive-publication refusal on a native APFS fixture. macOS desktop
+acceptance, safe APFS archive publication, and the Windows workstation tests
+remain open. Windows v143 qualification requires the `V:` development drive.
+The [implementation evidence](ck-files-progress.md) names the exact source
+revisions and the scope of each native and sanitizer run.
+
+Updated 2026-11-24.
 Original baseline review:
 `81aaf009db23ca8558211722107bd2122351e565` (2026-10-23).
 
 Execution: continue WP-02 implementation and its acceptance gates before
 claiming completion. See [implementation evidence](ck-files-progress.md),
 [behavioral and adapter contracts](ck-files-contracts.md)
-and the [SDK validation record](../docs/migration/ckvision-1.4.0-validation.md).
+and the [current SDK baseline](../docs/migration/ckvision-baseline.md).
 
 ## Product commitment
 
