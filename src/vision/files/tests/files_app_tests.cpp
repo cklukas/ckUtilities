@@ -1168,7 +1168,7 @@ CK_TEST(files_app_rename_uses_strict_dialog_worker_mutation_and_refreshes_listin
     CK_CHECK(!std::filesystem::exists(f.scratch.path() / "left" / "left-item-0"));
     CK_CHECK(std::filesystem::is_regular_file(f.scratch.path() / "left" / "renamed-by-app"));
     CK_CHECK(f.app->model(0).row_count() == 100);
-    CK_CHECK(f.app->status(0).find("Choose Use current row") != std::string::npos);
+    CK_CHECK(f.app->status(0).starts_with("Choose Use current row"));
     CK_CHECK(!f.command("ck.files.rename"));
     CK_CHECK(f.command("ck.files.refresh"));
     f.loaded();

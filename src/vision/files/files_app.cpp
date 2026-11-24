@@ -1515,8 +1515,17 @@ struct FilesApp::State {
             text = "Loading page...";
         else if (!p.archive_notice.empty())
             text = p.archive_notice;
-        else
-            text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
+        else {
+            if (p.selection.invalidated_refresh_focus)
+                text = "Choose Use current row";
+            if (p.selection.invalidated_refresh_marks) {
+                if (!text.empty())
+                    text += " | ";
+                text += "Marks lost on refresh: " + std::to_string(p.selection.invalidated_refresh_marks);
+            }
+            if (text.empty())
+                text = "Last scan: " + std::to_string(p.model.row_count()) + " items";
+        }
         if (p.active && (!p.model.current() || p.refresh_failed) && text.find("Stale") == text.npos)
             text += "; stale listing";
         if (p.volume_view && p.volume_inventory_stale)
@@ -1528,10 +1537,6 @@ struct FilesApp::State {
             if (p.selection.marks->hidden)
                 text += " (" + std::to_string(p.selection.marks->hidden) + " hidden; review required)";
         }
-        if (p.selection.invalidated_refresh_marks)
-            text += " | Marks lost on refresh: " + std::to_string(p.selection.invalidated_refresh_marks);
-        if (p.selection.invalidated_refresh_focus)
-            text += " | Choose Use current row";
         if (p.range_start)
             text += " | Range start set";
         std::string hint;
