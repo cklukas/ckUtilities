@@ -4,6 +4,7 @@
 #include "files_location_dialog.hpp"
 #include "files_settings_service.hpp"
 #include "files_location_text.hpp"
+#include "files_volume_archive_review_dialog.hpp"
 #include "native_filesystem.hpp"
 #include "sha256.hpp"
 #include "scratch_directory.hpp"
@@ -13,6 +14,7 @@
 #include <cvision/testing/cktest.hpp>
 #include <cvision/widgets/dialog.hpp>
 #include <cvision/widgets/label.hpp>
+#include <cvision/widgets/list_view.hpp>
 #include <cvision/widgets/text_view.hpp>
 #include <algorithm>
 #include <chrono>
@@ -2751,6 +2753,87 @@ CK_TEST(files_app_volume_copy_stays_disabled_when_recovery_review_is_required) {
     CK_CHECK(f.painted().find("Read-only inspection") != std::string::npos);
     CK_CHECK(f.key(ckv::Key::Escape));
     f.until([&] { return f.painted().find("Archive recovery review") == std::string::npos; });
+}
+
+CK_TEST(files_app_archive_loss_review_keeps_large_lists_virtual_and_requires_all_acknowledgements) {
+    Fixture f(ThemeScheme::Classic, {}, {}, {100, 25});
+    f.loaded();
+    std::vector<ckv::widgets::Desktop *> desktops;
+    find_views(f.application.root(), desktops);
+    CK_CHECK(desktops.size() == 1);
+    auto &desktop = *desktops.at(0);
+    const auto &roles = f.application.standard_roles();
+    auto make_review = [&](std::size_t count) {
+        FilesVolumeArchiveDocument document;
+        document.source = {"Fixture & volume", "/fixture", "fixturefs", {}, {}, false, "fixture", {
+            FilesVolumeArchiveSupport::LiveReadable, false, {}}, {}};
+        document.entries.push_back({".", FilesVolumeArchiveEntryKind::Directory, 0, {}, {}, 0});
+        for (std::size_t index = 0; index < count; ++index)
+            document.losses.push_back({0, ".", FilesVolumeArchiveLossKind::Metadata, false,
+                                       "Loss detail " + std::to_string(index)});
+        auto result = FilesVolumeArchiveReview::create(document, address(f.scratch.path()), {},
+                                                       FilesVolumeArchiveDestinationState::Ready);
+        CK_CHECK(result.value());
+        return std::move(result).take_value();
+    };
+    auto press = [&](std::string_view caption, std::string key) {
+        std::vector<ckv::widgets::Button *> buttons;
+        find_views(*desktop.active_window(), buttons);
+        const auto button = std::find_if(buttons.begin(), buttons.end(), [&](const auto *view) {
+            return view->text() == caption;
+        });
+        CK_CHECK(button != buttons.end());
+        if (button != buttons.end())
+            CK_CHECK((*button)->activate_mnemonic(key));
+        f.application.step(f.clock.now_nanos());
+    };
+    auto list = [&] {
+        std::vector<ckv::widgets::ListView *> views;
+        find_views(*desktop.active_window(), views);
+        CK_CHECK(views.size() == 1);
+        return views.at(0);
+    };
+    std::optional<Observation<FilesVolumeArchiveApproval>> outcome;
+    auto completion = [&](auto result) { outcome.emplace(std::move(result)); };
+
+    auto large = make_review(4097);
+    FilesVolumeArchiveReviewDialog large_dialog(f.application, desktop, roles, large, completion);
+    press("Review &losses", "l");
+    CK_CHECK(list()->items().empty() && list()->model()->item_count() == 4097);
+    list()->set_cursor(4096);
+    press("&Details", "d");
+    CK_CHECK(f.painted().find("Loss detail 4096") != std::string::npos);
+    press("&Close", "c");
+    press("&Acknowledge", "a");
+    CK_CHECK(list()->model()->item_at(4096).caption().starts_with("[x]"));
+    press("&Back", "b");
+    press("&Create archive", "c");
+    CK_CHECK(!outcome && !large_dialog.completed());
+    press("Review &losses", "l");
+    CK_CHECK(list()->model()->item_at(4096).caption().starts_with("[x]"));
+    large_dialog.close();
+    f.until([&] { return outcome.has_value(); });
+    CK_CHECK(!outcome->value());
+    outcome.reset();
+
+    auto small = make_review(2);
+    FilesVolumeArchiveReviewDialog small_dialog(f.application, desktop, roles, small, completion);
+    press("Review &losses", "l");
+    press("&Acknowledge", "a");
+    list()->set_cursor(1);
+    press("&Acknowledge", "a");
+    press("Undo &acknowledgement", "a");
+    press("&Back", "b");
+    press("&Create archive", "c");
+    CK_CHECK(!outcome && !small_dialog.completed());
+    press("Review &losses", "l");
+    list()->set_cursor(1);
+    press("&Acknowledge", "a");
+    press("&Back", "b");
+    press("&Create archive", "c");
+    f.until([&] { return outcome.has_value(); });
+    CK_CHECK(outcome->value() && outcome->value()->review() == small &&
+             outcome->value()->continued_with_listed_losses());
 }
 CK_TEST(files_app_volume_properties_keep_the_full_mount_and_exact_capacity_in_a_narrow_pane) {
     const auto mount = std::string("/Volumes/") + std::string(100, 'x') + "&tail\nleaf";

@@ -768,9 +768,8 @@ CK_TEST(volume_archive_review_requires_explicit_loss_consent_and_writer_refuses_
     CK_CHECK(model->summary().hard_losses == 0);
     const auto refused = model->approve(FilesVolumeArchiveReviewDecision::Proceed);
     CK_CHECK(!refused.value());
-    const std::size_t loss = 0;
     const auto approved = model->approve(FilesVolumeArchiveReviewDecision::ContinueWithListedLosses,
-                                         std::span<const std::size_t>(&loss, 1));
+                                         {true});
     CK_CHECK(approved.value());
     CK_CHECK(approved.value()->continued_with_listed_losses());
 

@@ -170,7 +170,7 @@ class FilesVolumeArchiveReview final : public std::enable_shared_from_this<Files
     // using the retained capture and destination. Approval performs no I/O.
     ck::files::Observation<FilesVolumeArchiveApproval> approve(
         FilesVolumeArchiveReviewDecision decision,
-        std::span<const std::size_t> reviewed_losses = {}) const;
+        const std::vector<bool> &reviewed_losses = {}) const;
 
   private:
     FilesVolumeArchiveReview(const FilesVolumeArchiveDocument &document,

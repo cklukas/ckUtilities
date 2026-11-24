@@ -1287,18 +1287,6 @@ Observation<T> review_rejected(ObservationState state, AdapterError code, const 
     return Observation<T>::unavailable(state, error(code, operation));
 }
 
-bool all_loss_indices_reviewed(std::span<const std::size_t> reviewed, std::size_t count) {
-    if (reviewed.size() != count)
-        return false;
-    std::vector<bool> seen(count, false);
-    for (const auto index : reviewed) {
-        if (index >= count || seen[index])
-            return false;
-        seen[index] = true;
-    }
-    return true;
-}
-
 } // namespace
 
 std::string FilesVolumeArchiveReview::default_archive_name(std::string_view volume_name) {
@@ -1428,7 +1416,7 @@ bool archive_source_matches(const FilesVolumeRecord &expected, const FilesVolume
 } // namespace
 
 Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
-    FilesVolumeArchiveReviewDecision decision, std::span<const std::size_t> reviewed_losses) const {
+    FilesVolumeArchiveReviewDecision decision, const std::vector<bool> &reviewed_losses) const {
     if (decision == FilesVolumeArchiveReviewDecision::Cancel)
         return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Unsupported,
                                                            AdapterError::ProviderReviewRequired,
@@ -1445,7 +1433,8 @@ Observation<FilesVolumeArchiveApproval> FilesVolumeArchiveReview::approve(
         return Observation<FilesVolumeArchiveApproval>::available({shared_from_this(), false});
     }
     if (decision != FilesVolumeArchiveReviewDecision::ContinueWithListedLosses ||
-        !all_loss_indices_reviewed(reviewed_losses, losses_.size()) || summary_.hard_losses != 0)
+        reviewed_losses.size() != losses_.size() || summary_.hard_losses != 0 ||
+        !std::all_of(reviewed_losses.begin(), reviewed_losses.end(), [](bool reviewed) { return reviewed; }))
         return review_rejected<FilesVolumeArchiveApproval>(ObservationState::Unsupported,
                                                            AdapterError::ProviderReviewRequired,
                                                            "volume_archive.review.loss_consent");

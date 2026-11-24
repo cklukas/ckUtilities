@@ -71,6 +71,10 @@ clipboard.
   the archive has been written to its destination staging file. The
   review shows consistency, logical/data bytes, sparse shape, links, and
   explicit preservation losses, including ACLs and extended attributes.
+  Open **Review losses** to browse the full list. **Details** or **Enter**
+  shows the exact path and explanation for the selected row. **Acknowledge**
+  records its acceptance, and **Back** returns to the archive summary. Files
+  requires acknowledgement of every listed loss before creation.
   Live archive creation has passed native Linux ext4, XFS, and Btrfs
   fixtures. On macOS, volume browsing is available and archive Copy stays
   disabled pending support for exact archive publication.
