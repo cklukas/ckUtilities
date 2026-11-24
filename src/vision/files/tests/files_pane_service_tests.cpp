@@ -115,6 +115,9 @@ class Source final : public BasicFileSystem {
         fs_.bind(take(address("").host_path()), fs_.make_node(ObjectKind::Directory));
         for (auto name : {"one", "two"}) {
             auto root = fs_.make_node(ObjectKind::Directory);
+            LocationInfo location;
+            location.read_only_mount = Observation<bool>::available(std::string_view(name) == "one");
+            fs_.set_location(root, Observation<LocationInfo>::available(std::move(location)));
             fs_.bind(take(address(name).host_path()), root);
             for (int i = 0; i < 20; ++i)
                 fs_.put(root, *NativeName::from_posix(std::string(name) + "-" + std::to_string(i)),
@@ -782,6 +785,28 @@ CK_TEST(files_service_latest_navigation_supersedes_blocked_work_without_joining_
              result.active_location->root_address() == address("two"));
     CK_CHECK(f.trace->opens == 2);
     f.stopped();
+}
+CK_TEST(files_service_reports_mount_access_for_the_published_navigation_only) {
+    Fixture f;
+    f.start();
+    auto navigate = [&](const char *name) {
+        const auto submitted = f.service->navigate(address(name), {}, 5);
+        CK_CHECK(submitted.state == FilesPaneSubmission::Accepted);
+        auto reply = f.reply();
+        CK_CHECK(reply.request == submitted.ticket && reply.navigation == submitted.ticket &&
+                 reply.state == FilesPaneReplyState::Ready);
+        return reply;
+    };
+    const auto read_only = navigate("one");
+    CK_CHECK(read_only.read_only_mount == true);
+    const auto read = f.service->read_page(read_only.navigation, read_only.stamp, {5, 3});
+    CK_CHECK(read.state == FilesPaneSubmission::Accepted);
+    const auto page = f.reply();
+    CK_CHECK(page.request == read.ticket && page.state == FilesPaneReplyState::Ready && !page.read_only_mount);
+    CK_CHECK(navigate("two").read_only_mount == false);
+    CK_CHECK(!navigate("").read_only_mount);
+    f.stopped();
+    CK_CHECK(f.trace->wrong_thread == 0);
 }
 CK_TEST(files_service_failed_and_cancelled_navigation_preserve_active_location_and_page_stamp) {
     Fixture f;

@@ -197,9 +197,27 @@ FilesVolumeArchiveWriteRequest write_request(FilesVolumeArchiveDocument value,
         .prepared_journal_root={}, .native_journal_name={}, .native_journal_id={}, .journal_limits={}};
 }
 
+class ReadOnlyArchiveDestination final : public DirectoryCursor {
+public:
+    explicit ReadOnlyArchiveDestination(std::shared_ptr<const DirectoryCursor> native)
+        : DirectoryCursor(native->identity()), native_(std::move(native)) {}
+
+    Observation<AdapterScope> source_scope() const override { return native_->source_scope(); }
+    Observation<BasicMetadata> inspect_basic() const override { return native_->inspect_basic(); }
+    Observation<LocationInfo> inspect_location() const override {
+        LocationInfo result;
+        result.read_only_mount = Observation<bool>::available(true);
+        return Observation<LocationInfo>::available(std::move(result));
+    }
+
+private:
+    Observation<DirectoryStep> next_step() override { return Observation<DirectoryStep>::available(DirectoryEnd{}); }
+    std::shared_ptr<const DirectoryCursor> native_;
+};
+
 Observation<FilesVolumeArchiveWriteResult> write_with_native_owners(
     const FilesVolumeArchiveWriteRequest &input, std::filesystem::path *journal_path=nullptr,
-    std::stop_token stop={}) {
+    std::stop_token stop={}, bool destination_read_only=false) {
     static std::atomic<std::uint64_t> sequence{1000};
     const auto serial=sequence.fetch_add(1);
     NativeFileSystem filesystem;
@@ -218,6 +236,8 @@ Observation<FilesVolumeArchiveWriteResult> write_with_native_owners(
     auto result=[&] {
         auto bound=input;
         bound.destination_owner=destination;bound.prepared_journal_root=root;
+        if (destination_read_only)
+            bound.destination_owner = std::make_shared<ReadOnlyArchiveDestination>(destination);
         bound.native_journal_name=basename;bound.native_journal_id=journal_id(serial);
         return write_volume_archive(bound,stop);
     }();
@@ -585,6 +605,19 @@ CK_TEST(volume_archive_writer_preserves_utf8_archive_name) {
     CK_CHECK(found.value());
     CK_CHECK(found.value()->state() == ChildLookupState::Found);
 #endif
+}
+
+CK_TEST(volume_archive_writer_refuses_read_only_destination_before_creating_files) {
+    ck::testing::ScratchDirectory scratch("files-volume-archive-read-only", CKTOOLS_FILES_PRIVATE_INDEX_TEST_ROOT);
+    const auto request = write_request(document(), scratch.path(), "read-only.ckarchive", 21);
+    std::filesystem::path journal_path;
+    const auto result = write_with_native_owners(request, &journal_path, {}, true);
+    CK_CHECK(result.state() == ObservationState::Denied);
+    CK_CHECK(result.unavailable_detail() &&
+             result.unavailable_detail()->error.operation == "volume_archive.destination_read_only");
+    const NativeFileSystem filesystem;
+    CK_CHECK(filesystem.inspect_basic(scratch.path() / request.archive_name).state() == ObservationState::Gone);
+    CK_CHECK(filesystem.inspect_basic(journal_path).state() == ObservationState::Gone);
 }
 
 CK_TEST(volume_archive_writer_refuses_legacy_callbacks_without_native_authority) {

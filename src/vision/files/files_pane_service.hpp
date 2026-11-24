@@ -85,6 +85,9 @@ struct FilesPaneReply {
     // changes can also carry a current recovery page of the retained state.
     // Terminal worker faults may interrupt acknowledgment after commitment.
     FilesPaneChangeOutcome change_outcome = FilesPaneChangeOutcome::NotRequested;
+    // Advisory mount state for the successfully published navigation, queried
+    // through its held directory. An absent value leaves the state unknown.
+    std::optional<bool> read_only_mount;
 };
 // Worker-to-worker operation handoff. The source handles and exact native
 // addresses are created and consumed only by worker services; FilesApp never

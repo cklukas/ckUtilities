@@ -592,6 +592,12 @@ struct FilesPaneService::State {
                                                 include_focused_row(*candidate, range);
                                             capture(*candidate, candidate->state_stamp(), range, stop.get_token(), result);
                                             if (result.state == FilesPaneReplyState::Ready) {
+                                                const auto held = candidate->hold_directory(candidate->state_stamp());
+                                                if (held.value() && !stop.stop_requested()) {
+                                                    const auto info = (*held.value())->inspect_location();
+                                                    if (info.value() && info.value()->read_only_mount.value())
+                                                        result.read_only_mount = *info.value()->read_only_mount.value();
+                                                }
                                                 // Native I/O and native-owner destruction stay outside this lock.
                                                 std::lock_guard lock(mutex);
                                                 if (!stopping && latest_request == nav->ticket &&
@@ -603,6 +609,7 @@ struct FilesPaneService::State {
                                                 } else {
                                                     result.state = FilesPaneReplyState::Cancelled;
                                                     result.page.reset();
+                                                    result.read_only_mount.reset();
                                                 }
                                             }
                                         }

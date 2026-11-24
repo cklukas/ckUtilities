@@ -292,6 +292,7 @@ struct FilesApp::State {
         FilesPaneTicket navigation, request;
         ck::files::PaneStateStamp stamp;
         std::shared_ptr<const FilesPaneLocation> active, requested;
+        std::optional<bool> read_only_mount;
         std::optional<FilesPaneViewport> cache, blocked;
         FilesPaneViewport inflight;
         bool navigating = false, reading = false, navigation_error = false, entering = false, homing = false;
@@ -1353,6 +1354,8 @@ struct FilesApp::State {
                     return unavailable("Copy unavailable: source volume mount identity is unavailable");
                 if (!archive_destination_ready(active))
                     return unavailable("Copy unavailable: destination pane is not ready");
+                if (panes[1 - active].read_only_mount.value_or(false))
+                    return unavailable("Copy unavailable: destination mount is read-only");
                 return FilesCommandAvailability::available();
             }
             if (!planning_service || !execution_service || !operation_journal_root)
@@ -3363,6 +3366,7 @@ struct FilesApp::State {
                     p.volume_inventory_stale = false;
                     p.active = reply.active_location;
                     p.requested = reply.requested_location;
+                    p.read_only_mount = reply.read_only_mount;
                     p.navigation_error = false;
                     p.refresh_failed = false;
                     p.range_start.reset();
@@ -3485,6 +3489,15 @@ struct FilesApp::State {
         volume_archive_origin.reset();
         labels();
     }
+    bool report_read_only_archive_destination(const ck::files::UnavailableObservation &failure) {
+        if (failure.state != ck::files::ObservationState::Denied ||
+            failure.error.operation != "volume_archive.destination_read_only")
+            return false;
+        if (volume_archive_origin && archive_destination_current(*volume_archive_origin))
+            panes[1 - volume_archive_origin->source_pane].read_only_mount = true;
+        report_archive_error("Copy unavailable: destination mount is read-only");
+        return true;
+    }
     void consume_volume_archive_plan(FilesVolumeArchivePlanningReply reply) {
         if (!volume_archive_planning_request || reply.request != *volume_archive_planning_request)
             return;
@@ -3495,6 +3508,8 @@ struct FilesApp::State {
             return;
         }
         if (reply.state != FilesVolumeArchivePlanningState::Ready || !reply.review) {
+            if (reply.error && report_read_only_archive_destination(*reply.error))
+                return;
             std::string message = reply.state == FilesVolumeArchivePlanningState::Cancelled
                 ? "Volume archive cancelled" : "Volume archive planning failed";
             if (reply.error)
@@ -3571,6 +3586,9 @@ struct FilesApp::State {
         // Refresh before Copy or recovery inspection can reuse the old scan.
         scan_archive_recovery();
         if (!volume_archive_origin)
+            return;
+        if (reply.state == FilesVolumeArchiveState::Failed && !reply.failure_pod && reply.error &&
+            report_read_only_archive_destination(*reply.error))
             return;
         if (reply.state == FilesVolumeArchiveState::Complete ||
             reply.state == FilesVolumeArchiveState::Indeterminate) {

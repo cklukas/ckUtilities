@@ -60,8 +60,9 @@ clipboard.
   Copy starts volume archive planning on the archive worker only after
   native identity, live-read capability, destination, and private-journal
   checks pass. It remains visibly disabled otherwise, with the specific reason
-  in the active-pane status. Approval creates a versioned sparse filesystem
-  archive, not a raw block image; Move is never used for this operation. The
+  in the active-pane status. A read-only destination mount disables Copy.
+  The archive worker checks the mount again before writing. Approval creates a
+  versioned sparse filesystem archive with a manifest and file data. The
   review shows consistency, logical/data bytes, sparse shape, links, and
   explicit preservation losses. Changing focus during planning keeps the
   reviewed source and destination panes. The worker keeps the source mount

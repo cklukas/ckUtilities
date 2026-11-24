@@ -172,6 +172,13 @@ Observation<bool> revalidate_archive_destination(const ck::files::NativeAbsolute
     return Observation<bool>::available(true);
 }
 
+std::optional<UnavailableObservation> read_only_archive_destination(const ck::files::DirectoryCursor &destination) {
+    const auto location = destination.inspect_location();
+    if (location.value() && location.value()->read_only_mount.value() && *location.value()->read_only_mount.value())
+        return error(AdapterError::InvalidAccess, "volume_archive.destination_read_only", ObservationState::Denied);
+    return {};
+}
+
 bool valid_archive_recovery_scan(const ck::files::NativeAbsolutePath &root,
                                  const FilesVolumeArchiveRecoveryLimits &limits) {
     return root.is_valid() && limits.max_journals != 0 && limits.max_journals <= 16 * 1024 &&
@@ -1146,6 +1153,8 @@ Observation<FilesVolumeArchiveWriteResult> write_bound_volume_archive(
     const auto route = revalidate_archive_destination(*address.value(), *request.destination_owner);
     if (!route.value())
         return R::unavailable(route.state(), route.unavailable_detail()->error);
+    if (const auto denied = read_only_archive_destination(*request.destination_owner))
+        return R::unavailable(denied->state, denied->error);
     auto began=ck::files::NativeArchiveWriteJob::begin(std::move(native));
     if(!began.value())return R::unavailable(began.state(),began.unavailable_detail()->error);
     auto job = std::move(began).take_value();
@@ -1466,6 +1475,8 @@ struct FilesVolumeArchiveService::State final {
             if (!opened.value())
                 return fail(*opened.unavailable_detail());
             auto destination = ArchiveDestination(std::move(opened).take_value());
+            if (auto denied = read_only_archive_destination(*destination))
+                return fail(std::move(*denied));
 
             auto captured = value.capture_source(token);
             if (!captured.value())
@@ -1569,6 +1580,7 @@ struct FilesVolumeArchiveService::State final {
             if (destination) {
                 const auto route = revalidate_archive_destination(value.destination_directory, *destination);
                 if (!route.value()) { cache_error(*route.unavailable_detail()); return; }
+                if (auto denied = read_only_archive_destination(*destination)) { cache_error(std::move(*denied)); return; }
                 const auto conflict = probe_archive_destination(*destination, value.destination_directory.encoding(),
                                                                 value.archive_name);
                 if (!conflict.value()) { cache_error(*conflict.unavailable_detail()); return; }
