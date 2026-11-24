@@ -6,7 +6,7 @@
 # configuration folder, the diagnostic switches, and the About text.
 add_library(ck_vision_host INTERFACE)
 target_include_directories(ck_vision_host INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ck_vision_host INTERFACE ckvision::cvision)
+target_link_libraries(ck_vision_host INTERFACE ckvision::cvision ck_files_core)
 target_compile_features(ck_vision_host INTERFACE cxx_std_20)
 target_compile_definitions(ck_vision_host INTERFACE CK_UTILITIES_VERSION="${PROJECT_VERSION}")
 

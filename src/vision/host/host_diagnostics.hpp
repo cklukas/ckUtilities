@@ -33,6 +33,7 @@
 #include <io.h>
 #include <windows.h>
 #include "cvision/term/windows_text.hpp"
+#include "windows_name.hpp"
 #endif
 
 #include "cvision/core/clock.hpp"
@@ -105,26 +106,41 @@ private:
 
     static std::FILE *open_capture(std::string_view path) noexcept {
 #if defined(_WIN32)
-        const auto wide = ckv::term::windows_utf16(path);
-        if (!wide)
-            return nullptr;
-        const auto native = ckv::term::windows_absolute_extended_path(*wide);
-        if (!native)
-            return nullptr;
-        HANDLE handle = ::CreateFileW(native->c_str(), GENERIC_WRITE,
-                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                                      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (handle == INVALID_HANDLE_VALUE)
-            return nullptr;
-        const int descriptor = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
-        if (descriptor < 0) {
-            (void)::CloseHandle(handle);
+        try {
+            const auto wide = ckv::term::windows_utf16(path);
+            if (!wide || wide->empty() || wide->find(L'\0') != std::wstring::npos)
+                return nullptr;
+            auto native = ck::files::windows_extended_path(*wide);
+            if (!native) {
+                const DWORD needed = ::GetFullPathNameW(wide->c_str(), 0, nullptr, nullptr);
+                if (needed == 0 || needed > 32767)
+                    return nullptr;
+                std::wstring full(needed, L'\0');
+                const DWORD written = ::GetFullPathNameW(wide->c_str(), needed, full.data(), nullptr);
+                if (written == 0 || written >= needed)
+                    return nullptr;
+                full.resize(written);
+                native = ck::files::windows_extended_path(full);
+            }
+            if (!native)
+                return nullptr;
+            HANDLE handle = ::CreateFileW(native->c_str(), GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                          CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (handle == INVALID_HANDLE_VALUE)
+                return nullptr;
+            const int descriptor = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_WRONLY | _O_BINARY);
+            if (descriptor < 0) {
+                (void)::CloseHandle(handle);
+                return nullptr;
+            }
+            std::FILE *stream = ::_fdopen(descriptor, "wb");
+            if (!stream)
+                (void)::_close(descriptor);
+            return stream;
+        } catch (...) {
             return nullptr;
         }
-        std::FILE *stream = ::_fdopen(descriptor, "wb");
-        if (!stream)
-            (void)::_close(descriptor);
-        return stream;
 #else
         return std::fopen(std::string(path).c_str(), "wb");
 #endif

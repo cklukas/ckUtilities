@@ -23,7 +23,7 @@ add_subdirectory(integration)
 # through Alt+X - the counterpart of the POSIX terminal-profile verification.
 if(WIN32)
   add_executable(ck_windows_tools_contract windows/windows_tools_contract.cpp)
-  target_link_libraries(ck_windows_tools_contract PRIVATE ck_vision_cktest_main ckvision::cvision)
+  target_link_libraries(ck_windows_tools_contract PRIVATE ck_vision_cktest_main ckvision::cvision ck_files_core)
   target_compile_definitions(ck_windows_tools_contract PRIVATE
     CKTOOLS_TOOL_BINARY_DIR="$<TARGET_FILE_DIR:ckutilities_ckvision>")
   cktools_strict(ck_windows_tools_contract)
