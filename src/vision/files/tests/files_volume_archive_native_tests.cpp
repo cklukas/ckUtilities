@@ -20,6 +20,7 @@
 #include <new>
 #include <semaphore>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <thread>
 #include <unistd.h>
 using namespace ck::files;using namespace ck::vision;
@@ -52,6 +53,23 @@ struct CaptureMutation {
     bool injected = false;
 };
 CaptureMutation* capture_mutation = nullptr;
+struct AttributeFailure {
+    dev_t device;
+    ino_t inode;
+    unsigned hits = 0;
+};
+AttributeFailure *attribute_failure = nullptr;
+constexpr char fixture_attribute[] = "user.ckfiles-fixture";
+
+bool fail_attribute_read(const char *path) {
+    struct stat metadata{};
+    if (!attribute_failure || stat(path, &metadata) != 0 ||
+        metadata.st_dev != attribute_failure->device || metadata.st_ino != attribute_failure->inode)
+        return false;
+    ++attribute_failure->hits;
+    errno = EIO;
+    return true;
+}
 void replace_destination() {
     assert(!destination_moved);
     const auto original = base_path + "/dest";
@@ -60,6 +78,19 @@ void replace_destination() {
     assert(mkdir(original.c_str(), 0700) == 0);
     destination_moved = true;
 }
+}
+extern "C" ssize_t __real_listxattr(const char *, char *, std::size_t);
+extern "C" ssize_t __real_getxattr(const char *, const char *, void *, std::size_t);
+extern "C" ssize_t __wrap_listxattr(const char *path, char *list, std::size_t size) {
+    if (is("source-attribute-catalog-io-error") && fail_attribute_read(path))
+        return -1;
+    return __real_listxattr(path, list, size);
+}
+extern "C" ssize_t __wrap_getxattr(const char *path, const char *name, void *value, std::size_t size) {
+    if (is("source-attribute-value-io-error") && value && size != 0 && std::strcmp(name, fixture_attribute) == 0 &&
+        fail_attribute_read(path))
+        return -1;
+    return __real_getxattr(path, name, value, size);
 }
 extern "C" ssize_t __real_pread(int, void *, size_t, off_t);
 extern "C" ssize_t __real_pwrite(int, const void *, size_t, off_t);
@@ -162,6 +193,65 @@ void verify_archive(const std::string& path,OperationJournalState expected_state
 }
 }
 namespace {
+void live_capture_blocks_failed_attribute_observation() {
+    const auto path = base_path + "/source";
+    const auto file_path = path + "/payload";
+    const auto scratch = base_path + "/scratch";
+    const auto destination = base_path + "/dest";
+    assert(mkdir(path.c_str(), 0700) == 0 && mkdir(scratch.c_str(), 0700) == 0 &&
+           mkdir(destination.c_str(), 0700) == 0);
+    const int file = open(file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    assert(file >= 0 && write(file, "DATA", 4) == 4);
+    assert(fsetxattr(file, fixture_attribute, "meta", 4, XATTR_CREATE) == 0);
+    struct stat metadata{};
+    assert(fstat(file, &metadata) == 0 && close(file) == 0);
+    AttributeFailure injection{metadata.st_dev, metadata.st_ino};
+
+    NativeFileSystem filesystem;
+    const auto root = take(filesystem.open_native_directory(address(path)));
+    const auto root_metadata = take(root->inspect_basic());
+    assert(root_metadata.identity.value() && root_metadata.mount_id.value());
+    auto selected = source();
+    selected.mount_point = path;
+    selected.archive.root = {*root_metadata.identity.value(), *root_metadata.mount_id.value()};
+    const auto review_capture = [&](const FilesVolumeArchiveSourceCapture &capture) {
+        return take(FilesVolumeArchiveReview::create(capture.document, address(destination), "image.ckarchive",
+            FilesVolumeArchiveDestinationState::Ready, capture.payload.scratch != nullptr));
+    };
+    {
+        const auto control = take(capture_native_volume_archive_source(selected, address(scratch)));
+        const auto review = review_capture(control);
+        assert(review->summary().hard_losses == 0);
+        assert(std::ranges::any_of(review->losses(), [](const FilesVolumeArchiveLoss &loss) {
+            return loss.path == "payload" && loss.diagnostic == "extended attributes are not encoded";
+        }));
+        const std::vector<bool> all(review->losses().size(), true);
+        assert(review->approve(FilesVolumeArchiveReviewDecision::ContinueWithListedLosses, all).value());
+    }
+    {
+        attribute_failure = &injection;
+        auto result = capture_native_volume_archive_source(selected, address(scratch));
+        attribute_failure = nullptr;
+        assert(injection.hits > 0);
+        const auto failed = take(std::move(result));
+        const auto review = review_capture(failed);
+        assert(review->summary().hard_losses > 0);
+        assert(std::ranges::any_of(review->losses(), [](const FilesVolumeArchiveLoss &loss) {
+            return loss.path == "payload" && loss.kind == FilesVolumeArchiveLossKind::Metadata &&
+                   loss.hard_failure && loss.diagnostic.find("extended-attribute") != std::string::npos;
+        }));
+        const std::vector<bool> all(review->losses().size(), true);
+        assert(!review->approve(FilesVolumeArchiveReviewDecision::ContinueWithListedLosses, all).value());
+    }
+    assert(std::filesystem::is_empty(scratch) && std::filesystem::is_empty(destination));
+    assert(read_file(file_path) == bytes("DATA"));
+    char attribute[4]{};
+    assert(getxattr(file_path.c_str(), fixture_attribute, attribute, sizeof(attribute)) ==
+               static_cast<ssize_t>(sizeof(attribute)) &&
+           std::memcmp(attribute, "meta", sizeof(attribute)) == 0);
+    std::printf("%s PASS after %u injected native failures\n", mode, injection.hits);
+}
+
 void live_capture_refuses_observed_change(bool directory_change) {
     const auto path = base_path + "/source";
     assert(mkdir(path.c_str(), 0700) == 0);
@@ -410,6 +500,10 @@ int main(int argc,char** argv){assert((argc==3||argc==4)&&getuid()!=0);mode=argv
  }
  if (is("source-edited-during-capture") || is("source-directory-changed-during-capture")) {
     live_capture_refuses_observed_change(is("source-directory-changed-during-capture"));
+    return 0;
+ }
+ if (is("source-attribute-catalog-io-error") || is("source-attribute-value-io-error")) {
+    live_capture_blocks_failed_attribute_observation();
     return 0;
  }
  assert(mkdir((base_path+"/dest").c_str(),0700)==0&&mkdir((base_path+"/private").c_str(),0700)==0);

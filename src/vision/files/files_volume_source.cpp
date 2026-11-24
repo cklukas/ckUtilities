@@ -129,10 +129,11 @@ void add_observation_loss(FilesVolumeArchiveDocument &document, std::size_t entr
     const auto *detail = observation.unavailable_detail();
     if (!detail)
         return;
-    const bool hard = detail->state == ObservationState::Unknown || detail->state == ObservationState::Denied ||
-                      detail->state == ObservationState::Gone || detail->state == ObservationState::Changed;
-    add_loss(document, entry_index, path, kind, hard,
-             std::string(feature) + (hard ? " coverage is not qualified" : " is not preserved"));
+    const bool hard = detail->state != ObservationState::Unsupported;
+    std::string diagnostic = std::string(feature) + (hard ? " coverage could not be verified" : " is not preserved");
+    if (hard && !detail->error.operation.empty())
+        diagnostic += " (" + detail->error.operation + ')';
+    add_loss(document, entry_index, path, kind, hard, std::move(diagnostic));
 }
 
 void add_metadata_losses(FilesVolumeArchiveDocument &document, std::size_t entry_index,
@@ -167,6 +168,14 @@ void add_metadata_losses(FilesVolumeArchiveDocument &document, std::size_t entry
     } else {
         add_observation_loss(document, entry_index, path, FilesVolumeArchiveLossKind::Metadata,
                              "extended-attribute", data.attributes);
+    }
+    for (const auto &attribute : data.attribute_values) {
+        const auto *failure = attribute.value.unavailable_detail();
+        // The catalog already reports the loss of known attributes. Failed
+        // reads require a separate, non-approvable coverage diagnostic.
+        if (failure && failure->state != ObservationState::Unsupported)
+            add_observation_loss(document, entry_index, path, FilesVolumeArchiveLossKind::Metadata,
+                                 "extended-attribute value", attribute.value);
     }
 
     for (const auto &security : data.security) {

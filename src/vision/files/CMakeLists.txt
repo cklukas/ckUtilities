@@ -65,12 +65,14 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
   cktools_strict(ck_vision_archive_native_tests)
   target_compile_options(ck_vision_archive_native_tests PRIVATE -UNDEBUG)
   target_link_options(ck_vision_archive_native_tests PRIVATE
-    -Wl,--wrap=ftruncate -Wl,--wrap=pwrite -Wl,--wrap=fsync -Wl,--wrap=close -Wl,--wrap=linkat -Wl,--wrap=pread)
+    -Wl,--wrap=ftruncate -Wl,--wrap=pwrite -Wl,--wrap=fsync -Wl,--wrap=close -Wl,--wrap=linkat -Wl,--wrap=pread
+    -Wl,--wrap=listxattr -Wl,--wrap=getxattr)
   foreach(archive_case roundtrip occupied hint-replaced cancel-in-write cancel-close
       cancel-close-oom cancel-after-publish close-oom first-enospc-close-oom
       upstream-oom-close post-link-flush service service-cancel service-legacy-root service-oom no-owner
       destination-moved-during-write destination-moved-at-publish source-mount-changed-during-write
       source-edited-during-capture source-directory-changed-during-capture
+      source-attribute-catalog-io-error source-attribute-value-io-error
       recovery-root-replaced recovery-journal-appeared-during-review
       crash-write crash-before-link crash-after-link crash-after-commit)
     add_test(NAME ck_files_archive_native_${archive_case} COMMAND ${Python3_EXECUTABLE}
