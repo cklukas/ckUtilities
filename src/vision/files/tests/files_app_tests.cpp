@@ -532,7 +532,8 @@ struct Fixture {
             std::make_shared<const NativeAbsolutePath>(operation_root_address), std::move(settings),
             volume_service.get(), volume_archive_service.get(),
             volume_archive_recovery_service.get(), volume_archive_recovery_cleanup_service.get(),
-            operation_recovery_service.get(), operation_recovery_cleanup_service.get());
+            operation_recovery_service.get(), operation_recovery_cleanup_service.get(),
+            std::make_shared<const NativeAbsolutePath>(address(scratch.path() / "cache-left")));
     }
     ~Fixture() {
         app.reset();
