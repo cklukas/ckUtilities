@@ -18,7 +18,7 @@ struct FilesVolumeArchiveSourceLimits final {
 
 // Worker-only native source adapter. Capture traverses the held root with
 // exact native names and retains that owner for the approval revalidation.
-// The review model receives only the immutable archive document.
+// The archive worker keeps the capture and exposes an immutable summary to the UI.
 ck::files::Observation<FilesVolumeArchiveSourceCapture> capture_native_volume_archive_source(
     const FilesVolumeRecord &source, FilesVolumeArchiveConsistency consistency = FilesVolumeArchiveConsistency::Live,
     std::stop_token stop_token = {}, FilesVolumeArchiveSourceLimits limits = {});

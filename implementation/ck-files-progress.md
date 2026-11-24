@@ -1,5 +1,24 @@
 # Files implementation evidence
 
+## 2026-11-24 — Worker-owned archive payload
+
+Frontend `327f26d` keeps the captured bytes with the native source and
+destination bindings. The UI review holds source details, counts, and loss
+records. The approved worker path moves the captured buffers into the native
+writer. The writer still uses an in-memory recipe.
+
+The macOS ARM64 Release build passed all 115 Files, keymap, and shell test
+entries and the independent installed ckVision consumer. Linux ARM64
+Release passed ordinary-user consent, native ext4 publication, and 4 MiB
+reconstruction in Debian xterm. The source and reconstructed SHA-256 matched.
+The 4,195,367-byte archive used 5,120 allocated bytes.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release build and tests | `d2adfd49d6a8f15ed7a352daa64ccf7b9fae6e1e998a803370e58de03d21b71c` |
+| Linux ARM64 Release build and run | `d8131c9a55f21889e4192330123b73d977f1775df13509eecb8eb42656286124` |
+| Linux xterm receipt | `1487b93e185df77ed730f9737adcc57e282ec8ebb1afc8d00a963ee3a0b6db2f` |
+
 ## 2026-11-24 — Live archive capture and native failures
 
 Frontend `9c323b4` brackets file capture and directory enumeration with

@@ -531,6 +531,10 @@ authority and does not close the application or release requirements below.
   addition detected during native reads. Real xterm runs also verified
   unreadable-source refusal and full-destination failure.
   See the [native capture qualification](ck-files-progress.md#2026-11-24--live-archive-capture-and-native-failures).
+  Approval now transfers the worker's captured buffers to the native writer.
+  The [worker payload qualification](ck-files-progress.md#2026-11-24--worker-owned-archive-payload)
+  covers macOS Release tests and Linux xterm reconstruction. Bounded disk-backed
+  capture and its platform qualification remain open.
 
 The implemented view and navigation features have application-suite coverage;
 WP-02 remains open until the cross-platform and interactive acceptance gates
