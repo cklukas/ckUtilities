@@ -1,5 +1,107 @@
 # Files implementation evidence
 
+## 2026-11-24 — WP-07 100k scale benchmark, decoder fuzzing, and WP-08 packaging/docgen qualification
+
+Frontend `d69b033` adds the WP-07 100,000-entry scale and responsiveness
+benchmark (`benchmarks/bench_files.cpp`, registered as CTest
+`files_benchmark_smoke --gate`) and broad deterministic decoder/model fuzzing
+(`src/vision/files/tests/files_decoder_fuzz_tests.cpp`, registered as CTest
+`ck_vision_files_decoder_fuzz_tests`, 5 seeded `SplitMix64` suites spanning
+8,500+ mutated/adversarial inputs across `parse_files_settings` including the
+1 MiB cap, `parse_files_location_text` / `parse_files_location_completion` in
+`Path` and `ExactNames` modes for both POSIX byte and Windows UTF-16
+namespaces, `decode_operation_journal` / `decode_native_operation_recovery_evidence`,
+`inspect_volume_archive_recovery`, and fail-closed
+`assess_operation_recovery_overlap` under malformed/adversarial scans).
+
+### Measured 100,000-entry scale & responsiveness budgets (`files_bench`, `d69b033`, Release)
+
+Both macOS ARM64 and Linux ARM64 (`ckdev`) ran `files_bench` in timed mode and
+`--gate` mode against 100,000 scrambled synthetic entries (`DirectoryIndexListingJob`
+→ `DirectoryIndexStore` → `IndexedPane` publish → Size-descending reorder →
+40-row `IndexedPanePage` top/middle/tail slicing → steady `FilesPaneGridModel`
++ `CellGrid` render on a `140x40` `HeadlessTerminal` → substring filter
+(`"042"`, 1,299 matches) → 1,000-journal `assess_operation_recovery_overlap`):
+
+| Metric (100,000 entries, Release Timed) | macOS ARM64 | Linux ARM64 (`ckdev`) | Budget / gate |
+| --- | --- | --- | --- |
+| Index scan (`files_index_scan_100k`) | 2.84 s | 3.45 s | completes within budget |
+| Size-descending reorder (`files_index_sort_100k`) | 2.60 s | 2.76 s | completes within budget |
+| 40-row page slice (`files_page_slice_100k`) | 232.8 µs/op | 244.9 µs/op | sub-millisecond paging |
+| Steady 140×40 grid render (`files_grid_steady_render_100k`) | 305.9 µs/op | 370.8 µs/op | 5600/5600 cells, 0 idle bytes |
+| Filter 100,000 → 1,299 (`files_index_filter_100k`) | 195.3 ms | 210.0 ms | interactive filter latency |
+| 1,000-journal overlap (`files_recovery_overlap_1000`) | 4.57 µs/op | 4.89 µs/op | sub-10 µs repeat gate |
+| Published index bytes | 30,400,000 B (29.0 MiB) | 30,400,000 B (29.0 MiB) | ≤ 134,217,728 B (128 MiB) |
+| Peak backing bytes | 134,400,000 B (128.2 MiB) | 134,400,000 B (128.2 MiB) | bounded private backing |
+| Peak RSS | 220,608 KiB (215.4 MiB) | 183,936 KiB (179.6 MiB) | measured process RSS |
+
+### Fuzzing, sanitizer, native mount, docgen, and packaging qualification (`d69b033`)
+
+- **Sanitizer qualification (all 4 cohorts)**: `ck_vision_files_decoder_fuzz_tests`
+  (5/5) and `files_benchmark_smoke` (`files_bench --gate`) passed cleanly with
+  zero memory, leak, UB, or data-race diagnostics on macOS ARM64 AppleClang
+  ASan/UBSan (`8.71 s` / `74.48 s`), macOS ARM64 Homebrew LLVM ThreadSanitizer
+  (`10.16 s` / `190.77 s`), Linux ARM64 Clang 19 ASan/UBSan with `detect_leaks=1`
+  (`3.22 s` / `46.26 s`), and Linux ARM64 GCC 14 ThreadSanitizer (`16.02 s` /
+  `219.95 s`), each linked against its matching instrumented ckVision 2.1.0 SDK
+  and pinned `ck-core-fs-lib` `d51e5a0`.
+- **Linux Release & FAT32 probe (`ckdev`)**: Passed all 35 affected CTests
+  (4 `ck_vision_files_tests` shards, `ck_vision_files_decoder_fuzz_tests`,
+  `files_benchmark_smoke`, and all 29 `ck_files_archive_native_*` tests) plus
+  a live loopback `mkfs.vfat -F 32` (`vfat`) mount verified with `ck-files`
+  CLI (`--version` / `--help`) and `volume_enumerator_reports_native_archive_capability`.
+- **Deterministic docgen screenshots (macOS ARM64)**: Rebuilt
+  `capture_ckutilities_screenshots` against pinned ckVision 2.1.0 (`3d018210`)
+  and verified 100% byte-for-byte identity against all three checked-in goldens
+  (`docs/generated/screenshots/ck-files.svg`, `ck-files-volumes.svg`, and
+  `ck-files-volume-properties.svg`).
+- **macOS ARM64 packaging & Homebrew formula (`BUILD_TESTING=OFF`)**: Passed
+  `verify_ckvision_package`, `verify_ckvision_cutover` / `verify_ckvision_install`,
+  `verify_ckvision_archive` (`ck-utilities-0.2.0-macos.tar.gz`, extracted PTY
+  smoke across `xterm-256color`, `xterm`, `vt100`), and `verify_ckvision_terminal`.
+  `scripts/generate_homebrew_formula.py` + `verify-inputs.py` generated
+  `ck-utilities.rb` and passed `ruby -c` (`Syntax OK`).
+- **Linux ARM64 packaging (`ckdev`, `BUILD_TESTING=OFF`)**: Passed
+  `verify_ckvision_package`, `verify_ckvision_cutover` / `verify_ckvision_install`,
+  `verify_ckvision_archive` (generating and verifying installed PTY smoke for
+  all three formats: `.tar.gz`, `.deb`, and `.rpm`), and `verify_ckvision_terminal`.
+- **Remaining explicit gates**:
+  - **Windows workstation (`V:`)**: Console Session 1 is currently owned by
+    another logged-in user and the workstation later went offline
+    (`Operation timed out`), so interactive desktop-window inspection of
+    `ck-files.exe` for the target user, plus the `d69b033` Windows x64
+    `files_bench`/fuzz rerun and Windows ZIP packaging verification
+    (`ck_windows_package_tools_contract`), remain open until the workstation is
+    online with an interactive session for that user.
+  - **Backend-gated milestones in `ck-core-fs-lib`**: Pinned `d51e5a0` leaves
+    Darwin APFS same-UID held-FD strong publication explicitly No-Go / gated
+    (B-01/B-02, per `ck-core-fs-lib/docs/darwin-protected-publication.md`),
+    and full multi-item original-job resume / linked-retry reconciliation
+    (B-03), macOS copy-based source-retirement stability proof (B-04), and
+    cross-process job coordination (B-05) remain gated in `ck-core-fs-lib`.
+  - **Remaining WP-07 matrix rows**: Real SMB/NFS shares, exFAT, low-memory /
+    ENOSPC / disconnect fault injection, and controlled VM/storage power-loss
+    testing remain open.
+
+| Evidence (`d69b033`) | SHA-256 |
+| --- | --- |
+| macOS ARM64 Release (`files_bench` 100k + fuzz + docgen) | `88c8f591283359937cecc44ec1d6d3c44d754a870bd577798f9c061c46499586` |
+| macOS ARM64 WP-08 packaging (`verify_ckvision_*` + `.tar.gz`) | `9f1c968ecaf563388a6d13fe0290b5f3f17da68f6e274bdbc8fd11c1d1e42f38` |
+| macOS ARM64 `ck-utilities-0.2.0-macos.tar.gz` | `74cd2f9076d1ee73c8687e958b4f5dea2210cb70fe4324e97d3d2aaf20d5dd1a` |
+| macOS ARM64 Homebrew formula (`ck-utilities.rb`, `ruby -c` OK) | `5c407bf083f5afdbc83c891ac10b1a123cc50bf3ac47107b3ca48fe9c0de3068` |
+| macOS ARM64 Homebrew generation log | `17b8c3c0e6a48451487f08e05b57d26a43491e59db1a8b4c4876e6aa596e3ca2` |
+| Linux ARM64 WP-07 + WP-08 (`files_bench` 100k + 35/35 + FAT32 + DEB/RPM/TGZ) | `9ae829f537789f334ffab6c085a9b0f6006d1f7c8fd7e825ca2e2b2b8f5ce36d` |
+| Linux ARM64 `ck-utilities-0.2.0-linux.tar.gz` | `458bb57bac390d000b09f027180f309e7a3c8fc1c0cd1d966534e66692a4df7b` |
+| Linux ARM64 `ck-utilities_0.2.0_arm64.deb` | `1cf775e3c99ef7c55780fdc4148475cc3dbcf087935fdfd065a96da040dcdb22` |
+| Linux ARM64 `ck-utilities-0.2.0-1.aarch64.rpm` | `3eb6d3acc71163fa1dcec5235211cf78749a4cca20da05b98476a73a0c64960f` |
+| macOS ARM64 ASan/UBSan (`d69b033`, fuzz + 100k `--gate`) | `bd21dbdf9ede5d7c30870b1764b1df10a0184d144147c9e8c676c6f1b00b0bdc` |
+| macOS ARM64 ThreadSanitizer (`d69b033`, fuzz + 100k `--gate`) | `bba667f1517ce56d6e82c1139cfa22669c088c0f78df7ac5d76912e61c270d49` |
+| Linux ARM64 ASan/UBSan (`d69b033`, fuzz + 100k `--gate`) | `20d314a68fb1e66cce49fe5cfbc897b2c28028f3bd1047e7da9511197aca074d` |
+| Linux ARM64 ThreadSanitizer (`d69b033`, fuzz + 100k `--gate`) | `cc69da0adfff71aab78472d593670b19cdd360bb5395127f2dfc04e16f0ab77f` |
+| Golden `docs/generated/screenshots/ck-files.svg` | `b94bb0a1f3808dc2e817808e2e40f2517e9c30421f9417bf9287cf1048fd241c` |
+| Golden `docs/generated/screenshots/ck-files-volumes.svg` | `2a3cefc7befa12e9fd256d4bf3c669181104d054227d3f3b67a94350b7943df3` |
+| Golden `docs/generated/screenshots/ck-files-volume-properties.svg` | `a2b0a45779504217b7f35a074d276b9ff1d24fd72f3c3f2ccb77e89c718a598d` |
+
 ## 2026-11-24 — Reconciliation-aware repeat planning and Windows ConPTY runtime qualification
 
 Frontend `ddeddd4` adds identity-based operation-recovery overlap checks in

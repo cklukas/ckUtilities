@@ -675,23 +675,40 @@ reported. All first-release features are present with no placeholder actions.
 ### WP-07 — qualification matrix and reliability
 
 - [ ] Execute the matrix below with actual feature-bearing fixtures and native
-  independent inspection, not only mocked capability responses.
-- [ ] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
+  independent inspection, not only mocked capability responses. Native ext4/XFS/Btrfs
+  archive fixtures, APFS sparse/resource-fork/xattr/ACL source capture, Windows
+  ReFS/NTFS runtime tests, and Linux loopback FAT32 (`vfat`) probing are
+  recorded; real SMB/NFS shares, exFAT, and remaining cross-filesystem pairs
+  remain open.
+- [~] Add model/journal decoder fuzzing, address/undefined/thread sanitizer runs
   where supported, resource-lifetime tests, and deterministic cost budgets.
-  The deterministic archive-journal mutation baseline is now committed and
-  separately qualified; broad model fuzzing and the remaining resource/cost
-  gates are still required before this item can be checked off.
-- [ ] Test very large directories and operation inventories (including at least
+  Frontend `d69b033` expands deterministic fuzzing beyond the archive-journal
+  baseline to settings, location/ExactNames parsing & completion, operation
+  journals, native recovery evidence, archive recovery, and fail-closed overlap
+  planning (`ck_vision_files_decoder_fuzz_tests`, 5 seeded suites / 8,500+
+  cases), qualified on macOS and Linux Release plus all four matching ASan/UBSan
+  and ThreadSanitizer cohorts. Windows fuzz/benchmark rerun and remaining
+  resource-lifetime fault tests stay open.
+- [~] Test very large directories and operation inventories (including at least
   100,000 entries), long names, low memory, index exhaustion, slow/disconnected
   network mounts, full disks and repeated cancellation. Report measured input,
   memory, index size and responsiveness; establish thresholds before approval.
+  Frontend `d69b033` adds `files_bench` (`files_benchmark_smoke --gate`),
+  measuring 100,000-entry scan/sort/page-slice/steady-render/filter and
+  1,000-journal overlap with explicit index-size (29.0 MiB / 128 MiB budget),
+  cell-budget (5600/5600, 0 idle bytes), and peak-RSS reporting across macOS
+  and Linux Release plus all four sanitizer cohorts; low-memory, disconnected
+  network mounts, full disks, and Windows `files_bench` measurement remain open.
+  See the [WP-07/WP-08 qualification record](ck-files-progress.md#2026-11-24--wp-07-100k-scale-benchmark-decoder-fuzzing-and-wp-08-packagingdocgen-qualification).
 - [ ] Test process crashes at every destructive transition; perform controlled
   VM/storage fault tests for any claimed power-loss guarantees.
 - [ ] Execute the [R-01–12 repeat/recovery matrix](ck-files-transfer-recovery-plan.md#acceptance-matrix)
   on each advertised provider, including foreign partial transfers, repeated
   recovery crashes, retained replacement restore, competing frontends and
   source writers. Positive Mac publication/move/restart requires native success
-  evidence; mocked transitions and Unsupported results do not close it.
+  evidence; mocked transitions and Unsupported results do not close it (Darwin
+  APFS same-UID held-FD strong publication remains No-Go / gated in
+  `ck-core-fs-lib` per `docs/darwin-protected-publication.md`).
 
 Acceptance: every matrix row has a result, exact OS/driver/mount/feature details,
 and evidence. No unresolved data-loss, incorrect-source-deletion, silent-loss,
@@ -700,19 +717,31 @@ access is a release blocker for that advertised capability, not a presumed pass.
 
 ### WP-08 — release and documentation
 
-- [ ] Add all package/install/archive/terminal verification entries and verify
+- [~] Add all package/install/archive/terminal verification entries and verify
   `--help`, `--version`, launcher launch/return and installed executable paths.
-- [ ] Document supported semantics and tested limits, loss dialogs, interrupted
+  `d69b033` passed `verify_ckvision_package`, `verify_ckvision_cutover` /
+  `verify_ckvision_install`, `verify_ckvision_archive`, and
+  `verify_ckvision_terminal` on macOS ARM64 (`.tar.gz` + Homebrew formula
+  `ruby -c`) and Linux ARM64 (`.tar.gz`, `.deb`, `.rpm`); Windows ZIP
+  packaging (`ck_windows_package_tools_contract`) awaits workstation online
+  availability.
+- [x] Document supported semantics and tested limits, loss dialogs, interrupted
   moves, Trash behavior, operational artifacts, and recovery procedures.
-- [ ] Reconcile capability claims across WPs, user help and shipped actions.
+- [~] Reconcile capability claims across WPs, user help and shipped actions.
   Document resume versus retry versus foreign partial-folder recovery, retained
   version storage/disposal, and exact provider limits. Keep process-crash and
   power-loss evidence distinct; do not advertise universal losslessness.
-- [ ] Capture screenshots from the actual app through the deterministic docgen
+- [x] Capture screenshots from the actual app through the deterministic docgen
   pipeline; review goldens rather than blindly accepting regenerated output.
-- [ ] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
+  Verified 100% byte-for-byte match for `ck-files.svg`, `ck-files-volumes.svg`,
+  and `ck-files-volume-properties.svg` on `d69b033` against pinned ckVision 2.1.0.
+- [~] Run the full suite and fresh release rehearsal, Linux DEB/RPM/archive,
   macOS archive/Homebrew and Windows ZIP/ConPTY paths. Inspect the user-facing
   app in actual terminals on all OSes, including mouse and restricted-key paths.
+  Linux DEB/RPM/tar.gz and macOS tar.gz/Homebrew rehearsals passed on `d69b033`;
+  Windows ZIP rehearsal and interactive Windows desktop-window inspection for
+  the target user remain open (Session 1 belonged to another user and the
+  workstation later went offline).
 
 Acceptance: one release candidate with provenance, matrix, tests, build records,
 real-window observations and no undocumented preservation limits. Only then
